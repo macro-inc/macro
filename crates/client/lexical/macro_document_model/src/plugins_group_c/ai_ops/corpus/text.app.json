@@ -44,6 +44,50 @@
         }
       }
     },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
+          }
+        }
+      }
+    },
     "ops": [
       {
         "kind": "insertText",
@@ -90,7 +134,8 @@
         "$": {
           "id": "s0000002",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -151,6 +196,62 @@
           "id": "s0000003",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "a ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -225,7 +326,8 @@
         "$": {
           "id": "s0000003",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -286,6 +388,62 @@
           "id": "s0000003",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "b",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " c",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 1,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -360,7 +518,8 @@
         "$": {
           "id": "s0000003",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -413,6 +572,50 @@
         }
       }
     },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
+          }
+        }
+      }
+    },
     "ops": [
       {
         "kind": "removeText",
@@ -459,7 +662,8 @@
         "$": {
           "id": "s0000002",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -536,6 +740,74 @@
         }
       }
     },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "plain ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " tail",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
+          }
+        }
+      }
+    },
     "ops": [
       {
         "kind": "removeText",
@@ -594,7 +866,8 @@
         "$": {
           "id": "s0000004",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -671,6 +944,74 @@
         }
       }
     },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "one ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "two",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " three",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
+          }
+        }
+      }
+    },
     "ops": [
       {
         "kind": "setText",
@@ -716,7 +1057,8 @@
         "$": {
           "id": "s0000004",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -791,6 +1133,76 @@
           "id": "s0000004",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha beta gamma",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Second line",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -871,7 +1283,8 @@
         "$": {
           "id": "s0000004",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -963,6 +1376,89 @@
         }
       }
     },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
+          }
+        }
+      }
+    },
     "ops": [
       {
         "kind": "setText",
@@ -1047,7 +1543,8 @@
         "$": {
           "id": "s0000005",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1110,6 +1607,62 @@
           "id": "s0000003",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "start ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "bold",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1183,7 +1736,8 @@
         "$": {
           "id": "s0000003",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1244,6 +1798,62 @@
           "id": "s0000003",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 2,
+                "mode": "normal",
+                "style": "",
+                "text": "lead",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " rest",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000002"
+            },
+            "textFormat": 2,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000003",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1317,7 +1927,8 @@
         "$": {
           "id": "s0000003",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1366,6 +1977,50 @@
           "id": "s0000002",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1420,7 +2075,8 @@
         "$": {
           "id": "s0000002",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1469,6 +2125,50 @@
           "id": "s0000002",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1523,7 +2223,8 @@
         "$": {
           "id": "s0000002",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1578,6 +2279,50 @@
         }
       }
     },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "cat and cat",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
+          }
+        }
+      }
+    },
     "ops": [
       {
         "kind": "replaceText",
@@ -1627,7 +2372,8 @@
         "$": {
           "id": "s0000002",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1700,6 +2446,74 @@
           "id": "s0000004",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "say ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "hello world",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " now",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1777,7 +2591,8 @@
         "$": {
           "id": "s0000004",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1852,6 +2667,76 @@
           "id": "s0000004",
           "documentMetadata": {
             "version": 10
+          }
+        }
+      }
+    },
+    "loaded": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Beta",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000002"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000003"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000004",
+          "documentMetadata": {
+            "version": 10,
+            "environmentTags": null
           }
         }
       }
@@ -1941,7 +2826,8 @@
         "$": {
           "id": "s0000004",
           "documentMetadata": {
-            "version": 10
+            "version": 10,
+            "environmentTags": null
           }
         }
       }

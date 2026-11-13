@@ -591,6 +591,8 @@ struct BlockEntry {
     name: String,
     seed: Value,
     ops: Vec<Value>,
+    /// Source's load of `seed`: what the native import must produce.
+    loaded: Value,
     state: Value,
     /// Ops Source reported and skipped; the ops after each still applied.
     refused: Vec<usize>,
@@ -669,17 +671,22 @@ fn id_list(value: &Value, ids: &mut Vec<String>) {
 /// Oracle control: the raw Source JSON must survive a native import and export
 /// unchanged, or the parity comparison below would compare a native projection.
 #[test]
-fn source_block_states_survive_native_import_unchanged() {
+fn native_import_matches_the_app_source_load() {
     let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
     let mut deltas = Vec::new();
     for entry in &corpus {
-        for (label, raw) in [("seed", &entry.seed), ("state", &entry.state)] {
+        // Native loads a stored state the way the app's Source editor does.
+        for (label, raw, expected) in [
+            ("seed", &entry.seed, &entry.loaded),
+            ("loaded", &entry.loaded, &entry.loaded),
+            ("state", &entry.state, &entry.state),
+        ] {
             let mut editor = block_editor();
             load(&mut editor, raw);
             let exported = export(&editor);
-            if &exported != raw {
+            if &exported != expected {
                 deltas.push(format!(
-                    "{} [{label}]\n  raw    {raw}\n  native {exported}",
+                    "{} [{label}]\n  source {expected}\n  native {exported}",
                     entry.name
                 ));
             }

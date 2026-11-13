@@ -24,7 +24,8 @@ import { applyAiOps } from './applyAiOps';
 // block-md MarkdownEditor, replaying each case of the worker's headless
 // corpora (text.json and blocks.json: seed and ops) through the real
 // applyAiOps. Writes corpus/text.app.json and corpus/blocks.app.json, the
-// single native targets. The app editor's onError is
+// single native targets: `seed` as first stored, `loaded` as the app editor
+// loads it, and `state` after the ops from `loaded`. The app editor's onError is
 // Telemetry.error, so a refused op is dropped and later ops still apply
 // (live-20261113/live-refusal.json); `refused` lists the op indices Source
 // reported and skipped. Regenerate with
@@ -73,9 +74,21 @@ type HeadlessEntry = {
   refs?: string[];
 };
 
-type AppEntry = {
+type Replayed = {
   name: string;
   seed: SerializedEditorState;
+  ops: DocumentOp[];
+  state: SerializedEditorState;
+  refused: number[];
+  refs: string[];
+};
+
+type AppEntry = {
+  name: string;
+  /** The stored document: the app editor's first load of the headless seed. */
+  seed: SerializedEditorState;
+  /** The app editor's load of `seed`, the state the ops apply to. */
+  loaded: SerializedEditorState;
   ops: DocumentOp[];
   state: SerializedEditorState;
   /** Ops Source reported to telemetry and skipped; later ops still applied. */
@@ -148,7 +161,7 @@ async function settle(): Promise<void> {
   await new Promise((r) => setTimeout(r, 0));
 }
 
-async function replay(entry: HeadlessEntry): Promise<AppEntry> {
+async function replay(entry: HeadlessEntry): Promise<Replayed> {
   return createRoot(async (dispose) => {
     const wrapper = createLexicalWrapper({
       type: 'markdown-sync',
@@ -259,7 +272,20 @@ async function generate(
     readFileSync(resolve(CORPUS_DIR, headlessName), 'utf8')
   ) as HeadlessEntry[];
   const app: AppEntry[] = [];
-  for (const entry of headless) app.push(await replay(entry));
+  for (const entry of headless) {
+    // Stored once, then loaded again as the native replay will load it.
+    const stored = await replay({ ...entry, ops: [] });
+    const run = await replay({ ...entry, seed: stored.seed });
+    app.push({
+      name: entry.name,
+      seed: stored.seed,
+      loaded: run.seed,
+      ops: entry.ops,
+      state: run.state,
+      refused: run.refused,
+      refs: run.refs,
+    });
+  }
   const json = `${JSON.stringify(app, null, 2)}\n`;
   if (process.env.UPDATE_NATIVE_CORPUS === '1') writeFileSync(appPath, json);
   expect(existsSync(appPath)).toBe(true);
@@ -286,17 +312,24 @@ async function generate(
   return deltas;
 }
 
-const METADATA = '.root.$.documentMetadata: app-only {"version":10}';
+// documentMetadataPlugin stamps the version on the first load; loading that
+// stored state parses it, which adds environmentTags: null.
+const STORED_METADATA = '.root.$.documentMetadata: app-only {"version":10}';
+const LOADED_METADATA =
+  '.root.$.documentMetadata: app-only {"version":10,"environmentTags":null}';
 
 /** Every seed and state gains documentMetadata; returns the other state deltas. */
 function beyondMetadata(deltas: Deltas): Record<string, string[]> {
   for (const { seed, state } of Object.values(deltas)) {
-    expect(seed).toEqual([METADATA]);
-    expect(state).toContain(METADATA);
+    expect(seed).toEqual([STORED_METADATA]);
+    expect(state).toContain(LOADED_METADATA);
   }
   return Object.fromEntries(
     Object.entries(deltas)
-      .map(([name, { state }]) => [name, state.filter((d) => d !== METADATA)])
+      .map(([name, { state }]) => [
+        name,
+        state.filter((d) => d !== LOADED_METADATA),
+      ])
       .filter(([, rest]) => rest.length > 0)
   );
 }
@@ -333,4 +366,37 @@ test('the native block-op corpus is the app Source profile of the headless cases
       '.root.children[0].$.id: "s0000001" -> "ref-kept"',
     ],
   });
+});
+
+test('the app Source editor loads its oracle states as recorded', async () => {
+  // The native import is held to `loaded`: Source's own load of the stored
+  // seed. Loading `loaded` or `state` again changes nothing further.
+  const changed: string[] = [];
+  for (const name of ['text.app.json', 'blocks.app.json']) {
+    const app = JSON.parse(
+      readFileSync(resolve(CORPUS_DIR, name), 'utf8')
+    ) as AppEntry[];
+    for (const entry of app)
+      for (const [label, from, expected] of [
+        ['seed', entry.seed, entry.loaded],
+        ['loaded', entry.loaded, entry.loaded],
+        ['state', entry.state, entry.state],
+      ] as const) {
+        const reloaded = await replay({
+          name: entry.name,
+          seed: from,
+          ops: [],
+          state: from,
+          failedAt: null,
+          refs: entry.refs,
+        });
+        const deltas: string[] = [];
+        diff(expected as never, reloaded.seed as never, '', deltas);
+        if (deltas.length > 0)
+          changed.push(
+            `${name} ${entry.name} [${label}]: ${deltas.join('; ')}`
+          );
+      }
+  }
+  expect(changed).toEqual([]);
 });
