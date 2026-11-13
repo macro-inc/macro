@@ -165,6 +165,102 @@ where
     /// Looks up both the active `calls` table and the archived `call_records`
     /// table. Returns `NotFound` if neither has a matching row, or
     /// `BadRequest` if the id is not a valid UUID.
+    /// The audience behind `get_users_by_entity` and its uncached variant.
+    async fn users_by_entity(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        freshness: Freshness,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match entity_type {
+            // Agent sessions grant their owner directly and their originating
+            // channel as a channel source, both of which the generic accessor
+            // query expands.
+            // A database's audience is exactly its `entity_access` rows, so it
+            // resolves the same way a document's does. So is a form's: a public
+            // audience is anyone with the link, which no list can name.
+            EntityType::ForeignEntity
+            | EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread
+            | EntityType::AgentSession
+            | EntityType::Initiative
+            | EntityType::CrmCompany
+            | EntityType::CrmContact
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form => {
+                let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid entity_id for get_users_by_entity")
+                })?;
+
+                self.entity_users(&entity_id, entity_type, freshness).await
+            }
+            // A row's audience is its database's: rows carry no grants.
+            EntityType::DatabaseRow => {
+                let row_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid row_id for get_users_by_entity")
+                })?;
+                match self.repo.get_database_row_database(&row_id).await? {
+                    Some(database_id) => {
+                        self.entity_users(&database_id, EntityType::Database, freshness)
+                            .await
+                    }
+                    None => Ok(Vec::new()),
+                }
+            }
+            EntityType::Channel => {
+                let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid channel_id for get_users_by_entity")
+                })?;
+                self.channel_users(&channel_id, freshness).await
+            }
+            EntityType::Call => match self.resolve_call_channel_id(entity_id).await? {
+                Some(channel_id) => self.channel_users(&channel_id, freshness).await,
+                None => {
+                    let call_id = Uuid::parse_str(entity_id).map_err(|_| {
+                        AccessError::BadRequest("invalid call_id for get_users_by_entity")
+                    })?;
+                    self.repo
+                        .get_direct_entity_users(&call_id, EntityType::Call)
+                        .await
+                }
+            },
+            _ => Err(AccessError::BadRequest(
+                "get_users_by_entity does not support this entity type",
+            )),
+        }
+    }
+
+    async fn entity_users(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        freshness: Freshness,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match freshness {
+            Freshness::Cached => self.repo.get_entity_users(entity_id, entity_type).await,
+            Freshness::Uncached => {
+                self.repo
+                    .get_entity_users_uncached(entity_id, entity_type)
+                    .await
+            }
+        }
+    }
+
+    async fn channel_users(
+        &self,
+        channel_id: &Uuid,
+        freshness: Freshness,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match freshness {
+            Freshness::Cached => self.repo.get_channel_users(channel_id).await,
+            Freshness::Uncached => self.repo.get_channel_users_uncached(channel_id).await,
+        }
+    }
+
     async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Option<Uuid>, AccessError> {
         let call_uuid = Uuid::from_str(call_id)
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
@@ -786,33 +882,82 @@ where
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.users_by_entity(entity_id, entity_type, Freshness::Cached)
+            .await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn get_users_by_entity_uncached(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.users_by_entity(entity_id, entity_type, Freshness::Uncached)
+            .await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn is_accessor(
+        &self,
+        principal_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<bool, AccessError> {
+        let principal = MacroUserIdStr::parse_from_str(principal_id)
+            .map_err(|_| AccessError::BadRequest("invalid principal_id"))?;
+        let principal = principal.as_ref();
+        // Each arm mirrors the matching arm of `users_by_entity`, and none
+        // reads a process cache.
         match entity_type {
-            // Agent sessions grant their owner directly and their originating
-            // channel as a channel source, both of which the generic accessor
-            // query expands.
-            // A database's audience is exactly its `entity_access` rows, so it
-            // resolves the same way a document's does. So is a form's: a public
-            // audience is anyone with the link, which no list can name.
-            EntityType::ForeignEntity
-            | EntityType::Document
+            EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread
             | EntityType::AgentSession
             | EntityType::Initiative
-            | EntityType::CrmCompany
-            | EntityType::CrmContact
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::ExternalChat
             | EntityType::Form => {
-                let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
-                    AccessError::BadRequest("invalid entity_id for get_users_by_entity")
-                })?;
-
-                self.repo.get_entity_users(&entity_id, entity_type).await
+                let entity_id = parse_accessor_entity_id(entity_id)?;
+                self.repo
+                    .is_entity_user(&entity_id, entity_type, principal)
+                    .await
             }
-            // A row's audience is its database's: rows carry no grants.
+            // An email thread's audience is its grants plus the inbox owner
+            // and delegates. The owner lookup is not worth duplicating as an
+            // exact query (a thread has one owner and few delegates), so after
+            // the grant check misses, test membership in the listed set.
+            EntityType::EmailThread => {
+                let entity_id = parse_accessor_entity_id(entity_id)?;
+                if self
+                    .repo
+                    .is_entity_user(&entity_id, entity_type, principal)
+                    .await?
+                {
+                    return Ok(true);
+                }
+                Ok(contains_principal(
+                    &self
+                        .repo
+                        .get_entity_users_uncached(&entity_id, entity_type)
+                        .await?,
+                    principal,
+                ))
+            }
+            // CRM records reach their owning team under hidden-row rules, and
+            // foreign entities their stored-for user or team. An exact query
+            // would duplicate those rules, and the lists are one team at most,
+            // so test membership in them.
+            EntityType::CrmCompany | EntityType::CrmContact | EntityType::ForeignEntity => {
+                let entity_id = parse_accessor_entity_id(entity_id)?;
+                Ok(contains_principal(
+                    &self
+                        .repo
+                        .get_entity_users_uncached(&entity_id, entity_type)
+                        .await?,
+                    principal,
+                ))
+            }
             EntityType::DatabaseRow => {
                 let row_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid row_id for get_users_by_entity")
@@ -820,26 +965,26 @@ where
                 match self.repo.get_database_row_database(&row_id).await? {
                     Some(database_id) => {
                         self.repo
-                            .get_entity_users(&database_id, EntityType::Database)
+                            .is_entity_user(&database_id, EntityType::Database, principal)
                             .await
                     }
-                    None => Ok(Vec::new()),
+                    None => Ok(false),
                 }
             }
             EntityType::Channel => {
                 let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid channel_id for get_users_by_entity")
                 })?;
-                self.repo.get_channel_users(&channel_id).await
+                self.repo.is_channel_user(&channel_id, principal).await
             }
             EntityType::Call => match self.resolve_call_channel_id(entity_id).await? {
-                Some(channel_id) => self.repo.get_channel_users(&channel_id).await,
+                Some(channel_id) => self.repo.is_channel_user(&channel_id, principal).await,
                 None => {
                     let call_id = Uuid::parse_str(entity_id).map_err(|_| {
                         AccessError::BadRequest("invalid call_id for get_users_by_entity")
                     })?;
                     self.repo
-                        .get_direct_entity_users(&call_id, EntityType::Call)
+                        .is_direct_entity_user(&call_id, EntityType::Call, principal)
                         .await
                 }
             },
@@ -881,6 +1026,22 @@ impl<R: AccessRepository> ScheduledActionGrants for EntityAccessServiceImpl<R> {
     ) -> Result<Vec<Uuid>, AccessError> {
         self.repo.accessible_scheduled_action_ids(user_id).await
     }
+}
+
+/// Whether an audience lookup may use the adapter's process cache.
+#[derive(Clone, Copy, Debug)]
+enum Freshness {
+    Cached,
+    Uncached,
+}
+
+fn parse_accessor_entity_id(entity_id: &str) -> Result<Uuid, AccessError> {
+    Uuid::parse_str(entity_id)
+        .map_err(|_| AccessError::BadRequest("invalid entity_id for get_users_by_entity"))
+}
+
+fn contains_principal(users: &[MacroUserIdStr<'_>], principal: &str) -> bool {
+    users.iter().any(|user| user.as_ref() == principal)
 }
 
 fn channel_role_result_to_permission(

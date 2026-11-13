@@ -320,6 +320,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// [`Self::get_entity_users`] without the adapter's process cache, so a
+    /// grant change is visible to the next call.
+    fn get_entity_users_uncached(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Get direct user grants only, excluding inherited channel, team, and project access.
     fn get_direct_entity_users(
         &self,
@@ -327,8 +335,49 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Whether `principal_id` is an explicit accessor of an entity through its
+    /// `entity_access` rows: a direct `user` grant, an active participant of a
+    /// granting channel, or a member of a granting team. This is the exact
+    /// test for membership in [`Self::get_entity_users`]'s generic union; it
+    /// does not cover email-thread owners or CRM and foreign-entity rules.
+    ///
+    /// `principal_id` is a canonical, lowercased `macro|<email>`. Stored ids
+    /// match case-insensitively, the way [`MacroUserIdStr`] parses them.
+    fn is_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
+    /// Whether `principal_id` holds a direct `user` grant on an entity, not
+    /// inherited from a project: membership in [`Self::get_direct_entity_users`].
+    /// `principal_id` matches as in [`Self::is_entity_user`].
+    fn is_direct_entity_user(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        principal_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
+    /// Whether `principal_id` is an active participant of a channel:
+    /// membership in [`Self::get_channel_users`]. `principal_id` matches as in
+    /// [`Self::is_entity_user`].
+    fn is_channel_user(
+        &self,
+        channel_id: &Uuid,
+        principal_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
     /// Get all active participant user IDs in a channel.
     fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// [`Self::get_channel_users`] without the adapter's process cache, so a
+    /// participant who joins or leaves is visible to the next call.
+    fn get_channel_users_uncached(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
@@ -579,13 +628,57 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     ///
     /// The activity team feed applies this audience in SQL
-    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`); keep
-    /// the two in step.
+    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`), and
+    /// [`Self::is_accessor`] and [`Self::get_users_by_entity_uncached`] answer
+    /// the same audience; keep them all in step.
     fn get_users_by_entity(
         &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// [`Self::get_users_by_entity`] without the adapter's per-process
+    /// cache: grant and participant changes are visible to the next call.
+    /// For callers that act on membership changes as they happen.
+    ///
+    /// The default delegates to [`Self::get_users_by_entity`], which is right
+    /// for implementations that keep no cache.
+    fn get_users_by_entity_uncached(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send {
+        self.get_users_by_entity(entity_id, entity_type)
+    }
+
+    /// Whether `principal_id` is in the set
+    /// [`Self::get_users_by_entity_uncached`] returns for the entity, decided
+    /// without listing every accessor and without any process cache.
+    ///
+    /// `principal_id` is a Macro user id (`macro|<email>`), matched as
+    /// [`MacroUserIdStr`] lowercases it. Link-share access does not count.
+    /// Unsupported entity types, malformed entity ids and malformed principal
+    /// ids return [`AccessError::BadRequest`].
+    ///
+    /// The default tests membership in [`Self::get_users_by_entity_uncached`];
+    /// the database-backed service overrides it with bounded lookups.
+    fn is_accessor(
+        &self,
+        principal_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send {
+        async move {
+            let Ok(principal) = MacroUserIdStr::parse_from_str(principal_id) else {
+                return Err(AccessError::BadRequest("invalid principal_id"));
+            };
+            Ok(self
+                .get_users_by_entity_uncached(entity_id, entity_type)
+                .await?
+                .iter()
+                .any(|user| user.as_ref() == principal.as_ref()))
+        }
+    }
 
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
@@ -726,6 +819,27 @@ impl EntityAccessService for NoOpEntityAccessService {
     }
 
     async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Err(AccessError::internal(
+            "entity access service not configured",
+        ))
+    }
+
+    async fn is_accessor(
+        &self,
+        _principal_id: &str,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<bool, AccessError> {
+        Err(AccessError::internal(
+            "entity access service not configured",
+        ))
+    }
+
+    async fn get_users_by_entity_uncached(
         &self,
         _entity_id: &str,
         _entity_type: EntityType,
