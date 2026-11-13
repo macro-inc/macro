@@ -49,9 +49,10 @@ impl PasswordService {
             return Err(Error::Invalid);
         }
         let mut folders = HashMap::new();
+        let mut names = HashMap::new();
         // Validate the complete tree before creating any folders, including duplicate keys.
         for folder in &batch.folders {
-            Self::folder_name(folder.name.clone())?;
+            names.insert(folder.key.clone(), Self::folder_name(folder.name.clone())?);
             if folders.contains_key(&folder.key)
                 || folder
                     .parent_key
@@ -70,7 +71,7 @@ impl PasswordService {
             let lock = if matches!(&batch.target, ImportTarget::Root) && batch.folders.is_empty() {
                 None
             } else {
-                Some(self.admit(actor, team, ItemId(Uuid::nil())).await?)
+                Some(self.admit_member(actor, team, ItemId(Uuid::nil())).await?)
             };
             target_folder_id = match batch.target {
                 ImportTarget::Root => None,
@@ -94,7 +95,7 @@ impl PasswordService {
                     .copied()
                     .or(target_folder_id);
                 self.repository
-                    .ensure_folder(team, folders[&folder.key], &folder.name, parent)
+                    .ensure_folder(team, folders[&folder.key], &names[&folder.key], parent)
                     .await?;
             }
             if let Some(lock) = lock {
@@ -123,13 +124,14 @@ impl PasswordService {
             let id = ItemId(derive_v7(import_id, "item", item.source_key.as_ref()));
             let mut item_id = None;
             let imported = async {
-                let lock = self.admit(actor, team, id).await?;
+                // The batch already checked membership; the lease still rechecks it.
+                let lock = self.admit_member(actor, team, id).await?;
                 let imported = async {
                     let folder_id = match &item.folder_key {
                         Some(key) => Some(*folders.get(key).ok_or(Error::Invalid)?),
                         None => target_folder_id,
                     };
-                    let (_, created) = self
+                    let created = self
                         .create_under_lease(
                             actor,
                             team,
@@ -146,7 +148,18 @@ impl PasswordService {
                             },
                             lock.as_ref(),
                         )
-                        .await?;
+                        .await;
+                    let (_, created) = match created {
+                        // A folder deleted since this batch ensured it: the next
+                        // batch, or a retry, ensures it again.
+                        Err(Error::Invalid)
+                            if folder_id.is_some()
+                                && self.validate_folder(team, folder_id).await.is_err() =>
+                        {
+                            return Err(Error::FolderMissing);
+                        }
+                        result => result?,
+                    };
                     item_id = Some(id);
                     if let Some(seed) = item.totp {
                         self.configure_totp_under_lease(

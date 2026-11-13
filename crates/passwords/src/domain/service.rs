@@ -73,6 +73,18 @@ impl PasswordService {
         self.membership(actor, team).await?;
         Ok(lock)
     }
+    /// [`Self::admit`] for a caller whose membership was just checked: only
+    /// the recheck after the lease, which a lifecycle change can still fail.
+    async fn admit_member(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+    ) -> Result<Box<dyn ItemLock>, Error> {
+        let lock = self.repository.lock(team, item).await?;
+        self.membership(actor, team).await?;
+        Ok(lock)
+    }
     fn permission(actor: &Actor, team: TeamId, record: &Record, edit: bool) -> bool {
         record.user_id == actor.user_id
             || record.grants.iter().any(|grant| {

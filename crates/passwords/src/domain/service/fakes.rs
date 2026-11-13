@@ -34,6 +34,11 @@ pub struct FakeRepository {
     pub imports: Mutex<Vec<(TeamId, Uuid, ImportFormat, ImportCounts)>>,
     pub busy_items: Mutex<HashSet<Uuid>>,
     pub enrollments: Mutex<HashMap<Uuid, FakeEnrollment>>,
+    /// Membership lookups (`teams`), to count admission work.
+    pub team_lookups: AtomicUsize,
+    /// Answer `ensure_folder` without keeping the folder, as if it were
+    /// deleted right after.
+    pub forget_ensured_folders: AtomicBool,
 }
 impl FakeRepository {
     pub fn new() -> Self {
@@ -55,6 +60,8 @@ impl FakeRepository {
             imports: Mutex::new(vec![]),
             busy_items: Mutex::new(HashSet::new()),
             enrollments: Mutex::new(HashMap::new()),
+            team_lookups: AtomicUsize::new(0),
+            forget_ensured_folders: AtomicBool::new(false),
         }
     }
 }
@@ -337,6 +344,7 @@ impl Repository for FakeRepository {
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.team_lookups.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .memberships
             .lock()
@@ -434,6 +442,14 @@ impl Repository for FakeRepository {
     ) -> Result<Folder, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let mut folders = self.folders.lock().unwrap();
+        if self.forget_ensured_folders.load(Ordering::SeqCst) {
+            return Ok(Folder {
+                id,
+                team_id: team,
+                name: name.into(),
+                parent_id,
+            });
+        }
         Ok(folders
             .entry((team, id))
             .or_insert_with(|| Folder {

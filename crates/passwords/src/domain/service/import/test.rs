@@ -377,3 +377,44 @@ async fn empty_and_fully_failed_batches_are_audited_without_items() {
     assert_eq!(audits[0].3.failed, 0);
     assert_eq!(audits[1].3.failed, 1);
 }
+
+#[tokio::test]
+async fn folder_deleted_after_the_folder_phase_is_folder_missing() {
+    let (service, repository, _, actor, team) = fixture();
+    repository
+        .forget_ensured_folders
+        .store(true, Ordering::SeqCst);
+    let result = service
+        .import_batch(&actor, team, Uuid::now_v7(), batch())
+        .await
+        .unwrap();
+    assert_eq!(result.items[0].outcome, ImportOutcome::Failed);
+    assert_eq!(
+        result.items[0].error_code,
+        Some(ImportErrorCode::FolderMissing)
+    );
+}
+
+#[tokio::test]
+async fn items_recheck_membership_once_after_the_batch_admission() {
+    let (service, repository, _, actor, team) = fixture();
+    let mut batch: ImportBatch = serde_json::from_value(serde_json::json!({
+        "format": "bitwarden_csv", "target": {"kind":"root"}, "private": false, "folders": [],
+        "items": [
+            {"sourceKey":"one","name":"Synthetic one","kind":"note","favorite":false,
+                "values":{"username":"","password":"","notes":"synthetic","fields":[]}},
+            {"sourceKey":"two","name":"Synthetic two","kind":"note","favorite":false,
+                "values":{"username":"","password":"","notes":"synthetic","fields":[]}},
+            {"sourceKey":"three","name":"Synthetic three","kind":"note","favorite":false,
+                "values":{"username":"","password":"","notes":"synthetic","fields":[]}}
+        ]
+    }))
+    .unwrap();
+    batch.private = true;
+    service
+        .import_batch(&actor, team, Uuid::now_v7(), batch)
+        .await
+        .unwrap();
+    // One for the batch, then one per item under its lease.
+    assert_eq!(repository.team_lookups.load(Ordering::SeqCst), 1 + 3);
+}
