@@ -579,6 +579,15 @@ export const enableCrmPipelines = defineFlag({
   default: onInDev,
 });
 
+// Contracts module: packet databases, field placement, and the public signing
+// page. Packets live in the browser until the signing engine ships, so this
+// stays a dev-mode default; override with VITE_ENABLE_CONTRACTS.
+export const enableContracts = defineFlag({
+  key: 'enable-contracts',
+  env: 'ENABLE_CONTRACTS',
+  default: onInDev,
+});
+
 // Native Projects frontend: navigation, creation, task assignment and project
 // views. Enabled in development; PostHog controls production rollout. Override
 // with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.

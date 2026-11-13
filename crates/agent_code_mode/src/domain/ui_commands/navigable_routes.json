@@ -130,6 +130,7 @@
     {"route":"view-recent","navigable":true,"segments":["recent"]},
     {"route":"view-activity","navigable":true,"segments":["activity"]},
     {"route":"view-passwords","navigable":false,"segments":["passwords"]},
+    {"route":"view-contracts","navigable":false,"segments":["contracts"]},
     {"route":"view-notifications","navigable":true,"segments":["notifications"]},
     {"route":"view-agents","navigable":true,"segments":["agents"]},
     {"route":"view-mail","navigable":true,"segments":["mail"]},

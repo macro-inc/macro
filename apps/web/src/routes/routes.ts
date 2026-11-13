@@ -95,6 +95,13 @@ export const formRespondRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** A recipient's signing link, outside the split layout so signers skip login. */
+export const contractSigningRoute = defineRoute({
+  id: 'contract-signing',
+  path: 'sign/:token',
+  externalSearch: '*',
+});
+
 export const bookingReceiptRoute = defineRoute({
   id: 'booking-receipt',
   path: 'booking/:id',
@@ -571,6 +578,12 @@ export const passwordsRoute = defineRoute({
   id: 'view-passwords',
   path: 'passwords',
   claim: () => ({ namespace: 'component', id: 'passwords' }),
+});
+
+export const contractsRoute = defineRoute({
+  id: 'view-contracts',
+  path: 'contracts',
+  claim: () => ({ namespace: 'component', id: 'contracts' }),
 });
 
 export const activityRoute = defineRoute({

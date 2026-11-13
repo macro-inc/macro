@@ -16,6 +16,7 @@ import { Button } from '@ui';
 import { lazy, onCleanup, onMount } from 'solid-js';
 import {
   bookingReceiptRoute,
+  contractSigningRoute,
   EMAIL_SIGNUP_CALLBACK_PATH,
   formRespondRoute,
   INBOX_LINK_CALLBACK_PATH,
@@ -102,6 +103,16 @@ const FormRespondPage = lazy(async () => ({
 export function FormRespondRoutePage() {
   const params = useRouteParams(formRespondRoute);
   return <FormRespondPage formId={params.formId} />;
+}
+
+/** Contracts code loads only when someone opens a signing link. */
+const ContractSigningPage = lazy(async () => ({
+  default: (await import('@app/features/contracts/signing')).SigningPage,
+}));
+
+export function ContractSigningRoutePage() {
+  const params = useRouteParams(contractSigningRoute);
+  return <ContractSigningPage token={params.token} />;
 }
 
 export function BookingReceiptRoutePage() {

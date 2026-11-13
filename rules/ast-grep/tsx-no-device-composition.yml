@@ -23,6 +23,7 @@ ignores:
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
+  - apps/web/src/features/contracts/contracts.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx

@@ -13,6 +13,7 @@ export default {
   calendar: 'Calendar',
   agents: 'Agents',
   customers: 'Customers',
+  contracts: 'Contracts',
   calls: 'Calls',
   reviews: 'Reviews',
   scheduling: 'Scheduling',

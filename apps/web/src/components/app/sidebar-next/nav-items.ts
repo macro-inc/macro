@@ -30,6 +30,7 @@ import PasswordIcon from '@icon/system/regular/lock.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
+import SignatureIcon from '@icon/system/regular/signature.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
 import type { NavIcon } from './nav-glyph';
@@ -174,6 +175,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     hotkeyToken: TOKENS.sidebar.goTo.companies,
   },
   {
+    id: 'contracts',
+    get label() {
+      return t('nav.contracts');
+    },
+    href: '/contracts',
+    icon: SignatureIcon,
+    iconActive: SignatureIcon,
+  },
+  {
     id: 'calls',
     get label() {
       return t('nav.calls');
@@ -237,6 +247,7 @@ export type NavItemGates = {
   showActivity: boolean;
   showExternal: boolean;
   showPasswords: boolean;
+  showContracts: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -254,6 +265,7 @@ export const isNavItemAvailable = (
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
   if (item.id === 'passwords') return gates.showPasswords;
+  if (item.id === 'contracts') return gates.showContracts;
   if (item.id === 'external') return gates.showExternal;
   return true;
 };

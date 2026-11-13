@@ -57,6 +57,10 @@ files:
   - apps/web/src/features/scheduling/primitives/**
   - apps/web/src/features/usage/queries/**
   - apps/web/src/features/usage/primitives/**
+  - apps/web/src/features/contracts/core/**
+  - apps/web/src/features/contracts/context/**
+  - apps/web/src/features/contracts/queries/**
+  - apps/web/src/features/contracts/primitives/**
   - apps/web/src/features/crm/queries/**
   - apps/web/src/features/crm/primitives/**
   - apps/web/src/features/slack-import/queries/**

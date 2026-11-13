@@ -24,6 +24,7 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showReviews: true,
   showActivity: true,
   showPasswords: false,
+  showContracts: false,
   showExternal: true,
   prefs: defaultPrefs(),
   ...overrides,
@@ -67,6 +68,7 @@ describe('sidebar visibility preferences', () => {
     const gates = defaultGates({
       showActivity: false,
       showPasswords: false,
+      showContracts: false,
       prefs: defaultPrefs({ hidden: new Set() }),
     });
     for (const items of [
