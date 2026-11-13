@@ -104,7 +104,7 @@ the domain decides *whether* and *to whom*; an outbound adapter calls
    for live delivery.
 3. **Wire the composition root.** Services construct
    `SqsNotificationIngress { queue: SqsQueue::new(sqs, macro_queues::NotificationIngressQueue::new().to_string()) }`
-   (see `services/agent_harness_service/src/main.rs`). A service that has never
+   (see `services/agent_harness_service/src/lib.rs`). A service that has never
    notified also needs `sqs:SendMessage` on the ingress queue: take
    `notificationIngressQueueArn` from `getMacroNotify()`
    (`infra/packages/shared/src/macro_notify.ts`), as `infra/stacks/email-service/index.ts` does.
