@@ -552,6 +552,8 @@ jobs:
             - 'apps/web/src/features/block-calendar/**'
             - 'apps/web/src/lib/queries/email/**'
             - 'apps/web/src/lib/queries/calendar/**'
+            - 'apps/web/src/lib/core/email-link/**'
+            - 'packages/email-renderer/**'
             - 'apps/web/justfile'
             - '.github/workflows/email_e2e_browser.yml'
           observability_image:

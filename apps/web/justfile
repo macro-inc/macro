@@ -139,8 +139,6 @@ local-email: ensure-cache-wasm
 # above that peak; CI builds use the same mid-size runner as preview deploys.
 node_heap := "--max-old-space-size=8192"
 
-# Features whose browser-test suites `test-email-fixtures-browser` runs.
-email_fixture_suites := "email-compose email-message email-view calendar-view"
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
@@ -264,15 +262,26 @@ build-email-e2e: build-wasm
 test-email-e2e-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
 
-# The email and calendar features' fixture suites (real components over
-# scripted data, no backend), one after another. Tests tagged `@known-bug`
-# assert behaviour that is not fixed yet and stay out.
+# The fixture tests that cover a class of email or calendar bug (real
+# components over scripted data, no backend). Each line is a Playwright
+# config and, where the suite holds more than those tests, the files to run:
+# the rest of such a suite is not run in CI. A dev server's first page load
+# can outlast a test's first wait, hence the retries. Tests tagged
+# `@known-bug` assert behaviour that is not fixed yet and stay out.
 test-email-fixtures-browser *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    for feature in {{email_fixture_suites}}; do
-        env -u LD_LIBRARY_PATH bunx playwright test --config "src/features/$feature/browser-test/playwright.config.ts" --grep-invert @known-bug {{ARGS}}
-    done
+    while read -r config files; do
+        env -u LD_LIBRARY_PATH bunx playwright test --config "$config" $files --grep-invert @known-bug --retries 2 {{ARGS}} < /dev/null
+    done <<'SUITES'
+    src/features/email-compose/browser-test/playwright.config.ts sender.browser draft-recovery.browser
+    src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/calendar/browser-test/playwright.config.ts
+    src/features/calendar-view/browser-test/playwright.config.ts
+    src/features/settings/browser-test/signatures/playwright.config.ts
+    src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts unavailable-mention.browser
+    ../../packages/email-renderer/playwright.config.ts
+    SUITES
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test

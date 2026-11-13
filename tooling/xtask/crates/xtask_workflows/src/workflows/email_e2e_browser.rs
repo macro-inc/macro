@@ -37,6 +37,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("apps/web/src/features/block-calendar/**"),
     xtask_paths::repo_glob!("apps/web/src/lib/queries/email/**"),
     xtask_paths::repo_glob!("apps/web/src/lib/queries/calendar/**"),
+    xtask_paths::repo_glob!("apps/web/src/lib/core/email-link/**"),
+    xtask_paths::repo_glob!("packages/email-renderer/**"),
     xtask_paths::repo_glob!("apps/web/justfile"),
     xtask_paths::repo_glob!(".github/workflows/email_e2e_browser.yml"),
 ];
@@ -123,7 +125,6 @@ fn suite() -> Job {
         .add_step(email_e2e::raise_connection_limit())
         .add_step(code_check_cloud_storage::configure_postgres())
         .add_step(run_suite())
-        .add_step(fixture_suites())
         .add_step(known_bugs())
         .add_step(upload("email-e2e-browser-logs", SERVICE_LOGS))
         .add_step(upload("email-e2e-browser-traces", TRACES))
@@ -131,19 +132,13 @@ fn suite() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// The built app against the stack.
+/// The built app against the stack and, beside it, the fixture tests of the
+/// email and calendar features: real components over scripted data, for
+/// what needs no backend.
 fn run_suite() -> Step<Run> {
     web_app_check_main::with_pr_wasm_env(
         Step::new("run the email browser suite").run(include_str!("scripts/email_e2e_browser.sh")),
     )
-}
-
-/// The email and calendar features' own browser suites: real components over
-/// scripted data, for what needs no backend.
-fn fixture_suites() -> Step<Run> {
-    Step::new("run the email and calendar fixture suites")
-        .run("just test-email-fixtures-browser")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 /// Tests kept for known, unfixed bugs fail by design, so this step never
