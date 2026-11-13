@@ -21,7 +21,8 @@ persona/model to run later.
   step types (code and Ask AI) and a worked example, which a test parses and
   the harness's real-Deno test type-checks. Its code-step section is
   `routine_program`'s `code_steps.md`, appended at compile time and shared
-  with the scheduler's drafter; edit it there.
+  with every writer of routines through `routine_program::WRITING`; edit it
+  there.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.
