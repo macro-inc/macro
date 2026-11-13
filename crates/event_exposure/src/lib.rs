@@ -167,7 +167,7 @@ pub enum PublicEntityType {
     Bot,
     /// A webhook configuration.
     Webhook,
-    /// A GitHub pull request, by its lowercased `owner/repo#number` key.
+    /// A GitHub pull request, by its lowercased `owner/repo/pull/number` key.
     GithubPullRequest,
 }
 

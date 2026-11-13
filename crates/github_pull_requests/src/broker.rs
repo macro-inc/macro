@@ -1,4 +1,7 @@
 //! Broker envelopes and publication for persisted pull request updates.
+
+#[cfg(test)]
+mod test;
 use crate::domain::events::GithubPullRequestUpdated;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroGithubPullRequestsTopic;
@@ -12,11 +15,34 @@ pub enum GithubPullRequestTopicEvent {
     #[serde(rename = "github_pull_request.updated")]
     Updated(GithubPullRequestUpdated),
 }
+/// Public payload of `github_pull_request.updated`: which pull request and
+/// which of its Macro records changed. Read them for the new state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct PublicGithubPullRequestUpdated {
+    /// The pull request's lowercased `owner/repo/pull/number` key.
+    pub github_key: String,
+    /// The foreign entities recording this pull request that the write
+    /// touched.
+    pub foreign_entity_ids: Vec<uuid::Uuid>,
+}
+
+/// The public projection of [`GithubPullRequestTopicEvent`], delivered under
+/// the same event names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum GithubPullRequestPublicEvent {
+    /// Stored pull request metadata changed.
+    #[serde(rename = "github_pull_request.updated")]
+    Updated(PublicGithubPullRequestUpdated),
+}
+
 impl TopicEvent for GithubPullRequestTopicEvent {
     type Topic = MacroGithubPullRequestsTopic;
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = GithubPullRequestPublicEvent;
 
     fn exposure(
         &self,
@@ -24,14 +50,43 @@ impl TopicEvent for GithubPullRequestTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEntityType, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::Updated(_) => Exposure::pending(
-                PendingPhase::EntityFamilies,
-                "Any(Entity(ForeignEntity, id)) per foreign_entity_ids, with a thin projection",
-            ),
-        })
+        match self {
+            // Whoever can see any Macro record of the pull request.
+            Self::Updated(update) => {
+                if update.foreign_entity_ids.is_empty() {
+                    return Ok(Exposure::internal_by_design(
+                        "a pull request update that touched no Macro record has no audience",
+                    ));
+                }
+                let github_key = update.github_key.to_lowercase();
+                Ok(Exposure::Public(PublicEvent {
+                    name: "github_pull_request.updated",
+                    entity: EntityRef::new(PublicEntityType::GithubPullRequest, github_key.clone()),
+                    audience: Audience::Any(
+                        update
+                            .foreign_entity_ids
+                            .iter()
+                            .map(|id| Audience::Entity {
+                                entity_type: EntityType::ForeignEntity,
+                                entity_id: id.to_string(),
+                            })
+                            .collect(),
+                    ),
+                    stage: Stage::Preview,
+                    payload: Cow::Owned(GithubPullRequestPublicEvent::Updated(
+                        PublicGithubPullRequestUpdated {
+                            github_key,
+                            foreign_entity_ids: update.foreign_entity_ids.clone(),
+                        },
+                    )),
+                }))
+            }
+        }
     }
 }
 /// An event keyed by PR so updates retain per-PR ordering.
