@@ -311,6 +311,7 @@ impl CalendarRepository for FakeRepo {
         _lease_token: Uuid,
         _account_id: Uuid,
         _calendar_id: Uuid,
+        _kind: CalendarSyncFailure,
         message: &str,
     ) -> Result<(), Report> {
         if self.fail_sync_error_recording {

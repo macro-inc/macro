@@ -19,15 +19,17 @@ use super::{
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
-        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor,
-        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor, CalendarSyncFailure,
+        CalendarSyncHealth, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet,
+        OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
         CalendarEventLabelReader, CalendarEventWrite, CalendarEventWriteOutcome,
         CalendarOccurrenceService, CalendarProviderError, CalendarProviderErrorKind,
-        CalendarReauthNotifier, CalendarRepository, GoogleCalendarProvider,
-        GoogleCalendarSyncRepository, GoogleEventSyncContext, RetiredCalendarEvent,
+        CalendarReauthNotifier, CalendarRepository, CalendarSyncHealthReader,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        RetiredCalendarEvent,
     },
 };
 
@@ -457,6 +459,16 @@ where
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventIcs>, Report>> + Send {
         CalendarService::event_ics(self, requester_id, event_id)
+    }
+}
+
+impl<R> CalendarSyncHealthReader for CalendarService<R>
+where
+    R: CalendarSyncHealthReader,
+{
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn calendar_sync_health(&self, requester_id: &str) -> Result<CalendarSyncHealth, Report> {
+        self.repository.calendar_sync_health(requester_id).await
     }
 }
 
@@ -919,7 +931,7 @@ where
         // failing the account. The run fails only when no calendar is healthy,
         // so the coordinator can still classify a wholesale outage.
         let mut any_calendar_healthy = false;
-        let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
+        let mut isolated_failures: Vec<(Uuid, CalendarSyncFailure, String)> = Vec::new();
         let mut last_isolated_error: Option<CalendarProviderError> = None;
 
         for provider_calendar in calendars {
@@ -1002,7 +1014,11 @@ where
                         calendar_id=%calendar_id,
                         "isolating a failed Google Calendar and continuing the account sync"
                     );
-                    isolated_failures.push((calendar_id, error.message().to_owned()));
+                    isolated_failures.push((
+                        calendar_id,
+                        error.kind().into(),
+                        error.message().to_owned(),
+                    ));
                     report.team_ooo_changed = true;
                     // A retryable failure outranks a permanent one so a total
                     // failure still surfaces as retryable.
@@ -1143,13 +1159,14 @@ where
         // Record each isolated failure for the settings badge, leaving the
         // calendar's sync state untouched so the next poll retries it. This
         // write must succeed before the account can report healthy coverage.
-        for (calendar_id, message) in isolated_failures {
+        for (calendar_id, kind, message) in isolated_failures {
             self.repository
                 .record_google_calendar_sync_error(
                     key,
                     lease_token,
                     account_id,
                     calendar_id,
+                    kind,
                     &message,
                 )
                 .await?;
