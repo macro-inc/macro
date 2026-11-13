@@ -25,6 +25,8 @@ export function MobileBlockHeader(props: {
   itemType?: ItemType;
   /** Shown before the file name, such as the file type. */
   badges?: JSX.Element;
+  /** Shown after the file name, such as a Beta badge. */
+  trailingBadges?: JSX.Element;
   /** Islands after the title, before the permissions badge. */
   children?: JSX.Element;
   /** Islands before Info. */
@@ -46,6 +48,7 @@ export function MobileBlockHeader(props: {
           icon={props.icon}
           colorIcon
           badges={props.badges}
+          trailingBadges={props.trailingBadges}
           label={props.name}
         />
         {props.children}
