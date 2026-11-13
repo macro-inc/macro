@@ -694,7 +694,10 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         });
 
         let document_uuid = macro_uuid::string_to_uuid(&args.document_id).ok();
-        if document_uuid.is_none() && args.project_id.is_some() {
+        if document_uuid.is_none()
+            && args.project_id.is_some()
+            && !agent_correlation::context::may_share()
+        {
             let (owner, from) =
                 edit::get_document_owner_and_folder(&mut transaction, &args.document_id).await?;
             entity_access_db_utils::project_grants::refuse_unregistered_filing(
