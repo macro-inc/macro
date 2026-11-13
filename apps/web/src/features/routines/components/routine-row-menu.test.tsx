@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineRow } from '../core/types';
 import type { RoutineRowMenuActions } from './routine-row-menu';
@@ -260,6 +261,36 @@ describe('routine row menu', () => {
     expect(entries()).toContain('Keep as my routine');
     choose('Keep as my routine');
     await waitFor(() => expect(menu.onKeep).toHaveBeenCalledWith(child));
+  });
+
+  it('stays open while the list refreshes under it', async () => {
+    const [rows, setRows] = createSignal([briefing, paused]);
+    const menu = menuActions();
+    render(() => (
+      <RoutinesList
+        rows={rows()}
+        loading={false}
+        error={false}
+        onCreate={vi.fn()}
+        onOpen={vi.fn()}
+        onToggle={vi.fn()}
+        onRetry={vi.fn()}
+        menu={menu}
+      />
+    ));
+    await openMenu('Morning briefing');
+    const open = screen.getByRole('menu');
+    // A refetch makes new objects for the same routines.
+    setRows([{ ...briefing }, { ...paused, name: 'Weekly summary' }]);
+    // The open menu hides the rest of the page from the accessibility tree.
+    await screen.findByRole('button', { name: 'Weekly summary', hidden: true });
+    expect(screen.getByRole('menu')).toBe(open);
+    choose('Run now');
+    await waitFor(() =>
+      expect(menu.onRun).toHaveBeenCalledWith(
+        expect.objectContaining({ id: briefing.id })
+      )
+    );
   });
 
   it('has no menu where the host gives none', () => {

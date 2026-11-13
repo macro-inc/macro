@@ -7,8 +7,9 @@ import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, ComposerSurface, Layer, Tabs } from '@ui';
-import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
+import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
@@ -294,7 +295,9 @@ function RoutinesTable(props: {
           role="rowgroup"
           class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
         >
-          <For each={props.groups}>
+          {/* Keyed by group and routine: each list update makes new row
+              objects, and a row that remounted would close its open menu. */}
+          <Key each={props.groups} by="key">
             {(group) => (
               <>
                 {/* A band like the tasks list's group headers. */}
@@ -305,67 +308,67 @@ function RoutinesTable(props: {
                         as="div"
                         class="mx-1 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight text-ink-muted touch:rounded-lg touch:border touch:border-edge-muted touch:bg-surface"
                       >
-                        {group.title}
+                        {group().title}
                         <span class="font-normal tabular-nums text-ink-extra-muted">
-                          {group.rows.length}
+                          {group().rows.length}
                         </span>
                       </ComposerSurface>
                     </Layer>
                   </div>
                 </div>
-                <For each={group.rows}>
+                <Key each={group().rows} by="id">
                   {(row) => (
                     <>
                       <RoutineRowMenu
-                        row={row}
-                        pending={props.pendingId === row.id}
+                        row={row()}
+                        pending={props.pendingId === row().id}
                         onToggle={props.onToggle}
                         actions={props.menu}
                       >
                         <RoutineListRow
-                          row={row}
-                          pending={props.pendingId === row.id}
+                          row={row()}
+                          pending={props.pendingId === row().id}
                           onOpen={props.onOpen}
                           onToggle={props.onToggle}
-                          expanded={props.isExpanded(row)}
+                          expanded={props.isExpanded(row())}
                           caretGutter={props.rows.some(
                             (other) => other.children.length > 0
                           )}
                           onExpand={
-                            row.children.length > 0
-                              ? (open) => props.onExpand(row.id, open)
+                            row().children.length > 0
+                              ? (open) => props.onExpand(row().id, open)
                               : undefined
                           }
                         />
                       </RoutineRowMenu>
-                      <Show when={props.isExpanded(row)}>
-                        <For each={row.children}>
+                      <Show when={props.isExpanded(row())}>
+                        <Key each={row().children} by="id">
                           {(child) => (
                             <RoutineRowMenu
                               nested
-                              row={child}
-                              pending={props.pendingId === child.id}
+                              row={child()}
+                              pending={props.pendingId === child().id}
                               onToggle={props.onToggle}
                               actions={props.menu}
                             >
                               <RoutineListRow
                                 nested
                                 caretGutter
-                                row={child}
-                                pending={props.pendingId === child.id}
+                                row={child()}
+                                pending={props.pendingId === child().id}
                                 onOpen={props.onOpen}
                                 onToggle={props.onToggle}
                               />
                             </RoutineRowMenu>
                           )}
-                        </For>
+                        </Key>
                       </Show>
                     </>
                   )}
-                </For>
+                </Key>
               </>
             )}
-          </For>
+          </Key>
         </div>
         <Show when={props.empty}>
           <div role="row">
