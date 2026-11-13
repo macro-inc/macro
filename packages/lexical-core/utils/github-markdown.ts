@@ -285,9 +285,67 @@ function splitFences(markdown: string): { code: boolean; text: string }[] {
   return parts;
 }
 
+/** Quote content our inline-only `>` importer can't hold: blocks and sections. */
+const QUOTED_BLOCK =
+  /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|<details|<summary|`{3,}|~{3,}|\|)/i;
+
+/**
+ * Our `>` importer keeps a quote to inline text, but GitHub quotes hold
+ * headings, lists and `<details>` (CodeRabbit's "Review skipped" notice). A
+ * quote with block content becomes `<blockquote>`, which the HTML blockquote
+ * transformer imports as Markdown, with its own content normalized first. A
+ * GitHub alert's `[!NOTE]` marker becomes its bold label.
+ */
+function liftBlockquotes(markdown: string): string {
+  const output: string[] = [];
+  let quote: string[] = [];
+  let fence: string | null = null;
+
+  const flushQuote = () => {
+    if (quote.length === 0) return;
+    const inner = quote.map((line) => line.replace(/^\s*> ?/, ''));
+    if (inner.some((line) => QUOTED_BLOCK.test(line))) {
+      const alert = inner[0]?.match(
+        /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/i
+      );
+      if (alert) inner[0] = `**${ALERT_LABELS[alert[1].toUpperCase()]}**\n`;
+      output.push(
+        '',
+        '<blockquote>',
+        normalizeGithubMarkdown(inner.join('\n')),
+        '</blockquote>',
+        ''
+      );
+    } else {
+      // Inline quotes import as they are; their alert marker is a line.
+      output.push(...quote);
+    }
+    quote = [];
+  };
+
+  for (const line of markdown.split('\n')) {
+    const fenceMarker = line.match(FENCE_OPEN)?.[1];
+    if (fence) {
+      if (fenceMarker?.startsWith(fence)) fence = null;
+      output.push(line);
+      continue;
+    }
+    if (/^\s{0,3}>/.test(line)) {
+      quote.push(line);
+      continue;
+    }
+    flushQuote();
+    if (fenceMarker) fence = fenceMarker;
+    output.push(line);
+  }
+  flushQuote();
+  return output.join('\n');
+}
+
 export function normalizeGithubMarkdown(markdown: string): string {
   const saved: string[] = [];
-  const normalized = splitFences(markdown.replace(/\r\n?/g, '\n'))
+  const lifted = liftBlockquotes(markdown.replace(/\r\n?/g, '\n'));
+  const normalized = splitFences(lifted)
     .map((part) =>
       part.code ? `\n${part.text}\n` : convertProse(part.text, saved)
     )

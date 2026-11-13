@@ -187,6 +187,27 @@ describe('GitHub details sections', () => {
     });
   });
 
+  it('keep a quote whole when it holds blocks and a section', () => {
+    const { editor } = importMarkdown(
+      normalizeGithubMarkdown(
+        '> [!IMPORTANT]\n> ## Review skipped\n>\n> <details>\n> <summary><strong>Run configuration</strong></summary>\n>\n> - **Plan**: Advanced\n>\n> </details>\n>\n> - [ ] <!-- {} --> Trigger review'
+      )
+    );
+    editor.read(() => {
+      const root = $getRoot();
+      const quotes = root.getChildren();
+      expect(quotes.map((node) => node.getType())).toEqual(['quote']);
+      const [quote] = quotes;
+      const text = quote?.getTextContent() ?? '';
+      expect(text).toContain('Important');
+      expect(text).not.toMatch(/##|\[!|- \[ \]|<details|<summary/);
+      const [details] = collect(root, $isDetailsNode);
+      expect(details?.getFirstChild()?.getTextContent()).toBe(
+        'Run configuration'
+      );
+    });
+  });
+
   it('honors `open` and labels a section without a summary', () => {
     const { editor } = importMarkdown('<details open>\n\nBody\n\n</details>');
     editor.read(() => {
