@@ -897,3 +897,112 @@ async fn a_recipient_nested_in_any_still_excludes_a_borrowed_bot() {
     );
     assert_eq!(borrowed_bot.next_event_name().await, None);
 }
+
+/// Ported from the webhook crate's stream tests (composer session requests
+/// to team-shared runtimes): a requested session reaches the requester's own
+/// streams in any scope and the stream of the user its runtime runs as, and
+/// no other member of the team.
+mod requested_sessions {
+    use super::*;
+    use agent_trigger::domain::broker_events::{
+        AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    use macro_event_broker::exposure::Exposure;
+    use macro_event_broker::{Event, TopicEvent as _};
+
+    const REQUESTER: &str = "requester@example.com";
+    const TEAMMATE: &str = "teammate@example.com";
+    const BUYER: &str = "buyer@example.com";
+
+    /// The audience the producer declares for a composer request.
+    fn requested_audience(requester: &str, runtime_user: Option<&str>) -> Audience {
+        let event = Event::new(AgentTriggerTopicEvent::New(
+            NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+                origin: trigger_context::TriggerOrigin::Unknown,
+                repo_url: None,
+                bot_id: bot_id::BotId::new_from_uuid(BOT),
+                session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
+                    Uuid::from_u128(0x5E55),
+                ),
+                owner: user(requester).as_ref().to_owned(),
+                context: None,
+                runtime_user: runtime_user.map(|runtime| user(runtime).as_ref().to_owned()),
+            }),
+        ));
+        match event.event.exposure().unwrap() {
+            Exposure::Public(public) => public.audience,
+            Exposure::Internal(reason) => panic!("requested sessions are public: {reason}"),
+        }
+    }
+
+    /// Whether a stream held by `subscriber` in `scope` receives the request.
+    async fn receives(subscriber: &str, scope: WebhookScope, audience: Audience) -> bool {
+        let harness = Harness::default();
+        let subscriber = user(subscriber);
+        harness.teams.add(TEAM, &subscriber, TeamRole::Member);
+        let mut stream = harness
+            .open(
+                person(&subscriber),
+                scope,
+                filter(&["agent_trigger.new"]),
+                None,
+            )
+            .await
+            .unwrap();
+        harness
+            .publish(public(
+                event("agent_trigger.new", "bot", &BOT.to_string()),
+                audience,
+            ))
+            .await;
+        stream.next_event_name().await.is_some()
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_requested_session_reaches_the_requesters_team_stream() {
+        assert!(
+            receives(
+                REQUESTER,
+                WebhookScope::Team,
+                requested_audience(REQUESTER, None)
+            )
+            .await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_requested_session_does_not_reach_a_teammates_team_stream() {
+        assert!(
+            !receives(
+                TEAMMATE,
+                WebhookScope::Team,
+                requested_audience(REQUESTER, None)
+            )
+            .await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_requested_session_reaches_the_requesters_user_stream() {
+        assert!(
+            receives(
+                REQUESTER,
+                WebhookScope::User,
+                requested_audience(REQUESTER, None)
+            )
+            .await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_teammates_request_reaches_the_runtime_owners_team_stream() {
+        let audience = requested_audience(TEAMMATE, Some(BUYER));
+        assert!(receives(BUYER, WebhookScope::Team, audience).await);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_teammates_request_does_not_reach_a_third_members_team_stream() {
+        let audience = requested_audience(TEAMMATE, Some(BUYER));
+        assert!(!receives(REQUESTER, WebhookScope::Team, audience).await);
+    }
+}

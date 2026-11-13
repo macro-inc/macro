@@ -61,6 +61,8 @@ pub enum AudienceClass {
     Workspace,
     /// People captured by the producer, such as removed participants.
     Snapshot,
+    /// A user's own live streams, any scope (live streams only).
+    Person,
     /// Claimants of a GitHub App installation.
     GithubInstallation,
 }
@@ -365,7 +367,7 @@ public_event_registry! {
         "webhook.deleted": ["webhook"], [Workspace], Stable;
         "webhook.validated": ["webhook"], [Workspace], Stable;
         // macro.agent_sessions: the agent-runtime contract.
-        "agent_trigger.new": ["bot"], [Entity, Owner], Stable;
+        "agent_trigger.new": ["bot"], [Entity, Owner, Person], Stable;
         "agent_trigger.existing": ["bot"], [Entity], Stable;
     }
 }

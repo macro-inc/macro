@@ -110,6 +110,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
+trigger_context = { path = "../trigger_context" }
 model_owner = { path = "../model_owner" }
 macro_env_var = { path = "../macro_env_var" }
 tokio = { workspace = true, features = ["test-util"] }

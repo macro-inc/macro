@@ -173,8 +173,8 @@ pub struct StreamPrincipal {
 
 /// The kinds of credential that may open a stream. A stream always follows
 /// one user's access: a bot listens as the user it acts for, and a bot with
-/// no acting user cannot open one. Harness and internal credentials are
-/// never admitted.
+/// no acting user cannot open one. A harness runtime listens as the user it
+/// acts for (as `User`); internal credentials are never admitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrincipalKind {
     /// A user's own session, Macro API token or API key.

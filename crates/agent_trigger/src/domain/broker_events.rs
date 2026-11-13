@@ -121,6 +121,11 @@ pub struct AgentSessionRequestedEvent {
     /// events from producers that predate it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// Who the bot's runtime authenticates as (its harness's owner), so its
+    /// event stream receives a request any teammate made. Absent on events
+    /// from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_user: Option<String>,
 }
 
 /// A message in a channel where an agent persona converses. The session
@@ -425,7 +430,25 @@ impl TopicEvent for AgentTriggerTopicEvent {
                         entity_id: requested.owner.clone(),
                     }
                 })?;
-                (requested.bot_id, Audience::Owner { user_id: owner })
+                // Webhooks match the requester's workspaces (Owner). Live
+                // streams also take it on the requester's own team-scoped
+                // stream (a runtime shared with a team streams team-scoped)
+                // and on the stream of the user the runtime authenticates
+                // as, who need not be whoever asked.
+                let mut audiences = vec![
+                    Audience::Owner {
+                        user_id: owner.clone(),
+                    },
+                    Audience::Person { user_id: owner },
+                ];
+                audiences.extend(
+                    requested
+                        .runtime_user
+                        .clone()
+                        .and_then(|user| MacroUserIdStr::try_from(user).ok())
+                        .map(|user_id| Audience::Person { user_id }),
+                );
+                (requested.bot_id, Audience::Any(audiences))
             }
             Self::New(NewAgentSessionEvent::ConversationMessage(_)) => {
                 return Ok(Exposure::internal_by_design(

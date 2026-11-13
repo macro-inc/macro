@@ -162,6 +162,7 @@ fn audience_classes(audience: &event_exposure::Audience, classes: &mut Vec<Audie
         Audience::GithubInstallation { .. } => AudienceClass::GithubInstallation,
         Audience::Workspace { .. } => AudienceClass::Workspace,
         Audience::Snapshot { .. } => AudienceClass::Snapshot,
+        Audience::Person { .. } => AudienceClass::Person,
     };
     if !classes.contains(&class) {
         classes.push(class);

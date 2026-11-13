@@ -14,7 +14,10 @@ use std::sync::Mutex;
 use tower::ServiceExt;
 
 #[derive(Default)]
-struct OneShot(Mutex<Vec<(String, String, CompletionThinking)>>);
+struct OneShot(
+    Mutex<Vec<(String, String, CompletionThinking)>>,
+    Mutex<Vec<Option<uuid::Uuid>>>,
+);
 
 #[async_trait::async_trait]
 impl ToolFreeCompletion for OneShot {
@@ -26,6 +29,7 @@ impl ToolFreeCompletion for OneShot {
         assert_eq!(request.model, chat::domain::models::FREE_MODEL);
         assert_eq!(request.schema.name, "Answer");
         assert!(request.system_prompt.ends_with("Be brief."));
+        self.1.lock().unwrap().push(request.session);
         self.0
             .lock()
             .unwrap()
@@ -76,6 +80,82 @@ async fn tool_free_requests_call_one_completion_without_an_agent_or_discovery(po
             ADMISSION_TEST_USER.into(),
             ai_usage::AiFeature::DynamicCompletionsApi
         )]
+    );
+}
+
+/// A generation session's completion is its own work: recorded with the
+/// session as non-billable, never checked against the person's allowance,
+/// and tool free.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_generation_sessions_completion_is_its_own_and_never_billed(pool: sqlx::PgPool) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let mut state = (*test_api_context(pool).await).clone();
+    let one_shot = Arc::new(OneShot::default());
+    state.tool_free_completions = one_shot.clone();
+    let admission = Arc::new(TestAdmission {
+        result: Ok(()),
+        calls: Default::default(),
+    });
+    state.ai_admission = admission.clone();
+    let router = Router::new()
+        .route("/", post(structured_completion))
+        .with_state(state);
+    let session = uuid::Uuid::now_v7();
+    let scoped = |scope| Attribution {
+        correlation_id: Some(uuid::Uuid::now_v7()),
+        session_id: Some(session),
+        scope: Some(scope),
+        ..Attribution::default()
+    };
+    let mut body = request_body();
+    body["additional_instructions"] = json!("Be brief.");
+    body["toolset"] = json!({"type": "none"});
+    let response = scope_attribution(
+        scoped(SessionScope::Generation),
+        router
+            .clone()
+            .oneshot(authorized_request("/", body.clone())),
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(*one_shot.1.lock().unwrap(), [Some(session)]);
+    assert_eq!(
+        *admission.calls.lock().unwrap(),
+        [(
+            ADMISSION_TEST_USER.into(),
+            ai_usage::AiFeature::NonBillableAgentSession
+        )]
+    );
+    // Tools are refused to any scoped session, before admission.
+    let mut with_tools = body.clone();
+    with_tools["toolset"] = json!({"type": "all"});
+    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+        let response = scope_attribution(
+            scoped(scope),
+            router
+                .clone()
+                .oneshot(authorized_request("/", with_tools.clone())),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{scope:?}");
+    }
+    assert_eq!(admission.calls.lock().unwrap().len(), 1);
+    // A run's tool-free completion is the person's, as before.
+    let response = scope_attribution(
+        scoped(SessionScope::NoSend),
+        router.oneshot(authorized_request("/", body)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(one_shot.1.lock().unwrap()[1], None);
+    assert_eq!(
+        admission.calls.lock().unwrap()[1].1,
+        ai_usage::AiFeature::DynamicCompletionsApi
     );
 }
 

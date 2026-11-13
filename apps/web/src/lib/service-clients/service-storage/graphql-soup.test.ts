@@ -561,7 +561,7 @@ vi.mock('@urql/core', () => ({
   },
 }));
 
-it('maps the unread alias without pretending it is the full notification edge', async () => {
+it('maps the unread and mention aliases without pretending either is the full notification edge', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const item = {
     __typename: 'GraphqlSoupChannel',
@@ -587,6 +587,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
     unreadNotifications: [
       { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
     ],
+    unreadMentions: [{ id: 'mention', state: 'UNSEEN' }],
   } satisfies ChannelListItemFieldsFragment;
   expect(mapGraphqlSoupItem(item)).toMatchObject({
     tag: 'channel',
@@ -595,6 +596,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
       unreadNotifications: [
         { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
       ],
+      unreadMentions: [{ id: 'mention', state: 'unseen' }],
     },
   });
 });

@@ -1508,6 +1508,7 @@ fn agent_trigger_requested_event()
             ),
             owner: "macro|asker@example.com".to_owned(),
             context: None,
+            runtime_user: None,
         }),
     ))
 }

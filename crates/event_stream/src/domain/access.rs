@@ -358,6 +358,7 @@ where
                 .sees_personal_events()
                 && candidate.scope == WebhookScope::User
                 && kind.user() == user_id),
+            Audience::Person { user_id } => Ok(kind.user() == user_id),
             Audience::Snapshot { user_ids } => {
                 Ok(candidate.scope == WebhookScope::User && user_ids.contains(kind.user()))
             }
@@ -607,6 +608,7 @@ fn collect_entities(audience: &Audience, entities: &mut Vec<EntityKey>) {
         | Audience::Workspace { .. }
         | Audience::GithubInstallation { .. }
         | Audience::EntityAtLeast { .. }
+        | Audience::Person { .. }
         | Audience::Snapshot { .. } => {}
     }
 }
@@ -622,6 +624,7 @@ pub fn audience_class(audience: &Audience) -> &'static str {
         Audience::ContactsOf { .. } => "contacts_of",
         Audience::Workspace { .. } => "workspace",
         Audience::Snapshot { .. } => "snapshot",
+        Audience::Person { .. } => "person",
         Audience::GithubInstallation { .. } => "github_installation",
         Audience::EntityAtLeast { .. } => "entity_at_least",
         Audience::Any(_) => "any",

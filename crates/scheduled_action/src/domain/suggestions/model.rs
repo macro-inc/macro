@@ -118,6 +118,9 @@ pub enum SuggestRequest {
         reason: String,
         surfaces: Vec<Surface>,
         keep_probability: f32,
+        /// Never set: a catalog pick is not shown among suggestions.
+        #[serde(default, rename = "card")]
+        card: Option<RoutineSuggestionCard>,
     },
     /// A routine the catalog lacks, checked as saving checks it.
     #[serde(rename_all = "camelCase")]
@@ -129,7 +132,24 @@ pub enum SuggestRequest {
         reason: String,
         surfaces: Vec<Surface>,
         keep_probability: f32,
+        /// How it shows in the person's Suggestions feed.
+        card: RoutineSuggestionCard,
     },
+}
+
+/// How a drafted routine suggestion shows in the person's Suggestions feed:
+/// every routine a session drafts is also one suggestion there, kept and
+/// closed with it.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RoutineSuggestionCard {
+    /// What it does for the person, in a few words.
+    pub title: String,
+    /// 0 to 100: how much the person would regret missing it this week.
+    pub importance: u8,
+    /// The feed's filters it shows under.
+    #[serde(default)]
+    pub categories: Vec<suggestions::domain::model::Category>,
 }
 
 impl SuggestRequest {
@@ -175,6 +195,16 @@ pub struct CheckedSuggestion {
     pub reason: String,
     pub keep_probability: f32,
     pub pick: StoredPick,
+    /// A drafted routine's suggestion.
+    pub card: Option<CheckedRoutineSuggestionCard>,
+}
+
+/// A drafted routine's suggestion, checked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckedRoutineSuggestionCard {
+    pub title: String,
+    pub importance: u8,
+    pub categories: Vec<suggestions::domain::model::Category>,
 }
 
 /// A stored suggestion AI made.
@@ -185,32 +215,81 @@ pub struct StoredSuggestion {
     pub reason: String,
     pub keep_probability: f32,
     pub pick: StoredPick,
-    pub dismissed: bool,
+    /// When the person dismissed it.
+    pub dismissed_at: Option<DateTime<Utc>>,
+    /// When a nightly session retired it.
+    pub retired_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 
-/// A person's generation, as stored.
-#[derive(Debug, Clone, PartialEq)]
-pub struct StoredGeneration {
-    pub status: GenerationStatus,
-    pub started_at: DateTime<Utc>,
-    pub finished_at: Option<DateTime<Utc>>,
+impl StoredSuggestion {
+    /// Neither dismissed nor retired.
+    pub fn is_open(&self) -> bool {
+        self.dismissed_at.is_none() && self.retired_at.is_none()
+    }
 }
 
-/// How a generation ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
-#[strum(serialize_all = "snake_case")]
-pub enum GenerationOutcome {
-    /// Suggestions are off for the person.
-    Off,
-    /// They were generated before; generation runs once.
-    Done,
-    /// Every session handed back at least one suggestion.
-    Ready,
-    /// Some sessions handed back none, even after a retry.
-    Partial,
-    /// No session handed back any; Macro's templates fill in.
-    Failed,
-    /// The process is stopping.
-    Cancelled,
+/// Where one of the person's suggestions is, for a routines session
+/// managing them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewedState {
+    /// Shown.
+    Open,
+    /// The person turned it down; never suggest it again.
+    Dismissed,
+    /// A session found it no longer fits; it may be suggested again.
+    Retired,
+    /// The person saved a routine from it.
+    Saved,
+}
+
+/// One suggestion AI made for the person, as a routines session reviews it.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewedSuggestion {
+    #[schema(value_type = String, format = Uuid)]
+    pub id: Uuid,
+    pub surfaces: Vec<Surface>,
+    pub reason: String,
+    pub keep_probability: f32,
+    pub state: ReviewedState,
+    /// When it was suggested.
+    pub created_at: DateTime<Utc>,
+    /// When it was dismissed or retired.
+    pub closed_at: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    pub pick: SuggestedPick,
+}
+
+/// Every suggestion AI made for the person, for a routines session.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionReview {
+    pub suggestions: Vec<ReviewedSuggestion>,
+    /// Suggestions this session may still hand back.
+    pub kept_left: u32,
+}
+
+/// Retiring an open suggestion that no longer fits.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RetireSuggestion {
+    /// Why, for the change log.
+    pub reason: String,
+}
+
+/// What a generation's routines sessions did, for its log events.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoutineGenerationReport {
+    /// `onboarding` or `nightly`.
+    pub trigger: &'static str,
+    /// `ready` (every session kept one), `partial`, `failed` (none kept
+    /// any) or `cancelled`.
+    pub outcome: &'static str,
+    pub sessions: usize,
+    pub kept: u32,
+    pub retries: usize,
+    pub started_at: DateTime<Utc>,
+    pub duration_ms: u64,
 }

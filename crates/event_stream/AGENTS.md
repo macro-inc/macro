@@ -80,7 +80,12 @@ event (`lagged`, `revoked`, `reset`).
   bypassed (`get_users_by_entity_uncached`, `is_accessor`) so eviction on a
   logged revocation is exact.
 - Link-share viewers are never in an audience; a bot listens as its acting
-  user and sees `owner`/`recipient` events only if that user owns it.
+  user and sees `owner`/`recipient` events only if that user owns it. A
+  harness runtime (the coding agent daemon) listens as the user it acts for.
+- `Audience::Person` is live-stream only: the user's own streams in any scope
+  (a team-shared runtime streams team-scoped). Webhooks ignore it; composer
+  session requests use it next to `Owner` for the requester and the runtime's
+  user.
 - Metrics (`src/metrics.rs`, global OTel meter): `events.stream.open`,
   `events.stream.closes{reason}`, `events.stream.fan_out_lag`,
   `events.log.append_lag`, `events.stream.tail_gaps`. No ids as attributes.

@@ -299,6 +299,15 @@ pub enum Audience {
         /// The captured audience.
         user_ids: Vec<MacroUserIdStr<'static>>,
     },
+    /// The user themself on their own live streams, in any scope: a runtime
+    /// shared with a team streams team-scoped and must still receive what is
+    /// addressed to the user it authenticates as. Live streams only:
+    /// webhooks ignore it, so it widens stream delivery without changing
+    /// which webhooks match.
+    Person {
+        /// The user whose own streams receive the event.
+        user_id: MacroUserIdStr<'static>,
+    },
     /// Anyone in any of these audiences.
     Any(Vec<Audience>),
 }

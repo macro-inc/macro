@@ -9,7 +9,8 @@
 //! Control events (`lagged`, `revoked`, `reset`) precede a server close.
 //!
 //! A bot listens as the user it acts for: a credential with no acting user
-//! is refused (401), as are harness and internal credentials (403).
+//! is refused (401), as are internal credentials (403). A harness runtime
+//! streams as the user it acts for.
 
 #[cfg(test)]
 mod test;
@@ -164,9 +165,17 @@ async fn principal<B: BotOwners>(
                 credential_id: "session".to_owned(),
             }),
         },
-        MacroAuthorization::Harness(_) | MacroAuthorization::Internal(_) => {
-            Err(StreamHandlerError(StreamError::Forbidden))
-        }
+        // A harness runtime (the self-hosted coding agent daemon) streams
+        // its triggers as the user it acts for, as it did before streams
+        // had principals; refusing it would cut the daemon off.
+        MacroAuthorization::Harness(harness) => Ok(StreamPrincipal {
+            kind: PrincipalKind::User {
+                user,
+                api_key: false,
+            },
+            credential_id: format!("harness_token:{}", harness.token_id),
+        }),
+        MacroAuthorization::Internal(_) => Err(StreamHandlerError(StreamError::Forbidden)),
     }
 }
 

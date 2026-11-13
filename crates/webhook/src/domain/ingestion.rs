@@ -601,6 +601,7 @@ fn audience_members(audience: &Audience) -> Vec<&Audience> {
         | Audience::GithubInstallation { .. }
         | Audience::EntityAtLeast { .. }
         | Audience::Workspace { .. }
+        | Audience::Person { .. }
         | Audience::Snapshot { .. } => vec![audience],
     }
 }
@@ -698,6 +699,8 @@ where
                 | Audience::TeamsOf { user_id }
                 | Audience::ContactsOf { user_id } => workspaces.add_person(user_id),
                 Audience::Recipient { user_id } => workspaces.exact.push(user_id.to_string()),
+                // Live streams only: a webhook never matches through it.
+                Audience::Person { .. } => {}
                 Audience::Snapshot { user_ids } => workspaces
                     .exact
                     .extend(user_ids.iter().map(ToString::to_string)),
