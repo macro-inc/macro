@@ -74,7 +74,9 @@ use suggestion_generation::domain::model::GenerationAgent;
 use suggestion_generation::domain::service::GenerationService;
 use suggestion_generation::inbound::router::{GenerationRouterState, generation_router};
 use suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo;
+use suggestions::domain::resolution::SuggestionResolution;
 use suggestions::domain::service::SuggestionService;
+use suggestions::inbound::kafka_consumer::run_suggestion_resolution_consumer;
 use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
 use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
@@ -421,6 +423,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
+    let suggestions_brokers = brokers.clone();
+    let suggestions_ready = ready.clone();
     let intake_shutdown = lifecycle.stop_consumers.clone();
     let mut worker_ready = ready.clone();
     let worker_shutdown = lifecycle.stop_workers.clone();
@@ -572,13 +576,15 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
         },
     ));
+    let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let suggestion_access = Arc::new(EntitySuggestionAccess {
+        access: access.as_ref().clone(),
+        pool: db.clone(),
+    });
     let feed = Arc::new(
         SuggestionService::new(
-            Arc::new(PgSuggestionRepo::new(db.clone())),
-            Arc::new(EntitySuggestionAccess {
-                access: access.as_ref().clone(),
-                pool: db.clone(),
-            }),
+            Arc::clone(&feed_repo),
+            Arc::clone(&suggestion_access),
             correlation_sessions,
             generations.clone(),
             // Reading the feed counts paid readers in for nightly runs.
@@ -652,6 +658,29 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: generation,
         authorization_state: authorization_state.clone(),
     };
+    // Between generations, suggestions end by events: the person's own reply, a
+    // deleted item, lost access. Its own consumer group, started with the
+    // other consumers once the listener is ready.
+    let resolution = SuggestionResolution::new(feed_repo, suggestion_access);
+    let suggestions_shutdown = lifecycle.stop_consumers.clone();
+    lifecycle.consumers.spawn(supervise_consumer(
+        move || {
+            let mut ready = suggestions_ready.clone();
+            let brokers = suggestions_brokers.clone();
+            let resolution = resolution.clone();
+            let shutdown = suggestions_shutdown.clone();
+            async move {
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => return Ok(()),
+                    result = ready.wait_for(|ready| *ready) => if result.is_err() { return Ok(()); },
+                }
+                run_suggestion_resolution_consumer(&brokers, resolution, shutdown.cancelled()).await
+            }
+        },
+        lifecycle.stop_consumers.clone(),
+        CONSUMER_RESTART_DELAY,
+    ));
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),

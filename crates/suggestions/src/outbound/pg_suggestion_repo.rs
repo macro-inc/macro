@@ -11,8 +11,8 @@ use model_entity::EntityType;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Category, Change, NewKind, Suggestion, SuggestionContent, SuggestionKind, SuggestionState,
-    Target, TargetRole,
+    Category, Change, EntityAction, NewKind, OpenTarget, ResolveReason, Suggestion,
+    SuggestionContent, SuggestionKind, SuggestionState, Target, TargetRole,
 };
 use crate::domain::ports::{Limits, SuggestionRepo, Written};
 
@@ -291,6 +291,14 @@ fn category_names(categories: &[Category]) -> Vec<String> {
     categories
         .iter()
         .map(|category| category.as_ref().to_owned())
+        .collect()
+}
+
+/// The states a suggestion is open in, as stored.
+fn open_states() -> Vec<String> {
+    [SuggestionState::Proposed, SuggestionState::Accepted]
+        .iter()
+        .map(|state| state.as_ref().to_owned())
         .collect()
 }
 
@@ -599,5 +607,85 @@ impl SuggestionRepo for PgSuggestionRepo {
         }
         tx.commit().await?;
         Ok(moved)
+    }
+
+    async fn open_about(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> Result<Vec<OpenTarget>, Self::Err> {
+        // Every event of every person asks this: bounded, and the item's
+        // targets found by their index first whatever the statistics say
+        // (`OFFSET 0` keeps the planner from flattening the subquery).
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        let rows = sqlx::query!(
+            r#"SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS "action?"
+               FROM (SELECT suggestion_id, part_id, position FROM suggestion_target
+                     WHERE entity_type = $1 AND entity_id = $2 AND role = $3
+                     OFFSET 0) t
+               JOIN suggestion i ON i.id = t.suggestion_id
+               LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
+               WHERE i.state = ANY($4)
+               ORDER BY i.id, t.position"#,
+            entity_type.as_ref(),
+            entity_id,
+            TargetRole::About.as_ref(),
+            &open_states(),
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        let targets = rows.into_iter().filter_map(|row| {
+            let id = row.id;
+            let target = (|| -> Result<OpenTarget, PgSuggestionRepoError> {
+                let action = row
+                    .action
+                    .as_deref()
+                    .map(parse::<EntityAction>)
+                    .transpose()?;
+                Ok(OpenTarget {
+                    suggestion: row.id,
+                    user: MacroUserIdStr::try_from(row.user_id)
+                        .map_err(|_| PgSuggestionRepoError::Decode("a suggestion's user".to_owned()))?,
+                    created_at: row.created_at,
+                    reply: action == Some(EntityAction::Reply),
+                    part_id: row.part_id,
+                })
+            })();
+            // One broken row must not keep the item's other suggestions open.
+            target
+                .inspect_err(|error| {
+                    tracing::warn!(suggestion_id = %id, error = %error, "skipped an undecodable suggestion row");
+                })
+                .ok()
+        });
+        Ok(targets.collect())
+    }
+
+    async fn resolve(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        reason: ResolveReason,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let moved = sqlx::query!(
+            r#"UPDATE suggestion
+               SET state = $4, state_reason = $5, updated_at = $6, state_changed_at = $6
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3)"#,
+            user.as_ref(),
+            id,
+            &open_states(),
+            SuggestionState::Resolved.as_ref(),
+            reason.as_ref(),
+            now,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(moved == 1)
     }
 }

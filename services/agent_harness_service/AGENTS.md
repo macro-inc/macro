@@ -196,6 +196,9 @@ Pulumi stacks; they do not host extra agent processes.
   `scheduling.rs` sweeps generation sessions a stopped process left open
   every minute and starts nightly generations every five minutes, once the
   process is ready.
+  The suggestions routes are served here too, and `scheduling.rs` runs suggestions'
+  resolution consumer (group `suggestions-resolution`, `crates/suggestions`) beside the
+  event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
