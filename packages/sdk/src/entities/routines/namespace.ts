@@ -29,8 +29,9 @@ export interface CreatedEntity {
  *
  * ### Writing one
  *
- * - Find every item the request names (a channel, person, folder, project, label, tag, agent, database or document) with one `macro.search.names` call for all of them, before any other search: it looks in every kind at once. The item is the match marked `exact`, whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no match is exact, or several are and the request doesn't say which kind it means, ask which one rather than guess. A kind in `unavailable` wasn't checked: look for the item there with SDK search before saying it doesn't exist. Look names up only while writing the routine: its code and instructions use the ids you found, and never call `macro.search.names` to find a named item again on every run.
- * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key. A code step uses an item by its id, in a knob.
+ * - Find every item the request names (a channel, person, folder, project, label, tag, agent, database or document) with one `macro.search.names` call for all of them, before any other search: it looks in every kind at once. The item is the match marked `exact`, whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no match is exact, or several are and the request doesn't say which kind it means, ask which one rather than guess. A kind in `unavailable` wasn't checked: look for the item there with SDK search before saying it doesn't exist.
+ * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key.
+ * - A code step takes each item the request names from a knob, never from a name or id written into its code. The knob holds the item's name, which the step looks up when it runs with `macro.search.names([{ name: knobs.x, kinds: [its kind] }])`, taking the one exact match and throwing an error that names the knob when there is none. It holds an id only for an item made for the routine, such as the database it writes to.
  * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and use its id. Create nothing else.
  * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
  * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
@@ -110,8 +111,13 @@ export class RoutineNamespace {
    *     {
    *       type: 'code',
    *       title: 'Post hello',
-   *       source: `export async function main({ macro }: StepContext) {
-   *   await macro.channels.byId('<channel id>').send('Hello');
+   *       knobs: [{ type: 'text', name: 'channel', label: 'Channel to post in', value: 'general' }],
+   *       sentence: 'Post Hello in {channel}.',
+   *       source: `export async function main({ macro, knobs }: StepContext) {
+   *   const [{ matches }] = (await macro.search.names([{ name: knobs.channel, kinds: ['channel'] }])).results;
+   *   const match = matches.find((m) => m.exact && m.type === 'channel');
+   *   if (match?.type !== 'channel') throw new Error('There is no channel named ' + knobs.channel + '. Change the channel to post in.');
+   *   await match.entity.send('Hello');
    * }`,
    *     },
    *   ],
