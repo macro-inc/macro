@@ -468,7 +468,7 @@ export function ImportProgressStep(props: { done: number; total: number }) {
         aria-valuemin={0}
         aria-valuemax={props.total}
         aria-valuenow={props.done}
-        class="h-1.5 w-full overflow-hidden rounded-full bg-edge-muted"
+        class="h-1.5 w-full overflow-hidden rounded-full bg-active"
       >
         <div
           class="h-full rounded-full bg-accent transition-[width] motion-reduce:transition-none"
