@@ -18,7 +18,8 @@ section below is one place, in order; past misses are called out inline.
 | Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
 | A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
-| A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
+| A per-process fan-out (GraphQL subscription) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
+| Public events to API clients (SSE, webhooks) | Nothing to copy: declare exposure (section 8) | `crates/event_stream` delivers every public event |
 
 Background: `crates/macro_event_broker/AGENTS.md` maps the broker crate;
 `crates/properties/README.md` ("Delivery semantics and compatibility") states the
@@ -110,7 +111,7 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 
 | Consumer | What to add | Silent-drop behavior if you don't |
 | --- | --- | --- |
-| Webhook ingestion and SSE, `crates/webhook/src/domain/ingestion.rs` + `ingestion/stream.rs`, topic list in `crates/webhook/src/topics.rs` | Nothing per event: the variant's `exposure()` (section 8) decides; a new `Audience` class needs a mapping in both files; a README event-list row for public events | Internal variants are skipped by design; an audience class with no mapping fails the event as `UnsupportedAudience`, logged in DSS |
+| Public events (webhooks and live streams): exposure in the producer, registry in `crates/event_stream/src/domain/catalog.rs`, topic lists in `crates/event_stream/src/topics.rs` | Its `exposure()` arm (section 8); for a public event, its catalog entry | A public event whose name is not in the catalog is logged as unregistered and dropped by both deliveries; an agent-trigger shape with no arm is rejected as `InvalidEntityId` and committed, logged in DSS, not by the producer |
 | Realtime Soup, `crates/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
@@ -209,23 +210,42 @@ whether it leaves Macro, to whom, and in what shape. The vocabulary is in
 - The payload is an explicit projection, not the whole metadata by default: a
   new family ships thin (ids, actor, what changed). It derives
   `utoipa::ToSchema` under the crate's `schema` or `inbound` feature and has a
-  JSON-literal test. Start new families at `Stage::Preview`, which is not
-  delivered until the event stream's flag gate exists.
-- A topic is delivered only when `crates/webhook/src/topics.rs` subscribes to
-  it; otherwise list it in `INTERNAL_TOPICS` there. A new topic fails
+  JSON-literal test. Start new families at `Stage::Preview`: delivered only
+  to users with the `public-event-stream` flag.
+- A topic is delivered only when `crates/event_stream/src/topics.rs`
+  declares it; otherwise list it in `INTERNAL_TOPICS` there. A new topic fails
   `every_topic_is_delivered_or_listed_internal` until it is in one of the two.
+- An event that changes access (sharing, participants, team membership, bot
+  deletion) also returns its `Invalidation` in
+  `crates/event_stream/src/domain/invalidations.rs`, so live streams evict
+  cached access before delivering anything after it. Internal topics that
+  only change access go in `ACCESS_CHANGE_TOPICS`.
 
-When a family becomes public (subscribed in `topics.rs`, part of `WebhookEvent`
-in `crates/webhook/src/domain/events.rs`, which is in the storage OpenAPI spec):
+When a family becomes public:
 
-- Add its payload to `WebhookEvent` and to the `has_schema` assertions beside
-  it.
+- Add its block (topic enum, public payload type, each event's entity types,
+  rule classes and stage) to `public_event_registry!` in
+  `crates/event_stream/src/domain/catalog.rs`. That one registration feeds the
+  catalog endpoint, wildcard expansion (`document.*`) and the OpenAPI
+  `WebhookEvent` union; webhook management and the agent-runtime contract are
+  listed `outside_union`.
+- Move its topic from `INTERNAL_TOPICS` into both `declare_topics!` lists and
+  add one `ingest_public_event` arm in
+  `crates/webhook/src/inbound/kafka_consumer.rs`. The ingestion group starts a
+  new topic at `Latest`.
+- Ship it `Stage::Preview`: only users with the `public-event-stream` flag get
+  it, on streams and on webhooks they created. Flip to `Stable` in a later PR.
 - Regenerate: `bun run gen-api cloud-storage` in `apps/web`, then
   `just update-generated` in `packages/sdk`. Commit both generated trees.
 - Hydrate it in the SDK (`packages/sdk/src/events/hydrate/`, routed from
   `src/events/receiver.ts`); see the
   [add-sdk-endpoint skill](../../.agents/skills/add-sdk-endpoint/SKILL.md) for
   SDK conventions, and add its row to `crates/webhook/README.md`.
+
+Delivery guarantees to state in a family's docs: one entity's events arrive in
+order; webhooks are at least once; live streams are at least once within the
+one-hour replay window when resumed with a cursor; publication is at most once
+relative to the write (no outbox), so clients reconcile with list APIs.
 
 ## Verify locally
 

@@ -75,17 +75,23 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 
 ## Event ingestion and matching
 
-The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
-`macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
-`macro.agent_session_lifecycle`, `macro.users`, and `macro.call_notifications`
-(`src/topics.rs`; every other topic is listed there as internal).
+The `webhook-event-ingestion` Kafka consumer reads every topic with public
+events: today `macro.documents`, `macro.channels`, `macro.messages`,
+`macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
+`macro.users`, and `macro.call_notifications` (declared once in
+`crates/event_stream/src/topics.rs`, shared with the live stream's log; every
+other topic is listed there as internal). The group starts at `Latest` on a
+partition it has never committed, so a topic added to it does not replay its
+retention.
 
 What is delivered, to whom, and in what shape is declared by each event's
 `TopicEvent::exposure()` in its producing crate (vocabulary in
-`crates/event_exposure`); `src/domain/ingestion.rs` and `ingestion/stream.rs`
-only map the declared `Audience` to webhook workspaces and stream checks.
-Internal events, and `Preview` ones until the stream's flag gate exists, are
-skipped. It supports these event names:
+`crates/event_exposure`) and normalized by `event_stream::domain::normalize`,
+shared with live streams; `src/domain/ingestion.rs` only maps the declared
+`Audience` to webhook workspaces. Internal events are skipped. `Preview`
+events reach a webhook only when its creator has the `public-event-stream`
+feature flag. Live streams (`GET /events/stream`) live in
+`crates/event_stream`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`,
   `document.copied`, and `document.interaction` (a peer joined or left, or a
@@ -112,7 +118,7 @@ skipped. It supports these event names:
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
   removed). Persisted webhooks go only to the changed user's own personal and
-  team workspaces. The live SSE stream also reaches the user's contacts (user
+  team workspaces. The live stream also reaches the user's contacts (user
   scope only) and the team-scoped streams of the user's teams.
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
@@ -161,16 +167,26 @@ workspace expansion, and actor membership does not make another workspace
 eligible.
 
 A webhook matches only when it is active, valid, not soft-deleted, owned by an
-eligible workspace, and has one filter element that matches both the exact
-event name and entity ID. An event match in one filter element cannot be
+eligible workspace, and has one filter element that matches the event name,
+the entity ID and, when present, the entity type. An event match in one filter element cannot be
 combined with an ID match in another element. Because deletion is published
 after soft deletion, a webhook cannot receive its own `webhook.deleted` event;
 other eligible webhooks in the same owner workspace can receive it.
 
-### Filter-ID semantics
+### Filter semantics
 
-Each filter requires `events`. `ids` is optional; an absent or `null` value
-matches every entity ID for that filter's events:
+Each filter requires `events`. `ids` and `entity_types` are optional; an
+absent or `null` value matches every entity ID or type for that filter's
+events. A webhook holds at most 32 filters of at most 100 events and 100 ids
+each (the routine trigger caps), and the same validation applies to live
+streams, so a filter set is valid for both or neither.
+
+`events` entries are exact names, a family wildcard such as `document.*`, or
+`*`. Wildcards expand at match time against the event catalog
+(`event_stream::domain::catalog`), so a new event in a family arrives without
+editing the webhook. They need the `public-event-stream` feature flag for the
+webhook's creator; without it a wildcard is a literal name that matches
+nothing, as before.
 
 ```json
 [
@@ -191,9 +207,23 @@ an absent or `null` `ids` field matches every webhook ID in the strict owner
 workspace.
 
 The matching query stores filters in the `webhook.filters` `JSONB NOT NULL`
-column, protected by the `webhook_filters_is_array` constraint. It uses the
-`webhook_filters_gin_idx` `jsonb_path_ops` GIN index for the event containment
-probe and an exact JSONPath recheck to enforce same-filter event/ID matching.
+column, protected by the `webhook_filters_is_array` constraint. It narrows by
+owner workspace (`webhook_workspace_status_idx`), probes the
+`webhook_filters_gin_idx` `jsonb_path_ops` GIN index for the exact name, the
+family wildcard and `*`, and rechecks with JSONPath that one filter element
+matches both the event and the ID. Ingestion then applies the creator's flag
+to wildcard and preview matches and checks `entity_types`.
+
+### Ordering and delivery guarantees
+
+- Events of one entity arrive in order (the Kafka key); there is no order
+  across entities or topics.
+- Webhooks are at least once from ingestion (below). Live streams are at
+  least once inside the one-hour replay window when the client resumes with
+  its cursor, best effort beyond it.
+- Upstream publication is at most once relative to the write: producers
+  publish after commit with no outbox, so a committed change can have no
+  event. Clients that need certainty reconcile through the list APIs.
 
 Ingestion concurrently enqueues one message for every matched webhook and waits
 for every send. It succeeds only if all sends complete. Repository,
