@@ -31,10 +31,7 @@ use models_email::service::{
 /// slots, waiting would park a shared worker on every one of its messages.
 /// A population the CRM rejects outright, such as a malformed address, is
 /// dropped instead of retried.
-///
-/// The dispatcher logs each outcome with its reason and error chain, so the
-/// span records no error event of its own: a refusal is not a failure.
-#[tracing::instrument(skip_all, fields(link_id = %link.id))]
+#[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
 pub(super) async fn populate_crm_contact<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
