@@ -364,10 +364,7 @@ impl AccessRepository for PgAccessRepository {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::form_access::list_form_access(&self.pool, &source_ids).await?)
+        Ok(queries::form_access::list_form_access(&self.pool, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -379,10 +376,12 @@ impl AccessRepository for PgAccessRepository {
         let form_uuid = form_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid form ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
+        Ok(queries::form_access::get_form_access(
+            &self.pool,
+            &form_uuid,
+            Viewer::from_user(user_id),
+        )
+        .await?)
     }
 
     /// Resolve ordinary shares on an external chat.
@@ -598,7 +597,7 @@ impl AccessRepository for PgAccessRepository {
                 queries::external_chat_access::get_external_chat_access(&self.pool, &entity_uuid, &source_ids).await
             }
             EntityType::Form => {
-                queries::form_access::get_form_access(&self.pool, &entity_uuid, &source_ids).await
+                queries::form_access::get_form_access(&self.pool, &entity_uuid, viewer).await
             }
             EntityType::User
             | EntityType::Channel

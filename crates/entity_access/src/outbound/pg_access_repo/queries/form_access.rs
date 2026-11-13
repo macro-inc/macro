@@ -1,10 +1,13 @@
 //! Query for form access level.
 
 #[cfg(feature = "explain_binary")]
+use crate::outbound::pg_access_repo::queries::SourceIds;
+#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -14,15 +17,15 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// The highest access level `source_ids` hold on a form: its `entity_access`
+/// The highest access level a viewer holds on a form: its `entity_access`
 /// grants, plus View for anyone while the form's audience is public and it is
-/// not trashed. With no source ids (an anonymous caller) only the public arm
-/// can answer, and it never answers more than View.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_form_access(
+/// not trashed. For an anonymous viewer only the public arm can answer, and it
+/// never answers more than View.
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_form_access(
     pool: &PgPool,
     form_id: &Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
@@ -30,7 +33,7 @@ pub async fn get_form_access(
         FROM entity_access
         WHERE entity_id = $1
         AND entity_type = 'form'
-        AND source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))
 
         UNION ALL
 
@@ -41,7 +44,8 @@ pub async fn get_form_access(
         AND trashed_at IS NULL
         "#,
         form_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
@@ -49,28 +53,24 @@ pub async fn get_form_access(
     super::database_access::highest_access_level(&all_level_strings)
 }
 
-/// The highest access level `source_ids` hold through grants on every live
+/// The highest access level a user holds through grants on every live
 /// form they reach, ordered by form id. The public arm is deliberately absent:
 /// a public audience makes a form answerable by link, not listed to everyone.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn list_form_access(
+#[tracing::instrument(err, skip(pool, user_id))]
+pub(crate) async fn list_form_access(
     pool: &PgPool,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<(Uuid, AccessLevel)>, sqlx::Error> {
-    if source_ids.0.is_empty() {
-        return Ok(Vec::new());
-    }
-
     let rows = sqlx::query!(
         r#"
         SELECT ea.entity_id, ea.access_level AS "access_level: AccessLevel"
         FROM entity_access ea
         JOIN forms f ON f.id = ea.entity_id
         WHERE ea.entity_type = 'form'
-        AND ea.source_id = ANY($1)
+        AND ea.source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))
         AND f.trashed_at IS NULL
         "#,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;
