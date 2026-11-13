@@ -3,7 +3,7 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-bloc
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
-  ResponsiveBlockToolbar,
+  ResponsiveDocumentToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -84,24 +84,20 @@ export function agentSessionTitle(
   return transcriptTitle ?? name ?? sessionHarnessTitle(session ?? {});
 }
 
-/**
- * Agent-session identity in the split header chrome plus the standard split
- * toolbar: static label, shared entity actions, the session's pull request
- * once one exists, and external-provider links.
- *
- * Rename lives on the title menu (channel / routine), not on a tap of
- * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
- * the dropdown instead of an inline editor.
- */
-export function AgentSplitHeader(props: {
+type AgentSessionHeaderProps = {
   session: AgentSessionResponse | undefined;
   /** The fold's session title, preferred over the harness fallback. */
   title?: string;
-}) {
+  /** The file menu's Delete; the split closes by default. */
+  onDelete?: () => void;
+};
+
+/** The session's title, the viewer's access, and its entity for commands. */
+function useAgentSessionIdentity(props: AgentSessionHeaderProps) {
   // The session, not `useBlockId()`: a block created from the launcher mounts
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
-  const { sessionId, metadata, userId } = useAgentSession();
+  const { sessionId, userId } = useAgentSession();
   const title = () => agentSessionTitle(props.session, props.title);
   const permissions = () =>
     userId() && props.session?.ownerId === userId()
@@ -109,7 +105,6 @@ export function AgentSplitHeader(props: {
       : props.session?.canEdit
         ? Permissions.CAN_EDIT
         : Permissions.CAN_VIEW;
-
   const entity = (): AgentSessionEntity | undefined => {
     const session = props.session;
     const id = sessionId();
@@ -128,7 +123,29 @@ export function AgentSplitHeader(props: {
           : session.status.kind,
     };
   };
+  return { title, permissions, entity };
+}
+
+/** The block adapter: registers the session's commands on the Block's scope. */
+export function AgentSplitHeader(props: AgentSessionHeaderProps) {
+  const { entity } = useAgentSessionIdentity(props);
   useBlockEntityCommands({ resolveEntity: entity });
+  return <AgentSessionHeader {...props} />;
+}
+
+/**
+ * Agent-session identity in the split header chrome plus the standard split
+ * toolbar: static label, shared entity actions, the session's pull request
+ * once one exists, and external-provider links. Block-free: the standalone
+ * block and the Agents view (inside a `SplitHeaderScope`) both render it.
+ *
+ * Rename lives on the title menu (channel / routine), not on a tap of
+ * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
+ * the dropdown instead of an inline editor.
+ */
+export function AgentSessionHeader(props: AgentSessionHeaderProps) {
+  const { sessionId, metadata } = useAgentSession();
+  const { title, permissions, entity } = useAgentSessionIdentity(props);
   const openShare = useShareModal(() => {
     const session = entity();
     if (!session) return;
@@ -235,15 +252,17 @@ export function AgentSplitHeader(props: {
         </div>
       </SplitHeaderRight>
 
-      <ResponsiveBlockToolbar
+      <ResponsiveDocumentToolbar
         tools={shareTools}
         menuTools={tools}
         ops={entity() ? ops() : []}
         id={sessionId() ?? ''}
         itemType="agent_session"
         entity={entity()}
+        entityKind="agent"
         permissions={permissions()}
         name={title()}
+        onDelete={props.onDelete}
       />
     </>
   );
