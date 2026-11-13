@@ -56,8 +56,17 @@ export interface NativeComments {
   resolveBookmark(
     bookmark: NativeCommentBookmark
   ): { readonly anchor: Point; readonly focus: Point } | null;
-  /** True only when the session accepted the mark. */
-  publish(markId: string, bookmark: NativeCommentBookmark): Promise<boolean>;
+  /** Current Source draft quote; unavailable after retirement or unresolved range. */
+  draftText(
+    markId: string,
+    bookmark: NativeCommentBookmark
+  ): string | undefined;
+  /** True only when the session accepted the mark; expectedText is captured before flush. */
+  publish(
+    markId: string,
+    bookmark: NativeCommentBookmark,
+    expectedText?: string
+  ): Promise<boolean>;
   /** True only when the session accepted the removal. */
   remove(markId: string): Promise<boolean>;
   /** Source MARK_SELECTED_COMMENT_COMMAND: toggle `selected` on mark elements. */
@@ -295,12 +304,17 @@ export function createNativeComments(view: EditorView): NativeComments {
       if (disposed || view.mirror.keyGeneration === null) return null;
       return port.resolveCommentSelection(bookmark.cursors);
     },
-    publish(markId, bookmark) {
+    draftText(markId, bookmark) {
+      if (disposed || bookmark.generation !== view.mirror.keyGeneration)
+        return undefined;
+      return port.commentDraftText(bookmark.cursors, markId);
+    },
+    publish(markId, bookmark, expectedText = bookmark.cursors.text) {
       if (disposed || bookmark.generation !== view.mirror.keyGeneration)
         return Promise.resolve(false);
       return reply(
         markId,
-        { kind: 'add', ...bookmark.cursors },
+        { kind: 'add', ...bookmark.cursors, text: expectedText },
         bookmark.generation
       );
     },

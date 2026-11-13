@@ -338,3 +338,41 @@ test('a mark request is not sent once the key generation is replaced during the 
     }
   });
 });
+
+// Query outcome is controlled; this tests the real consumer's owner gate only.
+test('draft text refuses disposed and stale generation without querying the session', async () => {
+  const runtime = mount();
+  await createRoot(async (dispose) => {
+    const comments = createNativeComments(runtime.view);
+    const query = vi
+      .spyOn(runtime.port, 'commentDraftText')
+      .mockReturnValue('current');
+    const generation = vi.spyOn(runtime.view.mirror, 'keyGeneration', 'get');
+    try {
+      const one = textNode(runtime, 'one ');
+      runtime.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: one.key, offset: 0, type: 'text' },
+        focus: { key: one.key, offset: 3, type: 'text' },
+      });
+      const bookmark = comments.captureSelection();
+      if (!bookmark) throw new Error('Missing bookmark');
+      expect(comments.draftText('quote', bookmark)).toBe('current');
+      expect(query).toHaveBeenCalledTimes(1);
+      generation.mockReturnValue(bookmark.generation + 1);
+      expect(comments.draftText('quote', bookmark)).toBeUndefined();
+      expect(query).toHaveBeenCalledTimes(1);
+      generation.mockReturnValue(bookmark.generation);
+      comments.dispose();
+      expect(comments.draftText('quote', bookmark)).toBeUndefined();
+      expect(query).toHaveBeenCalledTimes(1);
+    } finally {
+      generation.mockRestore();
+      query.mockRestore();
+      comments.dispose();
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+});

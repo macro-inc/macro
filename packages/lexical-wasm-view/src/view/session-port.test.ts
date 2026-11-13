@@ -9,7 +9,7 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import {
   EditorSession,
   initSync,
@@ -281,6 +281,58 @@ test('type flags, command propagation and cold initialize use the paired ABI', (
     expect(s.mirror.node(s.key)?.text).toBe('ab');
     expect(s.session.nodeText(s.key)).toBe('ab');
   } finally {
+    s.session.free();
+  }
+});
+
+// Transport interpretation only: query reply is controlled, not native exposure.
+test('comment quote read distinguishes unavailable and resolved empty text', () => {
+  const s = setup(true);
+  const query = vi.spyOn(s.port, 'query');
+  try {
+    const selection = {
+      anchor: { nodeId: 'anchor', cursor: Uint8Array.of(1, 2) },
+      focus: { nodeId: 'focus', cursor: Uint8Array.of(3, 4) },
+      text: 'old capture',
+    };
+    query.mockReturnValue({
+      text: '',
+      count: 1,
+      keys: [],
+      nodes: [],
+      points: [],
+    });
+    expect(s.port.commentDraftText(selection, 'mark')).toBe('');
+    expect(query).toHaveBeenLastCalledWith({
+      kind: 12,
+      key: 0,
+      flags: 0,
+      text: JSON.stringify({
+        anchor: { nodeId: 'anchor', cursor: [1, 2] },
+        focus: { nodeId: 'focus', cursor: [3, 4] },
+        markId: 'mark',
+      }),
+    });
+    query.mockReturnValue({
+      text: '',
+      count: 0,
+      keys: [],
+      nodes: [],
+      points: [],
+    });
+    expect(s.port.commentDraftText(selection, 'mark')).toBeUndefined();
+    query.mockReturnValue({
+      text: 'orphan',
+      count: 0,
+      keys: [],
+      nodes: [],
+      points: [],
+    });
+    expect(() => s.port.commentDraftText(selection, 'mark')).toThrow(
+      'Invalid native comment draft text reply'
+    );
+  } finally {
+    query.mockRestore();
     s.session.free();
   }
 });

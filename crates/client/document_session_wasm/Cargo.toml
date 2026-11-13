@@ -29,6 +29,7 @@ wasm-bindgen.workspace = true
 js-sys.workspace = true
 scoped-tls-hkt.workspace = true
 bebop.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -42,5 +43,4 @@ wasm-opt = ["-Oz"]
 
 [dev-dependencies]
 syn.workspace = true
-serde.workspace = true
 sync_protocol.workspace = true

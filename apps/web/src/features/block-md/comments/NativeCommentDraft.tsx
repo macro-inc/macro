@@ -153,13 +153,22 @@ export function createNativeCommentDraft(options: {
       parent.append(anchorElement);
       refresh();
       options.add(id, anchorElement, {
-        text: () => (active() ? record.bookmark.text : undefined),
+        text: () =>
+          active() ? comments.draftText(id, record.bookmark) : undefined,
         publish: () => {
           if (!active()) return Promise.resolve(false);
           if (record.pending) return record.pending;
+          // Source snapshots this independently of the message quote read,
+          // before the asynchronous flush; the original cursor capture stays immutable.
+          const selectedText = comments.draftText(id, record.bookmark);
+          if (!selectedText || !active()) return Promise.resolve(false);
           const publish = async () => {
             try {
-              const accepted = await comments.publish(id, record.bookmark);
+              const accepted = await comments.publish(
+                id,
+                record.bookmark,
+                selectedText
+              );
               if (accepted) record.published = true;
               if (!active()) {
                 await cleanupPublished(record);

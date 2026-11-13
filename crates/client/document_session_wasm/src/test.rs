@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod action_dependencies;
 mod click;
+mod comment_draft_text;
 mod decorator_actions;
 mod focus_end;
 mod history_awareness;

@@ -858,6 +858,24 @@ export class SessionPort implements EditorPort {
     });
     return { anchor: point(anchor), focus: point(focus) };
   }
+  /** Source draft quote: current nonempty marked text, else durable range text.
+   * Undefined is unavailable; an empty string is a resolved empty range.
+   */
+  commentDraftText(
+    selection: CommentSelection,
+    markId: string
+  ): string | undefined {
+    const reply = this.query({
+      kind: 12,
+      key: 0,
+      flags: 0,
+      text: encodeCommentSelectionCursors(selection, markId),
+    });
+    if (reply.count === 1) return reply.text;
+    if (reply.count !== 0 || reply.text !== '')
+      throw new Error('Invalid native comment draft text reply');
+    return undefined;
+  }
   /** Append local edits and resolve when they are delivered or cannot be. */
   flush(): Promise<FlushReply> {
     this.assertRootAdmission();

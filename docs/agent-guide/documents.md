@@ -124,6 +124,9 @@ remain unmounted. The draft
 follows edits until the mark is published through the session's isolated
 staging peer. Existing comment marks bind to their threads, highlight at the
 caret, and open from comment links once the native body is ready.
+With edit access, change text inside an open draft before posting. Verify that
+the comment quote and the published mark cover the updated passage, including
+backward ranges, ranges across paragraphs, and ranges inside a table cell.
 
 For desktop table borders, hover a cell edge to insert a row or column, and the
 left/top/corner controls to delete the hovered row, column or table. Check the

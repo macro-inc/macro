@@ -21,6 +21,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { batch, createSignal } from 'solid-js';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
+import { finishQuoteControl } from './commentQuoteTestCleanup';
 import { NativeMessageCommentsProvider } from './NativeMessageCommentsProvider';
 
 const mocks = vi.hoisted(() => ({
@@ -349,6 +350,10 @@ test('the native draft highlight follows its durable cursors through edits', asy
 
     select(0, 6);
     expect(controls.create()).toBe(true);
+    const draftId = controls.current();
+    if (!draftId) throw new Error('Missing draft id');
+    const publication = harness.state.comments.marks[draftId]?.publication;
+    expect(publication?.text()).toBe('before');
     expect(ranges.at(-1)).toBe('before');
     expect(highlights()).toEqual(['6px']);
 
@@ -364,6 +369,7 @@ test('the native draft highlight follows its durable cursors through edits', asy
     expect(ranges.at(-1)).toBe('befZore');
     expect(highlights()).toEqual(['7px']);
     expect(controls.current()).toBeDefined();
+    expect(publication?.text()).toBe('befZore');
 
     controls.discard();
     expect(highlights()).toEqual([]);
@@ -489,5 +495,139 @@ test('a native draft inside an existing comment leaves that comment on cancellat
     expect(harness.state.comments.marks.mark?.existsOnServer).toBe(true);
   } finally {
     await harness.close();
+  }
+});
+
+// The native view/cursors/lifecycle are real. Quote reads and service completion
+// are controlled to pin the Source two-read/pre-flush chronology independently.
+test('native quote publication snapshots its second read before flush without changing the bookmark', async () => {
+  const harness = draftHarness();
+  const read = vi
+    .spyOn(harness.comments, 'draftText')
+    .mockReturnValueOnce('message quote')
+    .mockReturnValueOnce('before');
+  const publish = vi.spyOn(harness.comments, 'publish');
+  let drain: (() => void) | undefined;
+  let pending: Promise<boolean> | undefined;
+  let primary: { error: unknown } | undefined;
+  const flush = vi.spyOn(harness.session.port, 'flush').mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        drain = () => resolve({ kind: 'drained' });
+      })
+  );
+  const comment = vi
+    .spyOn(harness.session.port, 'comment')
+    .mockResolvedValue({ kind: 'accepted' });
+  try {
+    harness.select('before ', 0, 6);
+    expect(harness.controls.create()).toBe(true);
+    const id = harness.controls.current();
+    if (!id) throw new Error('Missing draft');
+    const publication = harness.publication(id);
+    expect(publication.text()).toBe('message quote');
+    pending = publication.publish();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(flush).toHaveBeenCalledTimes(1);
+    const call = publish.mock.calls[0];
+    if (!call) throw new Error('Missing publish call');
+    const bookmark = call[1];
+    const frozen = JSON.stringify(bookmark);
+    expect(call[2]).toBe('before');
+    read.mockReturnValue('after flush started');
+    expect(comment).not.toHaveBeenCalled();
+    if (!drain) throw new Error('Missing flush completion');
+    drain();
+    expect(await pending).toBe(true);
+    expect(comment).toHaveBeenCalledWith(id, {
+      kind: 'add',
+      ...bookmark.cursors,
+      text: 'before',
+    });
+    expect(JSON.stringify(bookmark)).toBe(frozen);
+    expect(bookmark.text).toBe('before');
+    expect(bookmark.cursors.text).toBe('before');
+    expect(read).toHaveBeenCalledTimes(2);
+  } catch (error) {
+    primary = { error };
+  } finally {
+    await finishQuoteControl(primary, [
+      () => {
+        drain?.();
+        drain = undefined;
+      },
+      async () => {
+        if (pending) await pending;
+      },
+      // The mark service is controlled: retire its local draft without issuing
+      // another held flush during resource cleanup.
+      () => {
+        const id = harness.controls.current();
+        if (id) harness.controls.commit(id);
+      },
+      () => read.mockRestore(),
+      () => publish.mockRestore(),
+      () => flush.mockRestore(),
+      () => comment.mockRestore(),
+      () => harness.close(),
+    ]);
+  }
+});
+
+// Real draftText/query + real edit/cursors; only flush and external annotation
+// completion are supplied. This is not an ACK, physical storage or browser proof.
+test('actual range edit supplies the current quote to outgoing comment publication', async () => {
+  const harness = draftHarness();
+  const capture = vi.spyOn(harness.comments, 'captureSelection');
+  const flush = vi
+    .spyOn(harness.session.port, 'flush')
+    .mockResolvedValue({ kind: 'drained' });
+  const comment = vi
+    .spyOn(harness.session.port, 'comment')
+    .mockResolvedValue({ kind: 'accepted' });
+  let pending: Promise<boolean> | undefined;
+  let primary: { error: unknown } | undefined;
+  try {
+    harness.select('before ', 0, 6);
+    expect(harness.controls.create()).toBe(true);
+    const id = harness.controls.current();
+    if (!id) throw new Error('Missing draft');
+    const result = capture.mock.results[0];
+    if (result?.type !== 'return' || !result.value)
+      throw new Error('Missing captured bookmark');
+    const bookmark = result.value;
+    const frozen = JSON.stringify(bookmark);
+    const publication = harness.publication(id);
+    expect(publication.text()).toBe('before');
+    harness.select('before ', 3, 3);
+    harness.session.port.command(CommandCode.InsertText, 0, 0, 'Z');
+    expect(publication.text()).toBe('befZore');
+    expect(JSON.stringify(bookmark)).toBe(frozen);
+    pending = publication.publish();
+    expect(await pending).toBe(true);
+    expect(comment).toHaveBeenCalledExactlyOnceWith(id, {
+      kind: 'add',
+      ...bookmark.cursors,
+      text: 'befZore',
+    });
+    expect(bookmark.text).toBe('before');
+    expect(bookmark.cursors.text).toBe('before');
+    expect(JSON.stringify(bookmark)).toBe(frozen);
+  } catch (error) {
+    primary = { error };
+  } finally {
+    await finishQuoteControl(primary, [
+      async () => {
+        if (pending) await pending;
+      },
+      () => {
+        const id = harness.controls.current();
+        if (id) harness.controls.commit(id);
+      },
+      () => capture.mockRestore(),
+      () => flush.mockRestore(),
+      () => comment.mockRestore(),
+      () => harness.close(),
+    ]);
   }
 });

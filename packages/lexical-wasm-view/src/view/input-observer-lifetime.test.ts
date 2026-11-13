@@ -547,3 +547,71 @@ test('real Enter callback keeps its issued scope and scoped retirement path', as
     runtime.root.remove();
   }
 });
+
+test('draft quote query preserves callback lease and next healthy listener', async () => {
+  const runtime = mount();
+  const Enter = createViewCommand(
+    'Key(Enter)',
+    (value): value is KeyboardEvent | null =>
+      value === null || value instanceof KeyboardEvent
+  );
+  let release = () => {};
+  let calls = 0;
+  try {
+    runtime.port.setState(state('before'));
+    const node = [...runtime.view.mirror.values()].find(
+      (node) => node.kind === 'text'
+    );
+    if (!node) throw new Error('Missing native text');
+    runtime.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: node.key, offset: 0, type: 'text' },
+      focus: { key: node.key, offset: 6, type: 'text' },
+    });
+    const cursors = runtime.port.commentSelection();
+    if (!cursors) throw new Error('Missing durable cursors');
+    const message = {
+      kind: 12,
+      key: 0,
+      flags: 0,
+      text: JSON.stringify({
+        anchor: {
+          nodeId: cursors.anchor.nodeId,
+          cursor: [...cursors.anchor.cursor],
+        },
+        focus: {
+          nodeId: cursors.focus.nodeId,
+          cursor: [...cursors.focus.cursor],
+        },
+        markId: 'draft',
+      }),
+    };
+    release = runtime.view.registerViewCommand(
+      Enter,
+      () => {
+        const scope = runtime.port.nativeEnter?.scope();
+        const pending = runtime.port.nativeEnter?.pendingSelection();
+        expect(scope).toBeDefined();
+        expect(() => runtime.port.query(message)).toThrow();
+        expect(runtime.port.nativeEnter?.scope()).toBe(scope);
+        expect(runtime.port.nativeEnter?.pendingSelection()).toEqual(pending);
+        calls++;
+        return true;
+      },
+      3
+    );
+    expect(runtime.port.nativeEnter?.dispatch()).toBe(true);
+    expect(calls).toBe(1);
+    expect(runtime.port.nativeEnter?.scope()).toBeUndefined();
+    const before = runtime.view.query.serializedState();
+    const reply = runtime.port.query(message);
+    expect([reply.count, reply.text]).toEqual([1, 'before']);
+    expect(runtime.view.query.serializedState()).toBe(before);
+    expect(runtime.port.nativeEnter?.dispatch()).toBe(true);
+    expect(calls).toBe(2);
+  } finally {
+    release();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});

@@ -197,6 +197,7 @@ fn selection_cursors(value: &serde_json::Value) -> Result<loro::LoroValue, Bound
     ))
 }
 mod clipboard_dom;
+mod draft_text;
 pub(crate) use clipboard_dom::clipboard_dom;
 
 pub(crate) fn query(
@@ -280,6 +281,9 @@ pub(crate) fn query(
         12 => {
             // Kind 8's JSON cursors resolve back to current model points.
             let value: serde_json::Value = serde_json::from_str(&msg.text)?;
+            if value.get("markId").is_some() {
+                return draft_text::query(session, &msg);
+            }
             if let Some(ViewSelection::Range { anchor, focus, .. }) =
                 session.resolve_selection(&selection_cursors(&value)?)
             {

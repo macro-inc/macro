@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { appendFileSync } from 'node:fs';
 import {
   DRAFT_THREAD_ID,
   type MessageCommentOperations,
@@ -10,10 +11,19 @@ import {
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import {
+  $createTableCellNode,
+  $createTableNode,
+  $createTableRowNode,
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+} from '@lexical/table';
 import { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import {
   $createCommentNode,
+  $getCommentMarkText,
   $updateAllNodeIds,
   CommentNode,
   peerIdPlugin,
@@ -159,7 +169,7 @@ function setup(lateEditor = false) {
   Element.prototype.scrollIntoView = scroll;
   const editor = createEditor({
     namespace: 'comment-link',
-    nodes: [CommentNode],
+    nodes: [CommentNode, TableNode, TableRowNode, TableCellNode],
     onError: (error) => {
       throw error;
     },
@@ -258,6 +268,182 @@ function setup(lateEditor = false) {
 }
 
 describe('inline comment link navigation', () => {
+  it('reads a retained draft range inside a real table shadow after the caret moves', async () => {
+    const f = setup();
+    f.editor.update(
+      () => {
+        const table = $createTableNode();
+        const row = $createTableRowNode();
+        const cell = (value: string) =>
+          $createTableCellNode().append(
+            $createParagraphNode().append($createTextNode(value))
+          );
+        table.append(row.append(cell('Cell 1:1'), cell('Cell 1:2')));
+        $getRoot().append(table);
+        $getRoot().getAllTextNodes()[0].select(1, 5);
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    f.editor.update(
+      () => {
+        f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+      },
+      { discrete: true }
+    );
+    const id = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+    const publication = f.state.comments.marks[id]?.publication;
+    if (!publication) throw new Error('Missing table draft');
+    expect(publication.text()).toBe('ell ');
+    f.editor.update(
+      () => {
+        $getRoot().getAllTextNodes()[1].select(0, 8);
+      },
+      { discrete: true }
+    );
+    expect(publication.text()).toBe('ell ');
+  });
+
+  it('keeps message quote and publication expected text as independent reads', async () => {
+    const f = setup();
+    f.editor.update(
+      () => {
+        const text = $createTextNode('before');
+        $getRoot().append($createParagraphNode().append(text));
+        text.select(0, 6);
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    f.editor.update(
+      () => {
+        f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+      },
+      { discrete: true }
+    );
+    const id = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+    const publication = f.state.comments.marks[id]?.publication;
+    if (!publication) throw new Error('Missing publication');
+    // Controlled first read pins chronology, not a real simultaneous edit.
+    const quote = vi
+      .spyOn(publication, 'text')
+      .mockReturnValueOnce('message quote');
+    try {
+      mocks.post.mockResolvedValueOnce(null);
+      await f.post({ threadId: DRAFT_THREAD_ID, content: 'Comment' });
+      expect(quote).toHaveBeenCalledTimes(1);
+      expect(mocks.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'before' })
+      );
+      expect(mocks.post).toHaveBeenCalledWith(
+        'Comment',
+        id,
+        'message quote',
+        undefined,
+        undefined
+      );
+    } finally {
+      quote.mockRestore();
+    }
+  });
+
+  it.each([
+    ['range', false],
+    ['range', true],
+    ['edit', false],
+    ['edit', true],
+    ['whitespace-mark', false],
+    ['whitespace-mark', true],
+  ] as const)(
+    'pins raw Source durable quote separators: %s backward=%s',
+    async (profile, backward) => {
+      const f = setup();
+      const first = profile === 'whitespace-mark' ? '   ' : 'before';
+      let endpoints: unknown;
+      f.editor.update(
+        () => {
+          const a = $createTextNode(first),
+            b = $createTextNode('second');
+          $getRoot().append(
+            $createParagraphNode().append(a),
+            $createParagraphNode().append(b)
+          );
+          const range = $createRangeSelection();
+          const start = { key: a.getKey(), offset: 0, type: 'text' as const };
+          const end = { key: b.getKey(), offset: 6, type: 'text' as const };
+          const anchor = backward ? end : start,
+            focus = backward ? start : end;
+          range.anchor.set(anchor.key, anchor.offset, anchor.type);
+          range.focus.set(focus.key, focus.offset, focus.type);
+          $setSelection(range);
+          endpoints = { anchor, focus };
+        },
+        { discrete: true }
+      );
+      await f.synchronize();
+      f.editor.update(
+        () => {
+          f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined);
+        },
+        { discrete: true }
+      );
+      const id = f.state.comments.threads[DRAFT_THREAD_ID]!.anchorId;
+      const publication = f.state.comments.marks[id]?.publication;
+      if (!publication) throw new Error('Missing multi-block draft');
+      f.editor.update(
+        () => {
+          $getRoot().getAllTextNodes()[0].select(0, 0);
+        },
+        { discrete: true }
+      );
+      if (profile === 'edit') {
+        f.editor.update(
+          () => {
+            $getRoot().getAllTextNodes()[0].spliceText(3, 0, 'Z');
+          },
+          { discrete: true }
+        );
+        await f.synchronize();
+      }
+      if (profile === 'whitespace-mark') {
+        // Actual matching CommentNode with whitespace-only text: trimmed mark
+        // helper is empty, so the retained durable range remains authoritative.
+        f.editor.update(
+          () => {
+            const text = $getRoot().getAllTextNodes()[0];
+            const mark = $createCommentNode({ ids: [id], isDraft: false });
+            text.replace(mark);
+            mark.append(text);
+          },
+          { discrete: true }
+        );
+        await f.synchronize();
+      }
+      const marked = f.editor.read(() => $getCommentMarkText(id));
+      const text = publication.text();
+      const record = {
+        profile,
+        backward,
+        endpoints,
+        marked,
+        text,
+        firstText: first,
+        secondText: 'second',
+        model: f.editor.getEditorState().toJSON(),
+      };
+      const output = process.env.SOURCE_QUOTE_PROFILE_OUT;
+      if (output) appendFileSync(output, JSON.stringify(record) + '\n');
+      expect(marked).toBe('');
+      expect(text).toBe(
+        profile === 'whitespace-mark'
+          ? '   \nsecond'
+          : profile === 'edit'
+            ? 'befZore\nsecond'
+            : 'before\nsecond'
+      );
+    }
+  );
+
   it('keeps the draft and posts no message when its anchor is not acknowledged', async () => {
     const f = setup();
     f.editor.update(
@@ -469,6 +655,45 @@ describe('inline comment link navigation', () => {
     expect(f.state.comments.threads.root?.anchorId).toBe('mark');
     expect(f.editor.getRootElement()?.textContent).toBe('Commented text');
   });
+  it('reads the current quoted text after an edit inside the draft range', async () => {
+    const f = setup();
+    f.editor.update(
+      () => {
+        const text = $createTextNode('before ');
+        $getRoot().append($createParagraphNode().append(text));
+        text.select(0, 6);
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    f.editor.update(
+      () => {
+        expect(
+          f.editor.dispatchCommand(CREATE_DRAFT_COMMENT_COMMAND, undefined)
+        ).toBe(true);
+      },
+      { discrete: true }
+    );
+    const draft = f.state.comments.threads[DRAFT_THREAD_ID];
+    if (!draft) throw new Error('Missing draft thread');
+    const publication = f.state.comments.marks[draft.anchorId]?.publication;
+    expect(publication?.text()).toBe('before');
+
+    f.editor.update(
+      () => {
+        const text = $getRoot().getAllTextNodes()[0];
+        text.select(3, 3);
+        text.spliceText(3, 0, 'Z');
+      },
+      { discrete: true }
+    );
+    await f.synchronize();
+    expect(publication?.text()).toBe('befZore');
+    expect(f.state.comments.threads[DRAFT_THREAD_ID]?.anchorId).toBe(
+      draft.anchorId
+    );
+  });
+
   it('keeps a draft spanning paragraphs outside the document tree', async () => {
     const f = setup();
     f.editor.update(
