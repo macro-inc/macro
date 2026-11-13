@@ -27,6 +27,7 @@ mod permission_policy;
 mod preview;
 mod public_mcp;
 mod pull_request_archive;
+mod pull_request_descriptions;
 mod routine_code;
 mod routine_sessions;
 mod runtime_commands;
@@ -986,12 +987,22 @@ async fn run() -> anyhow::Result<()> {
         },
         internal_mcp::InternalTools {
             service: session_pull_requests.clone(),
+            backlinks: Arc::new(
+                agent_session::domain::pull_request_backlinks::PullRequestBacklinkService::new(
+                    session_repo.clone(),
+                    Arc::new(
+                        pull_request_descriptions::GithubPullRequestDescriptions::new(
+                            config.linked_github_tokens()?,
+                        )?,
+                    ),
+                    macro_service_urls::AppServiceUrl::new()?.as_ref(),
+                ),
+            ),
             tasks: session_tasks.clone(),
             code_mode: code_mode_enabled.then(|| code_mode.clone()),
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
-            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each

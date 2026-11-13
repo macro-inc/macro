@@ -6,7 +6,10 @@ use std::sync::{Arc, OnceLock};
 
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
-    domain::{pull_request::SessionPullRequests, session_task::SessionTasks},
+    domain::{
+        pull_request::SessionPullRequests, pull_request_backlinks::SessionPullRequestBacklinks,
+        session_task::SessionTasks,
+    },
     inbound::toolset::{LinkTask, SessionToolContext, SetPullRequest, TaskPullRequestsTool},
 };
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
@@ -89,13 +92,12 @@ async fn authenticate(session: AuthenticatedSession, mut request: Request, next:
 #[derive(Clone)]
 pub(super) struct InternalTools {
     pub(super) service: Arc<dyn SessionPullRequests>,
+    pub(super) backlinks: Arc<dyn SessionPullRequestBacklinks>,
     pub(super) tasks: Arc<dyn SessionTasks>,
     pub(super) code_mode: Option<Arc<dyn SessionCodeMode>>,
     pub(super) cognition: Option<Arc<dyn Cognition>>,
     pub(super) reviews: Arc<OnceLock<ReviewService>>,
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
-    /// Macro app origin, for links back to the calling session.
-    pub(super) app_url: Arc<str>,
 }
 
 impl ServerHandler for InternalTools {
@@ -302,13 +304,9 @@ impl ServerHandler for InternalTools {
             .try_tool_call(
                 SessionToolContext {
                     service: self.service.clone(),
+                    backlinks: self.backlinks.clone(),
                     tasks: self.tasks.clone(),
                     session: grant.id,
-                    session_url: format!(
-                        "{}/app/agent/{}",
-                        self.app_url.trim_end_matches('/'),
-                        grant.id
-                    ),
                 },
                 RequestContext::new(acting_user.clone()),
                 &request.name,
