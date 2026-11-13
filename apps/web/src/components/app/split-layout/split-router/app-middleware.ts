@@ -1,3 +1,4 @@
+import { databaseDetailSearch } from '@app/features/block-database/database-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import {
   CALENDAR_ROUTE_ID,
@@ -265,6 +266,24 @@ function migrateLegacySearch({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,
     }))
+    // A database link (`?tableId=…&viewId=…`, what `webUrl()` on a table or
+    // view hands out) names the table and view it opens on.
+    .when(
+      (id) =>
+        (id === 'legacy-content' &&
+          routeParams(to.location.route).type === 'database') ||
+        ((id === 'drive-document' ||
+          id === 'drive-folder-document' ||
+          id === 'drive-tab-document') &&
+          routeParams(to.location.route).documentType === 'database'),
+      () => ({
+        namespace: databaseDetailSearch.namespace,
+        fields: [
+          ['tableId', 'tableId'],
+          ['viewId', 'viewId'],
+        ] as const,
+      })
+    )
     .with('call-detail', 'drive-call', 'calls-call', () => ({
       namespace: 'call-detail',
       fields: [

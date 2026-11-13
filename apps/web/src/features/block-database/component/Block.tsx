@@ -2,6 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -13,7 +14,6 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { DATABASE_MODEL, modelsForPlan } from '@core/component/AI/constant';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { ParamsProvider, useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -61,9 +61,11 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
+import { databaseDetailSearch } from '../database-route';
 import {
   createDatabaseViewSelection,
-  followLinkedLocation,
+  followRouteLocation,
+  selectLocation,
 } from '../primitives/view-selection';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';
@@ -135,16 +137,19 @@ const Block: Component = () => {
     // Another table's grid takes the request when it mounts.
     openRequestedRecord();
   }
-  const linked = useUrlParams({ tableId: 'tableId', viewId: 'viewId' });
-  followLinkedLocation(linked, setSelection);
+  const [routeSearch] = createSearchParams(databaseDetailSearch);
+  followRouteLocation(
+    {
+      tableId: () => routeSearch.tableId,
+      viewId: () => routeSearch.viewId,
+    },
+    userId,
+    setSelection
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
       if (params.tableId && params.viewId)
-        setSelection((current) => ({
-          ...current,
-          tableId: params.tableId,
-          views: { ...current.views, [params.tableId]: params.viewId },
-        }));
+        selectLocation(setSelection, params.tableId, params.viewId);
       if (params.tableId && params.rowId)
         fireAndForget(
           openRelated({
@@ -599,9 +604,7 @@ const DatabaseBlock: Component = () => {
         </div>
       }
     >
-      <ParamsProvider>
-        <Block />
-      </ParamsProvider>
+      <Block />
     </Show>
   );
 };

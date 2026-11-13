@@ -36,26 +36,32 @@ export function createDatabaseViewSelection(
   return [() => persisted()[0](), select] as const;
 }
 
+/** Open a table, and its view when one is named, keeping other tables' views. */
+export function selectLocation(
+  select: Setter<DatabaseViewSelection>,
+  tableId: string,
+  viewId: string | undefined
+) {
+  select((current) => ({
+    ...current,
+    tableId,
+    views: viewId ? { ...current.views, [tableId]: viewId } : current.views,
+  }));
+}
+
 /**
- * Open the table and view a link names (`?tableId=…&viewId=…`, what an agent
- * hands out for the table it built) over the remembered selection, whenever
- * the link changes. A link without a view keeps the table's remembered one.
+ * Open the table and view the route names, over the remembered selection,
+ * whenever they change. The viewer's remembered selection restores once
+ * their id is known, so the route is applied again then.
  */
-export function followLinkedLocation(
-  linked: {
-    tableId: Accessor<string | undefined>;
-    viewId: Accessor<string | undefined>;
-  },
+export function followRouteLocation(
+  route: { tableId: Accessor<string>; viewId: Accessor<string> },
+  userId: Accessor<string | undefined>,
   select: Setter<DatabaseViewSelection>
 ) {
   createEffect(
-    on([linked.tableId, linked.viewId], ([tableId, viewId]) => {
-      if (!tableId) return;
-      select((current) => ({
-        ...current,
-        tableId,
-        views: viewId ? { ...current.views, [tableId]: viewId } : current.views,
-      }));
+    on([route.tableId, route.viewId, userId], ([tableId, viewId]) => {
+      if (tableId) selectLocation(select, tableId, viewId || undefined);
     })
   );
 }

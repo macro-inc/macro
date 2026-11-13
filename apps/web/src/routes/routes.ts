@@ -1,5 +1,6 @@
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
+import { databaseDetailSearch } from '@app/features/block-database/database-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
 import {
   CALENDAR_ROUTE_ID,
@@ -309,7 +310,11 @@ const documentRemountKey = ({
 export const driveRootDocumentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'drive-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    databaseDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -325,7 +330,11 @@ export const driveRootDocumentRoute = defineRoute({
 export const driveFolderDocumentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'drive-folder-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    databaseDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -341,7 +350,11 @@ export const driveFolderDocumentRoute = defineRoute({
 export const driveTabDocumentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'drive-tab-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    databaseDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,

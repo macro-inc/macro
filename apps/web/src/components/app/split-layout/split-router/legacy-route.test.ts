@@ -182,6 +182,22 @@ describe('opening an app URL', () => {
     });
   });
 
+  it('opens a database link on the table and view it names', async () => {
+    const { router } = openApp(
+      '/app/database/database-1?tableId=table-1&viewId=view-1'
+    );
+    await router.settled();
+
+    const entry = router.entry(router.panes()[0]!);
+    expect(entry?.location.route.matches.at(-1)).toEqual({
+      id: legacyContentRoute.id,
+      params: { type: 'database', id: 'database-1' },
+    });
+    expect(entry?.location.search).toEqual({
+      'database-detail': { tableId: ['table-1'], viewId: ['view-1'] },
+    });
+  });
+
   it.each(['/app/calendar/week', '/app/home/calendar/day'])(
     'keeps %s',
     async (url) => {
