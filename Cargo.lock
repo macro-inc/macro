@@ -17996,6 +17996,7 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "suggestions",
+ "suggestions_db_utils",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
@@ -20176,10 +20177,23 @@ dependencies = [
  "shown_text",
  "sqlx",
  "strum 0.27.2",
+ "suggestions_db_utils",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "suggestions_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "macro_uuid",
+ "serde_json",
+ "sqlx",
  "workspace-hack",
 ]
 

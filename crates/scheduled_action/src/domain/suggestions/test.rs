@@ -20,6 +20,8 @@ struct FakeRepo {
     saved: Mutex<Vec<Uuid>>,
     /// (generation, action, reason) per change.
     changes: Mutex<Vec<(Uuid, &'static str, String)>>,
+    /// Suggestions kept with a routine suggestion.
+    cards: Mutex<Vec<Uuid>>,
 }
 
 impl SuggestionRepo for FakeRepo {
@@ -40,7 +42,7 @@ impl SuggestionRepo for FakeRepo {
         generation: Uuid,
         suggestion: &CheckedSuggestion,
         now: DateTime<Utc>,
-    ) -> Result<Uuid> {
+    ) -> Result<Kept> {
         let id = Uuid::now_v7();
         self.suggestions.lock().unwrap().push(StoredSuggestion {
             id,
@@ -57,7 +59,10 @@ impl SuggestionRepo for FakeRepo {
             .lock()
             .unwrap()
             .push((generation, "created", suggestion.reason.clone()));
-        Ok(id)
+        if suggestion.card.is_some() {
+            self.cards.lock().unwrap().push(id);
+        }
+        Ok(Kept::Stored(id))
     }
 
     async fn retire(
@@ -246,6 +251,7 @@ fn catalog(key: &str, surfaces: &[Surface], keep: f32) -> SuggestRequest {
         reason: "Most of your mail is supplier updates".to_owned(),
         surfaces: surfaces.to_vec(),
         keep_probability: keep,
+        card: None,
     }
 }
 
@@ -299,6 +305,14 @@ async fn suggest(h: &Harness, session: Uuid, request: SuggestRequest) -> Suggest
         .unwrap()
 }
 
+fn card() -> super::model::RoutineSuggestionCard {
+    super::model::RoutineSuggestionCard {
+        title: "Chase late deliveries".to_owned(),
+        importance: 60,
+        categories: Vec::new(),
+    }
+}
+
 fn drafted(reason: &str, keep: f32) -> SuggestRequest {
     SuggestRequest::Routine {
         routine: configuration(false),
@@ -306,6 +320,7 @@ fn drafted(reason: &str, keep: f32) -> SuggestRequest {
         reason: reason.to_owned(),
         surfaces: vec![Surface::Tasks],
         keep_probability: keep,
+        card: card(),
     }
 }
 
@@ -329,6 +344,7 @@ async fn a_suggestion_is_checked_before_it_is_kept() {
             reason: "You get many supplier emails".to_owned(),
             surfaces: vec![Surface::Email],
             keep_probability: 0.5,
+            card: None,
         },
     )
     .await;
@@ -359,6 +375,7 @@ async fn a_suggestion_is_checked_before_it_is_kept() {
             reason: "orders@supplier.example writes to you daily".to_owned(),
             surfaces: vec![Surface::Email],
             keep_probability: 0.5,
+            card: None,
         },
     )
     .await;
@@ -377,6 +394,7 @@ async fn a_suggestion_is_checked_before_it_is_kept() {
             reason: "You chase late deliveries every week".to_owned(),
             surfaces: vec![Surface::Tasks],
             keep_probability: 0.4,
+            card: card(),
         },
     )
     .await;
@@ -538,6 +556,7 @@ async fn a_drafted_routine_naming_someones_details_is_refused() {
                 reason: "You chase late deliveries every week".to_owned(),
                 surfaces: vec![Surface::Tasks],
                 keep_probability: 0.4,
+                card: card(),
             },
         )
         .await;
@@ -850,4 +869,75 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn a_drafted_routine_brings_its_card_and_a_catalog_pick_none() {
+    let h = harness(true);
+    let session = open_session(&h, &[Surface::Email, Surface::Tasks]).await;
+    let kept = suggest(
+        &h,
+        session,
+        drafted("You chase late deliveries every week", 0.6),
+    )
+    .await;
+    assert!(kept.ok, "{kept:?}");
+    assert_eq!(*h.repo.cards.lock().unwrap(), [kept.id.unwrap()]);
+    let SuggestRequest::Catalog {
+        key,
+        knobs,
+        reason,
+        surfaces,
+        keep_probability,
+        ..
+    } = catalog("inbox", &[Surface::Email], 0.5)
+    else {
+        unreachable!()
+    };
+    let with_card = suggest(
+        &h,
+        session,
+        SuggestRequest::Catalog {
+            key,
+            knobs,
+            reason,
+            surfaces,
+            keep_probability,
+            card: Some(card()),
+        },
+    )
+    .await;
+    assert!(!with_card.ok);
+    assert!(with_card.problems[0].contains("leave `card` out"));
+    // The suggestion's title is checked like any suggestion's.
+    let SuggestRequest::Routine {
+        routine,
+        created,
+        reason,
+        surfaces,
+        keep_probability,
+        ..
+    } = drafted("You chase late deliveries every week", 0.6)
+    else {
+        unreachable!()
+    };
+    let named = suggest(
+        &h,
+        session,
+        SuggestRequest::Routine {
+            routine,
+            created,
+            reason,
+            surfaces,
+            keep_probability,
+            card: super::model::RoutineSuggestionCard {
+                title: format!("Write to {}@{}.com", "sam", "example"),
+                importance: 60,
+                categories: Vec::new(),
+            },
+        },
+    )
+    .await;
+    assert!(!named.ok);
+    assert_eq!(h.repo.cards.lock().unwrap().len(), 1);
 }

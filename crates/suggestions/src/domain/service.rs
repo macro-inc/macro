@@ -24,8 +24,8 @@ use super::model::{
     SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 use super::ports::{
-    GenerationSessions, Limits, RequestSessions, SuggestionAccess, SuggestionApi,
-    SuggestionAudience, SuggestionRepo, Written,
+    GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, SuggestionAccess,
+    SuggestionApi, SuggestionAudience, SuggestionRepo, Written,
 };
 use super::prompt;
 
@@ -62,6 +62,7 @@ pub struct SuggestionService<Repo, Access, Flags> {
     request_sessions: Arc<dyn RequestSessions>,
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
+    routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
     flags: Option<Flags>,
     /// The SDK reference a suggestions session's brief carries.
     sdk_reference: String,
@@ -82,6 +83,7 @@ where
         request_sessions: Arc<dyn RequestSessions>,
         generation_sessions: Arc<dyn GenerationSessions>,
         audience: Arc<dyn SuggestionAudience>,
+        routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
         flags: Option<Flags>,
     ) -> Self {
         Self {
@@ -90,6 +92,7 @@ where
             request_sessions,
             generation_sessions,
             audience,
+            routine_suggestions,
             flags,
             sdk_reference: String::new(),
             checker_model: String::new(),
@@ -402,6 +405,31 @@ where
         id: Uuid,
     ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
+        let suggestion = self
+            .repo
+            .suggestion(user, id)
+            .await
+            .map_err(SuggestionError::internal)?;
+        let suggestion = suggestion
+            .filter(|suggestion| suggestion.state.is_open())
+            .ok_or(SuggestionError::NotFound)?;
+        // A routine suggestion and its suggestion are dismissed together, where
+        // the suggestion is kept.
+        if let SuggestionKind::Routine {
+            routine_suggestion_id,
+        } = suggestion.kind
+        {
+            let dismissed = self
+                .routine_suggestions
+                .dismiss_suggestion(user, routine_suggestion_id)
+                .await
+                .map_err(SuggestionError::Internal)?;
+            if !dismissed {
+                return Err(SuggestionError::NotFound);
+            }
+            tracing::info!(event = "suggestions.dismissed", kind = "routine");
+            return Ok(());
+        }
         let moved = self
             .repo
             .set_state(

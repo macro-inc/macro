@@ -55,6 +55,16 @@ scheduler's spec.
 - After an API change: regenerate the scheduler's spec and clients (see the
   `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/suggestions`.
 
+- Routine suggestions: every drafted ("smart") routine suggestion has exactly one,
+  written with it by `macro.routines.suggest` through `crates/suggestions_db_utils`
+  in one transaction; catalog picks never have one. One a replica on the
+  previous release drafts during a deploy has none: every path that closes
+  a routine suggestion tolerates a missing one. Dismissing a routine suggestion
+  dismisses its suggestion through `RoutineSuggestionDismissal`; retiring its
+  suggestion retires it; saving a routine from the suggestion makes it done
+  with the routine as `produced`. Suggestions sessions never add, rewrite or retire
+  routine suggestions.
+
 ## Gotchas
 
 - Gate every entry point on `enable-suggestions` (`SUGGESTIONS_FLAG`).
