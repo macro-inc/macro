@@ -138,6 +138,23 @@ impl InboxSyncLabelTransaction for PgInboxSyncTransaction {
         .map_err(Into::into)
     }
 
+    async fn set_starred(
+        &mut self,
+        link_id: Uuid,
+        message_id: Uuid,
+        is_starred: bool,
+    ) -> Result<(), Self::Err> {
+        label_state::update_message_starred_status_batch(
+            &mut PgLabelState(&mut self.0),
+            vec![message_id],
+            link_id,
+            is_starred,
+        )
+        .await
+        .map(|_| ())
+        .map_err(Into::into)
+    }
+
     async fn update_thread(&mut self, link_id: Uuid, thread_id: Uuid) -> Result<(), Self::Err> {
         email_db_client::threads::update::update_thread_metadata(&mut self.0, thread_id, link_id)
             .await
