@@ -65,7 +65,6 @@ static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSo
 /// Callers that miss the cache at the same time for the same database and user
 /// share one run of the query. A failure reaches all of them as an
 /// `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(pool), err, fields(coalesced = tracing::field::Empty))]
 pub async fn get_user_source_ids(
     pool: &Pool<Postgres>,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -79,6 +78,15 @@ pub async fn get_user_source_ids(
 /// The source ids every caller of one lookup shares. The cache keeps them
 /// behind a pointer because it has one lock for all users, and a hit or a
 /// store that copied the list would hold that lock for the length of the list.
+///
+/// The span keeps the public function's name and, sitting above the cache,
+/// is opened only when the cache misses.
+#[tracing::instrument(
+    name = "get_user_source_ids",
+    skip(pool),
+    err,
+    fields(coalesced = tracing::field::Empty)
+)]
 #[cfg_attr(
     not(test),
     cached(

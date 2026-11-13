@@ -20,7 +20,6 @@ static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItem
 /// Callers that miss the cache at the same time for the same database, user and
 /// filters share one run of the queries. A failure reaches all of them as an
 /// `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(db), err, fields(coalesced = tracing::field::Empty))]
 pub async fn get_user_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -36,6 +35,15 @@ pub async fn get_user_accessible_items(
 /// The list every caller of one lookup shares. The cache keeps it behind a
 /// pointer because it has one lock for all users, and a hit or a store that
 /// copied the list would hold that lock for the length of the list.
+///
+/// The span keeps the public function's name and, sitting above the cache,
+/// is opened only when the cache misses.
+#[tracing::instrument(
+    name = "get_user_accessible_items",
+    skip(db),
+    err,
+    fields(coalesced = tracing::field::Empty)
+)]
 #[cfg_attr(
     not(test),
     cached(
