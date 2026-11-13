@@ -282,3 +282,153 @@ async fn matches_accounts_and_contacts_regardless_of_case(pool: PgPool) {
         vec![grace.to_string()]
     );
 }
+
+async fn insert_unfiled_contact(pool: &PgPool, team_id: Uuid, email: &str, hidden: bool) -> Uuid {
+    let contact_id = Uuid::now_v7();
+    sqlx::query(
+        r#"INSERT INTO crm_contacts (id, team_id, email, hidden, first_interaction, last_interaction)
+           VALUES ($1, $2, $3, $4, now(), now())"#,
+    )
+    .bind(contact_id)
+    .bind(team_id)
+    .bind(email)
+    .bind(hidden)
+    .execute(pool)
+    .await
+    .unwrap();
+    contact_id
+}
+
+async fn add_address(pool: &PgPool, contact_id: Uuid, email: &str) {
+    sqlx::query("INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2)")
+        .bind(contact_id)
+        .bind(email)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn links_a_company_contact_by_its_second_address(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let acme = insert_company(&pool, team_id, "acme.example.com", false).await;
+    let ada = insert_contact(&pool, acme, "ada@acme.example.com").await;
+    add_address(&pool, ada, "ada.personal@personal.example.com").await;
+    let call_record_id = Uuid::now_v7();
+
+    linker(&pool)
+        .link_call_record(
+            call_record_id,
+            &people(&[MEMBER], &["Ada.Personal@personal.example.com"]),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
+        vec![ada.to_string()]
+    );
+    // The address is not at the company's domain; the contact brings its
+    // company.
+    assert_eq!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Companies).await,
+        vec![acme.to_string()]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn links_a_contact_without_a_company_by_any_address(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let lin = insert_unfiled_contact(&pool, team_id, "lin@personal.example.com", false).await;
+    add_address(&pool, lin, "lin@other.example.com").await;
+
+    for address in ["lin@personal.example.com", "lin@other.example.com"] {
+        let call_record_id = Uuid::now_v7();
+        linker(&pool)
+            .link_call_record(call_record_id, &people(&[MEMBER], &[address]))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
+            vec![lin.to_string()],
+            "{address}"
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn links_every_visible_contact_holding_an_address(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let acme = insert_company(&pool, team_id, "acme.example.com", false).await;
+    let ada = insert_contact(&pool, acme, "ada@acme.example.com").await;
+    add_address(&pool, ada, "shared@personal.example.com").await;
+    let lin = insert_unfiled_contact(&pool, team_id, "shared@personal.example.com", false).await;
+    // The same address in another team's CRM is not this team's contact.
+    let other_team = Uuid::now_v7();
+    sqlx::query("INSERT INTO team (id, name, owner_id) VALUES ($1, 'other', $2)")
+        .bind(other_team)
+        .bind(TEAMMATE)
+        .execute(&pool)
+        .await
+        .unwrap();
+    insert_unfiled_contact(&pool, other_team, "shared@personal.example.com", false).await;
+    let call_record_id = Uuid::now_v7();
+
+    linker(&pool)
+        .link_call_record(
+            call_record_id,
+            &people(&[MEMBER], &["shared@personal.example.com"]),
+        )
+        .await
+        .unwrap();
+
+    let mut contacts = vec![ada.to_string(), lin.to_string()];
+    contacts.sort();
+    assert_eq!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
+        contacts
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn second_addresses_skip_hidden_records_and_team_members(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let hidden_company = insert_company(&pool, team_id, "hidden.example.com", true).await;
+    let under_hidden = insert_contact(&pool, hidden_company, "x@hidden.example.com").await;
+    add_address(&pool, under_hidden, "x.personal@personal.example.com").await;
+    let hidden_contact =
+        insert_unfiled_contact(&pool, team_id, "y@personal.example.com", true).await;
+    add_address(&pool, hidden_contact, "y@other.example.com").await;
+    // A contact holding a teammate's address never links the teammate.
+    let acme = insert_company(&pool, team_id, "acme.example.com", false).await;
+    let ada = insert_contact(&pool, acme, "ada@acme.example.com").await;
+    add_address(&pool, ada, "teammate@acme.example.com").await;
+    let call_record_id = Uuid::now_v7();
+
+    linker(&pool)
+        .link_call_record(
+            call_record_id,
+            &people(
+                &[MEMBER, TEAMMATE],
+                &[
+                    "x.personal@personal.example.com",
+                    "y@personal.example.com",
+                    "y@other.example.com",
+                ],
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts)
+            .await
+            .is_empty()
+    );
+    assert!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Companies)
+            .await
+            .is_empty()
+    );
+}

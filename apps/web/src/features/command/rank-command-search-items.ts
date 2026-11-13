@@ -1,4 +1,6 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
+import { normalizeNameText } from '@core/util/name-match-score';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
@@ -24,6 +26,20 @@ function displayName(item: CommandMenuItem): string {
       (row) => row.searchText
     )
     .exhaustive();
+}
+
+/**
+ * A command's label is a verb and what it acts on ("Go to Settings", "Change
+ * theme"), and people type the latter. A label ending in the query from a
+ * later word names the command after it: it ranks under exact names and above
+ * names that only start with the query. A later word starting with the query
+ * ranks with names starting with it.
+ */
+function commandNameRank(label: string, term: string): number {
+  if (!term) return 0;
+  const name = normalizeNameText(label);
+  if (name.endsWith(` ${term}`)) return 2;
+  return name.includes(` ${term}`) ? 1 : 0;
 }
 
 function compareRecency(left: CommandMenuItem, right: CommandMenuItem) {
@@ -59,6 +75,26 @@ function isMacroPerson(item: CommandMenuItem) {
   return item.bucket === 'dm' || item.bucket === 'person';
 }
 
+/**
+ * Sources republish their lists on cache refreshes and page reads, often with
+ * new objects that hold the same data. Rows that are the same object or hold
+ * equal data rank the same, so such a list needs no new ranking. Commands
+ * carry handlers and are compared by identity only.
+ */
+export function sameRankInput(
+  previous: readonly CommandMenuItem[],
+  next: readonly CommandMenuItem[]
+): boolean {
+  if (previous.length !== next.length) return false;
+
+  return previous.every((item, index) => {
+    const other = next[index];
+    if (item === other) return true;
+    if (item.kind === 'command' || other.kind === 'command') return false;
+    return deepEqual(item, other);
+  });
+}
+
 /** Rank cached and local candidates together using the command menu's rules. */
 export function rankCommandSearchItems<T extends CommandMenuItem>(
   items: T[],
@@ -74,6 +110,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     viewerId?: string;
   }
 ): T[] {
+  const term = normalizeNameText(query);
   const search = createFreshSearch<T>({
     config: {
       ...NAME_MATCH_RANKING,
@@ -119,14 +156,26 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   // Match quality decides first. Among equally good matches, teammates and
   // conversations with them lead, then other Macro users and DMs, then
   // documents and channels.
-  const scored = search(eligible, query).sort(
-    (left, right) =>
-      right.nameMatchRank - left.nameMatchRank ||
-      Number(withTeammate(right.item)) - Number(withTeammate(left.item)) ||
-      Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
-      right.combinedScore - left.combinedScore ||
-      compareRecency(left.item, right.item)
-  );
+  const scored = search(eligible, query)
+    .map((result) =>
+      result.item.kind === 'command'
+        ? {
+            ...result,
+            nameMatchRank: Math.max(
+              result.nameMatchRank,
+              commandNameRank(displayName(result.item), term)
+            ),
+          }
+        : result
+    )
+    .sort(
+      (left, right) =>
+        right.nameMatchRank - left.nameMatchRank ||
+        Number(withTeammate(right.item)) - Number(withTeammate(left.item)) ||
+        Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
+        right.combinedScore - left.combinedScore ||
+        compareRecency(left.item, right.item)
+    );
   const ranked = scored.map(({ item }) => item);
   // People keep their window order only among equally good name matches, so
   // a recent weak match cannot take the slot an exact name earned.

@@ -66,6 +66,17 @@ soft delete/restore/purge, and bulk upload into a project tree.
   default. `GET /projects/upload_extract/{request_id}` reports the caller's own
   request status and the extractor's stored/failed counts.
 
+- Folder trash, restore and purge write every item in the tree in one
+  transaction, with set-based entity-registry writes. The REST handlers (and
+  DSS's GraphQL entity mutations) run them on their own task, so a dropped
+  request cannot cancel one partway or stop a purge's document cleanup after
+  it commits. The purge enqueues document deletes eight SQS batches at a time.
+- `edit_project.rs` refuses a share permission change from a scoped agent
+  session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
+  field that isn't a grant joins that check. Creating a folder in, or moving
+  one under, another calls `project_grants::refuse_filing_in` in the
+  transaction that writes `parentId`.
+
 ## Checks
 
 - `cargo test -p projects` (`SQLX_OFFLINE` unset; requires local MacroDB).

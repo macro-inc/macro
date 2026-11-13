@@ -7,7 +7,7 @@ use crate::local::instance::Instance;
 #[test]
 fn key_is_deterministic_and_port_free() {
     let instance = Instance::derive(None, None).unwrap();
-    crate::local::fusionauth::write_kickstart(&instance, None, None).unwrap();
+    crate::local::fusionauth::write_kickstart(&instance, None, None, None).unwrap();
 
     let a = Plan::compute(&instance).unwrap();
     let b = Plan::compute(&instance).unwrap();
@@ -15,7 +15,7 @@ fn key_is_deterministic_and_port_free() {
     assert_eq!(a.key.len(), 64, "sha256 hex");
 
     let other = Instance::derive(Some("snapshot-key-test"), None).unwrap();
-    crate::local::fusionauth::write_kickstart(&other, None, None).unwrap();
+    crate::local::fusionauth::write_kickstart(&other, None, None, None).unwrap();
     let c = Plan::compute(&other).unwrap();
     let _ = std::fs::remove_dir_all(other.artifact_dir());
     assert_eq!(

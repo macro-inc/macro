@@ -9,7 +9,6 @@ use crate::{
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
-pub(crate) const MICROSOFT_LOGIN_BASE_URL: &str = "https://login.microsoftonline.com/";
 /// Mail and address-book consent. Calendar access is requested only by calendar entry points.
 pub const MICROSOFT_SCOPES: &str = "openid email offline_access profile User.Read Mail.ReadWrite Mail.Send MailboxSettings.ReadWrite Contacts.Read";
 
@@ -108,12 +107,13 @@ pub struct MicrosoftUserInfo {
 }
 
 pub(crate) fn construct_authorize_url(
+    login_page_url: &str,
     client_id: &str,
     tenant_id: &str,
     redirect_uri: &str,
     state: &str,
 ) -> anyhow::Result<String> {
-    let mut url = endpoint_url(tenant_id, "authorize")?;
+    let mut url = endpoint_url(login_page_url, tenant_id, "authorize")?;
 
     url.query_pairs_mut()
         .append_pair("client_id", client_id)
@@ -134,6 +134,7 @@ pub(crate) fn construct_authorize_url(
 /// used as configured. On success Microsoft returns to `redirect_uri` with
 /// `admin_consent=True&tenant={id}&state={state}`.
 pub(crate) fn construct_admin_consent_url(
+    login_page_url: &str,
     client_id: &str,
     tenant_id: &str,
     redirect_uri: &str,
@@ -144,10 +145,9 @@ pub(crate) fn construct_admin_consent_url(
         "common" | "consumers" => "organizations",
         tenant => tenant,
     };
-    let mut url =
-        Url::parse(MICROSOFT_LOGIN_BASE_URL).context("invalid Microsoft OAuth base URL")?;
+    let mut url = Url::parse(login_page_url).context("invalid Microsoft OAuth base URL")?;
     url.path_segments_mut()
-        .expect("Microsoft OAuth base URL must support path segments")
+        .map_err(|()| anyhow::anyhow!("Microsoft OAuth base URL must support path segments"))?
         .pop_if_empty()
         .extend([tenant, "v2.0", "adminconsent"]);
     url.query_pairs_mut()
@@ -160,7 +160,7 @@ pub(crate) fn construct_admin_consent_url(
 }
 
 pub(crate) async fn exchange_code_for_tokens(
-    _client: &UnauthedClient,
+    login_url: &str,
     client_id: &str,
     client_secret: &str,
     tenant_id: &str,
@@ -168,7 +168,8 @@ pub(crate) async fn exchange_code_for_tokens(
     code: &str,
     code_verifier: Option<&str>,
 ) -> Result<MicrosoftExchangeTokenResponse> {
-    let token_endpoint = endpoint_url(tenant_id, "token").map_err(FusionAuthClientError::from)?;
+    let token_endpoint =
+        endpoint_url(login_url, tenant_id, "token").map_err(FusionAuthClientError::from)?;
     let request = MicrosoftTokenExchangeRequest {
         client_id,
         client_secret,
@@ -380,11 +381,15 @@ pub(crate) fn decode_bound_microsoft_id_token(
     })
 }
 
-pub(super) fn endpoint_url(tenant_id: &str, endpoint: &str) -> anyhow::Result<Url> {
-    let mut url =
-        Url::parse(MICROSOFT_LOGIN_BASE_URL).context("invalid Microsoft OAuth base URL")?;
+/// An OAuth endpoint of `tenant_id` under a Microsoft login host.
+pub(super) fn endpoint_url(
+    login_url: &str,
+    tenant_id: &str,
+    endpoint: &str,
+) -> anyhow::Result<Url> {
+    let mut url = Url::parse(login_url).context("invalid Microsoft OAuth base URL")?;
     url.path_segments_mut()
-        .expect("Microsoft OAuth base URL must support path segments")
+        .map_err(|()| anyhow::anyhow!("Microsoft OAuth base URL must support path segments"))?
         .pop_if_empty()
         .extend([tenant_id, "oauth2", "v2.0", endpoint]);
     Ok(url)

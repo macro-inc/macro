@@ -53,6 +53,15 @@ realtime appearance events do not re-ingest history.
 
 - `cargo test -p initiative --all-features` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- `axum_router/update.rs` refuses share permission changes from a scoped
+  agent session (`agent_correlation::context::refuse_sharing`, 403). Member
+  and assignee grants are checked where they are written
+  (`entity_access_db_utils::scoped_grants`): only people who already have
+  access can be added, and nobody can be removed. A new sharing field that
+  isn't a grant joins the route check.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

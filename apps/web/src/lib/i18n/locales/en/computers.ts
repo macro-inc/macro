@@ -113,17 +113,50 @@ export default {
   buy: 'Buy',
   buyHeadsUp:
     "Next you'll name your agent and sign in to Claude (Pro or Max) — have claude.ai handy.",
-  stepComputer: 'Computer',
-  stepAgent: 'Agent',
-  stepClaude: 'Claude',
-  stepReady: 'Ready',
+  stepBuy: 'Buy computer',
+  stepConfigureAgent: 'Configure agent',
+  stepBringAi: 'Bring your AI',
+  stepCreateAgent: 'Create agent',
+  stepBuyShort: 'Buy',
+  stepConfigureAgentShort: 'Agent',
+  stepBringAiShort: 'Your AI',
+  stepCreateAgentShort: 'Create',
+  loadingSizes: 'Loading computer sizes',
+  noSizes: 'No computer sizes are available right now.',
+  setupProgressLabel: 'Setup progress',
+  stageBilling: 'Updating billing…',
+  stageSignIn: 'Sign in to Claude',
+  stageBillingDone: 'Billing updated',
+  stepCreatingDone: 'Computer created',
+  stepBootingDone: 'Started up',
+  stepConnectingDone: 'Connected to Macro',
+  stageSignInDone: 'Signed in to Claude',
+  stageSkipped: '{{stage}} · skipped',
+  skippedStep: 'skipped',
+  signInWaitsForRetry:
+    'Setup stopped before the computer came up, so there is no sign-in yet. Retry setup above; this step continues once the computer connects.',
+  signInUnlocksLater:
+    'The sign-in link comes from the computer, so this unlocks by itself once it connects.',
+  preparingSignIn: 'Preparing sign-in…',
+  preparingSignInStatus: 'Preparing sign-in… {{stage}} · {{elapsed}}',
+  computerStarting: 'Computer starting',
+  setupFailedReason:
+    'The computer could not be set up. Retry sets it up again at no extra charge; contact support if it fails again.',
+  retrySetup: 'Retry setup',
+  setupFailedTitle: 'Setup failed',
+  signInSkipped: "Not needed: the agent runs on Macro's Claude.",
+  nameAgentToContinue: 'Name the agent to continue.',
+  chooseClaudeToContinue: 'Choose which Claude it should use to continue.',
+  tryItAfterSetup: 'Try it and creating agents unlock once setup finishes.',
+  pasteCodeToContinue: 'Paste the code from claude.ai to complete sign-in.',
+  buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
+  setupContinuesInBackground:
+    'You can close this; setup carries on and the computer’s row shows its progress.',
+  signInWaitingBody:
+    "Your computer is still starting. The sign-in link comes from the computer, so this step unlocks by itself once it connects; you'll open claude.ai, sign in, and paste a code back here.",
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
-  signInLinkWaiting:
-    "Your sign-in link will be ready in a moment. Keep this open; you'll open claude.ai, sign in, and paste a code back here.",
   signInTabTitle: '● Sign in to Claude — Macro',
-  signInReadyToast: '{{name}} is ready — sign in to Claude',
-  signInReadyAction: 'Sign in',
   claudeHarnessNote:
     'We run the real Claude Code on your computer. The code you paste here goes right into the harness on your computer.',
   almostReady: 'Almost ready',
@@ -138,7 +171,16 @@ export default {
   claudeCreditsChoice: "Macro's Claude",
   claudeCreditsChoiceHint: "Runs on Macro's API key and your team's credits.",
   setupDoneTitle: '{{agent}} is ready',
-  setupDoneBody: 'It runs on {{computer}}. Mention it or start a chat with it.',
+  setupDoneBody:
+    'It runs on {{computer}}. Try {{agent}} now, or create another agent that runs there.',
+  setupDoneBodyForAgent:
+    'It runs on {{computer}}. Try {{agent}} now, or use this computer for the agent you are editing.',
+  createAgentHere: 'Create an agent on this computer',
+  setupReadyNotice: 'Your computer is ready: connect your AI and finish setup',
+  setupReadyNoticeBody:
+    '{{computer}} is up. Bring your AI, then create an agent on it.',
+  setupFailedNotice: '{{computer}} could not be set up',
+  useForThisAgent: 'Use for this agent',
   tryIt: 'Try it',
   done: 'Done',
   fromPrice: 'From {{price}}',
@@ -146,7 +188,10 @@ export default {
   getComputerLine:
     'A full computer, with your Claude sub, and a Macro agent, ready to go',
   trialBlocked:
-    'Computers are available on paid plans. Your team is on a trial.',
+    'Computers can be added once your trial ends and your team is on a paid plan.',
+  noPaidPlan:
+    'Computers need a paid Macro plan. Your team does not have one yet.',
+  rolloutDisabled: "Computers aren't available for this account yet.",
   trialBillingAction: 'Go to Billing',
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',
@@ -156,6 +201,11 @@ export default {
   errorComputersUnavailable:
     "Computers aren't available right now. Try again later.",
   offersFailed: "Couldn't load computer sizes. Try again.",
+  offersTimedOut: 'Loading computer sizes took too long. Try again.',
+  errorBillingProvider:
+    "Macro's billing provider didn't answer. Try again in a moment.",
+  errorTimedOut: 'Macro took too long to answer. Try again.',
+  errorNetwork: "Couldn't reach Macro. Check your connection and try again.",
   errorSalesUnavailable:
     "Computers can't be bought right now. Try again later.",
   errorNotRestorable: "This computer can't be restored anymore.",
