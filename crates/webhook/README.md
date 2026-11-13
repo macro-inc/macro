@@ -134,7 +134,8 @@ personal webhook workspace and personal event stream may receive them. The
 broker's recipient routing field is removed from delivered metadata.
 
 For document, channel, and message events, ingestion asks `EntityAccessService`
-for the people who currently have access to the entity; a message's entity is
+for the people who currently have access to the entity, uncached, so a grant
+or revocation just before the event counts; a message's entity is
 its parent channel or document. The matching workspace set
 contains each person's Macro user ID, for personal webhooks, plus every team ID
 to which any of those people belongs. The set is deduplicated before matching,

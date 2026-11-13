@@ -176,6 +176,8 @@ struct MockAccessService {
     calls: Arc<Mutex<Vec<(String, EntityType)>>>,
     /// Access levels by user id, for access-floor audiences.
     levels: Arc<Mutex<std::collections::HashMap<String, AccessLevel>>>,
+    /// What a stale cached listing would still say.
+    stale_users: Option<Vec<MacroUserIdStr<'static>>>,
 }
 
 impl MockAccessService {
@@ -185,6 +187,7 @@ impl MockAccessService {
             failure: None,
             calls: Arc::default(),
             levels: Arc::default(),
+            stale_users: None,
         }
     }
 }
@@ -260,7 +263,21 @@ impl EntityAccessService for MockAccessService {
         unimplemented!("not used by webhook event ingestion")
     }
 
+    /// The cached listing: answers with `stale_users` when set, as the
+    /// adapter's 10 s cache would after a grant change. Ingestion must not
+    /// use it.
     async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self
+            .stale_users
+            .clone()
+            .unwrap_or_else(|| self.users.clone()))
+    }
+
+    async fn get_users_by_entity_uncached(
         &self,
         entity_id: &str,
         entity_type: EntityType,
@@ -1072,6 +1089,7 @@ async fn search_only_document_events_skip_webhook_delivery() {
         failure: Some(AccessFailure::Internal),
         calls: Arc::default(),
         levels: Arc::default(),
+        stale_users: None,
     };
     let repository = MockRepository::new(
         vec![PERSONAL_WORKSPACE_ID.to_string()],
@@ -1113,6 +1131,7 @@ async fn normalizes_all_webhook_variants_with_direct_workspace_ownership() {
             failure: Some(AccessFailure::Internal),
             calls: Arc::default(),
             levels: Arc::default(),
+            stale_users: None,
         };
         let repository = MockRepository::new(
             vec!["workspace-that-must-not-be-used".to_string()],
@@ -1453,6 +1472,7 @@ async fn entity_access_internal_error_is_not_transient() {
         failure: Some(AccessFailure::Internal),
         calls: Arc::default(),
         levels: Arc::default(),
+        stale_users: None,
     };
     let repository = MockRepository::new(Vec::new(), Vec::new());
     let enqueuer = MockEnqueuer::default();
@@ -2629,4 +2649,36 @@ mod team_and_installation_audiences {
             Err(WebhookEventIngestionError::UnsupportedAudience(_))
         ));
     }
+}
+
+/// A revocation just before an event excludes the user at once: matching
+/// reads current access, never the adapter's 10 s cached listing.
+#[tokio::test]
+async fn a_revocation_just_before_an_event_excludes_the_user_from_matching() {
+    let kept = "macro|kept@example.com";
+    let revoked = "macro|revoked@example.com";
+    let mut access = MockAccessService::with_users(vec![user_id(kept)]);
+    access.stale_users = Some(vec![user_id(kept), user_id(revoked)]);
+    let repository = MockRepository::new(Vec::new(), Vec::new());
+    let service = service(access, repository.clone(), MockEnqueuer::default());
+    let event = Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
+        document_id: DOCUMENT_ID.to_string(),
+        owner: Owner::User(user_id(kept)),
+        actor_user_id: Some(user_id(kept)),
+        actor: None,
+        on_behalf_of: None,
+        document_name: Some("renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        file_type: None,
+        share_permission_updated: true,
+    }));
+
+    service.ingest_document_event(event).await.unwrap();
+
+    assert_eq!(
+        lock(&repository.state).workspace_calls,
+        vec![vec![user_id(kept)]]
+    );
 }

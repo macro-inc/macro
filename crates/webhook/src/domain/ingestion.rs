@@ -314,15 +314,17 @@ where
     T: TeamDirectory,
     G: GithubClaims,
 {
-    /// Resolve the users that currently have access to an entity.
+    /// Resolve the users that currently have access to an entity, uncached.
     #[tracing::instrument(skip(self), err)]
     pub async fn users_with_access(
         &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
+        // Uncached: a grant or revocation just before the event must count,
+        // not a listing cached for up to 10 s.
         self.entity_access_service
-            .get_users_by_entity(entity_id, entity_type)
+            .get_users_by_entity_uncached(entity_id, entity_type)
             .await
             .map_err(WebhookEventIngestionError::EntityAccess)
     }
