@@ -4,13 +4,19 @@
 //! The search cluster and the indexer's consumer group are shared, so these
 //! scenarios run one at a time and each user has an address of its own.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a scenario writes the delegation row, which a service not started here would create"
+)]
+
 use std::{ops::Range, time::Duration};
 
 use chrono::{DateTime, Utc};
 use email_e2e::{
-    DEFAULT_TIMEOUT, Mail, Provider, Report, Stack, StackOptions, User, eventually,
-    gmail_emulator, outlook_emulator,
+    DEFAULT_TIMEOUT, Mail, Provider, Report, Stack, StackOptions, User, eventually, gmail_emulator,
+    outlook_emulator,
 };
+use reqwest::Method;
 use serde_json::{Value, json};
 
 /// The id that leaves a kind of item out of a search.
@@ -168,10 +174,30 @@ fn deliver_odd_thread(
     numbers: Range<usize>,
 ) -> Result<(), Report> {
     let messages = [
-        Odd { word: words[0], html: None, date: None, sender: true },
-        Odd { word: words[1], html: Some(BROKEN_TABLE), date: None, sender: true },
-        Odd { word: words[2], html: None, date: DateTime::from_timestamp(0, 0), sender: true },
-        Odd { word: words[3], html: None, date: None, sender: false },
+        Odd {
+            word: words[0],
+            html: None,
+            date: None,
+            sender: true,
+        },
+        Odd {
+            word: words[1],
+            html: Some(BROKEN_TABLE),
+            date: None,
+            sender: true,
+        },
+        Odd {
+            word: words[2],
+            html: None,
+            date: DateTime::from_timestamp(0, 0),
+            sender: true,
+        },
+        Odd {
+            word: words[3],
+            html: None,
+            date: None,
+            sender: false,
+        },
     ];
     let root = format!("{}@odd.example", words[0]);
     for (number, odd) in messages.iter().enumerate() {
@@ -284,7 +310,14 @@ async fn outlook_an_odd_message_does_not_keep_its_thread_out_of_search() -> Resu
 
 /// The words of the messages that arrive together in one new thread.
 const TOGETHER: [&str; 8] = [
-    "quince", "quandong", "quenepa", "quararibea", "querina", "quinoa", "quillaja", "quassia",
+    "quince",
+    "quandong",
+    "quenepa",
+    "quararibea",
+    "querina",
+    "quinoa",
+    "quillaja",
+    "quassia",
 ];
 
 /// Every message of a new thread is found, also when they arrive together.
@@ -322,5 +355,92 @@ async fn gmail_messages_arriving_together_in_a_new_thread_are_all_found() -> Res
         )
         .await?;
     }
+    stack.finish().await
+}
+
+/// What a search answers with for the user, whole.
+async fn search_answer(user: &User, query: &str) -> Result<Value, Report> {
+    user.search(&json!({
+        "query": query,
+        "match_type": "partial",
+        "search_on": "name_content",
+    }))
+    .await?
+    .ok()
+}
+
+/// A personal tag shows in its owner's search results and in nobody
+/// else's: someone the inbox is delegated to finds the same thread without
+/// it. When this fails, the search answer carries another person's
+/// personal tags.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let bob = stack.unique_user("bob").await?;
+    let inbox = ada.link_gmail().await?;
+    inbox.deliver(&Mail::new(SENDER, "Shared plans", "The tamarillo harvest."))?;
+    let preview = inbox.wait_for_preview("inbox", "Shared plans").await?;
+    let thread = preview["id"].as_str().unwrap_or_default().to_owned();
+    // The inbox is delegated to Bob. The service that records a delegation
+    // is not started, so the row is written here.
+    sqlx::query(
+        "INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id) \
+         VALUES ($1, $2, $3)",
+    )
+    .bind(bob.macro_id())
+    .bind(ada.macro_id())
+    .bind(inbox.link_id())
+    .execute(stack.db())
+    .await?;
+
+    // Ada makes a personal tag and puts it on the thread, as the tag picker does.
+    let tags = ada
+        .document_storage_request(
+            Method::POST,
+            "/properties/tags",
+            Some(&json!({ "scope": "user" })),
+        )
+        .await?
+        .ok()?;
+    let definition = tags["definition"]["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let option = ada
+        .document_storage_request(
+            Method::POST,
+            &format!("/properties/definitions/{definition}/options"),
+            Some(&json!({
+                "type": "select_string",
+                "option": { "value": "Orchard", "display_order": 0, "color": "#33AA55" },
+            })),
+        )
+        .await?
+        .ok()?;
+    let option = option["id"].as_str().unwrap_or_default().to_owned();
+    ada.document_storage_request(
+        Method::POST,
+        &format!("/properties/entities/THREAD/{thread}/{definition}/options/{option}"),
+        None,
+    )
+    .await?
+    .ok()?;
+
+    eventually(
+        "Ada's search to find the thread with her tag",
+        DEFAULT_TIMEOUT,
+        async || {
+            let answer = search_answer(&ada, "tamarillo").await?.to_string();
+            Ok((answer.contains("Shared plans") && answer.contains(&option)).then_some(()))
+        },
+    )
+    .await?;
+    let answer = search_answer(&bob, "tamarillo").await?.to_string();
+    assert!(answer.contains("Shared plans"), "{answer}");
+    assert!(
+        !answer.contains(&option) && !answer.contains("Orchard"),
+        "{answer}"
+    );
     stack.finish().await
 }

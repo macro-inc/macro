@@ -23,12 +23,19 @@ scenarios.
   need it ask for it. On such a stack the stand-in for document storage
   records what the email services ask and passes it on to this process, so
   attachments become real documents.
-  Scenarios run in parallel and share nothing but the four servers (Postgres, Redis, SQS, Kafka).
+- `StackOptions { search: true, .. }` adds the real search indexer
+  (`search_processing_service`) on top of document storage: it follows the
+  mail's Kafka events into OpenSearch, and document storage answers
+  `POST /search` from it. Before the indexer starts, the harness moves its
+  consumer group to the end of every topic, so it indexes only what the
+  scenario does.
+- Scenarios run in parallel and share nothing but the servers (Postgres,
+  Redis, SQS, Kafka, and OpenSearch for search).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
   and nothing else. Build them before running; `just email-e2e` does.
 - Each scenario's service logs are in
-  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,document_storage_service}.log`.
+  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,document_storage_service,search_processing_service}.log`.
   A failing scenario prints the directory and the end of the logs.
 
 ## Writing a scenario
@@ -98,6 +105,12 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   composer; `SendConfirmedEmail` sends. Give a sending tool the base64url
   HTML a composer exports, since no Markdown renderer is started. The test
   file needs `#![recursion_limit = "256"]`. See `tests/ai_tools.rs`.
+- Search (a stack with `search`): `user.search(&request)` is `POST /search`
+  with the body the web app sends; wait for a search to find the mail,
+  since indexing follows the sync. The index and the indexer's consumer
+  group are shared, so give each user an address of its own with
+  `stack.unique_user(name)`, and keep search scenarios in `tests/search.rs`,
+  whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
 - A user at an address that matters (a staff domain): `stack.user_at`.
 - Failures of what the services depend on: a provider fault on the emulator,
@@ -120,17 +133,25 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Owns: the harness and the email scenarios.
 - Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
   `crates/outlook_emulator`. Tests of one crate's logic → that crate.
-- Not started yet: `calendar_service`, search, the real notification and
+- Not started yet: `calendar_service`, the real notification and
   authentication services, and the web app. `document_storage_service` is
-  started only for its GraphQL API; its document, search and AI features
-  run on placeholder settings.
+  started for its GraphQL API, its lists and, on a stack with `search`,
+  search over mail; its document and AI features run on placeholder
+  settings.
 
 ## Checks
 
 - `just email-e2e` (in `nix develop`), with `EMAIL_E2E_SQS_URL` pointing at
   an ElasticMQ, `EMAIL_E2E_KAFKA_BROKERS` at a Kafka broker, and Postgres and Redis from `DATABASE_URL`/`REDIS_URI` or
   `EMAIL_E2E_DATABASE_URL`/`EMAIL_E2E_REDIS_URL`.
-- `just email-e2e` also builds `document_storage_service`, whose build
+- The search scenarios also need `EMAIL_E2E_OPENSEARCH_URL`: an OpenSearch
+  with the `analysis-icu` plugin (`infra/local/opensearch/Dockerfile`) and
+  the indices created once, in `infra/stacks/opensearch/helpers`:
+  `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=$EMAIL_E2E_OPENSEARCH_URL
+  OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin bun run
+  scripts/create_indices.ts`.
+- `just email-e2e` also builds `search_processing_service` and
+  `document_storage_service`, whose build
   needs the repository's `bun install` or `CODE_MODE_ASSETS_DIR` pointing
   at `nix build .#code-mode-assets`.
 - No ElasticMQ at hand: `docker run -p 9324:9324
@@ -160,6 +181,11 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   consumers share their groups across scenarios: an event one scenario
   publishes may be read by another scenario's process, so do not assert on
   what that service does with Kafka events.
+- One search indexer at a time: every indexer is in the consumer group
+  `search-processing-service`, so two of them split the topics between
+  them and each misses the other's share. The `email-e2e-search` test
+  group in `.config/nextest.toml` runs `tests/search.rs` serially; a bare
+  `cargo test` runs its tests in parallel and they fail.
 - A session connected to a template database blocks every clone of it;
   the harness waits up to a minute for it and closes templates to
   connections.

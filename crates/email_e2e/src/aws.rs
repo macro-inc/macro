@@ -187,7 +187,9 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
         return StatusCode::PAYLOAD_TOO_LARGE.into_response();
     };
 
-    if let Some(target) = headers.get(SQS_TARGET).and_then(|value| value.to_str().ok())
+    if let Some(target) = headers
+        .get(SQS_TARGET)
+        .and_then(|value| value.to_str().ok())
         && target.starts_with(DYNAMODB_TARGET)
     {
         return dynamodb_table();
