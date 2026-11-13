@@ -1,0 +1,19 @@
+apps/web/src/components/app/mobile/SwipeDownDismissKeyboard.test.tsx
+  s_37f8afe51098dd::t_30be1261946757 25-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "99b5b92dc2c9cad1cd357a79eb6b53ac71c28f29",
+  "prompts": {},
+  "sessions": {
+    "s_37f8afe51098dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7a23327-45dc-49e8-a50b-c18a75448505",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
