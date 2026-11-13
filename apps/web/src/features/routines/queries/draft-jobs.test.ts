@@ -228,6 +228,21 @@ describe('background draft updates', () => {
     applyDraftUpdate({ draftId: 'b', state: 'exploded', progress: {} });
     expect(listed()?.map((each) => each.id)).toEqual(['b']);
   });
+
+  it('keeps a draft removed elsewhere out of a read already under way', async () => {
+    queryClient.setQueryData(KEY, [drafting('a'), drafting('b')]);
+    const read = Promise.withResolvers<unknown>();
+    client.listRoutineDraftJobs.mockReturnValueOnce(read.promise);
+    const reading = queryClient.fetchQuery({
+      ...routineDraftJobsQueryOptions(),
+      staleTime: 0,
+    });
+    applyDraftUpdate({ draftId: 'a', state: 'removed', progress: {} });
+    // This read started before the server removed it.
+    read.resolve(ok([drafting('a'), drafting('b')]));
+    await reading;
+    expect(listed()?.map((each) => each.id)).toEqual(['b']);
+  });
 });
 
 /** `useDraftJobs` mounted as the app mounts it, until `dispose` runs. */
@@ -278,12 +293,12 @@ describe('useDraftJobs', () => {
 
   it('reads them again once a login that replaced the session is confirmed', async () => {
     vi.useFakeTimers();
-    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('a')]));
+    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('mine')]));
     const { drafts, dispose } = mountDraftJobs();
     await vi.advanceTimersByTimeAsync(0);
-    expect(drafts.jobs().map((job) => job.id)).toEqual(['a']);
+    expect(drafts.jobs().map((job) => job.id)).toEqual(['mine']);
 
-    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('b')]));
+    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('theirs')]));
     client.listRoutineDraftJobs.mockClear();
     await resetQueryAccountSession();
     await vi.advanceTimersByTimeAsync(1000);
@@ -296,7 +311,7 @@ describe('useDraftJobs', () => {
     });
     await vi.advanceTimersByTimeAsync(0);
     expect(client.listRoutineDraftJobs).toHaveBeenCalledTimes(1);
-    expect(drafts.jobs().map((job) => job.id)).toEqual(['b']);
+    expect(drafts.jobs().map((job) => job.id)).toEqual(['theirs']);
     dispose();
   });
 });
