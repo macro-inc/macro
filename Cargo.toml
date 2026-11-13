@@ -558,7 +558,7 @@ zip = { version = "9.0.5", default-features = false, features = [
   "xz",
   "zstd",
 ] }
-ammonia = "4.1.8"
+ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
 
