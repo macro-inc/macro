@@ -23,7 +23,7 @@ export interface CreatedEntity {
  * ## Routines
  *
  * - "Remind me", "every Monday", "tomorrow at 9" and "whenever something happens" ask for a routine: work that runs later, as the user, after this conversation ends. A meeting with other people is a calendar event, not a routine.
- * - To write a routine or change one, follow the Compose Routines skill, which comes right after this guide.
+ * - To write a routine or change one, follow the Compose Routines skill, which comes right after this guide; where it doesn't, read it from `macro.documents.systemSkills()`.
  * - A routine created by a routine's run, from its code or its Ask AI step, is that routine's sub-routine: it is listed under it, pauses and is deleted with it, and `list()` leaves it out unless asked. A routine has at most 50 active sub-routines (one-time ones that have run don't count); creating another is refused. When a run may create the same routine again, pass a `key` so the second create updates the first instead of adding a duplicate.
  */
 export class RoutineNamespace {

@@ -400,29 +400,35 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
 }
 
 /// A session that reads the routines guide reads the Compose Routines skill
-/// right after it, without having to find it: code mode the skill, and a
-/// direct host, which can't run the skill's programs, its routine-tools form.
+/// right after it, without having to find it: code mode the skill's code
+/// form, and a direct host, which can't run the skill's programs, its
+/// routine-tools form.
 #[test]
 fn the_routines_guide_carries_the_compose_routines_skill_each_host_can_follow() {
     use system_skills::compose_routines;
-    let skill = compose_routines::SKILL.render_content();
+    let skill = compose_routines::CODE.to_string();
     let direct_skill = compose_routines::DIRECT.to_string();
     let guide = entity_guide("routines").expect("routines has a guide");
     assert!(
         guide.contains("follow the Compose Routines skill"),
         "{guide}"
     );
-    let carried = sdk_documentation()
+    let routines = sdk_documentation()
         .iter()
         .find(|doc| doc.name == "routines")
-        .and_then(|doc| doc.guide.as_deref())
+        .expect("routines is in the catalog");
+    assert_eq!(routines.guide.as_deref(), Some(guide));
+    let carried = with_attached_skill(routines)
+        .guide
         .expect("routines has a guide");
     assert_eq!(carried, format!("{guide}\n\n{skill}"));
-    assert!(inline_guides(GuideHost::Code).contains(carried));
+    let code = inline_guides(GuideHost::Code);
+    assert!(code.contains(&carried));
+    assert!(!code.contains("# Without code"));
+    assert!(!code.contains("`NameSearch` for a channel"));
     let direct = inline_guides(GuideHost::Direct);
     assert!(direct.contains(&format!("{guide}\n\n{direct_skill}")));
-    assert!(!direct.contains(&skill));
-    assert!(!inline_guides(GuideHost::Code).contains(&direct_skill));
+    assert!(!direct.contains("macro.routines.check(routine, { created })"));
 }
 
 #[tokio::test]
@@ -444,7 +450,76 @@ async fn a_routed_routine_request_brings_the_compose_routines_skill() {
         &CancellationToken::new(),
     )
     .await;
-    assert!(result.contains(&system_skills::compose_routines::SKILL.render_content()));
+    assert!(result.contains(&system_skills::compose_routines::CODE.to_string()));
+}
+
+/// The skill rides on the routines guide without taking another entity's
+/// place: neither the routed prompt's cap nor a `DescribeCodeTools` budget
+/// counts it.
+#[tokio::test]
+async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
+    let skill = system_skills::compose_routines::CODE.to_string();
+    let relevant = &["routines", "documents", "channels", "databases"];
+    let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: false,
+        relevant,
+    });
+    let routed = select_documentation(
+        &user(),
+        RoutingRequest {
+            latest: "when a row is added to Leads, post it in #sales",
+            previous: None,
+        },
+        Some(&classifier),
+        Guidance::Selected,
+        &CancellationToken::new(),
+    )
+    .await;
+    assert!(routed.contains(&skill));
+    let loaded = sdk_documentation()
+        .iter()
+        .filter(|doc| relevant.contains(&doc.name.as_str()))
+        .filter(|doc| {
+            doc.index
+                .as_ref()
+                .is_some_and(|index| routed.contains(index))
+        })
+        .count();
+    assert!(loaded >= 3, "only {loaded} entities fit beside the skill");
+    let without_skill = routed.replacen(&format!("\n{skill}\n"), "", 1);
+    assert!(without_skill.len() <= 48 * 1024 + "</macro_sdk>\n".len());
+    let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: false,
+        relevant: &["routines", "databases"],
+    });
+    let task = documentation_for_task(
+        &user(),
+        "when a row is added to Leads, email me",
+        Some(&classifier),
+        &CancellationToken::new(),
+    )
+    .await;
+    assert_eq!(task.entities.len(), 2);
+    assert!(task.omitted.is_empty(), "{:?}", task.omitted);
+    let carried = task
+        .entities
+        .iter()
+        .find(|doc| doc.name == "routines")
+        .and_then(|doc| doc.guide.as_deref())
+        .expect("routines is selected with its guide");
+    assert!(carried.ends_with(&skill));
+    let counted: usize = task
+        .entities
+        .iter()
+        .map(|doc| {
+            doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len)
+        })
+        .sum();
+    assert!(counted - skill.len() - 2 <= 32 * 1024);
 }
 
 /// Ranks the `calendar` entity relevant only when the request it is shown
