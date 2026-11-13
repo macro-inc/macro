@@ -1,0 +1,21 @@
+crates/gitai/src/domain/redaction.rs
+  s_6dd028f21c9ecc::t_65ec12a88385fc 39-43,46-49,116,165-176,182-186,189-192,194,208-209,212-220,236,251-253,281-309
+crates/gitai/src/domain/redaction/test.rs
+  s_6dd028f21c9ecc::t_d73a6c0a2e7511 222-244,249-250,303-382
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "10a636305bdf04ee2f1274567c69d733b3606063",
+  "prompts": {},
+  "sessions": {
+    "s_6dd028f21c9ecc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12ca901f-69ea-43d0-ba06-391ff7d83e32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
