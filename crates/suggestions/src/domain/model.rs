@@ -51,9 +51,10 @@ pub struct Suggestion {
     pub is_new: bool,
     /// A background prompt suggestion's latest run.
     pub run: Option<SuggestionRun>,
-    /// What to open to see how acting on it went, once known: the item its
-    /// finished run made (else the run's session), a failed run's session,
-    /// or what was made from a done suggestion that didn't run.
+    /// What to open to see how acting on it went, only while it is done or
+    /// its latest run failed: the first item its latest, finished run made
+    /// (else that run's session), a failed run's session, or what was made
+    /// from a done suggestion that didn't run.
     pub result: Option<Target>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
@@ -65,25 +66,33 @@ pub struct Suggestion {
 /// (what its finished run made, else the session; what was made without a
 /// run) or an accepted one whose run failed (the session). An open suggestion
 /// shows none, even one restored while its old run settled.
+///
+/// Each finished run adds its session to `produced`, then what it made, so
+/// the latest run's items are those after its session: an earlier run, one
+/// cancelled before the suggestion was restored and run again, never
+/// answers for it.
 pub fn result_of(
     state: SuggestionState,
     run: Option<&SuggestionRun>,
     produced: &[Target],
 ) -> Option<Target> {
-    let made = || {
-        produced
-            .iter()
-            .find(|target| target.entity_type != EntityType::AgentSession)
-            .cloned()
-    };
+    let is_item = |target: &&Target| target.entity_type != EntityType::AgentSession;
+    let made = || produced.iter().find(is_item).cloned();
     let session = |run: &SuggestionRun| Target {
         entity_type: EntityType::AgentSession,
         entity_id: run.session_id.to_string(),
         part_id: None,
     };
+    let made_by = |run: &SuggestionRun| {
+        let own = session(run);
+        match produced.iter().position(|target| *target == own) {
+            Some(at) => produced.iter().skip(at + 1).find(is_item).cloned(),
+            None => made(),
+        }
+    };
     match (state, run) {
         (SuggestionState::Done, Some(run)) if run.state == RunStateName::Finished => {
-            made().or_else(|| Some(session(run)))
+            made_by(run).or_else(|| Some(session(run)))
         }
         (SuggestionState::Done, None) => made(),
         (SuggestionState::Accepted, Some(run)) if run.state == RunStateName::Failed => {
@@ -101,8 +110,10 @@ pub enum SuggestionStatus {
     /// Open, nothing under way: shown to act on (an agent may have taken a
     /// background prompt suggestion on for the person to run).
     Open,
-    /// Its latest run hasn't settled: it is starting, working, waiting or
-    /// being stopped for running over its time.
+    /// Its latest run hasn't settled: it is starting, working, waiting,
+    /// being stopped for running over its time, or, for a suggestion
+    /// restored after a dismissal, still being cancelled (it runs again once
+    /// that settles).
     Running,
     /// Accepted, and its latest run failed: running it again retries.
     Failed,
@@ -113,9 +124,9 @@ pub enum SuggestionStatus {
 }
 
 impl SuggestionStatus {
-    /// The status of a suggestion in `state` whose latest run is `run`. A run
-    /// being cancelled isn't running: its suggestion closed, or was restored
-    /// to be run again.
+    /// The status of a suggestion in `state` whose latest run is `run`. An
+    /// open suggestion whose run is still being cancelled (restored after a
+    /// dismissal) shows running: it can't run again until that settles.
     pub fn of(state: SuggestionState, run: Option<&SuggestionRun>) -> Self {
         match (state, run.map(|run| run.state)) {
             (SuggestionState::Done, _) => Self::Done,
@@ -123,7 +134,7 @@ impl SuggestionStatus {
                 SuggestionState::Dismissed | SuggestionState::Resolved | SuggestionState::Retired,
                 _,
             ) => Self::Closed,
-            (_, Some(run)) if !run.is_settled() && run != RunStateName::Cancelling => Self::Running,
+            (_, Some(run)) if !run.is_settled() => Self::Running,
             (SuggestionState::Accepted, Some(RunStateName::Failed)) => Self::Failed,
             (SuggestionState::Proposed | SuggestionState::Accepted, _) => Self::Open,
         }
@@ -899,7 +910,8 @@ pub enum SuggestionError {
     /// the person.
     #[error("a generation session may not read the feed or act on suggestions")]
     Generating,
-    /// The suggestion changed since the caller read it: here it is as it is now.
+    /// The suggestion changed since the caller read it, or a run of it is
+    /// still settling: here it is as it is now.
     #[error("the suggestion changed since it was read; read it again")]
     Changed(Box<Suggestion>),
     /// Only a suggestion the person dismissed in the last few minutes comes

@@ -620,6 +620,7 @@ impl SuggestionRepo for PgSuggestionRepo {
         &self,
         run: &StoredRun,
         shown_updated_at: DateTime<Utc>,
+        hold_until: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
         suggestions_db_utils::lock_user(&mut tx, run.user.as_ref()).await?;
@@ -650,8 +651,8 @@ impl SuggestionRepo for PgSuggestionRepo {
         sqlx::query!(
             r#"INSERT INTO suggestion_run
                  (session_id, suggestion_id, user_id, agent_id, action_id, started_at, state,
-                  state_changed_at, sends)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+                  state_changed_at, sends, claimed_until)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
             run.session,
             run.suggestion,
             run.user.as_ref(),
@@ -661,6 +662,7 @@ impl SuggestionRepo for PgSuggestionRepo {
             state.as_ref(),
             run.state_changed_at,
             run.sends.as_deref(),
+            hold_until,
         )
         .execute(&mut *tx)
         .await?;
@@ -698,7 +700,18 @@ impl SuggestionRepo for PgSuggestionRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter().map(run).collect()
+        // One broken row must not stop the sweep for every other run.
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let session = row.session_id;
+                run(row)
+                    .inspect_err(|error| {
+                        tracing::warn!(agent.session.id = %session, error = %error, "skipped an undecodable run row");
+                    })
+                    .ok()
+            })
+            .collect())
     }
 
     async fn claim_run(
@@ -744,6 +757,16 @@ impl SuggestionRepo for PgSuggestionRepo {
         now: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
+        if to == RunState::Finished {
+            // The suggestion before its run, as closing a suggestion takes
+            // them, so a finish and a dismiss never deadlock.
+            sqlx::query!(
+                "SELECT id FROM suggestion WHERE id = $1 FOR UPDATE",
+                run.suggestion,
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+        }
         let Some(suggestion) = write_run(&mut tx, run, to, changed_at, now, true).await? else {
             return Ok(false);
         };

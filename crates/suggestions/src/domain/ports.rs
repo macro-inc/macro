@@ -106,11 +106,13 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     /// start a run ([`LifecycleEvent::StartRun`](super::lifecycle::LifecycleEvent::StartRun)),
     /// has no unsettled run, and last changed at `shown_updated_at`. The
     /// suggestion becomes accepted, and the run is stored as `run` says
-    /// (starting, with its `sends`). False when it can't run now.
+    /// (starting, with its `sends`), held until `hold_until` by whoever
+    /// starts it ([`Self::claim_run`]). False when it can't run now.
     fn start_run(
         &self,
         run: &StoredRun,
         shown_updated_at: DateTime<Utc>,
+        hold_until: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Run `session`, if it is one.

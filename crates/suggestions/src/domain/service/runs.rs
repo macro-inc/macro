@@ -93,10 +93,14 @@ where
             span.record("suggestion.run.outcome", "changed");
             return Err(SuggestionError::Changed(Box::new(suggestion.clone())));
         }
-        // The row first, so two accepts at once start one session.
+        // The row first, so two accepts at once start one session. It is
+        // held while its session starts: a dismiss meanwhile cancels it, and
+        // the start then stops what it opened rather than anyone else
+        // settling it before its session exists.
+        let hold_until = started_at + HOLD_FOR;
         if !self
             .repo
-            .start_run(&run, shown_updated_at)
+            .start_run(&run, shown_updated_at, hold_until)
             .await
             .map_err(SuggestionError::internal)?
         {
@@ -107,7 +111,13 @@ where
                 .await
                 .map_err(SuggestionError::internal)?;
             return Err(match now {
-                Some(now) if now.updated_at != shown_updated_at => {
+                // Changed since the card, or still settling an earlier run
+                // (restored while it is cancelled): the caller sees it as it
+                // is now.
+                Some(now)
+                    if now.updated_at != shown_updated_at
+                        || now.run.as_ref().is_some_and(|run| !run.state.is_settled()) =>
+                {
                     SuggestionError::Changed(Box::new(now))
                 }
                 _ => SuggestionError::NotFound,
@@ -129,15 +139,51 @@ where
             }
         };
         span.record("suggestion.run.outcome", outcome);
+        let session = run.session;
         // A failed write leaves the run starting; the sweep reads its session.
-        let _ = self
+        let advanced = self
             .advance(runs, run, Evidence::Event(event))
             .await
             .inspect_err(|error| tracing::warn!(?error, "could not record a run's start"));
+        // A move lets go of the run; anything else lets go here.
+        if !matches!(advanced, Ok(Advanced::Moved(_))) {
+            let _ = self
+                .repo
+                .release_run(session, hold_until)
+                .await
+                .inspect_err(|error| tracing::warn!(?error, "could not let go of a run"));
+        }
+        if event == RunEvent::Started && matches!(advanced, Ok(Advanced::Refused)) {
+            self.stop_orphaned_session(runs, session).await;
+        }
         if result.is_ok() {
             tracing::info!(event = "suggestions.run_started");
         }
         result
+    }
+
+    /// Delete run `session`'s session when it took its prompt after the run
+    /// had settled without finishing (its hold ran out while it started), so
+    /// nothing runs that no one watches. Best effort.
+    async fn stop_orphaned_session(&self, runs: &Runs, session: Uuid) {
+        let run = match self.repo.run(session).await {
+            Ok(Some(run)) => run,
+            Ok(None) => return,
+            Err(error) => {
+                tracing::warn!(?error, "could not read a run that settled while starting");
+                return;
+            }
+        };
+        if !run.state.is_settled() || run.state == RunState::Finished {
+            return;
+        }
+        tracing::warn!(
+            state = run.state.name().as_ref(),
+            "a run's session started after it settled"
+        );
+        let _ = runs.sessions.delete(&run).await.inspect_err(|error| {
+            tracing::warn!(?error, "could not delete an orphaned run session")
+        });
     }
 
     /// Stop the run that closing `suggestion` just cancelled, now rather than

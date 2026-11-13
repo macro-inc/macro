@@ -112,6 +112,67 @@ async fn a_run_has_one_holder_at_a_time(pool: PgPool) {
     );
 }
 
+/// A run is stored held by whoever starts it: no one else claims or sweeps
+/// it until it is let go or the hold runs out.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_starts_held_by_its_starter(pool: PgPool) {
+    let f = fixture(pool).await;
+    let id = f.prompt(None).await;
+    let run = f.run_of(id, None);
+    let shown = f.suggestion(id).await.updated_at;
+    let hold = run.started_at + chrono::Duration::minutes(2);
+    assert!(f.repo.start_run(&run, shown, hold).await.unwrap());
+    let now = Utc::now();
+    assert!(
+        f.repo
+            .claim_run(run.session, now, now + chrono::Duration::minutes(2))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(f.repo.runs_to_check(now, 10).await.unwrap().is_empty());
+    f.repo.release_run(run.session, hold).await.unwrap();
+    assert_eq!(
+        f.repo
+            .runs_to_check(now, 10)
+            .await
+            .unwrap()
+            .iter()
+            .map(|run| run.session)
+            .collect::<Vec<_>>(),
+        [run.session]
+    );
+}
+
+/// A run row that doesn't decode is skipped, so the sweep still checks the
+/// others.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_sweep_skips_a_run_it_cant_read(pool: PgPool) {
+    let f = fixture(pool).await;
+    let broken = f.start(f.prompt(None).await).await.unwrap().session;
+    let fine = f
+        .start(f.prompt(Some("Email the supplier the order")).await)
+        .await
+        .unwrap()
+        .session;
+    sqlx::query!(
+        "UPDATE suggestion_run SET agent_id = 'not-a-uuid' WHERE session_id = $1",
+        broken,
+    )
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    let checked: Vec<_> = f
+        .repo
+        .runs_to_check(Utc::now(), 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|run| run.session)
+        .collect();
+    assert_eq!(checked, [fine]);
+}
+
 /// A move lands only on the run as it was read, lets go of it, and stamps
 /// when it settled.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -246,7 +307,7 @@ async fn a_run_sends_what_it_was_started_with(pool: PgPool) {
     for (id, sends) in [(quiet, None), (loud, Some("Email the supplier the order"))] {
         let run = f.run_of(id, sends);
         let shown = f.suggestion(id).await.updated_at;
-        assert!(f.repo.start_run(&run, shown).await.unwrap());
+        assert!(f.repo.start_run(&run, shown, run.started_at).await.unwrap());
         sessions.push(run.session);
     }
     assert!(f.repo.sends_nothing(sessions[0]).await.unwrap());

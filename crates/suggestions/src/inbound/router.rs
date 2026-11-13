@@ -154,7 +154,8 @@ impl IntoResponse for SuggestionApiError {
     }
 }
 
-/// The suggestion changed since the caller read it.
+/// The suggestion changed since the caller read it, or can't run until its
+/// last run settles.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct SuggestionChanged {
     /// What happened.
@@ -168,7 +169,8 @@ pub struct SuggestionChanged {
 #[serde(rename_all = "camelCase")]
 pub struct AcceptSuggestionRequest {
     /// The suggestion's `updatedAt` as the caller read it. A background suggestion runs
-    /// only if it is unchanged since; otherwise the answer is 409.
+    /// only if it is unchanged since and no run of it is still settling;
+    /// otherwise the answer is 409.
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -288,7 +290,7 @@ where
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not accept"),
-        (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it: the body has it as it is now"),
+        (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now"),
         (status = 404, body = String, description = "No open or done suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )

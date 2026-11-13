@@ -137,9 +137,9 @@ export class Suggestion {
 
   /**
    * What its card shows: `open` to act on, `running` while its background run
-   * is under way, `failed` when that run failed (the user can run it again from
-   * the app), `done`, or `closed` (dismissed, resolved or retired; never in the
-   * feed).
+   * is under way (or, restored after a dismissal, still being stopped),
+   * `failed` when that run failed (the user can run it again from the app),
+   * `done`, or `closed` (dismissed, resolved or retired; never in the feed).
    */
   get status(): SuggestionStatus {
     return this.record.status;
@@ -284,8 +284,9 @@ export class Suggestion {
    * Take back the user's dismissal of this suggestion: it is open again. Only
    * within five minutes of the dismissal, by the same user; fails with 409
    * later, and for a routine suggestion. A background run the dismissal
-   * stopped stays stopped: the user runs it again from the app. For the
-   * user's own agent; a generation session gets a 403.
+   * stopped stays stopped: the suggestion shows `running` until it has, then
+   * the user runs it again from the app. For the user's own agent; a
+   * generation session gets a 403.
    */
   async restore(): Promise<void> {
     unwrap(

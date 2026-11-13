@@ -176,8 +176,17 @@ impl RunState {
             Self::Starting | Self::Running | Self::Waiting { .. } => {
                 self.live(event, started_at, now)
             }
-            Self::Stopping { since } => Ok(stopping(self, Self::Failed, since, event, now)),
-            Self::Cancelling { since } => Ok(stopping(self, Self::Cancelled, since, event, now)),
+            Self::Stopping { since } => {
+                Ok(stopping(self, Self::Failed, since, event, started_at, now))
+            }
+            Self::Cancelling { since } => Ok(stopping(
+                self,
+                Self::Cancelled,
+                since,
+                event,
+                started_at,
+                now,
+            )),
         }
     }
 
@@ -227,16 +236,18 @@ impl RunState {
     }
 }
 
-/// A run being stopped (`state`, since `since`), which settles as `settles`
-/// unless it finished first.
+/// A run that started at `started_at` being stopped (`state`, since
+/// `since`), which settles as `settles` unless it finished first.
 fn stopping(
     state: RunState,
     settles: RunState,
     since: DateTime<Utc>,
     event: RunEvent,
+    started_at: DateTime<Utc>,
     now: DateTime<Utc>,
 ) -> Step {
     let past_grace = now - since >= STOP_GRACE;
+    let opening = now - started_at < START_WINDOW;
     match event {
         // Its session came up after the stop was asked for: stop it too.
         RunEvent::Started => Step::stay_and(state, RunEffect::Stop),
@@ -246,6 +257,10 @@ fn stopping(
         RunEvent::Observed(Observation::Finished) => {
             Step::with(RunState::Finished, RunEffect::ReadProduced)
         }
+        // A run cancelled while starting may have no session yet: one that
+        // opens later takes its prompt, so it is stopped then, not left to
+        // run unwatched.
+        RunEvent::Observed(Observation::Gone) if opening => Step::stay(state),
         RunEvent::Observed(Observation::Failed | Observation::Gone) => Step::to(settles),
         RunEvent::Observed(
             Observation::AwaitingPrompt

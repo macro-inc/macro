@@ -24,11 +24,12 @@ scheduler's spec.
   `?limit` caps the open list and leaves `done` out; `counts` (`open`,
   `running`, `failed`, `done`) counts every suggestion shown either way. Each
   carries its server-computed `status` (`open`, `running` while its latest run
-  is unsettled and not being cancelled, `failed`, `done`; `closed` only in
-  `review`, `SuggestionStatus::of`), its latest `run` as stored, and, while
-  it is `done` or `failed`, its `result` (`result_of`: what its finished run
-  made over its session, its failed run's session, or without a run what
-  acting on it made; none while open, even after an old run settled).
+  is unsettled, a restored suggestion's run still being cancelled included,
+  `failed`, `done`; `closed` only in `review`, `SuggestionStatus::of`), its
+  latest `run` as stored, and, while it is `done` or `failed`, its `result`
+  (`result_of`: what its latest, finished run made over its session, never an
+  earlier run's item; its failed run's session; or without a run what acting
+  on it made; none while open, even after an old run settled).
   Reading it never calls a session or reads an item. A suggestion one of whose
   items can't be checked is left out and logged, never failing the feed. Each
   process keeps a person's flag for 60 s and counts them in at most once an
@@ -43,7 +44,8 @@ scheduler's spec.
 - The person takes back a dismissal within five minutes
   (`POST /suggestions/{id}/restore`, lifecycle event `undismiss`): it is
   proposed again, and a run the dismissal cancelled stays cancelled, so a new
-  one starts once that settles. A routine suggestion isn't restored (409):
+  one starts once that settles: until then it shows `running`, and accepting
+  it answers 409 with it as it is. A routine suggestion isn't restored (409):
   its routine suggestion has no way back.
 - The feed, `accept`, `dismiss` and `restore` (`UserOnly`) serve the person and anyone
   acting for them: a code-mode credential is a Macro API token for the
@@ -145,7 +147,8 @@ scheduler's spec.
   hidden session of the person's, billed as their agent usage. Anyone acting
   for them (an agent) only takes the suggestion on (`accepted`, no run) for them to
   run. Accept carries the `updatedAt` the card showed; a run starts only if
-  the suggestion is unchanged since (409 otherwise). Clicking Run is the approval:
+  the suggestion is unchanged since and no run of it is unsettled (409 with
+  it as it is now otherwise). Clicking Run is the approval:
   the run is told never to stop to ask or wait (`run_prompt`), and posts or
   sends only what the suggestion's `sends` says (shown on the card, approved by
   running it), or nothing. The run row keeps the `sends` it started with; a run
@@ -162,7 +165,11 @@ scheduler's spec.
   when it was entered are stored, so the feed never asks a session. Every move
   compares and sets the state it read, under a 2 minute hold
   (`claimed_until`), so two processes never act on one run; its effect (read
-  what it made, stop, delete) runs before it lands. A finished run makes an
+  what it made, stop, delete) runs before it lands. A run is stored already
+  held by the accept that starts it, so a dismissal while its session opens
+  only cancels it, and the start stops what it opened; a missing session
+  settles no stopping or cancelling run within its 10 minutes to start, since
+  one may still open and take the prompt. A finished run makes an
   accepted suggestion done with the session and what it created as `produced`
   (each item once, at most 200; the harness reads every page of the session's
   activity); a failed run leaves it accepted, and accepting it again runs it
@@ -172,8 +179,10 @@ scheduler's spec.
   for input, command rejected, stopped, deleted) and from a reconcile sweep
   every 5 minutes in the harness (`SuggestionRuns::reconcile_runs`, at most 200
   runs, least recently checked first) that reads each unsettled run's session,
-  for missed events and runs over their time. One run's error never stops the
-  sweep. A run is never started twice: a prompt whose answer was lost
+  for missed events and runs over their time. One run's error, or a row that
+  doesn't decode (skipped and logged), never stops the sweep. A finish takes
+  the suggestion's row before the run's, as closing a suggestion does, so the
+  two never deadlock. A run is never started twice: a prompt whose answer was lost
   (`RunStartError::Uncertain`) stays `starting` for its session to settle; only
   a definite refusal fails it at once. A session that can't be read is given
   up only past the run's time.

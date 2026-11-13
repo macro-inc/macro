@@ -436,12 +436,13 @@ impl Fixture {
         }
     }
 
-    /// Start a run of suggestion `id` as it is now; the run when it started.
+    /// Start a run of suggestion `id` as it is now, held by no one; the run
+    /// when it started.
     async fn start(&self, id: Uuid) -> Option<StoredRun> {
         let run = self.run_of(id, None);
         let shown = self.suggestion(id).await.updated_at;
         self.repo
-            .start_run(&run, shown)
+            .start_run(&run, shown, run.started_at)
             .await
             .unwrap()
             .then_some(run)

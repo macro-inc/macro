@@ -222,6 +222,9 @@ fn cases() -> Vec<Case> {
             to(Cancelled),
         ),
         case(cancelling(30), observed(Gone), 31, to(Cancelled)),
+        // Cancelled while starting: a session not opened yet may still open.
+        case(cancelling(2), observed(Gone), 9, to(cancelling(2))),
+        case(cancelling(2), observed(Gone), 10, to(Cancelled)),
     ];
     // A stopped session that may still be going is asked again to stop until
     // its grace runs out, then deleted.
@@ -385,6 +388,23 @@ fn a_cancelled_run_stays_cancelled_unless_it_finished_first() {
             ),
             "{state:?} on {event:?} at {now}"
         );
+    }
+}
+
+/// Before its start is confirmed, a run's session may not have opened yet and
+/// can still open and take the prompt: a missing session settles no run that
+/// may be in that spot while its start window is open.
+#[test]
+fn a_missing_session_settles_no_run_whose_session_may_still_open() {
+    for (state, event, now, step) in sweep() {
+        let Ok(step) = step else { continue };
+        let unconfirmed = matches!(
+            state,
+            RunState::Starting | RunState::Stopping { .. } | RunState::Cancelling { .. }
+        );
+        if unconfirmed && event == observed(Observation::Gone) && now - t(0) < START_WINDOW {
+            assert!(!step.to.is_settled(), "{state:?} at {now}");
+        }
     }
 }
 

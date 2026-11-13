@@ -38,6 +38,15 @@ pub(crate) struct FakeRuns {
     deleted: Mutex<Vec<Uuid>>,
     delete_fails: std::sync::atomic::AtomicBool,
     starts_as: Mutex<StartsAs>,
+    /// When set, the next start says it began, then waits to be let through
+    /// before its session opens.
+    start_gate: Mutex<Option<StartGate>>,
+}
+
+/// Holds a start open: `entered` hears it began, `proceed` lets it go on.
+struct StartGate {
+    entered: tokio::sync::oneshot::Sender<()>,
+    proceed: tokio::sync::oneshot::Receiver<()>,
 }
 
 impl FakeRuns {
@@ -57,6 +66,11 @@ impl FakeRuns {
 #[async_trait::async_trait]
 impl RunSessions for FakeRuns {
     async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), RunStartError> {
+        let gate = self.start_gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            let _ = gate.entered.send(());
+            let _ = gate.proceed.await;
+        }
         let starts_as = *self.starts_as.lock().unwrap();
         if starts_as == StartsAs::NotStarted {
             return Err(RunStartError::NotStarted(rootcause::report!(
@@ -276,11 +290,11 @@ async fn accepting_a_background_prompt_suggestion_runs_it_and_its_turn_ending_fi
     );
     assert!(started[0].prompt.contains("never stop to ask"));
     assert!(started[0].prompt.contains("Post, send or share nothing:"));
-    // A run going can't be started twice.
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
+    // A run going can't be started twice: the caller gets it as it is, running.
+    match h.accept(&user(OWNER), suggestion.id).await {
+        Err(SuggestionError::Changed(now)) => assert_eq!(now.status, SuggestionStatus::Running),
+        other => panic!("accepted a running suggestion again: {other:?}"),
+    }
     let run = started[0].session;
     let shown = h.in_feed(suggestion.id).await.unwrap();
     assert_eq!(shown.state, SuggestionState::Accepted);
@@ -610,7 +624,7 @@ async fn a_run_whose_prompt_may_have_arrived_is_never_started_twice(pool: PgPool
     assert_eq!(h.run_state(run.session).await, RunStateName::Starting);
     assert!(matches!(
         h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
+        Err(SuggestionError::Changed(_))
     ));
     assert_eq!(runs.started().len(), 1);
     assert_eq!(
@@ -674,7 +688,7 @@ async fn a_run_whose_prompt_never_arrived_is_deleted_and_runs_again(pool: PgPool
     assert_eq!(h.reconcile().await, STAYED);
     assert!(matches!(
         h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
+        Err(SuggestionError::Changed(_))
     ));
     runs.delete_fails
         .store(false, std::sync::atomic::Ordering::SeqCst);
@@ -700,7 +714,7 @@ async fn a_run_whose_session_cant_be_read_is_deleted_only_past_its_time(pool: Pg
     }
     assert!(matches!(
         h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
+        Err(SuggestionError::Changed(_))
     ));
     age_runs(&h.pool, chrono::Duration::minutes(1)).await;
     h.sweeps_to(run, RunStateName::Failed).await;
@@ -795,7 +809,7 @@ async fn retiring_a_suggestion_cancels_its_run_and_a_restored_one_waits_for_it(p
     assert!(restored.ok, "{:?}", restored.problems);
     assert!(matches!(
         h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
+        Err(SuggestionError::Changed(_))
     ));
     assert_eq!(runs.started().len(), 1);
     // Once the first run settles cancelled, the restored suggestion may run.
@@ -1002,9 +1016,73 @@ async fn one_failing_run_never_stops_the_sweep(pool: PgPool) {
     h.sweeps_to(sessions[0], RunStateName::Finished).await;
 }
 
+/// A dismissal while a run's session is still opening cancels the run, and
+/// the start, which holds the run, stops the session it opened: nothing
+/// settles the run before its session exists, so none runs unwatched.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_dismissed_while_starting_is_stopped_by_its_start(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    let (entered, began) = tokio::sync::oneshot::channel();
+    let (proceed, held) = tokio::sync::oneshot::channel();
+    *runs.start_gate.lock().unwrap() = Some(StartGate {
+        entered,
+        proceed: held,
+    });
+    let dismiss = async {
+        began.await.unwrap();
+        h.service
+            .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+            .await
+            .unwrap();
+        // The start holds the run: the dismissal cancels it but leaves the
+        // stop to the start, and its missing session settles nothing.
+        assert!(runs.stopped.lock().unwrap().is_empty());
+        assert_eq!(h.reconcile().await, RunsReconciled::default());
+        proceed.send(()).unwrap();
+    };
+    let owner = user(OWNER);
+    let (accepted, ()) = tokio::join!(h.accept(&owner, suggestion.id), dismiss);
+    accepted.unwrap();
+    let run = runs.last().session;
+    assert_eq!(*runs.stopped.lock().unwrap(), [run]);
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelling);
+    // Released by its start, its stopped session settles it cancelled.
+    h.sweeps_to(run, RunStateName::Cancelled).await;
+    assert_eq!(
+        h.stored(suggestion.id).await.state,
+        SuggestionState::Dismissed
+    );
+}
+
+/// A missing session settles no run that was cancelled while starting
+/// until its start window is over: one may still open and take its prompt.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_cancelled_while_starting_waits_for_its_session(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    *runs.starts_as.lock().unwrap() = StartsAs::Uncertain;
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last().session;
+    runs.state.lock().unwrap().remove(&run);
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelling);
+    assert_eq!(
+        h.reconcile().await,
+        RunsReconciled {
+            checked: 1,
+            ..RunsReconciled::default()
+        }
+    );
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelling);
+}
+
 /// Restoring a suggestion whose dismissal stopped its run brings the
-/// suggestion back as proposed; the run stays cancelled, and a new one starts
-/// once it has settled.
+/// suggestion back as proposed, shown running while the run is cancelled;
+/// the run stays cancelled, and a new one starts once it has settled.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_restored_suggestion_keeps_its_cancelled_run(pool: PgPool) {
     let (h, runs) = run_harness(pool).await;
@@ -1039,24 +1117,28 @@ async fn a_restored_suggestion_keeps_its_cancelled_run(pool: PgPool) {
         .unwrap();
     let restored = h.in_feed(suggestion.id).await.unwrap();
     assert_eq!(restored.state, SuggestionState::Proposed);
-    assert_eq!(restored.status, SuggestionStatus::Open);
+    assert_eq!(restored.status, SuggestionStatus::Running);
     assert_eq!(restored.result, None);
     assert_eq!(restored.run.unwrap().state, RunStateName::Cancelling);
     assert_eq!(
         counts().await,
         FeedCounts {
-            open: 1,
+            running: 1,
             ..FeedCounts::default()
         }
     );
-    // Its old run still stopping, it can't run again yet.
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
+    // Its old run still stopping, it can't run again yet: the caller gets it
+    // as it is now.
+    match h.accept(&user(OWNER), suggestion.id).await {
+        Err(SuggestionError::Changed(now)) => {
+            assert_eq!(now.status, SuggestionStatus::Running);
+        }
+        other => panic!("ran a suggestion whose old run was settling: {other:?}"),
+    }
     h.sweeps_to(run, RunStateName::Cancelled).await;
     let restored = h.stored(suggestion.id).await;
     assert_eq!(restored.state, SuggestionState::Proposed);
+    assert_eq!(restored.status, SuggestionStatus::Open);
     assert!(restored.produced.is_empty());
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     assert_eq!(runs.started().len(), 2);

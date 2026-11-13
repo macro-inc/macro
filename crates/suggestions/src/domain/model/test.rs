@@ -23,9 +23,7 @@ fn a_suggestions_status_follows_its_state_then_its_latest_run() {
             let expected = match (state, latest) {
                 (S::Done, _) => Status::Done,
                 (S::Dismissed | S::Resolved | S::Retired, _) => Status::Closed,
-                (_, Some(latest)) if !latest.is_settled() && latest != RunStateName::Cancelling => {
-                    Status::Running
-                }
+                (_, Some(latest)) if !latest.is_settled() => Status::Running,
                 (S::Accepted, Some(RunStateName::Failed)) => Status::Failed,
                 (S::Proposed | S::Accepted, _) => Status::Open,
             };
@@ -49,10 +47,11 @@ fn a_suggestions_status_follows_its_state_then_its_latest_run() {
         SuggestionStatus::of(S::Dismissed, Some(&run(RunStateName::Cancelling))),
         Status::Closed
     );
-    // Restored after a dismissal stopped its run: open, the run still stopping.
+    // Restored after a dismissal stopped its run: running until the run
+    // settles, since it can't run again before.
     assert_eq!(
         SuggestionStatus::of(S::Proposed, Some(&run(RunStateName::Cancelling))),
-        Status::Open
+        Status::Running
     );
 }
 
@@ -111,6 +110,36 @@ fn a_suggestions_result_is_what_its_settled_run_made() {
         Some(session_of(&finished))
     );
     assert_eq!(result_of(SuggestionState::Done, None, &[]), None);
+}
+
+/// A suggestion run again after an earlier run finished while cancelled
+/// opens what its latest run made, never the earlier run's item.
+#[test]
+fn a_suggestions_result_is_its_latest_runs() {
+    let session_of = |run: &SuggestionRun| Target {
+        entity_type: EntityType::AgentSession,
+        entity_id: run.session_id.to_string(),
+        part_id: None,
+    };
+    let (earlier, latest) = (run(RunStateName::Finished), run(RunStateName::Finished));
+    let (first, second) = (target(EntityType::Document), target(EntityType::Document));
+    let both = [
+        session_of(&earlier),
+        first.clone(),
+        session_of(&latest),
+        second.clone(),
+    ];
+    assert_eq!(
+        result_of(SuggestionState::Done, Some(&latest), &both),
+        Some(second)
+    );
+    // The latest run made nothing but its session: the session, not the
+    // earlier run's item.
+    let only_session = [session_of(&earlier), first, session_of(&latest)];
+    assert_eq!(
+        result_of(SuggestionState::Done, Some(&latest), &only_session),
+        Some(session_of(&latest))
+    );
 }
 
 #[test]
