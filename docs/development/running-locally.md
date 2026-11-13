@@ -727,7 +727,8 @@ enabled = false
 ```
 
 It is also off when `CI` is set (`MACRO_LOCAL_TELEMETRY=on` overrides that).
-Opted out, nothing is written or sent.
+Opted out, nothing is written or sent, and the next bring-up stops sending
+[your stacks' telemetry](#your-stacks-telemetry-in-grafana-opt-in).
 
 **What is sent.** Each bring-up, `rebuild`, `restart-frontend`, `stop`, `r`/`f`
 hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
@@ -788,7 +789,8 @@ services = true
 ```
 
 The file needs a token (provisioned or your own), and a provisioned file keeps
-both lines when its token is replaced. The next bring-up with the default
+both lines when its token is replaced. Checkouts older than this setting reject
+the file as having unknown keys and send no timings until they are rebased. The next bring-up with the default
 `--traces lgtm` starts a `grafana-forwarder` container (Grafana Alloy,
 `docker/grafana-forwarder/`) and recreates the lgtm collector so it copies
 everything it receives there; stacks that are already running are sent from then
@@ -798,16 +800,16 @@ shows bring-ups, stacks, traces, error logs and logs by machine.
 
 **What is sent.** Everything your services send to the local collector, which
 includes request attributes, log messages and error text from your local data;
-the forwarder drops the collector's own telemetry. It keeps every trace that has
-an error and a tenth of the others (by trace id, so a kept trace is whole), and
-all logs and metrics. Everything is tagged `host.name` = the machine name,
+the forwarder drops the collector's own telemetry and debug and trace logs. It
+keeps every trace with an error in its first 30 seconds and a tenth of the
+others (by trace id, so a kept trace is whole), and all other logs and metrics. Everything is tagged `host.name` = the machine name,
 `deployment.environment` = `local` (which keeps it off dev's dashboards and
 alerts) and, per stack, `macro.local.instance`; your run events gain
 `host_name`. A machine running about ten stacks sends under one request a
 second.
 
-**Turning it off.** Delete the line or set `services = false`: the next
-bring-up removes the forwarder and its copy of the token and recreates the
-collector without the copy. `MACRO_LOCAL_TELEMETRY=off` and `CI` keep a run
-from changing the forwarder either way. The token is copied, mode 0600, to
-`~/.local/state/macro/local-telemetry/forwarder/`, which the container mounts.
+**Turning it off.** Delete the line, set `services = false`, or turn local
+telemetry off (`MACRO_LOCAL_TELEMETRY=off`, `CI`): the next bring-up removes
+the forwarder, recreates the collector without the copy, and then removes the
+forwarder's copy of the token, which is kept mode 0600 in
+`~/.local/state/macro/local-telemetry/forwarder/` and mounted read-only.

@@ -124,7 +124,8 @@ A developer who sets `services = true` in their local telemetry settings also
 sends their local stacks' service traces, logs and metrics through the same
 route and token (`docs/development/running-locally.md`). A Grafana Alloy
 forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
-error trace and a tenth of the rest, drops the local collector's own telemetry,
+trace with an error in its first 30 seconds and a tenth of the rest, drops the
+local collector's own telemetry and debug and trace logs,
 and tags resources and metric datapoints with `host.name` (the machine's name)
 and `deployment.environment="local"`; services add `macro.local.instance`. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
