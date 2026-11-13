@@ -1812,7 +1812,15 @@ custom MCP server) a toast asks the reader to reply when ready. A server whose
 sign-in cannot start opens the Add MCP Server dialog filled in with its name
 and URL. In code mode the Macro agent presents connect cards instead of the
 `m-connect-app` chip, which stays for AI chat, external agents and older
-replies. A list holds a fixed height and says how many
+replies. In the resumed turn, a call to the new server's tools waits for the
+owner's **Approve**. To exercise the sign-in locally, never against a real provider,
+run a stand-in OAuth MCP server inside the harness container's network
+namespace (`docker run --network container:<harness>`) at `https://localhost`.
+The OAuth client accepts a non-public metadata host only when it is loopback
+and the server URL is too, so a container IP fails. The harness must also
+trust a certificate from `infra/local/certs`. Forward the browser's
+`localhost` port to the harness IP, and add an `mcp_overlays` row for an app
+card. A list holds a fixed height and says how many
 items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
 each widget. Task list titles wrap above their live properties and timestamps;
 side-by-side project groups stack below 672px of available container width,
