@@ -56,7 +56,7 @@ export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   [GatewayService.DOCUMENT_COGNITION_SERVICE]: 120,
   [GatewayService.CALENDAR_SERVICE]: 140,
   [GatewayService.LEXICAL_SERVICE]: 160,
-  [GatewayService.AGENT_GIT_SERVICE]: 170,
+  [GatewayService.AGENT_GIT_SERVICE]: 180,
   [GatewayService.CONVERT_SERVICE]: 3000,
 };
 

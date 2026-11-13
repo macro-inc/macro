@@ -420,6 +420,7 @@ dependencies = [
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
@@ -673,6 +674,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "code_execution",
+ "code_mode_assets",
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
@@ -4091,6 +4093,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_correlation",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -4471,6 +4474,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4532,8 +4536,6 @@ dependencies = [
 [[package]]
 name = "chrono-tz"
 version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
 dependencies = [
  "chrono",
  "phf 0.12.1",
@@ -5573,6 +5575,7 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "crm"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -7449,6 +7452,7 @@ dependencies = [
  "email_utils",
  "email_validator",
  "entity_access",
+ "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
  "filter_ast",
@@ -7979,6 +7983,7 @@ dependencies = [
 name = "entity_access_db_utils"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "macro_db_migrator",
  "macro_user_id",
@@ -7996,6 +8001,7 @@ dependencies = [
 name = "entity_access_management"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "entity_access_db_utils",
  "macro_db_migrator",
@@ -11297,6 +11303,7 @@ name = "initiative"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -13817,6 +13824,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "macro_user_id",
  "model-entity",
  "model_file_type",
@@ -13827,6 +13835,7 @@ dependencies = [
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
+ "tokio",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -18298,6 +18307,7 @@ version = "0.1.0"
 dependencies = [
  "agent_session",
  "anyhow",
+ "async-trait",
  "axum",
  "calendar_events",
  "channels",
@@ -18307,6 +18317,7 @@ dependencies = [
  "document_sub_type",
  "email_db_client",
  "entity_access",
+ "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
  "macro_authorization",
@@ -19983,6 +19994,7 @@ dependencies = [
 name = "static_file_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -20011,6 +20023,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
  "utoipa",

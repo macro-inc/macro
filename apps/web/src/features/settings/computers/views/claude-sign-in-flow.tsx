@@ -5,6 +5,7 @@ import { thrownResultErrorHasCode } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import {
+  type ClaudeSignInEntry,
   useClaudeCompleteMutation,
   useClaudeSignInMutation,
 } from '@queries/computers/claude';
@@ -47,8 +48,10 @@ export function isHttpsUrl(url: string): boolean {
  */
 export function ClaudeSignInFlow(props: {
   harnessId: string;
+  /** Recorded on the sign-in's spans. */
+  entry: ClaudeSignInEntry;
   onSignedIn: () => void;
-  /** Offered beside Complete sign-in; absent when credits are not an option. */
+  /** Offered at every step; absent when credits are not an option. */
   onUseCredits?: () => void;
   title?: string;
   /** Guided setup's step header and progress, above the title. */
@@ -77,6 +80,7 @@ export function ClaudeSignInFlow(props: {
     try {
       const result = await start.mutateAsync({
         harnessId: props.harnessId,
+        entry: props.entry,
         signal: request.signal,
       });
       if (current !== generation) return;
@@ -143,6 +147,7 @@ export function ClaudeSignInFlow(props: {
     try {
       await complete.mutateAsync({
         harnessId: props.harnessId,
+        entry: props.entry,
         code: code().trim(),
         signal: request.signal,
       });
@@ -220,6 +225,20 @@ export function ClaudeSignInFlow(props: {
         </Show>
       </ActionDialogShell.Body>
       <ActionDialogShell.Footer>
+        {/* Offered at every step, failed ones too; not while a pasted code is
+            being checked, which may still sign the computer in. */}
+        <Show when={props.onUseCredits}>
+          {(useCredits) => (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={complete.isPending}
+              onClick={useCredits()}
+            >
+              {t('computers.claudeUseCreditsInstead')}
+            </Button>
+          )}
+        </Show>
         <Switch>
           <Match when={restart()}>
             {(label) => (
@@ -241,13 +260,6 @@ export function ClaudeSignInFlow(props: {
             </a>
           </Match>
           <Match when={step() === 'code'}>
-            <Show when={props.onUseCredits}>
-              {(useCredits) => (
-                <Button type="button" variant="ghost" onClick={useCredits()}>
-                  {t('computers.claudeUseCreditsInstead')}
-                </Button>
-              )}
-            </Show>
             <Button
               type="button"
               variant="primary"

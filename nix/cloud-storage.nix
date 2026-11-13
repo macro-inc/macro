@@ -168,6 +168,8 @@
           || (rel == "vendor")
           || (rel == "vendor/utoipa-swagger-ui")
           || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
+          || (rel == "vendor/chrono-tz")
+          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -1157,6 +1159,8 @@
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
           grep -q "fn write_embed_code" \
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
+          grep -q "IANA_TZDB_VERSION" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
           touch $out
         '';
         pruned-deploy-src-starter-agent =

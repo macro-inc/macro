@@ -49,3 +49,6 @@ key-holders signing for a verified context set them, never from request input.
 - Rules: `.agents/rules/rust/security.md`
 
 - SDK JWTs optionally carry signed `agent_correlation_id` and managed-MCP `agent_session_id`; these are attribution, never additional authorization.
+  A code-mode credential whose session runs in a narrower scope also signs
+  `agent_scope` (the scope's stored name), so services with no database can
+  enforce it; it only narrows what the credential may do.

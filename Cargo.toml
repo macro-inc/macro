@@ -582,6 +582,8 @@ subtle = "2.6.1"
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
+# Bundles a newer IANA tzdata release than crates.io; see vendor/chrono-tz/README-MACRO.md.
+chrono-tz = { path = "vendor/chrono-tz" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests

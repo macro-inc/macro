@@ -184,6 +184,9 @@ tools/HTTP/GraphQL surfaces over them.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
+- The pipeline `edit` route refuses `sharing` from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

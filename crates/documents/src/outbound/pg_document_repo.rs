@@ -693,6 +693,21 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             FileTypeUpdate::Clear => None,
         });
 
+        let document_uuid = macro_uuid::string_to_uuid(&args.document_id).ok();
+        if document_uuid.is_none()
+            && args.project_id.is_some()
+            && !agent_correlation::context::may_share()
+        {
+            let (owner, from) =
+                edit::get_document_owner_and_folder(&mut transaction, &args.document_id).await?;
+            entity_access_db_utils::project_grants::refuse_unregistered_filing(
+                &mut transaction,
+                &owner,
+                from.as_deref(),
+                args.project_id.as_deref(),
+            )
+            .await?;
+        }
         edit::update_document_metadata(
             &mut transaction,
             &args.document_id,
@@ -701,6 +716,15 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             file_type_db,
         )
         .await?;
+        if let Some(document_uuid) = document_uuid {
+            entity_access_db_utils::project_grants::refuse_filing_in(
+                &mut transaction,
+                &document_uuid,
+                model_entity::EntityType::Document,
+                args.project_id.as_deref(),
+            )
+            .await?;
+        }
 
         if let Some(ref share_permission) = args.share_permission {
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)

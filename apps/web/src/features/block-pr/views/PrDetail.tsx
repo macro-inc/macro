@@ -19,6 +19,7 @@ import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
 import IconShared from '@icon/share.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import IconLink from '@icon/system/regular/link.svg';
+import { normalizeGithubMarkdown } from '@macro-inc/lexical-core';
 import { NotificationReadMarker } from '@notifications';
 import {
   type GithubPullRequestWithDetails,
@@ -63,11 +64,7 @@ import {
   type PrActions,
 } from '../primitives/create-pr-actions';
 import { usePrFileOperations } from '../primitives/pr-file-operations';
-import {
-  cleanGithubMarkdown,
-  githubAvatarUrl,
-  githubDisplayLogin,
-} from '../util/githubMarkdown';
+import { githubAvatarUrl, githubDisplayLogin } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
 import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
@@ -223,13 +220,16 @@ export function PrDetailActions(props: {
       <Show when={props.detail}>
         {(detail) => (
           <>
-            <AskMacroButton
-              entity={{
-                type: 'pr',
-                id: detail().id,
-                url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
-              }}
-            />
+            <HeaderActionGroup label="Actions">
+              <AskMacroButton
+                grouped
+                entity={{
+                  type: 'pr',
+                  id: detail().id,
+                  url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
+                }}
+              />
+            </HeaderActionGroup>
             <HeaderActionGroup label="Sharing">
               <Tooltip label="Share pull request">
                 <HeaderActionButton
@@ -430,7 +430,7 @@ function PrDescription(props: { pullRequest?: GithubPullRequestWithDetails }) {
   const description = createMemo(() => {
     const raw = props.pullRequest?.description;
     if (!raw) return null;
-    const cleaned = cleanGithubMarkdown(raw);
+    const cleaned = normalizeGithubMarkdown(raw);
     return cleaned || null;
   });
 
