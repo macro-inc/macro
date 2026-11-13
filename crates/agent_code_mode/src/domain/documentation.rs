@@ -51,9 +51,41 @@ static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
         .expect("generated SDK documentation is valid")
 });
 
-/// Every SDK entity with its index, supplied at build time.
+/// The system skill that comes with an entity's guidance in code mode, so a
+/// session that reads how an area works also reads how to do its main job
+/// there, without having to find the skill: how to write a routine.
+fn attached_skill(entity: &str) -> Option<&'static system_skills::SystemSkill> {
+    (entity == ROUTINES_ENTITY).then_some(&system_skills::compose_routines::SKILL)
+}
+
+/// The entity whose guidance carries the Compose Routines skill.
+const ROUTINES_ENTITY: &str = "routines";
+
+/// The entities as code mode carries them: each guide followed by the system
+/// skill attached to it, wherever the guide goes (inline, routed, or a
+/// `DescribeCodeTools` result).
+static CODE_ENTITIES: LazyLock<Vec<SdkDocumentation>> = LazyLock::new(|| {
+    GENERATED
+        .entities
+        .iter()
+        .cloned()
+        .map(|mut doc| {
+            if let Some(skill) = attached_skill(&doc.name) {
+                let skill = skill.render_content();
+                doc.guide = Some(match doc.guide.take() {
+                    Some(guide) => format!("{guide}\n\n{skill}"),
+                    None => skill,
+                });
+            }
+            doc
+        })
+        .collect()
+});
+
+/// Every SDK entity with its index, supplied at build time, with the guidance
+/// code mode carries.
 pub fn sdk_documentation() -> &'static [SdkDocumentation] {
-    &GENERATED.entities
+    &CODE_ENTITIES
 }
 
 /// The reference for one symbol an entity index or another reference names.
@@ -61,9 +93,11 @@ pub fn symbol_reference(symbol: &str) -> Option<&'static str> {
     GENERATED.symbols.get(symbol).map(String::as_str)
 }
 
-/// One entity's `@agent` guidance, for hosts that carry a single area whole.
+/// One entity's `@agent` guidance as the SDK declares it, without an attached
+/// skill, for hosts that carry a single area whole.
 pub fn entity_guide(name: &str) -> Option<&'static str> {
-    sdk_documentation()
+    GENERATED
+        .entities
         .iter()
         .find(|doc| doc.name == name)
         .and_then(|doc| doc.guide.as_deref())
@@ -111,10 +145,16 @@ const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
 
 /// Every area's guidance as one prompt section, for prompts that do not route
 /// entities per turn. The search guide stays a `DescribeCodeTools` topic, as
-/// it is SDK how-to rather than how an area works.
+/// it is SDK how-to rather than how an area works. Code mode carries each
+/// guide with its attached skill; direct hosts, which cannot run the SDK,
+/// carry the guide alone.
 pub fn inline_guides(host: GuideHost) -> &'static str {
     fn render(host: GuideHost) -> String {
-        sdk_documentation()
+        let entities: &[SdkDocumentation] = match host {
+            GuideHost::Code => sdk_documentation(),
+            GuideHost::Direct => &GENERATED.entities,
+        };
+        entities
             .iter()
             .filter(|doc| doc.name != SEARCH_ENTITY)
             .filter(|doc| host == GuideHost::Code || !SDK_ONLY_GUIDES.contains(&doc.name.as_str()))

@@ -326,6 +326,11 @@ fn inline_guides_carry_every_area_but_the_search_guide() {
             continue;
         };
         assert_eq!(code.contains(guide), doc.name != "search", "{}", doc.name);
+    }
+    for doc in &GENERATED.entities {
+        let Some(guide) = doc.guide.as_deref() else {
+            continue;
+        };
         assert_eq!(
             direct.contains(guide),
             !["search", "agentSessions", "tasks"].contains(&doc.name.as_str()),
@@ -394,23 +399,50 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
     assert!(result.contains(catalog[32].index.as_deref().unwrap()));
 }
 
-/// Every session that sets up a routine reads these rules here, and the
-/// routine drafter's brief carries this same guide.
+/// A code-mode session that reads the routines guide reads the Compose
+/// Routines skill right after it, without having to find it. A direct host,
+/// which can't run the skill's programs, reads the guide alone, which points
+/// to the skill.
 #[test]
-fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
+fn code_mode_carries_the_compose_routines_skill_with_the_routines_guide() {
+    let skill = system_skills::compose_routines::SKILL.render_content();
     let guide = entity_guide("routines").expect("routines has a guide");
-    for rule in [
-        "never bug-reports-archive",
-        "never an id, and never an `ids` key",
-        "Create nothing else.",
-        "makes no task today",
-        "weekday numbers start at 1 = Sunday",
-        "check the whole routine with `macro.routines.check`",
-        "`channel.message_posted`",
-    ] {
-        assert!(guide.contains(rule), "{rule}: {guide}");
-    }
-    assert!(inline_guides(GuideHost::Code).contains(guide));
+    assert!(
+        guide.contains("follow the Compose Routines skill"),
+        "{guide}"
+    );
+    let carried = sdk_documentation()
+        .iter()
+        .find(|doc| doc.name == "routines")
+        .and_then(|doc| doc.guide.as_deref())
+        .expect("routines has a guide");
+    assert_eq!(carried, format!("{guide}\n\n{skill}"));
+    assert!(inline_guides(GuideHost::Code).contains(carried));
+    let direct = inline_guides(GuideHost::Direct);
+    assert!(direct.contains(guide));
+    assert!(!direct.contains(&skill));
+}
+
+#[tokio::test]
+async fn a_routed_routine_request_brings_the_compose_routines_skill() {
+    let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: false,
+        relevant: &["routines"],
+    });
+    let result = select_documentation(
+        &user(),
+        RoutingRequest {
+            latest: "every Monday at 9, post the open bugs in #eng",
+            previous: None,
+        },
+        Some(&classifier),
+        Guidance::Selected,
+        &CancellationToken::new(),
+    )
+    .await;
+    assert!(result.contains(&system_skills::compose_routines::SKILL.render_content()));
 }
 
 /// Ranks the `calendar` entity relevant only when the request it is shown
