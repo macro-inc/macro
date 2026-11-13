@@ -1,6 +1,8 @@
 //! Pinned Unicode reactions with raw-email actor mapping, never live side effects.
 
-use std::{collections::BTreeMap, sync::LazyLock};
+use std::collections::BTreeMap;
+
+use slack_client::emoji;
 
 use crate::domain::models::{HistoricalReaction, SlackTimestamp};
 
@@ -8,28 +10,6 @@ use super::{export::ExportReaction, users::UserDirectory};
 
 #[cfg(test)]
 mod test;
-
-static SHORTCODES: LazyLock<BTreeMap<&'static str, String>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../data/emoji-shortcodes.json"))
-        .expect("checked-in generated shortcode map must be valid JSON")
-});
-
-/// Resolve a Slack name, stripping only valid skin-tone suffixes. Unknown/custom
-/// names and standalone skin tones have no fallback reaction. Optional surrounding
-/// colons are accepted, but arbitrary colon-separated names are not truncated.
-pub fn shortcode(name: &str) -> Option<&'static str> {
-    let mut name = name;
-    if let Some(inner) = name.strip_prefix(':').and_then(|s| s.strip_suffix(':')) {
-        name = inner;
-    }
-    while let Some((base, tone)) = name.rsplit_once("::skin-tone-") {
-        if !matches!(tone, "2" | "3" | "4" | "5" | "6") {
-            return None;
-        }
-        name = base;
-    }
-    SHORTCODES.get(name).map(String::as_str)
-}
 
 /// Convert one message's reactions. Actor lists, not Slack's advisory counts, are
 /// authoritative. Deduplication happens after both shortcode and email mapping;
@@ -42,7 +22,7 @@ pub fn convert(
 ) -> Vec<HistoricalReaction> {
     let mut converted: BTreeMap<(String, &str), HistoricalReaction> = BTreeMap::new();
     for reaction in reactions {
-        let Some(emoji) = shortcode(&reaction.name) else {
+        let Some(emoji) = emoji::unicode(&reaction.name) else {
             continue;
         };
         for user in &reaction.users {

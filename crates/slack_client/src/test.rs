@@ -529,11 +529,36 @@ async fn files_upload_download_and_external_users_resolve() {
             filename: "notes.txt".to_owned(),
             title: Some("Notes".to_owned()),
             initial_comment: Some("here you go".to_owned()),
+            client_msg_id: uuid::Uuid::now_v7(),
             body: bytes::Bytes::from_static(b"file body"),
         })
         .await
         .expect("upload");
     assert_eq!(uploaded.title.as_deref(), Some("Notes"));
+    let shared = fake.calls_of("files.share");
+    assert_eq!(shared.len(), 1);
+    assert_eq!(
+        shared[0].fields.get("files").map(String::as_str),
+        Some(uploaded.id.as_str())
+    );
+    let history = client
+        .history(&HistoryRequest {
+            channel: channel.clone(),
+            latest: None,
+            oldest: None,
+            inclusive: false,
+            limit: 100,
+            cursor: None,
+        })
+        .await
+        .expect("history");
+    assert!(
+        history
+            .messages
+            .iter()
+            .any(|message| message.ts == uploaded.share_ts),
+        "the share message carries the returned ts"
+    );
     assert_eq!(
         fake.file_bytes(uploaded.id.as_str()),
         Some(b"file body".to_vec())

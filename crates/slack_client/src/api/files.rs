@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 use tracing::field::Empty;
 use url::Url;
+use uuid::Uuid;
 
 use crate::client::{SlackClient, invalid_request, record_error};
 use crate::error::SlackError;
@@ -23,20 +24,27 @@ pub struct FileUpload {
     pub title: Option<String>,
     /// Message text posted with the file.
     pub initial_comment: Option<String>,
+    /// Idempotency key the share message echoes back as `client_msg_id`.
+    pub client_msg_id: Uuid,
     /// The bytes.
     pub body: Bytes,
 }
 
 /// A shared file.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UploadedFile {
     /// The file.
     pub id: FileId,
     /// Its title.
     pub title: Option<String>,
     /// The `ts` of the message that shared it in the conversation.
-    #[serde(skip)]
-    pub share_ts: Option<MessageTs>,
+    pub share_ts: MessageTs,
+}
+
+#[derive(Deserialize)]
+struct CompletedFileSummary {
+    id: FileId,
+    title: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -53,7 +61,12 @@ struct CompletedFile<'upload> {
 
 #[derive(Deserialize)]
 struct CompletedUpload {
-    files: Vec<UploadedFile>,
+    files: Vec<CompletedFileSummary>,
+}
+
+#[derive(Deserialize)]
+struct SharedFile {
+    file_msg_ts: MessageTs,
 }
 
 #[derive(Deserialize)]
@@ -62,8 +75,9 @@ struct FileEnvelope {
 }
 
 impl SlackClient {
-    /// Shares a file: `files.getUploadURLExternal`, the byte upload, then
-    /// `files.completeUploadExternal` into the conversation.
+    /// Shares a file: `files.getUploadURLExternal`, the byte upload,
+    /// `files.completeUploadExternal`, then `files.share` into the
+    /// conversation.
     pub async fn upload_file(&self, upload: &FileUpload) -> Result<UploadedFile, SlackError> {
         let target: UploadTarget = self
             .call(
@@ -84,28 +98,32 @@ impl SlackClient {
             title,
         }])
         .map_err(|source| SlackError::Decode { method, source })?;
-        let mut form = vec![("files", files), ("channel_id", upload.channel.to_string())];
+        // Completed without a channel, the file stays private until
+        // `files.share` posts it and answers with the message's ts;
+        // `completeUploadExternal` into a channel shares it later, so its ts
+        // isn't known yet when the call returns.
+        let completed: CompletedUpload = self.call(method, vec![("files", files)]).await?;
+        let file =
+            completed.files.into_iter().next().ok_or_else(|| {
+                invalid_request(method, "Slack completed the upload without a file")
+            })?;
+        let mut form = vec![
+            ("files", file.id.to_string()),
+            ("channel", upload.channel.to_string()),
+            ("client_msg_id", upload.client_msg_id.to_string()),
+        ];
         if let Some(thread_ts) = &upload.thread_ts {
             form.push(("thread_ts", thread_ts.to_string()));
         }
         if let Some(comment) = &upload.initial_comment {
-            form.push(("initial_comment", comment.clone()));
+            form.push(("text", comment.clone()));
         }
-        let completed: CompletedUpload = self.call(method, form).await?;
-        let mut uploaded =
-            completed.files.into_iter().next().ok_or_else(|| {
-                invalid_request(method, "Slack completed the upload without a file")
-            })?;
-        // The share message's ts is only in the file's metadata.
-        let info = self.file_info(&uploaded.id).await?;
-        uploaded.share_ts = info
-            .shares
-            .values()
-            .filter_map(|channels| channels.get(upload.channel.as_str()))
-            .flatten()
-            .map(|share| share.ts.clone())
-            .max();
-        Ok(uploaded)
+        let shared: SharedFile = self.call(SlackMethod::FilesShare, form).await?;
+        Ok(UploadedFile {
+            id: file.id,
+            title: file.title,
+            share_ts: shared.file_msg_ts,
+        })
     }
 
     /// Posts the bytes to the presigned upload URL. The URL carries its own

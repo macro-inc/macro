@@ -9,6 +9,7 @@ use std::time::Duration;
 use external_chat::domain::models::MEDIA_LIMIT_BYTES;
 use external_chat::domain::models::{ExternalChatError, Mutation, ReplyContent, SendReply};
 use external_chat::domain::ports::ExternalChatResult;
+use slack_client::api::FileUpload;
 use slack_client::models::Message;
 use slack_client::realtime::{Event, RealtimeEvent};
 use slack_client::{ChannelId, InvalidId, MessageTs, SlackError};
@@ -18,7 +19,8 @@ use slack_linked::domain::events::{
 };
 use slack_linked::domain::models::{BACKFILL_MESSAGE_LIMIT, EndedReason};
 use slack_linked::domain::session::{
-    SessionService, changes_catalogue, ended_reason, inbound_changes, inbound_message, ts_time,
+    SessionService, changes_catalogue, ended_reason, inbound_changes, inbound_message,
+    reaction_name, ts_time,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -643,10 +645,19 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                 },
                 Some(target),
             ) => {
-                let name = text.as_deref().unwrap_or_default().trim_matches(':');
+                let Some(name) = text.as_deref().and_then(reaction_name) else {
+                    return self
+                        .record(
+                            send.id,
+                            SendOutcome::Failed {
+                                code: "unsupported_emoji".to_owned(),
+                            },
+                        )
+                        .await;
+                };
                 let add = *operation == Mutation::Reaction;
                 self.session
-                    .react(conversation, target, name, add)
+                    .react(conversation, target, &name, add)
                     .await
                     .map(|()| now_ts())
             }
@@ -656,13 +667,15 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                     .await
                     .map_err(from_domain)?;
                 self.session
-                    .upload(
-                        conversation,
-                        thread_ts.as_ref(),
-                        &file.filename,
-                        file.bytes,
-                        file.caption.as_deref(),
-                    )
+                    .upload(&FileUpload {
+                        channel: conversation.clone(),
+                        thread_ts: thread_ts.clone(),
+                        filename: file.filename,
+                        title: None,
+                        initial_comment: file.caption,
+                        client_msg_id,
+                        body: file.bytes.into(),
+                    })
                     .await
             }
             (ReplyContent::Mutation { .. }, None) => {

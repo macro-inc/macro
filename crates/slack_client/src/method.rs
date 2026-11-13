@@ -71,6 +71,9 @@ pub enum SlackMethod {
     /// `files.completeUploadExternal`
     #[strum(serialize = "files.completeUploadExternal")]
     FilesCompleteUploadExternal,
+    /// `files.share` (the web client's; answers the share message's ts)
+    #[strum(serialize = "files.share")]
+    FilesShare,
     /// `files.info`
     #[strum(serialize = "files.info")]
     FilesInfo,
@@ -183,7 +186,7 @@ impl SlackMethod {
             | Self::FilesGetUploadUrlExternal
             | Self::FilesCompleteUploadExternal => RateTier::Tier3,
             Self::ClientUserBoot | Self::EmojiList | Self::AuthSignout => RateTier::Tier2,
-            Self::ChatPostMessage => RateTier::PerSecond,
+            Self::ChatPostMessage | Self::FilesShare => RateTier::PerSecond,
             Self::FileUploadBytes
             | Self::FileDownload
             | Self::SignupCheckEmail

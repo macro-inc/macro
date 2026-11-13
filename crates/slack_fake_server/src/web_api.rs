@@ -145,6 +145,7 @@ pub(crate) fn call(state: &mut State, method: &str, fields: &Fields, caller: &Ca
         "reactions.remove" => react(state, fields, caller, false),
         "files.getUploadURLExternal" => upload_url(state, fields, caller),
         "files.completeUploadExternal" => complete_upload(state, fields, caller),
+        "files.share" => share_files(state, fields, caller),
         "files.info" => match field(fields, "file").and_then(|file| state.files.get(file)) {
             Some(file) => ok(json!({ "file": file.info })),
             None => error("file_not_found"),
@@ -693,10 +694,7 @@ fn complete_upload(state: &mut State, fields: &Fields, caller: &Caller) -> Value
         Ok(Some(Value::Array(files))) => files,
         _ => return error("invalid_arguments"),
     };
-    let Some(channel) = field(fields, "channel_id").map(str::to_owned) else {
-        return error("invalid_arguments");
-    };
-    let mut shared = Vec::new();
+    let mut ids = Vec::new();
     for file in &files {
         let Some(id) = file.get("id").and_then(Value::as_str) else {
             return error("invalid_arguments");
@@ -708,25 +706,77 @@ fn complete_upload(state: &mut State, fields: &Fields, caller: &Caller) -> Value
             object.insert("title".to_owned(), title.clone());
             object.insert("size".to_owned(), json!(stored.bytes.len()));
         }
-        shared.push(stored.info.clone());
+        ids.push(id.to_owned());
     }
+    // Like Slack, a channel here shares the file; without one it stays
+    // private until `files.share`.
+    if let Some(channel) = field(fields, "channel_id").map(str::to_owned) {
+        let text = field(fields, "initial_comment")
+            .unwrap_or_default()
+            .to_owned();
+        let thread_ts = field(fields, "thread_ts").map(str::to_owned);
+        share(state, caller, &ids, &channel, thread_ts, &text, None);
+    }
+    let summaries: Vec<Value> = ids
+        .iter()
+        .filter_map(|id| state.files.get(id))
+        .map(|file| json!({ "id": file.info.get("id"), "title": file.info.get("title") }))
+        .collect();
+    ok(json!({ "files": summaries }))
+}
+
+/// `files.share`: posts already uploaded files into a conversation and
+/// answers the message's ts.
+fn share_files(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
+    let (Some(files), Some(channel)) = (field(fields, "files"), field(fields, "channel")) else {
+        return error("invalid_arguments");
+    };
+    let ids: Vec<String> = files.split(',').map(str::to_owned).collect();
+    if ids.iter().any(|id| !state.files.contains_key(id)) {
+        return error("file_not_found");
+    }
+    let channel = channel.to_owned();
+    let text = field(fields, "text").unwrap_or_default().to_owned();
+    let thread_ts = field(fields, "thread_ts").map(str::to_owned);
+    let client_msg_id = field(fields, "client_msg_id").map(str::to_owned);
+    let ts = share(
+        state,
+        caller,
+        &ids,
+        &channel,
+        thread_ts,
+        &text,
+        client_msg_id,
+    );
+    ok(json!({ "file_msg_ts": ts }))
+}
+
+/// Records the share on each file and posts the `file_share` message.
+fn share(
+    state: &mut State,
+    caller: &Caller,
+    ids: &[String],
+    channel: &str,
+    thread_ts: Option<String>,
+    text: &str,
+    client_msg_id: Option<String>,
+) -> String {
     let ts = state.next_ts();
     let shared_in = if channel.starts_with('C') {
         "public"
     } else {
         "private"
     };
-    for file in &files {
-        if let Some(stored) = file
-            .get("id")
-            .and_then(Value::as_str)
-            .and_then(|id| state.files.get_mut(id))
-            && let Some(object) = stored.info.as_object_mut()
-        {
-            object.insert(
-                "shares".to_owned(),
-                json!({ shared_in: { channel.clone(): [{ "ts": ts, "thread_ts": field(fields, "thread_ts") }] } }),
-            );
+    let mut shared = Vec::new();
+    for id in ids {
+        if let Some(stored) = state.files.get_mut(id) {
+            if let Some(object) = stored.info.as_object_mut() {
+                object.insert(
+                    "shares".to_owned(),
+                    json!({ shared_in: { channel: [{ "ts": ts, "thread_ts": thread_ts }] } }),
+                );
+            }
+            shared.push(stored.info.clone());
         }
     }
     let mut message = json!({
@@ -735,18 +785,19 @@ fn complete_upload(state: &mut State, fields: &Fields, caller: &Caller) -> Value
         "user": caller.user_id,
         "team": caller.team_id,
         "user_team": caller.team_id,
-        "text": field(fields, "initial_comment").unwrap_or_default(),
+        "text": text,
         "ts": ts,
         "files": shared,
         "upload": true,
     });
-    if let (Some(object), Some(thread_ts)) = (message.as_object_mut(), field(fields, "thread_ts")) {
-        object.insert("thread_ts".to_owned(), json!(thread_ts));
+    if let Some(object) = message.as_object_mut() {
+        if let Some(thread_ts) = thread_ts {
+            object.insert("thread_ts".to_owned(), json!(thread_ts));
+        }
+        if let Some(client_msg_id) = client_msg_id {
+            object.insert("client_msg_id".to_owned(), json!(client_msg_id));
+        }
     }
-    add_message(state, &channel, message);
-    let summaries: Vec<Value> = shared
-        .iter()
-        .map(|file| json!({ "id": file.get("id"), "title": file.get("title") }))
-        .collect();
-    ok(json!({ "files": summaries }))
+    add_message(state, channel, message);
+    ts
 }

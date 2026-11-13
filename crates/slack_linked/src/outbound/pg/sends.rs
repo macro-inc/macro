@@ -529,7 +529,7 @@ pub(super) async fn record_send_outcome(
                         mentions: mentions.clone(),
                         thread_ts,
                         broadcast: false,
-                        system: false,
+                        system: None,
                         files: vec![],
                         edited_ts: None,
                         client_msg_id: None,
@@ -579,7 +579,7 @@ pub(super) async fn record_send_outcome(
                                     mentions: vec![],
                                     thread_ts: None,
                                     broadcast: false,
-                                    system: false,
+                                    system: None,
                                     files: vec![],
                                     edited_ts: Some(ts.clone()),
                                     client_msg_id: None,
@@ -595,11 +595,7 @@ pub(super) async fn record_send_outcome(
                                     conversation_id: chat.remote_id.clone(),
                                     ts: target,
                                     slack_user_id: identity,
-                                    name: text
-                                        .as_deref()
-                                        .unwrap_or_default()
-                                        .trim_matches(':')
-                                        .to_owned(),
+                                    emoji: text.clone().unwrap_or_default(),
                                     added: *operation == Mutation::Reaction,
                                     event_ts: ts.clone(),
                                 }
@@ -627,7 +623,7 @@ pub(super) async fn record_send_outcome(
                         mentions: vec![],
                         thread_ts,
                         broadcast: false,
-                        system: false,
+                        system: None,
                         files: vec![],
                         edited_ts: None,
                         client_msg_id: None,

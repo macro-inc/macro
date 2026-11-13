@@ -74,6 +74,12 @@ pub struct Message {
     pub user_profile: Option<UserProfile>,
     /// Client-chosen id; echoes back on your own sends.
     pub client_msg_id: Option<String>,
+    /// The new topic, on `channel_topic` and `group_topic`.
+    pub topic: Option<String>,
+    /// The new purpose, on `channel_purpose` and `group_purpose`.
+    pub purpose: Option<String>,
+    /// The new name, on `channel_name` and `group_name`.
+    pub name: Option<String>,
     /// Hidden from the conversation view (e.g. some edits and deletes).
     #[serde(default)]
     pub hidden: bool,

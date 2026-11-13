@@ -3,7 +3,7 @@
 
 use super::models::*;
 use chrono::{DateTime, Utc};
-use external_chat::domain::models::ExternalChatKind;
+use external_chat::domain::{models::ExternalChatKind, rich::SystemLine};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -224,8 +224,9 @@ pub struct InboundMessage {
     /// A thread reply also sent to the conversation.
     #[serde(default)]
     pub broadcast: bool,
-    /// A system line (joined, renamed…).
-    pub system: bool,
+    /// A system line (joined, renamed…), drawn from its fields rather than
+    /// its text.
+    pub system: Option<SystemLine>,
     /// Files.
     pub files: Vec<InboundFile>,
     /// When it was last edited (`edited.ts`), ordering revisions.
@@ -271,8 +272,8 @@ pub enum InboundChange {
         ts: String,
         /// Who.
         slack_user_id: String,
-        /// Emoji name without colons.
-        name: String,
+        /// The emoji as Macro stores it ([`crate::domain::session::reaction_emoji`]).
+        emoji: String,
         /// Added (else removed).
         added: bool,
         /// The event's time, ordering add/remove pairs.

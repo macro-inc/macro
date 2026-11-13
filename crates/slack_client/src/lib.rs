@@ -9,6 +9,7 @@
 pub mod api;
 mod client;
 mod credentials;
+pub mod emoji;
 mod endpoints;
 mod error;
 mod ids;

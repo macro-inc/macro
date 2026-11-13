@@ -4,6 +4,7 @@
 
 use std::future::Future;
 
+use slack_client::api::FileUpload;
 use slack_client::login::{LoginError, LoginInput, LoginState, LoginStep};
 use slack_client::models::Message;
 use slack_client::realtime::RealtimeEvent;
@@ -158,11 +159,7 @@ pub trait SlackSession: Send + Sync + 'static {
     /// message's `ts`.
     fn upload(
         &self,
-        conversation: &ChannelId,
-        thread_ts: Option<&MessageTs>,
-        filename: &str,
-        bytes: Vec<u8>,
-        caption: Option<&str>,
+        upload: &FileUpload,
     ) -> impl Future<Output = Result<String, SlackError>> + Send;
 
     /// A file's bytes (`files.info`, then the authenticated download).

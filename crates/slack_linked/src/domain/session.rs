@@ -8,7 +8,11 @@
 
 use super::{events::*, models::*, ports::SessionRepository};
 use chrono::{DateTime, Utc};
-use external_chat::domain::{models::ExternalChatKind, ports::ExternalChatResult};
+use external_chat::domain::{
+    models::ExternalChatKind,
+    ports::ExternalChatResult,
+    rich::{SystemAction, SystemLine},
+};
 use slack_client::{
     SlackErrorCode,
     models::{Conversation, ConversationKind, Message, MessageSubtype},
@@ -367,6 +371,27 @@ pub fn catalogue_conversation(
     })
 }
 
+/// The emoji Macro stores for a Slack reaction name: Unicode when Slack's
+/// name has one, else `:name:` (a workspace's custom emoji).
+pub fn reaction_emoji(name: &str) -> String {
+    slack_client::emoji::unicode(name)
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!(":{}:", name.trim_matches(':')))
+}
+
+/// The Slack reaction name for an emoji Macro stored; `None` for an emoji
+/// Slack has no name for.
+pub fn reaction_name(emoji: &str) -> Option<String> {
+    if let Some(name) = slack_client::emoji::name(emoji) {
+        return Some(name.to_owned());
+    }
+    emoji
+        .strip_prefix(':')
+        .and_then(|inner| inner.strip_suffix(':'))
+        .filter(|inner| !inner.is_empty() && !inner.contains(':'))
+        .map(str::to_owned)
+}
+
 /// The changes a websocket event brings to added conversations; most events
 /// bring none.
 pub fn inbound_changes(event: &SlackEvent) -> Vec<InboundChange> {
@@ -411,7 +436,7 @@ pub fn inbound_changes(event: &SlackEvent) -> Vec<InboundChange> {
                 conversation_id: channel.to_string(),
                 ts: ts.to_string(),
                 slack_user_id: reaction.user.to_string(),
-                name: reaction.reaction.clone(),
+                emoji: reaction_emoji(&reaction.reaction),
                 added: matches!(event, SlackEvent::ReactionAdded(_)),
                 event_ts: reaction
                     .event_ts
@@ -513,7 +538,7 @@ pub fn inbound_message(message: &Message) -> InboundMessage {
             .then(|| message.thread_ts.as_ref().map(|ts| ts.to_string()))
             .flatten(),
         broadcast: message.subtype == Some(MessageSubtype::ThreadBroadcast),
-        system: message.subtype.as_ref().is_some_and(is_system),
+        system: system_line(message),
         files: message
             .files
             .iter()
@@ -551,27 +576,38 @@ pub fn mentions(text: &str) -> Vec<String> {
     found
 }
 
-/// Housekeeping lines Slack posts into a conversation.
-fn is_system(subtype: &MessageSubtype) -> bool {
-    match subtype {
-        MessageSubtype::ChannelJoin
-        | MessageSubtype::ChannelLeave
-        | MessageSubtype::ChannelTopic
-        | MessageSubtype::ChannelPurpose
-        | MessageSubtype::ChannelName
-        | MessageSubtype::ChannelArchive
+/// The system line for Slack's housekeeping messages that Macro draws as
+/// lines; other housekeeping (archived, huddles, reminders) stays text.
+fn system_line(message: &Message) -> Option<SystemLine> {
+    let user = || message.user.iter().map(ToString::to_string).collect();
+    let (action, participants, value) = match message.subtype.as_ref()? {
+        MessageSubtype::ChannelJoin | MessageSubtype::GroupJoin => {
+            (SystemAction::ParticipantsJoined, user(), None)
+        }
+        MessageSubtype::ChannelLeave | MessageSubtype::GroupLeave => {
+            (SystemAction::ParticipantsLeft, user(), None)
+        }
+        MessageSubtype::ChannelTopic | MessageSubtype::GroupTopic => (
+            SystemAction::DescriptionChanged,
+            vec![],
+            message.topic.clone(),
+        ),
+        MessageSubtype::ChannelPurpose | MessageSubtype::GroupPurpose => (
+            SystemAction::DescriptionChanged,
+            vec![],
+            message.purpose.clone(),
+        ),
+        MessageSubtype::ChannelName | MessageSubtype::GroupName => {
+            (SystemAction::SubjectChanged, vec![], message.name.clone())
+        }
+        MessageSubtype::PinnedItem => (SystemAction::MessagePinned, vec![], None),
+        MessageSubtype::UnpinnedItem => (SystemAction::MessageUnpinned, vec![], None),
+        MessageSubtype::ChannelArchive
         | MessageSubtype::ChannelUnarchive
         | MessageSubtype::ChannelConvertToPrivate
-        | MessageSubtype::GroupJoin
-        | MessageSubtype::GroupLeave
-        | MessageSubtype::GroupTopic
-        | MessageSubtype::GroupPurpose
-        | MessageSubtype::GroupName
-        | MessageSubtype::PinnedItem
-        | MessageSubtype::UnpinnedItem
         | MessageSubtype::HuddleThread
-        | MessageSubtype::ReminderAdd => true,
-        MessageSubtype::BotMessage
+        | MessageSubtype::ReminderAdd
+        | MessageSubtype::BotMessage
         | MessageSubtype::MeMessage
         | MessageSubtype::MessageChanged
         | MessageSubtype::MessageDeleted
@@ -581,8 +617,15 @@ fn is_system(subtype: &MessageSubtype) -> bool {
         | MessageSubtype::Tombstone
         | MessageSubtype::EkmAccessDenied
         | MessageSubtype::SlackbotResponse
-        | MessageSubtype::Other(_) => false,
-    }
+        | MessageSubtype::Other(_) => return None,
+    };
+    Some(SystemLine {
+        action,
+        participants,
+        value: value.filter(|value| !value.is_empty()),
+        call: None,
+        by_provider: false,
+    })
 }
 
 /// The wall-clock time of a Slack `ts`; the epoch when it is malformed.

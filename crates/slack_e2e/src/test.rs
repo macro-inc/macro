@@ -258,6 +258,18 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .expect("the message, its edit, the thread reply and the reaction arrive");
     assert_eq!(body, "hello from Partner Inc");
     assert_eq!(thread_root.as_deref(), Some(root_ts.as_str()));
+    let stored = sqlx::query_scalar!(
+        "SELECT r.emoji FROM external_chat_reaction r JOIN external_chat_message m ON m.id = r.message_id WHERE m.chat_id = $1",
+        chat.id
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored,
+        vec!["\u{1f389}".to_owned()],
+        "Slack's :tada: is stored as its emoji"
+    );
     assert_ne!(reply_ts, root_ts);
 
     // The owner replies in the thread from Macro.
@@ -312,7 +324,7 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
                     message: ReplyContent::Mutation {
                         message_id: root_id,
                         operation,
-                        text: Some("rocket".to_owned()),
+                        text: Some("\u{1f680}".to_owned()),
                     },
                     reply_to: None,
                     thread: None,
@@ -329,6 +341,14 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
             slack.wait_for_calls(method, 1, WAIT).await,
             "{method} reaches Slack"
         );
+        assert_eq!(
+            slack.calls_of(method)[0]
+                .fields
+                .get("name")
+                .map(String::as_str),
+            Some("rocket"),
+            "Slack gets the name of Macro's emoji"
+        );
     }
     let mine = wait_for_rows(&pool, WAIT, || async {
         let pending = sqlx::query_scalar!(
@@ -343,8 +363,9 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .await;
     assert!(mine.is_some(), "both reaction sends are accepted");
     let rockets = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM external_chat_reaction WHERE message_id = $1 AND emoji = 'rocket'"#,
-        root_id
+        r#"SELECT count(*) AS "count!" FROM external_chat_reaction WHERE message_id = $1 AND emoji = $2"#,
+        root_id,
+        "\u{1f680}"
     )
     .fetch_one(&pool)
     .await
@@ -445,6 +466,12 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     assert_eq!(file_message.body, "the chart");
     assert_eq!(file_message.state, "downloaded");
     assert_eq!(slack.calls_of("files.completeUploadExternal").len(), 1);
+    let shared = slack.calls_of("files.share");
+    assert_eq!(shared.len(), 1);
+    assert_eq!(
+        shared[0].fields.get("channel").map(String::as_str),
+        Some(CHANNEL)
+    );
     let rows_for_file = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM external_chat_message WHERE chat_id = $1 AND body = 'the chart'"#,
         chat.id

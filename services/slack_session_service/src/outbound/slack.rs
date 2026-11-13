@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use slack_client::api::{
     ConversationType, HistoryRequest, RepliesRequest, UsersConversationsRequest, validate_session,
 };
-use slack_client::api::{PostMessage, UpdateMessage};
+use slack_client::api::{FileUpload, PostMessage, UpdateMessage};
 use slack_client::login::{EmailLogin, LoginError, LoginInput, LoginState, LoginStep};
 use slack_client::models::{Team as SlackTeam, User};
 use slack_client::realtime::RealtimeConfig;
@@ -337,31 +337,9 @@ impl SlackSession for SlackClient {
         }
     }
 
-    async fn upload(
-        &self,
-        conversation: &ChannelId,
-        thread_ts: Option<&MessageTs>,
-        filename: &str,
-        bytes: Vec<u8>,
-        caption: Option<&str>,
-    ) -> Result<String, SlackError> {
-        let uploaded = self
-            .upload_file(&slack_client::api::FileUpload {
-                channel: conversation.clone(),
-                thread_ts: thread_ts.cloned(),
-                filename: filename.to_owned(),
-                title: None,
-                initial_comment: caption.map(str::to_owned),
-                body: bytes.into(),
-            })
-            .await?;
-        uploaded
-            .share_ts
-            .map(|ts| ts.to_string())
-            .ok_or(SlackError::InvalidRequest {
-                method: slack_client::SlackMethod::FilesCompleteUploadExternal,
-                reason: "Slack did not say where the file was shared".to_owned(),
-            })
+    async fn upload(&self, upload: &FileUpload) -> Result<String, SlackError> {
+        let uploaded = self.upload_file(upload).await?;
+        Ok(uploaded.share_ts.to_string())
     }
 
     async fn download(&self, file: &slack_client::FileId) -> Result<Vec<u8>, SlackError> {

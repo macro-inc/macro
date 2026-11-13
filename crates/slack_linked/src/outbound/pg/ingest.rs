@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::domain::session::ts_time;
+use external_chat::domain::rich::RichContent;
 
 /// Namespace of each chat's stand-in person: the author of system lines Slack
 /// names nobody for.
@@ -188,11 +189,21 @@ pub(super) async fn store_message_in(
         StoredOrigin::Slack(IngestOrigin::History) => (Uuid::now_v7(), "history"),
         StoredOrigin::Send { id, .. } => (id, "macro"),
     };
-    let kind = if message.system { "system" } else { "message" };
+    let kind = if message.system.is_some() {
+        "system"
+    } else {
+        "message"
+    };
+    let rich = message
+        .system
+        .clone()
+        .map(|line| serde_json::to_value(RichContent::System(line)))
+        .transpose()
+        .map_err(failure)?;
     let row = sqlx::query!(
         r#"INSERT INTO external_chat_message (id, message_id, chat_id, person_id, source_id, origin, source_at,
-            body, thread_root, thread_broadcast, kind, mentions, effect_revision)
-        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $11, $9, $10, 1)
+            body, thread_root, thread_broadcast, kind, mentions, rich, effect_revision)
+        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $11, $9, $10, $12, 1)
         ON CONFLICT (chat_id, person_id, source_id) DO UPDATE SET
             thread_root = COALESCE(external_chat_message.thread_root, excluded.thread_root),
             thread_broadcast = external_chat_message.thread_broadcast OR excluded.thread_broadcast,
@@ -209,7 +220,8 @@ pub(super) async fn store_message_in(
         thread_root,
         kind,
         &message.mentions,
-        message.broadcast
+        message.broadcast,
+        rich
     )
     .fetch_one(&mut **tx)
     .await
@@ -343,7 +355,7 @@ pub(super) async fn apply_in(
         InboundChange::Reaction {
             ts,
             slack_user_id,
-            name,
+            emoji,
             added,
             event_ts,
             ..
@@ -371,7 +383,7 @@ pub(super) async fn apply_in(
                     WHERE excluded.revision >= external_chat_reaction.revision"#,
                     target,
                     reactor,
-                    name,
+                    emoji,
                     event_ts,
                     revision,
                     ts_time(event_ts)
@@ -384,7 +396,7 @@ pub(super) async fn apply_in(
                     "DELETE FROM external_chat_reaction WHERE message_id = $1 AND person_id = $2 AND emoji = $3 AND revision <= $4",
                     target,
                     reactor,
-                    name,
+                    emoji,
                     revision
                 )
                 .execute(&mut **tx)

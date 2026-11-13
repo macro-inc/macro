@@ -283,7 +283,9 @@ impl CatalogueRepository for PgSlackRepository {
     ) -> ExternalChatResult<Vec<(bool, bool)>> {
         let ids: Vec<Uuid> = chats.iter().map(|chat| chat.id).collect();
         let rows = sqlx::query!(
-            r#"SELECT m.chat_id, bool_or(c.is_member AND NOT c.is_archived AND c.frozen_reason IS NULL) AS "can_post!"
+            r#"SELECT m.chat_id,
+                -- A conversation gone from the catalogue (no longer Slack Connect) can't be posted to.
+                coalesce(bool_or(c.is_member AND NOT c.is_archived AND c.frozen_reason IS NULL), false) AS "can_post!"
             FROM slack_chat_membership m
             JOIN slack_account a ON a.id = m.account_id
             JOIN external_chat e ON e.id = m.chat_id

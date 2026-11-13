@@ -34,7 +34,7 @@ fn a_thread_reply_from_another_organization_becomes_a_threaded_message_with_ment
                 mentions: vec!["U0OWNER12".to_owned()],
                 thread_ts: Some("1700000000.000100".to_owned()),
                 broadcast: false,
-                system: false,
+                system: None,
                 files: vec![InboundFile {
                     file_id: "F0FILE1234".to_owned(),
                     filename: "plan.pdf".to_owned(),
@@ -94,7 +94,7 @@ fn edits_deletes_reactions_and_marks_map_to_their_changes() {
             conversation_id: "C0123ABCDE".to_owned(),
             ts: "1700000100.000200".to_owned(),
             slack_user_id: "U0OWNER12".to_owned(),
-            name: "tada".to_owned(),
+            emoji: "\u{1f389}".to_owned(),
             added: false,
             event_ts: "1700000400.000000".to_owned(),
         }
@@ -163,4 +163,50 @@ fn a_blocks_only_message_is_stored_as_mrkdwn_with_its_mentions() {
     let stored = inbound_message(&message);
     assert_eq!(stored.body, "ping <@U0OWNER12>");
     assert_eq!(stored.mentions, vec!["U0OWNER12".to_owned()]);
+}
+
+#[test]
+fn reactions_are_stored_as_emoji_and_sent_back_as_slack_names() {
+    assert_eq!(reaction_emoji("thumbsup::skin-tone-3"), "\u{1f44d}");
+    assert_eq!(reaction_name("\u{1f44d}").as_deref(), Some("+1"));
+    assert_eq!(reaction_emoji("party_parrot"), ":party_parrot:");
+    assert_eq!(
+        reaction_name(":party_parrot:").as_deref(),
+        Some("party_parrot")
+    );
+    assert_eq!(reaction_name("party_parrot"), None);
+    assert_eq!(reaction_name("::"), None);
+}
+
+#[test]
+fn housekeeping_messages_become_system_lines_from_their_fields() {
+    let joined: Message = serde_json::from_value(serde_json::json!({
+        "type": "message", "subtype": "channel_join", "user": "U0PARTNER1",
+        "text": "<@U0PARTNER1> has joined the channel", "ts": "1700000000.000100",
+    }))
+    .unwrap();
+    assert_eq!(
+        inbound_message(&joined).system,
+        Some(SystemLine {
+            action: SystemAction::ParticipantsJoined,
+            participants: vec!["U0PARTNER1".to_owned()],
+            value: None,
+            call: None,
+            by_provider: false,
+        })
+    );
+    let topic: Message = serde_json::from_value(serde_json::json!({
+        "type": "message", "subtype": "channel_topic", "user": "U0PARTNER1",
+        "text": "set the channel topic: Launch", "topic": "Launch", "ts": "1700000000.000200",
+    }))
+    .unwrap();
+    let line = inbound_message(&topic).system.unwrap();
+    assert_eq!(line.action, SystemAction::DescriptionChanged);
+    assert_eq!(line.value.as_deref(), Some("Launch"));
+    let archived: Message = serde_json::from_value(serde_json::json!({
+        "type": "message", "subtype": "channel_archive", "user": "U0PARTNER1",
+        "text": "archived the channel", "ts": "1700000000.000300",
+    }))
+    .unwrap();
+    assert_eq!(inbound_message(&archived).system, None);
 }

@@ -247,7 +247,7 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
         mentions: vec![],
         thread_ts: thread_ts.map(str::to_owned),
         broadcast: false,
-        system: false,
+        system: None,
         files: vec![],
         edited_ts: None,
         client_msg_id: None,
@@ -274,7 +274,7 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
             conversation_id: CHANNEL.to_owned(),
             ts: "1700000000.000100".to_owned(),
             slack_user_id: ALICE_SLACK.to_owned(),
-            name: "tada".to_owned(),
+            emoji: "\u{1f389}".to_owned(),
             added: true,
             event_ts: "1700000300.000000".to_owned(),
         },
@@ -320,7 +320,7 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(reaction, vec!["tada".to_owned()]);
+    assert_eq!(reaction, vec!["\u{1f389}".to_owned()]);
     let read = sqlx::query_scalar!(
         "SELECT m.source_id FROM external_chat_read_state s JOIN external_chat_message m ON m.id = s.message_id WHERE s.chat_id = $1 AND s.user_id = $2",
         chat.id,
@@ -337,6 +337,28 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
             .unwrap()
             == 0
     );
+
+    // The share ends: the conversation leaves the catalogue; the chat stays
+    // readable but can't be posted to.
+    session
+        .replace_catalogue(
+            scope,
+            &Catalogue {
+                conversations: vec![],
+                teams: vec![],
+                users: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    let facts = provider
+        .sending_facts(
+            &provider.account(&alice).await.unwrap().unwrap(),
+            std::slice::from_ref(&chat),
+        )
+        .await
+        .unwrap();
+    assert!(facts[0].observing && !facts[0].can_post);
 
     // Slack ends the session: logged out, credentials wiped, chat kept.
     session
