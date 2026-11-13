@@ -1,6 +1,4 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { DocumentPreviewContent } from '@core/component/DocumentPreview';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import type { GraphicsPresence } from '@macro-inc/graphics/loro';
@@ -8,19 +6,12 @@ import {
   attachPresencePointer,
   GraphicsPresenceOverlay,
 } from '@macro-inc/graphics/loro/solid';
-import {
-  ConnectorView,
-  EllipseView,
-  GraphicsSurface,
-  RectangleView,
-  TextView,
-} from '@macro-inc/graphics/solid';
+import { GraphicsSurface } from '@macro-inc/graphics/solid';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';
-import { CanvasMediaView } from './embedded-items';
-import { CanvasTextContent } from './text-content';
+import { STATIC_ITEM_RENDERERS } from './static-item-renderers';
 
 /** Viewers get navigation without mounting editing handlers or embedded editors. */
 export function CanvasReadOnlyView(props: {
@@ -114,6 +105,7 @@ export function CanvasReadOnlyView(props: {
         }}
         gridColor="transparent"
         renderers={{
+          ...STATIC_ITEM_RENDERERS,
           artifact: (p) => (
             <CanvasArtifactView
               {...p}
@@ -121,32 +113,6 @@ export function CanvasReadOnlyView(props: {
               onEnter={() => setActiveArtifact(p.item.id)}
               onExit={() => setActiveArtifact(undefined)}
               onPresent={() => setPresenting(p.item.id)}
-            />
-          ),
-          connector: (p) => (
-            <ConnectorView {...p} contentView={CanvasTextContent} />
-          ),
-          rectangle: (p) => (
-            <RectangleView {...p} contentView={CanvasTextContent} />
-          ),
-          ellipse: (p) => (
-            <EllipseView {...p} contentView={CanvasTextContent} />
-          ),
-          text: (p) => <TextView {...p} contentView={CanvasTextContent} />,
-          image: (p) => (
-            <CanvasMediaView {...p} playing={false} onStop={() => {}} />
-          ),
-          video: (p) => (
-            <CanvasMediaView {...p} playing={false} onStop={() => {}} />
-          ),
-          document: (p) => (
-            <DocumentPreviewContent
-              documentInfo={{
-                id: p.item.geometry.documentId,
-                type: fileTypeToBlockName(p.item.geometry.fileType),
-                params: {},
-                isOpenable: true,
-              }}
             />
           ),
         }}
