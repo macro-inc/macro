@@ -291,6 +291,10 @@ impl<Auth: DeviceAuthenticator, Objects: ObjectStore, Index: ReadIndex, Github: 
             .blame(&rev, &query.path)
             .await?
             .ok_or_else(not_found)?;
+        // GitHub blames a path missing at the revision as an empty file.
+        if blame.hunks.is_empty() {
+            return Err(not_found());
+        }
 
         let hunks: Vec<_> = blame
             .hunks

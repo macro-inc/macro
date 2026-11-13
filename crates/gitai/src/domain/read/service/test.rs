@@ -420,6 +420,33 @@ async fn blame_on_main_resolves_squash_commits_by_file() {
     );
 }
 
+#[tokio::test]
+async fn blame_of_a_missing_path_is_not_found() {
+    let harness = ReadHarness::new().await;
+    harness.github.script.lock().unwrap().blames.insert(
+        "main".to_owned(),
+        GithubBlame {
+            commit: SQUASH.to_owned(),
+            hunks: Vec::new(),
+        },
+    );
+
+    let blame = harness
+        .reader
+        .blame(
+            harness.key(),
+            BlameQuery {
+                path: "does/not/exist.rs".to_owned(),
+                start: 1,
+                end: 2,
+                rev: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(blame, Err(ReadError::Gitai(GitaiError::NotFound))));
+}
+
 #[test]
 fn reads_the_pull_request_from_a_squash_subject() {
     assert_eq!(pull_request_in_subject("feat(x): thing (#10645)"), Some(10645));
