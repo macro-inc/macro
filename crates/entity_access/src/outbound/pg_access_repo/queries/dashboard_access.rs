@@ -1,5 +1,6 @@
-//! Dashboard grants: the owner, the owners and admins of the owner's teams,
-//! and the caller's direct, team and channel grants.
+//! Dashboard grants: the owner, the owners and admins of the owner's teams
+//! when the owner is an agent account, and the caller's direct, team and
+//! channel grants.
 
 #[cfg(test)]
 mod test;
@@ -31,11 +32,13 @@ pub async fn get_dashboard_access(
                 ),
                 CASE WHEN EXISTS (
                     SELECT 1
-                    FROM team_user manager
-                    JOIN team_user member ON member.team_id = manager.team_id
-                    WHERE manager.user_id = $2
+                    FROM "User" agent
+                    JOIN team_user member ON member.user_id = agent.id
+                    JOIN team_user manager ON manager.team_id = member.team_id
+                    WHERE agent.id = d.user_id
+                      AND agent."isAgent"
+                      AND manager.user_id = $2
                       AND manager.team_role IN ('owner', 'admin')
-                      AND member.user_id = d.user_id
                 ) THEN 'edit'::"AccessLevel" END
             )
         END AS "access_level?: AccessLevel"

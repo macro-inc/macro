@@ -31,6 +31,29 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
     .unwrap();
 }
 
+async fn mark_agent(pool: &PgPool, user_id: &str) {
+    sqlx::query!(
+        r#"UPDATE "User" SET "isAgent" = TRUE WHERE id = $1"#,
+        user_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_dashboard(pool: &PgPool, owner: &str) -> Uuid {
+    let dashboard = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO dashboard_entities (id, user_id, current_version) VALUES ($1, $2, 1)",
+        dashboard,
+        owner,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    dashboard
+}
+
 async fn insert_team(pool: &PgPool, owner: &str, members: &[(&str, &str)]) -> Uuid {
     let team_id = Uuid::now_v7();
     sqlx::query!(
@@ -63,7 +86,7 @@ async fn level(pool: &PgPool, dashboard: Uuid, user_id: &str) -> Option<AccessLe
         .unwrap()
 }
 
-/// The owner owns it, admins of the owner's team edit it, plain members and
+/// The owner owns it, admins of the agent owner's team edit it, plain members and
 /// admins of other teams see nothing, and a direct grant gives its level.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn dashboard_access_follows_owner_team_admins_and_grants(pool: PgPool) {
@@ -77,16 +100,9 @@ async fn dashboard_access_follows_owner_team_admins_and_grants(pool: PgPool) {
     )
     .await;
     insert_team(&pool, OUTSIDE_ADMIN, &[(OUTSIDE_ADMIN, "owner")]).await;
+    mark_agent(&pool, AGENT).await;
 
-    let dashboard = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO dashboard_entities (id, user_id, current_version) VALUES ($1, $2, 1)",
-        dashboard,
-        AGENT,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let dashboard = insert_dashboard(&pool, AGENT).await;
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
            VALUES ($1, 'dashboard', $2, 'user', 'view')"#,
@@ -112,4 +128,35 @@ async fn dashboard_access_follows_owner_team_admins_and_grants(pool: PgPool) {
         Some(AccessLevel::View)
     );
     assert_eq!(level(&pool, Uuid::now_v7(), AGENT).await, None);
+}
+
+/// Team owners and admins edit every dashboard an agent teammate owns, but
+/// get nothing on a human teammate's dashboard.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_admins_reach_only_agent_teammates_dashboards(pool: PgPool) {
+    for user in [AGENT, ADMIN, MEMBER] {
+        insert_user(&pool, user).await;
+    }
+    insert_team(
+        &pool,
+        ADMIN,
+        &[(AGENT, "member"), (ADMIN, "owner"), (MEMBER, "member")],
+    )
+    .await;
+    mark_agent(&pool, AGENT).await;
+
+    let agents_home = insert_dashboard(&pool, AGENT).await;
+    let agents_other = insert_dashboard(&pool, AGENT).await;
+    let humans = insert_dashboard(&pool, MEMBER).await;
+
+    assert_eq!(
+        level(&pool, agents_home, ADMIN).await,
+        Some(AccessLevel::Edit)
+    );
+    assert_eq!(
+        level(&pool, agents_other, ADMIN).await,
+        Some(AccessLevel::Edit)
+    );
+    assert_eq!(level(&pool, humans, ADMIN).await, None);
+    assert_eq!(level(&pool, humans, MEMBER).await, Some(AccessLevel::Owner));
 }

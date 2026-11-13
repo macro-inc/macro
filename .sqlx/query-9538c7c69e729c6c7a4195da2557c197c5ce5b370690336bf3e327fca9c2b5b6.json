@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT CASE\n            WHEN d.user_id = $2 THEN 'owner'::\"AccessLevel\"\n            ELSE GREATEST(\n                (\n                    SELECT max(ea.access_level)\n                    FROM entity_access ea\n                    WHERE ea.entity_id = d.id\n                      AND ea.entity_type = 'dashboard'\n                      AND ea.source_id = ANY($3)\n                ),\n                CASE WHEN EXISTS (\n                    SELECT 1\n                    FROM \"User\" agent\n                    JOIN team_user member ON member.user_id = agent.id\n                    JOIN team_user manager ON manager.team_id = member.team_id\n                    WHERE agent.id = d.user_id\n                      AND agent.\"isAgent\"\n                      AND manager.user_id = $2\n                      AND manager.team_role IN ('owner', 'admin')\n                ) THEN 'edit'::\"AccessLevel\" END\n            )\n        END AS \"access_level?: AccessLevel\"\n        FROM dashboard_entities d\n        WHERE d.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9538c7c69e729c6c7a4195da2557c197c5ce5b370690336bf3e327fca9c2b5b6"
+}
