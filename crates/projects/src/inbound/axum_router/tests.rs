@@ -46,6 +46,7 @@ use models_permissions::share_permission::{
 };
 use rootcause::Report;
 use serde_json::{Value, json};
+use tokio::sync::{Notify, oneshot};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -69,6 +70,14 @@ struct FakeProjectService {
     permanently_deleted_projects: Arc<Mutex<Vec<BasicProject>>>,
     upload_internal_flags: Arc<Mutex<Vec<bool>>>,
     create_principals: Arc<Mutex<Vec<CreationPrincipal>>>,
+    purge_gate: Arc<Mutex<Option<PurgeGate>>>,
+}
+
+/// Holds a purge open so a test can drop the request while it runs.
+struct PurgeGate {
+    started: oneshot::Sender<()>,
+    release: Arc<Notify>,
+    finished: oneshot::Sender<()>,
 }
 
 impl FakeProjectService {
@@ -85,6 +94,7 @@ impl FakeProjectService {
             permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
             create_principals: Arc::new(Mutex::new(Vec::new())),
+            purge_gate: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -95,6 +105,7 @@ impl FakeProjectService {
             permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
             create_principals: Arc::new(Mutex::new(Vec::new())),
+            purge_gate: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -222,10 +233,26 @@ impl ProjectService for FakeProjectService {
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
         project: BasicProject,
     ) -> Result<PurgedProjectTree, ProjectError> {
+        let gate = self
+            .purge_gate
+            .lock()
+            .expect("purge gate lock poisoned")
+            .take();
+        let finished = match gate {
+            Some(gate) => {
+                let _ = gate.started.send(());
+                gate.release.notified().await;
+                Some(gate.finished)
+            }
+            None => None,
+        };
         self.mutations
             .lock()
             .expect("mutation lock poisoned")
             .push("permanent_delete");
+        if let Some(finished) = finished {
+            let _ = finished.send(());
+        }
         self.permanently_deleted_projects
             .lock()
             .expect("permanently deleted project lock poisoned")
@@ -1195,6 +1222,41 @@ async fn permanent_delete_forwards_loaded_project() {
             .expect("permanently deleted project lock poisoned"),
         vec![expected_project]
     );
+}
+
+/// A client that goes away mid-purge (a closed tab, a network change, a
+/// deploy) must not cancel it: the purge still finishes.
+#[tokio::test]
+async fn permanent_delete_finishes_after_the_request_is_dropped() {
+    let service = FakeProjectService::with_project(USER_ID, true);
+    let (started_tx, started_rx) = oneshot::channel();
+    let (finished_tx, finished_rx) = oneshot::channel();
+    let release = Arc::new(Notify::new());
+    *service.purge_gate.lock().expect("purge gate lock poisoned") = Some(PurgeGate {
+        started: started_tx,
+        release: Arc::clone(&release),
+        finished: finished_tx,
+    });
+    let request = tokio::spawn(
+        router(service, Some(AccessLevel::Owner)).oneshot(
+            Request::delete(format!("/{PROJECT_ID}/permanent"))
+                .header("authorization", format!("Bearer {TOKEN}"))
+                .body(Body::empty())
+                .expect("request should be valid"),
+        ),
+    );
+
+    started_rx.await.expect("purge should start");
+    request.abort();
+    assert!(
+        request
+            .await
+            .expect_err("request should be cancelled")
+            .is_cancelled()
+    );
+    release.notify_one();
+
+    assert_eq!(finished_rx.await, Ok(()));
 }
 
 #[tokio::test]

@@ -1,13 +1,15 @@
 // Prints the cache key for one wasm package build: a hash of what the build
 // reads, so a change elsewhere in the workspace keeps the key.
 //
-// - The files of the package's workspace dependency closure
-//   (.github/workspace-dep-closures.json), the toolchain pin, the Nix flake and
-//   its definitions (they choose wasm-pack, wasm-bindgen and binaryen), `.cargo`
-//   and `static_assets`.
-// - Its slice of Cargo.lock: every locked package reachable from the closure's
-//   crates. Lockfile edges cover every target and dependency kind, so the slice
-//   holds at least what the build compiles.
+// - The files of the workspace crates a wasm32 build of the package compiles
+//   (`wasm_closures` in .github/workspace-dep-closures.json, written by
+//   `cargo x deps`), the toolchain pin, the Nix flake and its definitions (they
+//   choose wasm-pack, wasm-bindgen and binaryen), `.cargo` and `static_assets`.
+// - Its slice of Cargo.lock: every locked package reachable from those crates
+//   without passing through a workspace crate outside them. Lockfile edges
+//   cover every target and dependency kind, so the slice holds at least what
+//   the build compiles: anything it compiles is reached through crates it
+//   compiles.
 // - The root Cargo.toml without its `members` list. Dependencies, profiles,
 //   patches and lints stay in.
 // - The `CARGO_PROFILE_*` variables of the profile the build uses, and the
@@ -23,6 +25,8 @@ import { join } from 'node:path';
 type LockPackage = {
   name: string;
   version: string;
+  /** No `source`: a workspace crate or a path dependency. */
+  local: boolean;
   lines: string[];
   dependencies: string[];
 };
@@ -35,7 +39,7 @@ function parseLock(lockText: string): LockPackage[] {
 
   for (const line of lockText.split('\n')) {
     if (line === '[[package]]') {
-      current = { name: '', version: '', lines: [], dependencies: [] };
+      current = { name: '', version: '', local: true, lines: [], dependencies: [] };
       packages.push(current);
       inDependencies = false;
       continue;
@@ -57,6 +61,7 @@ function parseLock(lockText: string): LockPackage[] {
     const [, key, value] = field;
     if (key === 'name') current.name = JSON.parse(value);
     if (key === 'version') current.version = JSON.parse(value);
+    if (key === 'source') current.local = false;
     if (key === 'dependencies') {
       if (value === '[') {
         inDependencies = true;
@@ -70,10 +75,17 @@ function parseLock(lockText: string): LockPackage[] {
 }
 
 /**
- * The Cargo.lock entries reachable from `roots` (package names), as text in a
- * fixed order.
+ * The Cargo.lock entries reachable from `roots` (the names of the workspace
+ * crates the build compiles), as text in a fixed order. The walk does not enter
+ * the other crates of `workspace` (every member's name): the lock lists a
+ * crate's dependencies for every target, so the edges into them are ones a
+ * wasm32 build leaves off.
  */
-export function lockSlice(lockText: string, roots: string[]): string[] {
+export function lockSlice(
+  lockText: string,
+  roots: string[],
+  workspace: ReadonlySet<string>
+): string[] {
   const byName = new Map<string, LockPackage[]>();
   for (const lockPackage of parseLock(lockText)) {
     const sameName = byName.get(lockPackage.name) ?? [];
@@ -91,10 +103,12 @@ export function lockSlice(lockText: string, roots: string[]): string[] {
     return sameName.filter((lockPackage) => lockPackage.version === version);
   };
 
+  const compiled = new Set(roots);
   const reached = new Set<LockPackage>();
   const pending = roots.flatMap((name) => byName.get(name) ?? []);
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     if (reached.has(next)) continue;
+    if (next.local && workspace.has(next.name) && !compiled.has(next.name)) continue;
 
     reached.add(next);
     for (const dependency of next.dependencies) {
@@ -172,10 +186,12 @@ export function wasmCacheKey(
 ): string {
   const closures = JSON.parse(
     readFileSync(join(root, '.github/workspace-dep-closures.json'), 'utf8')
-  ) as { closures: Record<string, string[]> };
-  const directories = closures.closures[closurePackage] ?? [];
+  ) as { closures?: Record<string, string[]>; wasm_closures?: Record<string, string[]> };
+  const directories = closures.wasm_closures?.[closurePackage] ?? [];
   if (directories.length === 0) {
-    throw new Error(`no dependency closure for ${closurePackage}`);
+    throw new Error(
+      `no wasm closure for ${closurePackage}: add it to WASM_PACKAGES in tooling/xtask/crates/xtask_deps/src/closures.rs and run \`cargo x deps\``
+    );
   }
 
   const hash = createHash('sha256');
@@ -205,7 +221,8 @@ export function wasmCacheKey(
 
   const lock = lockSlice(
     readFileSync(join(root, 'Cargo.lock'), 'utf8'),
-    crateNames(root, directories)
+    crateNames(root, directories),
+    new Set(Object.keys(closures.closures ?? {}))
   );
   hash.update(`lock\0${lock.join('\0')}\0`);
 

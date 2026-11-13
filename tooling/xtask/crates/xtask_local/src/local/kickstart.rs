@@ -114,6 +114,66 @@ impl GithubIdp {
     }
 }
 
+/// What the local `microsoft` OIDC identity provider authenticates against:
+/// the stack's Outlook emulator (`microsoft_emulator::idp`). There is no
+/// provider for a real Microsoft client: its registered redirect URIs do not
+/// name a local stack.
+pub struct MicrosoftIdp {
+    pub client_id: String,
+    pub client_secret: String,
+    /// The OpenID issuer FusionAuth discovers the endpoints and signing keys
+    /// from, as its container reaches it.
+    pub issuer: String,
+}
+
+/// Appends the `microsoft` identity provider and its reconcile lambda to a
+/// kickstart document, as the deployed instance defines them
+/// (`infra/stacks/fusionauth-instance`): endpoints and keys from the issuer,
+/// so FusionAuth verifies the ID token and the lambda can read `xms_edov`
+/// from it. `lambda_body` is the source of `reconcile_microsoft_signin.js`.
+/// Appended last: the provider references the application.
+pub fn add_microsoft_idp(doc: &mut Value, microsoft: &MicrosoftIdp, lambda_body: &str) {
+    let Some(requests) = doc.get_mut("requests").and_then(Value::as_array_mut) else {
+        return;
+    };
+    requests.push(json!({
+        "method": "POST",
+        "url": format!("/api/lambda/{}", identity::MICROSOFT_RECONCILE_LAMBDA_ID),
+        "body": { "lambda": {
+            "id": identity::MICROSOFT_RECONCILE_LAMBDA_ID,
+            "name": "Reconcile Microsoft Sign-in (local)",
+            "type": "OpenIDReconcile",
+            "enabled": true,
+            "body": lambda_body,
+        }}
+    }));
+    requests.push(json!({
+        "method": "POST",
+        "url": format!("/api/identity-provider/{}", identity::MICROSOFT_IDP_ID),
+        "body": { "identityProvider": {
+            "type": "OpenIDConnect",
+            "name": "microsoft",
+            "enabled": true,
+            "debug": true,
+            "buttonText": "Microsoft",
+            "linkingStrategy": "LinkByEmail",
+            "lambdaConfiguration": { "reconcileId": identity::MICROSOFT_RECONCILE_LAMBDA_ID },
+            "oauth2": {
+                "issuer": microsoft.issuer.as_str(),
+                "client_id": microsoft.client_id.as_str(),
+                "client_secret": microsoft.client_secret.as_str(),
+                "clientAuthenticationMethod": "client_secret_basic",
+                "scope": "openid email profile offline_access",
+                "uniqueIdClaim": "sub",
+                "emailVerifiedClaim": "xms_edov",
+            },
+            "applicationConfiguration": {
+                identity::APPLICATION_ID: { "enabled": true, "createRegistration": true }
+            },
+        }}
+    }));
+}
+
 /// The application's OAuth redirect URLs: the only part of the kickstart that
 /// depends on the instance's ports. The init snapshot key leaves them out (see
 /// [`without_instance_urls`]), and every bring-up writes the instance's own
