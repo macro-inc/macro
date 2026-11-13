@@ -166,9 +166,14 @@ Pulumi stacks; they do not host extra agent processes.
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
-  Code execution's destination list in `src/code_mode.rs` also includes the
-  configured editing worker, whose comment-mark endpoint requires a scoped
-  document token; this does not grant permission to edit document content.
+  Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
+  includes the configured editing worker, whose comment-mark endpoint requires
+  a scoped document token; this does not grant permission to edit document
+  content. The test `every_sdk_host_holds_a_scoped_credential_to_its_scope`
+  fails for a host the SDK can reach (`code_mode_assets::HOSTS`) that isn't
+  an `SdkHost`, and records how each host's service holds a scoped session's
+  credential to its scope: `propagate`, `enforce_signed_scope`, or no Macro
+  credential accepted. A new host picks one before it ships.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
@@ -184,6 +189,9 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
+  A scoped hidden session's chat messages and structured completions take
+  no tools (`tool_selection::tools_refused_to_current_session`): tools run
+  with the person's full access, past the scope its credential carries.
 - `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
