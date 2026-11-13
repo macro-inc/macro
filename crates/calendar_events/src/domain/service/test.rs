@@ -919,12 +919,17 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
     ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         // The transient failure comes first, so last-write-wins would surface
         // the permanent one and fail the assertion.
-        let kind = if context.target.provider_calendar_id == "primary" {
-            CalendarProviderErrorKind::Transient
+        if context.target.provider_calendar_id == "primary" {
+            Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Transient,
+                "the primary calendar is unavailable",
+            ))
         } else {
-            CalendarProviderErrorKind::Permanent
-        };
-        Err(CalendarProviderError::new(kind, "failed"))
+            Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Permanent,
+                "the colleague calendar was not found",
+            ))
+        }
     }
 
     async fn watch_calendar(
@@ -1182,8 +1187,10 @@ async fn a_reauth_signal_on_one_calendar_fails_the_run_immediately() {
 #[tokio::test]
 async fn a_wholesale_failure_prefers_a_retryable_error() {
     let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::default();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
     let coordinator = GoogleCalendarBackfillCoordinator::new(
-        FakeRepo::default(),
+        repository,
         MixedTotalFailureGoogleProvider,
         lifecycle.clone(),
         NoopMacroEventBroker,
@@ -1212,6 +1219,11 @@ async fn a_wholesale_failure_prefers_a_retryable_error() {
     assert_eq!(
         lifecycle.failures.lock().unwrap().as_slice(),
         [CalendarBackfillFailureDisposition::Retry]
+    );
+    assert_eq!(
+        recorded_sync_errors.lock().unwrap().as_slice(),
+        ["the colleague calendar was not found"],
+        "the calendar that failed for good records it; the transient one stays with the account"
     );
 }
 

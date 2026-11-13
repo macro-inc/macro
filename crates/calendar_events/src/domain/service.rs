@@ -1151,8 +1151,24 @@ where
 
         // No calendar is healthy: a wholesale outage the coordinator classifies
         // for retry. The account-level failure carries it, so no calendar is
-        // badged for it.
+        // badged for it, except one that failed for good: its calendar records
+        // that, since the account's retry would read as transient.
         if !any_calendar_healthy && let Some(error) = last_isolated_error {
+            for (calendar_id, kind, message) in isolated_failures {
+                if kind == CalendarSyncFailure::Transient {
+                    continue;
+                }
+                self.repository
+                    .record_google_calendar_sync_error(
+                        key,
+                        lease_token,
+                        account_id,
+                        calendar_id,
+                        kind,
+                        &message,
+                    )
+                    .await?;
+            }
             return Err(rootcause::report!(error).into());
         }
 
