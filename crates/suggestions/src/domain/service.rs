@@ -18,6 +18,7 @@ use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::check;
+use super::lifecycle::{self, LifecycleEvent};
 use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
     KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress,
@@ -632,7 +633,7 @@ where
                 self.move_as_shown(
                     user,
                     &suggestion,
-                    &[SuggestionState::Proposed],
+                    &lifecycle::sources(LifecycleEvent::TakeOn),
                     SuggestionState::Accepted,
                     accept,
                 )
@@ -660,7 +661,7 @@ where
         self.move_as_shown(
             user,
             &suggestion,
-            &[SuggestionState::Proposed, SuggestionState::Accepted],
+            &lifecycle::sources(LifecycleEvent::Complete),
             SuggestionState::Done,
             accept,
         )
@@ -806,7 +807,7 @@ where
             .set_state(
                 user,
                 id,
-                &[SuggestionState::Proposed, SuggestionState::Accepted],
+                &lifecycle::sources(LifecycleEvent::Dismiss),
                 SuggestionState::Dismissed,
                 None,
                 Utc::now(),
@@ -1251,7 +1252,7 @@ where
             .set_state(
                 &user,
                 id,
-                &[SuggestionState::Proposed, SuggestionState::Accepted],
+                &lifecycle::sources(LifecycleEvent::Retire),
                 SuggestionState::Retired,
                 Some(&change),
                 change.at,
