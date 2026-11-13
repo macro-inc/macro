@@ -502,6 +502,31 @@ fn cldr_49_windows_zones_map_to_the_zones_they_replace() {
 }
 
 #[test]
+fn series_end_dates_use_the_zones_2026_rules() {
+    for (zone, until) in [
+        ("America/Edmonton", "20261201T055959Z"),
+        ("America/Inuvik", "20261201T055959Z"),
+        ("America/Vancouver", "20261201T065959Z"),
+        ("America/Winnipeg", "20261201T045959Z"),
+        ("Alberta Standard Time", "20261201T055959Z"),
+        ("British Columbia Standard Time", "20261201T065959Z"),
+        ("Manitoba Standard Time", "20261201T045959Z"),
+    ] {
+        let mut series = event("series");
+        series["type"] = json!("seriesMaster");
+        series["originalStartTimeZone"] = json!(zone);
+        series["recurrence"] = json!({"pattern":{"type":"weekly","interval":1,"daysOfWeek":["monday"],"firstDayOfWeek":"monday"},"range":{"type":"endDate","startDate":"2026-11-02","endDate":"2026-11-30","recurrenceTimeZone":zone}});
+        assert_eq!(
+            recurrence::from_graph(&series).unwrap(),
+            vec![format!(
+                "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;WKST=MO;UNTIL={until}"
+            )],
+            "the end of November 30 in {zone}"
+        );
+    }
+}
+
+#[test]
 fn all_day_utc_responses_use_the_zones_2026_rules() {
     for (zone, utc) in CANADA_2026 {
         let midnight = utc.parse::<DateTime<Utc>>().unwrap() - chrono::Duration::minutes(136);
