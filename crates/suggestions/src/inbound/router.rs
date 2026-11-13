@@ -178,7 +178,7 @@ fn caller(user: &MacroUserAuthentication, headers: &HeaderMap) -> SuggestionCall
     }
 }
 
-/// The reader's time zone.
+/// The reader's time zone, and how much of the feed to read.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct FeedQuery {
@@ -187,6 +187,10 @@ pub struct FeedQuery {
     #[param(value_type = Option<String>)]
     #[serde(default)]
     pub timezone: Option<chrono_tz::Tz>,
+    /// Most suggestions to return in each list, open and done; all when unset.
+    #[param(value_type = Option<u16>, minimum = 1)]
+    #[serde(default)]
+    pub limit: Option<std::num::NonZeroU16>,
 }
 
 #[utoipa::path(
@@ -196,7 +200,7 @@ pub struct FeedQuery {
     operation_id = "list_suggestions",
     params(FeedQuery),
     responses(
-        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions they can open every item of, best first"),
+        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of"),
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not read the feed"),
         (status = 404, body = String, description = "Suggestions are off for the caller"),
@@ -218,7 +222,12 @@ where
     Ok(Json(
         state
             .service
-            .feed(&user.authorization.macro_user_id, caller, query.timezone)
+            .feed(
+                &user.authorization.macro_user_id,
+                caller,
+                query.timezone,
+                query.limit.map(|limit| usize::from(limit.get())),
+            )
             .await?,
     ))
 }

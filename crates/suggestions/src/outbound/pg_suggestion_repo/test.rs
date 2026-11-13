@@ -3,6 +3,9 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use super::*;
 use crate::domain::model::{ChangeAction, RunMode};
 
+mod lifecycle;
+mod runs;
+
 /// A person who can own suggestions.
 pub(crate) async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = Uuid::now_v7();
@@ -326,130 +329,120 @@ async fn a_broken_row_about_an_item_is_skipped_and_the_rest_found(pool: PgPool) 
     );
 }
 
-/// Unsettled runs come least recently checked first, so runs that keep
-/// waiting never hide the others from a small batch.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn unsettled_runs_take_turns(pool: PgPool) {
-    use crate::domain::model::StoredRun;
-    insert_user(&pool, OWNER).await;
-    let generation = generation(&pool).await;
-    let repo = PgSuggestionRepo::new(pool);
-    let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
-    let limits = Limits {
-        open: 30,
-        new_per_generation: 10,
-    };
-    let mut sessions = Vec::new();
-    for n in 0..2 {
-        let suggestion = Uuid::now_v7();
-        let change = Change {
-            session: Uuid::now_v7(),
-            generation,
-            action: ChangeAction::Created,
-            old: None,
-            new: None,
-            reason: None,
-            at: Utc::now(),
-        };
-        repo.create(
-            &user,
-            suggestion,
-            &NewKind::Prompt {
-                run_mode: RunMode::Background,
-            },
-            &content(&format!("suggestion:{n}")),
-            limits,
-            &change,
-        )
-        .await
-        .unwrap();
-        let run = StoredRun {
-            session: Uuid::now_v7(),
-            suggestion,
-            user: user.clone(),
-            agent: Uuid::now_v7(),
-            action: Uuid::now_v7(),
-            started_at: Utc::now() - chrono::Duration::minutes(10 - n),
-            settled: None,
-        };
-        let shown = repo
-            .suggestion(&user, suggestion)
-            .await
-            .unwrap()
-            .unwrap()
-            .updated_at;
-        assert!(repo.start_run(&run, shown).await.unwrap());
-        sessions.push(run.session);
-    }
-    let first = repo.unsettled_runs(1).await.unwrap();
-    assert_eq!(first[0].session, sessions[0]);
-    repo.checked_run(sessions[0], Utc::now()).await.unwrap();
-    let next = repo.unsettled_runs(1).await.unwrap();
-    assert_eq!(next[0].session, sessions[1]);
+/// Limits no fixture reaches.
+const NO_LIMITS: Limits = Limits {
+    open: 1000,
+    new_per_generation: 1000,
+};
+
+/// A person's suggestions in a fresh database.
+struct Fixture {
+    pool: PgPool,
+    repo: PgSuggestionRepo,
+    user: MacroUserIdStr<'static>,
+    generation: Uuid,
 }
 
-/// A run's session sends nothing when its suggestion says nothing about sending;
-/// a session that is no run isn't one.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_run_sends_nothing_unless_its_suggestion_says_what_it_sends(pool: PgPool) {
-    use crate::domain::ports::RunScopes;
-
+async fn fixture(pool: PgPool) -> Fixture {
     insert_user(&pool, OWNER).await;
     let generation = generation(&pool).await;
-    let repo = PgSuggestionRepo::new(pool);
-    let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
-    let limits = Limits {
-        open: 30,
-        new_per_generation: 12,
-    };
-    let mut sessions = Vec::new();
-    for (key, sends) in [
-        ("quiet", None),
-        ("loud", Some("Email the supplier the order")),
-    ] {
-        let suggestion = Uuid::now_v7();
-        let mut content = content(key);
-        content.sends = sends.map(str::to_owned);
-        let change = Change {
+    Fixture {
+        repo: PgSuggestionRepo::new(pool.clone()),
+        pool,
+        user: MacroUserIdStr::parse_from_str(OWNER).unwrap(),
+        generation,
+    }
+}
+
+impl Fixture {
+    fn change(&self, action: ChangeAction) -> Change {
+        Change {
             session: Uuid::now_v7(),
-            generation,
-            action: ChangeAction::Created,
+            generation: self.generation,
+            action,
             old: None,
             new: None,
             reason: None,
             at: Utc::now(),
-        };
-        repo.create(
-            &user,
-            suggestion,
-            &NewKind::Prompt {
-                run_mode: RunMode::Background,
-            },
-            &content,
-            limits,
-            &change,
+        }
+    }
+
+    /// A new proposed background prompt suggestion, sending what `sends` says.
+    async fn prompt(&self, sends: Option<&str>) -> Uuid {
+        let id = Uuid::now_v7();
+        let mut content = content(&format!("prompt:{id}"));
+        content.sends = sends.map(str::to_owned);
+        let written = self
+            .repo
+            .create(
+                &self.user,
+                id,
+                &NewKind::Prompt {
+                    run_mode: RunMode::Background,
+                },
+                &content,
+                NO_LIMITS,
+                &self.change(ChangeAction::Created),
+            )
+            .await
+            .unwrap();
+        assert_eq!(written, Written::Applied);
+        id
+    }
+
+    /// A background prompt suggestion in `state`.
+    async fn prompt_in(&self, state: SuggestionState) -> Uuid {
+        let id = self.prompt(None).await;
+        self.force(id, state).await;
+        id
+    }
+
+    /// Put suggestion `id` in `state`, whatever its lifecycle says.
+    async fn force(&self, id: Uuid, state: SuggestionState) {
+        sqlx::query!(
+            r#"UPDATE suggestion
+               SET state = $2, state_reason = CASE WHEN $2 = 'resolved' THEN 'replied' END
+               WHERE id = $1"#,
+            id,
+            state.as_ref(),
         )
+        .execute(&self.pool)
         .await
         .unwrap();
-        let run = StoredRun {
+    }
+
+    async fn suggestion(&self, id: Uuid) -> Suggestion {
+        self.repo.suggestion(&self.user, id).await.unwrap().unwrap()
+    }
+
+    async fn state(&self, id: Uuid) -> SuggestionState {
+        self.suggestion(id).await.state
+    }
+
+    /// A run of suggestion `id`, starting now, sending what `sends` says.
+    fn run_of(&self, id: Uuid, sends: Option<&str>) -> StoredRun {
+        let now = Utc::now();
+        StoredRun {
             session: Uuid::now_v7(),
-            suggestion,
-            user: user.clone(),
+            suggestion: id,
+            user: self.user.clone(),
             agent: Uuid::now_v7(),
             action: Uuid::now_v7(),
-            started_at: Utc::now(),
-            settled: None,
-        };
-        let shown = repo
-            .suggestion(&user, suggestion)
+            started_at: now,
+            state: RunState::Starting,
+            state_changed_at: now,
+            sends: sends.map(str::to_owned),
+        }
+    }
+
+    /// Start a run of suggestion `id` as it is now; the run when it started.
+    async fn start(&self, id: Uuid) -> Option<StoredRun> {
+        let run = self.run_of(id, None);
+        let shown = self.suggestion(id).await.updated_at;
+        self.repo
+            .start_run(&run, shown)
             .await
             .unwrap()
-            .unwrap()
-            .updated_at;
-        assert!(repo.start_run(&run, shown).await.unwrap());
-        sessions.push(run.session);
+            .then_some(run)
     }
-    assert!(repo.sends_nothing(sessions[0]).await.unwrap());
-    assert!(!repo.sends_nothing(sessions[1]).await.unwrap());
-    assert!(!repo.sends_nothing(Uuid::now_v7()).await.unwrap());
 }

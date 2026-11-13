@@ -7,6 +7,11 @@ use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::run::{RunState, RunStateName};
+
+#[cfg(test)]
+mod test;
+
 /// One proactive suggestion for one person.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +44,8 @@ pub struct Suggestion {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
+    /// What the card shows: whether it is open, being run, failed or done.
+    pub status: SuggestionStatus,
     /// A background prompt suggestion's latest run.
     pub run: Option<SuggestionRun>,
     /// Its kind, with that kind's data.
@@ -46,45 +53,56 @@ pub struct Suggestion {
     pub kind: SuggestionKind,
 }
 
+/// What a suggestion's card shows, from its state and its latest run.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::AsRefStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SuggestionStatus {
+    /// Open, nothing under way: shown to act on (an agent may have taken a
+    /// background prompt suggestion on for the person to run).
+    Open,
+    /// Its latest run hasn't settled: it is starting, working, waiting or
+    /// being stopped.
+    Running,
+    /// Accepted, and its latest run failed: running it again retries.
+    Failed,
+    /// Done.
+    Done,
+    /// Dismissed, resolved or retired; never in the feed.
+    Closed,
+}
+
+impl SuggestionStatus {
+    /// The status of a suggestion in `state` whose latest run is `run`.
+    pub fn of(state: SuggestionState, run: Option<&SuggestionRun>) -> Self {
+        match (state, run.map(|run| run.state)) {
+            (SuggestionState::Done, _) => Self::Done,
+            (SuggestionState::Dismissed | SuggestionState::Resolved | SuggestionState::Retired, _) => {
+                Self::Closed
+            }
+            (_, Some(run)) if !run.is_settled() => Self::Running,
+            (SuggestionState::Accepted, Some(RunStateName::Failed)) => Self::Failed,
+            (SuggestionState::Proposed | SuggestionState::Accepted, _) => Self::Open,
+        }
+    }
+}
+
 /// A run of a background prompt suggestion: a hidden agent session of the
 /// person's, with the full toolset, that never stops to ask.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SuggestionRun {
-    /// The agent session: open it to see the result or answer what it
-    /// waits for.
+    /// The agent session: open it to see the result.
     #[schema(value_type = String, format = Uuid)]
     pub session_id: Uuid,
     /// When it started.
     pub started_at: DateTime<Utc>,
-    /// How it is going, read from the session.
-    pub progress: RunProgress,
-}
-
-/// How a run is going, as its session says.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema, strum::AsRefStr)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum RunProgress {
-    /// Working.
-    Running,
-    /// Waiting for the person to approve a tool call.
-    NeedsApproval,
-    /// Waiting for the person to answer a question.
-    NeedsInput,
-    /// Done; its result is in the session and the suggestion's `produced`.
-    Finished,
-    /// It stopped without finishing; accepting the suggestion again retries.
-    Failed,
-    /// The session couldn't be read just now.
-    Unknown,
-}
-
-impl RunProgress {
-    /// Finished or failed: nothing more will happen.
-    pub fn is_over(self) -> bool {
-        matches!(self, Self::Finished | Self::Failed)
-    }
+    /// Where it is, as stored: reading it never asks the session.
+    pub state: RunStateName,
+    /// When it entered `state`.
+    pub state_changed_at: DateTime<Utc>,
 }
 
 /// Where a run's session is, as the scheduler reads it.
@@ -106,19 +124,6 @@ pub enum SessionState {
     Failed,
 }
 
-impl SessionState {
-    /// How the run shows on its suggestion.
-    pub fn progress(self) -> RunProgress {
-        match self {
-            Self::AwaitingPrompt | Self::Running | Self::Disconnected => RunProgress::Running,
-            Self::NeedsApproval => RunProgress::NeedsApproval,
-            Self::NeedsInput => RunProgress::NeedsInput,
-            Self::Finished => RunProgress::Finished,
-            Self::Failed => RunProgress::Failed,
-        }
-    }
-}
-
 /// Why a run's session couldn't be read.
 #[derive(Debug)]
 pub enum SessionReadError {
@@ -138,7 +143,7 @@ pub enum RunStartError {
     Uncertain(rootcause::Report),
 }
 
-/// A run as stored, before its progress is read.
+/// A run as stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoredRun {
     /// The agent session.
@@ -153,17 +158,12 @@ pub struct StoredRun {
     pub action: Uuid,
     /// When it started.
     pub started_at: DateTime<Utc>,
-    /// Whether it was settled, and how.
-    pub settled: Option<RunSettled>,
-}
-
-/// How a finished run was settled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunSettled {
-    /// It finished: the suggestion is done.
-    Finished,
-    /// It failed: the suggestion may be accepted again.
-    Failed,
+    /// Where it is.
+    pub state: RunState,
+    /// When it entered `state`: with `state`, what a write expects to find.
+    pub state_changed_at: DateTime<Utc>,
+    /// What it may send or post: the suggestion's `sends` when it started.
+    pub sends: Option<String>,
 }
 
 /// What kind of suggestion it is, with that kind's data. A kind never changes.

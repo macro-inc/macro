@@ -141,6 +141,8 @@ struct FakeSuggestions {
     callers: Mutex<Vec<(String, SuggestionCaller)>>,
     /// Whether each accept was the person's own.
     by_person: Mutex<Vec<bool>>,
+    /// The `limit` each feed read asked for.
+    limits: Mutex<Vec<Option<usize>>>,
     refused: Option<Uuid>,
 }
 
@@ -171,8 +173,10 @@ impl SuggestionApi for FakeSuggestions {
         user: &MacroUserIdStr<'static>,
         caller: SuggestionCaller,
         _: Option<chrono_tz::Tz>,
+        limit: Option<usize>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         self.reach(user, caller)?;
+        self.limits.lock().unwrap().push(limit);
         Ok(SuggestionFeed {
             suggestions: Vec::new(),
             done: Vec::new(),
@@ -204,10 +208,6 @@ impl SuggestionApi for FakeSuggestions {
     }
 
     async fn kept(&self, _: Uuid, _: Uuid) -> Result<u32, SuggestionError> {
-        unreachable!()
-    }
-
-    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
         unreachable!()
     }
 
@@ -412,4 +412,21 @@ async fn only_the_persons_own_session_accepts_as_the_person() {
         router.oneshot(bare).await.unwrap().status(),
         StatusCode::BAD_REQUEST
     );
+}
+
+/// `?limit` caps each list of the feed; zero, or anything not a count, is
+/// refused.
+#[tokio::test]
+async fn the_feed_takes_a_limit() {
+    let service = Arc::new(FakeSuggestions::default());
+    for (uri, expected) in [
+        ("/suggestions", StatusCode::OK),
+        ("/suggestions?limit=5", StatusCode::OK),
+        ("/suggestions?limit=0", StatusCode::BAD_REQUEST),
+        ("/suggestions?limit=many", StatusCode::BAD_REQUEST),
+    ] {
+        let status = send(&service, "GET", uri, SESSION_JWT, false, None).await;
+        assert_eq!(status, expected, "{uri}");
+    }
+    assert_eq!(*service.limits.lock().unwrap(), [None, Some(5)]);
 }

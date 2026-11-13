@@ -10,12 +10,13 @@ use model_owner::CreationPrincipal;
 
 use super::model::{
     Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion,
-    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunSettled,
-    RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller,
-    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome,
-    SuggestionsReview, Target,
+    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunStartError,
+    SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller, SuggestionContent,
+    SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
+use super::run::{Advanced, RunState, SessionEvent};
 
 /// Limits a write must stay within, checked where it is stored so two
 /// writes at once can't pass them together.
@@ -39,6 +40,8 @@ pub enum Written {
     /// Another write took the suggestion first: its dedup key is taken, or its
     /// state moved on.
     Conflict,
+    /// Its prompt or `sends` would change while a run of it is unsettled.
+    RunGoing,
 }
 
 /// Suggestions, their items and the change log, in storage.
@@ -85,46 +88,56 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         session: Uuid,
     ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
-    /// Start run `run` of the person's background prompt suggestion: one that is
-    /// proposed, or accepted with no run going and none finished, and last
-    /// changed at `shown_updated_at`. The suggestion becomes accepted. False when
-    /// it can't run now.
+    /// Start run `run` of the person's background prompt suggestion: one that may
+    /// start a run ([`LifecycleEvent::StartRun`](super::lifecycle::LifecycleEvent::StartRun)),
+    /// has no unsettled run, and last changed at `shown_updated_at`. The
+    /// suggestion becomes accepted, and the run is stored as `run` says
+    /// (starting, with its `sends`). False when it can't run now.
     fn start_run(
         &self,
         run: &StoredRun,
         shown_updated_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// The latest run of each of the person's suggestions in `suggestions` that has one.
-    fn latest_runs(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        suggestions: &[Uuid],
-    ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
+    /// Run `session`, if it is one.
+    fn run(&self, session: Uuid) -> impl Future<Output = Result<Option<StoredRun>, Self::Err>> + Send;
 
-    /// Runs not settled yet, least recently checked first, at most `limit`.
-    fn unsettled_runs(
+    /// Unsettled runs nobody holds at `now`, least recently checked first,
+    /// at most `limit`.
+    fn runs_to_check(
         &self,
+        now: DateTime<Utc>,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
 
-    /// Run `session` was checked at `at`: it goes to the back of
-    /// [`Self::unsettled_runs`].
-    fn checked_run(
+    /// Hold unsettled run `session` until `until`, unless someone holds it at
+    /// `now`: it is checked at `now`, and nobody else acts on it meanwhile.
+    /// The run as it is, when held.
+    fn claim_run(
         &self,
         session: Uuid,
-        at: DateTime<Utc>,
+        now: DateTime<Utc>,
+        until: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<StoredRun>, Self::Err>> + Send;
+
+    /// Let go of run `session`, held until `until`.
+    fn release_run(
+        &self,
+        session: Uuid,
+        until: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Settle run `session` as `settled`; a finished one makes its suggestion done,
-    /// if still accepted, and adds `produced` to it. False when it was
-    /// settled already.
-    fn settle_run(
+    /// Move `run` to `to`, entered at `changed_at`, if it is still as read
+    /// (its state and when it entered it); settled at `now` when `to` is.
+    /// A finished run adds `produced` to its suggestion (once each) and makes
+    /// it done if it is still accepted. Lets go of the run. Whether it moved.
+    fn move_run(
         &self,
-        session: Uuid,
-        settled: RunSettled,
+        run: &StoredRun,
+        to: RunState,
+        changed_at: DateTime<Utc>,
         produced: &[Target],
-        at: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Add a proposed suggestion `id` with `content` for the person, within
@@ -141,7 +154,8 @@ pub trait SuggestionRepo: Send + Sync + 'static {
 
     /// Replace suggestion `id`'s content and move it from state `from` to `to`,
     /// logging `change`. Moving it from closed to open stays within
-    /// `limits`.
+    /// `limits`. Its prompt and `sends` don't change while a run of it
+    /// is unsettled ([`Written::RunGoing`]).
     #[expect(clippy::too_many_arguments, reason = "one write, all of its parts")]
     fn replace(
         &self,
@@ -155,7 +169,9 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Written, Self::Err>> + Send;
 
     /// Move the person's suggestion `id` to `to` when it is in one of `from`,
-    /// logging `change` when given; whether it moved.
+    /// logging `change` when given; whether it moved. Moving it to a state that
+    /// cancels its run ([`cancels_run`](super::lifecycle::cancels_run)) cancels
+    /// its unsettled run in the same write.
     fn set_state(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -197,7 +213,7 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<OpenTarget>, Self::Err>> + Send;
 
     /// Resolve the person's suggestion `id` for `reason` if it is still open;
-    /// whether it moved.
+    /// whether it moved. Its unsettled run is cancelled in the same write.
     fn resolve(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -233,7 +249,8 @@ pub trait SuggestionAccess: Send + Sync + 'static {
 /// harness's credential minting.
 #[async_trait::async_trait]
 pub trait RunScopes: Send + Sync + 'static {
-    /// Whether `session` runs a suggestion that says it sends nothing.
+    /// Whether `session` is a run whose `sends`, as the suggestion said when
+    /// it started, is nothing.
     async fn sends_nothing(&self, session: Uuid) -> Result<bool, rootcause::Report>;
 }
 
@@ -311,8 +328,12 @@ pub trait RunSessions: Send + Sync + 'static {
     /// What `run`'s session made, besides the session itself.
     async fn produced(&self, run: &StoredRun) -> Result<Vec<Target>, rootcause::Report>;
 
-    /// Delete `run`'s session, one that never took its prompt.
-    async fn discard(&self, run: &StoredRun) -> Result<(), rootcause::Report>;
+    /// Ask `run`'s session to stop its turn. Its stopping is seen later,
+    /// from its events or a read.
+    async fn stop(&self, run: &StoredRun) -> Result<(), rootcause::Report>;
+
+    /// Delete `run`'s session: nothing of it runs after.
+    async fn delete(&self, run: &StoredRun) -> Result<(), rootcause::Report>;
 }
 
 /// Suggestions as the API serves them: the person's feed, which they and their
@@ -320,14 +341,16 @@ pub trait RunSessions: Send + Sync + 'static {
 /// manage it with.
 pub trait SuggestionApi: Send + Sync + 'static {
     /// The person's open suggestions they can still open every item of, best
-    /// first. With their `timezone`, it also counts them in for nightly
-    /// generations. `caller` is the person or their own agent; a
+    /// first, and those done in the last day, most recently first; at most
+    /// `limit` of each. With their `timezone`, it also counts them in for
+    /// nightly generations. `caller` is the person or their own agent; a
     /// generation session is refused.
     fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
         caller: SuggestionCaller,
         timezone: Option<chrono_tz::Tz>,
+        limit: Option<usize>,
     ) -> impl Future<Output = Result<SuggestionFeed, SuggestionError>> + Send;
 
     /// The person, or someone acting for them, acts on a suggestion. A
@@ -361,10 +384,6 @@ pub trait SuggestionApi: Send + Sync + 'static {
         generation: Uuid,
         session: Uuid,
     ) -> impl Future<Output = Result<u32, SuggestionError>> + Send;
-
-    /// Settle the runs whose sessions finished: a finished one makes its
-    /// suggestion done with what it produced. How many it settled.
-    fn settle_runs(&self) -> impl Future<Output = Result<usize, SuggestionError>> + Send;
 
     /// Every suggestion of the person's, for the suggestions session the request
     /// `correlation` names.
@@ -418,4 +437,42 @@ pub trait ResolveSuggestions: Send + Sync + 'static {
         &self,
         event: &ResolutionEvent,
     ) -> impl Future<Output = Result<Resolved, SuggestionError>> + Send;
+}
+
+/// Moves background runs along as their sessions go.
+pub trait SuggestionRuns: Send + Sync + 'static {
+    /// Apply what a session said about itself to its run, if it is one.
+    fn on_session_event(
+        &self,
+        event: SessionEvent,
+    ) -> impl Future<Output = Result<RunEventOutcome, SuggestionError>> + Send;
+
+    /// Check the runs nobody holds, least recently checked first: read each
+    /// one's session and move it on, giving up the ones over their time. One
+    /// run failing never stops the others.
+    fn reconcile_runs(&self) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send;
+}
+
+/// How a session's event went for runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunEventOutcome {
+    /// The session runs no unsettled suggestion run.
+    Ignored,
+    /// Someone else holds the run just now; try again shortly.
+    Busy,
+    /// Applied to the run.
+    Applied(Advanced),
+}
+
+/// What one reconcile pass did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunsReconciled {
+    /// Runs it looked at.
+    pub checked: usize,
+    /// Runs it moved (settled ones included).
+    pub moved: usize,
+    /// Runs it settled.
+    pub settled: usize,
+    /// Runs it couldn't check, for an error.
+    pub failed: usize,
 }

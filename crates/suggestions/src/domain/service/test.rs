@@ -8,8 +8,10 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;
-use crate::domain::model::{Category, EntityAction, RunMode};
+use crate::domain::model::{Category, EntityAction, RunMode, SuggestionStatus};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
+
+mod runs;
 
 pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
 const OTHER: &str = "macro|suggestions-other@macro.com";
@@ -18,17 +20,27 @@ fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap()
 }
 
-/// Items the person can open: all but those named in `denied`. A part is
-/// its item's when its id starts with the item's.
+/// Items the person can open: all but those named in `denied`; those in
+/// `failing` can't be checked. A part is its item's when its id starts with
+/// the item's.
 #[derive(Default)]
 pub(crate) struct FakeAccess {
     denied: Mutex<HashSet<String>>,
+    failing: Mutex<HashSet<String>>,
 }
 
+/// The access check couldn't answer.
+#[derive(Debug, thiserror::Error)]
+#[error("the access check is down")]
+pub(crate) struct AccessDown;
+
 impl SuggestionAccess for FakeAccess {
-    type Err = std::convert::Infallible;
+    type Err = AccessDown;
 
     async fn can_view(&self, _: &MacroUserIdStr<'_>, target: &Target) -> Result<bool, Self::Err> {
+        if self.failing.lock().unwrap().contains(&target.entity_id) {
+            return Err(AccessDown);
+        }
         Ok(!self.denied.lock().unwrap().contains(&target.entity_id))
     }
 
@@ -271,18 +283,6 @@ impl Harness {
             .await
     }
 
-    /// The latest run of the person's first suggestion in the feed.
-    async fn first_run(&self) -> crate::domain::model::SuggestionRun {
-        self.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
-            .await
-            .unwrap()
-            .suggestions[0]
-            .run
-            .clone()
-            .unwrap()
-    }
-
     /// An open session of `kind` in `owner`'s running generation, started
     /// when none is running.
     pub(crate) async fn session(&self, owner: &str, kind: &str) -> Uuid {
@@ -394,6 +394,7 @@ async fn an_suggestions_session_adds_an_suggestion_the_person_sees(pool: PgPool)
             &user(OWNER),
             SuggestionCaller::User,
             Some(chrono_tz::Europe::Paris),
+            None,
         )
         .await
         .unwrap();
@@ -404,7 +405,7 @@ async fn an_suggestions_session_adds_an_suggestion_the_person_sees(pool: PgPool)
     );
     assert!(
         h.service
-            .feed(&user(OTHER), SuggestionCaller::User, None)
+            .feed(&user(OTHER), SuggestionCaller::User, None, None)
             .await
             .unwrap()
             .suggestions
@@ -469,7 +470,7 @@ async fn suggestions_are_off_without_the_flag(pool: PgPool) {
     ));
     assert!(matches!(
         h.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
+            .feed(&user(OWNER), SuggestionCaller::User, None, None)
             .await,
         Err(SuggestionError::NotFound)
     ));
@@ -499,7 +500,7 @@ async fn the_same_dedup_key_updates_the_suggestion_and_its_kind_never_changes(po
     assert_eq!(second.title, "Pick the cheapest supplier");
     assert_eq!(
         h.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
+            .feed(&user(OWNER), SuggestionCaller::User, None, None)
             .await
             .unwrap()
             .suggestions
@@ -542,7 +543,7 @@ async fn a_dismissed_suggestion_comes_back_only_with_a_reason(pool: PgPool) {
         .unwrap();
     assert!(
         h.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
+            .feed(&user(OWNER), SuggestionCaller::User, None, None)
             .await
             .unwrap()
             .suggestions
@@ -625,7 +626,7 @@ async fn a_session_rewrites_and_retires_open_suggestions_and_a_retired_one_comes
     assert_eq!(retired.suggestion.unwrap().state, SuggestionState::Retired);
     assert!(
         h.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
+            .feed(&user(OWNER), SuggestionCaller::User, None, None)
             .await
             .unwrap()
             .suggestions
@@ -780,7 +781,7 @@ async fn an_suggestion_names_a_part_only_with_its_own_item(pool: PgPool) {
     assert!(own.ok, "{:?}", own.problems);
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert_eq!(feed.suggestions.len(), 1);
@@ -803,7 +804,7 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
         .await;
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     // Best first.
@@ -815,13 +816,139 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
         .insert("thread-2".to_owned());
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert_eq!(feed.suggestions.len(), 1);
     assert_eq!(feed.suggestions[0].dedup_key, "quotes:compare");
 }
 
+
+/// One suggestion whose items can't be checked is left out; the rest of the
+/// feed is read.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_suggestion_whose_items_cant_be_checked_is_left_out_of_the_feed(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    h.suggest(
+        session,
+        prompt_suggestion("quotes:compare", "Compare quotes"),
+    )
+    .await;
+    h.suggest(session, entity_suggestion("venue:headcount"))
+        .await;
+    h.access
+        .failing
+        .lock()
+        .unwrap()
+        .insert("thread-2".to_owned());
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        feed.suggestions
+            .iter()
+            .map(|suggestion| suggestion.dedup_key.as_str())
+            .collect::<Vec<_>>(),
+        ["quotes:compare"]
+    );
+}
+
+/// `limit` caps each list, open best first and done latest first, counting
+/// only what the person can open.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_feed_returns_at_most_limit_of_each_list(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let mut ids = Vec::new();
+    for (key, importance) in [("a:low", 20), ("b:high", 90), ("c:mid", 50), ("d:top", 99)] {
+        let mut request = entity_suggestion(key);
+        request.importance = importance;
+        request.about[0].entity_id = format!("thread-{key}");
+        ids.push(h.suggest(session, request).await.suggestion.unwrap().id);
+    }
+    // The best can't be opened: the next ones fill its place.
+    h.access
+        .denied
+        .lock()
+        .unwrap()
+        .insert("thread-d:top".to_owned());
+    let repo = PgSuggestionRepo::new(h.pool.clone());
+    let mut done = Vec::new();
+    for key in ["e:done-first", "f:done-last"] {
+        let mut request = entity_suggestion(key);
+        request.about[0].entity_id = format!("thread-{key}");
+        let id = h.suggest(session, request).await.suggestion.unwrap().id;
+        repo.set_state(
+            &user(OWNER),
+            id,
+            &[SuggestionState::Proposed],
+            SuggestionState::Done,
+            None,
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+        done.push(id);
+    }
+    let keys = |list: &[Suggestion]| {
+        list.iter()
+            .map(|suggestion| suggestion.dedup_key.clone())
+            .collect::<Vec<_>>()
+    };
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None, Some(2))
+        .await
+        .unwrap();
+    assert_eq!(keys(&feed.suggestions), ["b:high", "c:mid"]);
+    assert_eq!(keys(&feed.done), ["f:done-last", "e:done-first"]);
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None, Some(1))
+        .await
+        .unwrap();
+    assert_eq!(keys(&feed.suggestions), ["b:high"]);
+    assert_eq!(keys(&feed.done), ["f:done-last"]);
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
+        .await
+        .unwrap();
+    assert_eq!(keys(&feed.suggestions), ["b:high", "c:mid", "a:low"]);
+    assert!(feed.suggestions.iter().all(|suggestion| suggestion.status == SuggestionStatus::Open));
+    assert!(feed.done.iter().all(|suggestion| suggestion.status == SuggestionStatus::Done));
+}
+
+/// Reading the feed counts the person in once per timezone while it is
+/// remembered, and again when they read it from another one.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reading_the_feed_counts_the_person_in_once_per_timezone(pool: PgPool) {
+    let h = harness(pool, true).await;
+    for timezone in [
+        chrono_tz::Europe::Paris,
+        chrono_tz::Europe::Paris,
+        chrono_tz::Europe::London,
+        chrono_tz::Europe::Paris,
+    ] {
+        h.service
+            .feed(&user(OWNER), SuggestionCaller::User, Some(timezone), None)
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        h.audience
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, timezone)| timezone.as_str())
+            .collect::<Vec<_>>(),
+        ["Europe/Paris", "Europe/London", "Europe/Paris"]
+    );
+}
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPool) {
     let h = harness(pool, true).await;
@@ -840,7 +967,7 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert!(feed.suggestions.is_empty());
@@ -877,7 +1004,7 @@ async fn the_persons_own_agent_reads_accepts_and_dismisses_their_suggestions(poo
         .unwrap();
     let feed = h
         .service
-        .feed(&user(OWNER), chat_agent(), None)
+        .feed(&user(OWNER), chat_agent(), None, None)
         .await
         .unwrap();
     assert_eq!(feed.suggestions, vec![entity.clone(), prompt.clone()]);
@@ -898,7 +1025,7 @@ async fn the_persons_own_agent_reads_accepts_and_dismisses_their_suggestions(poo
         .unwrap();
     let feed = h
         .service
-        .feed(&user(OWNER), chat_agent(), None)
+        .feed(&user(OWNER), chat_agent(), None, None)
         .await
         .unwrap();
     assert!(feed.suggestions.is_empty());
@@ -923,7 +1050,7 @@ async fn another_persons_agent_never_reaches_the_persons_suggestions(pool: PgPoo
         .unwrap();
     assert!(
         h.service
-            .feed(&user(OTHER), chat_agent(), None)
+            .feed(&user(OTHER), chat_agent(), None, None)
             .await
             .unwrap()
             .suggestions
@@ -948,7 +1075,7 @@ async fn another_persons_agent_never_reaches_the_persons_suggestions(pool: PgPoo
     ));
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert_eq!(feed.suggestions[0].state, SuggestionState::Proposed);
@@ -971,7 +1098,7 @@ async fn generation_sessions_never_read_accept_or_dismiss_for_the_person(pool: P
         };
         let feed = h
             .service
-            .feed(&user(OWNER), caller, Some(chrono_tz::Europe::Paris))
+            .feed(&user(OWNER), caller, Some(chrono_tz::Europe::Paris), None)
             .await;
         assert!(matches!(feed, Err(SuggestionError::Generating)), "{feed:?}");
         let accept = h
@@ -992,7 +1119,7 @@ async fn generation_sessions_never_read_accept_or_dismiss_for_the_person(pool: P
     assert!(h.audience.0.lock().unwrap().is_empty());
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert_eq!(feed.suggestions[0].state, SuggestionState::Proposed);
@@ -1044,7 +1171,7 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
 
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     let card = feed.suggestions[0].clone();
@@ -1089,599 +1216,6 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
-}
-
-/// How the fake's next start goes.
-#[derive(Default, Clone, Copy, PartialEq)]
-enum StartsAs {
-    #[default]
-    Started,
-    NotStarted,
-    Uncertain,
-}
-
-/// Run sessions whose state the test sets, recording what they started and
-/// deleted. A session with no state set is missing; one in `unreadable`
-/// exists but can't be read.
-#[derive(Default)]
-struct FakeRuns {
-    started: Mutex<Vec<(Uuid, String)>>,
-    state: Mutex<HashMap<Uuid, SessionState>>,
-    unreadable: Mutex<HashSet<Uuid>>,
-    discarded: Mutex<Vec<Uuid>>,
-    discard_fails: std::sync::atomic::AtomicBool,
-    starts_as: Mutex<StartsAs>,
-}
-
-impl FakeRuns {
-    fn set(&self, session: Uuid, state: SessionState) {
-        self.state.lock().unwrap().insert(session, state);
-    }
-}
-
-#[async_trait::async_trait]
-impl RunSessions for FakeRuns {
-    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), RunStartError> {
-        let starts_as = *self.starts_as.lock().unwrap();
-        if starts_as == StartsAs::NotStarted {
-            return Err(RunStartError::NotStarted(rootcause::report!(
-                "the session didn't open"
-            )));
-        }
-        self.started
-            .lock()
-            .unwrap()
-            .push((run.session, prompt.to_owned()));
-        self.set(run.session, SessionState::Running);
-        if starts_as == StartsAs::Uncertain {
-            return Err(RunStartError::Uncertain(rootcause::report!(
-                "the prompt's answer was lost"
-            )));
-        }
-        Ok(())
-    }
-
-    async fn state(&self, run: &StoredRun) -> Result<SessionState, SessionReadError> {
-        if self.unreadable.lock().unwrap().contains(&run.session) {
-            return Err(SessionReadError::Unreadable(rootcause::report!(
-                "the session service is down"
-            )));
-        }
-        self.state
-            .lock()
-            .unwrap()
-            .get(&run.session)
-            .copied()
-            .ok_or(SessionReadError::Missing)
-    }
-
-    async fn produced(&self, _: &StoredRun) -> Result<Vec<Target>, rootcause::Report> {
-        Ok(vec![Target {
-            entity_type: EntityType::Document,
-            entity_id: "comparison-doc".to_owned(),
-            part_id: None,
-        }])
-    }
-
-    async fn discard(&self, run: &StoredRun) -> Result<(), rootcause::Report> {
-        if self.discard_fails.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(rootcause::report!("the session wasn't deleted"));
-        }
-        self.discarded.lock().unwrap().push(run.session);
-        self.state.lock().unwrap().remove(&run.session);
-        Ok(())
-    }
-}
-
-const RUN_AGENT: Uuid = Uuid::from_u128(0xa2a2);
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn accepting_a_background_prompt_suggestion_runs_it_and_its_session_finishes_it(
-    pool: PgPool,
-) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let started = runs.started.lock().unwrap().clone();
-    assert_eq!(started.len(), 1);
-    assert!(
-        started[0]
-            .1
-            .starts_with("Compare the supplier quotes in my inbox and list the cheapest.\n\n"),
-        "{}",
-        started[0].1
-    );
-    assert!(started[0].1.contains("never stop to ask"));
-    assert!(started[0].1.contains("Post, send or share nothing:"));
-    // A run going can't be started twice.
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
-    let run_session = started[0].0;
-    let run = h.first_run().await;
-    assert_eq!(
-        (run.session_id, run.progress),
-        (run_session, RunProgress::Running)
-    );
-    assert_eq!(
-        h.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
-            .await
-            .unwrap()
-            .suggestions[0]
-            .state,
-        SuggestionState::Accepted
-    );
-
-    // Waiting for an approval shows on the suggestion; within its start window
-    // the run isn't given up.
-    runs.set(run_session, SessionState::NeedsApproval);
-    assert_eq!(h.first_run().await.progress, RunProgress::NeedsApproval);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-
-    // Once its session finished, the suggestion is done with what the run made.
-    runs.set(run_session, SessionState::Finished);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-    let done = PgSuggestionRepo::new(h.pool.clone())
-        .suggestion(&user(OWNER), suggestion.id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(done.state, SuggestionState::Done);
-    assert_eq!(
-        done.produced,
-        [
-            Target {
-                entity_type: EntityType::AgentSession,
-                entity_id: run_session.to_string(),
-                part_id: None,
-            },
-            Target {
-                entity_type: EntityType::Document,
-                entity_id: "comparison-doc".to_owned(),
-                part_id: None,
-            },
-        ]
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_failed_run_is_retried_by_accepting_again(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    // A session that never opened leaves the suggestion to try again.
-    *runs.starts_as.lock().unwrap() = StartsAs::NotStarted;
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::Internal(_))
-    ));
-    *runs.starts_as.lock().unwrap() = StartsAs::Started;
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.set(run_session, SessionState::Failed);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    let feed = h
-        .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
-        .await
-        .unwrap();
-    assert_eq!(feed.suggestions[0].state, SuggestionState::Accepted);
-    assert_eq!(
-        feed.suggestions[0].run.as_ref().unwrap().progress,
-        RunProgress::Failed
-    );
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 2);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn accepting_any_other_suggestion_starts_no_run(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let mut composer = prompt_suggestion("quotes:compare", "Compare the supplier quotes");
-    composer.run_mode = Some(RunMode::Composer);
-    let composer = h.suggest(session, composer).await.suggestion.unwrap();
-    let entity = h
-        .suggest(session, entity_suggestion("venue:headcount"))
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), composer.id).await.unwrap();
-    h.accept(&user(OWNER), entity.id).await.unwrap();
-    assert!(runs.started.lock().unwrap().is_empty());
-    assert!(
-        h.service
-            .feed(&user(OWNER), SuggestionCaller::User, None)
-            .await
-            .unwrap()
-            .suggestions
-            .iter()
-            .all(|suggestion| suggestion.run.is_none())
-    );
-}
-
-/// Someone acting for the person (an agent of theirs) takes a background
-/// suggestion on but never starts its run; the person starts it in the app.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn only_the_person_starts_a_background_run(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    // An agent of the person's: even one claiming to be the person.
-    let agent = || SuggestionCaller::Agent { correlation: None };
-    let as_agent = |shown_updated_at| Accept {
-        shown_updated_at,
-        by_person: true,
-    };
-    h.service
-        .accept(
-            &user(OWNER),
-            agent(),
-            suggestion.id,
-            as_agent(suggestion.updated_at),
-        )
-        .await
-        .unwrap();
-    assert!(runs.started.lock().unwrap().is_empty());
-    let feed = h
-        .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
-        .await
-        .unwrap();
-    assert_eq!(feed.suggestions[0].state, SuggestionState::Accepted);
-    assert!(feed.suggestions[0].run.is_none());
-    // Again, still nothing runs.
-    h.service
-        .accept(
-            &user(OWNER),
-            agent(),
-            suggestion.id,
-            as_agent(feed.suggestions[0].updated_at),
-        )
-        .await
-        .unwrap();
-    assert!(runs.started.lock().unwrap().is_empty());
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 1);
-}
-
-/// What runs is what the person saw: a card read before the suggestion was
-/// rewritten is refused, and runs once read again.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_background_suggestion_runs_only_as_the_person_saw_it(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    let rewritten = h
-        .service
-        .rewrite(
-            &principal(OWNER),
-            Some(session),
-            suggestion.id,
-            RewriteSuggestion {
-                prompt: Some("Compare the quotes and email the cheapest supplier.".to_owned()),
-                reason: "A fourth quote arrived".to_owned(),
-                ..RewriteSuggestion::default()
-            },
-        )
-        .await
-        .unwrap();
-    assert!(rewritten.ok, "{:?}", rewritten.problems);
-    let as_person = |shown_updated_at| Accept {
-        shown_updated_at,
-        by_person: true,
-    };
-    let Err(SuggestionError::Changed(now)) = h
-        .service
-        .accept(
-            &user(OWNER),
-            SuggestionCaller::User,
-            suggestion.id,
-            as_person(suggestion.updated_at),
-        )
-        .await
-    else {
-        panic!("a card read before the rewrite is refused");
-    };
-    // The answer carries the suggestion as it is now.
-    assert!(matches!(
-        &now.kind,
-        SuggestionKind::Prompt { prompt, .. } if prompt.starts_with("Compare the quotes and email")
-    ));
-    assert!(runs.started.lock().unwrap().is_empty());
-    h.service
-        .accept(
-            &user(OWNER),
-            SuggestionCaller::User,
-            suggestion.id,
-            as_person(rewritten.suggestion.unwrap().updated_at),
-        )
-        .await
-        .unwrap();
-    let started = runs.started.lock().unwrap().clone();
-    assert!(
-        started[0]
-            .1
-            .starts_with("Compare the quotes and email the cheapest supplier.")
-    );
-}
-
-/// Any suggestion is acted on only as the person saw it: a composer prompt or a
-/// reply rewritten after the card was read is refused with how it is now,
-/// stays open, and is done once accepted as it is.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn any_suggestion_is_acted_on_only_as_the_person_saw_it(pool: PgPool) {
-    let h = harness(pool, true).await;
-    let session = h.session(OWNER, "suggestions").await;
-    let mut composer = prompt_suggestion("quotes:composer", "Compare quotes");
-    composer.run_mode = Some(RunMode::Composer);
-    for request in [composer, entity_suggestion("venue:headcount")] {
-        let shown = h.suggest(session, request).await.suggestion.unwrap();
-        let rewritten = h
-            .service
-            .rewrite(
-                &principal(OWNER),
-                Some(session),
-                shown.id,
-                RewriteSuggestion {
-                    summary: Some("A fourth one arrived this morning.".to_owned()),
-                    reason: "New mail".to_owned(),
-                    ..RewriteSuggestion::default()
-                },
-            )
-            .await
-            .unwrap();
-        assert!(rewritten.ok, "{:?}", rewritten.problems);
-        let stale = Accept {
-            shown_updated_at: shown.updated_at,
-            by_person: true,
-        };
-        let Err(SuggestionError::Changed(now)) = h
-            .service
-            .accept(&user(OWNER), SuggestionCaller::User, shown.id, stale)
-            .await
-        else {
-            panic!("a stale card is refused");
-        };
-        assert_eq!(now.summary, "A fourth one arrived this morning.");
-        assert_eq!(now.state, SuggestionState::Proposed);
-        h.service
-            .accept(
-                &user(OWNER),
-                SuggestionCaller::User,
-                shown.id,
-                Accept {
-                    shown_updated_at: now.updated_at,
-                    by_person: true,
-                },
-            )
-            .await
-            .unwrap();
-    }
-    let feed = h
-        .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
-        .await
-        .unwrap();
-    assert!(feed.suggestions.is_empty());
-    assert_eq!(feed.done.len(), 2);
-}
-
-/// A run waiting for an approval or an answer gets none: past its start
-/// window it is given up, so the suggestion may run again.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_run_left_waiting_is_given_up_and_runs_again(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    for (key, waiting) in [
-        ("quotes:approval", SessionState::NeedsApproval),
-        ("quotes:input", SessionState::NeedsInput),
-    ] {
-        let suggestion = h
-            .suggest(session, prompt_suggestion(key, "Compare quotes"))
-            .await
-            .suggestion
-            .unwrap();
-        h.accept(&user(OWNER), suggestion.id).await.unwrap();
-        let run = runs.started.lock().unwrap().last().unwrap().0;
-        runs.set(run, waiting);
-    }
-    assert_eq!(
-        h.service.settle_runs().await.unwrap(),
-        0,
-        "within the window"
-    );
-    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
-    assert_eq!(h.service.settle_runs().await.unwrap(), 2);
-    assert_eq!(runs.discarded.lock().unwrap().len(), 2);
-    let feed = h
-        .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
-        .await
-        .unwrap();
-    assert!(
-        feed.suggestions
-            .iter()
-            .all(|suggestion| suggestion.run.as_ref().map(|run| run.progress)
-                == Some(RunProgress::Failed))
-    );
-    // Accepting again runs it again.
-    let suggestion = feed.suggestions[0].id;
-    h.accept(&user(OWNER), suggestion).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 3);
-}
-
-/// Age every run of the test's suggestions by `by`, as if started that long ago.
-async fn age_runs(pool: &PgPool, by: chrono::Duration) {
-    sqlx::query!(
-        "UPDATE suggestion_run SET started_at = started_at - $1::interval",
-        sqlx::postgres::types::PgInterval::try_from(by).unwrap(),
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-/// A prompt whose answer was lost may be running: the run stays, no second
-/// session starts, and the session settles it.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_run_whose_prompt_may_have_arrived_is_never_started_twice(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    *runs.starts_as.lock().unwrap() = StartsAs::Uncertain;
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    *runs.starts_as.lock().unwrap() = StartsAs::Started;
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
-    assert_eq!(runs.started.lock().unwrap().len(), 1);
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.set(run_session, SessionState::Finished);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-}
-
-/// A session that never took its prompt is deleted after a while, and the
-/// suggestion may run again.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_run_whose_prompt_never_arrived_is_given_up_and_runs_again(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.set(run_session, SessionState::AwaitingPrompt);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 2);
-}
-
-/// A run whose session can't be read is never given up, however long the
-/// outage: it may be running, and a retry would start a second session.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_live_run_whose_session_cant_be_read_is_never_given_up(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.unreadable.lock().unwrap().insert(run_session);
-    age_runs(&h.pool, chrono::Duration::hours(3)).await;
-    for _ in 0..20 {
-        assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-    }
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
-    assert_eq!(runs.started.lock().unwrap().len(), 1);
-    // Once it reads again, it settles as its session says.
-    runs.unreadable.lock().unwrap().remove(&run_session);
-    runs.set(run_session, SessionState::Finished);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-}
-
-/// A run whose session is confirmed missing (it never opened) is given up
-/// once its start window has passed, and the suggestion may run again.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_run_whose_session_is_missing_is_given_up_after_its_start_window(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.state.lock().unwrap().remove(&run_session);
-    // It may still be opening.
-    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
 
 /// A reply suggestion about email thread `thread`.
@@ -1822,7 +1356,7 @@ async fn a_draft_is_attached_only_to_an_open_reply_suggestion_in_its_thread(pool
     assert_eq!(attached.suggestion.unwrap().kind, expected);
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     let shown = feed
@@ -1995,37 +1529,6 @@ async fn only_the_persons_open_suggestions_session_attaches_drafts(pool: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_unprompted_session_that_cant_be_deleted_keeps_its_run(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.set(run_session, SessionState::AwaitingPrompt);
-    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
-    runs.discard_fails
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
-    runs.discard_fails
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     let h = harness(pool, true).await;
     let session = h.session(OWNER, "suggestions").await;
@@ -2065,7 +1568,7 @@ async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     .unwrap();
     let feed = h
         .service
-        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .feed(&user(OWNER), SuggestionCaller::User, None, None)
         .await
         .unwrap();
     assert_eq!(
@@ -2082,127 +1585,4 @@ async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
             .collect::<Vec<_>>(),
         [ids[0]]
     );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_background_suggestion_says_what_it_sends_and_running_it_approves_that(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let mut posting = prompt_suggestion("ops:weekly-status", "Post the weekly status summary");
-    posting.sends = Some("Posts the weekly status summary in #ops".to_owned());
-    let suggestion = h.suggest(session, posting).await.suggestion.unwrap();
-    assert!(matches!(
-        &suggestion.kind,
-        SuggestionKind::Prompt { sends: Some(sends), .. } if sends == "Posts the weekly status summary in #ops"
-    ));
-    let mut composer = prompt_suggestion("ops:draft", "Draft the status summary");
-    composer.run_mode = Some(RunMode::Composer);
-    composer.sends = Some("Posts it in #ops".to_owned());
-    let refused = h.suggest(session, composer).await;
-    assert!(!refused.ok);
-    assert!(refused.problems[0].contains("only for background prompt suggestions"));
-    let rewritten = h
-        .service
-        .rewrite(
-            &principal(OWNER),
-            Some(session),
-            suggestion.id,
-            RewriteSuggestion {
-                sends: Some("Posts the weekly status summary in #ops-leads".to_owned()),
-                reason: "The leads channel took over".to_owned(),
-                ..RewriteSuggestion::default()
-            },
-        )
-        .await
-        .unwrap();
-    assert!(rewritten.ok, "{:?}", rewritten.problems);
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let prompt = runs.started.lock().unwrap()[0].1.clone();
-    assert!(
-        prompt.contains("this run will: Posts the weekly status summary in #ops-leads."),
-        "{prompt}"
-    );
-    assert!(prompt.contains("sendConfirmed"));
-}
-
-/// A suggestion retired while its run waits, then suggested again, can't start a
-/// second run until the first one settles.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_restored_suggestion_starts_no_second_run_while_its_first_is_going(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.set(run_session, SessionState::NeedsApproval);
-    let retired = h
-        .service
-        .retire(
-            &principal(OWNER),
-            Some(session),
-            suggestion.id,
-            RetireSuggestionRequest {
-                reason: "The quotes expired".to_owned(),
-            },
-        )
-        .await
-        .unwrap();
-    assert!(retired.ok, "{:?}", retired.problems);
-    let restored = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the new supplier quotes"),
-        )
-        .await;
-    assert!(restored.ok, "{:?}", restored.problems);
-    assert!(matches!(
-        h.accept(&user(OWNER), suggestion.id).await,
-        Err(SuggestionError::NotFound)
-    ));
-    assert_eq!(runs.started.lock().unwrap().len(), 1);
-    // Once the first run settles failed, the restored suggestion may run.
-    runs.set(run_session, SessionState::Failed);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 2);
-}
-
-/// A run whose runtime went away mid-run (a harness restart) doesn't stay
-/// running: past its start window its session is deleted, the run fails,
-/// and the suggestion may run again.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_run_cut_off_by_a_restart_is_given_up_and_runs_again(pool: PgPool) {
-    let mut h = harness(pool, true).await;
-    let runs = Arc::new(FakeRuns::default());
-    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
-    let session = h.session(OWNER, "suggestions").await;
-    let suggestion = h
-        .suggest(
-            session,
-            prompt_suggestion("quotes:compare", "Compare the supplier quotes"),
-        )
-        .await
-        .suggestion
-        .unwrap();
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let run_session = runs.started.lock().unwrap()[0].0;
-    runs.set(run_session, SessionState::Disconnected);
-    assert_eq!(h.first_run().await.progress, RunProgress::Running);
-    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
-    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
-    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
-    h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    assert_eq!(runs.started.lock().unwrap().len(), 2);
 }

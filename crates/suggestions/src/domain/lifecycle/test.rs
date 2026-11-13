@@ -82,3 +82,16 @@ fn writes_that_keep_the_state_leave_it_open() {
         }
     }
 }
+
+#[test]
+fn closing_a_suggestion_without_doing_it_cancels_its_run() {
+    for event in [E::Dismiss, E::Retire, E::Resolve] {
+        for from in sources(event) {
+            let to = transition(from, event).expect("a source moves");
+            assert!(cancels_run(to), "{event:?} from {from:?}");
+        }
+    }
+    for state in [S::Proposed, S::Accepted, S::Done] {
+        assert!(!cancels_run(state), "{state:?}");
+    }
+}

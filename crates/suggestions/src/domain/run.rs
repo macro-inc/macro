@@ -18,7 +18,10 @@
 
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
+use macro_uuid::Uuid;
 use utoipa::ToSchema;
+
+use super::model::{SessionReadError, SessionState};
 
 #[cfg(test)]
 mod test;
@@ -297,6 +300,23 @@ pub enum Observation {
     Unreadable,
 }
 
+impl Observation {
+    /// What reading a run's session found.
+    pub fn of_read(read: &Result<SessionState, SessionReadError>) -> Self {
+        match read {
+            Ok(SessionState::AwaitingPrompt) => Self::AwaitingPrompt,
+            Ok(SessionState::Running) => Self::Working,
+            Ok(
+                SessionState::Disconnected | SessionState::NeedsApproval | SessionState::NeedsInput,
+            ) => Self::Paused,
+            Ok(SessionState::Finished) => Self::Finished,
+            Ok(SessionState::Failed) => Self::Failed,
+            Err(SessionReadError::Missing) => Self::Gone,
+            Err(SessionReadError::Unreadable(_)) => Self::Unreadable,
+        }
+    }
+}
+
 /// What must happen before a step's state is written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -363,4 +383,88 @@ pub enum Refused {
     /// A start's result came for a run already past starting.
     #[error("the run already started")]
     AlreadyStarted,
+}
+
+/// Something a session said about itself, from its lifecycle events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionEvent {
+    /// The session.
+    pub session: Uuid,
+    /// What it said.
+    pub news: SessionNews,
+}
+
+/// What a session said about itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionNews {
+    /// The turn for `action` ended and nothing is queued after it;
+    /// `finished` when it ended as asked.
+    TurnEnded {
+        /// The turn's action.
+        action: Uuid,
+        /// Whether it ended as asked.
+        finished: bool,
+    },
+    /// The turn for `action` waits for an answer to a question.
+    WaitingForInput {
+        /// The turn's action.
+        action: Uuid,
+    },
+    /// Something only reading the session explains: it settled with no turn
+    /// on record, or its runtime stopped.
+    Changed,
+    /// It was deleted.
+    Deleted,
+}
+
+impl SessionNews {
+    /// What it says about a run whose prompt is the turn for `action`;
+    /// `None` when its session must be read to know.
+    pub fn about_run(self, action: Uuid) -> Option<Observation> {
+        match self {
+            Self::TurnEnded {
+                action: ended,
+                finished,
+            } if ended == action => Some(if finished {
+                Observation::Finished
+            } else {
+                Observation::Failed
+            }),
+            Self::WaitingForInput { action: waiting } if waiting == action => {
+                Some(Observation::Paused)
+            }
+            Self::Deleted => Some(Observation::Gone),
+            Self::TurnEnded { .. } | Self::WaitingForInput { .. } | Self::Changed => None,
+        }
+    }
+}
+
+/// How applying an event to a run went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Advanced {
+    /// It moved to this state.
+    Moved(RunStateName),
+    /// It stays where it is; what its step asked for first (a stop, say) ran.
+    Stayed,
+    /// The event no longer applies to it: it settled, say.
+    Refused,
+    /// What had to happen first failed, so nothing was written; the next
+    /// event or check tries again.
+    EffectFailed,
+    /// Others kept moving it meanwhile; the next event or check tries again.
+    Contended,
+}
+
+impl Advanced {
+    /// How it shows on a span.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Moved(_) => "moved",
+            Self::Stayed => "stayed",
+            Self::Refused => "refused",
+            Self::EffectFailed => "effect_failed",
+            Self::Contended => "contended",
+        }
+    }
 }

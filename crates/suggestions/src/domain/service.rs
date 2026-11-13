@@ -9,9 +9,9 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use feature_flags::FeatureFlags;
-use futures::{StreamExt as _, TryStreamExt as _};
+use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityType;
@@ -21,17 +21,20 @@ use super::check;
 use super::lifecycle::{self, LifecycleEvent};
 use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
-    KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress,
-    RunSettled, RunStartError, SessionKind, SessionReadError, SessionState, StoredRun, Suggestion,
-    SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind,
-    SuggestionRun, SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
+    KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, SessionKind,
+    Suggestion, SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed,
+    SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target,
 };
 use super::ports::{
     GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, RunSessions,
     SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
+use recent::Recent;
 
+mod recent;
+mod runs;
 #[cfg(test)]
 pub(crate) mod test;
 
@@ -47,6 +50,17 @@ pub const DONE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
 
 /// Suggestions whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;
+
+/// How long a person's flag is trusted before it is read again: every
+/// entry point checks it, and a feed read checks it on each poll.
+const FLAG_KEPT_FOR: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// How often reading the feed counts a person in for nightly generations
+/// again, in the same timezone.
+const READER_KEPT_FOR: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// People each in-memory memo keeps at most.
+const PEOPLE_REMEMBERED: usize = 10_000;
 
 /// How many of the person's closed suggestions a session's review shows, most
 /// recently closed first: enough not to suggest again what they just turned
@@ -74,6 +88,10 @@ pub struct SuggestionService<Repo, Access, Drafts, Flags> {
     sdk_reference: String,
     /// The model a suggestions session has check each new suggestion against its items.
     checker_model: String,
+    /// Each person's flag, as last read.
+    flag_kept: Recent<bool>,
+    /// The timezone each person was last counted in with.
+    readers: Recent<chrono_tz::Tz>,
 }
 
 /// The sessions background prompt suggestions run in, and the agent they run as.
@@ -81,14 +99,6 @@ struct Runs {
     sessions: Arc<dyn RunSessions>,
     agent: Uuid,
 }
-
-/// Runs one settle pass checks at most.
-const SETTLE_BATCH: u16 = 50;
-
-/// How long a run's session has to open and take its prompt. Past it, a
-/// session that is missing or still waiting for its prompt never started,
-/// and one whose in-process runtime went away (a restart) won't resume.
-const START_WINDOW: chrono::Duration = chrono::Duration::minutes(10);
 
 impl<Repo, Access, Drafts, Flags> SuggestionService<Repo, Access, Drafts, Flags>
 where
@@ -121,6 +131,8 @@ where
             flags,
             sdk_reference: String::new(),
             checker_model: String::new(),
+            flag_kept: Recent::new(FLAG_KEPT_FOR, PEOPLE_REMEMBERED),
+            readers: Recent::new(READER_KEPT_FOR, PEOPLE_REMEMBERED),
         }
     }
 
@@ -144,56 +156,6 @@ where
     pub fn with_runs(mut self, sessions: Arc<dyn RunSessions>, agent: Uuid) -> Self {
         self.runs = Some(Runs { sessions, agent });
         self
-    }
-
-    /// Attach each suggestion's latest run, with how it is going read from its
-    /// session.
-    async fn attach_runs(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        suggestions: &mut [Suggestion],
-    ) -> Result<(), SuggestionError> {
-        // Only background prompt suggestions run.
-        let ids: Vec<Uuid> = suggestions
-            .iter()
-            .filter(|suggestion| {
-                matches!(
-                    suggestion.kind,
-                    SuggestionKind::Prompt {
-                        run_mode: RunMode::Background,
-                        ..
-                    }
-                )
-            })
-            .map(|suggestion| suggestion.id)
-            .collect();
-        let runs = self
-            .repo
-            .latest_runs(user, &ids)
-            .await
-            .map_err(SuggestionError::internal)?;
-        for suggestion in suggestions.iter_mut() {
-            let Some(run) = runs.iter().find(|run| run.suggestion == suggestion.id) else {
-                continue;
-            };
-            let progress = match (&run.settled, &self.runs) {
-                (Some(RunSettled::Finished), _) => RunProgress::Finished,
-                (Some(RunSettled::Failed), _) => RunProgress::Failed,
-                (None, Some(runs)) => runs
-                    .sessions
-                    .state(run)
-                    .await
-                    .inspect_err(|error| tracing::warn!(?error, "could not read a run's session"))
-                    .map_or(RunProgress::Unknown, SessionState::progress),
-                (None, None) => RunProgress::Unknown,
-            };
-            suggestion.run = Some(SuggestionRun {
-                session_id: run.session,
-                started_at: run.started_at,
-                progress,
-            });
-        }
-        Ok(())
     }
 
     /// Move `suggestion` from one of `from` to `to` if it is still as `accept`
@@ -237,100 +199,32 @@ where
         })
     }
 
-    /// Start a run of background prompt suggestion `suggestion`.
-    #[tracing::instrument(name = "suggestions.run.start", skip_all, fields(
-        suggestion.id = %suggestion.id,
-        agent.session.id = tracing::field::Empty,
-        suggestion.run.outcome = tracing::field::Empty,
-    ), err)]
-    async fn start_run(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        suggestion: &Suggestion,
-        prompt: &str,
-        shown_updated_at: DateTime<Utc>,
-    ) -> Result<(), SuggestionError> {
-        let span = tracing::Span::current();
-        let Some(runs) = &self.runs else {
-            return Err(SuggestionError::Internal(rootcause::report!(
-                "background runs are not configured"
-            )));
-        };
-        let run = StoredRun {
-            session: Uuid::now_v7(),
-            suggestion: suggestion.id,
-            user: user.clone(),
-            agent: runs.agent,
-            action: Uuid::now_v7(),
-            started_at: Utc::now(),
-            settled: None,
-        };
-        span.record("agent.session.id", run.session.to_string());
-        // What runs is what the person saw: a card read before the suggestion
-        // was rewritten is read again first.
-        if suggestion.updated_at != shown_updated_at {
-            span.record("suggestion.run.outcome", "changed");
-            return Err(SuggestionError::Changed(Box::new(suggestion.clone())));
-        }
-        // The row first, so two accepts at once start one session.
-        if !self
-            .repo
-            .start_run(&run, shown_updated_at)
-            .await
-            .map_err(SuggestionError::internal)?
-        {
-            span.record("suggestion.run.outcome", "not_runnable");
-            let now = self
-                .repo
-                .suggestion(user, suggestion.id)
-                .await
-                .map_err(SuggestionError::internal)?;
-            return Err(match now {
-                Some(now) if now.updated_at != shown_updated_at => {
-                    SuggestionError::Changed(Box::new(now))
-                }
-                _ => SuggestionError::NotFound,
-            });
-        }
-        match runs.sessions.start(&run, prompt).await {
-            Ok(()) => {}
-            Err(RunStartError::NotStarted(error)) => {
-                // Nothing runs: the suggestion may be accepted again to retry.
-                let _ = self
-                    .repo
-                    .settle_run(run.session, RunSettled::Failed, &[], Utc::now())
-                    .await
-                    .inspect_err(|error| {
-                        tracing::warn!(?error, "could not settle a run that failed to start")
-                    });
-                span.record("suggestion.run.outcome", "failed_to_start");
-                return Err(SuggestionError::Internal(error));
-            }
-            Err(RunStartError::Uncertain(error)) => {
-                // The prompt may be running: the run stays unsettled, so no
-                // second session starts, and its session settles it.
-                tracing::warn!(?error, "a run's prompt may not have arrived");
-                span.record("suggestion.run.outcome", "uncertain");
-                return Ok(());
-            }
-        }
-        span.record("suggestion.run.outcome", "started");
-        tracing::info!(event = "suggestions.run_started");
-        Ok(())
-    }
-
-    #[tracing::instrument(name = "suggestions.flag", err, skip_all)]
+    #[tracing::instrument(name = "suggestions.flag", err, skip_all, fields(
+        suggestions.flag.cached = tracing::field::Empty,
+    ))]
     async fn require_flag(&self, user: &MacroUserIdStr<'_>) -> Result<(), SuggestionError> {
         let Some(flags) = &self.flags else {
             return Err(SuggestionError::NotFound);
         };
-        let enabled = flags
-            .load(user)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(?error, "feature flags unavailable; suggestions stay off");
-            })
-            .is_ok_and(|flags| flags.is_enabled(SUGGESTIONS_FLAG));
+        let now = tokio::time::Instant::now();
+        let kept = self.flag_kept.get(user.as_ref(), now);
+        tracing::Span::current().record("suggestions.flag.cached", kept.is_some());
+        let enabled = match kept {
+            Some(enabled) => enabled,
+            // Only a read is kept: flags that can't be read leave suggestions off
+            // for this request alone.
+            None => match flags.load(user).await {
+                Ok(flags) => {
+                    let enabled = flags.is_enabled(SUGGESTIONS_FLAG);
+                    self.flag_kept.put(user.as_ref(), enabled, now);
+                    enabled
+                }
+                Err(error) => {
+                    tracing::warn!(?error, "feature flags unavailable; suggestions stay off");
+                    false
+                }
+            },
+        };
         if enabled {
             Ok(())
         } else {
@@ -464,6 +358,62 @@ where
         Ok(true)
     }
 
+    /// The first `limit` of `ordered` the person can open every item of, in
+    /// order. A suggestion whose items can't be checked is left out and logged:
+    /// one failing check never fails the feed.
+    async fn viewable_first(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ordered: Vec<Suggestion>,
+        limit: usize,
+    ) -> Viewable {
+        let mut viewable = Viewable::default();
+        if limit == 0 {
+            return viewable;
+        }
+        // Up to 30 suggestions of up to 5 items each: check a few at a time,
+        // in order, until enough are shown.
+        let mut checked = futures::stream::iter(ordered)
+            .map(|suggestion| async move {
+                let check = self.viewable(user, &suggestion).await;
+                (suggestion, check)
+            })
+            .buffered(ACCESS_CHECKS_AT_ONCE);
+        while let Some((suggestion, check)) = checked.next().await {
+            match check {
+                Ok(true) => {
+                    viewable.shown.push(suggestion);
+                    if viewable.shown.len() >= limit {
+                        break;
+                    }
+                }
+                Ok(false) => viewable.hidden += 1,
+                Err(error) => {
+                    viewable.unchecked += 1;
+                    tracing::warn!(
+                        ?error,
+                        suggestion.id = %suggestion.id,
+                        "could not check a suggestion's items; left out of the feed"
+                    );
+                }
+            }
+        }
+        viewable
+    }
+
+    /// Count the person in for nightly generations, in `timezone`: at most once
+    /// an hour per timezone, never failing the read.
+    async fn count_in(&self, user: &MacroUserIdStr<'_>, timezone: chrono_tz::Tz) {
+        let now = tokio::time::Instant::now();
+        if self.readers.get(user.as_ref(), now) == Some(timezone) {
+            return;
+        }
+        match self.audience.seen(user, timezone.name(), Utc::now()).await {
+            Ok(()) => self.readers.put(user.as_ref(), timezone, now),
+            Err(error) => tracing::warn!(?error, "could not record a suggestions reader"),
+        }
+    }
+
     /// The suggestion as stored after a write.
     async fn reread(
         &self,
@@ -482,6 +432,49 @@ where
     }
 }
 
+/// What the feed shows of one list.
+#[derive(Default)]
+struct Viewable {
+    /// The suggestions shown, in order.
+    shown: Vec<Suggestion>,
+    /// Those about an item the person can no longer open.
+    hidden: usize,
+    /// Those whose items couldn't be checked.
+    unchecked: usize,
+}
+
+/// Why a running suggestion's prompt and `sends` stay as they are.
+const RUN_GOING: &str = "a run of this suggestion is going: its `prompt` and `sends` stay as the user \
+     ran them until it settles; rewrite its other fields, or try again later";
+
+/// Where `event` moves a suggestion in state `from`, as its lifecycle says; an
+/// internal error where it doesn't apply, which the caller's checks rule out.
+fn moved_by(
+    from: SuggestionState,
+    event: LifecycleEvent,
+) -> Result<SuggestionState, SuggestionError> {
+    lifecycle::transition(from, event).ok_or_else(|| {
+        SuggestionError::Internal(rootcause::report!(
+            "`{}` doesn't apply to a {} suggestion",
+            event.as_ref(),
+            from.as_ref()
+        ))
+    })
+}
+
+/// A problem when `content` changes the prompt or `sends` of `existing` while a
+/// run of it is going.
+fn run_going(existing: &Suggestion, content: &SuggestionContent, problems: &mut Vec<String>) {
+    let SuggestionKind::Prompt { prompt, sends, .. } = &existing.kind else {
+        return;
+    };
+    let changes = content.prompt.as_ref().is_some_and(|new| new != prompt) || content.sends != *sends;
+    let going = existing.run.as_ref().is_some_and(|run| !run.state.is_settled());
+    if changes && going {
+        problems.push(RUN_GOING.to_owned());
+    }
+}
+
 /// A write's outcome as a problem the session can act on.
 fn written_problem(written: Written) -> Option<String> {
     match written {
@@ -496,6 +489,7 @@ fn written_problem(written: Written) -> Option<String> {
             "the suggestion changed while you wrote it; read it again with `macro.suggestions.review` and retry"
                 .to_owned(),
         ),
+        Written::RunGoing => Some(RUN_GOING.to_owned()),
     }
 }
 
@@ -519,67 +513,53 @@ where
 {
     #[tracing::instrument(name = "suggestions.feed", skip_all, fields(
         suggestions.caller = tracing::field::Empty,
+        suggestions.limit = limit,
         suggestions.open = tracing::field::Empty,
         suggestions.done = tracing::field::Empty,
         suggestions.hidden = tracing::field::Empty,
+        suggestions.unchecked = tracing::field::Empty,
     ), err)]
     async fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
         caller: SuggestionCaller,
         timezone: Option<chrono_tz::Tz>,
+        limit: Option<usize>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         self.require_flag(user).await?;
         self.admit(caller).await?;
         if let Some(timezone) = timezone {
-            // Reading the feed counts the person in for nightly generations;
-            // a failure here never fails the read.
-            let _ = self
-                .audience
-                .seen(user, timezone.name(), Utc::now())
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(?error, "could not record a suggestions reader")
-                });
+            self.count_in(user, timezone).await;
         }
         let done_since = Utc::now() - DONE_WITHIN;
+        // Each suggestion comes with its latest run as stored: no session is
+        // asked how a run is going.
         let shown: Vec<Suggestion> = self
             .repo
             .shown(user, done_since)
             .await
             .map_err(SuggestionError::internal)?;
-        let before = shown.len();
-        // Up to 30 suggestions of up to 5 items each: check a few at a time.
-        let viewable: Vec<Suggestion> = futures::stream::iter(shown)
-            .map(|suggestion| async move {
-                Ok::<_, SuggestionError>(
-                    self.viewable(user, &suggestion)
-                        .await?
-                        .then_some(suggestion),
-                )
-            })
-            .buffer_unordered(ACCESS_CHECKS_AT_ONCE)
-            .try_filter_map(|suggestion| async move { Ok(suggestion) })
-            .try_collect()
-            .await?;
-        let hidden = before - viewable.len();
-        // One read of runs for the open and the done suggestions.
-        let mut viewable = viewable;
-        self.attach_runs(user, &mut viewable).await?;
-        let (mut suggestions, mut done): (Vec<Suggestion>, Vec<Suggestion>) = viewable
+        let (mut open, mut done): (Vec<Suggestion>, Vec<Suggestion>) = shown
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
-        suggestions.sort_by(|a, b| {
+        open.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
                 .then(b.updated_at.cmp(&a.updated_at))
         });
         done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
+        let limit = limit.unwrap_or(usize::MAX);
+        let open = self.viewable_first(user, open, limit).await;
+        let done = self.viewable_first(user, done, limit).await;
         let span = tracing::Span::current();
-        span.record("suggestions.open", suggestions.len());
-        span.record("suggestions.done", done.len());
-        span.record("suggestions.hidden", hidden);
-        Ok(SuggestionFeed { suggestions, done })
+        span.record("suggestions.open", open.shown.len());
+        span.record("suggestions.done", done.shown.len());
+        span.record("suggestions.hidden", open.hidden + done.hidden);
+        span.record("suggestions.unchecked", open.unchecked + done.unchecked);
+        Ok(SuggestionFeed {
+            suggestions: open.shown,
+            done: done.shown,
+        })
     }
 
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {
@@ -646,6 +626,7 @@ where
                     user,
                     &suggestion,
                     &run_prompt(prompt, sends.as_deref()),
+                    sends.as_deref(),
                     accept.shown_updated_at,
                 )
                 .await;
@@ -668,101 +649,6 @@ where
         .await?;
         tracing::info!(event = "suggestions.accepted", done = true);
         Ok(())
-    }
-
-    #[tracing::instrument(name = "suggestions.runs.settle", skip_all, fields(
-        suggestions.runs.checked = tracing::field::Empty,
-        suggestions.runs.settled = tracing::field::Empty,
-    ), err)]
-    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
-        let Some(runs) = &self.runs else {
-            return Ok(0);
-        };
-        let unsettled = self
-            .repo
-            .unsettled_runs(SETTLE_BATCH)
-            .await
-            .map_err(SuggestionError::internal)?;
-        let mut settled = 0;
-        for run in &unsettled {
-            let now = Utc::now();
-            if let Err(error) = self.repo.checked_run(run.session, now).await {
-                tracing::warn!(?error, "could not record a run's check");
-            }
-            let started_long_ago = now - run.started_at >= START_WINDOW;
-            let (outcome, produced) = match runs.sessions.state(run).await {
-                // It may be running: a run is given up only on what is known.
-                Err(SessionReadError::Unreadable(error)) => {
-                    tracing::warn!(?error, "could not read a run's session");
-                    continue;
-                }
-                // Its session never opened, or is gone: nothing runs. Within
-                // the start window it may still be opening.
-                Err(SessionReadError::Missing) => {
-                    if !started_long_ago {
-                        continue;
-                    }
-                    tracing::warn!(event = "suggestions.run_session_missing");
-                    (RunSettled::Failed, Vec::new())
-                }
-                // Its runtime went away mid-run (a restart): once its session
-                // is gone it can't resume, and the suggestion may be tried again.
-                // Its prompt never arrived: likewise. Nobody watches a run,
-                // so one waiting for an approval or an answer never gets one.
-                Ok(
-                    SessionState::AwaitingPrompt
-                    | SessionState::Disconnected
-                    | SessionState::NeedsApproval
-                    | SessionState::NeedsInput,
-                ) => {
-                    if !started_long_ago {
-                        continue;
-                    }
-                    if let Err(error) = runs.sessions.discard(run).await {
-                        tracing::warn!(?error, "could not delete a run's unprompted session");
-                        continue;
-                    }
-                    (RunSettled::Failed, Vec::new())
-                }
-                Ok(SessionState::Finished) => {
-                    // The session is the result; the items it made come with it.
-                    let mut produced = vec![Target {
-                        entity_type: model_entity::EntityType::AgentSession,
-                        entity_id: run.session.to_string(),
-                        part_id: None,
-                    }];
-                    match runs.sessions.produced(run).await {
-                        Ok(items) => produced.extend(items),
-                        Err(error) => {
-                            tracing::warn!(?error, "could not read what a run made");
-                            continue;
-                        }
-                    }
-                    (RunSettled::Finished, produced)
-                }
-                Ok(SessionState::Failed) => (RunSettled::Failed, Vec::new()),
-                Ok(SessionState::Running) => continue,
-            };
-            let moved = self
-                .repo
-                .settle_run(run.session, outcome, &produced, now)
-                .await
-                .map_err(SuggestionError::internal)?;
-            settled += usize::from(moved);
-            tracing::info!(
-                event = "suggestions.run_settled",
-                outcome = if outcome == RunSettled::Finished {
-                    "finished"
-                } else {
-                    "failed"
-                },
-                produced = produced.len(),
-            );
-        }
-        let span = tracing::Span::current();
-        span.record("suggestions.runs.checked", unsettled.len());
-        span.record("suggestions.runs.settled", settled);
-        Ok(settled)
     }
 
     #[tracing::instrument(name = "suggestions.dismiss", skip_all, fields(
@@ -817,6 +703,7 @@ where
         if !moved {
             return Err(SuggestionError::NotFound);
         }
+        self.stop_cancelled_run(&suggestion).await;
         tracing::info!(event = "suggestions.dismissed");
         Ok(())
     }
@@ -847,8 +734,6 @@ where
                     .map_err(SuggestionError::internal)
             },
         )?;
-        let mut suggestions = suggestions;
-        self.attach_runs(&session.user, &mut suggestions).await?;
         let (mut open, mut closed): (Vec<Suggestion>, Vec<Suggestion>) = suggestions
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
@@ -1004,31 +889,27 @@ where
             ));
         }
         check::keeps_draft(&existing.kind, &content.about, &mut problems);
+        run_going(&existing, &content, &mut problems);
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
-        let (action, to) = match existing.state {
-            SuggestionState::Proposed | SuggestionState::Accepted => {
-                (ChangeAction::Rewritten, existing.state)
-            }
-            SuggestionState::Dismissed => {
-                if reason.is_none() {
-                    return Ok(rejected(
-                        &span,
-                        vec![format!(
-                            "the user dismissed `{}` on {}; bring it back only with a `reason` \
-                             saying what changed since",
-                            existing.dedup_key,
-                            existing.state_changed_at.format("%Y-%m-%d")
-                        )],
-                    ));
-                }
-                (ChangeAction::Restored, SuggestionState::Proposed)
-            }
-            SuggestionState::Done | SuggestionState::Resolved | SuggestionState::Retired => {
-                (ChangeAction::Restored, SuggestionState::Proposed)
-            }
+        if existing.state == SuggestionState::Dismissed && reason.is_none() {
+            return Ok(rejected(
+                &span,
+                vec![format!(
+                    "the user dismissed `{}` on {}; bring it back only with a `reason` \
+                     saying what changed since",
+                    existing.dedup_key,
+                    existing.state_changed_at.format("%Y-%m-%d")
+                )],
+            ));
+        }
+        let (action, event) = if existing.state.is_open() {
+            (ChangeAction::Rewritten, LifecycleEvent::Rewrite)
+        } else {
+            (ChangeAction::Restored, LifecycleEvent::Restore)
         };
+        let to = moved_by(existing.state, event)?;
         let change = Change {
             session: session.session,
             generation: session.generation,
@@ -1154,9 +1035,11 @@ where
         if let Some(sends) = request.sends.filter(|_| background) {
             content.sends = check::text(&sends, "`sends`", check::MAX_SENDS_CHARS, &mut problems);
         }
+        run_going(&existing, &content, &mut problems);
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
+        let to = moved_by(existing.state, LifecycleEvent::Rewrite)?;
         let change = Change {
             session: session.session,
             generation: session.generation,
@@ -1173,7 +1056,7 @@ where
                 id,
                 &content,
                 existing.state,
-                existing.state,
+                to,
                 LIMITS,
                 &change,
             )
@@ -1266,6 +1149,7 @@ where
             ));
         }
         span.record("suggestion.outcome", "retired");
+        self.stop_cancelled_run(&existing).await;
         self.reread(&user, id).await
     }
 

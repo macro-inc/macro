@@ -370,3 +370,77 @@ fn a_step_moves_a_run_when_its_state_or_since_changes() {
     assert!(stay.moves_from(waiting(4)));
     assert!(stay.moves_from(RunState::Running));
 }
+
+/// A cancel is written inside the closing suggestion's own write, so it never
+/// asks for anything to be done first.
+#[test]
+fn a_cancel_needs_nothing_done_first() {
+    for (_, event, _, step) in sweep() {
+        if event == RunEvent::Cancel
+            && let Ok(step) = step
+        {
+            assert_eq!(step.effect, None);
+        }
+    }
+}
+
+#[test]
+fn a_session_read_is_one_observation() {
+    use super::super::model::{SessionReadError, SessionState};
+    for (read, expected) in [
+        (Ok(SessionState::AwaitingPrompt), Observation::AwaitingPrompt),
+        (Ok(SessionState::Running), Observation::Working),
+        (Ok(SessionState::Disconnected), Observation::Paused),
+        (Ok(SessionState::NeedsApproval), Observation::Paused),
+        (Ok(SessionState::NeedsInput), Observation::Paused),
+        (Ok(SessionState::Finished), Observation::Finished),
+        (Ok(SessionState::Failed), Observation::Failed),
+        (Err(SessionReadError::Missing), Observation::Gone),
+        (
+            Err(SessionReadError::Unreadable(rootcause::report!("down"))),
+            Observation::Unreadable,
+        ),
+    ] {
+        assert_eq!(Observation::of_read(&read), expected, "{read:?}");
+    }
+}
+
+/// An event about the run's own turn says how it went; anything else about
+/// its session takes a read, except its deletion.
+#[test]
+fn a_session_event_speaks_for_a_run_only_about_its_own_turn() {
+    let action = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    for (news, expected) in [
+        (
+            SessionNews::TurnEnded {
+                action,
+                finished: true,
+            },
+            Some(Observation::Finished),
+        ),
+        (
+            SessionNews::TurnEnded {
+                action,
+                finished: false,
+            },
+            Some(Observation::Failed),
+        ),
+        (
+            SessionNews::TurnEnded {
+                action: other,
+                finished: true,
+            },
+            None,
+        ),
+        (
+            SessionNews::WaitingForInput { action },
+            Some(Observation::Paused),
+        ),
+        (SessionNews::WaitingForInput { action: other }, None),
+        (SessionNews::Changed, None),
+        (SessionNews::Deleted, Some(Observation::Gone)),
+    ] {
+        assert_eq!(news.about_run(action), expected, "{news:?}");
+    }
+}

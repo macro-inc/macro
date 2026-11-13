@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT session_id, suggestion_id, user_id, agent_id, action_id, started_at, outcome\n               FROM suggestion_run WHERE settled_at IS NULL\n               ORDER BY checked_at NULLS FIRST, started_at LIMIT $1",
+  "query": "SELECT session_id, suggestion_id, user_id, agent_id, action_id, started_at, state,\n                  state_changed_at, sends\n           FROM suggestion_run WHERE suggestion_id = $1 AND settled_at IS NULL\n           FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -35,13 +35,23 @@
       },
       {
         "ordinal": 6,
-        "name": "outcome",
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "state_changed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "sends",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -51,8 +61,10 @@
       false,
       false,
       false,
+      false,
+      false,
       true
     ]
   },
-  "hash": "95c0f3f49422a4430f572f8e262a2baac15ba81d8b8847b0305e58a95eb03886"
+  "hash": "e508e5035090853c776d9f7817f38d26f4741c8e9ffb1a08d36a699169614f3c"
 }
