@@ -60,6 +60,18 @@ impl JwtValidationArgs {
         })
     }
 
+    /// Build an isolated Macro JWT verifier with fixture keys.
+    #[cfg(feature = "testing")]
+    pub fn testing_macro_token(issuer: &'static str, public_key: &'static str) -> Self {
+        Self {
+            macro_api_token_issuer: MacroApiTokenIssuer::Comptime(issuer),
+            macro_api_token_public_key: LocalOrRemoteSecret::Local(
+                MacroApiTokenPublicKey::Comptime(public_key),
+            ),
+            ..Self::new_testing()
+        }
+    }
+
     #[cfg(feature = "testing")]
     #[allow(dead_code)]
     /// create a new instance of Self with all empty values
@@ -431,7 +443,11 @@ CwIDAQAB
         });
 
         let claims = MacroApiToken {
+            agent_correlation_id: None,
+            agent_session_id: None,
             agent_id: None,
+            agent_via: None,
+            routine_id: None,
             exp: now + 3600, // Token expires in 1 hour
             iss: issuer.to_string(),
             fusion_user_id: fusionauth_id.to_string(),

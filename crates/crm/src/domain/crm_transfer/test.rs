@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use chrono::{TimeZone, Utc};
@@ -44,7 +44,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
                 team_id: Uuid::now_v7(),
                 user_id: "macro|me@example.com".into(),
                 name: "Deals".into(),
-                record_type,
+                record_type: Some(record_type),
                 database_id: DatabaseId::new(),
                 table_id: TableId::new(),
                 primary_column_id: ColumnId::new(),
@@ -74,11 +74,11 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
 fn entry(id: Uuid) -> PipelineEntryView {
     PipelineEntryView {
         entry_id: RowId::new(),
-        record: PipelineRecord {
+        record: Some(PipelineRecord {
             id,
             name: None,
             detail: None,
-        },
+        }),
         fields: Vec::new(),
     }
 }
@@ -177,8 +177,8 @@ impl PipelineWorkflowService for Workflows {
         let added = additions
             .iter()
             .map(|addition| match addition.record {
-                RecordTarget::Id(id) => entry(id),
-                RecordTarget::Email(_) => unreachable!("imports add records by id"),
+                Some(RecordTarget::Id(id)) => entry(id),
+                _ => unreachable!("imports add records by id"),
             })
             .collect();
         self.added.lock().unwrap().extend(additions);
@@ -235,6 +235,8 @@ impl PipelineWorkflowService for Workflows {
 struct Records {
     domains: HashMap<String, Uuid>,
     contacts: HashMap<String, Uuid>,
+    ambiguous_contacts: HashSet<String>,
+    unavailable_contacts: HashSet<String>,
     companies_created: Mutex<Vec<String>>,
     contacts_created: Mutex<Vec<(Uuid, String)>>,
 }
@@ -267,6 +269,15 @@ impl TransferRecords for Records {
     }
 
     async fn contact(&self, _: &Viewer, email: &str) -> Result<Option<Uuid>, TransferError> {
+        if self.ambiguous_contacts.contains(email) {
+            return Err(CrmError::InvalidRequest(
+                "Multiple contacts use this email. Select a contact by ID instead.".into(),
+            )
+            .into());
+        }
+        if self.unavailable_contacts.contains(email) {
+            return Err(CrmError::StorageLayerError(anyhow::anyhow!("lookup unavailable")).into());
+        }
         Ok(self.contacts.get(email).copied())
     }
 
@@ -356,12 +367,12 @@ async fn a_companies_export_restores_stage_and_owner_on_a_new_private_pipeline()
         [("Stage".to_owned(), vec!["Churned".to_owned()])]
     );
     let added = service.workflows.added.lock().unwrap();
-    assert_eq!(added[0].record, RecordTarget::Id(acme));
+    assert_eq!(added[0].record, Some(RecordTarget::Id(acme)));
     assert_eq!(
         added[0].set,
         [("Stage".to_owned(), FieldInput::One("Lead".into()))]
     );
-    assert_eq!(added[1].record, RecordTarget::Id(id_of("beta.io")));
+    assert_eq!(added[1].record, Some(RecordTarget::Id(id_of("beta.io"))));
     assert_eq!(
         added[1].set,
         [
@@ -473,15 +484,107 @@ async fn new_contacts_at_one_new_domain_share_one_new_company() {
 }
 
 #[tokio::test]
+async fn ambiguous_contacts_are_unresolved_without_blocking_other_csv_rows() {
+    let mut contacts = overview(PipelineRecordType::Contact);
+    contacts.fields[0].name = "Contact".into();
+    let pipeline = contacts.pipeline.pipeline.id;
+    let known = Uuid::now_v7();
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(Workflows::new(contacts)),
+        Records {
+            contacts: HashMap::from([("existing@example.com".into(), known)]),
+            ambiguous_contacts: HashSet::from(["shared@ambiguous.example.com".into()]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Contact,Email\n\
+                 Shared,shared@ambiguous.example.com\n\
+                 Existing,existing@example.com\n\
+                 New,new@new.example.com\n\
+                 Shared again,shared@ambiguous.example.com\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!((outcome.added, outcome.created_records), (2, 1));
+    assert_eq!(
+        outcome.unresolved,
+        [SkippedRecord {
+            key: "shared@ambiguous.example.com".into(),
+            reason: "Multiple contacts use this email. Select a contact by ID instead.".into(),
+        }]
+    );
+    assert_eq!(
+        *service.records.companies_created.lock().unwrap(),
+        ["new.example.com"]
+    );
+    assert_eq!(
+        *service.records.contacts_created.lock().unwrap(),
+        [(id_of("new.example.com"), "new@new.example.com".into())]
+    );
+    let added = service.workflows.added.lock().unwrap();
+    assert_eq!(added[0].record, Some(RecordTarget::Id(known)));
+    assert_eq!(
+        added[1].record,
+        Some(RecordTarget::Id(Uuid::new_v5(
+            &Uuid::NAMESPACE_OID,
+            b"new@new.example.com"
+        )))
+    );
+}
+
+#[tokio::test]
+async fn contact_lookup_storage_failure_stops_import_before_creating_records() {
+    let mut contacts = overview(PipelineRecordType::Contact);
+    contacts.fields[0].name = "Contact".into();
+    let pipeline = contacts.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(Workflows::new(contacts)),
+        Records {
+            unavailable_contacts: HashSet::from(["unavailable@example.com".into()]),
+            ..Records::default()
+        },
+        Files::default(),
+    );
+    let error = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text(
+                "Contact,Email\nNew,new@new.example.com\nUnavailable,unavailable@example.com\n"
+                    .into(),
+            ),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        TransferError::Crm(CrmError::StorageLayerError(_))
+    ));
+    assert!(service.records.companies_created.lock().unwrap().is_empty());
+    assert!(service.records.contacts_created.lock().unwrap().is_empty());
+    assert!(service.workflows.added.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn an_export_writes_people_as_emails_and_reimports() {
     let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
     workflows.exported = vec![PipelineEntryView {
         entry_id: RowId::new(),
-        record: PipelineRecord {
+        record: Some(PipelineRecord {
             id: Uuid::now_v7(),
             name: Some("=Acme".into()),
             detail: Some("acme.com".into()),
-        },
+        }),
         fields: vec![
             ("Stage".into(), FieldValue::Labels(vec!["Lead".into()])),
             (
@@ -505,4 +608,34 @@ async fn an_export_writes_people_as_emails_and_reimports() {
     let table = parse_csv(&saved[0].1).unwrap();
     let rows = record_rows(&table, PipelineRecordType::Company).unwrap();
     assert_eq!(rows.rows[0].name, "=Acme");
+}
+
+#[tokio::test]
+async fn a_generic_pipeline_exports_its_fields_and_refuses_a_record_import() {
+    let mut generic = overview(PipelineRecordType::Company);
+    generic.pipeline.pipeline.record_type = None;
+    generic.fields = vec![field("Name", FieldKind::Text)];
+    let id = generic.pipeline.pipeline.id;
+    let mut workflows = Workflows::new(generic);
+    workflows.exported = vec![PipelineEntryView {
+        entry_id: RowId::new(),
+        record: None,
+        fields: vec![("Name".into(), FieldValue::Text("Launch site".into()))],
+    }];
+    let service =
+        CrmTransferServiceImpl::new(Arc::new(workflows), Records::default(), Files::default());
+
+    let refused = service
+        .import_to_pipeline(&viewer(), id, CsvInput::Text("Name\nLaunch site\n".into()))
+        .await;
+    assert!(matches!(refused, Err(TransferError::Invalid(_))));
+    assert!(service.workflows.added.lock().unwrap().is_empty());
+
+    service.export_pipeline(&viewer(), id).await.unwrap();
+    let saved = service.files.saved.lock().unwrap();
+    let (_, csv) = saved.last().unwrap();
+    assert_eq!(
+        csv.trim_start_matches('\u{feff}').trim(),
+        "Name\nLaunch site"
+    );
 }

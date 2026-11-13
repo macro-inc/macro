@@ -67,6 +67,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -165,6 +166,7 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
 fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     let previous_project_id = Uuid::now_v7().to_string();
     let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -331,6 +333,7 @@ fn sent_chat_messages_refresh_the_soup_model() {
 #[test]
 fn task_property_updates_map_to_document_updates() {
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: DOCUMENT_ID.to_string(),
         entity_type: PropertyEntityType::Task,
@@ -461,6 +464,7 @@ fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
 fn a_cell_edit_updates_the_database_row() {
     let row = "70000000-0000-0000-0000-000000000001";
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::from_u128(0xe0000000_0000_0000_0000_000000000001),
         entity_id: row.to_string(),
         entity_type: PropertyEntityType::DatabaseRow,
@@ -1040,6 +1044,7 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
         }]))
     };
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: DOCUMENT_ID.to_string(),
         entity_type: PropertyEntityType::Task,

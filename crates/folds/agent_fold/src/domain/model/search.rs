@@ -208,6 +208,17 @@ impl SearchText {
                     self.json(output);
                 }
             }
+            ToolDetail::View { view, error } => {
+                if let Some(value) = view
+                    .as_ref()
+                    .and_then(|view| serde_json::to_value(view).ok())
+                {
+                    self.json(&value);
+                }
+                if let Some(error) = error {
+                    self.push(error);
+                }
+            }
             ToolDetail::UserTool { input, outcome } => {
                 self.json(input);
                 self.user_tool_outcome(outcome);

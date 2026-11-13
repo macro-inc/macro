@@ -1,7 +1,14 @@
-use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    routing::post,
+};
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal, is_agent_run,
 };
 use model_error_response::ErrorResponse;
 use thiserror::Error;
@@ -26,6 +33,29 @@ where
     Router::new().route("/", post(send_message_handler::<T, Auth>))
 }
 
+#[cfg(test)]
+mod test;
+
+/// Why an agent's program may not send this way: a person has to see an
+/// email before it leaves, as with the `SendEmail` tool.
+pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email without the user seeing it first. In an agent session, present it with execution.reviews.create({kind: 'email', ...}) and return the review's reference. In a channel or document thread, write the email out, ask whether to send it, and only after the user replies approving it call macro.email.sendConfirmed (or EmailMessage.forwardConfirmed, EmailDraft.send, EmailDraft.schedule) with their reply quoted in userConfirmation.";
+
+/// Refuse a send from an agent's program (see [`is_agent_run`]) that does
+/// not quote the user's approval. A person in the app sends from the
+/// composer, which is their confirmation; a route that takes no
+/// `confirmation` refuses every program.
+pub fn refuse_program_send(
+    agent_attributed: bool,
+    headers: &HeaderMap,
+    confirmation: Option<&str>,
+) -> Result<(), SendMessageError> {
+    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
+    if is_agent_run(agent_attributed, headers) && !confirmed {
+        return Err(SendMessageError::ConfirmationRequired);
+    }
+    Ok(())
+}
+
 /// Errors from the send message handler.
 #[derive(Debug, Error)]
 pub enum SendMessageError {
@@ -35,6 +65,9 @@ pub enum SendMessageError {
     /// Not found.
     #[error("{0}")]
     NotFound(String),
+    /// An agent's program asked to send without the user seeing the email.
+    #[error("{PROGRAM_SEND_REFUSAL}")]
+    ConfirmationRequired,
     /// Internal error.
     #[error("Internal error")]
     Internal(EmailErr),
@@ -49,6 +82,7 @@ impl IntoResponse for SendMessageError {
         let status = match &self {
             SendMessageError::Validation(_) => StatusCode::BAD_REQUEST,
             SendMessageError::NotFound(_) => StatusCode::NOT_FOUND,
+            SendMessageError::ConfirmationRequired => StatusCode::FORBIDDEN,
             SendMessageError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -73,7 +107,10 @@ impl From<EmailErr> for SendMessageError {
             | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)
-            | EmailErr::Utf8Error(_) => SendMessageError::Validation(err.to_string()),
+            | EmailErr::Utf8Error(_)
+            | EmailErr::InvalidSender
+            | EmailErr::UnverifiedSendingAlias { .. }
+            | EmailErr::SendAsPermissionRequired => SendMessageError::Validation(err.to_string()),
             _ => SendMessageError::Internal(err),
         }
     }
@@ -89,11 +126,15 @@ impl From<EmailErr> for SendMessageError {
     responses(
         (status = 201, body = SendMessageResponse),
         (status = 400, body = ErrorResponse),
+        (status = 403, body = ErrorResponse, description = "An agent's program asked to send; it must go through a review or a confirmed send"),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, link, accessible_inboxes, authorization, body))]
+#[tracing::instrument(
+    err,
+    skip(state, headers, link, accessible_inboxes, authorization, body)
+)]
 pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(state): State<EmailRouterState<T>>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
@@ -101,9 +142,15 @@ pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationServi
         MultiEmailLinkExtractor<T, Auth>,
     >,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
+    headers: HeaderMap,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, SendMessageError> {
-    let mut input = body.into_domain();
+    refuse_program_send(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+        None,
+    )?;
+    let mut input = body.into_domain()?;
     // Attribute the send to the authenticated caller, who is not necessarily
     // the link owner (delegated inboxes).
     input.actor = Some(authorization.authorization.user.macro_user_id.clone());

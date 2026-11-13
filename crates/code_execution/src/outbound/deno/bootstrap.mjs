@@ -1,4 +1,4 @@
-import { Macro, observeRequests } from "@macro-inc/sdk";
+import { Macro, gateRequests, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -62,9 +62,31 @@ globalThis.console = {
   log: consoleMethod("info"), info: consoleMethod("info"),
   debug: consoleMethod("debug"), warn: consoleMethod("warn"), error: consoleMethod("error"),
 };
+// Sleeping to wait for something burns the execution deadline and blocks the
+// turn. A worker would bring fresh timers; imports of node timer modules are
+// remapped to timers.mjs.
+// A function, not an arrow, so `new Worker(...)` reaches the throw.
+const sleepBanned = (name) => function () {
+  throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
+};
+for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
+AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
+Atomics.wait = sleepBanned("Atomics.wait");
+Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
-  const {maxResultBytes, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  // A dry run answers each write with an empty result, so it shows what the
+  // program would do. Operations missing from the catalog count as writes.
+  const dryRun = unattended?.dryRun === true;
+  const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
+  const routes = (operations ?? []).map(operation => ({
+    ...operation,
+    pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
+  }));
+  if (dryRun) gateRequests(({service, operation}) =>
+    catalog.get(`${service}.${operation}`)?.write === false ? undefined : {skip: {data: {}}});
   const originalFetch = globalThis.fetch.bind(globalThis);
+  sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
@@ -75,32 +97,64 @@ try {
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
       request.headers.set("x-macro-code-execution", "1");
+      // A dry run's backstop: an authenticated request that didn't come
+      // through the gate is sent only if a read matches its route.
+      if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
+        const path = new URL(request.url).pathname;
+        const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
+        if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      }
     }
     return originalFetch(request);
   };
   const activeRequests = new Set();
   let observedRequests = 0;
   observeRequests(value => {
-    if (value.status === "started") {
+    // A gated operation reports once, as skipped or refused, with no start.
+    if (value.status === "started" || value.status === "skipped" || value.status === "refused") {
       if (++observedRequests > 128) {
         if (observedRequests === 129) emit({type: "progress", value: {truncated: true}});
         return;
       }
-      activeRequests.add(value.id);
+      if (value.status === "started") activeRequests.add(value.id);
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
-  const macro = new Macro({token: context.token, hosts: context.hosts});
-  const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
-  const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
+  const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
-  const program = new URL("./main.mjs", import.meta.url).href;
+  const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
+  if (unattended) {
+    // A dry run's backstop lives in fetch; nothing else may reach the
+    // network (raw sockets) or start a realm with its own fetch (workers).
+    for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
+    globalThis.Worker = undefined;
+  }
   const { main } = await import(program);
-  if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
-  const value = await main({...context, macro, session, execution});
-  emit(resultFrame(value ?? null, maxResultBytes));
+  let value;
+  if (unattended) {
+    if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
+    // Never the credential, hosts or trace context: only the SDK and the step's inputs.
+    value = await main({...unattended.arguments, macro});
+  } else {
+    const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
+    const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
+    if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
+    value = await main({...context, macro, session, execution});
+  }
+  if (unattended) {
+    // A step's output feeds later steps whole; one too large fails instead
+    // of being summarized.
+    const bytes = encoder.encode(stringify(value ?? null) ?? "null").length;
+    if (bytes > maxResultBytes) {
+      emit({type: "error", message: `The step's output is ${Math.ceil(bytes / 1024)} KB as JSON; a step's output can be at most ${Math.floor(maxResultBytes / 1024)} KB. Return only what later steps need.`});
+      exit(0);
+    }
+    emit({type: "result", value: value ?? null});
+  } else {
+    emit(resultFrame(value ?? null, maxResultBytes));
+  }
   exit(0);
 } catch (error) {
   emit({type: "error", message: String(error)});

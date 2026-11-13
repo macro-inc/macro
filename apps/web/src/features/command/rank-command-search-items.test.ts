@@ -142,6 +142,29 @@ describe('command menu search ranking', () => {
     }
   );
 
+  it('reranks dynamic command descriptions without replacing rows', () => {
+    let description = 'Create';
+    const items: CommandMenuItem[] = [
+      {
+        id: 'dynamic-command',
+        kind: 'command',
+        bucket: 'command',
+        searchText: 'create make',
+        sortTimestamp: NOW,
+        timestamps: { viewedAt: new Date(NOW) },
+        data: {
+          description: () => description,
+          scopeId: 'command-menu',
+          runWithInputFocused: true,
+        },
+      },
+      note('plan', 'Create plan'),
+    ];
+    expect(ids(items, 'create')).toEqual(['dynamic-command', 'plan']);
+    description = 'Make';
+    expect(ids(items, 'create')).toEqual(['plan', 'dynamic-command']);
+  });
+
   it('keeps commands and other entities ordered by recency', () => {
     expect(
       ids(
@@ -260,14 +283,14 @@ describe('command menu search ranking', () => {
     expect(ids([...items].reverse(), 'Planning')).toEqual(['a', 'b', 'older']);
   });
 
-  it('retains broader cache subsequences after regular matches without retaining unmatched commands', () => {
+  it('uses the same per-row subsequences for cached/local entities without widening command keywords', () => {
     const items = [
       channel('b', 'Quarterly plan'),
       channel('a', 'Quarterly plan'),
       command('unmatched-command', 'Quarterly plan', NOW),
       channel('direct-match', 'Qtr plan', NOW - DAY),
     ];
-    expect(ids(items, 'qtr', false)).toEqual(['direct-match']);
+    expect(ids(items, 'qtr', false)).toEqual(['direct-match', 'a', 'b']);
     expect(ids(items, 'qtr')).toEqual(['direct-match', 'a', 'b']);
     expect(ids([...items].reverse(), 'qtr')).toEqual([
       'direct-match',
@@ -316,10 +339,10 @@ describe('command menu search ranking', () => {
         channel('dm', 'Jackson Kustec', NOW - 60 * DAY, 'dm'),
       ];
 
-      expect(ids(items, 'jack', cacheEnabled)).toEqual(['dm', 'jack', 'crm']);
+      expect(ids(items, 'jack', cacheEnabled)).toEqual(['jack', 'dm', 'crm']);
       expect(ids([...items].reverse(), 'jack', cacheEnabled)).toEqual([
-        'dm',
         'jack',
+        'dm',
         'crm',
       ]);
     }
@@ -331,7 +354,7 @@ describe('command menu search ranking', () => {
       contact('older-crm', 'Jack CRM', NOW - 10 * DAY),
       command('command', 'Jack command', NOW - 5 * DAY),
       channel('channel-slot', 'Jack channel', NOW - 15 * DAY),
-      person('jack', 'Jack Smith'),
+      person('jack', 'Jackie Smith'),
       channel('old-dm', 'Jack old', NOW - 60 * DAY, 'dm'),
       channel('recent-dm', 'Jack recent', NOW - DAY, 'dm'),
     ];
@@ -339,10 +362,10 @@ describe('command menu search ranking', () => {
     expect(ids(items, 'jack')).toEqual([
       'recent-dm',
       'old-dm',
-      'channel-slot',
       'jack',
-      'command',
+      'channel-slot',
       'recent-crm',
+      'command',
       'older-crm',
     ]);
   });
@@ -354,7 +377,7 @@ describe('command menu search ranking', () => {
     ];
 
     expect(ids(items, 'qtr')).toEqual(['dm', 'crm']);
-    expect(ids(items, 'qtr', false)).toEqual(['crm']);
+    expect(ids(items, 'qtr', false)).toEqual(['dm', 'crm']);
   });
 
   it('prioritizes a preserved server-matched person over a directly matched CRM contact', () => {
@@ -369,5 +392,227 @@ describe('command menu search ranking', () => {
         preservedIds: new Set(['jack']),
       }).map((item) => item.id)
     ).toEqual(['jack', 'crm']);
+  });
+
+  describe('participant names in any order', () => {
+    const pair = channel('pair', 'Avery Morgan, Blair Chen', NOW - 20 * DAY);
+    const group = channel(
+      'group',
+      'Casey Reed, Avery Morgan, Blair Chen, Drew Fox',
+      NOW
+    );
+
+    it.each([
+      'Avery, Blair',
+      'Blair, Avery',
+      'blair avery',
+      'Blair, aver',
+      'chen, morgan',
+      'Blair Chen, Avery Morgan',
+    ])('ranks the exact pair above a newer larger group for %s', (query) => {
+      expect(ids([group, pair], query, true)).toEqual(['pair', 'group']);
+      expect(ids([group, pair], query, false)).toEqual(['pair', 'group']);
+    });
+
+    it('ranks the exact pair above a note and a project that loosely match', () => {
+      const items = [
+        note('note', 'Blair and Avery kickoff'),
+        project('project', 'Avery Blair launch'),
+        pair,
+      ];
+      expect(ids(items, 'Blair, Avery')[0]).toBe('pair');
+    });
+
+    it('does not treat a query that leaves a participant unnamed as the exact pair', () => {
+      const items = [note('note', 'Blair Chen notes'), pair];
+      expect(ids(items, 'blair chen')).toEqual(['note', 'pair']);
+    });
+
+    it('does not let one term name every participant whose name starts with it', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen'),
+        project('project', 'Avery', NOW - 20 * DAY),
+      ];
+      expect(ids(items, 'avery')).toEqual(['project', 'namesakes']);
+    });
+
+    it('keeps a recent group of namesakes below a DM with only one of them', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen'),
+        channel('dm', 'Avery Morgan', NOW - 60 * DAY, 'dm'),
+      ];
+      expect(ids(items, 'avery morgan')).toEqual(['dm', 'namesakes']);
+    });
+
+    it('matches namesakes when each has a term of their own', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen', NOW - 20 * DAY),
+        channel('group', 'Casey Reed, Avery Morgan, Avery Chen'),
+      ];
+      expect(ids(items, 'avery, morgan')).toEqual(['namesakes', 'group']);
+    });
+
+    it('reassigns a term when a later participant has no other', () => {
+      const group = channel('group', 'Avery Morgan, Avery Chen');
+      expect(ids([group], 'avery, chen', false)).toEqual(['group']);
+      expect(
+        ids([note('note', 'Avery chen plan'), group], 'avery, chen')[0]
+      ).toBe('group');
+    });
+
+    it('answers a long pasted query quickly on a large group', () => {
+      const people = Array.from({ length: 12 }, (_, index) =>
+        index === 11 ? 'Zane Young' : `Avery Person${index}`
+      );
+      const group = channel('group', people.join(', '));
+      const started = performance.now();
+      ids([group], Array.from({ length: 12 }, () => 'avery').join(' '), false);
+      expect(performance.now() - started).toBeLessThan(250);
+    });
+
+    it('finds a one-to-one DM by its name reversed', () => {
+      const dm = channel('dm', 'Avery Morgan', NOW, 'dm');
+      expect(ids([dm], 'morgan avery', false)).toEqual(['dm']);
+    });
+  });
+
+  describe('people matched by first name', () => {
+    const shortDm = channel('short-dm', 'Avery', NOW - 60 * DAY, 'dm');
+    const fullNameDm = channel('full-name-dm', 'Avery Morgan', NOW, 'dm');
+
+    it.each([false, true])(
+      'puts the recent full-name DM above an older DM and a person named only the query with GraphQL %s',
+      (cacheEnabled) => {
+        const items = [
+          shortDm,
+          person('person', 'avery'),
+          fullNameDm,
+          channel('longer-handle', 'avery+1', NOW - 40 * DAY, 'dm'),
+        ];
+        expect(ids(items, 'avery', cacheEnabled).slice(0, 3)).toEqual([
+          'full-name-dm',
+          'short-dm',
+          'person',
+        ]);
+      }
+    );
+
+    it('keeps a group DM out of the first-name group', () => {
+      const items = [
+        channel('group-dm', 'Avery Morgan, Blair Chen', NOW, 'dm'),
+        channel('one-to-one', 'Avery Morgan', NOW - 60 * DAY, 'dm'),
+      ];
+      expect(ids(items, 'avery')).toEqual(['one-to-one', 'group-dm']);
+    });
+
+    it('keeps the more recently viewed DM first when the short name is the active one', () => {
+      expect(
+        ids(
+          [
+            channel('short-dm', 'Avery', NOW, 'dm'),
+            channel('full-name-dm', 'Avery Morgan', NOW - 2 * DAY, 'dm'),
+          ],
+          'avery'
+        )
+      ).toEqual(['short-dm', 'full-name-dm']);
+    });
+
+    it('puts a first-name DM above a project named exactly the query', () => {
+      const items = [project('project', 'Avery', NOW), fullNameDm];
+      expect(ids(items, 'avery')).toEqual(['full-name-dm', 'project']);
+    });
+
+    it('keeps other rows and partial first names in the prefix group', () => {
+      const items = [
+        project('exact-project', 'Avery', NOW - 20 * DAY),
+        note('first-word-note', 'Avery Morgan'),
+        fullNameDm,
+      ];
+      expect(ids(items, 'aver')).toEqual([
+        'full-name-dm',
+        'first-word-note',
+        'exact-project',
+      ]);
+      expect(ids(items.slice(0, 2), 'avery')).toEqual([
+        'exact-project',
+        'first-word-note',
+      ]);
+    });
+  });
+  it('ranks rows containing the typed word above rows that only contain its letters', () => {
+    const items = [
+      note('scattered', 'Jan catch-up notes on billing', NOW),
+      note('word', 'Major Jacob review', NOW - 20 * DAY),
+    ];
+
+    expect(ids(items, 'jacob')).toEqual(['word', 'scattered']);
+  });
+
+  it('keeps window order among equal name matches without lifting a weaker person above exact names', () => {
+    const windowed = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      personOrder,
+    });
+    const items = [
+      channel('exact-channel', 'jacob', NOW - 30 * DAY),
+      note('exact-note', 'Jacob', NOW - 30 * DAY),
+      // The window lists the most recent contact first.
+      windowed('major', 'Major Jacob', 0),
+      windowed('baker', 'Jacob Baker', 1),
+      windowed('adams', 'Jacob Adams', 2),
+    ];
+
+    const order = ids(items, 'jacob');
+    expect(order).toHaveLength(5);
+    expect(order.indexOf('baker')).toBeLessThan(order.indexOf('adams'));
+    expect(order.indexOf('adams')).toBeLessThan(order.indexOf('major'));
+    expect(order.indexOf('exact-channel')).toBeLessThan(order.indexOf('major'));
+    expect(order.indexOf('exact-note')).toBeLessThan(order.indexOf('major'));
+  });
+  it('lists a person before documents and channels that match equally well, and never above a better match', () => {
+    const items = [
+      channel('prefix-channel', 'jacob-team', NOW),
+      note('prefix-note', 'Jacob onboarding', NOW),
+      { ...person('prefix-person', 'Jacobson Amy'), personOrder: 0 },
+      note('exact-note', 'Jacob', NOW - 90 * DAY),
+    ];
+
+    expect(ids(items, 'jacob').slice(0, 2)).toEqual([
+      'exact-note',
+      'prefix-person',
+    ]);
+  });
+  it('leads with teammates and conversations with them among equally good matches only', () => {
+    const windowed = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      personOrder,
+    });
+    const teammateDm = {
+      ...channel('teammate-dm', 'Jacob Adams', NOW - 40 * DAY, 'dm'),
+      data: {
+        ...channel('teammate-dm', 'Jacob Adams', NOW - 40 * DAY, 'dm').data,
+        participantIds: ['viewer', 'adams'],
+      },
+    } as EntityItem;
+    const items = [
+      // The window lists the outside contact first.
+      windowed('outside', 'Jacob', 0),
+      windowed('teammate', 'Jacob Baker', 1),
+      teammateDm,
+      windowed('weak-teammate', 'Major Jacobson', 2),
+      note('exact-note', 'Jacob', NOW),
+    ];
+    const order = rankCommandSearchItems(items, 'jacob', {
+      preserveAdditionalEntityMatches: true,
+      teammateIds: new Set(['teammate', 'adams', 'weak-teammate']),
+      viewerId: 'viewer',
+    }).map((item) => item.id);
+
+    expect(order.slice(0, 2).sort()).toEqual(['teammate', 'teammate-dm']);
+    expect(order.indexOf('outside')).toBe(2);
+    // A teammate who matches less well stays below better matches.
+    expect(order.indexOf('weak-teammate')).toBeGreaterThan(
+      order.indexOf('exact-note')
+    );
   });
 });

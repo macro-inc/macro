@@ -48,10 +48,10 @@ const message = (senderId: string, sender?: MessageData['sender']) =>
     sender,
   }) as unknown as MessageData;
 
-const renderSender = (data: MessageData) =>
+const renderSender = (data: MessageData, interactive = true) =>
   render(() => (
     <MessageProvider value={() => data}>
-      <SenderIcon />
+      <SenderIcon interactive={interactive} />
     </MessageProvider>
   ));
 
@@ -67,6 +67,21 @@ describe('SenderIcon', () => {
       expect(queryByTestId('bot-icon')).toBeNull();
       cleanup();
     }
+  });
+
+  it('draws a post made through an MCP client as that client', () => {
+    const { getByTestId, queryByTestId } = renderSender(
+      message(MACRO_AGENT_PRINCIPAL_ID, {
+        type: 'bot',
+        id: '00000000-0000-0000-0000-00000000a1a1',
+        name: 'Macro',
+        triggered_by: 'macro|alice@example.com',
+        triggered_via: 'Claude Code',
+      })
+    );
+    expect(getByTestId('bot-icon').textContent).toBe('Claude Code');
+    expect(getByTestId('user-card').dataset.name).toBe('Claude Code');
+    expect(queryByTestId('user-icon')).toBeNull();
   });
 
   it('draws a team bot with its own uploaded avatar', () => {
@@ -109,8 +124,51 @@ describe('SenderIcon', () => {
     expect(queryByTestId('user-card')).toBeNull();
   });
 
+  it('keeps a non-interactive sender avatar inside its enclosing action', () => {
+    const { getByTestId, queryByTestId } = renderSender(
+      message(`bot|${TEAM_BOT_ID}`, {
+        type: 'bot',
+        id: TEAM_BOT_ID,
+        name: 'Helper',
+        avatar_url: null,
+      }),
+      false
+    );
+    expect(getByTestId('bot-icon').textContent).toBe('Helper');
+    expect(queryByTestId('user-card')).toBeNull();
+  });
+
   it('draws people through UserIcon', () => {
     const { getByTestId } = renderSender(message('macro|peter@macro.com'));
     expect(getByTestId('user-icon').textContent).toBe('macro|peter@macro.com');
+  });
+
+  it('draws an opaque participant with initials and no profile card', () => {
+    const { getByTestId, queryByTestId } = renderSender({
+      ...message('participant:opaque'),
+      imported_author: { name: 'Participant' },
+    });
+    expect(getByTestId('bot-icon').textContent).toBe('Participant');
+    expect(queryByTestId('user-icon')).toBeNull();
+    expect(queryByTestId('user-card')).toBeNull();
+  });
+
+  it('keeps the existing avatar for an imported sender with an external id', () => {
+    const { getByTestId, queryByTestId } = renderSender({
+      ...message('external:fixture'),
+      imported_author: { name: 'Imported author' },
+    });
+    expect(getByTestId('user-icon').textContent).toBe('external:fixture');
+    expect(queryByTestId('bot-icon')).toBeNull();
+  });
+
+  it('draws a guest with initials and no profile card', () => {
+    const { getByTestId, queryByTestId } = renderSender({
+      ...message('guest:opaque'),
+      guest_name: 'Visitor',
+    });
+    expect(getByTestId('bot-icon').textContent).toBe('Visitor');
+    expect(queryByTestId('user-icon')).toBeNull();
+    expect(queryByTestId('user-card')).toBeNull();
   });
 });

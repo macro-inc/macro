@@ -81,6 +81,19 @@ pub struct InitiativeActivityPage {
     pub next_cursor: Option<InitiativeActivityCursor>,
 }
 
+/// Window and continuation of a history read.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InitiativeActivityRange {
+    /// Only changes at or after this time.
+    pub after: Option<DateTime<Utc>>,
+    /// Only changes before this time.
+    pub before: Option<DateTime<Utc>>,
+    /// The previous page's `next_cursor`.
+    pub cursor: Option<InitiativeActivityCursor>,
+    /// Events to scan, 1 through 100.
+    pub limit: u32,
+}
+
 /// Read service assembled with the owning activity and entity-access services.
 pub struct InitiativeHistory<R, A> {
     reads: R,
@@ -144,6 +157,51 @@ impl<R: EntityActivityReads, A: EntityAccessService> InitiativeHistory<R, A> {
             next_cursor: page
                 .next
                 .map(|(occurred_at, id)| InitiativeActivityCursor { occurred_at, id }),
+        })
+    }
+
+    /// Read history in an optional `[after, before)` window, newest first.
+    ///
+    /// Each page scans at most `limit` events, so it can hold fewer visible
+    /// records, even none; follow `next_cursor` with the same window until it
+    /// is absent.
+    pub async fn read_range(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        range: InitiativeActivityRange,
+    ) -> Result<InitiativeActivityPage, InitiativeError> {
+        if range
+            .after
+            .zip(range.before)
+            .is_some_and(|(after, before)| after >= before)
+        {
+            return Err(InitiativeError::BadRequest(
+                "after must precede before".into(),
+            ));
+        }
+        let cursor = range.cursor.or_else(|| {
+            range.before.map(|occurred_at| InitiativeActivityCursor {
+                occurred_at,
+                id: Uuid::nil(),
+            })
+        });
+        let page = self.read(receipt, cursor, range.limit).await?;
+        let next_cursor = page
+            .next_cursor
+            .filter(|cursor| range.after.is_none_or(|after| cursor.occurred_at >= after));
+        let records = page
+            .records
+            .into_iter()
+            .filter(|record| {
+                range.after.is_none_or(|after| record.occurred_at >= after)
+                    && range
+                        .before
+                        .is_none_or(|before| record.occurred_at < before)
+            })
+            .collect();
+        Ok(InitiativeActivityPage {
+            records,
+            next_cursor,
         })
     }
 

@@ -56,6 +56,16 @@ insets. Short conversations are bottom aligned. Before a scroll correction is
 written, `writeScroll` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
+A width change (a split opening or closing beside the channel) rewraps every row.
+The core only compensates a remeasured row that lies entirely above the viewport,
+so the row spanning the top edge would push the message being read down. Rows
+remember the width they were measured at; a row measured at another width is
+compensated whenever it starts above the viewport, like a first measurement, so
+the first message starting in view keeps its position. This covers rows measured
+at the old width that remount later as the reader scrolls up, and sizes restored
+from a scroll snapshot, whose width is unknown.
+The backend-free browser regression narrows and widens the production list and reopens it at another width:
+`bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
 including scroll events dispatched while our own `scrollTo` runs, so our own
 corrections neither start nor prolong gesture compensation.
@@ -74,6 +84,12 @@ The sizer's height excludes the adjustment during this period, so its end moves 
 the shifted rows: native scrolling stops at the latest message instead of continuing
 into blank space below it (or stopping short of it), and the distance to the bottom
 compares native positions.
+Because a gesture never moves the native top boundary, rows above that are taller than
+their 96px estimate would only grow the adjustment, and a long fling stops at
+`scrollTop` 0 with history still above it. On WebKit the range extractor
+therefore keeps rows up to twelve viewports above the reading position mounted
+and measured before a gesture reaches them, adding at most six unmeasured rows
+per range pass.
 Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
 the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
 navigation flush the adjustment before computing targets.

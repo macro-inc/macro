@@ -5,11 +5,8 @@ import type { EmailThreadHost } from '@app/features/email-thread/context/email-t
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { emailThreadRoute } from '@app/routes/routes';
-import {
-  EmailThreadControlGroups,
-  EmailThreadHeaderActions,
-} from '@block-email/component/EmailThreadHeaderActions';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import {
   type EmailThreadToolsOptions,
@@ -17,6 +14,12 @@ import {
 } from '@block-email/component/useEmailThreadTools';
 import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
 import { registerEmailHotkeys } from '@block-email/util/emailHotkeys';
+import {
+  EmailThreadActions,
+  EmailThreadControlGroups,
+  EmailThreadHeaderActions,
+  emailThreadMenu,
+} from '@block-email/views/email-thread-parts';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -33,7 +36,6 @@ import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
@@ -74,7 +76,7 @@ function EmailDetailHeader(
     onEmailReminderSaved: () => void | Promise<void>;
   }
 ) {
-  const { emailEntity, permissions, menuTools, controls } =
+  const { emailEntity, permissions, actions, controls } =
     useEmailThreadTools(props);
   return (
     <>
@@ -89,7 +91,7 @@ function EmailDetailHeader(
               entity={emailEntity()}
               permissions={permissions()}
               ops={[]}
-              tools={menuTools}
+              tools={emailThreadMenu(actions)}
               onEmailReminderSaved={props.onEmailReminderSaved}
             />
           </Portal>
@@ -129,6 +131,7 @@ export function EmailDetailView(props: {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  usePending('email.thread', () => threadQuery.isLoading);
   const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = source.thread;
   const title = () => {
@@ -185,7 +188,7 @@ export function EmailDetailView(props: {
   const focusContainer = () => container?.focus({ preventScroll: true });
   createSplitAutofocus({
     element: () => container ?? null,
-    enabled: () => canAutofocus && panel.isPanelActive() && !isTouchDevice(),
+    enabled: () => canAutofocus && panel.isPanelActive(),
   });
   createEffect(() => {
     if (!pane || pane.focusRequest() !== props.thread.id) return;
@@ -243,7 +246,7 @@ export function EmailDetailView(props: {
   return (
     <SidePanel.Root floating defaultOpen={false}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <ViewShell.TopBar class="touch:flex">
+        <ViewShell.TopBar>
           {/* The subject sits atop the thread, so the header only goes
               back; the reading pane already shows the list beside it. */}
           <Show when={!pane}>
@@ -254,7 +257,7 @@ export function EmailDetailView(props: {
               aria-label="Back"
               onClick={closeThread}
             >
-              <ArrowLeftIcon class="size-4 touch:size-6" />
+              <ArrowLeftIcon class="size-4" />
             </Button>
           </Show>
           <div ref={setHeaderMenuMount} class="flex items-center" />
@@ -284,7 +287,6 @@ export function EmailDetailView(props: {
             notificationSource={notificationSource}
             threadId={props.thread.id}
             linkId={threadData()?.link_id}
-            debounceTime={100}
             onRetry={() => fireAndForget(threadQuery.refetch(), 'email-view')}
           >
             <EmailThreadHostView
@@ -294,7 +296,7 @@ export function EmailDetailView(props: {
               source={source}
               threadTransport={() => threadQuery.transport}
               host={host}
-              chrome={({ createTask }) => (
+              chrome={({ createTask, createEvent, canCreateEvent }) => (
                 <EmailDetailHeader
                   onEmailReminderSaved={async () => {
                     await listNavigation.afterReminderSaved?.();
@@ -302,6 +304,8 @@ export function EmailDetailView(props: {
                   id={props.thread.id}
                   title={title()}
                   onCreateTask={createTask}
+                  onCreateEvent={createEvent}
+                  canCreateEvent={canCreateEvent}
                   onMarkedUnread={closeThread}
                   onDeleted={closeThread}
                   listNavigation={listNavigation}
@@ -309,7 +313,9 @@ export function EmailDetailView(props: {
                   controlsMount={controlsMount()}
                 />
               )}
-              sidePanelHeaderToggle={false}
+              actions={({ createTask }) => (
+                <EmailThreadActions title={title()} onCreateTask={createTask} />
+              )}
             />
           </EmailThreadLoadGate>
         </div>

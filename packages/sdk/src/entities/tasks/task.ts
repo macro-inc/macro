@@ -1,10 +1,11 @@
 import type { PropertyInput } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 
@@ -53,8 +54,9 @@ export interface SimilarTask {
 }
 
 /**
- * A Macro task: a document with sub-type `task`. Inherits the full document
- * surface ({@link Document.rename}, move, delete, restore, content, events)
+ * A Macro task: a document with sub-type `task`, so every `Document` method
+ * works on it, including `content` and `edit` for its body. Inherits the full
+ * document surface ({@link Document.rename}, move, delete, restore, events)
  * and adds task-specific state.
  */
 export class Task extends Document {
@@ -85,6 +87,22 @@ export class Task extends Document {
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.create takes an options object, { name, markdown, ... }.',
+      );
+    rejectUnknownOptions('tasks.create', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+      initiative: true,
+      assignees: true,
+      dueDate: true,
+      team: true,
+      shareWithTeam: true,
+    });
+    if (typeof opts.name !== 'string' || !opts.name.trim())
+      throw new MacroError('tasks.create needs `name`, the task title.');
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
@@ -144,6 +162,18 @@ export class Task extends Document {
     client: MacroClient,
     opts: { title: string; body?: string },
   ): Promise<SimilarTask[]> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.findSimilar takes an options object, { title, body }.',
+      );
+    rejectUnknownOptions('tasks.findSimilar', opts, {
+      title: true,
+      body: true,
+    });
+    if (typeof opts.title !== 'string' || !opts.title.trim())
+      throw new MacroError(
+        'tasks.findSimilar needs `title`, the title of the task you would create.',
+      );
     const { results } = unwrap(
       await client.storage.taskSimilaritySearchHandler({
         body: { taskName: opts.title, markdown: opts.body ?? null },
@@ -177,6 +207,8 @@ export class Task extends Document {
   /**
    * Whether the task is completed (its Status property is "Completed");
    * `undefined` if the document is not a task.
+   *
+   * @readonly
    */
   async completed(): Promise<boolean | undefined> {
     const { subType } = await this.detail.get();
@@ -191,7 +223,11 @@ export class Task extends Document {
     );
   }
 
-  /** The task's URL in the Macro web app. */
+  /**
+   * The task's URL in the Macro web app.
+   *
+   * @readonly
+   */
   override webUrl(): string {
     return `${this.client.webAppUrl}/app/task/${this.id}`;
   }

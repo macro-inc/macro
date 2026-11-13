@@ -116,6 +116,7 @@ function PopoverSplitModal(props: {
         ? props.popover.mount.updateMeta
         : undefined,
     referredFrom: () => null,
+    lastNavigationSource: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
@@ -142,6 +143,7 @@ function PopoverSplitModal(props: {
     bottomPanel: () => undefined,
     registerBottomPanel: () => () => {},
     layoutRefs: {},
+    mobileHeaderOwner: createSignal<symbol>(),
     titleFileMenuRef,
     setTitleFileMenuRef,
     titleFileMenuTrigger,

@@ -31,15 +31,25 @@ Chat sidebar, following the standard hexagonal crate layout.
 
 ## Checks
 
-- `cargo test -p channel_labels` (`SQLX_OFFLINE` unset).
+- `cargo test -p channel_labels --features postgres` (`SQLX_OFFLINE` unset).
+- `SQLX_OFFLINE=true cargo check -p channel_labels --all-features`.
 
 ## Gotchas
 
-- Every team member sees the same labels in the same order; only per-member
+- Omitted scope selects team for members and personal otherwise; explicit personal labels accept visible team, public, and private channels, never DMs.
+- Every team member sees the same team labels in the same order; only per-member
   channel *visibility inside* a label differs — don't make label ordering
   per-user.
-- Labels are restricted to team channels (#6801) — don't extend them to
-  non-team channels without revisiting that fix.
+- Team labels remain restricted to channels in the same team; personal labels require active channel membership.
+- `/channel-sections` reuses label storage through `for_sections` constructors; sections use either explicit picks or a name rule, and applying a rule atomically replaces the picks.
+- Sections expose unjoined team channels only within the verified team scope. Legacy labels and previews remain participant-only; legacy smart-tag writes stay read-only.
+
+- PATCH `{label_id}` accepts optional `targetScope: "personal" | "team"` with
+  the existing `name` and optional `rule`; omission keeps rename behavior.
+  Transferring a section preserves its ID and contents, but rejects any member
+  the actor cannot access or the destination cannot label, including unjoined
+  rule matches when moving to personal scope. Conflicting manual destination
+  assignments move to the transferred section atomically.
 
 ## Related
 

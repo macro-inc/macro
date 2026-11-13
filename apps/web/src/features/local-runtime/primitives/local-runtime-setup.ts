@@ -1,5 +1,5 @@
 import type { MacrodDetectedAgent, MacrodStatus } from '@macro/tauri/macrod';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import {
@@ -42,15 +42,16 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
 
   const attempt = async <T>(
     step: SetupStep,
-    work: () => Promise<T>
+    parent: Span,
+    work: (span: Span) => Promise<T>
   ): Promise<Result<T, string>> => {
     setState({ kind: 'running', step });
     // Error messages can carry local paths, so the span records only the
     // outcome; the user sees the message.
-    const span = Telemetry.span(`local_runtime.setup.${step}`);
+    const span = parent.span(`local_runtime.setup.${step}`);
     const result = await span.run(
       async () =>
-        await ResultAsync.fromPromise(work(), (error) =>
+        await ResultAsync.fromPromise(work(span), (error) =>
           errorMessage(error, FALLBACK_ERRORS[step])
         )
     );
@@ -73,9 +74,10 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
   };
 
   const connect = async (
-    choices: SetupChoices
+    choices: SetupChoices,
+    parent: Span
   ): Promise<Result<MacrodStatus, string>> => {
-    const found = await attempt('detect', async () => {
+    const found = await attempt('detect', parent, async () => {
       const offered = await scan();
       return choices.agentId
         ? offered.find((agent) => agent.id === choices.agentId)
@@ -88,25 +90,28 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
       return err('no-agents');
     }
 
-    return await attempt('connect', async () => {
+    return await attempt('connect', parent, async (span) => {
       await caps.startDaemon({
         agent: agent.id,
         workspace: choices.workspace?.trim() || undefined,
-        scope: 'private',
-        allowPermissionBypass: choices.fullAccess,
       });
-      return await caps.waitForRunning((phase) =>
-        setState({ kind: 'running', step: 'connect', phase })
+      return await span.run(() =>
+        caps.waitForRunning((phase) =>
+          setState({ kind: 'running', step: 'connect', phase })
+        )
       );
     });
   };
 
-  const loadModel = async (harnessId: string): Promise<string> => {
+  const loadModel = async (
+    harnessId: string,
+    parent: Span
+  ): Promise<string> => {
     let lastError: unknown;
     for (let tries = 0; tries < MODEL_LOAD_ATTEMPTS; tries++) {
       if (tries > 0) await caps.sleep(MODEL_LOAD_INTERVAL_MS);
       const result = await ResultAsync.fromPromise(
-        caps.loadModels(harnessId),
+        parent.run(() => caps.loadModels(harnessId)),
         (error) => error
       );
       if (result.isErr()) {
@@ -122,27 +127,42 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
   /** Reuse an agent already bound to this runtime, or create one. */
   const ensureAgent = async (
     status: MacrodStatus,
-    choices: SetupChoices
+    choices: SetupChoices,
+    parent: Span
   ): Promise<ReadyAgent> => {
     const harnessId = status.harnessId;
     if (!harnessId) throw new Error('This computer is not connected yet.');
-    const existing = (await caps.listAgents()).find(
+    // Bypass is a setting on the runtime itself; an agent can only choose it
+    // once the runtime allows it.
+    if (choices.fullAccess) {
+      await parent.run(() => caps.allowPermissionBypass(harnessId));
+    }
+    const existing = (await parent.run(() => caps.listAgents())).find(
       (agent) => agent.harnessId === harnessId
     );
     if (existing) return existing;
     const name = status.agentName ?? 'Local agent';
-    return await caps.createAgent({
-      name,
-      handle: agentHandle(name),
-      description: `Runs ${name} on this computer with your own login.`,
-      harnessId,
-      defaultModel: await loadModel(harnessId),
-      autoAcceptPermissions: choices.fullAccess,
-    });
+    const defaultModel = await loadModel(harnessId, parent);
+    return await parent.run(() =>
+      caps.createAgent({
+        name,
+        handle: agentHandle(name),
+        description: `Runs ${name} on this computer with your own login.`,
+        harnessId,
+        defaultModel,
+        autoAcceptPermissions: choices.fullAccess,
+      })
+    );
   };
 
-  const finish = async (status: MacrodStatus, choices: SetupChoices) => {
-    const agent = await attempt('agent', () => ensureAgent(status, choices));
+  const finish = async (
+    status: MacrodStatus,
+    choices: SetupChoices,
+    parent: Span
+  ) => {
+    const agent = await attempt('agent', parent, (span) =>
+      ensureAgent(status, choices, span)
+    );
     if (agent.isErr()) return;
     setState({
       kind: 'ready',
@@ -165,7 +185,7 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
     await span.run(async () => {
       const status: Result<MacrodStatus, string> = connected
         ? ok(connected)
-        : await connect(choices);
+        : await connect(choices, span);
       if (status.isOk()) {
         connected = status.value;
         if (status.value.harnessId) {
@@ -174,7 +194,7 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
         if (status.value.agentId) {
           span.setAttr('local_runtime.agent', status.value.agentId);
         }
-        await finish(status.value, choices);
+        await finish(status.value, choices, span);
       }
     });
     span.setAttr('local_runtime.outcome', state().kind);

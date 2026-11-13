@@ -4,6 +4,7 @@ import type {
   ToolName,
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
+import { isCodeModeSupportCall } from './code-mode-support';
 import { rendersOwnView, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
@@ -26,12 +27,7 @@ const displayResults = (): Extract<MessagePart, { kind: 'tool_use' }> => ({
   id: 'view',
   name: { kind: 'native', name: 'DisplayResults' },
   status: 'completed',
-  detail: {
-    kind: 'macro',
-    input: { view: { widgets: [] } },
-    output: { message: 'done' },
-    error: null,
-  },
+  detail: { kind: 'view', view: { widgets: [] }, error: null },
 });
 const permission = (): MessagePart => ({
   kind: 'permission',
@@ -120,18 +116,9 @@ describe('segmentParts', () => {
       'breaks tool groups before and after a %s call',
       (status) => {
         const details: ToolDetail[] = [
-          { kind: 'macro', input: null, output: null, error: null },
-          {
-            kind: 'other',
-            acpKind: 'other',
-            input: null,
-            output: null,
-            result: null,
-            error: null,
-          },
+          { kind: 'view', view: null, error: null },
         ];
         for (const detail of details) {
-          if (name.kind === 'native' && detail.kind === 'other') continue;
           const display = tool({ name, status, detail });
           expect(
             segmentParts([tool(), tool(), display, tool(), tool()])
@@ -454,7 +441,7 @@ describe.each(['GenerateImage', 'DispatchCodingAgent'])(
   }
 );
 
-it('keeps trusted code executions visible so their inner views stay outside collapsed groups', () => {
+it('folds code executions into the run around them, so one turn segment is one group', () => {
   const execution = tool({
     name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
     detail: {
@@ -466,14 +453,26 @@ it('keeps trusted code executions visible so their inner views stay outside coll
       acpKind: 'other',
     },
   });
-  expect(rendersOwnView(execution)).toBe(true);
-  expect(segmentParts([tool(), execution, tool()])).toEqual([
-    { kind: 'tools', start: 0, end: 1 },
-    { kind: 'part', start: 1, end: 2 },
-    { kind: 'tools', start: 2, end: 3 },
-  ]);
-  execution.name = { kind: 'mcp', server: 'external', tool: 'ExecuteCode' };
   expect(rendersOwnView(execution)).toBe(false);
+  expect(segmentParts([tool(), execution, tool()])).toEqual([
+    { kind: 'tools', start: 0, end: 3 },
+  ]);
+});
+
+it('hides how the agent looks up its tools', () => {
+  for (const name of [
+    'SearchTools',
+    'LoadTools',
+    'DescribeCodeTools',
+    'ReadCodeDocs',
+  ]) {
+    expect(
+      isCodeModeSupportCall(
+        tool({ name: { kind: 'mcp', server: 'macro_internal', tool: name } })
+      )
+    ).toBe(true);
+  }
+  expect(isCodeModeSupportCall(tool())).toBe(false);
 });
 
 describe('persistent review presentation', () => {
@@ -507,5 +506,26 @@ describe('persistent review presentation', () => {
       rendersOwnView(presentation('macro_internal', 'ordinary-call'))
     ).toBe(false);
     expect(rendersOwnView(presentation('untrusted'))).toBe(false);
+  });
+});
+
+describe('presented views', () => {
+  const presentation = (): ToolUsePart =>
+    tool({
+      id: 'view_019a0000-0000-7000-8000-000000000006',
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'PresentView' },
+      detail: {
+        kind: 'view',
+        view: { title: 'Launch notes', widgets: [] },
+        error: null,
+      },
+    });
+  it('draws the view the harness presented, outside collapsed tool groups', () => {
+    expect(rendersOwnView(presentation())).toBe(true);
+    expect(segmentParts([tool(), presentation(), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
   });
 });

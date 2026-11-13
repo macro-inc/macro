@@ -1,0 +1,12 @@
+.security-badges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 36px 0; padding: 28px 0; border-block: 1px solid color-mix(in srgb, currentColor 14%, transparent); color: var(--color-ink, var(--c0)); }
+.security-badges > div { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; font-size: 13px; line-height: 1.4; }
+.security-badges > div + div { border-left: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+.security-badges svg { width: 72px; height: 72px; }
+.documentation-body a.security-portal-link { display: inline-flex; align-items: center; gap: 20px; padding: 11px 20px; margin-top: 12px; border-radius: 999px; background: var(--color-ink, var(--c0)); color: var(--color-surface, #000); font-size: 15px; line-height: 24px; text-decoration: none; }
+.documentation-body a.security-portal-link:hover { opacity: .85; }
+.documentation-body a.security-portal-link:focus-visible { outline: 2px solid var(--color-ink, var(--c0)); outline-offset: 4px; }
+@media (max-width: 480px) {
+  .security-badges { margin: 28px 0; padding: 24px 0; }
+  .security-badges svg { width: 54px; height: 54px; }
+  .security-badges > div { gap: 14px; font-size: 11px; }
+}

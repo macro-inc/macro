@@ -1,10 +1,12 @@
 import { TimeRangeEditor } from '@app/components/date-time-range/time-range-editor';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
-import { Checkbox } from '@ui/components/Checkbox';
+import { Checkbox, InlineCheckbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
 import {
   createMemo,
@@ -68,12 +70,11 @@ export type DatabaseTextEditorProps = CellTextEditorProps & {
 export type GridCellProps = GridCellEditorOptions & {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
-  emptyLabel?: string;
-  /** Text values wrap onto as many lines as they need instead of truncating to one. */
-  wrap?: boolean;
   canEdit: boolean;
   renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
   renderTextValue?: (value: string) => JSX.Element;
+  /** Shows a URL cell's value as a link that opens it. */
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionPicker?: (props: DatabaseMentionPickerProps) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   /** Where the cell's popups mount in place of the page body, such as inside a modal dialog. */
@@ -364,6 +365,7 @@ export function GridCell(props: GridCellProps) {
           <BooleanCell
             column={props.column}
             value={props.value}
+            emptyLabel={props.emptyLabel}
             editable={editable()}
             wrapperRef={(element) => {
               booleanWrapper = element;
@@ -402,7 +404,14 @@ export function GridCell(props: GridCellProps) {
             data-cell-display
             class="px-2.5 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
           >
-            <Show when={props.value !== null}>
+            <Show
+              when={props.value !== null}
+              fallback={
+                <span data-cell-empty class="opacity-40">
+                  {props.emptyLabel}
+                </span>
+              }
+            >
               <SelectPill label={String(props.value)} column={props.column} />
             </Show>
           </div>
@@ -425,6 +434,7 @@ export function GridCell(props: GridCellProps) {
                 mentionPreview={mentionPreview()}
                 hasResolvedMentionLabel={hasResolvedMentionLabel()}
                 renderTextValue={props.renderTextValue}
+                renderLinkValue={props.renderLinkValue}
                 renderMentionValue={props.renderMentionValue}
                 ref={(element) => {
                   trigger = element;
@@ -486,6 +496,13 @@ function navigateOnTab(
   }
 }
 
+/** Whether an event came from a link inside the element that handles it. */
+export function isOnLink(event: Event & { currentTarget: Element }) {
+  const link =
+    event.target instanceof Element ? event.target.closest('a[href]') : null;
+  return !!link && event.currentTarget.contains(link);
+}
+
 function isClearCellKey(event: KeyboardEvent) {
   return (
     (event.key === 'Delete' || event.key === 'Backspace') &&
@@ -499,6 +516,7 @@ function isClearCellKey(event: KeyboardEvent) {
 function BooleanCell(props: {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
+  emptyLabel?: string;
   editable: boolean;
   wrapperRef: (element: HTMLDivElement) => void;
   inputRef: (element: HTMLInputElement) => void;
@@ -506,6 +524,7 @@ function BooleanCell(props: {
   onWrite: (value: DatabaseCellValue) => Promise<boolean>;
 }) {
   let wrapper: HTMLDivElement | undefined;
+  const showEmpty = () => props.value === null && !!props.emptyLabel;
   onMount(() => {
     const input = wrapper?.querySelector<HTMLInputElement>(
       'input[type="checkbox"]'
@@ -522,6 +541,8 @@ function BooleanCell(props: {
       data-cell-display
       class="flex min-h-9 items-center px-3 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
       checked={Boolean(props.value)}
+      indeterminate={showEmpty()}
+      readOnly={!props.editable}
       disabled={!props.editable}
       onChange={(checked) =>
         fireAndForget(props.onWrite(checked ? 1 : 0), 'database')
@@ -536,9 +557,109 @@ function BooleanCell(props: {
         if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
       }}
     >
-      <Checkbox.Control />
-      <Checkbox.Label class="sr-only">{props.column.name}</Checkbox.Label>
+      {/* CSS marks avoid a computed-style read per row while scrolling. */}
+      <Checkbox.Control class="group">
+        <CheckIcon class="hidden size-3 group-data-checked:block" />
+        <MinusIcon class="hidden size-3 group-data-indeterminate:block" />
+      </Checkbox.Control>
+      <Checkbox.Label classList={{ 'sr-only': !showEmpty() }}>
+        <Show when={showEmpty()} fallback={props.column.name}>
+          <span class="sr-only">{props.column.name}: </span>
+          <span data-cell-empty class="opacity-40">
+            {props.emptyLabel}
+          </span>
+        </Show>
+      </Checkbox.Label>
     </Checkbox>
+  );
+}
+
+/**
+ * What a cell shows, without its editors, focus handling or popups: rows
+ * mounted mid-scroll render this until scrolling settles, because a full
+ * `GridCell` costs more than a fast scroll leaves time for. Matches the
+ * display each `GridCell` kind renders.
+ */
+export function GridCellPreview(props: {
+  column: DatabaseViewColumn;
+  value: DatabaseCellValue;
+  canEdit: boolean;
+}) {
+  const muted = () => !(props.canEdit && canEditCell(props.column));
+  const kind = () =>
+    match({
+      boolean:
+        props.column.dataType === 'BOOLEAN' && !props.column.isMultiSelect,
+      option: isOptionColumn(props.column),
+      // A mention's label is read per record, which is the cost being saved.
+      mention:
+        props.column.dataType === 'ENTITY' &&
+        !props.column.isMultiSelect &&
+        !props.column.relation,
+      date:
+        (props.column.dataType === 'DATE' ||
+          props.column.dataType === 'DATE_RANGE') &&
+        !props.column.isMultiSelect,
+    })
+      .with({ boolean: true }, () => 'boolean' as const)
+      .with({ option: true }, () => 'option' as const)
+      .with({ mention: true }, () => 'mention' as const)
+      .with({ date: true }, () => 'date' as const)
+      .with(
+        { boolean: false, option: false, mention: false, date: false },
+        () => 'text' as const
+      )
+      .exhaustive();
+  return (
+    <div class="relative grid min-w-0" aria-hidden="true">
+      <Switch>
+        <Match when={kind() === 'boolean'}>
+          <span class="flex min-h-9 items-center px-3">
+            <InlineCheckbox checked={Boolean(props.value)} size="md" />
+          </span>
+        </Match>
+        <Match when={kind() === 'option'}>
+          <span class="flex min-h-9 min-w-0 items-center px-2.5 py-1">
+            <span class="flex min-w-0 flex-wrap gap-1">
+              <For
+                each={databaseCellValues(props.value, props.column)
+                  .filter((value) => value !== null)
+                  .map(String)}
+              >
+                {(value) => <SelectPill label={value} column={props.column} />}
+              </For>
+            </span>
+          </span>
+        </Match>
+        <Match when={kind() === 'mention'}>
+          <span class="flex min-h-9 items-center px-2.5">
+            <Show when={props.value !== null}>
+              <span class="h-2 w-1/2 rounded-full bg-hover" />
+            </Show>
+          </span>
+        </Match>
+        <Match when={kind() === 'date'}>
+          <span class="flex min-h-9 min-w-0 items-center px-2.5 py-1.5 text-[13px] leading-5 whitespace-nowrap text-ink-muted">
+            <span class="truncate">
+              {formatCellValue(props.column, props.value)}
+            </span>
+          </span>
+        </Match>
+        <Match when={kind() === 'text'}>
+          <span
+            class="flex min-h-9 min-w-0 items-center px-2.5 py-1.5 text-[13px] leading-5"
+            classList={{
+              'text-ink-muted': muted(),
+              'font-medium': props.column.dataType === 'STRING',
+            }}
+          >
+            <span class="truncate">
+              {formatCellValue(props.column, props.value)}
+            </span>
+          </span>
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
@@ -558,6 +679,7 @@ function TextCell(props: {
   mentionPreview: MentionPreview | undefined;
   hasResolvedMentionLabel: boolean;
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   ref: (element: HTMLButtonElement) => void;
   onNavigate?: (direction: 1 | -1) => boolean;
@@ -568,6 +690,15 @@ function TextCell(props: {
   // Refreshes rebuild row objects; only a changed value may rerun renderers and remount previews.
   const value = createMemo(() => props.value);
   const formatted = () => formatCellValue(props.column, value());
+  const renderedValue = () => {
+    const current = value();
+    if (typeof current !== 'string') return formatted();
+    if (props.column.dataType === 'STRING' && props.renderTextValue)
+      return props.renderTextValue(current);
+    if (props.column.dataType === 'LINK' && current && props.renderLinkValue)
+      return props.renderLinkValue(current);
+    return formatted();
+  };
   const hint = () =>
     props.onOpen ? 'Click to open' : props.editable ? 'Click to edit' : '';
   return (
@@ -596,16 +727,21 @@ function TextCell(props: {
         undefined
       }
       onContextMenu={(event) => {
-        if (!props.onOpen || !props.editable) return;
+        // A link keeps the browser's own menu, with Copy link.
+        if (isOnLink(event) || !props.onOpen || !props.editable) return;
         event.preventDefault();
         event.stopPropagation();
         props.onBeginEdit(undefined, event);
       }}
       onClick={(event) => {
+        // A link in the value opens itself; the rest of the cell still edits.
+        if (isOnLink(event)) return;
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
       }}
       onKeyDown={(event) => {
+        // Enter on a focused link opens it, as a click does.
+        if (event.key === 'Enter' && isOnLink(event)) return;
         if (
           props.onOpen &&
           event.key === 'Enter' &&
@@ -658,12 +794,10 @@ function TextCell(props: {
       >
         <Switch
           fallback={
-            (props.column.dataType === 'STRING' &&
-            typeof value() === 'string' &&
-            props.renderTextValue
-              ? props.renderTextValue(String(value()))
-              : formatted()) || (
-              <span class="opacity-40">{props.emptyLabel ?? '—'}</span>
+            renderedValue() || (
+              <span data-cell-empty class="opacity-40">
+                {props.emptyLabel ?? '—'}
+              </span>
             )
           }
         >
@@ -804,6 +938,7 @@ function InlineEditor(props: {
           when={renderTextEditor}
           fallback={
             <input
+              data-input-surface="grid-cell"
               ref={(element) => {
                 input = element;
                 props.onEditorReady?.(focus);
@@ -1034,6 +1169,7 @@ function SelectCell(props: GridCellProps) {
         when={label()}
         fallback={
           <span
+            data-cell-empty
             class="text-ink-placeholder opacity-40"
             classList={{
               'text-xs': !props.emptyLabel,
@@ -1184,7 +1320,7 @@ function DateCell(props: GridCellProps) {
   const shown = () => (
     <span class="truncate">
       {label() || (
-        <span class="text-ink-placeholder opacity-40">
+        <span data-cell-empty class="text-ink-placeholder opacity-40">
           {props.emptyLabel || '—'}
         </span>
       )}

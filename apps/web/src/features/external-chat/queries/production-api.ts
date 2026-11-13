@@ -8,6 +8,7 @@ import type { ExternalChatReplyContent } from '@service-storage/generated/schema
 import type { ExternalChatRichContent } from '@service-storage/generated/schemas/externalChatRichContent';
 import type { ExternalChatSendProgress } from '@service-storage/generated/schemas/externalChatSendProgress';
 import type { WhatsAppErrorCode } from '@service-storage/whatsapp-errors';
+import { whatsappLinkedClient } from '@service-storage/whatsapp-linked';
 import { err, ok } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { phoneFromJid } from '../../whatsapp-linked/core/account';
@@ -239,10 +240,8 @@ export const externalChatApi: ExternalChatApi = {
       unreadCount: view.unreadCount,
       members: (view.members?.participants ?? []).map((person) => ({
         id: person.jid,
-        name:
-          person.displayName ??
-          phoneFromJid(person.jid) ??
-          'WhatsApp participant',
+        // The server names everyone (provider name, else phone number).
+        name: person.name,
         admin: person.admin,
       })),
       backfill: view.backfill
@@ -288,7 +287,7 @@ export const externalChatApi: ExternalChatApi = {
         replyTo: message.replyTo ?? undefined,
         reactions: message.reactions.map((reaction) => ({
           emoji: reaction.emoji,
-          count: reaction.count,
+          reactors: reaction.reactors.map(person),
           mine: reaction.mine,
         })),
         attachments: message.attachments.map((attachment) => ({
@@ -328,4 +327,5 @@ export const externalChatApi: ExternalChatApi = {
   },
   markRead: (id, messageId) => throwOnErr(() => client.markRead(id, messageId)),
   stopSync: (id) => throwOnErr(() => client.stopSync(id)),
+  importHistory: () => throwOnErr(() => whatsappLinkedClient.importHistory()),
 };

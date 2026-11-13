@@ -14,6 +14,7 @@ use agent_session::domain::ports::{
 };
 use agent_trigger::domain::broker_events::{AgentSessionMacroEvent, AgentSessionRequestedEvent};
 use macro_event_broker::MacroEventBroker;
+use model_owner::Owner;
 
 /// How long a runtime gets to create the session before the request is
 /// refused. A daemon that is up answers well inside this; one that is down
@@ -44,13 +45,22 @@ where
         request: RequestedExternalSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let session_id = request.session_id;
+        // A caller-named id that already holds a session is taken, whoever's
+        // it is: answering with it would hand a retry or a racing create a
+        // session this request did not open, and its first prompt with it.
+        match self.sessions.get(session_id).await {
+            Ok(_) => return Err(AgentSessionError::SessionIdTaken(session_id)),
+            Err(AgentSessionError::NotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
         let event = AgentSessionMacroEvent::requested_event(AgentSessionRequestedEvent {
             bot_id: request.bot_id,
             repo_url: request.repo_url,
             session_id,
             owner: request.owner.as_ref().to_owned(),
-            // The requester's prompt follows through the session's control
-            // endpoint, from the app; nothing composes it with this event.
+            origin: request.origin,
+            // The requester's first prompt follows through the session's
+            // control path once it exists; nothing composes it with this event.
             context: None,
         });
         self.broker
@@ -65,6 +75,13 @@ where
         loop {
             match self.sessions.get(session_id).await {
                 Ok(session) => {
+                    // The id is the caller's, so the row may be a session
+                    // someone else already holds. Never touch or return it.
+                    if session.bot_id != request.bot_id
+                        || session.owner_id != Owner::User(request.owner.clone())
+                    {
+                        return Err(AgentSessionError::SessionIdTaken(session_id));
+                    }
                     if request.model.is_none() && request.source == SessionSource::User {
                         return Ok(session);
                     }
@@ -86,14 +103,17 @@ where
                 }
                 Err(error) => {
                     if tokio::time::Instant::now() >= deadline {
-                        tracing::info!(
+                        // Warn: the caller has waited the whole timeout and
+                        // gets an error, and nothing else records why.
+                        tracing::warn!(
                             %session_id,
                             bot_id = %request.bot_id,
+                            waited_secs = RUNTIME_ANSWER_TIMEOUT.as_secs(),
                             last_error = %error,
                             "no runtime created the requested session in time"
                         );
                         return Err(AgentSessionError::RuntimeUnavailable(
-                            "this agent's runtime did not open the session; make sure macrod is running and up to date",
+                            "this agent's machine did not open the session; make sure macrod is running and up to date",
                         ));
                     }
                 }

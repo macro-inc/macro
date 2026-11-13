@@ -17,7 +17,11 @@ import {
   type PersistedAgentLike,
   type RuntimeLike,
 } from '../core/roster';
-import { NEW_CONVERSATION_ATTACHMENTS_KEY } from '../primitives/composer-draft';
+import {
+  createPersistedComposerDraft,
+  HOME_CONVERSATION_ATTACHMENTS_KEY,
+  NEW_CONVERSATION_ATTACHMENTS_KEY,
+} from '../primitives/composer-draft';
 import { createPreferredRepository } from '../primitives/preferred-repository';
 import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
@@ -650,6 +654,81 @@ describe('agent-led new conversation', () => {
       (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
     ).toBe('Keep this prompt');
   });
+  it('restores a parent-owned Agents draft and its attachments after remount', () => {
+    mocks.attachments = [
+      { id: 'kept-file', name: 'notes.txt', kind: 'document' },
+    ];
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify(mocks.attachments)
+    );
+    const host = () => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <NewChatPage
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      );
+    };
+    render(host);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Keep the Agents prompt' },
+    });
+    expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+    cleanup();
+    render(host);
+    expect(
+      (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Keep the Agents prompt');
+    expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+  });
+  it('keeps Home attachments off the Agents store when the parent owns the draft', () => {
+    mocks.attachments = [
+      { id: 'home-file', name: 'home-only.txt', kind: 'document' },
+    ];
+    localStorage.setItem(
+      `${HOME_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify(mocks.attachments)
+    );
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify([{ id: 'agents-file', name: 'agents.txt', kind: 'file' }])
+    );
+    render(() => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <NewChatPage
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          attachmentsKey={HOME_CONVERSATION_ATTACHMENTS_KEY}
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      );
+    });
+    expect(screen.getByTestId('attachments').textContent).toBe('home-only.txt');
+  });
   it('starts a new conversation on Auto-detect, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
     mocks.recentUrls = ['https://github.com/macro-inc/macro'];
@@ -909,8 +988,8 @@ describe('agent-led new conversation', () => {
     // The row stays clickable: selecting it opens Settings → Runtimes, where
     // the runtime can be restarted (one click on desktop) or re-paired.
     expect(row.getAttribute('aria-disabled')).not.toBe('true');
-    expect(row.getAttribute('title')).toBe('Its runtime is disconnected');
-    expect(row.textContent).toContain('Reconnect runtime');
+    expect(row.getAttribute('title')).toBe('Its machine is disconnected');
+    expect(row.textContent).toContain('Reconnect machine');
   });
 
   it.each([false, true])(
@@ -963,9 +1042,9 @@ describe('agent-led new conversation', () => {
       expect(offline.textContent).toContain('Offline agent');
       // The disconnected row stays clickable: it offers to reconnect the
       // runtime (opens Settings → Runtimes) and keeps the reason as a tooltip.
-      expect(offline.textContent).toContain('Reconnect runtime');
+      expect(offline.textContent).toContain('Reconnect machine');
       expect(
-        within(picker).queryByText('Connect the runtime to load models.')
+        within(picker).queryByText('Connect the machine to load models.')
       ).toBeNull();
       expect(within(picker).queryByText('Models')).toBeNull();
       const unavailable = within(offline).getByRole(
@@ -975,7 +1054,7 @@ describe('agent-led new conversation', () => {
       // title attribute.
       if (!touch) {
         expect(unavailable.getAttribute('title')).toBe(
-          'Its runtime is disconnected'
+          'Its machine is disconnected'
         );
       }
       expect(
@@ -1307,6 +1386,49 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith(
       expect.objectContaining({ effortOverride: undefined })
+    );
+  });
+  it('keeps the last picked effort as the default for that model', async () => {
+    const pickGpt5 = async () => {
+      const models = await hoverAgent('Cursor');
+      fireEvent.keyDown(models.getByRole('menuitem', { name: /^GPT-5/ }), {
+        key: 'Enter',
+      });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    };
+    const send = page(true, [], false, [], 'code');
+    await pickGpt5();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Effort: Low' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Ultra' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+
+    await pickGpt5();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+
+    cleanup();
+    const remounted = page(true, [], false, [], 'code');
+    await pickGpt5();
+    expect(screen.getByRole('button', { name: 'Effort: Ultra' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(remounted).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
     );
   });
 });

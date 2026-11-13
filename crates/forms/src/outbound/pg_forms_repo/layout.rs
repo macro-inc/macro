@@ -87,6 +87,7 @@ pub(super) async fn insert(
     let mut rules: Vec<Option<String>> = Vec::new();
     let mut messages = Vec::new();
     let mut booking_targets: Vec<Option<String>> = Vec::new();
+    let mut show_whens: Vec<Option<String>> = Vec::new();
     let mut question_ids = Vec::new();
     let mut question_sections = Vec::new();
     let mut question_columns = Vec::new();
@@ -103,6 +104,7 @@ pub(super) async fn insert(
                 title,
                 description,
                 questions,
+                show_when,
             } => {
                 titles.push(title.clone());
                 descriptions.push(description.clone());
@@ -110,6 +112,7 @@ pub(super) async fn insert(
                 rules.push(None);
                 messages.push(String::new());
                 booking_targets.push(None);
+                show_whens.push(show_when.as_ref().map(serde_json::to_string).transpose()?);
                 for (question, position) in
                     questions
                         .iter()
@@ -137,6 +140,7 @@ pub(super) async fn insert(
                 rules.push(Some(serde_json::to_string(gate_rules)?));
                 messages.push(message.clone());
                 booking_targets.push(None);
+                show_whens.push(None);
             }
             FormSection::Booking {
                 title,
@@ -150,16 +154,18 @@ pub(super) async fn insert(
                 rules.push(None);
                 messages.push(String::new());
                 booking_targets.push(Some(serde_json::to_string(target)?));
+                show_whens.push(None);
             }
         }
     }
     sqlx::query!(
         r#"
-        INSERT INTO form_sections (id, form_id, position, title, description, kind, gate_rules, gate_message, booking_target)
+        INSERT INTO form_sections (id, form_id, position, title, description, kind, gate_rules, gate_message, booking_target, show_when)
         SELECT section.id, $1, section.position, section.title, section.description,
-               section.kind, section.rules::jsonb, section.message, section.booking_target::jsonb
-        FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
-            AS section(id, position, title, description, kind, rules, message, booking_target)
+               section.kind, section.rules::jsonb, section.message, section.booking_target::jsonb,
+               section.show_when::jsonb
+        FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
+            AS section(id, position, title, description, kind, rules, message, booking_target, show_when)
         "#,
         form.into_uuid(),
         &section_ids,
@@ -170,6 +176,7 @@ pub(super) async fn insert(
         &rules as &[Option<String>],
         &messages,
         &booking_targets as &[Option<String>],
+        &show_whens as &[Option<String>],
     )
     .execute(&mut **transaction)
     .await?;
@@ -217,7 +224,7 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
     let mut snapshot = pool.begin_with(SNAPSHOT).await?;
     let sections = sqlx::query!(
         r#"
-        SELECT id, title, description, kind, gate_rules, gate_message, booking_target
+        SELECT id, title, description, kind, gate_rules, gate_message, booking_target, show_when
         FROM form_sections WHERE form_id = $1
         ORDER BY position, id
         "#,
@@ -263,6 +270,10 @@ pub(super) async fn read(pool: &PgPool, form: FormId) -> Result<FormLayout, PgFo
                     title: section.title,
                     description: section.description,
                     questions: by_section.remove(&section.id).unwrap_or_default(),
+                    show_when: section
+                        .show_when
+                        .map(serde_json::from_value::<FilterGroup>)
+                        .transpose()?,
                 }),
                 FormSectionKind::Gate => {
                     let rules = section.gate_rules.ok_or(PgFormsRepoError::Corrupt {

@@ -9,6 +9,7 @@ import type { MutationInspection } from '../protocol';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
+import { createPeopleCache } from '../people/host';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type AffectedOperationsResult,
@@ -30,6 +31,7 @@ import {
   type HydrationResult,
   isCachePush,
   isCacheResponse,
+  isTypedSearch,
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
@@ -84,6 +86,7 @@ import type {
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
+  CacheHydrateArgs,
   CacheReadArgs,
   CacheWriteArgs,
   EnqueueOptimisticMutationArgs,
@@ -96,6 +99,8 @@ type Pending = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   kind: CacheRequest['kind'];
+  /** Stays queued for the replacement engine when a handoff blocks reads. */
+  typedSearch: boolean;
   opKey?: number;
   admitted: boolean;
   startedAt: number;
@@ -313,25 +318,28 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-hydrated') {
         for (const cb of hydrationSubscribers) {
-          if (msg.searchChangedBuckets === undefined) cb(msg.revision);
-          else
-            cb(msg.revision, {
-              searchChangedBuckets: msg.searchChangedBuckets,
-            });
+          cb(msg.revision, {
+            searchChangedBuckets: msg.searchChangedBuckets,
+            unchangedViews: msg.unchangedViews,
+          });
         }
         return;
       }
       if (msg.kind === 'cache-changed') {
         if (msg.reset) {
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
+          emitGenerationChange({ storage: 'reset' });
         }
         for (const cb of cacheChangeSubscribers) {
-          if (msg.reset || msg.searchChangedBuckets === undefined)
+          if (
+            msg.reset ||
+            (msg.searchChangedBuckets === undefined &&
+              msg.unchangedViews === undefined)
+          )
             cb(msg.revision);
           else
             cb(msg.revision, {
               searchChangedBuckets: msg.searchChangedBuckets,
+              unchangedViews: msg.unchangedViews,
             });
         }
         return;
@@ -413,6 +421,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const cb of affectedSubscribers) cb(opKeys);
   }
 
+  function emitGenerationChange(change: CacheGenerationChange): void {
+    // Reactive observers can unsubscribe and resubscribe during notification.
+    // A live Set iterator would keep visiting the replacement subscriptions.
+    for (const cb of [...generationChangeSubscribers]) {
+      if (generationChangeSubscribers.has(cb)) cb(change);
+    }
+  }
+
   function onEngineReplaced(
     ownerEpoch: number,
     openOutcome: EngineOpenOutcome
@@ -432,7 +448,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const change: CacheGenerationChange = {
       storage: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
     };
-    for (const cb of generationChangeSubscribers) cb(change);
+    emitGenerationChange(change);
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -492,6 +508,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         entry.timer = undefined;
       }
       if (!isReadOnlyCacheRequest(entry.kind)) continue;
+      // A typed search has no network fallback to hurry to. The coordinator
+      // still holds it for the replacement engine, so refusing it would only
+      // drop its place in line and leave the caller to ask again behind the
+      // rest. A host on its way out keeps nothing waiting.
+      if (entry.typedSearch && state !== 'disposing') continue;
       pending.delete(id);
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);
@@ -1119,6 +1140,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         resolve,
         reject,
         kind: msg.kind,
+        typedSearch: isTypedSearch({ ...msg, id }),
         opKey,
         admitted: false,
         startedAt: now(),
@@ -1252,8 +1274,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
           // invalidate local checkpoints as well as revision/dependency state.
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
+          emitGenerationChange({ storage: 'reset' });
         }
         telemetry?.record({
           name: 'graphql_cache.host_ready',
@@ -1342,6 +1363,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   return {
     clientId,
     liveQueries: true,
+    people: createPeopleCache({
+      snapshot: (request, traceparent) =>
+        initializedRequest({ kind: 'contact-snapshot', request, traceparent }),
+      reconcile: (request, traceparent) =>
+        initializedRequest({ kind: 'contact-reconcile', request, traceparent }),
+      readSql: (request, traceparent) =>
+        initializedRequest({ kind: 'people-sql', request, traceparent }),
+      resolveReferences: (request, traceparent) =>
+        initializedRequest({ kind: 'people-references', request, traceparent }),
+      context: (scope, traceparent) =>
+        initializedRequest({ kind: 'people-context', scope, traceparent }),
+      update: (update, traceparent) =>
+        initializedRequest({ kind: 'people-update', update, traceparent }),
+      search: (request, traceparent) =>
+        initializedRequest({ kind: 'people-search', request, traceparent }),
+    }),
 
     async currentRevision(): Promise<CacheRevision> {
       return (await initializedRequest({
@@ -1460,11 +1497,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       )) as WriteResult;
     },
 
-    async hydrateQuery(
-      args: Omit<CacheWriteArgs, 'opKey'>
-    ): Promise<HydrationResult> {
+    async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
       return (await initializedRequest({
         kind: 'hydrate',
+        hydrationScope: args.hydrationScope,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,

@@ -1,3 +1,4 @@
+use activity::domain::ports::EntityActivityReads;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,7 +17,12 @@ mod apply_ops;
 mod cell_triggers;
 #[cfg(feature = "gateway")]
 mod changes;
+#[cfg(feature = "gateway")]
+mod derived_cells;
+#[cfg(feature = "gateway")]
+mod duplicate;
 mod entity_split;
+mod folders;
 #[cfg(feature = "gateway")]
 mod journal;
 #[cfg(feature = "gateway")]
@@ -24,6 +30,8 @@ mod rename_column;
 #[cfg(feature = "gateway")]
 mod reorder_tables;
 mod required;
+#[cfg(feature = "gateway")]
+mod row_ids;
 mod saved_queries;
 #[cfg(feature = "gateway")]
 mod schema_ops;
@@ -35,6 +43,8 @@ mod team_share;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;
+#[cfg(feature = "view_rows")]
+mod view_paging;
 #[cfg(feature = "gateway")]
 mod views;
 
@@ -62,11 +72,14 @@ impl<Properties> PgDatabasesRepo<Properties> {
         if !rows::lock_live_database(&mut transaction, DatabaseId::from_uuid(database)).await? {
             return Ok(None);
         }
-        let rows = rows::append_rows(&mut transaction, table_id, created_by, count).await?;
-        if rows.is_some() {
-            transaction.commit().await?;
-        }
-        Ok(rows)
+        let ids: Vec<RowId> = (0..count).map(|_| RowId::new()).collect();
+        let rows::Placed::Applied(rows) =
+            rows::append_rows(&mut transaction, table_id, created_by, &ids).await?
+        else {
+            return Ok(None);
+        };
+        transaction.commit().await?;
+        Ok(Some(rows))
     }
 
     async fn delete_row(
@@ -150,6 +163,7 @@ async fn commit(
 ) -> HashMap<TableId, TableVersion> {
     let outcome = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
         .apply_writes(&Writes {
+            derivations: Vec::new(),
             database_id,
             created_by: user(),
             writes,
@@ -510,4 +524,114 @@ async fn rows_are_minted_in_order_and_deleted_by_their_table(pool: PgPool) {
         .await
         .unwrap();
     assert!(repo.insert_rows(table.id, USER, 1).await.unwrap().is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_persists_without_changing_content_dates(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    let id = table.database_id;
+    let before = sqlx::query_scalar!(
+        "SELECT updated_at FROM database_entities WHERE database_id = $1",
+        id.into_uuid()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: None,
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: Some(activity::Attribution::direct(
+            activity::Actor::new_from_user(MacroUserIdStr::parse_from_str(USER).unwrap()),
+        )),
+        event_id: Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    assert_eq!(
+        repo.set_appearance(id, update.clone()).await.unwrap(),
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(repo.set_appearance(id, update.clone()).await.unwrap(), None);
+    let (saved, _) = repo.get_database(id).await.unwrap().unwrap();
+    assert_eq!(saved.appearance, Some(appearance.clone()));
+    assert_eq!(
+        repo.databases_by_ids(&[id]).await.unwrap()[0].appearance,
+        Some(appearance)
+    );
+    let after = sqlx::query_scalar!(
+        "SELECT updated_at FROM database_entities WHERE database_id = $1",
+        id.into_uuid()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(before, after);
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone());
+    let records = history
+        .entity_feed(
+            EntityType::Database,
+            &id.to_string(),
+            None,
+            std::num::NonZeroU32::new(10).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(records.records.len(), 1);
+    assert!(matches!(
+        records.records[0].action,
+        activity::RecordedAction::Known(activity::Action::AppearanceChanged(_))
+    ));
+    repo.set_appearance(
+        id,
+        activity::AppearanceUpdate {
+            appearance: model_entity::EntityAppearance::default(),
+            event_id: Uuid::now_v7(),
+            ..update
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.get_database(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .appearance
+            .unwrap()
+            .is_default()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_failure_rolls_back_appearance(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    let id = table.database_id;
+    let (before, _) = repo.get_database(id).await.unwrap().unwrap();
+    sqlx::query!("ALTER TABLE activity_events ADD CONSTRAINT refuse_appearance_test CHECK (action <> 'appearance_changed')")
+        .execute(&pool).await.unwrap();
+    assert!(
+        repo.set_appearance(
+            id,
+            activity::AppearanceUpdate {
+                appearance: model_entity::EntityAppearance {
+                    icon: None,
+                    color: Some(model_entity::AppearanceColor::Blue),
+                },
+                attribution: Some(activity::Attribution::direct(
+                    activity::Actor::new_from_user(MacroUserIdStr::parse_from_str(USER).unwrap())
+                )),
+                event_id: Uuid::now_v7(),
+                occurred_at: chrono::Utc::now(),
+            }
+        )
+        .await
+        .is_err()
+    );
+    let (stored, _) = repo.get_database(id).await.unwrap().unwrap();
+    assert_eq!(stored.appearance, before.appearance);
 }

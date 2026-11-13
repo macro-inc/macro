@@ -14,6 +14,10 @@ const SPLIT_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261005183743_separate_database_entity.down.sql"
 ));
+const FOLDERS_UP: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../macro_db_client/migrations/20261102210628_databases_in_folders.sql"
+));
 const WEBHOOKS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261014153433_database_webhooks.down.sql"
@@ -21,6 +25,7 @@ const WEBHOOKS_DOWN: &str = include_str!(concat!(
 
 fn batch(database_id: DatabaseId, writes: Vec<Write>) -> Writes {
     Writes {
+        derivations: Vec::new(),
         database_id,
         created_by: user(),
         writes,
@@ -72,9 +77,11 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
                 }),
             },
             Write::InsertRows {
+                derivation: None,
                 table_id: table,
                 rows: vec![vec![(definition, PropertyValue::Str("Acme".into()))]],
                 restored: Vec::new(),
+                ids: Vec::new(),
             },
         ],
     );
@@ -100,9 +107,11 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
     let mut stale = batch(
         database,
         vec![Write::InsertRows {
+            derivation: None,
             table_id: table,
             rows: vec![Vec::new()],
             restored: Vec::new(),
+            ids: Vec::new(),
         }],
     );
     stale.expected_versions.push((table, TableVersion(0)));
@@ -205,6 +214,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
         .execute(&mut *transaction)
         .await
         .unwrap();
+    // The recreated entity table needs the later folder column back.
+    sqlx::raw_sql(FOLDERS_UP)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
     let remaining = sqlx::query_scalar!(
         r#"SELECT (SELECT COUNT(*) FROM databases)
                  + (SELECT COUNT(*) FROM database_entities)
@@ -235,6 +249,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     .unwrap();
     assert_eq!(shared, Some(shared_definition));
     transaction.commit().await.unwrap();
+    // Current readers also require metadata added after this historical cutover.
+    sqlx::query!("ALTER TABLE database_entities ADD COLUMN appearance jsonb")
+        .execute(&pool)
+        .await
+        .unwrap();
     // The owner remains and can immediately create and write a fresh app database.
     let database = repo
         .create_database(

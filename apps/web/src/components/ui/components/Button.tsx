@@ -249,7 +249,9 @@ export function Button<T extends ValidComponent = 'button'>(
         {...tabIndexProps()}
         aria-busy={local.loading || buttonProps['aria-busy'] || undefined}
         class={buttonClasses({
-          ...local,
+          appearance: local.appearance,
+          finish: local.finish,
+          fullWidth: local.fullWidth,
           variant: variant(),
           size: size(),
           class: local.class,

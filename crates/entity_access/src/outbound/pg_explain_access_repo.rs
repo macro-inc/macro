@@ -4,7 +4,7 @@ use crate::domain::{
     },
     ports::ExplainAccessRepository,
 };
-use crate::outbound::pg_access_repo::queries;
+use crate::outbound::pg_access_repo::{anyhow_access_error, queries};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use models_entity_access_management::EntityAccessSourceType;
 use sqlx::PgPool;
@@ -146,6 +146,19 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                     &pipeline_id,
                     EntityType::CrmPipeline,
                     &source_ids,
+                )
+                .await?)
+            }
+            EntityType::Harness => {
+                let id = parse_uuid(entity_id, "Invalid harness ID")?;
+                let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::list_entity_access_grants(
+                    &self.pool,
+                    &id,
+                    EntityType::Harness,
+                    &sources,
                 )
                 .await?)
             }
@@ -371,11 +384,4 @@ async fn explain_calendar_event_access(
                 }),
         )
         .collect())
-}
-
-fn anyhow_access_error(e: anyhow::Error) -> AccessError {
-    match e.downcast::<sqlx::Error>() {
-        Ok(sqlx_error) => AccessError::from(sqlx_error),
-        Err(other) => AccessError::Internal(rootcause::report!(other).into_dynamic()),
-    }
 }

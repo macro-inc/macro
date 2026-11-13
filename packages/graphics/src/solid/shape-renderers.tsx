@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { ShapeItem, ShapeKind } from '../core/model';
+import { ArtifactPlaceholder } from './shapes/artifact';
 import { ConnectorView } from './shapes/connector';
 import { EllipseView } from './shapes/ellipse';
 import { EmbeddedPlaceholder } from './shapes/embedded';
@@ -24,6 +25,7 @@ export const defaultRenderers: ItemRenderers = {
   image: EmbeddedPlaceholder,
   video: EmbeddedPlaceholder,
   document: EmbeddedPlaceholder,
+  artifact: ArtifactPlaceholder,
 };
 export function ShapeView<K extends ShapeKind>(
   props: ShapeViewProps<K> & { renderers: ItemRenderers }

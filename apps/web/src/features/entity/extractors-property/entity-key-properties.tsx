@@ -1,12 +1,15 @@
 import { useMaybeBlockId } from '@core/block';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Property } from '@property';
 import { Modals } from '@property/component/modal';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
   usePropertiesContext,
 } from '@property/context/PropertiesContext';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -70,6 +73,9 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'form' }, () => {
       throw new Error('forms do not support properties');
     })
+    .with({ type: 'harness' }, () => {
+      throw new Error('runtimes do not support properties');
+    })
     .exhaustive();
 }
 
@@ -82,6 +88,10 @@ interface EntityKeyPropertiesProps {
   showCaret?: boolean;
   /** Append a task's Project, set or not (Projects enabled). */
   includeProject?: boolean;
+  /** The task's leading icon already owns status editing. */
+  hideStatus?: boolean;
+  /** The task's leading priority icon already owns priority editing. */
+  hidePriority?: boolean;
 }
 
 /**
@@ -103,7 +113,13 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         return [];
       }
     });
-    const key = getSortedKeyProperties(properties);
+    const key = getSortedKeyProperties(properties).filter(
+      (property) =>
+        (!props.hideStatus ||
+          property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS) &&
+        (!props.hidePriority ||
+          property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY)
+    );
     return props.includeProject && entityType() === EntityType.TASK
       ? withTaskProject(key, properties)
       : key;
@@ -177,24 +193,26 @@ function KeyPropertiesRow(props: {
                 shown().valueType === 'ENTITY' &&
                 shown().specificEntityType === 'USER';
 
-              const isMultiUserEntity = () =>
-                isUserEntity() && getEntityValues(shown()).length > 1;
+              const userCount = () =>
+                isUserEntity() ? getEntityValues(shown()).length : 0;
+              const compactUserStack = () =>
+                isUserEntity() && props.maxUserStackUsers === 1;
+              const maxUsers = () =>
+                compactUserStack() && userCount() === 2
+                  ? 2
+                  : (props.maxUserStackUsers ?? 2);
 
               return (
                 <>
                   <Property.Tooltip property={shown()}>
                     <Layer depth={2}>
-                      <Property.EditTrigger
+                      <Property.Pill
                         class={cn(
-                          /* border, not ring: Tailwind rings are box-shadows and
-                             would fight the glass shadow */
-                          'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass',
+                          'flex h-auto items-center gap-1 min-w-0 border-0 font-normal touch:min-h-0 touch:min-w-0',
                           'px-1.5 py-1 leading-tight text-left rounded-full',
-                          '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
-                          {
-                            'hover:bg-hover': ctx.canEdit,
-                            'text-ink-extra-muted/50': isEmpty(),
-                          }
+                          '@max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
+                          compactUserStack() &&
+                            '@max-2xl/u-list:w-11 @max-2xl/u-list:shrink-0 @max-2xl/u-list:justify-start'
                         )}
                       >
                         <div class="h-4" />
@@ -202,16 +220,35 @@ function KeyPropertiesRow(props: {
                           fallback={
                             <Property.Icon
                               property={shown()}
-                              class="size-3 shrink-0 @max-2xl/u-list:size-4"
+                              class="shrink-0 @max-2xl/u-list:size-4 mobile:size-5"
                             />
                           }
                         >
-                          <Match when={isMultiUserEntity()}>
-                            <Property.UserStack
-                              property={shown()}
-                              maxUsers={props.maxUserStackUsers ?? 2}
-                              avatarClass="@max-2xl/u-list:size-5"
+                          <Match when={isEmpty()}>
+                            <PropertyEmptyIcon
+                              muted
+                              propertyDefinitionId={
+                                shown().propertyDefinitionId
+                              }
+                              class={
+                                shown().propertyDefinitionId ===
+                                SYSTEM_PROPERTY_IDS.PRIORITY
+                                  ? '@max-2xl/u-list:size-4 mobile:size-5'
+                                  : 'size-3.5 @max-2xl/u-list:size-4 mobile:size-5'
+                              }
                             />
+                          </Match>
+                          <Match when={userCount() > 1}>
+                            <div class="flex items-center gap-1">
+                              <Show when={props.maxUserStackUsers === 0}>
+                                <UsersIcon class="size-4 shrink-0 mobile:size-5" />
+                              </Show>
+                              <Property.UserStack
+                                property={shown()}
+                                maxUsers={maxUsers()}
+                                avatarClass="@max-2xl/u-list:size-5"
+                              />
+                            </div>
                           </Match>
                           <Match when={isUserEntity()}>
                             <Property.Icon
@@ -224,19 +261,17 @@ function KeyPropertiesRow(props: {
                           property={shown()}
                           class="@max-2xl/u-list:hidden"
                           fallback={
-                            <>
-                              <Property.Empty
-                                label="None"
-                                class="@max-2xl/u-list:hidden"
-                              />
-                              <Property.Empty class="hidden @max-2xl/u-list:inline-flex" />
-                            </>
+                            <Property.Empty
+                              label="None"
+                              hideIcon
+                              class="@max-2xl/u-list:hidden"
+                            />
                           }
                         />
                         <Show when={props.showCaret ?? true}>
                           <Property.Caret class="@max-2xl/u-list:hidden" />
                         </Show>
-                      </Property.EditTrigger>
+                      </Property.Pill>
                     </Layer>
                   </Property.Tooltip>
                   <Property.PopoverEditor

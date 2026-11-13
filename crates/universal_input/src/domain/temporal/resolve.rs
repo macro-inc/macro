@@ -6,8 +6,8 @@ use chrono_tz::Tz;
 #[cfg(test)]
 mod test;
 
-fn source(span: &str, input: &ExtractInputRequest) -> Result<(), InputError> {
-    if span.trim().is_empty() || !input.text.contains(span) {
+fn source(span: &str, text: &str) -> Result<(), InputError> {
+    if span.trim().is_empty() || !text.contains(span) {
         return Err(InputError::Extraction);
     }
     Ok(())
@@ -35,12 +35,12 @@ fn weekday_index(day: Weekday) -> u32 {
     }
 }
 
-fn date(
+/// The day `expression`, written in `text`, names, counting from `today`.
+pub(super) fn date(
     expression: &DateExpression,
-    input: &ExtractInputRequest,
-    reference: DateTime<Tz>,
+    text: &str,
+    today: NaiveDate,
 ) -> Result<NaiveDate, InputError> {
-    let today = reference.date_naive();
     match expression {
         DateExpression::Absolute {
             span,
@@ -48,7 +48,7 @@ fn date(
             month,
             day,
         } => {
-            source(span, input)?;
+            source(span, text)?;
             // Numeric absolute-date facts must be grounded in the selected source span.
             // This rejects a model inventing a year or turning a weekday into month/day.
             // Spelled-out numeric dates remain unresolved rather than authorizing a guess.
@@ -62,13 +62,13 @@ fn date(
             }
             (0..=4)
                 .filter_map(|offset| {
-                    NaiveDate::from_ymd_opt(reference.year().checked_add(offset)?, *month, *day)
+                    NaiveDate::from_ymd_opt(today.year().checked_add(offset)?, *month, *day)
                 })
                 .find(|candidate| *candidate >= today)
                 .ok_or(InputError::Extraction)
         }
         DateExpression::RelativeDay { span, offset_days } => {
-            source(span, input)?;
+            source(span, text)?;
             today
                 .checked_add_signed(Duration::days(i64::from(*offset_days)))
                 .ok_or(InputError::Extraction)
@@ -78,7 +78,7 @@ fn date(
             weekday,
             week,
         } => {
-            source(span, input)?;
+            source(span, text)?;
             let current = today.weekday().num_days_from_monday();
             let wanted = weekday_index(*weekday);
             let offset = match week {
@@ -97,7 +97,7 @@ fn clock(
     expression: &ClockExpression,
     input: &ExtractInputRequest,
 ) -> Result<(NaiveTime, bool), InputError> {
-    source(&expression.span, input)?;
+    source(&expression.span, &input.text)?;
     let raw = expression.hour;
     if raw > 23 || expression.minute > 59 {
         return Err(InputError::Extraction);
@@ -163,11 +163,10 @@ fn start(
     expression: &StartExpression,
     input: &ExtractInputRequest,
     reference: DateTime<Tz>,
-    date_only: bool,
 ) -> Result<ResolvedStart, InputError> {
     match expression {
         StartExpression::Relative { span, minutes } => {
-            source(span, input)?;
+            source(span, &input.text)?;
             let value = reference
                 .checked_add_signed(elapsed(*minutes)?)
                 .ok_or(InputError::Extraction)?;
@@ -183,7 +182,7 @@ fn start(
         } => {
             let mut day = expression_date
                 .as_ref()
-                .map(|d| date(d, input, reference))
+                .map(|d| date(d, &input.text, reference.date_naive()))
                 .transpose()?;
             let time = expression_clock
                 .as_ref()
@@ -205,13 +204,23 @@ fn start(
                         .ok_or(InputError::Extraction)?,
                 );
             }
+            // A clock without a date is its next occurrence: today, or tomorrow
+            // once that clock has passed.
+            if let (None, Some((t, _))) = (day, time) {
+                let today = reference.date_naive();
+                day = Some(if t < reference.time() {
+                    today
+                        .checked_add_days(Days::new(1))
+                        .ok_or(InputError::Extraction)?
+                } else {
+                    today
+                });
+            }
             let value = match (day, time) {
                 (Some(d), Some((t, _))) => Some(instant(d, t, reference.timezone())?),
                 _ => None,
             };
-            if (date_only && day.is_none())
-                || (expression_date.is_none() && expression_clock.is_none())
-            {
+            if expression_date.is_none() && expression_clock.is_none() {
                 return Err(InputError::Extraction);
             }
             let assumption = expression_clock
@@ -251,7 +260,7 @@ pub(super) fn apply(
         (InputSuggestions::Task(fields), TemporalExpressions::Task(expressions)) => {
             fields.due_date = None;
             if let Some(expression) = expressions.due {
-                let resolved = start(&expression, input, reference, true)?;
+                let resolved = start(&expression, input, reference)?;
                 fields.due_date = resolved
                     .instant
                     .map(|d| d.format("%Y-%m-%dT%H:%M").to_string())
@@ -278,14 +287,14 @@ pub(super) fn apply(
             let resolved = expressions
                 .start
                 .as_ref()
-                .map(|e| start(e, input, reference, false))
+                .map(|e| start(e, input, reference))
                 .transpose()?;
             let starts_at = resolved.as_ref().and_then(|r| r.instant);
             fields.start = starts_at.map(|d| d.format("%Y-%m-%dT%H:%M").to_string());
             fields.start_assumption = resolved.and_then(|r| r.assumption);
             fields.end = match (starts_at, expressions.end) {
                 (Some(start), Some(EndExpression::After { span, minutes })) => {
-                    source(&span, input)?;
+                    source(&span, &input.text)?;
                     let duration = elapsed(minutes)?;
                     if duration <= Duration::zero() {
                         return Err(InputError::Extraction);
@@ -307,7 +316,7 @@ pub(super) fn apply(
                     let explicit_date = end_date.is_some();
                     let mut day = end_date
                         .as_ref()
-                        .map(|d| date(d, input, reference))
+                        .map(|d| date(d, &input.text, reference.date_naive()))
                         .transpose()?
                         .unwrap_or(start.date_naive());
                     if !explicit_date && time < start.time() {
@@ -350,7 +359,7 @@ fn recurrence(
     input: &ExtractInputRequest,
     reference: DateTime<Tz>,
 ) -> Result<RecurrenceSuggestion, InputError> {
-    source(&expression.span, input)?;
+    source(&expression.span, &input.text)?;
     if expression.interval == 0
         || expression
             .monthly_by_day
@@ -363,7 +372,9 @@ fn recurrence(
         RecurrenceEndExpression::Never => RecurrenceEnd::Never,
         RecurrenceEndExpression::After { count } if count > 0 => RecurrenceEnd::After { count },
         RecurrenceEndExpression::On { date: d } => RecurrenceEnd::On {
-            date: date(&d, input, reference)?.format("%Y-%m-%d").to_string(),
+            date: date(&d, &input.text, reference.date_naive())?
+                .format("%Y-%m-%d")
+                .to_string(),
         },
         _ => return Err(InputError::Extraction),
     };

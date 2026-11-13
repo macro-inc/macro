@@ -99,6 +99,7 @@ fn connections(slugs: &[&str]) -> Vec<PipedreamConnection> {
             server_name: "Slack".to_string(),
             account_id: format!("apn_{slug}"),
             enabled: true,
+            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
         })
         .collect()
 }
@@ -108,7 +109,12 @@ fn selector(slugs: &[&str]) -> McpToolSelector<FakeStore, FakeStore, FakeConnect
         connections: connections(slugs),
         ..Default::default()
     });
-    McpToolSelector::new(store.clone(), store, Arc::new(FakeConnection::default()))
+    McpToolSelector::new(
+        store.clone(),
+        local_http(),
+        store,
+        Arc::new(FakeConnection::default()),
+    )
 }
 
 #[tokio::test]
@@ -138,8 +144,12 @@ async fn unconfigured_pipedream_preserves_native_connector_selection() {
             })
             .collect(),
     });
-    let selector =
-        McpToolSelector::new(store.clone(), store, Arc::new(None::<Arc<FakeConnection>>));
+    let selector = McpToolSelector::new(
+        store.clone(),
+        local_http(),
+        store,
+        Arc::new(None::<Arc<FakeConnection>>),
+    );
 
     assert!(matches!(
         selector.user_toolset(&user()).await,
@@ -168,6 +178,7 @@ async fn configured_optional_pipedream_remains_available() {
     let configured = selector(&["slack"]);
     let selector = McpToolSelector::new(
         configured.native_store,
+        configured.native_http,
         configured.pipedream_store,
         Arc::new(Some(configured.pipedream_connection)),
     );
@@ -390,6 +401,7 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
                     server_name: hosted_name.into(),
                     account_id: "test".into(),
                     enabled: true,
+                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
                 }],
                 native_records: vec![McpServerRecord {
                     user_id: user(),
@@ -399,8 +411,12 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
                     enabled: true,
                 }],
             });
-            let selector =
-                McpToolSelector::new(store.clone(), store, Arc::new(HttpConnection(url.clone())));
+            let selector = McpToolSelector::new(
+                store.clone(),
+                local_http(),
+                store,
+                Arc::new(HttpConnection(url.clone())),
+            );
             let tools = selector.user_toolset(&user()).await;
             assert!(matches!(tools, UserMcpTools::Mixed { .. }));
             let catalog = tools.catalog();
@@ -427,4 +443,8 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
     })
     .await
     .expect("local MCP discovery must not hang");
+}
+
+fn local_http() -> McpHttp {
+    McpHttp::new(mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress).unwrap()
 }

@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub mod origin;
+pub use origin::TriggerOrigin;
+
 #[cfg(test)]
 mod test;
 
@@ -469,6 +472,11 @@ pub enum RoutineTrigger {
         cron: String,
         /// The timezone it is read in.
         timezone: String,
+    },
+    /// A single run at an exact time.
+    Once {
+        /// When it runs.
+        at: DateTime<Utc>,
     },
     /// Events it watches.
     Events {

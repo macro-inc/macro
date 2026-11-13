@@ -4,24 +4,42 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { Audience } from './audience';
 import type { FormStatus } from './formStatus';
+import type { UpdateFormAccentColor } from './updateFormAccentColor';
 import type { UpdateFormClosesAt } from './updateFormClosesAt';
+import type { UpdateFormCoverFileId } from './updateFormCoverFileId';
+import type { UpdateFormLogoFileId } from './updateFormLogoFileId';
 
 /**
- * A change to a form's facts; what is left out stays. The description and
-confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+confirmation message and branding take edit, the rest owner. A form is renamed
 through the entity mutation router.
  */
 export interface UpdateForm {
+  /**
+   * A new accent color, or `null` for the default.
+   * @pattern ^#[0-9a-fA-F]{6}$
+   */
+  accentColor?: UpdateFormAccentColor;
+  /** Whether nobody can see who gave which response; refused once anyone
+has responded. */
+  anonymous?: boolean;
   /** Who may respond from now on. */
   audience?: Audience;
   /** When it stops taking responses, or `null` for never. */
   closesAt?: UpdateFormClosesAt;
   /** Its new confirmation message. */
   confirmationMessage?: string;
+  /** A new cover image, or `null` to remove it. */
+  coverFileId?: UpdateFormCoverFileId;
   /** Its new description. */
   description?: string;
+  /** A new logo, or `null` to remove it. */
+  logoFileId?: UpdateFormLogoFileId;
+  /** Whether people with View may read individual response rows. */
+  responsesVisible?: boolean;
   /** Open or close it. */
   status?: FormStatus;
   /** Whether respondents may read option tallies. */

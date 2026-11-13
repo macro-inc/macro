@@ -1,4 +1,5 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
+import type { AgentProvider } from '@service-notification/generated/schemas';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
@@ -6,6 +7,18 @@ import { GITHUB_EVENT_TYPES } from './github-event-types';
 import type { UnifiedNotification } from './types';
 
 // Helper functions for derived notification data
+
+/** "Scout has stopped.", as the notification service words its body. */
+export function stoppedAgentsText(
+  agents: readonly { name: string }[],
+  runtimeName: string
+): string {
+  const [first, second, ...rest] = agents.map((agent) => agent.name);
+  if (!first) return `Agents on ${runtimeName} have stopped.`;
+  if (!second) return `${first} has stopped.`;
+  if (rest.length === 0) return `${first} and ${second} have stopped.`;
+  return `${first} and ${rest.length + 1} others have stopped.`;
+}
 
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
@@ -30,11 +43,11 @@ export function getNotificationAction(n: UnifiedNotification): string {
         'replied_to_document_comment_thread',
         () => 'replied to a comment on'
       )
-      .with(
-        'entity_access_requested',
-        () =>
-          `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`
-      )
+      .with('entity_access_requested', () => {
+        // A runtime has one role to ask for: being a user of it.
+        if (n.entity_type === 'harness') return 'requested to use';
+        return `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`;
+      })
       .with(
         'entity_access_granted',
         () =>
@@ -56,6 +69,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('channel_message_reply', () => 'replied in')
       .with('call_started', () => 'started a call')
       .with('channel_invite', () => 'invited you to')
+      .with('channel_access_requested', () => 'asked to join')
       .with('new_email', () => 'sent a new email')
       .with('external_chat_message', () => {
         const meta = n.notification_metadata;
@@ -92,6 +106,22 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
+      // The routine is the actor: "<routine> failed".
+      .with('routine_run_finished', () =>
+        routineRunFailed(n) ? 'failed' : 'finished'
+      )
+      // The computer is the actor: "<computer> Claude sign-in expired".
+      .with('agent_sign_in_expiry', () => {
+        const meta = n.notification_metadata;
+        if (meta.tag !== 'agent_sign_in_expiry') return 'sign-in expires soon';
+        const agent = agentDisplayName(meta.content.agent);
+        return match(meta.content.stage)
+          .with('expires_soon', () => `${agent} sign-in expires soon`)
+          .with('expires_today', () => `${agent} sign-in expires today`)
+          .with('expired', () => `${agent} sign-in expired`)
+          .exhaustive(() => `${agent} sign-in expires soon`);
+      })
+      .with('runtime_access_removed', () => 'removed your access to')
       .exhaustive(() => 'notified you about')
   );
 }
@@ -103,6 +133,7 @@ export function getNotificationTargetName(
   return (
     match(m)
       .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+      .with({ tag: 'channel_access_requested' }, (m) => m.content.channelName)
       .with({ tag: 'document_mention' }, (m) => m.content.documentName)
       .with(
         { tag: 'mentioned_in_document_comment' },
@@ -153,6 +184,8 @@ export function getNotificationTargetName(
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with({ tag: 'routine_run_finished' }, () => undefined)
+      .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -163,6 +196,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.sessionName
       )
+      .with({ tag: 'runtime_access_removed' }, (m) => m.content.runtimeName)
       .exhaustive(() => undefined)
   );
 }
@@ -224,6 +258,7 @@ export function getNotificationContent(
           m.content.reviewSnippet || m.content.title || m.content.displayName
       )
       .with({ tag: 'channel_invite' }, () => undefined)
+      .with({ tag: 'channel_access_requested' }, () => undefined)
       .with({ tag: 'invite_to_team' }, () => undefined)
       // The description the user wrote is the whole point of a reminder.
       .with({ tag: 'reminder' }, (m) => m.content.description)
@@ -241,6 +276,21 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
+      .with({ tag: 'routine_run_finished' }, (m) =>
+        m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
+      )
+      .with({ tag: 'agent_sign_in_expiry' }, (m) => {
+        const agent = agentDisplayName(m.content.agent);
+        const when = match(m.content.stage)
+          .with('expires_soon', () => 'expires soon')
+          .with('expires_today', () => 'expires today')
+          .with('expired', () => 'expired')
+          .exhaustive();
+        return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
+      })
+      .with({ tag: 'runtime_access_removed' }, (m) =>
+        stoppedAgentsText(m.content.agents, m.content.runtimeName)
+      )
       .exhaustive(() => undefined)
   );
 }
@@ -300,6 +350,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'commented_on_document' }, () => true)
       .with({ tag: 'crm_discussion' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
+      .with({ tag: 'channel_access_requested' }, () => true)
       .with({ tag: 'invite_to_team' }, () => true)
       // Shown so "Reminder" reads as being about something; a standalone
       // reminder resolves to no target name and renders without one anyway.
@@ -307,6 +358,9 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with({ tag: 'routine_run_finished' }, () => false)
+      .with({ tag: 'agent_sign_in_expiry' }, () => false)
+      .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
           tag: P.union(
@@ -318,5 +372,19 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         () => true
       )
       .exhaustive(() => true)
+  );
+}
+
+/** The agent's name as people see it, e.g. "Claude". */
+function agentDisplayName(agent: AgentProvider): string {
+  return match(agent)
+    .with('claude', () => 'Claude')
+    .exhaustive();
+}
+
+function routineRunFailed(n: UnifiedNotification): boolean {
+  const meta = n.notification_metadata;
+  return (
+    meta.tag === 'routine_run_finished' && meta.content.outcome === 'failed'
   );
 }

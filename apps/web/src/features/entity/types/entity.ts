@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import type { ArchiveCause } from '@service-agent-harness/generated/schemas';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
@@ -12,11 +13,18 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
+import type {
+  GraphqlEmailFocusCategory,
+  GraphqlEmailImportanceTrend,
+} from '@service-storage/graphql/generated/graphql';
 
 export type EntityBase = {
   id: string;
   name: string;
   ownerId: string;
+  /** Shared entity-owned icon and palette overrides. */
+  appearance?: EntityAppearance | null;
   frecencyScore?: number;
   /** Viewer-owned favorite state from Soup; absent on search-only results. */
   isFavorited?: boolean;
@@ -138,6 +146,7 @@ export type ChannelEntity = EntityBase & {
     createdAt: DateValue;
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
+  teamId?: string;
   interactedAt?: DateValue | null;
   participantIds?: string[];
   /**
@@ -196,7 +205,9 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
-  isArchived?: boolean;
+  /** Who archived the session; null while it is not archived. */
+  archivedBy?: ArchiveCause | null;
+  archivedAt?: string | null;
   botId: string;
   harness?: string;
   repoUrl?: string | null;
@@ -297,10 +308,14 @@ export type EmailAttachment = {
 
 /** A thread's Focus classification; present only on Focus list rows. */
 export type EmailFocus = {
+  category: GraphqlEmailFocusCategory;
   /** 0 to 100. */
   importance: number;
   needsReply: boolean;
   needsFollowUp: boolean;
+  importanceTrend: GraphqlEmailImportanceTrend;
+  /** The day the thread's mail says it is due, as a `YYYY-MM-DD` calendar date. */
+  dueOn?: string | null;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
@@ -364,11 +379,13 @@ export type CallEntity = EntityBase & {
 };
 
 /**
- * What a routine is doing now. A run in progress outranks activation, and a
- * paused routine keeps its stale `next_run_at`, so pause outranks the schedule.
+ * What a routine is doing now. A run in progress outranks activation, a failed
+ * last run outranks the schedule, and a paused routine keeps its stale
+ * `next_run_at`, so pause outranks the schedule.
  */
 export type RoutineStatus =
   | { kind: 'running' }
+  | { kind: 'failed' }
   | { kind: 'paused' }
   | { kind: 'scheduled'; nextRunAt: string }
   | { kind: 'unscheduled' };
@@ -377,8 +394,11 @@ export function routineStatus(facts: {
   enabled: boolean;
   isRunning: boolean;
   nextRunAt?: string | null;
+  /** The latest finished run failed; it stays visible until a run succeeds. */
+  lastRunFailed?: boolean;
 }): RoutineStatus {
   if (facts.isRunning) return { kind: 'running' };
+  if (facts.lastRunFailed) return { kind: 'failed' };
   if (!facts.enabled) return { kind: 'paused' };
   if (facts.nextRunAt) return { kind: 'scheduled', nextRunAt: facts.nextRunAt };
   return { kind: 'unscheduled' };
@@ -424,13 +444,13 @@ export type CrmCompanyEntity = EntityBase & {
 export type CrmContactEntity = EntityBase & {
   type: 'crm_contact';
   teamId?: string;
-  companyName?: string;
+  companyName?: string | null;
   firstInteraction?: string;
   lastInteraction?: string;
-  /** The company the contact belongs to. */
-  companyId: string;
-  /** The contact's email address. */
-  email: string;
+  /** The company the contact belongs to; absent without a company. */
+  companyId?: string | null;
+  /** The contact's email address; absent for a contact added by name. */
+  email?: string | null;
   /** Whether the contact has been hidden from the CRM listings. Only
    * admin/owner team members can see `hidden: true` rows. */
   hidden: boolean;
@@ -441,6 +461,16 @@ export type DatabaseEntity = EntityBase & {
   type: 'database';
   /** What the viewer may do with the database. */
   grant: AccessLevel;
+  /** The folder it is filed in. */
+  projectId?: string;
+};
+
+/**
+ * A paired runtime (a macrod machine). Only the notifications inbox lists it,
+ * for the access notifications filed under it; it opens in Settings → Machines.
+ */
+export type HarnessEntity = EntityBase & {
+  type: 'harness';
 };
 
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
@@ -448,6 +478,8 @@ export type FormEntity = EntityBase & {
   type: 'form';
   /** What the viewer may do: view responds, edit builds and reads responses. */
   access: 'view' | 'edit' | 'owner';
+  /** The folder it is filed in. */
+  projectId?: string;
 };
 
 /** Normalized time shape of a calendar event soup row. */
@@ -506,6 +538,7 @@ export type EntityData =
   | CrmContactEntity
   | DatabaseEntity
   | FormEntity
+  | HarnessEntity
   | RoutineEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -525,6 +558,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'database',
   'form',
+  'harness',
   'routine',
   'calendar_event',
   'foreign',
@@ -665,6 +699,13 @@ export const isCrmContactEntity = (
 /** The full-email identity shared by CRM contacts and Macro users. Plus
  * aliases stay distinct, as in the backend's authorized contact deduplication. */
 export const crmContactEmailKey = (email: string) => email.trim().toLowerCase();
+
+/** One key per person: the normalized email, or the record id for a contact
+ * added without one, which never merges with anyone else. */
+export const crmContactIdentityKey = (contact: {
+  id: string;
+  email?: string | null;
+}) => (contact.email ? crmContactEmailKey(contact.email) : `id:${contact.id}`);
 
 export const isDocumentEntity = (
   entity: EntityData

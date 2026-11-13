@@ -20,8 +20,8 @@ use cognition::domain::Cognition;
 use rmcp::{
     ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo, Tool, ToolAnnotations,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
+        PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
     },
     transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -41,20 +41,35 @@ fn toolset() -> AsyncToolCollection<SessionToolContext> {
         .add_tool::<TaskPullRequestsTool, SessionToolContext>()
 }
 
+/// Admit only the explicitly configured egress origins and standard gateway hosts.
+pub(super) fn configured_hosts(urls: &[&str]) -> anyhow::Result<Vec<String>> {
+    use anyhow::Context as _;
+    urls.iter()
+        .map(|value| {
+            let url = url::Url::parse(value).context("invalid internal MCP egress URL")?;
+            Ok(url
+                .host_str()
+                .context("internal MCP egress URL needs a host")?
+                .to_owned())
+        })
+        .collect()
+}
+
 /// Build the internal endpoint with per-request session authentication.
 pub(super) fn router<A: AgentSessionRepo + 'static>(
     authority: Arc<A>,
-    host: String,
+    hosts: Vec<String>,
     tools: InternalTools,
 ) -> Router {
-    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-        host,
+    let mut hosts = hosts;
+    hosts.extend([
         "localhost".into(),
         "127.0.0.1".into(),
         "gateway.macro.com".into(),
         "dev-gateway.macro.com".into(),
     ]);
-    config.stateful_mode = false;
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts(hosts);
+    config.legacy_session_mode = false;
     config.json_response = true;
     let server = StreamableHttpService::new(
         move || Ok(tools.clone()),
@@ -79,11 +94,13 @@ pub(super) struct InternalTools {
     pub(super) cognition: Option<Arc<dyn Cognition>>,
     pub(super) reviews: Arc<OnceLock<ReviewService>>,
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
+    /// Macro app origin, for links back to the calling session.
+    pub(super) app_url: Arc<str>,
 }
 
 impl ServerHandler for InternalTools {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info = rmcp::model::Implementation::new(
             agent_harness::domain::model::INTERNAL_MCP_NAME,
             env!("CARGO_PKG_VERSION"),
@@ -185,7 +202,7 @@ impl ServerHandler for InternalTools {
         &self,
         mut request: CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let AuthenticatedSession(grant) = context
             .extensions
             .get::<axum::http::request::Parts>()
@@ -207,9 +224,9 @@ impl ServerHandler for InternalTools {
             let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
                 Ok(selection) => selection,
                 Err(error) => {
-                    return Ok(CallToolResult::error(vec![Content::text(
-                        error.to_string(),
-                    )]));
+                    return Ok(
+                        CallToolResult::error(vec![ContentBlock::text(error.to_string())]).into(),
+                    );
                 }
             };
             use agent_inmem::domain::tool_gate::NativeToolVerdict;
@@ -220,7 +237,7 @@ impl ServerHandler for InternalTools {
             {
                 NativeToolVerdict::RunAs(user) => acting_user = user,
                 NativeToolVerdict::Refuse(reason) => {
-                    return Ok(CallToolResult::error(vec![Content::text(reason)]));
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(reason)]).into());
                 }
                 NativeToolVerdict::Run => {}
             }
@@ -243,10 +260,11 @@ impl ServerHandler for InternalTools {
                 )
                 .await
                 .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-            return Ok(match result {
+            let result = match result {
                 Ok(value) => CallToolResult::structured(value),
-                Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-            });
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
         }
         if let Some(code_mode) = &self.code_mode {
             let tools = agent_code_mode::inbound::toolset::toolset();
@@ -269,12 +287,15 @@ impl ServerHandler for InternalTools {
                     )
                     .await
                     .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-                return Ok(match result {
+                let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
                     Ok(value) => CallToolResult::structured(value),
-                    Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-                });
+                    Err(error) => {
+                        CallToolResult::error(vec![ContentBlock::text(error.description)])
+                    }
+                };
+                return Ok(result.into());
             }
         }
         let result = toolset()
@@ -283,6 +304,11 @@ impl ServerHandler for InternalTools {
                     service: self.service.clone(),
                     tasks: self.tasks.clone(),
                     session: grant.id,
+                    session_url: format!(
+                        "{}/app/agent/{}",
+                        self.app_url.trim_end_matches('/'),
+                        grant.id
+                    ),
                 },
                 RequestContext::new(acting_user.clone()),
                 &request.name,
@@ -297,9 +323,10 @@ impl ServerHandler for InternalTools {
                     rmcp::ErrorData::resource_not_found(message, None)
                 }
             })?;
-        Ok(match result {
-            Ok(value) => CallToolResult::success(vec![Content::text(value.to_string())]),
-            Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-        })
+        let result = match result {
+            Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
+            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+        };
+        Ok(result.into())
     }
 }

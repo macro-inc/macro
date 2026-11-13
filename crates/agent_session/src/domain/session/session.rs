@@ -19,6 +19,7 @@ use agent_runtime_protocol::domain::action::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_runtime_protocol::domain::turn::RuntimeSessionClosedNotification;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::PROTOCOL_VERSION;
@@ -161,6 +162,24 @@ impl<Token> SessionMachine<Token> {
         });
     }
 
+    /// Whether the connection has nothing open: live, with no turn, held
+    /// elicitation, permission request or queued action. Only such a
+    /// connection may be released without telling anyone, because nothing
+    /// is waiting on it.
+    pub fn is_idle(&self) -> bool {
+        matches!(
+            self.phase,
+            SessionPhase::Live {
+                elicitation: None,
+                ..
+            }
+        ) && self.in_flight_turn.is_none()
+            && self.outstanding_permissions.is_empty()
+            && self.pending.is_empty()
+            && !self.reload_required
+            && !self.mcp_refresh_required
+    }
+
     /// Current phase.
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
@@ -207,11 +226,23 @@ impl<Token> SessionMachine<Token> {
                 if !matches!(self.phase, SessionPhase::Booting) {
                     return vec![];
                 }
-                let mut effects = vec![Effect::EstablishInitialization { context }];
+                let mut effects = vec![
+                    Effect::Log {
+                        boundary: None,
+                        message: ToServerMessage::Event {
+                            event: SystemEvent::AcpReady,
+                        },
+                    },
+                    Effect::EstablishInitialization { context },
+                ];
                 self.begin_opening(restore, &mut effects);
                 effects
             }
             Input::ReplaceMcpServers(servers) => self.on_mcp_servers_replaced(servers),
+            Input::SetPermissionPolicy(policy) => {
+                self.permission_policy = policy;
+                vec![]
+            }
             Input::Closed(reason) => self.on_closed(reason),
         }
     }
@@ -491,6 +522,10 @@ impl<Token> SessionMachine<Token> {
                 }
                 return;
             }
+            if self.reports_runtime_closed(&frame) {
+                effects.push(Effect::RuntimeClosed);
+                return;
+            }
             self.on_permission_request(&frame, effects);
             self.hold_or_refuse_elicitation(&frame, effects);
             return;
@@ -530,14 +565,7 @@ impl<Token> SessionMachine<Token> {
             }
         };
 
-        let restore = SessionRestoreSupport {
-            resume: response
-                .agent_capabilities
-                .session_capabilities
-                .resume
-                .is_some(),
-            load: response.agent_capabilities.load_session,
-        };
+        let restore = SessionRestoreSupport::of(&response);
         // Announced before this session opens: every other session on this
         // connection needs the same answer, and only this machine was told it.
         effects.push(Effect::Initialized { restore });
@@ -796,23 +824,8 @@ impl<Token> SessionMachine<Token> {
     fn build_initialize_request(
         &mut self,
     ) -> std::result::Result<(RawJsonRpcMessage, RequestId), agent_client_protocol::Error> {
-        // Both elicitation modes are advertised: the session page renders
-        // forms and opens URLs after consent. Agents that check (they must)
-        // will only ask once this says they may - so this line must never
-        // ship ahead of `hold_or_refuse_elicitation`, or every agent that
-        // asks hangs on a request nothing answers.
-        let capabilities = ClientCapabilities::new().elicitation(
-            ElicitationCapabilities::new()
-                .form(ElicitationFormCapabilities::new())
-                .url(ElicitationUrlCapabilities::new()),
-        );
-        let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
-            .client_capabilities(capabilities)
-            .to_untyped_message()?
-            .into_parts();
         let request_id = self.next_id();
-        let request = RawJsonRpcMessage::request(method, params, request_id.clone())?;
-        Ok((request, request_id))
+        Ok((initialize_request(request_id.clone())?, request_id))
     }
 
     fn build_new_session_request(
@@ -827,6 +840,25 @@ impl<Token> SessionMachine<Token> {
                 .meta(self.session_meta()),
             SessionOpening::New,
         )
+    }
+
+    /// Whether `frame` is the runtime's `_session/closed` for the live ACP
+    /// session. One naming another session, or unreadable, says nothing.
+    fn reports_runtime_closed(&self, frame: &RawJsonRpcMessage) -> bool {
+        let (RawJsonRpcMessage::Notification(notification), SessionPhase::Live { session_id, .. }) =
+            (frame, &self.phase)
+        else {
+            return false;
+        };
+        RuntimeSessionClosedNotification::matches_method(&notification.method)
+            && notification
+                .params
+                .clone()
+                .and_then(|params| {
+                    serde_json::from_value::<RuntimeSessionClosedNotification>(params.into_value())
+                        .ok()
+                })
+                .is_some_and(|closed| &closed.session_id == session_id)
     }
 
     /// A `session/request_permission` from the agent. The agent blocks until
@@ -1176,4 +1208,25 @@ impl<Token> SessionMachine<Token> {
         self.next_request += 1;
         id
     }
+}
+
+/// The one `initialize` a connection sends, whoever sends it.
+pub(crate) fn initialize_request(
+    request_id: RequestId,
+) -> std::result::Result<RawJsonRpcMessage, agent_client_protocol::Error> {
+    // Both elicitation modes are advertised: the session page renders
+    // forms and opens URLs after consent. Agents that check (they must)
+    // will only ask once this says they may - so this line must never
+    // ship ahead of `hold_or_refuse_elicitation`, or every agent that
+    // asks hangs on a request nothing answers.
+    let capabilities = ClientCapabilities::new().elicitation(
+        ElicitationCapabilities::new()
+            .form(ElicitationFormCapabilities::new())
+            .url(ElicitationUrlCapabilities::new()),
+    );
+    let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
+        .client_capabilities(capabilities)
+        .to_untyped_message()?
+        .into_parts();
+    RawJsonRpcMessage::request(method, params, request_id)
 }

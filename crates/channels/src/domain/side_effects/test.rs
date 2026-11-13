@@ -275,6 +275,7 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         thread_id: None,
         sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         triggered_by: None,
+        triggered_via: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -288,6 +289,43 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         .expect("Macro AI should have a built-in profile");
 
     assert_eq!(profile.name, bot_id::MACRO_AI_NAME);
+    assert_eq!(profile.avatar_url, None);
+    assert_eq!(*lookup_count.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn mcp_client_post_is_named_after_the_client() {
+    let lookup_count = Arc::new(Mutex::new(0));
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            bot_profile_lookup_count: lookup_count.clone(),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let message = MutatedMessage {
+        id: Uuid::new_v4(),
+        channel_id: Uuid::new_v4(),
+        thread_id: None,
+        sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        triggered_by: Some("macro|alice@example.com".to_string()),
+        triggered_via: Some("Claude Code".to_string()),
+        content: "hello".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: None,
+        deleted_at: None,
+    };
+
+    let profile = service
+        .bot_profile_for_message(&message)
+        .await
+        .expect("a client post should have a profile");
+
+    assert_eq!(profile.name, "Claude Code");
     assert_eq!(profile.avatar_url, None);
     assert_eq!(*lookup_count.lock().unwrap(), 0);
 }
@@ -311,6 +349,7 @@ async fn non_macro_bot_profile_uses_context_lookup() {
         thread_id: None,
         sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
         triggered_by: None,
+        triggered_via: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -373,6 +412,7 @@ async fn message_posted_derives_notification_effects_without_legacy_realtime() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
+                triggered_via: None,
                 content: "hello".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -438,6 +478,7 @@ fn bot_message_posted_event(
             thread_id,
             sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
             triggered_by: None,
+            triggered_via: None,
             content: "hello".to_string(),
             created_at: now,
             updated_at: now,
@@ -495,6 +536,7 @@ async fn silent_message_posted_skips_notifications_only() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
+                triggered_via: None,
                 content: "transient".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -556,6 +598,7 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
+                triggered_via: None,
                 content: "welcome".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -697,6 +740,7 @@ async fn bot_thread_reply_sends_reply_notification() {
     let service = ChannelSideEffectService::new(
         FakeContext {
             thread_context: ThreadNotificationContext {
+                connected_call_participants: vec![],
                 participants: vec![recipient.clone(), parent_sender.clone()],
                 parent_sender_id: Some(parent_sender.clone()),
             },
@@ -736,6 +780,100 @@ async fn bot_thread_reply_sends_reply_notification() {
     assert_eq!(*thread_parent_sender_id, Some(parent_sender.clone()));
     assert!(recipient_ids.contains(&recipient));
     assert!(recipient_ids.contains(&parent_sender));
+}
+
+#[tokio::test]
+async fn channel_members_connected_to_the_threads_call_get_a_reply_notification() {
+    let channel_id = Uuid::new_v4();
+    let connected = user("connected@example.com");
+    let outsider = user("outsider@example.com");
+    let away = user("away@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            thread_context: ThreadNotificationContext {
+                connected_call_participants: vec![connected.clone(), outsider.clone()],
+                participants: vec![away.clone()],
+                parent_sender_id: None,
+            },
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+
+    service
+        .handle(bot_message_posted_event(
+            channel_id,
+            Uuid::new_v4(),
+            Some(Uuid::new_v4()),
+            &[connected.as_ref(), away.as_ref()],
+        ))
+        .await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    let ChannelNotificationEffect::Reply { recipient_ids, .. } = &notification_effects[0] else {
+        panic!("expected a reply notification");
+    };
+    assert_eq!(recipient_ids, &HashSet::from([connected, away]));
+}
+
+#[tokio::test]
+async fn a_mention_of_someone_connected_to_the_threads_call_is_delivered() {
+    let channel_id = Uuid::new_v4();
+    let now = Utc::now();
+    let sender = user("sender@example.com");
+    let connected = user("connected@example.com");
+    let away = user("away@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            thread_context: ThreadNotificationContext {
+                connected_call_participants: vec![connected.clone()],
+                participants: vec![sender.clone()],
+                parent_sender_id: None,
+            },
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+
+    service
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Product".to_string(),
+            },
+            participants: vec![],
+            message: MutatedMessage {
+                id: Uuid::new_v4(),
+                channel_id,
+                thread_id: Some(Uuid::new_v4()),
+                sender_id: Sender::new_from_user(sender),
+                triggered_by: None,
+                triggered_via: None,
+                content: "look at this".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: vec![SimpleMention::user(&connected), SimpleMention::user(&away)],
+            has_attachments: false,
+            notification_policy: PostMessageNotificationPolicy::MentionsOnly,
+        })
+        .await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    let ChannelNotificationEffect::UserMention { recipient_ids, .. } = &notification_effects[0]
+    else {
+        panic!("expected a mention notification");
+    };
+    assert_eq!(recipient_ids, &HashSet::from([connected, away]));
 }
 
 #[tokio::test]
@@ -832,6 +970,7 @@ async fn document_mentions_notify_participants_except_sender() {
                 thread_id: None,
                 sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
+                triggered_via: None,
                 content: "hello".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -863,6 +1002,88 @@ async fn document_mentions_notify_participants_except_sender() {
         .expect("expected document mention notification");
     assert!(document_recipients.contains(&mentioned));
     assert!(document_recipients.contains(&other));
+    assert!(!document_recipients.contains(&sender));
+}
+
+#[tokio::test]
+async fn document_mentions_in_a_reply_notify_only_thread_participants() {
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let thread_id = Uuid::new_v4();
+    let sender = user("sender@example.com");
+    let participant = user("participant@example.com");
+    let outsider = user("outsider@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            document_mentions: vec![ChannelDocumentMention {
+                document_name: "Spec".to_string(),
+                owner: sender.clone(),
+                file_type: None,
+                sub_type: None,
+            }],
+            thread_context: ThreadNotificationContext {
+                connected_call_participants: vec![],
+                participants: vec![sender.clone(), participant.clone()],
+                parent_sender_id: Some(participant.clone()),
+            },
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+
+    service
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Project".to_string(),
+            },
+            participants: [&sender, &participant, &outsider]
+                .into_iter()
+                .map(|user| ChannelParticipant {
+                    channel_id,
+                    user_id: user.as_ref().to_string(),
+                    role: ParticipantRole::Member,
+                    joined_at: now,
+                    left_at: None,
+                })
+                .collect(),
+            message: MutatedMessage {
+                id: message_id,
+                channel_id,
+                thread_id: Some(thread_id),
+                sender_id: Sender::new_from_user(sender.clone()),
+                triggered_by: None,
+                triggered_via: None,
+                content: "see this".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: vec![SimpleMention {
+                entity_type: "document".to_string(),
+                entity_id: "doc-1".to_string(),
+            }],
+            has_attachments: false,
+            notification_policy: PostMessageNotificationPolicy::Default,
+        })
+        .await;
+
+    let notification_effects = notifications.effects.lock().unwrap();
+    let document_recipients = notification_effects
+        .iter()
+        .find_map(|effect| match effect {
+            ChannelNotificationEffect::DocumentMention { recipient_ids, .. } => Some(recipient_ids),
+            _ => None,
+        })
+        .expect("expected document mention notification");
+    assert!(document_recipients.contains(&participant));
+    assert!(!document_recipients.contains(&outsider));
     assert!(!document_recipients.contains(&sender));
 }
 
@@ -1226,6 +1447,7 @@ fn mention_broker_events_map_message_posted_mentions() {
             thread_id: None,
             sender_id: Sender::new_from_user(user("alice@example.com")),
             triggered_by: None,
+            triggered_via: None,
             content: "@bot @doc-1".to_string(),
             created_at: now,
             updated_at: now,

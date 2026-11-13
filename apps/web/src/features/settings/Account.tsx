@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
@@ -85,7 +86,8 @@ async function uploadProfilePicture(
   file: File
 ): Promise<{ id: string; url: string } | void> {
   if (file.size > MAX_PROFILE_PICTURE_SIZE) {
-    return toast.failure('Image size too large');
+    toast.failure('Image size too large');
+    return;
   }
 
   try {
@@ -93,11 +95,13 @@ async function uploadProfilePicture(
     const url = staticFileIdEndpoint(id);
     const response = await authServiceClient.putProfilePicture({ url });
     if (response.isErr()) {
-      return toast.failure('Failed to upload profile picture');
+      toast.failure('Failed to upload profile picture');
+      return;
     }
     return { id, url };
   } catch (_error) {
-    return toast.failure('Failed to upload profile picture');
+    toast.failure('Failed to upload profile picture');
+    return;
   }
 }
 
@@ -320,6 +324,7 @@ function AccountPlanCard() {
   const { openSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
   const summary = useAiBillingSummaryQuery();
+  usePending('settings.plan', () => summary.isLoading);
   // Wait for the summary before falling back to the license, so a Max plan
   // doesn't flash as Pro while it loads.
   const tier = () =>

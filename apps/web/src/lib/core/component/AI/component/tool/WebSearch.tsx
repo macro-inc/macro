@@ -9,10 +9,7 @@ const handler = createToolRenderer({
   name: 'WebSearch',
   render: (ctx) => {
     const [isExpanded, setIsExpanded] = createSignal(false);
-    const results = () => {
-      const content = ctx.response?.data.content;
-      return Array.isArray(content) ? content : [];
-    };
+    const results = () => ctx.response?.data.results ?? [];
     const hitCount = () => results().length;
     const hasResults = () => hitCount() > 0;
     const statusText = () => {
@@ -48,7 +45,7 @@ const handler = createToolRenderer({
           <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <span class="min-w-0 truncate">
               {ctx.response ? 'Searched for' : 'Search for'}{' '}
-              <span class="text-ink">{ctx.tool.data.input}</span>
+              <span class="text-ink">{ctx.tool.data.query}</span>
             </span>
           </div>
           <Tool.ResultToggle

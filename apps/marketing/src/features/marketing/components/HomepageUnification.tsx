@@ -352,7 +352,7 @@ export function HomepageUnification(
       class="homepage-unification"
       aria-labelledby="unification-heading"
     >
-      <FeatureConstellation expanded />
+      <FeatureConstellation expanded linked />
       <div class="unification-copy">
         <div class="unification-before" aria-hidden="true">
           The unified workspace
@@ -360,9 +360,9 @@ export function HomepageUnification(
           for your company.
         </div>
         <h2 id="unification-heading">
-          <span class="unification-heading-prefix">Replace 27+ apps</span>
+          Replace 27+ apps
           <br />
-          with Macro.
+          with one system.
         </h2>
         <p class="unification-subtext">
           <span class="unification-subtext-desktop">

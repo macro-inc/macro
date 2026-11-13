@@ -145,8 +145,9 @@ there is nothing earlier to import, and its first message arrives live. If a
 chat update later brings a message from before the chat was added (the phone
 had history after all), it becomes `waiting_for_phone`.
 
-The web shows the owner a closable bottom-right prompt while any of their
-chats is `waiting_for_phone` ("open WhatsApp on your phone … **Import**").
+The web shows the owner an import bar in each chat that is
+`waiting_for_phone`, and on desktop a closable bottom-right prompt covering all
+of them ("open WhatsApp on your phone … **Import**").
 `POST /whatsapp/history-import` (the owner's own session) moves those chats
 to `pending` and signals `whatsapp_history_requested`; the replica holding the
 account then asks for the anchor message itself when it predates adoption (a
@@ -179,6 +180,16 @@ account's LID store (ingest also from the account's roster). Identities still
 ambiguous are quarantined and retried. Missing reaction/revision targets
 are deferred. Edits follow source revision order; deletes are permanent tombstones.
 Reactions and media live in `external_chat_reaction` and `external_chat_attachment`.
+A sender's WhatsApp name (`external_chat_person.display_name`) comes from the
+message, else from the account's contact store, which keeps the names WhatsApp
+sends with history sync and earlier messages (history messages carry none).
+Contact-store failures log a warning and leave the sender unnamed; they do not
+prevent ingestion. Roster reads complete missing participant names from contacts.
+Reads name people (senders, reactors, voters, members, mentions) in
+`whatsapp_linked`'s `domain::people::ChatNames`: the chat owner's chat-list
+name for any of their aliases (their address book), else that WhatsApp name,
+else their phone number, so nothing needs backfilling when a contact is saved
+or renamed.
 
 Besides text and media, a message may carry structured content in
 `external_chat_message.rich` (`external_chat::domain::rich::RichContent`):

@@ -94,15 +94,50 @@ export type AppEvents = {
   onboarding_v4_email_connected: { connected_count: number };
   /** A connector completed OAuth from its step. */
   onboarding_v4_connector_connected: { connector: string };
+  /** How the last step's routine suggestions were left. */
+  onboarding_v4_routines: {
+    suggested: number;
+    /** Switched on before the person changed anything. */
+    recommended: number;
+    enabled: number;
+    recommended_kept: number;
+    /** Of those turned on, how many AI suggested for the person. */
+    for_you_enabled: number;
+  };
+  /** The last step's list settled: AI finished, or the wait ran out. */
+  onboarding_v4_routines_shown: {
+    shown: number;
+    /** Suggested by AI for the person, not Macro's templates. */
+    for_you: number;
+    on_by_default: number;
+    /** AI gave none in time, so only Macro's templates showed. */
+    fallback: boolean;
+    /** The wait ran out before AI finished. */
+    waited_out: boolean;
+    /** The generation's status when it settled. */
+    status: string;
+    /** From the step opening to AI's first suggestion showing; null if none did. */
+    first_suggestion_ms: number | null;
+  };
   /** What happened on the team step. */
   onboarding_v4_team: {
-    action: 'created' | 'joined_invite' | 'already_on_team';
+    action:
+      | 'created'
+      | 'joined_invite'
+      | 'already_on_team'
+      | 'invite_link_copied'
+      | 'referrals_sent'
+      | 'referral_link_copied';
     invites_sent?: number;
     /** Same-domain teammates the step pre-added to the invite list. */
     invites_prefilled?: number;
     /** How many of those the user removed before creating the team. */
     invites_removed?: number;
     used_domain_suggestion?: boolean;
+    /** Whether people on the work domain may join. */
+    allow_domain_join?: boolean;
+    /** Whether the domain notice was requested; only with domain join. */
+    notify_domain?: boolean;
   };
   /**
    * The flow finished (free, premium, or plan skipped) with a rollup of
@@ -149,7 +184,19 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
-  split_created: { from: string };
+  /**
+   * An agent's `macro.ui.open` reached this tab: `opened` a new pane,
+   * `shown` one already open, `no_room`, `cancelled`, or
+   * `not_allowed_route` (refused here). `route` is the route id, never the path.
+   */
+  agent_ui_command: { kind: 'open'; outcome: string; route?: string };
+  /**
+   * The person pressed Undo on a pane an agent opened: `undone`, or `kept`
+   * when a leave guard (unsaved edits) or a newer navigation kept the pane.
+   */
+  agent_ui_command_undone: { route: string; outcome: 'undone' | 'kept' };
+  /** `side` is where a split opened beside another; absent, it opened at the end. */
+  split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 
   // --- Entity lifecycle ----------------------------------------------------
   // Fired at data-layer chokepoints (core/util/create.ts, FileList
@@ -251,6 +298,31 @@ export type AppEvents = {
   channel_reaction: {
     emoji: string;
     action: 'add' | 'remove';
+  };
+
+  // In-product tutorial videos (the pinned row at the top of an inbox).
+  tutorial_video: {
+    /** `macro-<id>` for each id in features/video-tutorials/core/tutorial-id.ts. */
+    tutorial:
+      | 'macro-mail'
+      | 'macro-home'
+      | 'macro-chat'
+      | 'macro-tasks'
+      | 'macro-docs'
+      | 'macro-spreadsheets'
+      | 'macro-databases'
+      | 'macro-canvas'
+      | 'macro-drive'
+      | 'macro-crm'
+      | 'macro-calendar'
+      | 'macro-calls'
+      | 'macro-agents'
+      | 'macro-macrod'
+      | 'macro-github'
+      | 'macro-scheduling'
+      | 'macro-whatsapp';
+    /** `support_clicked`: the dialog's "Talk to us" link under the video. */
+    action: 'opened' | 'played' | 'dismissed' | 'support_clicked';
   };
 
   // --- Calls ---------------------------------------------------------------
@@ -363,14 +435,14 @@ export type AppEvents = {
 
   // --- CRM -----------------------------------------------------------------
   crm_company_created: { companyId: string };
-  crm_contact_created: { companyId: string; contactId: string };
+  crm_contact_created: { companyId?: string; contactId: string };
   /**
    * A committed pipeline write: inserted rows are entries added, updated
    * rows include stage moves and other cell edits.
    */
   crm_pipeline_entries_edited: {
     pipelineId: string;
-    recordType?: 'company' | 'contact';
+    recordType?: 'company' | 'contact' | 'generic';
     /** The pipeline editor or the record page's pipeline cards. */
     surface: 'pipeline' | 'record';
     insertedRows: number;
@@ -383,16 +455,66 @@ export type AppEvents = {
   // scheduled and event-triggered runs are not counted yet.
   routine_created: {
     routineId?: string;
-    source: 'new' | 'duplicate';
+    source: 'new' | 'duplicate' | 'suggestion';
+    /** The routine suggestion it was saved from. */
+    suggestionId?: string;
     triggerType: string;
-    targetKind?: 'agent' | 'model';
+    /** A single agent's model or agent, or `steps` for a routine with steps. */
+    targetKind?: 'agent' | 'model' | 'steps';
   };
+  /** The suggestions for a sidebar or the Routines page were opened. */
+  routine_suggestions_opened: {
+    surface: string;
+    suggestions: number;
+  };
+  /** A sidebar's suggestions card was closed on every device. */
+  routine_suggestions_card_dismissed: { surface: string };
+  /** Undo right after closing a sidebar's suggestions card. */
+  routine_suggestions_card_restored: { surface: string };
+  /** A suggestion's card was on screen in an opened list. */
+  routine_suggestion_shown: RoutineSuggestionEvent;
+  /** Turned on in one click from its card; `edited` if changed there first. */
+  routine_suggestion_enabled: RoutineSuggestionEvent & {
+    routineId: string;
+    edited: boolean;
+  };
+  /** First change to one of a suggestion's knob values on its card. */
+  routine_suggestion_edited: RoutineSuggestionEvent;
+  /** Opened in the full routine editor before saving. */
+  routine_suggestion_customized: RoutineSuggestionEvent & { edited: boolean };
+  /** "Not interested": dismissed on every surface. */
+  routine_suggestion_dismissed: RoutineSuggestionEvent;
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
     routineId: string;
     trigger: 'manual';
-    targetKind?: 'agent' | 'model';
+    targetKind?: 'agent' | 'model' | 'steps';
+  };
+
+  // --- Saved email views ---------------------------------------------------
+  /** A confirmed create, by where the definition started. */
+  email_saved_view_created: {
+    savedViewId: string;
+    source: 'builder' | 'save_filters' | 'duplicate';
+  };
+  /** Opened from the sidebar or picker; `viewCount` is how many the viewer has. */
+  email_saved_view_opened: {
+    savedViewId: string;
+    viewCount: number;
   };
 };
 
 export type AppEventNames = keyof AppEvents;
+
+/** Which suggestion, where it showed, and who suggested what kind. */
+type RoutineSuggestionEvent = {
+  suggestionId: string;
+  /** The sidebar's surface, or the suggestion's main one on the Routines page. */
+  surface: string;
+  placement: 'sidebar' | 'routines';
+  /** `for_you` from AI, `macro` for Macro's templates. */
+  from: 'for_you' | 'macro';
+  /** A catalog routine with AI's values, or a routine AI drafted. */
+  kind: 'catalog' | 'routine';
+  catalogKey?: string;
+};

@@ -7,7 +7,7 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
-import { createSignal, For, type JSX, onCleanup } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import {
@@ -16,29 +16,6 @@ import {
   ShareTrigger,
   shareLevelsFor,
 } from './ShareButton';
-
-vi.mock('@app/features/calendar-notes/document-meeting-notes', () => ({
-  DocumentMeetingNotes: (props: {
-    documentId: string;
-    onAccessState?: (state: 'shared' | 'none', teamIds: string[]) => void;
-  }) => {
-    mocks.mountMeetingNotes(props.documentId);
-    onCleanup(mocks.unmountMeetingNotes);
-    props.onAccessState?.(
-      props.documentId === 'meeting-note' ? 'shared' : 'none',
-      []
-    );
-    return (
-      <section aria-label="Meeting links">
-        Meeting links for {props.documentId}
-      </section>
-    );
-  },
-}));
-
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.meetingNotesFlag(),
-}));
 
 // Share's request workflow has its own source and lifecycle suites. Keep these
 // existing sharing tests independent of a live QueryClient and backend.
@@ -88,9 +65,6 @@ const ME = 'macro|me@example.com';
 const SOMEONE_ELSE = 'macro|someone-else@example.com';
 
 const mocks = vi.hoisted(() => ({
-  meetingNotesFlag: () => ({ enabled: true, loading: false }),
-  mountMeetingNotes: vi.fn(),
-  unmountMeetingNotes: vi.fn(),
   sendToChannel: vi.fn(),
   sendToUsers: vi.fn(),
   graphql: false,
@@ -200,9 +174,6 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [vi.fn(), 'share-scope'],
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({ all: () => [] }),
-}));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
@@ -449,7 +420,6 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false } },
   });
   vi.clearAllMocks();
-  mocks.meetingNotesFlag = () => ({ enabled: true, loading: false });
   mocks.inBlock = true;
   mocks.blockId = 'launcher-placeholder';
   mocks.getDocumentPermissions.mockResolvedValue(
@@ -491,8 +461,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('document meeting-link management', () => {
-  it('loads the linked note’s permissions instead of its enclosing calendar block', async () => {
+describe('document permissions source', () => {
+  it('loads a document’s own permissions instead of its enclosing block’s', async () => {
     mocks.blockId = 'calendar';
     mocks.blockEditPermissionEnabled = false;
     mocks.getDocumentPermissions.mockResolvedValue(
@@ -504,8 +474,8 @@ describe('document meeting-link management', () => {
     );
     render(() => (
       <ShareModal
-        id="linked-note"
-        name="Linked note"
+        id="shared-doc"
+        name="Shared doc"
         owner={ME}
         itemType="document"
         blockAlias="md"
@@ -516,7 +486,7 @@ describe('document meeting-link management', () => {
     ));
     await vi.waitFor(() =>
       expect(mocks.getDocumentPermissions).toHaveBeenCalledWith({
-        document_id: 'linked-note',
+        document_id: 'shared-doc',
       })
     );
     expect(
@@ -526,97 +496,6 @@ describe('document meeting-link management', () => {
     expect(
       await screen.findByRole('button', { name: 'Set option edit' })
     ).toBeTruthy();
-  });
-  it.each([false, true])(
-    'gates the meeting source without implying grants were revoked (mobile: %s)',
-    async (mobile) => {
-      mocks.mobile = mobile;
-      mocks.blockId = 'meeting-note';
-      const [flag, setFlag] = createSignal({ enabled: false, loading: true });
-      const [documentId, setDocumentId] = createSignal('meeting-note');
-      mocks.meetingNotesFlag = flag;
-      render(() => (
-        <ShareModal
-          id={documentId()}
-          name="Notes"
-          owner={ME}
-          itemType="document"
-          blockAlias="md"
-          userPermissions={Permissions.OWNER}
-          open
-          onOpenChange={vi.fn()}
-        />
-      ));
-      if (mobile)
-        await fireEvent.click(screen.getByRole('tab', { name: /^Link$/ }));
-      expect(mocks.mountMeetingNotes).not.toHaveBeenCalled();
-      expect(screen.getByText('Checking access…')).toBeDefined();
-      expect(screen.queryByText('Just me')).toBeNull();
-
-      setFlag({ enabled: false, loading: false });
-      expect(mocks.mountMeetingNotes).not.toHaveBeenCalled();
-      expect(screen.getByText('Restricted')).toBeDefined();
-      expect(screen.queryByText('Just me')).toBeNull();
-
-      setFlag({ enabled: true, loading: false });
-      expect(mocks.mountMeetingNotes).toHaveBeenCalledExactlyOnceWith(
-        'meeting-note'
-      );
-      expect(screen.getByText('Shared')).toBeDefined();
-
-      setFlag({ enabled: false, loading: false });
-      expect(mocks.unmountMeetingNotes).toHaveBeenCalledOnce();
-      expect(screen.getByText('Shared')).toBeDefined();
-      expect(screen.queryByText('Just me')).toBeNull();
-
-      setDocumentId('another-note');
-      expect(screen.queryByText('Shared')).toBeNull();
-      expect(await screen.findByText('Restricted')).toBeDefined();
-      expect(mocks.mountMeetingNotes).toHaveBeenCalledTimes(1);
-      setFlag({ enabled: true, loading: false });
-      expect(mocks.mountMeetingNotes).toHaveBeenLastCalledWith('another-note');
-      expect(screen.getByText('Just me')).toBeDefined();
-    }
-  );
-  it.each([false, true])(
-    'is reachable by the document owner (mobile: %s)',
-    async (mobile) => {
-      mocks.mobile = mobile;
-      render(() => (
-        <ShareModal
-          id="meeting-note"
-          name="Notes"
-          owner={ME}
-          itemType="document"
-          blockAlias="md"
-          userPermissions={Permissions.OWNER}
-          open
-          onOpenChange={vi.fn()}
-        />
-      ));
-      if (mobile)
-        await fireEvent.click(screen.getByRole('tab', { name: /^Link$/ }));
-      expect(
-        (await screen.findByRole('region', { name: 'Meeting links' }))
-          .textContent
-      ).toContain('meeting-note');
-      expect(screen.queryByText('Just me')).toBeNull();
-    }
-  );
-  it('does not request another owner’s meeting links', () => {
-    render(() => (
-      <ShareModal
-        id="meeting-note"
-        name="Notes"
-        owner={SOMEONE_ELSE}
-        itemType="document"
-        blockAlias="md"
-        userPermissions={Permissions.CAN_VIEW}
-        open
-        onOpenChange={vi.fn()}
-      />
-    ));
-    expect(screen.queryByRole('region', { name: 'Meeting links' })).toBeNull();
   });
 });
 function mountShare(isOwner: boolean) {
@@ -1044,7 +923,7 @@ describe('agent session sharing', () => {
     expect(mocks.sendToChannel).toHaveBeenCalledOnce();
   });
   it('keeps context identity for existing forwarding callers without overrides', async () => {
-    render(() => <ForwardToChannel name="Document" hideAccessLevelSelector />);
+    render(() => <ForwardToChannel name="Document" />);
     await selectChannel();
     share();
     expect(mocks.sendToChannel).toHaveBeenCalledWith(
@@ -1058,12 +937,7 @@ describe('agent session sharing', () => {
   it('uses the current explicit identity if it changes while mounted', async () => {
     const [id, setId] = createSignal('old-session');
     render(() => (
-      <ForwardToChannel
-        name="Session"
-        blockName="agent"
-        blockId={id()}
-        hideAccessLevelSelector
-      />
+      <ForwardToChannel name="Session" blockName="agent" blockId={id()} />
     ));
     setId('new-session');
     await selectChannel();

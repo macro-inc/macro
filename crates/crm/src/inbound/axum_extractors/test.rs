@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    http::{Method, Request, StatusCode, header},
     routing::get,
 };
 use chrono::{DateTime, Utc};
@@ -65,6 +65,7 @@ impl JwtValidator for FakeJwtValidator {
                 origin: macro_authorization::CredentialOrigin::Session,
                 identity: ValidatedIdentity {
                     agent_id: None,
+                    agent_via: None,
                     user_id: USER_ID.to_string(),
                     fusion_user_id: "test-fusion-user".to_string(),
                     organization_id: None,
@@ -233,6 +234,31 @@ impl EntityAccessService for FakeEntityAccessService {
 #[derive(Clone)]
 struct FakeCrmService;
 
+impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
+    async fn contribution_mailbox(
+        &self,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Option<crate::domain::email_privacy::EmailContributionMailbox>, CrmError> {
+        panic!("unexpected contribution_mailbox call")
+    }
+
+    async fn email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<crate::domain::email_privacy::EmailPrivacySettings, CrmError> {
+        panic!("unexpected email_privacy call")
+    }
+
+    async fn change_email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: crate::domain::email_privacy::EmailPrivacyChange,
+    ) -> Result<crate::domain::email_privacy::EmailPrivacySettings, CrmError> {
+        panic!("unexpected change_email_privacy call")
+    }
+}
+
 impl CrmService for FakeCrmService {
     async fn list_contacts_for_soup(
         &self,
@@ -306,7 +332,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         panic!("unexpected create_company call")
     }
@@ -315,7 +341,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         panic!("unexpected create_contact call")
     }
@@ -342,6 +368,55 @@ impl CrmService for FakeCrmService {
         _name: &str,
     ) -> Result<(), CrmError> {
         panic!("unexpected set_company_name call")
+    }
+
+    async fn set_contact_email(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn set_contact_company(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _company_id: uuid::Uuid,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn add_contact_email(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn remove_contact_email(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn unlink_contact_company(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
     }
 
     async fn set_contact_name(
@@ -433,6 +508,31 @@ impl CrmService for FakeCrmService {
         _patch: crate::domain::model::CrmTeamSettingsPatch,
     ) -> Result<crate::domain::model::CrmTeamSettings, CrmError> {
         panic!("unexpected update_team_settings call")
+    }
+
+    async fn create_team_contact(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        panic!("unexpected create_team_contact call")
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<crate::domain::model::CrmBlockedDomain>, CrmError> {
+        panic!("unexpected list_blocked_domains call")
+    }
+
+    async fn set_domain_blocked(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+        _blocked: bool,
+    ) -> Result<String, CrmError> {
+        panic!("unexpected set_domain_blocked call")
     }
 }
 
@@ -689,4 +789,265 @@ async fn credential_failures_happen_before_permission_lookup() {
         assert_eq!(body, json!({ "message": expected_message }));
         assert!(access.calls().is_empty());
     }
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn contact_mutation_http_contract_covers_addresses_and_company_links(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::{companies_repo::CompaniesRepository, service::CrmServiceImpl};
+    use crate::inbound::axum_router::{contact_emails, set_contact_company, set_contact_email};
+    use crate::outbound::{
+        companies_repo::CompaniesRepositoryImpl, no_op_resolver::NoOpCompanyMetadataResolver,
+    };
+    let team = uuid(TEAM_ID);
+    let user = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
+        user,
+        USER_ID,
+        format!("stripe_{user}")
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO \"User\" (id, email, macro_user_id) VALUES ($1, $1, $2)",
+        USER_ID,
+        user
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Test team', $2)",
+        team,
+        USER_ID
+    )
+    .execute(&pool)
+    .await?;
+    // Manual contact edits need team access, never contribution enrollment.
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let contact = repo
+        .create_contact_for_team(&team, None, "Contact", Utc::now())
+        .await?;
+    let company = repo
+        .create_company_for_team(&team, None, "Example company", Utc::now())
+        .await?;
+    let service = Arc::new(CrmServiceImpl::new(
+        repo.clone(),
+        NoOpCompanyMetadataResolver,
+    ));
+    let router = |level| {
+        let authorization = MacroAuthorizationServiceImpl::new(
+            FakeJwtValidator,
+            InternalAuthConfig {
+                api_key: INTERNAL_KEY.to_string(),
+                default_user_id: None,
+            },
+            macro_authorization::NoBotAuthorizer,
+            macro_authorization::NoUserApiKeyAuthorizer,
+        );
+        Router::new()
+            .route(
+                "/contacts/{contact_id}/email",
+                axum::routing::put(set_contact_email::handler),
+            )
+            .route(
+                "/contacts/{contact_id}/emails",
+                axum::routing::put(contact_emails::add_handler)
+                    .delete(contact_emails::remove_handler),
+            )
+            .route(
+                "/contacts/{contact_id}/company",
+                axum::routing::put(set_contact_company::handler)
+                    .delete(set_contact_company::unlink_handler),
+            )
+            .with_state(CrmRouterState {
+                service: service.clone(),
+                stage_service: Arc::new(()),
+                entity_access_service: Arc::new(FakeEntityAccessService::with_access_level(level)),
+                authorization_state: MacroAuthorizationState::new(Arc::new(authorization)),
+            })
+    };
+    let edit = router(AccessLevel::Edit);
+    let request = |id: Uuid, field: &str, body: Value| {
+        Request::put(format!("/contacts/{id}/{field}"))
+            .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    };
+    for (field, body) in [
+        ("email", json!({})),
+        ("email", json!({"email": null})),
+        ("company", json!({})),
+        ("company", json!({"companyId": null})),
+    ] {
+        assert_eq!(
+            edit.clone()
+                .oneshot(request(contact.id, field, body))
+                .await?
+                .status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+    assert_eq!(
+        edit.clone()
+            .oneshot(request(
+                contact.id,
+                "company",
+                json!({"companyId": company.company.id})
+            ))
+            .await?
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        router(AccessLevel::View)
+            .oneshot(request(
+                contact.id,
+                "email",
+                json!({"email": "contact@example.com"})
+            ))
+            .await?
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    for _ in 0..2 {
+        assert_eq!(
+            edit.clone()
+                .oneshot(request(
+                    contact.id,
+                    "email",
+                    json!({"email": " Contact@Example.com "})
+                ))
+                .await?
+                .status(),
+            StatusCode::OK
+        );
+    }
+    // Addresses travel in the body, so request telemetry never records one.
+    // Adding needs edit access like every other contact setter.
+    let address = |method: Method, id: Uuid, email: &str| {
+        Request::builder()
+            .method(method)
+            .uri(format!("/contacts/{id}/emails"))
+            .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json!({ "email": email }).to_string()))
+            .unwrap()
+    };
+    assert_eq!(
+        router(AccessLevel::View)
+            .oneshot(address(Method::PUT, contact.id, "second@example.com"))
+            .await?
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = edit
+        .clone()
+        .oneshot(address(Method::PUT, contact.id, "Second+tag@Example.com"))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["email"], "contact@example.com");
+    assert_eq!(
+        body["emails"],
+        json!(["contact@example.com", "second+tag@example.com"])
+    );
+    assert_eq!(body["companyDomain"], false);
+    assert_eq!(body["companyDomainEmails"], json!([]));
+    assert_eq!(
+        edit.clone()
+            .oneshot(address(Method::PUT, contact.id, "not-an-address"))
+            .await?
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let response = edit
+        .clone()
+        .oneshot(address(
+            Method::DELETE,
+            contact.id,
+            "second+tag@example.com",
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["emails"], json!(["contact@example.com"]));
+    assert_eq!(
+        router(AccessLevel::View)
+            .oneshot(address(Method::DELETE, contact.id, "contact@example.com"))
+            .await?
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        edit.clone()
+            .oneshot(request(
+                contact.id,
+                "company",
+                json!({"companyId": company.company.id})
+            ))
+            .await?
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let persisted = repo
+        .get_contact_for_team(&team, &contact.id, true)
+        .await?
+        .unwrap();
+    assert_eq!(persisted.email.as_deref(), Some("contact@example.com"));
+    assert_eq!(persisted.company_id, None);
+    let blank = repo
+        .create_contact_for_team(&team, None, "Second", Utc::now())
+        .await?;
+    assert_eq!(
+        edit.clone()
+            .oneshot(request(
+                blank.id,
+                "email",
+                json!({"email": "contact@example.com"})
+            ))
+            .await?
+            .status(),
+        StatusCode::CONFLICT
+    );
+    let personal = format!("contact@{}", "gmail.com");
+    assert_eq!(
+        edit.clone()
+            .oneshot(request(blank.id, "email", json!({"email": personal})))
+            .await?
+            .status(),
+        StatusCode::OK
+    );
+    let response = edit
+        .clone()
+        .oneshot(request(
+            blank.id,
+            "company",
+            json!({"companyId": company.company.id}),
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["personalEmail"], true);
+    assert_eq!(body["companyId"], company.company.id.to_string());
+
+    let unlink = |level| {
+        router(level).oneshot(
+            Request::delete(format!("/contacts/{}/company", blank.id))
+                .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+    };
+    assert_eq!(
+        unlink(AccessLevel::View).await?.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = unlink(AccessLevel::Edit).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["companyId"], Value::Null);
+    Ok(())
 }

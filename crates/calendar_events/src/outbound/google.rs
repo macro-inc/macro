@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
+use macro_service_urls::GoogleCalendarApiUrl;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use rootcause::Report;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -30,7 +31,6 @@ use crate::domain::{
     },
 };
 
-const GOOGLE_CALENDAR_API: &str = "https://www.googleapis.com/calendar/v3";
 // Events.list excludes the lower end bound and ignores fractional seconds.
 // A full second of padding admits points at the requested inclusive start;
 // normalization still filters occurrences against the exact requested range.
@@ -68,21 +68,31 @@ pub struct GoogleCalendarClient<G = UnmeteredGate> {
 impl GoogleCalendarClient<UnmeteredGate> {
     /// Construct an unmetered client using the application's HTTP client.
     pub fn new(client: Client) -> Self {
+        Self::with_gate(client, UnmeteredGate)
+    }
+
+    /// Construct an unmetered client for a given Google Calendar API base,
+    /// such as `crates/gmail_emulator`'s in a test.
+    pub fn new_with_url(client: Client, api_base: String) -> Self {
         Self {
             client,
             gate: UnmeteredGate,
-            api_base: GOOGLE_CALENDAR_API.into(),
+            api_base,
         }
     }
 }
 
 impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     /// Construct a client whose requests must pass the supplied quota gate.
+    ///
+    /// The API base is Google's unless `OVERRIDE_GOOGLE_CALENDAR_API_URL`
+    /// names another, and a process whose override cannot be read does not
+    /// start.
     pub fn with_gate(client: Client, gate: G) -> Self {
         Self {
             client,
             gate,
-            api_base: GOOGLE_CALENDAR_API.into(),
+            api_base: GoogleCalendarApiUrl::unwrap_new().to_string(),
         }
     }
 
@@ -1356,6 +1366,16 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         else {
             return Ok(ProviderSeriesMutationOutcome::Gone);
         };
+        // Google answers a read of a deleted or replaced series with its
+        // tombstone and refuses any change to it, so there is nothing left to
+        // truncate. The caller retires the source, as for a missing series.
+        if master.status.as_deref() == Some("cancelled") {
+            tracing::info!(
+                master_provider_event_id,
+                "the series is a tombstone, nothing to truncate"
+            );
+            return Ok(ProviderSeriesMutationOutcome::Gone);
+        }
         // Removing everything from the first occurrence onward is a series
         // deletion, matching Google Calendar's own behavior.
         let master_start = google_time(&master).ok().map(|time| event_start_of(&time));

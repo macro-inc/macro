@@ -53,8 +53,6 @@ export default {
     projectBadge: 'プロジェクト',
     newProject: '新規プロジェクト',
     contentAlreadyOpen: 'コンテンツはすでに開いています',
-    unableToOpenConversation:
-      '会話を開けませんでした。もう一度お試しください。',
     mobileSearchPlaceholder: '検索…',
     closeSearch: '検索を閉じる',
     searchFullTextFor: '「{{query}}」を全文検索',
@@ -735,7 +733,7 @@ export default {
     tabMobileApp: 'モバイルアプリ',
     tabTags: 'タグ',
     tabIntegrations: '連携',
-    tabRuntimes: 'ランタイム',
+    tabRuntimes: 'マシン',
     tabMcpServer: 'MCPサーバー',
     tabApiKeys: 'APIキー',
     tabBots: 'ボット',

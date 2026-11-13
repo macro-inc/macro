@@ -1,6 +1,4 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
-import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
@@ -12,21 +10,14 @@ import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import {
-  endTrackedDocumentSpan,
-  registerDocumentSpan,
-  startDocumentSpan,
-} from '@block-md/observability';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
-import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableAiEditor,
   enableCarouselCreateMenu,
-  enableChatV3Agents,
   enableDatabases,
   enableFigViewer,
   enableForms,
@@ -47,7 +38,6 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import {
   createCanvasFile,
-  createChat,
   createCodeFileFromText,
   createMarkdownFile,
   createSnippet,
@@ -162,7 +152,7 @@ const createBlock = async (spec: {
   loading?: boolean;
   shouldInsert?: boolean;
   openCreated?: OpenCreatedItem;
-  /** Active creation span; registered by document id after creation. */
+  /** Active creation span, owned by the creation operation. */
   span?: Span;
 }) => {
   const { openWithSplit } = useSplitLayout();
@@ -185,13 +175,11 @@ const createBlock = async (spec: {
   const id = await createFn();
   if (!id) {
     span?.setAttr('error', true);
-    span?.end();
     split?.goBack();
     return;
   }
 
   span?.setAttr('document.id', id);
-  if (span) registerDocumentSpan(id, span);
 
   if (openCreated?.({ blockName, id })) {
     span?.event('doc.navigated');
@@ -286,7 +274,7 @@ export function runCreateAction(
 
   switch (blockName) {
     case 'md': {
-      const span = startDocumentSpan('doc.create');
+      const span = Telemetry.span('doc.create');
       span.setAttr('doc.type', 'md');
       span.setAttr('doc.source', source);
       span
@@ -308,9 +296,9 @@ export function runCreateAction(
         )
         .catch((error) => {
           span.error(error);
-          endTrackedDocumentSpan(span);
           reportCreateBlockError(error);
-        });
+        })
+        .finally(() => span.end());
       return;
     }
     case 'spreadsheet':
@@ -428,35 +416,6 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
-    case 'chat':
-      if (isFeatureEnabled(enableChatV3Agents)) {
-        setCreateMenuOpen(false, false);
-        openAgentComposer(useSplitLayout(), shouldInsert);
-        return;
-      }
-      // On mobile the chat input doesn't autofocus on mount, so arm focus
-      // within this gesture (iOS only raises the keyboard for a synchronous
-      // focus). The chat mounts asynchronously, so this waits for the input.
-      if (isMobile()) {
-        triggerFocusInput(() =>
-          document
-            .getElementById(CHAT_INPUT_TEXT_AREA_ID)
-            ?.querySelector<HTMLElement>('[contenteditable="true"]')
-        );
-      }
-      createBlock({
-        blockName: 'chat',
-        createFn: async () => {
-          const result = await createChat(undefined, { source });
-          if ('error' in result) {
-            return;
-          }
-          return result.chatId;
-        },
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
     case 'project':
       createComponent({
         componentId: 'folder-compose',
@@ -536,39 +495,11 @@ export function runCreateAction(
         asPopover: true,
       });
       return;
-    case 'agent': {
-      if (isFeatureEnabled(enableChatV3Agents)) {
-        setCreateMenuOpen(false, false);
-        openAgentComposer(useSplitLayout(), shouldInsert);
-        return;
-      }
-      // Without the composer there is nothing to ask for: a managed session's
-      // bot, repository and workspace are all deployment configuration, so
-      // this opens one straight away.
-      //
-      // Opened against a placeholder rather than awaited: the create does not
-      // answer until its sandbox has booted and cloned the repo, and no one
-      // should watch a spinner for that. The block mounts now — composer live,
-      // prompts queueing — and adopts the real id when it lands
-      // (`block-agent/context/pending-session.ts`).
-      const { openWithSplit } = useSplitLayout();
+    case 'chat':
+    case 'agent':
       setCreateMenuOpen(false, false);
-      // On mobile the agent input doesn't autofocus on mount, so arm focus
-      // within this gesture (iOS only raises the keyboard for a synchronous
-      // focus). The block mounts asynchronously, so this waits for the input.
-      if (isMobile()) {
-        triggerFocusInput(() =>
-          document
-            .getElementById(AGENT_INPUT_TEXT_AREA_ID)
-            ?.querySelector<HTMLElement>('[contenteditable="true"]')
-        );
-      }
-      openWithSplit(
-        { type: 'agent', id: startPendingSession() },
-        { referredFrom: 'launcher', preferNewSplit: shouldInsert }
-      );
+      openAgentComposer(useSplitLayout(), shouldInsert);
       return;
-    }
   }
 }
 
@@ -606,34 +537,6 @@ const createBlocks = (
     },
   },
   {
-    // The pre-agent-session chat, kept on `a` for anyone the new agent flag
-    // has not reached. Mutually exclusive with the Agent entry below:
-    // both bind `a`, and exactly one is ever enabled.
-    id: 'Agent',
-    get label() {
-      return t('create.agentLabel');
-    },
-    icon: getIconConfig('chat').icon,
-    description: () => t('create.chatDescription'),
-    get launcherHint() {
-      return t('create.chatHint');
-    },
-    keywords: ['new', 'make', 'add', 'agent'],
-    blockName: 'chat',
-    hotkeyToken: TOKENS.create.chat,
-    altHotkeyToken: TOKENS.create.chatNewSplit,
-    hotkey: 'a',
-    // Both `a` entries have to survive registration for the dispatcher to
-    // pick between them by condition; the default 'override' would let the
-    // later one silently replace the earlier.
-    registrationType: 'add',
-    enabled: () => !isFeatureEnabled(enableChatV3Agents),
-    keyDownHandler: () => {
-      createAction('chat', { shouldInsert: pressedKeys().has('shift') });
-      return true;
-    },
-  },
-  {
     id: 'Routine',
     get label() {
       return t('create.routineLabel');
@@ -667,8 +570,6 @@ const createBlocks = (
     hotkeyToken: TOKENS.create.agent,
     altHotkeyToken: TOKENS.create.agentNewSplit,
     hotkey: 'a',
-    registrationType: 'add',
-    enabled: () => isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       createAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -1024,18 +925,16 @@ export function useCreateMenuBlocks(
   const commands = useCreateCommands();
   const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
+  const projectsFlag = useFeatureFlag(enableProjects);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
   // flag that resolves after mount would leave the menu as it was until reload.
-  const agentsFlag = useFeatureFlag(enableChatV3Agents);
-  const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
   const psdFlag = useFeatureFlag(enablePsdEditor);
   const figFlag = useFeatureFlag(enableFigViewer);
   const aiFlag = useFeatureFlag(enableAiEditor);
   const formsFlag = useFeatureFlag(enableForms);
   return createMemo(() => {
-    agentsFlag();
     databasesFlag();
     psdFlag();
     figFlag();

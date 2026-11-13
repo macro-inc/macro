@@ -1,3 +1,4 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { ChannelIcon } from '@channel/channel-icon';
 import {
   EntityIcon as CoreEntityIcon,
@@ -52,6 +53,11 @@ export function EntityIcon(props: EntityIconProps) {
       fallback={
         <CoreEntityIcon
           targetType={iconType()}
+          appearance={
+            supportsEntityAppearance(props.entity)
+              ? props.entity.appearance
+              : undefined
+          }
           size="fill"
           class={props.class}
           weight={props.weight}

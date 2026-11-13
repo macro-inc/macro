@@ -2,9 +2,11 @@
 
 Original SVG drawings for Macro's interface. The source of truth is the SVG
 files in this directory. These drawings were authored on a blank coordinate
-grid; no Apple, OpenAI, Linear, or Phosphor vector paths were imported or traced.
-SF Symbols and ChatGPT were visual references for optical balance and clarity,
-not asset sources. The icons have no platform font or native symbol dependency.
+grid, except `regular/speaker-slash.svg`, which retains Phosphor's regular
+geometry and MIT notice for the recording mute state. No Apple, OpenAI, or
+Linear vector paths were imported or traced. SF Symbols and ChatGPT were visual
+references for optical balance and clarity, not asset sources. The icons have
+no platform font or native symbol dependency.
 
 Apple's design guidance informs optical balance, not asset reuse. Do not import,
 trace, or modify SF Symbols exports or templates for this cross-platform set.
@@ -47,6 +49,9 @@ independent of the drawing size. Avoid scaling detailed glyphs below 14 px.
 SVGs are decorative by default; put accessible names on their controls.
 For a meaningful standalone glyph with its own accessible label, explicitly
 set `aria-hidden={false}` so the default does not hide its status or label.
+Property status option glyphs are decorative too: their surrounding value or
+menu label names the status. Standalone `TaskStatusIcon` identity glyphs retain
+their accessible status label.
 
 The existing semantic filenames make the migration explicit at each import.
 Several equivalent concepts (for example `folder` and `folder-simple`) share
@@ -58,10 +63,54 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
+Question glyphs share one letterform, following Phosphor's proportions: a wide,
+flat bowl with a short left terminal and stem, set slightly low. As in Phosphor,
+`question` is circled: the mark at 57% inside the `info` ring, leaving about 2
+units above the mark. `question-fill` cuts the same mark out of
+a 9.4-unit disc like the other circle fills, and `question-mark` draws it alone
+at full size.
+Urgent priority uses `priority-urgent-fill`, a filled rounded square with rounded
+exclamation-stem and dot cutouts. Its dedicated `priority-urgent` token maps to
+the theme's orange rather than warning or accent.
+Task status rings use a 2.25-unit stroke: `task-created` is a plain hollow ring,
+`task-in-progress` adds a counterclockwise half pie from 12 o'clock, and
+`task-in-review` adds a counterclockwise three-quarter pie. Both pies use a 6-unit
+radius with a 1.875-unit gap to the ring's inner edge. Not started keeps its
+neutral color, with no shadow or highlight. Completed and Canceled use the
+status-specific `task-completed-fill` and `task-canceled-fill` discs with transparent
+check and cross cutouts; keep generic check-circle and x-circle icons separate.
+Empty priority uses `../wide-priority-none.svg`: the same 18×12 ascending bars,
+color, and display box as Low/Medium/High, with all three bars at 30% opacity in
+the SVG and no additional empty-icon dimming. Empty assignees use
+`user-circle-dashed`, a dashed ring around a filled person. Set projects use
+`cube`; empty projects use `cube-dashed`, with a dash at every corner rather than
+a dashed stack. Use the same dashed cube for empty Project values in title pills,
+list cells, side-panel values, and group headers.
+Draw the cube's dash gaps as explicit segments; `pathLength`-normalized dashes
+become solid when SVG optimization merges the individual edges.
+Empty Due date values use `calendar-slash` in list cells, title pills, side-panel
+values, board cards, and no-due-date group headers; populated dates keep their
+existing calendar icon. Keep both icons at their surface's existing size.
+Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
+`task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
+tokens for icons and group-header tints. Their defaults are muted gray, blended
+amber, violet, accent, and muted gray respectively. In Progress mixes amber with
+`content-0` in sRGB: 80% amber in dark mode and 85% in light mode, improving contrast
+without rotating amber toward a tinted foreground's hue. Authored overrides stay
+unchanged.
+Status and Priority option glyphs share a 12 px default, including title property
+pills. Status and Priority selector dropdowns use 16 px icons on desktop and touch,
+including empty-value options. Explicit caller sizing takes precedence: leading task
+status controls use 18 px, leading priority controls use 16 px on desktop and
+20 px on phones, and side-panel values use 16 px. Leading priority glyphs never
+flex-shrink. Group-header carets use 16 px; hit targets stay unchanged.
 
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,
 people variants two figures. The CRM icon retains its stepped building silhouette.
+The connector plug stands upright: two prongs over a 13-unit rounded body and a
+short cord, filling the same optical area as its navigation neighbors; `plugs`
+shares the drawing.
 Office glyphs use two sparse rows of windows and a baseline to avoid a face-like
 appearance. Keep the selected calendar header open around its binding posts,
 quote heads closed with trailing tails, and the filter recognizable as a funnel.
@@ -90,32 +139,13 @@ Review both variants at their actual size and contrast, following Apple's
 [SF Symbols guidance](https://developer.apple.com/design/human-interface-guidelines/sf-symbols#Design-variants).
 These are composition principles; the drawings remain independently authored.
 
-## Interaction motion
+## No interaction motion
 
-`icon-motion.ts` is installed once by the app shell. It delegates pointer presses
-and keyboard/assistive-technology clicks to the leading action glyph in buttons,
-links, tabs, command options, and menu items, including portal menus and newly mounted controls.
-All existing and newly authored `data-macro-icon` SVGs inherit this behavior.
-
-- Keep feedback brief and finite: 320 ms on press, 280 ms on hover. Use a small
-  press-and-settle, a restrained turn for settings, tilt for folders/mail,
-  or lift for sharing. Do not bounce continuously or delay the action.
-- Hover is limited to search, settings, and add glyphs after 160 ms of
-  pointer intent. Touch does not trigger hover. Most icons respond only to press.
-  The agent sparkle stays still.
-- Animate the drawing, never its label, hit target, selection background, or
-  layout. Individual transform properties preserve existing layout transforms.
-- Put `data-icon-motion-target` on a fixed-size wrapper when an action swaps SVGs
-  (as `NavGlyph` does). Both variants then move as one without a position jump.
-- Static glyphs, disclosure arrows, state/check indicators, loading spinners,
-  disabled/busy controls, and illustrations larger than 32 px stay still.
-  Add `data-icon-motion="none"` on a glyph or ancestor for other stateful icons
-  or controls that own their own motion. Do not add decorative motion to status.
-- Respect `prefers-reduced-motion` for every effect, including hover; preference
-  changes cancel in-flight animation. Rapid presses replace rather than stack.
-- New semantic motion belongs in this shared module, not individual consumers.
-  Draw original paths and motion; references such as Grok inform restraint and
-  timing, never asset reuse. No new animation runtime is needed.
+Interface glyphs never animate on press or hover. Do not add a shared motion
+module or per-control bounce, turn, tilt, lift, or scale effects; controls give
+feedback through their own hover and pressed fills. State-driven motion is
+separate: disclosure carets still turn with their expanded state, and loading
+spinners keep spinning.
 
 ## Review
 

@@ -5,9 +5,14 @@ export type ClientOptions = {
 };
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+ * server-owned.
  */
 export type ActionConfiguration = {
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     enabled: boolean;
     kind: ActionKind;
     name: string;
@@ -15,18 +20,20 @@ export type ActionConfiguration = {
      * Omitted by clients that predate the setting; runs then start unlisted.
      */
     run_visibility?: RunVisibility;
-    task: {
-        [key: string]: unknown;
-    };
+    task: RoutineTask;
     trigger: ActionTrigger;
 };
 
 /**
- * Canonical configuration replacement. Activation has its own endpoint, so
- * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
- * it too, so clients that predate the setting do not reset it.
+ * Configuration replacement, the update body. Activation has its own endpoint, so
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` or
+ * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An empty string clears it.
+     */
+    description?: string | null;
     /**
      * Still sent by clients deployed before the activation endpoint.
      *
@@ -36,9 +43,7 @@ export type ActionConfigurationUpdate = {
     kind: ActionKind;
     name: string;
     run_visibility?: null | RunVisibility;
-    task: {
-        [key: string]: unknown;
-    };
+    task: RoutineTask;
     trigger: ActionTrigger;
 };
 
@@ -72,6 +77,9 @@ export type ActionTrigger = {
     filters: EventFilters;
     type: 'events';
 } | {
+    at: string;
+    type: 'once';
+} | {
     triggers: RoutineTriggers;
     type: 'multiple';
 };
@@ -93,6 +101,26 @@ export type AgentMcpServer = {
     server_name: string;
 };
 
+/**
+ * Hand the run to a model running as Macro, or to an agent.
+ */
+export type AgentStep = {
+    agent?: null | AgentTaskAgent;
+    /**
+     * What the model or agent should do. It also sees the triggering event
+     * and what earlier steps in this run did.
+     */
+    instructions: string;
+    /**
+     * Required when no agent is selected; otherwise overrides the agent's default model.
+     */
+    model?: string | null;
+};
+
+/**
+ * The single agent task: how routines were stored before they had steps,
+ * and still how a routine that is only an agent is saved.
+ */
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
     /**
@@ -101,7 +129,13 @@ export type AgentTask = {
      */
     mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
+    /**
+     * Instructions placed before the user's.
+     */
     prompt: string;
+    /**
+     * What the agent should do.
+     */
     user_prompt: string;
 };
 
@@ -109,6 +143,9 @@ export type AgentTask = {
  * A persona selection, independent of its runtime and current default model.
  */
 export type AgentTaskAgent = {
+    /**
+     * The agent's bot id.
+     */
     bot_id: string;
 };
 
@@ -128,6 +165,190 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor = 'gray' | 'red' | 'tomato' | 'orange' | 'amber' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink';
+
+/**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon = {
+    kind: 'macro';
+    /**
+     * Catalog name without the SVG extension.
+     */
+    name: string;
+} | {
+    kind: 'emoji';
+    /**
+     * Unicode emoji text, not markup or a URL.
+     */
+    value: string;
+};
+
+/**
+ * One of Macro's routines, ready to start a new routine from.
+ */
+export type CatalogEntry = {
+    /**
+     * What it does, in a few words, for the line beside its trigger.
+     */
+    action: string;
+    /**
+     * It changes or sends what other people see.
+     */
+    affectsOthers: boolean;
+    code?: null | RoutineStep;
+    /**
+     * What it does, in a short line.
+     */
+    description: string;
+    /**
+     * The Ask AI step's instructions: its only step without code, and the
+     * step to use where code can't be saved.
+     */
+    instructions: string;
+    /**
+     * Names it, e.g. `inbox`.
+     */
+    key: string;
+    /**
+     * The code step's text knobs whose value names one of the owner's
+     * items (a tag, channel or label), by knob name.
+     */
+    namedKnobs: {
+        [key: string]: NamedItemKind;
+    };
+    /**
+     * What someone asks for, with when it runs.
+     */
+    request: string;
+    /**
+     * It may be switched on before its owner changes anything.
+     */
+    safeDefault: boolean;
+    /**
+     * Offered unpicked as a suggestion from Macro.
+     */
+    suggest: boolean;
+    /**
+     * Where it is offered, first the part of the app it belongs to most.
+     */
+    surfaces: Array<Surface>;
+    /**
+     * Offered among the templates when someone creates a routine.
+     */
+    template: boolean;
+    /**
+     * Its name once saved.
+     */
+    title: string;
+    /**
+     * When it runs; schedules are in the zone the catalog was asked for.
+     */
+    trigger: ActionTrigger;
+};
+
+/**
+ * A routine to check, as the create body takes it.
+ */
+export type CheckRoutineRequest = {
+    /**
+     * What a routine draft's session created for the routine to use, such as
+     * the database it writes to; kept with its draft for the person to see.
+     */
+    created?: Array<CreatedItem>;
+    routine: ActionConfiguration;
+};
+
+/**
+ * A code step that doesn't type-check.
+ */
+export type CheckedStepProblems = {
+    /**
+     * Its place among the routine's steps, from zero.
+     */
+    index: number;
+    /**
+     * What the type checker reports, first problems first.
+     */
+    problems: Array<string>;
+    /**
+     * Its title.
+     */
+    title: string;
+};
+
+/**
+ * Who a routine's code steps write as.
+ */
+export type CodeIdentity = 'agent' | 'owner';
+
+/**
+ * TypeScript written against Macro's SDK, usually by the AI that built the
+ * routine. It is type-checked before it is saved and runs with its owner's
+ * access.
+ */
+export type CodeStep = {
+    id?: null | StepId;
+    /**
+     * Values its owner can change without new code, which the code reads
+     * as `knobs.<name>`.
+     */
+    knobs?: Array<RoutineKnob>;
+    /**
+     * What it does as one sentence for its owner, with `{name}` where a
+     * knob's value shows and `{?name}` where a question knob's question
+     * shows, e.g. "Label it {label} when {?aboutMoney}". Saving checks every
+     * slot names one of its knobs.
+     */
+    sentence?: string | null;
+    /**
+     * A module exporting `async function main({ macro, run, routine,
+     * trigger, steps }: StepContext)`: `run` is this run (its time, zone and
+     * the previous run), `trigger` what started it (a schedule, an event and
+     * its item, or a person), `steps` the typed outputs of the steps before
+     * it. What `main` returns, as JSON of at most 64 KB, is the step's output.
+     */
+    source: string;
+    /**
+     * One or two sentences on how, for the routine's owner.
+     */
+    summary?: string;
+    /**
+     * What the step does, in a few words, e.g. "Label invoices".
+     */
+    title: string;
+};
+
+/**
+ * One time a routine's code was brought to a new SDK.
+ */
+export type CodeUpgrade = {
+    createdAt: string;
+    /**
+     * The SDK the code was checked against before; none when it never was.
+     */
+    fromSdk?: string | null;
+    id: string;
+    outcome: UpgradeOutcome;
+    /**
+     * The task before.
+     */
+    previousTask: RoutineTask;
+    /**
+     * Why the routine needs its owner.
+     */
+    reason?: string | null;
+    task?: null | RoutineTask;
+    /**
+     * The SDK it was brought to.
+     */
+    toSdk: string;
+    updatedAt: string;
+};
+
+/**
  * Why an event-triggered run was skipped before it started.
  */
 export type ConditionResult = {
@@ -141,15 +362,172 @@ export type ConditionResult = {
 };
 
 /**
- * Exactly one representation is accepted, even if mixed fields agree or are null.
+ * Something a routine draft's session created for the routine to use, such
+ * as the database it writes to: it exists whether or not the routine is
+ * saved.
  */
-export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
+export type CreatedItem = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+};
+
+/**
+ * A routine a run created, as that run's history names it.
+ */
+export type CreatedRoutine = {
+    id: string;
+    name: string;
+};
+
+/**
+ * What AI drafted, or why it couldn't.
+ */
+export type Draft = (DraftedRoutine & {
+    outcome: 'routine';
+}) | (DraftedStep & {
+    outcome: 'step';
+}) | {
+    created?: Array<DraftCreated>;
+    message: string;
+    outcome: 'failed';
+};
+
+/**
+ * What the drafter may write. It looks up the items the person's words
+ * name itself, with their access.
+ */
+export type DraftContext = {
+    /**
+     * The model Ask AI steps it writes run on.
+     */
+    agentModel: string;
+    /**
+     * Whether it may write code steps; otherwise it writes Ask AI steps.
+     * Changing a code step needs no permission.
+     */
+    code?: boolean;
+    /**
+     * Whether triggers may ask AI a yes/no question before a run. This host
+     * must also be able to answer it.
+     */
+    conditions?: boolean;
+    /**
+     * IANA time zone schedules are written in, e.g. `America/New_York`.
+     */
+    timezone: string;
+};
+
+/**
+ * Something a draft's session created. It exists whether or not the draft
+ * is saved.
+ */
+export type DraftCreated = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    /**
+     * Whether the drafted routine uses it. One it doesn't use was made for
+     * nothing, or is the routine's own work done early.
+     */
+    used: boolean;
+};
+
+/**
+ * What to draft.
+ */
+export type DraftRequest = {
+    description: string;
+    type: 'routine';
+} | {
+    description: string;
+    kind?: null | StepKind;
+    routine: RoutineSoFar;
+    type: 'add_step';
+} | {
+    index: number;
+    instruction: string;
+    routine: RoutineSoFar;
+    type: 'change_step';
+};
+
+/**
+ * What to draft, and what the drafter may write and name.
+ */
+export type DraftRoutineRequest = {
+    context: DraftContext;
+    draft: DraftRequest;
+};
+
+/**
+ * A drafted routine.
+ */
+export type DraftedRoutine = {
+    /**
+     * What AI created while drafting, such as the database the routine
+     * writes to. These exist whether or not the routine is saved.
+     */
+    created: Array<DraftCreated>;
+    name: string;
+    /**
+     * Steps whose code still fails the type checker.
+     */
+    problems: Array<StepProblem>;
+    /**
+     * What it does, in the shape a routine's task holds steps, each code
+     * step named as saving names it.
+     */
+    steps: Array<RoutineStep>;
+    trigger?: null | ActionTrigger;
+};
+
+/**
+ * A drafted step.
+ */
+export type DraftedStep = {
+    /**
+     * What AI created while drafting the step. These exist whether or not
+     * the step is saved.
+     */
+    created: Array<DraftCreated>;
+    /**
+     * What the type checker still finds in its code.
+     */
+    problems: Array<string>;
+    /**
+     * Why AI made a step it chose code or Ask AI, in a few words; empty
+     * when it gave no short reason or didn't choose.
+     */
+    reason: string;
+    /**
+     * The step, in the shape a routine's task holds it.
+     */
+    step: RoutineStep;
+};
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
     [key: string]: unknown;
+};
+
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export type EntityAppearance = {
+    color?: null | AppearanceColor;
+    icon?: null | AppearanceIcon;
 };
 
 /**
@@ -174,6 +552,7 @@ export type EventFilter = {
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;
+    property?: null | PropertySelector;
 };
 
 /**
@@ -186,6 +565,16 @@ export type EventFilters = Array<EventFilter>;
  * selectors. Adding a broker variant does not automatically enable routines.
  */
 export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+
+/**
+ * A finished run, with the routines it created.
+ */
+export type ExecutionRecordResponse = ActionExecutionRecord & {
+    /**
+     * The sub-routines this run created that still follow the routine.
+     */
+    created?: Array<CreatedRoutine>;
+};
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -206,10 +595,27 @@ export type ExecutionResourceType = 'chat' | 'agent';
  */
 export type ExecutionResult = {
     condition?: null | ConditionResult;
+    /**
+     * The routine configuration the run used. Step paths only name the same
+     * steps in that configuration; a later edit can put another step there.
+     */
+    configuration_revision?: number | null;
     error?: string | null;
     resource?: null | ExecutionResource;
+    run?: null | RunInfo;
+    /**
+     * What each step that ran did, in order: decisions, tool calls, the agent.
+     */
+    steps?: Array<{
+        [key: string]: unknown;
+    }>;
     version: number;
 };
+
+/**
+ * Where a person's suggestions are in being generated.
+ */
+export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
 
 /**
  * Which GitHub deliveries match.
@@ -242,18 +648,16 @@ export type InProgressExecution = {
 };
 
 /**
- * Deprecated cron-only input, accepted during the compatibility rollout.
+ * How code reads a knob: a lowercase letter, then up to 31 letters or
+ * digits, e.g. `dueWithinDays`.
  */
-export type LegacyActionConfiguration = {
-    enabled: boolean;
-    kind: ActionKind;
-    name: string;
-    schedule: Schedule;
-    task: {
-        [key: string]: unknown;
-    };
-    timezone: string;
-};
+export type KnobName = string;
+
+/**
+ * What a text knob's value names: one of its owner's items, which a client
+ * matches by name or lets them pick.
+ */
+export type NamedItemKind = 'tag' | 'channel' | 'label';
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -290,9 +694,248 @@ export type PayloadCondition = {
 export type PayloadScalar = null | boolean | number | string;
 
 /**
+ * Narrows a task property change filter to one property and, optionally, the
+ * values it must gain.
+ */
+export type PropertySelector = {
+    /**
+     * The property definition that must have changed.
+     */
+    definitionId: string;
+    /**
+     * Select option ids or referenced entity ids, one of which the change must
+     * add. Any change to the property matches when empty.
+     */
+    values?: Array<string>;
+};
+
+/**
+ * What saving a routine would find wrong, without saving it: the answer to
+ * `POST /scheduled-actions/check`.
+ */
+export type RoutineCheck = {
+    /**
+     * Whether saving it would succeed: no problems and no failing steps.
+     */
+    ok: boolean;
+    /**
+     * Why saving it would fail, other than its code, for its author.
+     */
+    problems: Array<string>;
+    /**
+     * The routine as saving would store it: code steps named and the SDK
+     * their code checks against stamped.
+     */
+    routine: ActionConfiguration;
+    /**
+     * Code steps that don't type-check against Macro's SDK.
+     */
+    steps: Array<CheckedStepProblems>;
+};
+
+/**
+ * A value a code step reads as `knobs.<name>`, which its owner can change
+ * without the step being rewritten: the label it adds, a priority, a
+ * number of days, a question it asks AI. Its type is part of the step's
+ * type-checked contract; its value is not, so changing it needs no check.
+ */
+export type RoutineKnob = {
+    /**
+     * What it is, for the owner, e.g. "Label for money email".
+     */
+    label: string;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    type: 'text';
+    /**
+     * Its value.
+     */
+    value: string;
+} | {
+    /**
+     * What it is, for the owner.
+     */
+    label: string;
+    /**
+     * The largest value the owner may set.
+     */
+    max?: number | null;
+    /**
+     * The smallest value the owner may set.
+     */
+    min?: number | null;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    type: 'number';
+    /**
+     * Its value.
+     */
+    value: number;
+} | {
+    /**
+     * What it is, for the owner.
+     */
+    label: string;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    type: 'boolean';
+    /**
+     * Its value.
+     */
+    value: boolean;
+} | {
+    /**
+     * What it is, for the owner.
+     */
+    label: string;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    /**
+     * Every option, in the order they are offered.
+     */
+    options: Array<string>;
+    type: 'choice';
+    /**
+     * The chosen option.
+     */
+    value: string;
+} | {
+    /**
+     * The condition as a short clause that reads inside the step's
+     * sentence, e.g. "it's about money".
+     */
+    label: string;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    type: 'question';
+    /**
+     * The question AI is asked, e.g. "Is this email about money:
+     * investors, fundraising or finance?".
+     */
+    value: string;
+};
+
+/**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
+
+/**
+ * What a routine does each time it runs.
+ */
+export type RoutineProgram = {
+    /**
+     * Code steps write as the owner, with no agent badge: their posts,
+     * comments and emails appear written by the owner. Set only when the
+     * owner explicitly asked for the routine to act or send as them; by
+     * default code steps' writes are attributed to Macro's agent acting for
+     * the owner. Agent ("Ask AI") steps keep their own agent attribution
+     * either way: an agent session speaking as a person is a different
+     * change. A single agent task has no code steps, so it never applies.
+     */
+    dangerously_operate_as_user?: boolean;
+    /**
+     * Apps the routine requires, handed to its agent on top of the agent's
+     * own. The owner must have each one connected to save the routine and
+     * for it to run.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
+    sdk?: null | SdkFingerprint;
+    /**
+     * Steps run in order. A failed step stops the run.
+     */
+    steps: Array<RoutineStep>;
+};
+
+/**
+ * The routine a step is added to or changed in.
+ */
+export type RoutineSoFar = {
+    /**
+     * Its steps, in the shape a routine's task holds them.
+     */
+    steps: Array<RoutineStep>;
+    /**
+     * Its trigger as it would be saved, for AI to read; absent while it has none.
+     */
+    trigger?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+/**
+ * One step of a routine.
+ */
+export type RoutineStep = (CodeStep & {
+    type: 'code';
+}) | (AgentStep & {
+    type: 'agent';
+});
+
+/**
+ * A routine offered to one person: one AI suggested for them, or one of
+ * Macro's catalog routines filling a surface.
+ */
+export type RoutineSuggestion = SuggestedPick & {
+    /**
+     * Who suggests it: AI, for this person, or Macro, as a template.
+     */
+    from: SuggestionFrom;
+    /**
+     * Saving a routine from it passes this as `suggestion_id`; dismissing
+     * it uses it too.
+     */
+    id: string;
+    /**
+     * AI's estimate, from 0 to 1, that the person keeps it on; absent on
+     * Macro's templates.
+     */
+    keepProbability?: number | null;
+    /**
+     * Onboarding shows it switched on: one of at most two catalog
+     * routines AI picked that are safe by default and likely kept. Never a
+     * drafted routine or a template.
+     */
+    onByDefault: boolean;
+    /**
+     * Why it fits this person, in a line; absent on Macro's templates.
+     */
+    reason?: string | null;
+    /**
+     * The sidebars it shows in, first the one it belongs to most.
+     * Dismissing it in one dismisses it everywhere.
+     */
+    surfaces: Array<Surface>;
+};
+
+/**
+ * A person's suggestions, and whether more are on the way.
+ */
+export type RoutineSuggestions = {
+    status: GenerationStatus;
+    /**
+     * Per surface, AI's first, best first, then Macro's templates, so each
+     * surface has at least one and ideally three. A suggestion with
+     * several surfaces appears once.
+     */
+    suggestions: Array<RoutineSuggestion>;
+};
+
+/**
+ * A stored task's two forms, as the scheduler's API describes `task`:
+ * [`RoutineProgram::from_task`] reads them.
+ */
+export type RoutineTask = RoutineProgram | AgentTask;
 
 /**
  * A shared routine's snapshot, readable by signed-in users with sharing enabled.
@@ -302,6 +945,7 @@ export type RoutineTemplate = {
      * Routines activated from this template, including stopped ones.
      */
     active_count: number;
+    appearance: EntityAppearance;
     /**
      * Who shared it: the source routine's owner.
      */
@@ -313,9 +957,7 @@ export type RoutineTemplate = {
      */
     id: string;
     name: string;
-    task: {
-        [key: string]: unknown;
-    };
+    task: RoutineTask;
     trigger: ActionTrigger;
     updated_at: string;
     variables: Array<TemplateVariable>;
@@ -331,12 +973,70 @@ export type RoutineTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    at: string;
+    type: 'once';
 };
 
 /**
  * Bounded schedules and one combined set of event filters.
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * What the run page says about a run: what started it, when it counts as
+ * happening, and since when.
+ */
+export type RunInfo = {
+    /**
+     * When the run counts as happening: its trigger's time.
+     */
+    at: string;
+    code_acts_as?: null | CodeIdentity;
+    /**
+     * When the routine's previous finished run started.
+     */
+    previous_at?: string | null;
+    /**
+     * What started it.
+     */
+    started_by: RunStart;
+    /**
+     * The IANA time zone code reads `at` in, when the run had one.
+     */
+    timezone?: string | null;
+};
+
+/**
+ * What started a run, for its page.
+ */
+export type RunStart = {
+    kind: 'schedule';
+    /**
+     * The cron expression.
+     */
+    schedule: string;
+    /**
+     * Its IANA time zone.
+     */
+    timezone: string;
+} | {
+    /**
+     * The item the event is about.
+     */
+    entity_id?: string | null;
+    /**
+     * The event's name, e.g. `email.message_received`.
+     */
+    event: string;
+    kind: 'event';
+} | {
+    /**
+     * Who started it.
+     */
+    by: string;
+    kind: 'manual';
+};
 
 /**
  * Whether a routine's runs are listed in Home and the Agents list. Routines
@@ -349,12 +1049,20 @@ export type RunVisibility = 'listed' | 'unlisted';
 export type Schedule = string;
 
 export type ScheduledAction = {
+    /**
+     * Optional presentation overrides; absent values use routine defaults.
+     */
+    appearance?: EntityAppearance;
     claimed?: string | null;
     /**
      * Independent of execution bookkeeping in `updated_at`.
      */
     configuration_revision: number;
     created_at: string;
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     /**
      * When false, automatic dispatch skips this action. `run_now` remains
      * available regardless.
@@ -382,9 +1090,13 @@ export type ScheduledAction = {
      * Whether the action's runs are listed in Home and the Agents list.
      */
     run_visibility: RunVisibility;
-    task: {
-        [key: string]: unknown;
-    };
+    sub_routine?: null | SubRoutine;
+    /**
+     * The routine suggestion it was saved from, if any: a plain pointer
+     * that stays after the suggestion is replaced.
+     */
+    suggestion_id?: string | null;
+    task: RoutineTask;
     /**
      * The shared template this routine was activated from, if any.
      */
@@ -398,6 +1110,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | ActionExecutionRecord;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *
@@ -436,6 +1149,12 @@ export type ScheduledActionUpdate = {
     type: 'stopped';
 };
 
+/**
+ * Identifies the SDK API code was type-checked against: its version and a
+ * hash of its declarations, e.g. `0.2.2+18cc1c19c35c`.
+ */
+export type SdkFingerprint = string;
+
 export type SetScheduledActionEnabled = {
     enabled: boolean;
 };
@@ -447,6 +1166,127 @@ export type ShareRoutineTemplate = {
     description: string;
     variables: Array<TemplateVariable>;
 };
+
+/**
+ * Names a step's output: a lowercase letter, then up to 31 lowercase
+ * letters, digits or underscores.
+ */
+export type StepId = string;
+
+/**
+ * Code written once, or Ask AI each run.
+ */
+export type StepKind = 'code' | 'agent';
+
+/**
+ * A drafted step whose code still fails the type checker.
+ */
+export type StepProblem = {
+    /**
+     * Its place among the steps, from zero.
+     */
+    index: number;
+    problems: Array<string>;
+};
+
+/**
+ * How a routine created by a routine's run belongs to that routine.
+ */
+export type SubRoutine = {
+    /**
+     * The run that created it: the id of that run's history record, which
+     * exists once the run ends.
+     */
+    created_by_run_id: string;
+    /**
+     * The name its creating code gave it, when it gave one.
+     */
+    key?: string | null;
+    /**
+     * The top-level routine it follows: pausing that routine pauses it, and
+     * deleting that routine deletes it. A routine a sub-routine's run
+     * creates follows the same top-level routine.
+     */
+    parent_id: string;
+    /**
+     * It is off because its parent was switched off, and resumes with it.
+     */
+    paused_by_parent?: boolean;
+};
+
+/**
+ * What became of a suggestion handed back.
+ */
+export type SuggestOutcome = {
+    check?: null | RoutineCheck;
+    /**
+     * The kept suggestion's id.
+     */
+    id?: string | null;
+    /**
+     * Whether it was kept.
+     */
+    ok: boolean;
+    /**
+     * Why it wasn't, to fix and suggest again.
+     */
+    problems: Array<string>;
+};
+
+/**
+ * What a suggestion session hands back through `macro.routines.suggest`.
+ */
+export type SuggestRequest = {
+    keepProbability: number;
+    key: string;
+    kind: 'catalog';
+    knobs?: {
+        [key: string]: unknown;
+    };
+    reason: string;
+    surfaces: Array<Surface>;
+} | {
+    /**
+     * What the session created for it, as `macro.routines.check` takes.
+     */
+    created?: Array<CreatedItem>;
+    keepProbability: number;
+    kind: 'routine';
+    reason: string;
+    routine: ActionConfiguration;
+    surfaces: Array<Surface>;
+};
+
+/**
+ * What is suggested: a catalog routine with its knobs, or a routine AI
+ * drafted and checked.
+ */
+export type SuggestedPick = {
+    /**
+     * The catalog routine, e.g. `inbox`.
+     */
+    key: string;
+    kind: 'catalog';
+    /**
+     * Knob values by knob name; knobs left out keep the catalog's.
+     */
+    knobs: {
+        [key: string]: unknown;
+    };
+} | {
+    kind: 'routine';
+    routine: ActionConfiguration;
+};
+
+/**
+ * Who suggests a routine.
+ */
+export type SuggestionFrom = 'for_you' | 'macro';
+
+/**
+ * The part of the app a routine is about, where it is offered.
+ */
+export type Surface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
 
 /**
  * A user-specific part of a shared routine.
@@ -472,9 +1312,9 @@ export type TemplateVariable = {
 };
 
 /**
- * Full replacement of client configuration, not of server-owned action state.
+ * How an upgrade went.
  */
-export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
+export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
 
 /**
  * How a variable is filled when someone activates the template.
@@ -505,6 +1345,17 @@ export type ListScheduledActionsData = {
          * Backend clients must opt in to event actions; defaults to false (cron-only).
          */
         include_events?: boolean | null;
+        /**
+         * Also list active sub-routines, the routines other routines' runs
+         * created, without finished one-time ones; defaults to false (top-level
+         * routines only).
+         */
+        include_children?: boolean | null;
+        /**
+         * List only this routine's sub-routines: the active ones and its newest
+         * 200 finished one-time ones.
+         */
+        parent?: string | null;
     };
     url: '/scheduled-actions';
 };
@@ -524,9 +1375,20 @@ export type ListScheduledActionsResponses = {
 export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof ListScheduledActionsResponses];
 
 export type CreateScheduledActionData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The routine suggestion it is saved from, recorded on the routine.
+         */
+        suggestion_id?: string;
+        /**
+         * A name for a routine a routine's run creates: the same key under the
+         * same parent updates that sub-routine instead of adding another.
+         * Rejected outside a routine's run.
+         */
+        key?: string;
+    };
     url: '/scheduled-actions';
 };
 
@@ -534,16 +1396,234 @@ export type CreateScheduledActionErrors = {
     400: string;
     401: string;
     403: string;
+    /**
+     * The routine already has the most active sub-routines it can
+     */
+    409: string;
     500: string;
 };
 
 export type CreateScheduledActionError = CreateScheduledActionErrors[keyof CreateScheduledActionErrors];
 
 export type CreateScheduledActionResponses = {
+    /**
+     * The sub-routine its key already named, updated
+     */
+    200: ScheduledActionResponse;
     201: ScheduledActionResponse;
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type RoutineCatalogData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/scheduled-actions/catalog';
+};
+
+export type RoutineCatalogErrors = {
+    /**
+     * Not a time zone
+     */
+    400: string;
+    401: string;
+};
+
+export type RoutineCatalogError = RoutineCatalogErrors[keyof RoutineCatalogErrors];
+
+export type RoutineCatalogResponses = {
+    /**
+     * Macro's routines, with schedules in the given zone; code steps only where code can be saved
+     */
+    200: Array<CatalogEntry>;
+};
+
+export type RoutineCatalogResponse = RoutineCatalogResponses[keyof RoutineCatalogResponses];
+
+export type CheckScheduledActionData = {
+    body: CheckRoutineRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/check';
+};
+
+export type CheckScheduledActionErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+    503: string;
+};
+
+export type CheckScheduledActionError = CheckScheduledActionErrors[keyof CheckScheduledActionErrors];
+
+export type CheckScheduledActionResponses = {
+    200: RoutineCheck;
+};
+
+export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
+
+export type DraftRoutineData = {
+    body: DraftRoutineRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/drafts';
+};
+
+export type DraftRoutineErrors = {
+    400: string;
+    401: string;
+    /**
+     * AI usage limit reached
+     */
+    402: AiAdmissionErrorBody;
+    500: string;
+    /**
+     * AI usage validation unavailable
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type DraftRoutineError = DraftRoutineErrors[keyof DraftRoutineErrors];
+
+export type DraftRoutineResponses = {
+    /**
+     * A routine or step to review before saving, with any code problems AI couldn't fix, or why AI couldn't draft it
+     */
+    200: Draft;
+};
+
+export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
+
+export type ListRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only this surface's; every surface's when absent.
+         */
+        surface?: Surface;
+    };
+    url: '/scheduled-actions/suggestions';
+};
+
+export type ListRoutineSuggestionsErrors = {
+    401: string;
+    /**
+     * Routine suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListRoutineSuggestionsError = ListRoutineSuggestionsErrors[keyof ListRoutineSuggestionsErrors];
+
+export type ListRoutineSuggestionsResponses = {
+    /**
+     * Per surface, the routines AI suggested for the caller, then Macro's templates; reading never generates
+     */
+    200: RoutineSuggestions;
+};
+
+export type ListRoutineSuggestionsResponse = ListRoutineSuggestionsResponses[keyof ListRoutineSuggestionsResponses];
+
+export type SuggestRoutineData = {
+    body: SuggestRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/suggestions';
+};
+
+export type SuggestRoutineErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a routine suggestion session may suggest
+     */
+    403: string;
+    500: string;
+};
+
+export type SuggestRoutineError = SuggestRoutineErrors[keyof SuggestRoutineErrors];
+
+export type SuggestRoutineResponses = {
+    /**
+     * Whether the suggestion was kept, and what to fix when it wasn't
+     */
+    200: SuggestOutcome;
+};
+
+export type SuggestRoutineResponse = SuggestRoutineResponses[keyof SuggestRoutineResponses];
+
+export type GenerateRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/scheduled-actions/suggestions/generate';
+};
+
+export type GenerateRoutineSuggestionsErrors = {
+    401: string;
+    /**
+     * Routine suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type GenerateRoutineSuggestionsError = GenerateRoutineSuggestionsErrors[keyof GenerateRoutineSuggestionsErrors];
+
+export type GenerateRoutineSuggestionsResponses = {
+    /**
+     * The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing
+     */
+    200: RoutineSuggestions;
+};
+
+export type GenerateRoutineSuggestionsResponse = GenerateRoutineSuggestionsResponses[keyof GenerateRoutineSuggestionsResponses];
+
+export type DismissRoutineSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion, AI's or a template's
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/suggestions/{id}/dismiss';
+};
+
+export type DismissRoutineSuggestionErrors = {
+    401: string;
+    /**
+     * No such suggestion for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type DismissRoutineSuggestionError = DismissRoutineSuggestionErrors[keyof DismissRoutineSuggestionErrors];
+
+export type DismissRoutineSuggestionResponses = {
+    /**
+     * Never suggested again, on any surface
+     */
+    204: void;
+};
+
+export type DismissRoutineSuggestionResponse = DismissRoutineSuggestionResponses[keyof DismissRoutineSuggestionResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;
@@ -598,7 +1678,7 @@ export type GetScheduledActionResponses = {
 export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
 
 export type UpdateScheduledActionData = {
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
     path: {
         /**
          * ID of the scheduled action
@@ -627,6 +1707,89 @@ export type UpdateScheduledActionResponses = {
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
+
+export type SetScheduledActionAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/appearance';
+};
+
+export type SetScheduledActionAppearanceErrors = {
+    400: unknown;
+    401: unknown;
+    404: unknown;
+};
+
+export type SetScheduledActionAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetScheduledActionAppearanceResponse = SetScheduledActionAppearanceResponses[keyof SetScheduledActionAppearanceResponses];
+
+export type ListScheduledActionCodeUpgradesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/code-upgrades';
+};
+
+export type ListScheduledActionCodeUpgradesErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ListScheduledActionCodeUpgradesError = ListScheduledActionCodeUpgradesErrors[keyof ListScheduledActionCodeUpgradesErrors];
+
+export type ListScheduledActionCodeUpgradesResponses = {
+    /**
+     * How the routine's code steps were brought to new SDKs, newest first
+     */
+    200: Array<CodeUpgrade>;
+};
+
+export type ListScheduledActionCodeUpgradesResponse = ListScheduledActionCodeUpgradesResponses[keyof ListScheduledActionCodeUpgradesResponses];
+
+export type DetachScheduledActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the sub-routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/detach';
+};
+
+export type DetachScheduledActionErrors = {
+    /**
+     * Not a sub-routine
+     */
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type DetachScheduledActionError = DetachScheduledActionErrors[keyof DetachScheduledActionErrors];
+
+export type DetachScheduledActionResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type DetachScheduledActionResponse = DetachScheduledActionResponses[keyof DetachScheduledActionResponses];
 
 export type SetScheduledActionEnabledData = {
     body: SetScheduledActionEnabled;
@@ -719,7 +1882,7 @@ export type ListScheduledActionHistoryErrors = {
 export type ListScheduledActionHistoryError = ListScheduledActionHistoryErrors[keyof ListScheduledActionHistoryErrors];
 
 export type ListScheduledActionHistoryResponses = {
-    200: Array<ActionExecutionRecord>;
+    200: Array<ExecutionRecordResponse>;
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
@@ -807,7 +1970,7 @@ export type ShareScheduledActionTemplateResponses = {
 export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
 
 export type ActivateScheduledActionTemplateData = {
-    body: CreateScheduledAction;
+    body: ActionConfiguration;
     path: {
         /**
          * ID of the shared routine

@@ -392,10 +392,17 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
+export function removeSoupEntities(
+  entityIds: Set<string>,
+  matches?: (item: SoupApiItem, id: string) => boolean
+): SoupTransaction {
   cancelSoupQueries();
 
   const previous = snapshotSoup();
+  const shouldRemove = (item: SoupApiItem) => {
+    const id = getSoupItemId(item);
+    return entityIds.has(id) && (!matches || matches(item, id));
+  };
 
   queryClient.setQueriesData<SoupItemsInfiniteData>(
     {
@@ -406,9 +413,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
       return {
         ...prev,
         pages: prev.pages.map((page) => {
-          const items = page.items.filter(
-            (item) => !entityIds.has(getSoupItemId(item))
-          );
+          const items = page.items.filter((item) => !shouldRemove(item));
           if (items.length === page.items.length) return page;
           return { ...page, items };
         }),
@@ -430,9 +435,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
         const pages = prev.pages.map((page) => {
           if (page.kind !== 'flat') return page;
 
-          const items = page.items.filter(
-            (item) => !entityIds.has(getSoupItemId(item))
-          );
+          const items = page.items.filter((item) => !shouldRemove(item));
 
           if (items.length === page.items.length) return page;
 
@@ -445,7 +448,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
 
       // Grouped AST queries only use the first parent page. Group membership is
       // fully represented there by `groups[].itemIds`, so update that page once.
-      const nextPage = removeGroupedPage(firstPage, entityIds);
+      const nextPage = removeGroupedPage(firstPage, entityIds, matches);
 
       return nextPage === firstPage
         ? prev
@@ -453,7 +456,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     }
   );
 
-  removeGroupQueries(entityIds);
+  removeGroupQueries(entityIds, undefined, matches);
 
   return { rollback: () => restoreSnapshot(previous) };
 }
@@ -681,7 +684,10 @@ function removeSoupEntitiesWhere(
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
+export function removeSearchEntities(
+  entityIds: Set<string>,
+  matches?: (item: UnifiedSearchResponseItem, id: string) => boolean
+): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.search._def });
 
   const previous = queryClient.getQueriesData<SoupSearchInfiniteData>({
@@ -695,9 +701,13 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
       return {
         ...prev,
         pages: prev.pages.map((page) => {
-          const results = page.results.filter(
-            (result) => !entityIds.has(getSearchResultId(result))
-          );
+          const results = page.results.filter((result) => {
+            const id = getSearchResultId(result);
+            return (
+              !entityIds.has(id) ||
+              (matches !== undefined && !matches(result, id))
+            );
+          });
           return results.length === page.results.length
             ? page
             : { ...page, results };
@@ -735,6 +745,9 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * `created` marks an entity that did not exist a moment ago, so it sorts first
  * in newest-first lists. It is inserted into the REST lists whose filters admit
  * it, without refetching any list, in either transport.
+ *
+ * `notified` marks a new notification about the entity, which a mounted
+ * `notified_at` list must show even if the entity isn't cached yet.
  */
 export async function refetchSoupEntity(
   entityId: string,
@@ -744,6 +757,7 @@ export async function refetchSoupEntity(
     ownTouch?: boolean;
     refreshGraphql?: boolean;
     created?: boolean;
+    notified?: boolean;
   }
 ): Promise<void> {
   if (options?.refreshGraphql) {
@@ -752,10 +766,11 @@ export async function refetchSoupEntity(
 
   // GraphQL lists never read this cache, so a miss means no REST list shows
   // the entity. Own-touch inserts still land because Home's touched_by_me
-  // feed stays on REST.
+  // feed stays on REST, and notified ones because notified_at lists do.
   if (
     !options?.ownTouch &&
     !options?.created &&
+    !(options?.notified && mountedNotifiedLists().length > 0) &&
     isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
@@ -797,8 +812,40 @@ export async function refetchSoupEntity(
       } else {
         invalidateAllSoup();
       }
+      if (options?.notified) {
+        fireAndForget(
+          rereadNotifiedListsAfterFirstRead(),
+          'soup-normalized-cache'
+        );
+      }
     }
   }
+}
+
+/** Lists on screen ordered by `notified_at`, which only REST serves. */
+function mountedNotifiedLists() {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: soupKeys.astItems._def, type: 'active' })
+    .filter((query) => JSON.stringify(query.queryKey).includes('notified_at'));
+}
+
+/**
+ * A list's first read has no pages to insert into, and invalidating reuses it
+ * rather than restarting it, so its response can predate a new notification.
+ * Read each of those lists again once its own first read settles.
+ */
+async function rereadNotifiedListsAfterFirstRead(): Promise<void> {
+  const firstReads = mountedNotifiedLists().filter(
+    (query) =>
+      query.state.data === undefined && query.state.fetchStatus === 'fetching'
+  );
+  await Promise.allSettled(
+    firstReads.map(async (query) => {
+      await Promise.allSettled([query.promise]);
+      queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
+    })
+  );
 }
 
 /**
@@ -888,6 +935,9 @@ export function buildSingleEntityFilter(
     })
     .with('crmContact', () => {
       throw new Error('CRM contacts are read through GraphQL Soup only');
+    })
+    .with('harness', () => {
+      throw new Error('Runtimes are read through GraphQL Soup only');
     })
     .exhaustive(() => {
       throw new Error(`Unknown soup entity type: ${entityType}`);

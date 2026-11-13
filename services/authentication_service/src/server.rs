@@ -48,6 +48,7 @@ use macro_authorization::{
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    GoogleOauthAuthorizationUrl, StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
@@ -63,6 +64,7 @@ use roles_and_permissions::{
 };
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_client::StaticFileServiceClient;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
@@ -74,10 +76,7 @@ use teams::{
 use gtm_invite::{
     domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
 };
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
-};
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
 use system_status::{
     domain::service::SystemStatusServiceImpl,
     outbound::{
@@ -101,13 +100,20 @@ use crate::{
     microsoft_token_cipher::{
         EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
     },
-    outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
+    outbound::team_owned_entity_cleanup::{
+        TeamOwnedEntityCleanupAdapter, TeamOwnedEntityCleanupConfig,
+    },
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 /// Build the service from the environment and serve until shutdown.
-pub async fn run() -> anyhow::Result<()> {
+// Not a `pub async fn`: see CS-73.
+pub fn run() -> impl Future<Output = anyhow::Result<()>> {
+    run_server()
+}
+
+async fn run_server() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     // One SDK config is sufficient for every AWS client in this process.
@@ -245,13 +251,13 @@ pub async fn run() -> anyhow::Result<()> {
     // Gates new Outlook connections per user (`enable-outlook`). Without a
     // PostHog key the deployment switch alone decides.
     let feature_flags = config
-        .posthog_api_key
-        .value()
+        .posthog_api_key()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -271,10 +277,18 @@ pub async fn run() -> anyhow::Result<()> {
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled)
-            .with_feature_flags(feature_flags),
+            .with_feature_flags(feature_flags.clone()),
         ) as Arc<dyn MicrosoftAuth>
     });
 
+    let static_file_service_client = Arc::new(StaticFileServiceClient::with_timeout(
+        config.service_internal_auth_key.to_string(),
+        StaticFileServiceUrl::new()?.to_string(),
+        std::time::Duration::from_secs(10),
+    ));
+    let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
+    let google_authorization_url = url::Url::parse(GoogleOauthAuthorizationUrl::new()?.as_str())
+        .context("Google OAuth authorization URL is not a URL")?;
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -363,7 +377,7 @@ pub async fn run() -> anyhow::Result<()> {
                     test_event_code: config.meta_test_event_code.value().map(str::to_string),
                 }
             }),
-        posthog: config.posthog_api_key.value().map(|api_key| {
+        posthog: config.posthog_api_key().map(|api_key| {
             tracing::info!("configuring PostHog");
             PostHogConfig {
                 api_key: api_key.to_string(),
@@ -413,7 +427,7 @@ pub async fn run() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         db.clone(),
     );
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
@@ -532,12 +546,21 @@ pub async fn run() -> anyhow::Result<()> {
         db.clone(),
     )));
 
+    // Invites that turn into teammates and referrals that sign up earn the
+    // inviter AI credit (or more free allowance).
+    let invite_rewards = crate::outbound::invite_rewards::BillingInviteRewards::new(
+        ai_billing::domain::InviteRewardService::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+        ),
+    );
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
-        discount_client: StripeDiscountClient::new(
-            stripe_client.clone(),
-            10000, /*100$ credit, in cents*/
-        ),
+        rewarder: invite_rewards.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
     let gtm_invite_service = GtmInviteServiceImpl {
@@ -568,17 +591,23 @@ pub async fn run() -> anyhow::Result<()> {
         None
     };
 
+    let computer_policy = config.computer_billing_policy()?;
     let plan_customer = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         db.clone(),
     );
     let stripe_client = Arc::new(stripe_client);
     let plan_gateway = crate::outbound::subscription_plan::StripePlanGateway::new(
         db.clone(),
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         plan_customer,
+        crate::outbound::subscription_billing::StripeBillingReader::new(
+            teams_repo_impl.clone(),
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
+            stripe_prices.seat_prices()?,
+        ),
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(
         plan_gateway.clone(),
@@ -590,6 +619,10 @@ pub async fn run() -> anyhow::Result<()> {
                 teams_repo_impl.clone(),
             ),
             plan_gateway,
+            feature_flags
+                .clone()
+                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                .unwrap_or_default(),
         ),
     );
     let gtm_invite_service = Arc::new(gtm_invite_service);
@@ -599,7 +632,7 @@ pub async fn run() -> anyhow::Result<()> {
                 db.clone(),
                 stripe_client.clone(),
                 gtm_invite_service.clone(),
-                stripe_prices.seat_prices(),
+                stripe_prices.seat_prices()?,
             ),
         ));
     let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
@@ -648,12 +681,24 @@ pub async fn run() -> anyhow::Result<()> {
     let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
     let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
+        Arc::new(
+            passwords::outbound::postgres::PgRepository::new(db.clone())
+                .map_err(|_| anyhow::anyhow!("invalid Passwords metadata pool capacity"))?,
+        ),
         PgBotsRepo::new(db.clone()),
         EntityRegistryServiceImpl::new(PgEntityRegistryRepository::new(db.clone())),
         document_storage_service_client.clone(),
-        internal_key.clone(),
-        harness_url.clone(),
-        scheduled_action_url.clone(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: internal_key.clone(),
+            harness_url: harness_url.clone(),
+            scheduled_action_url: scheduled_action_url.clone(),
+        },
+        // Needs only the repository: the billing-backed computer service is
+        // built after the team service it bills through.
+        Arc::new(hosted_runtimes::domain::service::TeamComputerRelease::new(
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
+            hosted_runtimes::domain::service::SystemClock,
+        )),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
@@ -669,8 +714,45 @@ pub async fn run() -> anyhow::Result<()> {
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
-    .with_owned_entity_cleanup(team_owned_entity_cleanup);
+    .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_invite_rewarder(Arc::new(invite_rewards));
+    let computer_rollout = feature_flags
+        .clone()
+        .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+        .unwrap_or_default();
+    let computer_prices = config.computer_prices()?;
+    let computer_repo =
+        hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy);
     let teams_service = Arc::new(teams_service_impl);
+    let computer_service = Arc::new(
+        hosted_runtimes::domain::service::ComputerService::new(
+            computer_repo.clone(),
+            crate::outbound::computer_billing::TeamComputerBilling::new(
+                (*teams_service).clone(),
+                computer_prices.clone(),
+            ),
+            hosted_runtimes::domain::service::SystemClock,
+            computer_repo,
+        )
+        .with_rollout(computer_rollout),
+    );
+    let domain_notice_service =
+        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            ),
+            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
+                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
+                    db.clone(),
+                ),
+                SqsNotificationIngress {
+                    queue: SqsQueue::new(
+                        aws_sdk_sqs::Client::new(&aws_config),
+                        notification_queue.to_string(),
+                    ),
+                },
+            ),
+        ));
     // Reminds people of team invites they have not answered. Replicas claim
     // disjoint invites, so every replica sweeps.
     let invite_reminders_stop = CancellationToken::new();
@@ -684,6 +766,16 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     invite_reminders.close();
+    // Carries out computers' billing effects (removing subscription items)
+    // and settles purchases whose charge is being confirmed. Rows are leased,
+    // so every replica runs it.
+    let computer_billing_stop = CancellationToken::new();
+    let computer_billing = TaskTracker::new();
+    computer_billing.spawn(run_computer_billing_effects(
+        computer_service.clone(),
+        computer_billing_stop.clone(),
+    ));
+    computer_billing.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -749,6 +841,8 @@ pub async fn run() -> anyhow::Result<()> {
             subscription_plan,
             subscription_status,
             document_storage_service_client,
+            static_file_service_client,
+            static_file_public_url,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
@@ -757,7 +851,9 @@ pub async fn run() -> anyhow::Result<()> {
             environment: config.environment,
             signup_policy,
             rate_limit_service: rate_limit,
+            event_broker: macro_event_broker.clone(),
             calendar_scope_enabled: config.calendar_scope_enabled,
+            google_authorization_url,
             account_link_state_key,
             jwt_args,
             authorization_state,
@@ -773,6 +869,10 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            computer_prices,
+            computer_billing_observer: computer_service.clone(),
+            computer_service,
+            domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),
@@ -815,6 +915,18 @@ pub async fn run() -> anyhow::Result<()> {
         sweep.abort();
     }
 
+    // Lets a billing pass in progress finish its Stripe call and record it.
+    computer_billing_stop.cancel();
+    if tokio::time::timeout(COMPUTER_BILLING_DRAIN_TIMEOUT, computer_billing.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = COMPUTER_BILLING_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for the computer billing pass to finish"
+        );
+    }
+
     // Lets a sweep in progress finish: its reminders are already counted as
     // sent, so abandoning the batch would drop them.
     invite_reminders_stop.cancel();
@@ -846,6 +958,7 @@ pub async fn run() -> anyhow::Result<()> {
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const COMPUTER_BILLING_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
@@ -854,3 +967,23 @@ const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";
 // SAFETY: this is not a secret value
 const IOS_APP_BUNDLE_ID: &str = "com.macro.app.prod";
+
+/// How often due computer billing effects are carried out.
+const COMPUTER_BILLING_TICK: std::time::Duration = std::time::Duration::from_secs(10);
+
+async fn run_computer_billing_effects(
+    service: Arc<crate::api::context::ComputerServiceType>,
+    stop: CancellationToken,
+) {
+    let mut interval = tokio::time::interval(COMPUTER_BILLING_TICK);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        if let Err(error) = service.run_billing_effects().await {
+            tracing::error!(error = ?error, "computer billing effects pass failed");
+        }
+    }
+}

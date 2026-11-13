@@ -6,7 +6,7 @@ use crate::api::user::stripe::PaidPlan;
 
 use ai_billing::BillingService;
 use ai_billing::outbound::stripe_gateway::{
-    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
+    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY, RELOAD_METADATA_KEY,
 };
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
@@ -18,11 +18,10 @@ use axum::{
 };
 use gtm_invite::domain::ports::GtmInviteService;
 use macro_user_id::email::Email;
+use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
-use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::{
     model::{ProductTier, SubscriptionStatus},
     port::UserRolesAndPermissionsService,
@@ -261,8 +260,15 @@ async fn handle_payment_event(
                         paid,
                         "processing ai credit reload invoice event"
                     );
+                    // The reload id finds a paid invoice whose id never
+                    // reached its row.
+                    let reload_id = invoice
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.get(RELOAD_METADATA_KEY))
+                        .and_then(|id| macro_uuid::string_to_uuid(id).ok());
                     ctx.ai_billing_service
-                        .mark_credit_reload_invoice(invoice_id.as_str(), paid)
+                        .mark_credit_reload_invoice(invoice_id.as_str(), reload_id, paid)
                         .await
                         .context("failed to record ai credit reload invoice outcome")?;
                     return Ok(());
@@ -686,13 +692,6 @@ async fn handle_customer_subscription_event(
         );
     }
 
-    // Check if this user was referred and process the referral
-    if subscription_status == "active"
-        && let Err(e) = check_and_process_referral(ctx, &email).await
-    {
-        tracing::error!(error=?e, "failed to process referral on subscription created");
-    }
-
     // Unknown prices (legacy or manually created subscriptions) keep the
     // Premium entitlements.
     let product_tier = plan
@@ -765,38 +764,6 @@ async fn mark_gtm_invite_converted(
     }
 }
 
-/// Checks if the subscribing user was referred and, if so, processes the referral
-/// to credit the referrer.
-#[tracing::instrument(skip(ctx, email), err)]
-async fn check_and_process_referral(
-    ctx: &ApiContext,
-    email: &Email<macro_user_id::lowercased::Lowercase<'_>>,
-) -> anyhow::Result<()> {
-    let (macro_user_id, user_id_str) =
-        macro_db_client::user::get::get_user_macro_user_id_and_id_by_email(&ctx.db, email.as_ref())
-            .await?;
-
-    let Some(referral_code) = ctx
-        .referral_service
-        .get_referred_by(&macro_user_id)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?
-    else {
-        return Ok(());
-    };
-
-    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(&user_id_str)
-        .expect("user id from db should be valid")
-        .into_owned();
-
-    ctx.referral_service
-        .process_referral(&user_id.0, &referral_code)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
-
-    Ok(())
-}
-
 /// Handles team subscription events.
 /// NOTE: We use strs here because there is a mismatch between stripe crate and
 /// stripe_webhook crate for these types. *sigh*
@@ -817,7 +784,7 @@ async fn handle_team_subscription_event<'a>(
         macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, email, true).await?;
     }
 
-    billing::complete_subscription_webhook(
+    let result = billing::complete_subscription_webhook(
         billing::sync_team_usage_policy(ctx, &plan_sync),
         async {
             let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
@@ -885,7 +852,80 @@ async fn handle_team_subscription_event<'a>(
             }
         },
     )
-    .await
+    .await;
+    // Run even when the subscription work failed; either failure fails the
+    // webhook, so Stripe delivers it again.
+    let reconciled = reconcile_team_computers(ctx, subscription_id, team_id).await;
+    result?;
+    reconciled
+}
+
+/// Reports a complete subscription snapshot to the computer billing owner,
+/// which decides what it means for each computer. Reads the subscription
+/// fresh because webhook payloads arrive out of order, and stamps when it
+/// read, so a computer billed after the read is left alone. A failure fails
+/// the webhook, so Stripe redelivers it and the next delivery reconciles.
+#[tracing::instrument(skip(ctx), err)]
+async fn reconcile_team_computers(
+    ctx: &ApiContext,
+    subscription_id: &str,
+    team_id: &uuid::Uuid,
+) -> anyhow::Result<()> {
+    let observed_at = chrono::Utc::now();
+    let id = stripe::SubscriptionId::from_str(subscription_id)
+        .context("invalid team subscription id")?;
+    let subscription = stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[])
+        .await
+        .context("could not read the team subscription for computer reconcile")?;
+    let items = subscription_items(ctx, &id)
+        .await
+        .context("could not list the team subscription items for computer reconcile")?;
+    let current_period_end = chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
+        .context("team subscription has an invalid period end")?;
+    let observed = hosted_runtimes::domain::service::SubscriptionObserved {
+        status: subscription_status(subscription.status),
+        items,
+        current_period_end,
+        observed_at,
+    };
+    ctx.computer_billing_observer
+        .subscription_observed(*team_id, observed)
+        .await
+        .map_err(|error| anyhow::anyhow!("computer billing reconcile failed: {error:?}"))
+}
+
+fn subscription_status(
+    status: stripe::SubscriptionStatus,
+) -> hosted_runtimes::domain::service::SubscriptionStatus {
+    use hosted_runtimes::domain::service::SubscriptionStatus;
+    match status {
+        stripe::SubscriptionStatus::Active => SubscriptionStatus::Active,
+        stripe::SubscriptionStatus::Trialing => SubscriptionStatus::Trialing,
+        stripe::SubscriptionStatus::PastDue => SubscriptionStatus::PastDue,
+        stripe::SubscriptionStatus::Unpaid => SubscriptionStatus::Unpaid,
+        stripe::SubscriptionStatus::Paused => SubscriptionStatus::Paused,
+        stripe::SubscriptionStatus::Incomplete => SubscriptionStatus::Incomplete,
+        stripe::SubscriptionStatus::IncompleteExpired => SubscriptionStatus::IncompleteExpired,
+        stripe::SubscriptionStatus::Canceled => SubscriptionStatus::Canceled,
+    }
+}
+
+/// Every item on the subscription, with the computer id its (or its
+/// price's) metadata names.
+async fn subscription_items(
+    ctx: &ApiContext,
+    id: &stripe::SubscriptionId,
+) -> Result<Vec<hosted_runtimes::domain::service::ObservedItem>, stripe::StripeError> {
+    let items =
+        teams::outbound::customer_repo::list_subscription_items(&ctx.stripe_client, id).await?;
+    Ok(items
+        .iter()
+        .map(|item| hosted_runtimes::domain::service::ObservedItem {
+            subscription_item: item.id.clone(),
+            computer_id: teams::outbound::customer_repo::item_computer_uuid(item)
+                .map(hosted_runtimes::domain::ids::ComputerId::new_from_uuid),
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::ListScope;
 use ai_billing::{AiAdmissionError, DenyReason};
 
 #[tokio::test]
@@ -10,10 +11,7 @@ async fn manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_
         let service = service(true);
         set_admission_error(&service, error);
         let action = service
-            .create_action(
-                &user_principal(),
-                CreateScheduledAction::Canonical(configuration(false)),
-            )
+            .create_action(&user_principal(), configuration(false))
             .await
             .unwrap();
         let id = action.id.unwrap();
@@ -29,7 +27,14 @@ async fn manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_
                 .unwrap(),
             &stored_owner
         );
-        assert_eq!(service.get_actions(user(), true).await.unwrap().len(), 1);
+        assert_eq!(
+            service
+                .get_actions(user(), true, ListScope::TopLevel)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
         service
             .update_action(edit_receipt(id), update(configuration(false)))
             .await
@@ -40,7 +45,13 @@ async fn manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_
             .await
             .unwrap();
         service.delete_action(owner_receipt(id)).await.unwrap();
-        assert!(service.get_actions(user(), true).await.unwrap().is_empty());
+        assert!(
+            service
+                .get_actions(user(), true, ListScope::TopLevel)
+                .await
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(service.executor.calls.lock().unwrap().len(), 1);
     }
 }

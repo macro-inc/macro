@@ -96,7 +96,7 @@ async fn verified_mailbox_never_changes_the_initiating_owner() {
         .expect_encrypt()
         .once()
         .withf(move |actual, email, _| {
-            actual == &owner.to_string() && email == "other-mailbox@example.com"
+            actual == owner.to_string() && email == "other-mailbox@example.com"
         })
         .returning(|_, _, _| Ok(envelope()));
     let service = Service::new(repo, provider, Arc::new(cipher));
@@ -472,4 +472,52 @@ async fn reconnecting_an_inbox_never_depends_on_the_flag_or_the_switch() {
                 .is_ok()
         );
     }
+}
+
+#[tokio::test]
+async fn tokens_report_whether_the_cache_served_them() {
+    let grant_id = macro_uuid::generate_uuid_v7();
+    let mut repo = MockMicrosoftGrantRepository::new();
+    repo.expect_active_grant()
+        .times(2)
+        .returning(move |_, _, _| {
+            Ok(StoredGrant {
+                scopes: scopes(),
+                id: grant_id,
+                generation: 1,
+                revision: 0,
+                owner: "owner".into(),
+                email: "mailbox@example.com".into(),
+                envelope: envelope(),
+            })
+        });
+    repo.expect_acquire_refresh()
+        .once()
+        .returning(|_, _| Ok(true));
+    repo.expect_finish_refresh()
+        .once()
+        .returning(|_, _, _, _| Ok(true));
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider.expect_refresh().once().returning(|_| {
+        Ok(RefreshedGrant {
+            access_token: Zeroizing::new("fresh".into()),
+            refresh_token: None,
+            expires_in: 3600,
+            scopes: scopes(),
+        })
+    });
+    let mut cipher = MockMicrosoftTokenCipher::new();
+    cipher
+        .expect_decrypt()
+        .once()
+        .returning(|_, _, _| Ok(MicrosoftRefreshToken::new("refresh".into())));
+    let service = Service::new(repo, provider, Arc::new(cipher));
+    let link = macro_uuid::generate_uuid_v7();
+
+    let refreshed = service.access_token(link, 1, 1, false).await.unwrap();
+    let cached = service.access_token(link, 1, 1, false).await.unwrap();
+
+    assert!(!refreshed.cached);
+    assert!(cached.cached);
+    assert_eq!(cached.as_str(), "fresh");
 }

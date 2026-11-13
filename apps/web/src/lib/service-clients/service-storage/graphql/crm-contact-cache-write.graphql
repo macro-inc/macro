@@ -1,0 +1,18 @@
+# Confirmed contact edits share the existing Soup normalization path.
+subscription CrmContactCacheWrite {
+  soupUpdates {
+    __typename
+    ... on SoupUpdated {
+      item {
+        __typename
+        ... on GraphqlSoupCrmContact {
+          id
+          parentCompanyId
+          parentCompanyName
+          emailAddress
+          updatedAt
+        }
+      }
+    }
+  }
+}

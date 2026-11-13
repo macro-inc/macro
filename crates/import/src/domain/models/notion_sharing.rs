@@ -56,7 +56,9 @@ pub struct NotionWriteChoices {
 }
 
 /// A teammate who already imported some of a plan's objects.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionImporter {
     /// The teammate, by email.

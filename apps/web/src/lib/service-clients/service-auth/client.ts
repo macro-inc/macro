@@ -15,6 +15,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
+  AiCreditPurchaseResult,
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
@@ -39,6 +40,7 @@ import type {
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
+  PutCursorDefaultModelRequest,
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
@@ -48,6 +50,7 @@ import type {
   UserQuota,
 } from './generated/schemas';
 import type { AgentApiKey } from './generated/schemas/agentApiKey';
+import type { AgentSetupResponse } from './generated/schemas/agentSetupResponse';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
@@ -74,6 +77,7 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
 import type { StatusUpdate } from './generated/schemas/statusUpdate';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
@@ -375,8 +379,10 @@ export const authServiceClient = {
     }));
   },
   async sessionLogin(args: { session_code: string }) {
-    // The session code stays valid server-side for 5 minutes and is
-    // replayable, so retrying transient failures is safe.
+    // A session code redeems once. A server error leaves it redeemable (the
+    // server puts it back when its own token refresh fails), so retrying
+    // those is safe; a retry after a redemption that succeeded but never
+    // reached us gets 400.
     const result = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`,
       { retry: { maxTries: 3, delay: 'exponential' } }
@@ -463,6 +469,12 @@ export const authServiceClient = {
       )
     ).map((result) => result);
   },
+  async agentSetup() {
+    return await fetchWithAuth<AgentSetupResponse>(
+      `${authHost}/user/agent_setup`,
+      { method: 'POST' }
+    );
+  },
   async putProfilePicture(args: PutProfilePictureParams) {
     return (
       await fetchWithAuth<EmptyResponse>(
@@ -520,9 +532,15 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
-  async getUserNamesWithEmail(args: PostGetNamesRequestBody) {
+  async getUserNamesWithEmail(
+    args: PostGetNamesRequestBody,
+    init?: Pick<SafeFetchInit, 'headers' | 'trace' | 'signal'>
+  ) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names_with_email`, {
+        headers: init?.headers,
+        trace: init?.trace,
+        signal: init?.signal,
         method: 'POST',
         body: JSON.stringify(args),
       })
@@ -664,6 +682,7 @@ export const authServiceClient = {
       name: data.name,
       licenseStatus: data.licenseStatus,
       tutorialComplete: data.tutorialComplete,
+      isAgent: data.isAgent,
       group: data.group,
       hasChromeExt: data.hasChromeExt,
       authenticated: !!data.userId,
@@ -933,6 +952,42 @@ export const authServiceClient = {
     );
   },
 
+  /** Buy a credit pack now on the payer's card on file. */
+  async purchaseAiCredits(args: { amountCents: number }) {
+    return await fetchWithAuth<
+      AiCreditPurchaseResult,
+      'PAID_PLAN_REQUIRED' | 'CREDIT_PURCHASE_REJECTED'
+    >(`${authHost}/ai-billing/credits/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ amountCents: args.amountCents }),
+      errorResponseHandler: async (response) => {
+        if (response.status === 402) {
+          return {
+            code: 'PAID_PLAN_REQUIRED',
+            message: 'A paid plan is required',
+          };
+        }
+        // Over the monthly credit limit, or an earlier purchase is still
+        // processing; the body says which.
+        if (response.status === 409) {
+          const body: unknown = await response.json().catch(() => undefined);
+          return {
+            code: 'CREDIT_PURCHASE_REJECTED',
+            message:
+              typeof body === 'object' &&
+              body !== null &&
+              'error' in body &&
+              typeof body.error === 'string'
+                ? body.error
+                : 'Credit purchase rejected',
+          };
+        }
+        return statusError(response.status);
+      },
+    });
+  },
+
+  /** Stripe Checkout for a credit pack, for a payer with no card on file. */
   async createAiCreditCheckout(args: {
     amountCents: number;
     successUrl: string;
@@ -1091,15 +1146,16 @@ export const authServiceClient = {
   },
 
   /**
-   * Chooses the model the user's sessions start on.
+   * Chooses the model, and optionally its effort, the user's sessions start on.
+   * Saving a model without an effort clears the previous one.
    */
-  async putCursorDefaultModel(modelId: string) {
+  async putCursorDefaultModel(request: PutCursorDefaultModelRequest) {
     return (
       await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
         `${authHost}/cursor-api-key/default-model`,
         {
           method: 'PUT',
-          body: JSON.stringify({ modelId }),
+          body: JSON.stringify(request),
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
         }
       )
@@ -1360,6 +1416,20 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Emails the caller's same-domain contacts who aren't on Macro yet that
+   * the caller's team exists. Call it after inviting, so invitees are
+   * skipped. Admin/Owner only; the server caps a team at 25 recipients.
+   */
+  async sendTeamDomainNotice() {
+    return (
+      await fetchWithAuth<SendDomainNoticeResponse>(
+        `${authHost}/team/domain-notice`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {

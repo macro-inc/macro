@@ -1,34 +1,16 @@
+use ai_toolset::tool_search::{LoadToolsResponse, SearchToolsResponse, ToolMatch};
 use ai_toolset::{
     AsyncTool, RequestContext, SearchableTool, ServiceContext, ToolLoader, ToolResult,
 };
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::ToolServiceContext;
 
 #[cfg(test)]
 mod test;
-
-/// A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
-/// model to decide how to call it.
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct ToolMatch {
-    /// The exact name to call the tool by.
-    pub name: String,
-    /// What the tool does.
-    pub description: String,
-}
-
-impl ToolMatch {
-    fn of(tool: &SearchableTool) -> Self {
-        Self {
-            name: tool.name.clone(),
-            description: tool.description.clone(),
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // SearchTools — discovery + auto-loading
@@ -44,18 +26,9 @@ impl ToolMatch {
 /// be loaded explicitly with [`LoadTools`].
 const MAX_AUTO_LOADED_MATCHES: usize = 8;
 
-/// Response from [`SearchTools`]: ranked matches, split into the top matches
-/// (auto-loaded, callable on the next model turn) and the remainder (loadable
-/// via [`LoadTools`]).
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct SearchToolsResponse {
-    /// Top matches, ranked by relevance. These are loaded: call them by exact
-    /// name on the next step.
-    pub results: Vec<ToolMatch>,
-    /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
-    /// to `LoadTools` if one of these is the tool you need.
-    pub additional_matches: Vec<ToolMatch>,
-}
+/// How many already-advertised tools a [`SearchTools`] call names. Long
+/// descriptions match broad queries, so only the best few are worth naming.
+const MAX_ALREADY_AVAILABLE: usize = 8;
 
 /// `SearchTools` discovers tools from connected integrations (MCP servers such
 /// as Slack, Gmail, Linear) that are not listed upfront, and auto-loads the top
@@ -66,7 +39,7 @@ pub struct SearchToolsResponse {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
-    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net."
+    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools sent with every request (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net."
 )]
 pub struct SearchTools {
     /// Keywords describing the capability you need (matched against tool names
@@ -93,6 +66,7 @@ impl AsyncTool<ToolServiceContext> for SearchTools {
     ) -> ToolResult<Self::Output> {
         Ok(search_and_stage(
             &request_context.searchable_tools,
+            &request_context.advertised_tools,
             &self.query,
             request_context.tool_loader.as_ref(),
         ))
@@ -102,16 +76,6 @@ impl AsyncTool<ToolServiceContext> for SearchTools {
 // ---------------------------------------------------------------------------
 // LoadTools — load named tools so they become callable
 // ---------------------------------------------------------------------------
-
-/// Response from [`LoadTools`]: which requested tools were loaded, and any names
-/// that weren't found.
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct LoadToolsResponse {
-    /// Tools that are now loaded and callable by name.
-    pub loaded: Vec<ToolMatch>,
-    /// Requested names that don't exist (call `SearchTools` to find valid names).
-    pub not_found: Vec<String>,
-}
 
 /// `LoadTools` loads tools discovered via `SearchTools` so they become callable.
 /// Pass the exact names from the search results; after loading, call each tool
@@ -153,42 +117,18 @@ impl AsyncTool<ToolServiceContext> for LoadTools {
 // Pure logic (unit-testable without a service context)
 // ---------------------------------------------------------------------------
 
-/// Match `query` against `catalog`, ranked by relevance.
-///
-/// The query is split into whitespace-separated terms; a tool matches if **any**
-/// term is a case-insensitive substring of its name or description, ranked by
-/// how many distinct terms match (so "github list commits" surfaces the most
-/// relevant tools first). All matches are returned — the caller decides how
-/// many to load. An empty query returns the whole catalog.
+/// Match `query` against `catalog`, ranked by relevance; see
+/// [`ai_toolset::tool_search::rank`].
 fn search<'c>(catalog: &'c [SearchableTool], query: &str) -> Vec<&'c SearchableTool> {
-    let query = query.to_lowercase();
-    let terms: Vec<&str> = query.split_whitespace().collect();
-
-    let mut scored: Vec<(usize, &SearchableTool)> = catalog
-        .iter()
-        .filter_map(|t| {
-            if terms.is_empty() {
-                return Some((0, t));
-            }
-            let haystack = format!("{} {}", t.name.to_lowercase(), t.description.to_lowercase());
-            let score = terms
-                .iter()
-                .filter(|term| haystack.contains(**term))
-                .count();
-            (score > 0).then_some((score, t))
-        })
-        .collect();
-    // Highest term-match count first; tie-break by name for stable ordering.
-    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
-
-    scored.into_iter().map(|(_, t)| t).collect()
+    ai_toolset::tool_search::rank(catalog, query, |tool| (&tool.name, &tool.description))
 }
 
 /// Match `query`, auto-load the top [`MAX_AUTO_LOADED_MATCHES`] matches so they
 /// are advertised on the next model turn, and report the loaded/unloaded split
-/// to the model.
+/// to the model, plus which already-advertised tools match.
 fn search_and_stage(
     catalog: &[SearchableTool],
+    advertised: &[ToolMatch],
     query: &str,
     loader: Option<&ToolLoader>,
 ) -> SearchToolsResponse {
@@ -204,6 +144,17 @@ fn search_and_stage(
     SearchToolsResponse {
         results: loaded.iter().copied().map(ToolMatch::of).collect(),
         additional_matches: additional.iter().copied().map(ToolMatch::of).collect(),
+        // `rank` returns everything for a blank query; naming arbitrary tools
+        // would only mislead.
+        already_available: if query.trim().is_empty() {
+            Vec::new()
+        } else {
+            ai_toolset::tool_search::rank(advertised, query, |tool| (&tool.name, &tool.description))
+                .into_iter()
+                .take(MAX_ALREADY_AVAILABLE)
+                .map(|tool| tool.name.clone())
+                .collect()
+        },
     }
 }
 

@@ -1,3 +1,4 @@
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
@@ -23,6 +24,12 @@ export type { VisibleCalendar };
 
 const CALENDAR_LIST_STALE_TIME = 5 * 60_000;
 
+type VisibleCalendarsQueryKey =
+  | ReturnType<typeof calendarKeys.visibleCalendars>['queryKey']
+  | ReturnType<
+      typeof calendarKeys.visibleCalendars
+    >['_ctx']['graphql']['queryKey'];
+
 /**
  * Calendars visible to the viewer across connected and delegated inboxes,
  * primaries and writable calendars first — the order pickers present them in.
@@ -32,14 +39,17 @@ export function useVisibleCalendarsQuery(
 ) {
   const cacheHost = useGraphqlCalendarHost();
   const activeQueryClient = useQueryClient();
+  const userId = useUserId();
 
   createEffect(() => {
     const host = cacheHost();
     if (!host) return;
+    const queryKey = calendarKeys.visibleCalendars(userId())._ctx.graphql
+      .queryKey;
     onCleanup(
       subscribeToVisibleCacheChanges(host, () =>
         activeQueryClient.invalidateQueries(
-          { queryKey: calendarKeys.visibleCalendars._ctx.graphql.queryKey },
+          { queryKey },
           { cancelRefetch: false }
         )
       )
@@ -50,24 +60,30 @@ export function useVisibleCalendarsQuery(
     VisibleCalendar[],
     Error,
     VisibleCalendar[],
-    | typeof calendarKeys.visibleCalendars.queryKey
-    | typeof calendarKeys.visibleCalendars._ctx.graphql.queryKey
+    VisibleCalendarsQueryKey
   >(() => {
     const host = cacheHost();
-    const enabled = options?.().enabled !== false;
+    const account = userId();
+    const enabled = account !== undefined && options?.().enabled !== false;
     return host
-      ? cachedVisibleCalendarsQueryOptions(host, enabled)
-      : visibleCalendarsQueryOptions(enabled);
+      ? cachedVisibleCalendarsQueryOptions(host, account, enabled)
+      : visibleCalendarsQueryOptions(account, enabled);
   });
 }
 
 // Cached options outlive the hook. The host is the app-level cache service,
 // not component state, so the factory may close over it.
-function cachedVisibleCalendarsQueryOptions(host: CacheHost, enabled: boolean) {
+function cachedVisibleCalendarsQueryOptions(
+  host: CacheHost,
+  userId: string | undefined,
+  enabled: boolean
+) {
   return {
-    queryKey: calendarKeys.visibleCalendars._ctx.graphql.queryKey,
+    queryKey: calendarKeys.visibleCalendars(userId)._ctx.graphql.queryKey,
     queryFn: () => readCalendarList(host),
-    staleTime: Infinity,
+    // A list restored from the device is stamped 0 and must be read once.
+    staleTime: (query: { state: { dataUpdatedAt: number } }) =>
+      query.state.dataUpdatedAt === 0 ? 0 : Infinity,
     networkMode: 'offlineFirst' as const,
     enabled,
     placeholderData: keepPreviousData,
@@ -75,9 +91,12 @@ function cachedVisibleCalendarsQueryOptions(host: CacheHost, enabled: boolean) {
   };
 }
 
-function visibleCalendarsQueryOptions(enabled: boolean) {
+function visibleCalendarsQueryOptions(
+  userId: string | undefined,
+  enabled: boolean
+) {
   return {
-    queryKey: calendarKeys.visibleCalendars.queryKey,
+    queryKey: calendarKeys.visibleCalendars(userId).queryKey,
     queryFn: listCalendars,
     staleTime: CALENDAR_LIST_STALE_TIME,
     refetchInterval: outlookCalendarRefetchInterval,

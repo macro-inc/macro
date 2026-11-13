@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -44,7 +44,7 @@ pub struct MacroApiTokenQuery {
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
     let user_context = &authorization.authorization.user.user_context;
@@ -89,11 +89,17 @@ pub async fn handler(
 
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_correlation_id: None,
+            agent_session_id: None,
+            // Re-minting keeps the signed routine `propagate` accepted, so a
+            // routine run cannot shed it; callers can never supply one.
+            routine_id: agent_correlation::context::current_routine(),
             agent_id: authorization
                 .authorization
                 .user
                 .agent_id
                 .map(|agent| agent.as_uuid()),
+            agent_via: authorization.authorization.user.agent_via.clone(),
             macro_user_id,
             fusionauth_id: user_context.fusion_user_id.clone(),
             organization_id, // TOOD: get from user profile

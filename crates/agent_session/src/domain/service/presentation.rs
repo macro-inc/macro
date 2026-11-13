@@ -23,7 +23,7 @@ where
         if !session.owner_id.is_user(&actor) {
             return Err(AgentSessionError::Forbidden);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(AgentSessionError::Archived(id));
         }
         if presentation.tool_call_id.is_empty()
@@ -83,7 +83,8 @@ where
                 SessionUpdate::ToolCall(
                     ToolCall::new(presentation.tool_call_id.clone(), presentation.title)
                         .status(ToolCallStatus::InProgress)
-                        .raw_input(presentation.raw_input),
+                        .raw_input(presentation.raw_input)
+                        .meta(crate::domain::model::presented_meta()),
                 ),
             )?)
             .await?;

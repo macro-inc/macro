@@ -1,5 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
+    retry::resend_on_lost_connection,
     upsert::{self, document::UpsertDocumentArgs, properties::IndexedProperty},
 };
 
@@ -7,7 +8,10 @@ impl OpensearchClient {
     /// Inserts a document into the opensearch index
     #[tracing::instrument(skip(self))]
     pub async fn upsert_document(&self, upsert_document_args: &UpsertDocumentArgs) -> Result<()> {
-        upsert::document::upsert_document(&self.inner, upsert_document_args, None).await
+        resend_on_lost_connection(|| {
+            upsert::document::upsert_document(&self.inner, upsert_document_args, None)
+        })
+        .await
     }
 
     /// Upserts only the parent doc (no content chunks) into the opensearch index
@@ -17,8 +21,14 @@ impl OpensearchClient {
         upsert_document_args: &UpsertDocumentArgs,
         index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::document::upsert_parent_document(&self.inner, upsert_document_args, index_override)
-            .await
+        resend_on_lost_connection(|| {
+            upsert::document::upsert_parent_document(
+                &self.inner,
+                upsert_document_args,
+                index_override,
+            )
+        })
+        .await
     }
 
     /// Bulk upserts documents into the opensearch index
@@ -28,7 +38,10 @@ impl OpensearchClient {
         documents: &[UpsertDocumentArgs],
         index_override: Option<&str>,
     ) -> Result<upsert::BulkUpsertResult> {
-        upsert::document::bulk_upsert_documents(&self.inner, documents, index_override).await
+        resend_on_lost_connection(|| {
+            upsert::document::bulk_upsert_documents(&self.inner, documents, index_override)
+        })
+        .await
     }
 
     /// Deletes a document from the opensearch document index
@@ -38,7 +51,10 @@ impl OpensearchClient {
         document_id: &str,
         index_override: Option<&str>,
     ) -> Result<()> {
-        delete::document::delete_document_by_id(&self.inner, document_id, index_override).await
+        resend_on_lost_connection(|| {
+            delete::document::delete_document_by_id(&self.inner, document_id, index_override)
+        })
+        .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -47,7 +63,10 @@ impl OpensearchClient {
         document_id: &str,
         document_name: &str,
     ) -> Result<()> {
-        upsert::document::update_document_metadata(&self.inner, document_id, document_name).await
+        resend_on_lost_connection(|| {
+            upsert::document::update_document_metadata(&self.inner, document_id, document_name)
+        })
+        .await
     }
 
     /// Refresh only the denormalized `properties` on an existing parent doc.
@@ -57,12 +76,17 @@ impl OpensearchClient {
         document_id: &str,
         properties: &[IndexedProperty],
     ) -> Result<()> {
-        upsert::document::update_document_properties(&self.inner, document_id, properties, None)
-            .await
+        resend_on_lost_connection(|| {
+            upsert::document::update_document_properties(&self.inner, document_id, properties, None)
+        })
+        .await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn delete_documents_by_owner_id(&self, owner_id: &str) -> Result<()> {
-        delete::document::delete_document_by_owner_id(&self.inner, owner_id).await
+        resend_on_lost_connection(|| {
+            delete::document::delete_document_by_owner_id(&self.inner, owner_id)
+        })
+        .await
     }
 }

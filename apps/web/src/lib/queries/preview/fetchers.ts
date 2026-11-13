@@ -3,6 +3,7 @@ import {
   fetchCrmContactPreviews,
   fetchCrmPipelinePreviews,
 } from '@app/features/crm/preview-adapter';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
@@ -26,6 +27,7 @@ import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
 import { representativeThreadMessage } from '../email/thread-subject';
 import { normalizeMessageSender } from '../messages/message-sender';
+import { fetchCachedDatabaseDetail } from '../storage/databases';
 import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
@@ -135,6 +137,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           rawName: doc.document_name,
           name: doc.document_name,
+          appearance: readEntityAppearance(doc.appearance),
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
@@ -287,6 +290,7 @@ async function fetchInitiativePreviews(
             loading: false,
             rawName: item.data.name,
             name: item.data.name,
+            appearance: readEntityAppearance(item.data.appearance),
             owner: item.data.ownerId,
             updatedAt: item.data.updatedAt,
           },
@@ -422,13 +426,14 @@ async function fetchCalendarEventPreviews(
 
 /**
  * A database previews as the viewer's own read of it: an owner or anyone it
- * is shared with gets its name; one deleted or trashed is gone.
+ * is shared with gets its name; one deleted or trashed is gone. The read is
+ * the cached schema an open of the database shares.
  */
 async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
   return Promise.all(
     ids.map(async (id): Promise<PreviewItem> => {
       const base = { id, type: 'database', loading: false } as const;
-      const detail = await storageServiceClient.databases.get({ id });
+      const detail = await fetchCachedDatabaseDetail(id);
       if (detail.isErr())
         return { ...base, access: failedReadAccess(detail.error) };
       const { database } = detail.value;
@@ -439,6 +444,7 @@ async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: database.name,
         name: database.name,
+        appearance: readEntityAppearance(database.appearance),
         owner: database.owner_id,
       };
     })
@@ -462,6 +468,7 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: form.name,
         name: form.name,
+        appearance: readEntityAppearance(form.appearance),
         owner: form.ownerId,
       };
     })
@@ -481,6 +488,7 @@ async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: routine.value.name,
         name: routine.value.name,
+        appearance: readEntityAppearance(routine.value.appearance),
         owner: routine.value.owner,
         updatedAt: routine.value.updated_at,
       };

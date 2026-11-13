@@ -237,9 +237,15 @@ where
         + RestoreEntity
         + DeleteEntityPermanently
         + PurgeOwnedEntity,
-    Databases:
-        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Databases: DatabasesService
+        + RenameEntity
+        + MoveEntity
+        + DuplicateEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently,
     Forms: RenameEntity
+        + MoveEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently
@@ -445,6 +451,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -481,6 +488,14 @@ where
                 self.move_with(&*self.projects, actor, &requested, project_id)
                     .await
             }
+            EntityType::Database => {
+                self.move_with(&*self.databases, actor, &requested, project_id)
+                    .await
+            }
+            EntityType::Form => {
+                self.move_with(&*self.forms, actor, &requested, project_id)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -496,12 +511,9 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::Initiative
-            // A database is not filed into a project, so there is nowhere to
-            // move it to (`EntityType::is_valid_entity_access_entity`).
-            | EntityType::Database
             | EntityType::ExternalChat
-            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "move");
             }
@@ -553,6 +565,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::Initiative
             // Databases are shared by granting access directly; they carry no
             // public/channel share policy.
@@ -615,6 +628,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -652,6 +666,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -709,6 +724,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -760,14 +776,14 @@ where
         let receipt = self.receipt(actor, requested).await?;
         let requested = requested.clone();
         let user_id = actor.user_id.clone();
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 duplicator
                     .duplicate_entity(requested, receipt, user_id, display_name)
                     .await
             }
             .in_current_span(),
-        )
+        ))
         .await
         .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
     }
@@ -795,6 +811,10 @@ where
                 self.duplicate_project(actor, &requested, display_name)
                     .await
             }
+            EntityType::Database => {
+                self.duplicate_with(&*self.databases, actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -811,9 +831,8 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::Initiative
-            // Duplicating a database is unsupported.
-            | EntityType::Database
             | EntityType::ExternalChat
             | EntityType::Form
             | EntityType::DatabaseRow => {
@@ -852,9 +871,15 @@ where
         + RestoreEntity
         + DeleteEntityPermanently
         + PurgeOwnedEntity,
-    Databases:
-        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Databases: DatabasesService
+        + RenameEntity
+        + MoveEntity
+        + DuplicateEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently,
     Forms: RenameEntity
+        + MoveEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently

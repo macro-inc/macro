@@ -1,5 +1,7 @@
+use attention_feed::test_support::viewer_id;
+
 use super::*;
-use crate::domain::{models::WorkFeedMode, test_support::viewer_id};
+use crate::domain::models::WorkFeedMode;
 
 #[test]
 fn no_types_means_every_type() {
@@ -16,6 +18,7 @@ fn no_types_means_every_type() {
             EntityType::CalendarEvent,
             EntityType::ForeignEntity,
             EntityType::AgentSession,
+            EntityType::Harness,
         ]
     );
 }

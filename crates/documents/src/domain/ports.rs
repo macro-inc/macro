@@ -11,6 +11,7 @@ pub mod sync;
 #[cfg(test)]
 mod test;
 
+use std::collections::HashMap;
 use std::future::Future;
 
 use entity_access::domain::models::{
@@ -32,6 +33,7 @@ use super::events::InteractionReason;
 use super::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
+use super::skill_description::SkillDescription;
 
 use model::sync_service::SyncServiceVersionID;
 
@@ -51,6 +53,13 @@ use super::models::{
 /// directly in the outbound adapter implementation.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait DocumentRepo: Send + Sync + 'static {
+    /// Atomically replace presentation overrides and record attributed history without changing timestamps.
+    fn set_appearance(
+        &self,
+        document_id: &str,
+        update: &activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Err>> + Send;
+
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
@@ -283,6 +292,20 @@ pub trait DocumentRepo: Send + Sync + 'static {
         command: AuthorizedTeamShareCommand,
     ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
+    /// The stored descriptions of `document_ids`, by document id. Skills with
+    /// no description are left out.
+    fn get_skill_descriptions(
+        &self,
+        document_ids: &[String],
+    ) -> impl Future<Output = Result<HashMap<String, SkillDescription>, Self::Err>> + Send;
+
+    /// Store a skill document's description, replacing any earlier one.
+    fn set_skill_description(
+        &self,
+        document_id: &str,
+        description: &SkillDescription,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Get document metadata at a specific version ID.
     fn get_document_metadata_at_version(
         &self,
@@ -495,6 +518,13 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
 ///
 /// Orchestrates business logic using the repository and external services.
 pub trait DocumentService: Send + Sync + 'static {
+    /// Change presentation for ordinary Markdown and snippets with checked edit access.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DocumentError>> + Send;
+
     /// Gets the basic document ignoring access checks
     fn internal_get_basic_document(
         &self,
@@ -689,6 +719,28 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         share: bool,
     ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
+
+    /// Set when to use a skill the caller can edit. Fails with
+    /// [`DocumentError::BadRequest`] when the document is not a skill.
+    fn set_skill_description(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        description: SkillDescription,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Describe a skill the caller has just created, and so owns.
+    fn describe_new_skill(
+        &self,
+        document_id: &str,
+        description: SkillDescription,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// The descriptions of skills the caller is already known to see, by
+    /// document id. Skills with no description are left out.
+    fn skill_descriptions(
+        &self,
+        document_ids: &[String],
+    ) -> impl Future<Output = Result<HashMap<String, SkillDescription>, DocumentError>> + Send;
 }
 
 /// Shared editing-session timestamps, independent of document synchronization.

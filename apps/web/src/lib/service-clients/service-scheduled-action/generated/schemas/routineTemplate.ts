@@ -7,7 +7,8 @@
  */
 
 import type { ActionTrigger } from './actionTrigger';
-import type { RoutineTemplateTask } from './routineTemplateTask';
+import type { EntityAppearance } from './entityAppearance';
+import type { RoutineTask } from './routineTask';
 import type { TemplateVariable } from './templateVariable';
 
 /**
@@ -19,6 +20,7 @@ export interface RoutineTemplate {
    * @minimum 0
    */
   active_count: number;
+  appearance: EntityAppearance;
   /** Who shared it: the source routine's owner. */
   author: string;
   created_at: string;
@@ -26,7 +28,7 @@ export interface RoutineTemplate {
   /** The routine it was shared from. */
   id: string;
   name: string;
-  task: RoutineTemplateTask;
+  task: RoutineTask;
   trigger: ActionTrigger;
   updated_at: string;
   variables: TemplateVariable[];

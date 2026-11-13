@@ -2,18 +2,20 @@
 use agent_code_mode::domain::{
     CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
+use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
-use code_execution::domain::RunEnvironment;
+use code_execution::domain::{RunEnvironment, SdkEndpoints};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
 
 pub struct RunCredentials {
     pub signer: MacroApiTokenSigner,
+    pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
-    pub hosts: BTreeMap<String, String>,
+    pub endpoints: SdkEndpoints,
 }
 
 #[async_trait]
@@ -25,11 +27,26 @@ impl ExecutionCredentials for RunCredentials {
         cancel: CancellationToken,
     ) -> Result<RunEnvironment, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        let correlation = self
+            .correlations
+            .create(identity.session.as_uuid(), identity.agent_id.as_uuid())
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not persist code-mode correlation");
+                CodeModeError::Unavailable
+            })?;
         // No refresh credential. Covers the 30-second queue/run deadline plus
         // clock margin; a normal user token expires rather than revoking on exit.
         let token = self
             .signer
-            .mint_for_agent(&actor, 60, Some(identity.agent_id.as_uuid()))
+            .mint_for_agent(
+                &actor,
+                60,
+                Some(identity.agent_id.as_uuid()),
+                None,
+                None,
+                Some(correlation),
+            )
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not mint execution credential");
@@ -38,20 +55,24 @@ impl ExecutionCredentials for RunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            hosts: self.hosts.clone(),
+            endpoints: self.endpoints.clone(),
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
+            unattended: None,
         })
     }
 }
 
 /// Credentials for public MCP runs: the signed-in user, with no session, and
-/// for an agent caller (a self-hosted agent's call through egress) that agent.
-/// The MCP client asks the user before each tool call, so there is no owner
-/// gate.
+/// the agent the run's posts are attributed to: an agent caller (a self-hosted
+/// agent's call through egress) as itself, any other caller as the Macro bot,
+/// labelled with the MCP client's name - the same attribution the direct MCP
+/// tools give. The MCP client asks the user before each tool call, so there is
+/// no owner gate.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
-    pub hosts: BTreeMap<String, String>,
+    pub correlations: agent_correlation::outbound::PgCorrelationRepository,
+    pub endpoints: SdkEndpoints,
 }
 
 #[async_trait]
@@ -60,15 +81,37 @@ impl UserExecutionCredentials for UserRunCredentials {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ai_toolset::ToolCaller,
+        session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
         let agent = match caller {
-            ai_toolset::ToolCaller::Agent(agent) => Some(agent.as_uuid()),
-            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => None,
+            ai_toolset::ToolCaller::Agent(agent) => *agent,
+            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+                bot_id::MACRO_AI_BOT_ID
+            }
+        };
+        let correlation = match session {
+            Some(session) => Some(
+                self.correlations
+                    .create(session, agent.as_uuid())
+                    .await
+                    .map_err(|error| {
+                        tracing::error!(?error, "could not persist code-mode correlation");
+                        CodeModeError::Unavailable
+                    })?,
+            ),
+            None => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
-            .mint_for_agent(user, 60, agent)
+            .mint_for_agent(
+                user,
+                60,
+                Some(agent.as_uuid()),
+                caller.via().map(str::to_owned),
+                None,
+                correlation,
+            )
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not mint execution credential");
@@ -77,15 +120,16 @@ impl UserExecutionCredentials for UserRunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            hosts: self.hosts.clone(),
+            endpoints: self.endpoints.clone(),
             session_id: None,
             execution_id: None,
+            unattended: None,
         })
     }
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
-fn trace_headers() -> BTreeMap<String, String> {
+pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
     macro_tower_layers::inject_trace_headers(&mut headers);
     headers
@@ -101,15 +145,16 @@ fn trace_headers() -> BTreeMap<String, String> {
 
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
-pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
+pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
     use macro_service_urls::*;
     let storage = DocumentStorageServiceUrl::new()?.to_string();
-    Ok([
+    let hosts = [
         (
             "document-content",
             DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string(),
         ),
         ("static-content", StaticFilePublicUrl::new()?.to_string()),
+        ("editing-worker", AiEditingWorkerUrl::new()?.to_string()),
         ("storage", storage.clone()),
         ("search", storage.clone()),
         ("properties", storage),
@@ -130,10 +175,16 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
     ]
     .into_iter()
     .map(|(name, url)| (name.into(), url))
-    .collect())
+    .collect();
+    Ok(SdkEndpoints {
+        hosts,
+        web_app_url: AppServiceUrl::new()?.to_string(),
+    })
 }
 
+pub mod connected_apps;
 pub mod reviews;
+pub mod ui_commands;
 
 async fn approve_run(
     gate: &dyn NativeToolGate,

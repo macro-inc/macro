@@ -47,17 +47,18 @@ pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
 /// paths verify.
 pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
-/// Limit concurrent test links, which can each consume several GiB.
-pub const RUST_TEST_BUILD_JOBS: u32 = 2;
+/// Limit on entering the Nix dev shell. Healthy runs take under 9 minutes even
+/// from an empty cache volume, while a stalled store download has run for over
+/// an hour with no other limit to stop it.
+pub const DEV_SHELL_TIMEOUT_MINUTES: u32 = 15;
 
-/// Nextest thread count for the test job. Tuned for the previous
-/// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
-/// smaller.
+/// Nextest thread count for the test job, one per vCPU of [`Runner::Large`].
+///
+/// [`Runner::Large`]: crate::workflows::runners::Runner::Large
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
 /// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
-/// test). A fixed tag (instead of the default per-branch scoping) makes the
-/// Cargo/Nix volume global across all branches — see
+/// test), apart from the profile's default volume — see
 /// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
 /// retained so the existing warm volume is not invalidated.
 pub const CI_CACHE_TAG: &str = "sccache-ci";
@@ -73,16 +74,14 @@ pub const CI_SCCACHE_NAME: &str = "sccache-ci";
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
+/// Nix-only PR checks. They read a Nix store back, so they stay off the small
+/// profile's default volume, where other jobs would overwrite that store.
+pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
+
 /// Namespace remote sccache used when the web checks compile Rust API schema
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
-
-/// Namespace cache tag for `path-check`, which keeps its release
-/// `xtask_nextest_filter` binary on the volume. Without a fixed tag the small
-/// profile's volume is scoped per branch and PR runs never persisted, so every
-/// run rebuilt the filter.
-pub const NEXTEST_FILTER_CACHE_TAG: &str = "nextest-filter";
 
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
@@ -102,6 +101,10 @@ pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-mod
 /// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
 pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 
+/// The deploy build's wasm packages, kept in a GitHub Actions cache rather than
+/// on the cache volume, which PR jobs write. Off the volume on purpose.
+pub const DEPLOY_WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs-deploy";
+
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";
@@ -118,8 +121,12 @@ pub fn with_global_env(workflow: Workflow) -> Workflow {
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=lld"))
 }
 
-/// Cancel superseded runs of this workflow on the same git ref.
+/// Cancel superseded runs of this workflow on the same git ref. When `PR CI`
+/// calls the workflow, the group is that run's own, because `PR CI` cancels
+/// its own superseded runs.
 pub fn concurrency(prefix: &str) -> Concurrency {
-    Concurrency::new(Expression::new(format!("{prefix}-${{{{ github.ref }}}}")))
-        .cancel_in_progress(true)
+    Concurrency::new(Expression::new(format!(
+        "{prefix}-${{{{ github.event_name == 'pull_request' && github.run_id || github.ref }}}}"
+    )))
+    .cancel_in_progress(true)
 }

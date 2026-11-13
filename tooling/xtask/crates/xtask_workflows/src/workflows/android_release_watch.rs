@@ -6,8 +6,12 @@
 //! `android-update` (the label that started the
 //! [`super::android_play_release`] run), asks Play whether the version code
 //! committed at the PR head is live (built from the native code of the PR's
-//! merge result, like the gate checks), and when it is, re-runs the PR's
-//! failed `Android Native Check` job so the gate turns green on its own.
+//! merge result, like the gate checks), and when it is, marks the PR head
+//! with the `android-play/live` commit status — the gate runs the PR's code,
+//! so it cannot ask Play itself and reads this status instead — and re-runs
+//! the PR's failed `Android Native Check` job so the gate turns green on its
+//! own. Running from `main` on a schedule, it is one of the few workflows
+//! Google's identity provider admits.
 //! Re-running an existing job is how this stays within GitHub's rule that
 //! events created with the workflow token never start workflows. The iOS
 //! counterpart is [`super::ios_release_watch`].
@@ -32,7 +36,8 @@ pub fn android_release_watch() -> Workflow {
                 .actions(Level::Write)
                 .contents(Level::Read)
                 .id_token(Level::Write)
-                .pull_requests(Level::Write),
+                .pull_requests(Level::Write)
+                .statuses(Level::Write),
         )
         .add_job("watch", watch_job())
 }
@@ -47,7 +52,7 @@ fn watch_job() -> Job {
         .add_step(find_prs())
         .add_step(steps::checkout(false, false).if_condition(gated()))
         .add_step(setup_bun())
-        .add_step(play_auth())
+        .add_step(steps::google_play_auth(false).if_condition(gated()))
         .add_step(rerun_live_checks())
 }
 
@@ -72,43 +77,15 @@ fn find_prs() -> Step<Run> {
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
-        .if_condition(gated())
-        .add_with(("bun-version", "1.3.13"))
-}
-
-fn play_auth() -> Step<Use> {
-    Step::new("Authenticate to Google Play")
-        .uses(
-            "google-github-actions",
-            "auth",
-            "7c6bc770dae815cd3e89ee6cdf493a5fab2cc093",
-        ) // v3
-        .id("auth")
-        .if_condition(gated())
-        .add_with((
-            "workload_identity_provider",
-            "${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}",
-        ))
-        .add_with(("service_account", "${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}"))
-        .add_with(("token_format", "access_token"))
-        .add_with((
-            "access_token_scopes",
-            "https://www.googleapis.com/auth/androidpublisher",
-        ))
-        .add_with(("create_credentials_file", false))
-        .add_with(("export_environment_variables", false))
+    steps::setup_bun_pinned().if_condition(gated())
 }
 
 fn rerun_live_checks() -> Step<Run> {
     Step::new("Re-run the check on PRs whose release is live")
         .run(concat!(
             include_str!("scripts/android_git_fetch.sh"),
+            include_str!("scripts/pr_ci_run.sh"),
+            include_str!("scripts/android_play_statuses.sh"),
             include_str!("scripts/android_release_watch.sh")
         ))
         .shell("bash")

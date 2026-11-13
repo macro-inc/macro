@@ -10,7 +10,14 @@ vi.mock('@service-cognition/client', () => ({ cognitionApiServiceClient: {} }));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: {} }));
 vi.mock('../../email/thread', () => ({ threadQueryOptions: vi.fn() }));
-vi.mock('../../client', () => ({ queryClient: {} }));
+vi.mock('../../client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return {
+    queryClient: new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    }),
+  };
+});
 vi.mock('../../agent-session/mention-fetchers', () => ({
   fetchAgentSessionMentionPreviews: vi.fn(),
 }));
@@ -26,6 +33,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
         owner_id: 'macro|wolf@macro.com',
         created_at: '2026-09-01T00:00:00Z',
         trashed_at: null,
+        appearance: { icon: { kind: 'emoji', value: '📚' }, color: null },
       },
       grant: 'owner',
       tables: [],
@@ -43,6 +51,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
     rawName: 'Wedding',
     name: 'Wedding',
     owner: 'macro|wolf@macro.com',
+    appearance: { icon: { kind: 'emoji', value: '📚' }, color: null },
   });
 
   getDatabase.mockReturnValueOnce(

@@ -2,9 +2,9 @@
 
 ## What it is
 
-Part of the Email feature: the SQLx query crate for MacroDB's email tables —
-messages, threads, contacts, labels, links, attachments, sync tokens, CRM
-cleanup, and backfill.
+Part of the Email feature: SQLx access to MacroDB's email tables — messages,
+threads, contacts, labels, links, attachments, sync tokens, CRM cleanup and
+backfill — plus legacy storage/workflow helpers that remain to be separated.
 
 ## Start here
 
@@ -16,10 +16,17 @@ cleanup, and backfill.
 
 ## Scope
 
-- Owns: the `sqlx::query!` call sites for email tables.
-- Not here: email domain/business logic → `crates/email`; provider API calls
-  → `email_api_client`. The schema lives in `crates/macro_db_client/migrations/`
-  (shared MacroDB), not here.
+- Owns: email-table statements, relational predicates and transaction-scoped
+  storage operations. The schema lives in `crates/macro_db_client/migrations/`.
+- Put new workflow policy in `crates/email` and provider protocol implementations
+  in `email_api_client`. Preserve SQL guards and lock order when extracting
+  existing Rust decisions into domain services.
+- Purge batching/cursors/pacing, pending-label folding/restoration and scheduled
+  claim/identity/deletion decisions now live in the email domain. Legacy
+  ingestion/savepoints, label mapping during ingestion, parsed-read assembly,
+  contact normalization and backfill lease/completion composites remain. See the
+  [backend architecture](../../docs/architecture/email-backend.md#remaining-boundaries-to-review)
+  before treating a helper as a statement-only port.
 
 ## Boundaries
 
@@ -40,11 +47,17 @@ cleanup, and backfill.
 
 - `cargo test -p email_db_client` (`SQLX_OFFLINE` unset; requires local
   MacroDB — `just setup_macrodb`).
+- Run root `just check` for shared formatting, dependency and code-rule checks.
 
 Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
 
 ## Gotchas
 
+- Thread attachment flags (`has_calendar_attachment`, `has_pdf_attachment`,
+  `has_image_attachment`, `has_document_attachment`) back the CalendarOnly and
+  Attachment email filters. Call `threads::update::sync_thread_attachment_flags`
+  wherever a message's attachments change or a message is deleted; the MIME
+  prefixes in `threads/update.rs` mirror the web client's attachment filters.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.
@@ -62,6 +75,12 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   they drive, in their local state when it re-syncs a stored message. Given a
   `ResyncSnapshot` from before the Gmail fetch, it changes only labels where
   Gmail disagrees with that snapshot, so a write made during the fetch stays.
+- Label-state queries return facts and selected fallback rows to
+  `email::domain::message_labels::state`; that domain folds turns, partitions
+  restorations, validates batches, and interprets affected counts. Keep the
+  atomic sequence/expiry/fallback predicates in the existing SQL. The ingestion
+  helper `labels::insert::insert_message_labels` still owns its legacy mapping
+  until the ingestion workflow moves.
 - `email_gmail_pending_label_writes` keeps one row per write on a message's
   label, newest by `seq` (staging order, which write ids need not follow).
   Only the newest row's write sends; older ones wait while a newer row hasn't
@@ -70,6 +89,24 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   (`label_present_before`, passed on by older writes given up). Code that
   stages, confirms or abandons a Gmail label write takes
   `lock_thread_label_writes` for its threads first.
+- `links::delete` exposes the unchanged transaction-scoped purge SQL; the
+  email domain owns batching, cursor/finished-thread selection, pacing and
+  completion. Purge workflow tests live beside `email`'s mailbox-purge adapter.
+- The mailbox purge is bound by storage latency: a
+  500-message batch reads about as many pages as its rows, TOAST and child
+  rows occupy, so its time tracks per-read latency. A covering
+  `(link_id, thread_id, id)` index for its walk only moves the SELECT's heap
+  reads into the DELETE; it was benchmarked and rejected. A restarted purge
+  rescans the dead index entries the earlier run left until vacuum can remove
+  them.
+- SQLx can't see that a column read through a `LEFT JOIN` inside a `LATERAL`
+  subquery can be NULL and types it non-null from the table. Alias such
+  columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
+  nullable and `ON DELETE SET NULL`, so contact columns are often NULL.
+- A query that claims rows (`upload_claimed_at`) must return every row it
+  claims: read optional columns such as the sender through a `LEFT JOIN`. A
+  claimed attachment the caller never sees is never uploaded, and the Outlook
+  projection waits on its claim forever.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
@@ -80,3 +117,6 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+- Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.
+- Delivery, sent-identity and retained-deletion queries expose facts and statement outcomes to `email::domain::scheduled_delivery`; call that domain for claim, completion, adoption and deletion decisions. Keep SQL predicates and lock order in these query files; dormant legacy attachment mutation and schedule helpers remain unchanged.

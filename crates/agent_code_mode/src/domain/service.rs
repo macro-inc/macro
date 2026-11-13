@@ -63,7 +63,7 @@ impl CodeModeService {
 
     async fn run(
         &self,
-        identity: ExecutionIdentity,
+        mut identity: ExecutionIdentity,
         execution: ExecutionId,
         request: ExecuteRequest,
         cancel: CancellationToken,
@@ -80,29 +80,32 @@ impl CodeModeService {
             activity: Vec::new(),
             activity_truncated: false,
         };
-        if let Err(error) = self.0.store.create(identity.session, &record).await {
-            if matches!(error, CodeModeError::Duplicate) {
-                let existing = self
-                    .0
-                    .store
-                    .get(identity.session, execution)
-                    .await
-                    .map_err(|error| match error {
-                        // The ID may be unavailable outside this session. Do
-                        // not look up or reveal another session's record.
-                        CodeModeError::NotFound => CodeModeError::Invalid(
-                            "execution ID unavailable; use a fresh UUID".into(),
-                        ),
-                        other => other,
-                    })?;
-                if existing.source == request.source
-                    && existing.acting_as == Some(identity.acting_as)
-                    && existing.turn_id == Some(identity.turn)
-                {
-                    return Ok(receipt(&existing));
+        match self.0.store.create(identity.session, &record).await {
+            Ok(()) => {}
+            Err(CodeModeError::Duplicate) => {
+                match self.0.store.get(identity.session, execution).await {
+                    Ok(existing)
+                        if existing.source == request.source
+                            && existing.acting_as == Some(identity.acting_as)
+                            && existing.turn_id == Some(identity.turn) =>
+                    {
+                        return Ok(receipt(&existing));
+                    }
+                    // Models reuse example UUIDs, so a taken ID is usually not a
+                    // retry. Run under a fresh ID; the receipt reports it. Never
+                    // read or reveal another session's record.
+                    Ok(_) | Err(CodeModeError::NotFound) => {
+                        let fresh = ExecutionId::mint();
+                        tracing::Span::current()
+                            .record("assigned_execution_id", tracing::field::display(fresh));
+                        record.execution_id = fresh;
+                        identity.execution = fresh;
+                        self.0.store.create(identity.session, &record).await?;
+                    }
+                    Err(error) => return Err(error),
                 }
             }
-            return Err(error);
+            Err(error) => return Err(error),
         }
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
@@ -204,11 +207,21 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
                 | "ReadDiscussion"
                 | "Comment"
+                // Document.commentOnText().
                 | "CommentOnText"
                 | "DeleteComment"
                 | "EditComment"
@@ -219,31 +232,61 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
                 | "ReadThread"
                 | "UpdateThreadLabels"
                 | "SetSenderPolicy"
+                // macro.email.sendConfirmed runs the tool itself.
+                | "SendConfirmedEmail"
                 | "CreateChannel"
+                // Channel.send() and Thread.reply(), with images and documents.
                 | "SendChannelMessage"
                 | "EditChannelMessage"
                 | "DeleteChannelMessage"
                 | "ReactToChannelMessage"
                 | "ReadChannelMessages"
                 | "ReadChannelThread"
+                // Message.context().
+                | "ReadChannelMessageContext"
                 | "RenameChannel"
+                // shareWithChannel() on every shareable item's handle.
+                | "ShareWithChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
                 | "ListCalendars"
                 | "ListCalendarEvents"
+                // macro.calendar.createConfirmed runs the tool itself.
+                | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.teamAvailability().
+                | "GetTeamAvailability"
+                // macro.calendar.booking.
+                | "ReadBookingSettings"
+                | "UpdateBookingSettings"
+                | "ListBookings"
+                | "GetBookingInsights"
+                | "GetBookingRescheduleSlots"
+                | "ChangeBooking"
+                | "ListBookingLinks"
+                | "CreateBookingLink"
+                | "EditBookingLink"
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
@@ -251,8 +294,127 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
+                // macro.documents.upload(), which sends the bytes through Macro.
+                | "UploadFile"
+                // macro.search, macro.workspace and macro.chats.
+                | "ContentSearch"
+                | "NameSearch"
+                | "ListEntities"
+                | "ReadChat"
+                // macro.web.search() and macro.web.fetch().
+                | "WebSearch"
+                | "WebFetch"
+                // macro.bots and Bot. IssueBotCredential stays: its chat card
+                // mints the secret without the model ever reading it.
+                | "ListBots"
+                | "CreateBot"
+                | "ConfigureBot"
+                | "DeleteBot"
+                | "GetBotWebhooks"
+                | "ManageBotChannelAccess"
+                // macro.agents.coding(), macro.agents.list() and
+                // macro.agentSessions.createManaged, which prompts an agent
+                // its operator runs as well as a managed one.
+                | "ListCodingAgents"
+                | "DispatchCodingAgent"
+                | "CreateAgentSession"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
+                // macro.agentSessions.byId(): log(), foldedLog(), rename(),
+                // archive(), delete(), prompt(), control() and sharing.
+                | "ReadAgentSession"
+                | "ManageAgentSession"
+                | "ReadAgentSessionSharing"
+                | "UpdateAgentSessionSharing"
+                // macro.databases: list(), schema(), query() and view ops.
+                | "ListDatabases"
+                | "DescribeDatabase"
+                | "QueryDatabase"
+                | "SaveDatabaseView"
+                | "DeleteDatabaseView"
+                // macro.routines.
+                | "CreateRoutine"
+                | "ListRoutines"
+                | "ReadRoutine"
+                | "UpdateRoutine"
+                | "RunRoutine"
+                | "DeleteRoutine"
+                // macro.calendar.event(id).record() and addToCalendar().
+                | "ReadCalendarEvent"
+                | "AddSharedCalendarEvent"
+                // macro.images.generate().
+                | "GenerateImage"
+                // document.copy(), database.duplicate() and project.rename().
+                | "DuplicateItem"
+                | "RenameItem"
+                // macro.memory.read() and macro.memory.edit().
+                | "ReadMemory"
+                | "UpdateMemory"
+                // User.activity(), macro.activity.mine() and Initiative.activity().
+                | "GetUserActivity"
+                | "ReadInitiativeActivity"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
+                // macro.documents.create(), createSpreadsheet(), createCanvas()
+                // and upload(); macro.tasks.create().
+                | "CreateDocument"
+                // Document.updateSharePermissions() and Project.updateSharePermissions().
+                | "UpdateSharing"
+                // macro.databases.saveQuery(), Database.saveQuery() and
+                // DatabaseTable.saveQuery().
+                | "SaveDatabaseQuery"
+                // macro.crm: companyById(), createCompany(), createContact()
+                // and importCompaniesCsv().
+                | "GetCompany"
+                | "CreateCompany"
+                | "CreateContact"
+                | "ImportCompaniesCsv"
+                // macro.crm.pipelines and CrmPipeline.
+                | "ListPipelines"
+                | "CreatePipeline"
+                | "FindPipelineEntries"
+                | "AddToPipeline"
+                | "UpdatePipelineEntries"
+                | "RemoveFromPipeline"
+                | "EditPipeline"
+                | "ImportPipelineCsv"
+                | "ExportPipelineCsv"
+                // macro.initiatives and Initiative.update() and delete().
+                // ReadInitiative: initiatives.byId() detail, description() and
+                // properties through properties.bulkEntityProperties().
+                | "ListInitiatives"
+                | "ReadInitiative"
+                | "CreateInitiative"
+                | "UpdateInitiative"
+                | "UpdateInitiativeSharing"
+                | "DeleteInitiative"
+                // macro.imports: list(), track(), recordImported(),
+                // importNotionPage() and ImportEntry.decline().
+                | "ListImportEntities"
+                | "CreateImportEntity"
+                | "DeleteImportEntity"
+                | "ImportNotionPage"
+                // macro.agentSessions.updates(), whose cards an agentUpdates
+                // view draws.
+                | "ListAgentUpdates"
+                // macro.agents.list() and Agent.update().
+                | "ListAgents"
+                | "ConfigureAgent"
         )
 }
 
@@ -270,7 +432,7 @@ impl SessionCodeMode for CodeModeService {
         if self.0.executor.is_none() {
             return Err(CodeModeError::Unavailable);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(CodeModeError::Forbidden);
         }
         if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {
@@ -299,6 +461,7 @@ impl SessionCodeMode for CodeModeService {
             "code_mode.execution",
             agent_session_id = %session.id,
             execution_id = %execution,
+            assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,

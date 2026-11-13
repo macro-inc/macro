@@ -1,5 +1,6 @@
 //! Session-level state derived from the log.
 
+use agent_runtime_protocol::domain::review::ReviewUpdatedNotification;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -51,6 +52,9 @@ pub enum Harness {
 pub struct SessionMetadata {
     /// System events, projected independently of the conversation messages.
     pub notifications: Vec<SessionNotification>,
+    /// The newest saved revision of each review the log announced, in the
+    /// order they were first announced.
+    pub review_revisions: Vec<ReviewUpdatedNotification>,
     /// The last notification turn whose entire answer was suppressed.
     pub noop_turn: Option<u32>,
     /// The agent that produced the log. See [`Harness`].

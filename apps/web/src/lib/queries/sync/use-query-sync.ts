@@ -1,4 +1,5 @@
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { publishSessionActivity } from '@core/agent-session/session-activity';
 import { noteSessionActivity } from '@core/agent-session/session-turn';
 import {
   enableGraphqlSoup,
@@ -9,11 +10,13 @@ import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
 import { handleAgentSessionPreview } from '@queries/agent-session/preview';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
+  AGENT_SESSION_ACTIVITY_EVENT,
   AGENT_SESSION_CHANGES_EVENT,
   AGENT_SESSION_LOG_EVENT,
   AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
   AGENT_SESSION_UPDATED_EVENT,
+  type AgentSessionActivityEvent,
   type AgentSessionChangesEvent,
   type AgentSessionLogEvent,
   type AgentSessionQueueEvent,
@@ -25,11 +28,12 @@ import {
   handleAgentSessionUpdated,
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
+import { handleChannelAccessRequestChanged } from '@queries/channel/access-requests';
 import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import { invalidateContacts } from '@queries/contacts/contacts';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
@@ -57,6 +61,7 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@app/features/routines/queries/sync';
+import { handleUserPictureChanged } from '@core/signal/profilePicture';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createConnectionWebsocketEffect,
@@ -115,7 +120,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        fireAndForget(invalidateContacts(), 'websocket-query-sync');
+        requestContactRefresh();
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(
@@ -138,6 +143,20 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           handleChannelPictureChanged
         );
       })
+      .with({ type: 'user_picture_changed' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleUserPictureChanged
+        );
+      })
+      .with({ type: 'channel_access_request_changed' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleChannelAccessRequestChanged
+        );
+      })
       // One frame appended to a live agent session's log. Routed to the
       // channel's fold rather than to any cache: the frame is not a message,
       // it is a step towards one, and only the fold knows which.
@@ -158,6 +177,13 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           handleAgentSessionUpdated
+        );
+      })
+      .with({ type: AGENT_SESSION_ACTIVITY_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionActivityEvent>(
+          data.type,
+          data.data,
+          (event) => publishSessionActivity(event.agentSessionId, event.text)
         );
       })
       .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {

@@ -10,6 +10,38 @@ fn string_record(fields: &[(&str, &str)]) -> Record {
 }
 
 #[test]
+fn only_directory_contacts_prove_person_membership() {
+    for typename in ["GraphqlUser", "User", "GraphqlContact"] {
+        let mut record = string_record(&[
+            ("__typename", typename),
+            ("name", "  CAFÉ   Person "),
+            ("email", "PERSON@example.com"),
+            ("userId", "macro|person@example.com"),
+        ]);
+        let key = EntityKey::entity(typename, &["viewer-scoped-record"]);
+        let documents = project_search_documents(&key, &record);
+        if typename != "GraphqlContact" {
+            assert!(
+                documents.is_empty(),
+                "a profile alone is not directory membership"
+            );
+            continue;
+        }
+        assert_eq!(documents[0].bucket, "person");
+        assert_eq!(documents[0].search_text, "café person | person@example.com");
+        assert_eq!(
+            documents[0].timestamp_ms, 0,
+            "relationship recency is not DM activity"
+        );
+        record.fields.insert("name".into(), CacheValue::Null);
+        assert_eq!(
+            project_search_documents(&key, &record)[0].search_text,
+            "person | person@example.com"
+        );
+    }
+}
+
+#[test]
 fn projects_quick_access_document_without_decoding_other_records() {
     let mut record = string_record(&[
         ("__typename", "GraphqlSoupDocument"),
@@ -80,6 +112,27 @@ fn fuzzy_matching_rewards_prefix_and_freshness() {
     };
     assert!(fuzzy_freshness_score(&recent, "qtr plan", 1_000).is_some());
     assert!(fuzzy_freshness_score(&recent, "missing", 1_000).is_none());
+}
+
+#[test]
+fn commas_separate_query_tokens_in_any_order() {
+    let group = SearchDocument {
+        profile: SearchProfile::QuickAccessV1,
+        record_key: EntityKey::entity("GraphqlSoupChannel", &["1"]),
+        bucket: "channel".into(),
+        search_text: "avery morgan, blair chen".into(),
+        timestamp_ms: 990,
+        source_hash: "a".into(),
+    };
+    for query in ["avery, blair", "blair, avery", "blair,avery", "blair, ave"] {
+        assert!(
+            fuzzy_freshness_score(&group, query, 1_000).is_some(),
+            "{query} must match"
+        );
+        assert!(SearchQuery::new(query).matches(&group.search_text));
+    }
+    assert!(fuzzy_freshness_score(&group, "blair, casey", 1_000).is_none());
+    assert!(fuzzy_freshness_score(&group, " , ", 1_000).is_none());
 }
 
 #[test]
@@ -214,17 +267,20 @@ fn email_projection_matches_subject_and_all_senders_but_never_bodies() {
     assert!(!documents[0].search_text.contains("quartz"));
     assert!(!documents[0].search_text.contains("zebra"));
     for query in ["t", "te", "teo", "teo@sender.test", "weekly"] {
-        let page = rank_documents(
-            &SearchRequest {
-                profile: SearchProfile::QuickAccessV1,
-                buckets: vec!["email".into()],
-                query: query.into(),
-                cursor: None,
-                limit: 50,
-                now_ms: 0,
-            },
-            &documents,
-        );
+        let request = SearchRequest {
+            profile: SearchProfile::QuickAccessV1,
+            buckets: vec!["email".into()],
+            query: query.into(),
+            cursor: None,
+            limit: 50,
+            now_ms: 0,
+        };
+        let normalized = SearchQuery::new(query);
+        let mut ranker = SearchRanker::new(&request, &normalized);
+        for document in &documents {
+            ranker.push(document.as_borrowed());
+        }
+        let page = ranker.finish();
         assert_eq!(page.documents.len(), 1, "{query}");
     }
     record.fields.insert("name".into(), CacheValue::Null);

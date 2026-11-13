@@ -8,7 +8,7 @@ use crate::domain::authoring::{
 use crate::domain::collaboration;
 use serde_json::json;
 
-struct Access(Shared);
+pub(super) struct Access(pub(super) Shared);
 impl AuthoringAccess for Access {
     async fn receipt<L: RequiredPermission>(
         &self,
@@ -190,6 +190,8 @@ async fn authoring_preserves_human_edits_then_opens_directly_without_response_le
             status: FormStatus::Open,
             closes_at: None,
             tally_visible: false,
+            responses_visible: None,
+            anonymous: None,
             channel_grants: vec![],
         },
     };
@@ -491,6 +493,8 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
                     status: FormStatus::Closed,
                     closes_at: None,
                     tally_visible: false,
+                    responses_visible: None,
+                    anonymous: None,
                     channel_grants: vec![],
                 },
             },
@@ -739,6 +743,7 @@ async fn review_regression_metadata_edit_preserves_human_reference_questions_and
                             required: false,
                             widget: None,
                         }],
+                        show_when: None,
                     },
                     FormSection::Gate {
                         id: FormSectionId::new(),
@@ -829,6 +834,7 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
                             required: false,
                             widget: None,
                         }],
+                        show_when: None,
                     },
                     FormSection::Gate {
                         id: FormSectionId::new(),
@@ -876,6 +882,8 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
                     status: FormStatus::Open,
                     closes_at: None,
                     tally_visible: false,
+                    responses_visible: None,
+                    anonymous: None,
                     channel_grants: vec![],
                 },
             },
@@ -998,6 +1006,8 @@ async fn review_regression_equivalent_revision_bytes_remain_projected_and_editab
                     status: FormStatus::Closed,
                     closes_at: None,
                     tally_visible: false,
+                    responses_visible: None,
+                    anonymous: None,
                     channel_grants: vec![],
                 },
             },
@@ -1232,7 +1242,7 @@ async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
 }
 
 /// Test codec; production uses the Cloudflare worker through the same port.
-struct Editor;
+pub(super) struct Editor;
 impl crate::domain::authoring::ports::AuthoringEditor for Editor {
     async fn prepare_edit(
         &self,
@@ -1276,6 +1286,7 @@ async fn crdt_merge_revalidates_authoring_limits_after_a_concurrent_addition() {
         title: String::new(),
         description: String::new(),
         questions: vec![],
+        show_when: None,
     };
     let mut human = saved.layout.clone();
     human.sections.push(section());
@@ -1412,6 +1423,8 @@ async fn direct_access_changes_use_existing_channel_sharing_and_report_partial_f
             status: FormStatus::Open,
             closes_at: None,
             tally_visible: false,
+            responses_visible: None,
+            anonymous: None,
             channel_grants: vec![GrantChange::Upsert {
                 channel_id: channel,
                 access: GrantAccess::View,

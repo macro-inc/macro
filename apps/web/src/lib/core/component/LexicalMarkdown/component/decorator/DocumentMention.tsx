@@ -119,7 +119,7 @@ function MentionContainer(props: {
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
+        <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
           {props.text}
         </span>
       </Show>
@@ -719,7 +719,15 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
             documentId={props.documentId}
             blockName="database"
             name={name() || 'Database'}
-            icon={<EntityIcon targetType="database" size="fill" />}
+            icon={
+              <EntityIcon
+                targetType="database"
+                appearance={
+                  detail.isSuccess ? detail.data.database.appearance : undefined
+                }
+                size="fill"
+              />
+            }
             collapsed={props.collapsed}
             onOpen={(event) =>
               openDocument(
@@ -779,7 +787,15 @@ function FormMention(props: DocumentMentionDecoratorProps) {
           documentId={props.documentId}
           blockName="form"
           name={name() || 'Form'}
-          icon={<EntityIcon targetType="form" size="fill" />}
+          icon={
+            <EntityIcon
+              targetType="form"
+              appearance={
+                detail.isSuccess ? detail.data.form.appearance : undefined
+              }
+              size="fill"
+            />
+          }
           collapsed={props.collapsed}
           onOpen={(event) =>
             openDocument(

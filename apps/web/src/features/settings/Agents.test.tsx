@@ -38,6 +38,11 @@ const agentsPageProps = {
 };
 
 // The real Lexical surface has its own Markdown round-trip suite.
+vi.mock('./computers/views/agent-computer-entry', () => ({
+  RunOnComputerRow: () => null,
+  ComputerWhereItRuns: () => null,
+}));
+
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
     markdown: string;
@@ -56,6 +61,9 @@ vi.mock('./components/instructions-editor', () => ({
 // Covered by its own suite; it owns a live query.
 vi.mock('./components/coding-preferences-setting', () => ({
   CodingPreferencesSetting: () => null,
+}));
+vi.mock('./components/auto-archive-setting', () => ({
+  AutoArchiveSetting: () => null,
 }));
 
 const [searchParams, updateSearchParams] = createStore<{
@@ -278,6 +286,10 @@ vi.mock('@queries/pipedream-connectors', () => ({
     slugs: () => new Set(pipedreamMocks.connected),
     ready: () => true,
   }),
+  usePipedreamCatalogIconsQuery: () => ({
+    isPending: false,
+    data: new Map(),
+  }),
   usePipedreamCatalogQuery: (search: () => string) => ({
     get data() {
       const term = search().trim().toLowerCase();
@@ -358,6 +370,8 @@ const MACROD_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  access: 'owner',
+  shared_team_ids: [],
 } satisfies Harness;
 
 describe('Agents', () => {
@@ -533,7 +547,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Manage Cursor' }));
     expect(onCursor).toHaveBeenCalledTimes(2);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Manage paired runtimes' })
+      screen.getByRole('button', { name: 'Manage paired machines' })
     );
     expect(onManageRuntimes).toHaveBeenCalledOnce();
   });
@@ -667,10 +681,10 @@ describe('Agents', () => {
       within(list).getByText('In Cursor · cursor-small · All channels')
     ).toBeTruthy();
     expect(
-      within(list).getByText('In your harness · Dev box · codex · All channels')
+      within(list).getByText('On your machine · Dev box · codex · All channels')
     ).toBeTruthy();
     expect(
-      within(list).getByText('Disconnected runtime · codex · All channels')
+      within(list).getByText('Disconnected machine · codex · All channels')
     ).toBeTruthy();
   });
 
@@ -1136,9 +1150,9 @@ describe('Agents', () => {
       within(dialog).getByRole('radio', { name: 'In Cursor' })
     ).toHaveProperty('disabled', true);
     expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     ).toHaveProperty('disabled', true);
-    expect(within(dialog).queryByLabelText('Harness')).toBeNull();
+    expect(within(dialog).queryByLabelText('Machine')).toBeNull();
     expect(within(dialog).getAllByLabelText('Default model')).toHaveLength(1);
     expect(within(dialog).getByText('Who can use it')).toBeTruthy();
     expect(within(dialog).getByRole('group', { name: 'Share' })).toBeTruthy();
@@ -1175,13 +1189,13 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: 'New agent' });
     const ownHarness = within(dialog).getByRole('radio', {
-      name: 'In your harness',
+      name: 'On your machine',
     });
     expect(ownHarness).toHaveProperty('disabled', true);
     expect(
-      within(dialog).getByRole('button', { name: 'Set up your own harness' })
+      within(dialog).getByRole('button', { name: 'Set up your own machine' })
     ).toBeTruthy();
-    expect(within(dialog).queryByLabelText('Harness')).toBeNull();
+    expect(within(dialog).queryByLabelText('Machine')).toBeNull();
   });
 
   it('keeps mention, permission, and channel choices collapsed under Advanced', () => {
@@ -1233,9 +1247,11 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
-    const teamCardClasses = teamOption.closest('label')?.classList;
-    expect(teamCardClasses?.contains('cursor-not-allowed')).toBe(true);
-    expect(teamCardClasses?.contains('opacity-50')).toBe(true);
+    expect(
+      teamOption.closest('label')?.classList.contains('cursor-not-allowed')
+    ).toBe(true);
+    // The choice's text and radio dim; trailing actions stay legible.
+    expect(teamOption.classList.contains('opacity-50')).toBe(true);
     expect(
       within(dialog).getByText(
         'Team agents need a team owner. Create or join a team in Team settings to enable this option.'
@@ -1287,6 +1303,7 @@ describe('Agents', () => {
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add key' }));
     fireEvent.input(within(dialog).getByLabelText('Anthropic API key'), {
       target: { value: 'sk-ant-api03-abc' },
     });
@@ -1301,6 +1318,35 @@ describe('Agents', () => {
       );
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it('offers an optional API key without asking for one', async () => {
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    expect(within(dialog).queryByLabelText('Anthropic API key')).toBeNull();
+    expect(
+      within(dialog).getByText('Runs on Macro usage unless you add one.')
+    ).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add key' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Cancel API key' })
+    );
+    expect(within(dialog).queryByLabelText('Anthropic API key')).toBeNull();
+
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Bug fixer' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(apiKeyMocks.save).not.toHaveBeenCalled();
+    expect(apiKeyMocks.remove).not.toHaveBeenCalled();
   });
 
   it("removes an agent's saved API key, and locks the field on a free plan", async () => {
@@ -1371,10 +1417,10 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
 
+    expect(within(dialog).queryByLabelText('Anthropic API key')).toBeNull();
     expect(
-      (within(dialog).getByLabelText('Anthropic API key') as HTMLInputElement)
-        .disabled
-    ).toBe(true);
+      within(dialog).queryByRole('button', { name: 'Add key' })
+    ).toBeNull();
     expect(
       within(dialog).getByText(
         'Agent API keys are part of the Premium and Max plans.'
@@ -1402,7 +1448,7 @@ describe('Agents', () => {
       within(dialog).queryByRole('button', { name: 'Connect Cursor' })
     ).toBeNull();
     expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     ).toHaveProperty('disabled', true);
 
     fireEvent.click(cursor);
@@ -1443,15 +1489,15 @@ describe('Agents', () => {
       within(dialog).getByRole('radio', { name: 'In Cursor' })
     ).toHaveProperty('disabled', true);
     const ownHarness = within(dialog).getByRole('radio', {
-      name: 'In your harness',
+      name: 'On your machine',
     });
     expect(ownHarness).toHaveProperty('disabled', false);
     expect(
-      within(dialog).queryByRole('button', { name: 'Set up your own harness' })
+      within(dialog).queryByRole('button', { name: 'Set up your own machine' })
     ).toBeNull();
 
     fireEvent.click(ownHarness);
-    const harness = within(dialog).getByLabelText('Harness');
+    const harness = within(dialog).getByLabelText('Machine');
     expect(harness).toHaveProperty('textContent', 'Dev box');
     expect(selectOptions(harness).getAllByRole('option')).toHaveLength(1);
     expect(
@@ -1488,9 +1534,9 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
-    const harness = within(dialog).getByLabelText('Harness');
+    const harness = within(dialog).getByLabelText('Machine');
     expect(
       selectOptions(harness).getByRole('option', { name: 'Dev box' })
     ).toBeTruthy();
@@ -1572,13 +1618,13 @@ describe('Agents', () => {
 
     // The first paired harness is picked when the option is chosen.
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
-    const harness = within(dialog).getByLabelText('Harness');
+    const harness = within(dialog).getByLabelText('Machine');
     expect(harness).toHaveProperty('textContent', 'Dev box');
     expect(
       within(dialog).getByText(
-        'Model selection is unsupported by this runtime.'
+        'Model selection is unsupported by this machine.'
       )
     ).toBeTruthy();
 
@@ -1601,7 +1647,7 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
 
     const defaultModel = within(dialog).getByLabelText('Default model');
@@ -1624,7 +1670,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
 
     expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
@@ -1644,7 +1690,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
 
     const defaultModel = within(dialog).getByLabelText('Default model');
@@ -1674,7 +1720,7 @@ describe('Agents', () => {
       target: { value: 'Bug fixer' },
     });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Create agent' })
@@ -1720,7 +1766,7 @@ describe('Agents', () => {
       true
     );
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
     expect(within(dialog).getByLabelText('Coding agent')).toHaveProperty(
       'checked',
@@ -1812,9 +1858,9 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     ).toHaveProperty('checked', true);
-    expect(within(dialog).getByLabelText('Harness')).toHaveProperty(
+    expect(within(dialog).getByLabelText('Machine')).toHaveProperty(
       'textContent',
       'Dev box'
     );
@@ -2011,7 +2057,7 @@ it('requires prompts unless the harness operator permits bypass', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
   const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
   fireEvent.click(
-    within(dialog).getByRole('radio', { name: 'In your harness' })
+    within(dialog).getByRole('radio', { name: 'On your machine' })
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -2033,7 +2079,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
   fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
   const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
   fireEvent.click(
-    within(dialog).getByRole('radio', { name: 'In your harness' })
+    within(dialog).getByRole('radio', { name: 'On your machine' })
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -2045,7 +2091,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
     'checked',
     true
   );
-  chooseSelectOption(within(dialog).getByLabelText('Harness'), 'Prompt only');
+  chooseSelectOption(within(dialog).getByLabelText('Machine'), 'Prompt only');
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
     'checked',
     true

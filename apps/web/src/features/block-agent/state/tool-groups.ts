@@ -10,7 +10,7 @@
  *
  * A thought at the tail of a run stays out of the group only when the run
  * closes the message: that row is the current (or last) reasoning, and
- * burying it in "Called N tools" is what made a live Cursor turn look
+ * burying it in "Used N tools" is what made a live Cursor turn look
  * finished. Mid-message, a trailing thought belongs to its run — prose
  * follows it, so nothing live is being hidden.
  *
@@ -29,8 +29,7 @@ export type PartSegment = {
 
 /**
  * Macro tools whose call renders the answer itself rather than a card about
- * it: `DisplayResults` renders the dynamic-UI view the model composed, the
- * same full-width dashboard the chat shows. `GenerateImage` shows the generated
+ * it. `GenerateImage` shows the generated
  * image document. `DispatchCodingAgent` shows the dispatched session's Magic Chip.
  *
  * Folding one of these into a group would put the answer behind a closed
@@ -39,7 +38,6 @@ export type PartSegment = {
  */
 const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
   'DispatchCodingAgent',
-  'DisplayResults',
   'GenerateImage',
 ]);
 
@@ -50,7 +48,7 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
-  if (isCodeExecution(part) || presentedReviewId(part)) return true;
+  if (presentedReviewId(part) || part.detail.kind === 'view') return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&

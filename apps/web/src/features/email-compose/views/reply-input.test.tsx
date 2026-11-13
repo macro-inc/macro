@@ -68,6 +68,7 @@ it.each([
           session={{
             thread: () => undefined,
             recipientOptions: () => [],
+            ownsThreadInbox: () => true,
             isPersonalReply: () => false,
             onDraftRemoved() {},
             exitToThread: () => false,

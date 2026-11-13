@@ -6,6 +6,10 @@ import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequi
 import { nativeUpdateRequired } from '@core/mobile/nativeUpdateRequired';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
+import {
+  hasAutomaticReloadHolds,
+  syncNativeReloadHold,
+} from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
@@ -32,6 +36,10 @@ import {
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
+import {
+  createWaitingForWifiPrompt,
+  WaitingForWifiUpdateDialog,
+} from './WaitingForWifiUpdateDialog';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -85,6 +93,11 @@ function TauriProvider(props: { children: JSX.Element }) {
   useAndroidBack();
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
+  const waitingForWifiPrompt = createWaitingForWifiPrompt(bundleUpdateStatus);
+  function receiveBundleUpdateStatus(status: BundleUpdateStatus) {
+    setBundleUpdateStatus(status);
+    waitingForWifiPrompt.observe(status);
+  }
   const [
     nativeAppUpdateRequiredDialogOpen,
     setNativeAppUpdateRequiredDialogOpen,
@@ -110,6 +123,8 @@ function TauriProvider(props: { children: JSX.Element }) {
 
     hasShownNativeAppUpdateRequiredDialog = true;
     if (reason !== undefined) hasShownNativeUpdateReason = true;
+    // The App Store prompt wins over the offer to download a bundle off Wi-Fi.
+    waitingForWifiPrompt.yieldToNativeUpdate();
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
@@ -128,7 +143,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',
       (ev) => {
-        setBundleUpdateStatus(ev.payload);
+        receiveBundleUpdateStatus(ev.payload);
       }
     );
     if (LOADED_BUNDLE_BUILD !== undefined) {
@@ -138,10 +153,11 @@ function TauriProvider(props: { children: JSX.Element }) {
         console.error('[bundle-update] ack_bundle_update_reload failed', e)
       );
     }
+    fireAndForget(syncNativeReloadHold(), 'bundle-update');
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status')
       .then((status) => {
-        setBundleUpdateStatus(status);
+        receiveBundleUpdateStatus(status);
       })
       .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     onCleanup(() => {
@@ -157,7 +173,9 @@ function TauriProvider(props: { children: JSX.Element }) {
       // iOS gives us a short JS execution window after the app is backgrounded.
       // Use it to ask Rust to apply a completed bundle before suspension;
       // native Ready/Resumed handlers cover cases where this window is missed.
-      if (document.hidden) {
+      // Leaving the app does not mean nothing is running: switching to Gmail
+      // for a sign-in code hides the page while its auth sheet is still open.
+      if (document.hidden && !hasAutomaticReloadHolds()) {
         performBundleUpdate();
       }
     };
@@ -193,6 +211,10 @@ function TauriProvider(props: { children: JSX.Element }) {
           </div>
         </Surface>
       </Dialog>
+      <WaitingForWifiUpdateDialog
+        prompt={waitingForWifiPrompt}
+        status={bundleUpdateStatus()}
+      />
       <NativeAppUpdateRequiredDialog
         open={nativeAppUpdateRequiredDialogOpen()}
         onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}

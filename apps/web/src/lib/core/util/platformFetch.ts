@@ -1,26 +1,96 @@
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { NATIVE_SESSION_SERVICE_URLS } from '../constant/servers';
 import { isTauri } from './platform';
 
-async function acquireFetch() {
-  // @ts-ignore: tauri adds this on the window instance
-  if (isTauri()) {
-    const { fetch } = await import('@tauri-apps/plugin-http');
-    return fetch;
-  }
-  return window.fetch;
+const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
+let originalFetch: typeof fetch | undefined;
+
+// Third-party hosts that allow any origin and require requests from the user's
+// browser. The native HTTP client's scope doesn't list them and rejects them.
+// Call background effects fetch MediaPipe's WASM from jsDelivr and its
+// segmentation model from Google Cloud Storage (`@livekit/track-processors`).
+const WEBVIEW_FETCH_HOSTS = new Set([
+  'api.klipy.com',
+  'cdn.jsdelivr.net',
+  'storage.googleapis.com',
+]);
+
+/**
+ * Called once by the entry point: routes Tauri's global fetch through
+ * `createPlatformFetch`, the only place that chooses a transport.
+ */
+export function installPlatformFetch() {
+  if (!isTauri()) return;
+
+  const browserFetch = window.fetch;
+  // The global override must call the transport, never `platformFetch`: that
+  // reads the global back and would recurse until the stack overflows.
+  const transport = initializePlatformFetch(browserFetch);
+  window.fetch = new Proxy(browserFetch, {
+    apply: (_target, thisArg, args: Parameters<typeof fetch>) =>
+      transport.apply(thisArg, args),
+  });
 }
 
-// async function acquireWebsocket() {
-//   if (isTauri()) {
-//     const ws = await import("@tauri-apps/plugin-websocket");
-//     return ws
-//   }
-//   return WebSocket
-// }
+/** Exported for tests; production calls it through `installPlatformFetch`. */
+export function initializePlatformFetch(
+  webviewFetch: typeof fetch
+): typeof fetch {
+  originalFetch = webviewFetch;
+  return createPlatformFetch(webviewFetch);
+}
 
-// export const connectPlatformWebsocket: ReturnType<typeof WebSocket["conne"]
+/** Explicit browser transport for APIs that require the webview's origin. */
+export const webviewFetch: typeof fetch = (input, init) =>
+  (originalFetch ?? globalThis.fetch)(input, init);
 
-// wrapper around window.fetch which just forwards args to fetch on the web.
-// In tauri environments this forwards requests into the tauri http client
-export const platformFetch: typeof window.fetch = (url, opts) => {
-  return acquireFetch().then((f) => f(url, opts));
-};
+/** Native HTTP owns the desktop session cookie jar and bypasses remote CORS. */
+export function createPlatformFetch(
+  webviewFetch: typeof window.fetch
+): typeof window.fetch {
+  // Tauri sends invoke calls through global fetch. Preserve its webview-owned
+  // endpoint or native HTTP recursively invokes itself and expands each payload.
+  // Local files (`asset`) are also served only to the webview. Each protocol is
+  // `<name>://localhost` or `http(s)://<name>.localhost`, depending on platform.
+  const tauriProtocols = isTauri()
+    ? ['ipc', 'asset'].map((protocol) => new URL(convertFileSrc('', protocol)))
+    : [];
+  return async (input, init) => {
+    if (!isTauri()) return webviewFetch(input, init);
+    const url = new URL(
+      input instanceof Request ? input.url : String(input),
+      document.baseURI
+    );
+    // Service URLs own authentication even when a development proxy happens to
+    // share the page origin or use loopback. Webview and reqwest jars differ.
+    const service = nativeServices.some(
+      (base) =>
+        url.origin === base.origin &&
+        (url.pathname === base.pathname ||
+          url.pathname.startsWith(`${base.pathname.replace(/\/$/, '')}/`))
+    );
+    // Assets share the webview origin; authenticated service prefixes take
+    // precedence even when the development proxy shares that origin.
+    if (
+      tauriProtocols.some(
+        (endpoint) =>
+          url.protocol === endpoint.protocol && url.host === endpoint.host
+      ) ||
+      (!service && url.origin === new URL(document.baseURI).origin) ||
+      url.protocol === 'data:' ||
+      url.protocol === 'blob:' ||
+      WEBVIEW_FETCH_HOSTS.has(url.hostname)
+    ) {
+      return webviewFetch(input, init);
+    }
+    const { fetch } = await import('@tauri-apps/plugin-http');
+    // The plugin cancels only on `init.signal`, never on a `Request`'s own.
+    const signal =
+      init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    return fetch(input, { ...init, signal });
+  };
+}
+
+// Native startup installs the transport explicitly; all callers share it.
+export const platformFetch: typeof fetch = (input, init) =>
+  globalThis.fetch(input, init);

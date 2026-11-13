@@ -1,45 +1,39 @@
 ---
 title: "Agents"
-icon: "wand-magic-sparkles"
+icon: "sparkle"
 description: "Agents that live inside your workspace — with full context on your email, tasks, docs, calls, and channels."
 ---
 
-<Frame>
-  ![The Agents tab, with chat history and agents answering from workspace context](/images/agents_screenshot-1.png)
-</Frame>
+<GuideGraphic kind="agents" label="An agent works from the team conversation and returns its result." />
 
-Macro agents live inside your workspace and work from [unified memory](/product/unified-memory), so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
+Macro agents live and work inside your workspace, so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
 
-> To start a new conversation use shortcut <kbd>c</kbd> \+ <kbd>a</kbd>. The composer on [Home](/product/home) also starts a conversation.
+Watch a 1:05 walkthrough of Macro Agents.
+
+<video src="https://macro.com/video/tutorials/agents.mp4" poster="https://macro.com/video/tutorials/agents-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
 ### The Agents workspace
 
 Agents lists every conversation you've had, named automatically from your first message, and you can pick any of them back up where you left off. Ask for summaries, clarifications, drafts, or a status check. Agents answer using everything in your workspace, not just the current thread.
 
-> Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to Agents, and <kbd>j</kbd> and <kbd>k</kbd> to move up and down through conversations.
+> Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to Agents.
 
-The switch at the top of the Agents sidebar has two modes:
+**Chat** and **Code** are the two kinds of conversation.
 
-- **Work**: agent conversations
-- **Code**: coding sessions in a GitHub repository, with repository, branch, and linked pull request. See [GitHub integration](/integrations/github).
+- **Chat** works in your workspace: documents, email, tasks, channels, and the rest of what you can see.
+- **Code** works on a repository. The session shows the repository, branch, and linked pull request. See [GitHub integration](/integrations/github).
+
+The composer starts in **Auto**, which sends each prompt to your usual chat agent, or to your usual coding agent when the work is code. Choose **Chat** or **Code** to start that kind every time.
+
+Group conversations by **Type** and the sidebar splits into **Chat** and **Code**. Filter by **Type** to show one of them.
 
 **New conversation** starts a conversation. The **Agent** selector in the composer sets the agent or model. **Search conversations** filters by title. Right-click a conversation to rename, favorite, share, or delete it.
 
-Conversation status dots:
-
-- Pulsing: agent is working
-- Amber: agent is waiting for your answer
-- Solid: finished and unread
-
 A notification appears on [Home](/product/home) when an agent finishes or needs an answer.
-
-<Frame>
-  ![Agents answering a question using context from across the workspace](/images/Screenshot-2026-06-03-at-5.01.06-PM.png)
-</Frame>
 
 ### Full workspace context
 
-Agents answer from [unified memory](/product/unified-memory), a continuously refreshed view of your email, messages, tasks, docs, calls, and connected tools, not just your chat history. That's why you can ask a broad question ("what's the latest on the Acme deal?") without pointing them at anything.
+Agents answer from your email, messages, tasks, docs, calls, and connected tools, not just your chat history. That's why you can ask a broad question ("what's the latest on the Acme deal?") without pointing them at anything.
 
 When you want to be exact, @mention a specific channel, doc, task, or thread right in your prompt. That pins the context and skips the search, so agents work from precisely the item you mean. See [Mentions in Agents](/concepts/mentions#mentions-in-agents).
 
@@ -60,8 +54,6 @@ Agents have a broad tool set and will reach for the right tools on their own. In
 - **Web** — search the web and fetch pages when the answer isn't in your workspace
 - **Import** — pull content in from Notion, Linear, and Slack when you migrate
 
-For copy-paste prompts that put these to work, see [Agent recipes](/AI/recipes).
-
 ### Agents in channels
 
 Mention **@Macro** in any [channel](/product/channels) to pull agents into the conversation with the whole channel as context. They show up in the normal @-mention typeahead, read the thread, and reply inline. Agents can also post their results back into a channel or a specific thread as part of a longer task.
@@ -70,31 +62,25 @@ Mention **@Macro** in any [channel](/product/channels) to pull agents into the c
   **@Macro** invokes the built-in agents. They're separate from **custom bots** — named integrations you create with their own API tokens and webhooks to post into channels programmatically.
 </Note>
 
-<Frame>
-  ![An @Macro mention in a channel and the agents' reply in-thread](/images/macro_in_channel.png)
-</Frame>
-
 ### Routines
 
-A [routine](/product/routines) is a saved prompt that runs on a schedule or when activity happens in Macro, such as a new email or a task status change. Create one with <kbd>c</kbd> \+ <kbd>u</kbd> or from **Routines** in the Agents sidebar.
+A [routine](/product/routines) is a saved prompt that runs on a schedule or when activity happens in Macro, such as a new email or a task status change.
 
 ### Skills
 
-A [skill](/product/skills) is a saved set of instructions an agent follows. Type `/` in an agent composer to attach one. Create one with <kbd>c</kbd> \+ <kbd>k</kbd>.
+A [skill](/product/skills) is a saved set of instructions an agent follows. Type `/` in an agent composer to attach one.
 
 ### Custom agents
 
-**Settings → Agents** creates agents with a name, instructions, default model, and runtime. A runtime is Macro's AI, a hosted coding agent, or an agent running on your computer. See [Bring your own agent](/AI/bring-your-own) to connect Claude Code, Codex, or another local agent.
+**Settings → Agents** creates agents with a name, instructions, default model, and the machine it runs on: Macro's own, a hosted coding agent, or your own computer. See [Bring your own agent](/AI/bring-your-own) to connect Claude Code, Codex, or another local agent. See [Cursor](/AI/cursor) to run coding agents on your Cursor plan.
 
 ### Choosing a model
 
 A model picker sits in the composer. You can choose a model per conversation depending on how difficult you deem the question. Your choice is remembered for that conversation and carried forward when you start a new one.
 
-Free uses Gemini 3.8 Flash. Pro and Max include Anthropic's Sonnet 5.5, Opus 5.5, and Haiku 4.5, OpenAI's GPT-6 Astra and GPT-5.6, and open-weight models. See [Billing & Plans](/account/billing).
+On the Free plan, the model is Gemini 3.8 Flash. Pro and Max include Anthropic's Sonnet 5.5, Opus 5.5, and Haiku 4.5, OpenAI's GPT-6 Astra and GPT-5.6, and open-weight models.
 
-<Frame>
-  ![The model picker, showing the available models](/images/model_options.png)
-</Frame>
+Agent chats count as AI usage. Each plan includes a monthly amount, and some models use more of it than others. **Settings → Usage** shows how much of that amount you have used. See [Pricing](/account/billing).
 
 ### MCP setup
 
@@ -104,7 +90,7 @@ Macro's MCP server lets AI clients like Claude Code, Codex, and Cursor work with
 https://mcp-server.macro.com/mcp
 ```
 
-See [MCP setup](/AI/mcp/overview) for client-by-client instructions and the full [MCP tool reference](/AI/mcp/tools/index).
+See [MCP setup](/AI/mcp/overview) for client-by-client instructions.
 
 ### @mentioning
 

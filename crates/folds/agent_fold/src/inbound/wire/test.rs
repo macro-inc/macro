@@ -32,6 +32,7 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
         serde_json::to_value(FoldedMessage::new(session, message)).unwrap(),
         json!({
             "agentSessionId": session.to_string(),
+            "key": "3:agent",
             "turn": 3,
             "author": { "kind": "agent" },
             "requestId": null,
@@ -59,7 +60,8 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                     "id": "tool-1",
                     "label": "Running",
                     "detail": "ls",
-                    "status": "running"
+                    "status": "running",
+                    "card": null
                 }]
             }],
             "phase": "working",
@@ -148,5 +150,26 @@ fn a_prompt_carries_when_it_was_posted() {
     assert_eq!(
         serde_json::to_value(FoldedMessage::new(session, message)).unwrap()["postedAt"],
         json!("2026-10-15T14:02:00+00:00")
+    );
+}
+
+#[test]
+fn a_message_key_names_its_turn_and_side() {
+    let message = ModelFoldedMessage {
+        id: TurnId(12),
+        author: Author::User { user_id: None },
+        request_id: None,
+        parts: NonEmpty::one(MessagePart::Text {
+            text: "again".to_owned(),
+        }),
+        stop: None,
+        pending: true,
+        posted_at: None,
+    };
+    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
+
+    assert_eq!(
+        serde_json::to_value(FoldedMessage::new(session, message)).unwrap()["key"],
+        json!("12:user")
     );
 }

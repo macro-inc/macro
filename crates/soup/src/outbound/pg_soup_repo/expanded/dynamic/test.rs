@@ -3,6 +3,27 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
 #[test]
+fn nil_project_ids_are_impossible_but_parent_and_negated_filters_are_not() {
+    let nil = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::nil()));
+    let real = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::from_u128(1)));
+    assert!(project_filter_is_impossible(Some(&nil)));
+    assert!(project_filter_is_impossible(Some(&Expr::and(
+        nil.clone(),
+        real.clone()
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::or(
+        nil.clone(),
+        real.clone()
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::is_not(nil))));
+    assert!(!project_filter_is_impossible(Some(&real)));
+    assert!(!project_filter_is_impossible(Some(&Expr::val(
+        ProjectLiteral::ProjectId(Uuid::nil())
+    ))));
+    assert!(!project_filter_is_impossible(None));
+}
+
+#[test]
 fn grouped_access_shape() {
     let filter = EntityFilterAst::mock_empty();
     let grouping = GroupingConfig {
@@ -10,20 +31,22 @@ fn grouped_access_shape() {
         group_key: None,
         per_group_limit: None,
     };
+    let sort = SimpleSortMethod::ViewedUpdated.into();
     let (builder, _) = build_grouped_query(
         &filter,
         false,
         &grouping,
-        SimpleSortMethod::ViewedUpdated.into(),
-        &mut DocumentIdArrays::starting_at(first_document_id_slot(
-            SimpleSortMethod::ViewedUpdated.into(),
-            true,
-        )),
+        sort,
+        &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
     );
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
     assert!(!candidates.contains("AccessibleItems"));
     for (id, entity_type) in [("d.id", "document"), ("c.id", "chat"), ("p.id", "project")] {
-        assert!(candidates.contains(&access_semi_join(id, entity_type)));
+        assert!(candidates.contains(&bound_access_semi_join(
+            id,
+            entity_type,
+            source_ids_slot(sort, true)
+        )));
     }
     assert!(candidates.contains("cp.left_at IS NULL"));
     assert!(candidates.contains("event.owner_id = $1"));
@@ -317,6 +340,10 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         ..EntityFilterAst::mock_empty()
     };
+    let owner = sqlx::query_scalar!(r#"SELECT owner FROM "Document" WHERE id = $1"#, &ids[0])
+        .fetch_one(&pool)
+        .await?;
+    let source_ids = fetch_user_source_ids(&mut *pool.acquire().await?, &owner).await?;
     for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedUpdated] {
         for (label, filter, field, group_key) in [
             (
@@ -366,7 +393,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 &mut DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), true)),
             );
             // Dynamic AST/grouping SQL cannot use a compile-time macro.
-            // Mirror the production timestamp query's ten fixed parameters.
+            // Mirror the production timestamp query's ten fixed parameters and source ids.
             let sql = format!(
                 "EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) {}",
                 builder.sql()
@@ -386,7 +413,8 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                     .bind(SystemPropertyKey::STATUS_UUID)
                     .bind(SystemPropertyKey::ASSIGNEES_UUID)
                     .bind(grouping.group_key.clone())
-                    .bind(entity_type.clone());
+                    .bind(entity_type.clone())
+                    .bind(&source_ids);
                 let plan = query.persistent(false).fetch_one(&pool).await?;
                 println!("EXPLAIN {label} {sort} repetition={repetition}: {plan}");
             }

@@ -23,6 +23,7 @@ vi.mock('@app/features/next-soup/utils', () => ({
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
 vi.mock('@app/lib/split-router', () => ({
+  useOptionalSplitRouter: () => undefined,
   SplitRouter: {
     Outlet: (props: { fallback: ParentProps['children'] }) => props.fallback,
   },
@@ -123,6 +124,7 @@ function renderDetailSplit() {
     content,
     referredFrom: null,
     lastNavigationCause: 'fresh',
+    lastNavigationSource: null,
     mount: {
       kind: 'component',
       name: 'md',
@@ -162,6 +164,7 @@ function renderDetailSplit() {
     updateMeta: () => {},
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
+    lastNavigationSource: () => null,
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,

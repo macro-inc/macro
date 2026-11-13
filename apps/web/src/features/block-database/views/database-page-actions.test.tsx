@@ -22,9 +22,16 @@ import {
   DatabasePageActions,
 } from './database-page-actions';
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
+
 // Keep the real split label, title and menu together; stub only host data.
 vi.mock('@app/components/entity-detail/DocumentTitleHoverCard', () => ({
   DocumentTitleHoverCard: () => null,
+}));
+vi.mock('@app/features/entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => vi.fn(),
 }));
 vi.mock('@core/block', () => ({
   isInBlock: () => true,
@@ -118,38 +125,36 @@ function setup(
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <QueryClientProvider client={queryClient}>
-      <>
-        <BlockItemSplitLabel
-          name={() => 'Customers'}
-          title={
-            <Show when={loaded()}>
-              <DatabaseTitle
-                name="Customers"
-                canEdit={grant !== 'view'}
-                onRename={vi.fn()}
-                onEditReady={editReady}
-              />
-            </Show>
-          }
-        />
-        <DatabasePageActions
-          detail={
-            {
-              database: { id: 'db', name: 'Customers', owner_id: 'owner' },
-              grant,
-              tables: [],
-            } as unknown as DatabaseDetail
-          }
-          table={
-            selectedTable?.() ??
-            ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
-          }
-          entityActions={entityActions}
-          onImported={vi.fn()}
-          onRename={() => editTitle?.()}
-          onDelete={remove}
-        />
-      </>
+      <BlockItemSplitLabel
+        name={() => 'Customers'}
+        title={
+          <Show when={loaded()}>
+            <DatabaseTitle
+              name="Customers"
+              canEdit={grant !== 'view'}
+              onRename={vi.fn()}
+              onEditReady={editReady}
+            />
+          </Show>
+        }
+      />
+      <DatabasePageActions
+        detail={
+          {
+            database: { id: 'db', name: 'Customers', owner_id: 'owner' },
+            grant,
+            tables: [],
+          } as unknown as DatabaseDetail
+        }
+        table={
+          selectedTable?.() ??
+          ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
+        }
+        entityActions={entityActions}
+        onImported={vi.fn()}
+        onRename={() => editTitle?.()}
+        onDelete={remove}
+      />
     </QueryClientProvider>
   ));
   setLoaded(true);
@@ -294,24 +299,44 @@ describe('database page actions', () => {
     })) as HTMLInputElement;
     expect(name.value).toBe('Contacts 2');
   });
-  it('offers link, ID and favorite actions to every grant', async () => {
+  it('offers link, ID, favorite and duplicate actions to every grant', async () => {
     const entityActions = {
       favorited: true,
       onToggleFavorite: vi.fn(),
       onCopyLink: vi.fn(),
       onCopyId: vi.fn(),
+      duplicating: false,
+      onDuplicate: vi.fn(),
     };
     setup('view', undefined, entityActions);
     for (const [item, handler] of [
       ['Copy Link', entityActions.onCopyLink],
       ['Copy ID', entityActions.onCopyId],
       ['Unfavorite', entityActions.onToggleFavorite],
+      ['Duplicate', entityActions.onDuplicate],
     ] as const) {
       await openMenu();
       selectItem(item);
       expect(handler).toHaveBeenCalledOnce();
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
+  });
+  it('disables Duplicate while a copy is being made', async () => {
+    const onDuplicate = vi.fn();
+    setup('view', undefined, {
+      favorited: false,
+      onToggleFavorite: vi.fn(),
+      onCopyLink: vi.fn(),
+      onCopyId: vi.fn(),
+      duplicating: true,
+      onDuplicate,
+    });
+    await openMenu();
+    const item = screen.getByRole('menuitem', { name: 'Duplicate' });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    expect(onDuplicate).not.toHaveBeenCalled();
   });
   it('confirms deletion and retains a failed dialog for retry', async () => {
     const remove = vi

@@ -9,7 +9,9 @@ import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   crmPeopleSearch,
   crmRecordSearch,
+  isCrmRetiredDatabasesRoute,
   legacyCrmPipelineId,
+  retiredCrmDatabasesPath,
 } from '@app/features/crm/crm-route';
 import {
   driveDocumentFromContent,
@@ -17,6 +19,7 @@ import {
 } from '@app/features/drive-view/primitives/drive-route';
 import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
+import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {
@@ -62,6 +65,19 @@ function redirectLegacyCrmPipeline({
   if (!pipelineId) return;
 
   return redirect(crmPipelinePath(pipelineId));
+}
+
+/** Customers no longer lists databases; old links go to the record or database. */
+function redirectRetiredCrmDatabases({
+  to,
+  redirect,
+}: SplitRouterMiddlewareContext): SplitRouterMiddlewareResult | undefined {
+  const route = to.location.route;
+  const leaf = route.matches.at(-1)?.id;
+  if (!leaf || !isCrmRetiredDatabasesRoute(leaf)) return;
+
+  const destination = retiredCrmDatabasesPath(routeParams(route));
+  return destination ? redirect(destination) : undefined;
 }
 
 /** Upgrade legacy component and block URLs when supported; on touch, keep
@@ -122,6 +138,11 @@ function redirectLegacyRoutes(
     .with({ type: 'component', id: 'settings' }, () => '/settings')
     .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
       calendarPath(getPreferredCalendarPeriodView())
+    )
+    // Desktop writes a new email beside the Email list; touch keeps the
+    // full-screen composer.
+    .with({ type: 'component', id: 'email-compose' }, () =>
+      isTouch ? undefined : '/mail/new'
     )
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined
@@ -217,6 +238,11 @@ function migrateLegacySearch({
       namespace: EMAIL_DETAIL_SEARCH_NAMESPACE,
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
     }))
+    // A `component/email-compose?to=` link names its recipients.
+    .with('mail-compose', () => ({
+      namespace: composeDraftSearch.namespace,
+      fields: [['to', 'to']] as const,
+    }))
     .when(
       (id) => id === 'channels-channel' || homeChannel,
       () => ({
@@ -287,6 +313,7 @@ export function createAppSplitRouterMiddleware(
     // First: a cmd+click becomes a tab with the proposed entry as-is; legacy
     // redirects still run when that tab is activated.
     openInNewTabMiddleware,
+    redirectRetiredCrmDatabases,
     (context) => redirectLegacyRoutes(context, state),
     redirectLegacyCrmPipeline,
     migrateLegacySearch,

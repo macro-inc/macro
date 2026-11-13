@@ -7,9 +7,15 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 /// Caller-selected UUID persisted in tool input before execution begins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema, specta::Type,
+)]
 #[serde(transparent)]
-pub struct ExecutionId(#[schemars(with = "String")] Uuid);
+pub struct ExecutionId(
+    #[schemars(with = "String")]
+    #[specta(type = String)]
+    Uuid,
+);
 
 impl ExecutionId {
     /// Mint an execution identity.
@@ -159,6 +165,10 @@ pub enum CodeModeError {
     /// No record belongs to this session and execution pair.
     #[error("code execution not found")]
     NotFound,
+    /// A connected app's server could not be reached or broke the exchange.
+    /// Upstream details stay in server diagnostics.
+    #[error("the connected app could not be reached; try again later")]
+    ConnectedAppUnreachable,
     /// A submitted identity cannot replay an execution or replace its journal.
     #[error("execution_id was already used; execution was not started")]
     Duplicate,

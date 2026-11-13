@@ -21,6 +21,7 @@ export const FormErrorCode = {
   tableGone: 'tableGone',
   alreadyResponded: 'alreadyResponded',
   noResponse: 'noResponse',
+  anonymousResponseFinal: 'anonymousResponseFinal',
   unknownQuestion: 'unknownQuestion',
   repeatedAnswer: 'repeatedAnswer',
   missingAnswer: 'missingAnswer',
@@ -30,7 +31,9 @@ export const FormErrorCode = {
   invalidLayout: 'invalidLayout',
   invalidName: 'invalidName',
   invalidSharing: 'invalidSharing',
+  invalidAppearance: 'invalidAppearance',
   tallyHidden: 'tallyHidden',
+  invalidBranding: 'invalidBranding',
   conflict: 'conflict',
   internal: 'internal',
 } as const;

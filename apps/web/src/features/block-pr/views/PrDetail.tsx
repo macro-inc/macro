@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -16,8 +17,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
 import IconShared from '@icon/share.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import IconLink from '@icon/system/regular/link.svg';
-import { DebouncedNotificationReadMarker } from '@notifications';
+import { NotificationReadMarker } from '@notifications';
 import {
   type GithubPullRequestWithDetails,
   useRefreshGithubPullRequest,
@@ -130,7 +132,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
   const notificationSource = useGlobalNotificationSource();
   return (
     <>
-      <DebouncedNotificationReadMarker
+      <NotificationReadMarker
         notificationSource={notificationSource}
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
@@ -217,31 +219,42 @@ export function PrDetailActions(props: {
   );
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <div class="ml-auto flex shrink-0 items-center gap-2 touch:max-w-full touch:flex-wrap">
       <Show when={props.detail}>
-        <HeaderActionGroup label="Sharing">
-          <Tooltip label="Share pull request">
-            <HeaderActionButton
-              grouped
-              label="Share"
-              icon={
-                <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              }
-              onClick={openShare}
+        {(detail) => (
+          <>
+            <AskMacroButton
+              entity={{
+                type: 'pr',
+                id: detail().id,
+                url: detail().pullRequest.url ?? prHtmlUrl(detail().prRef),
+              }}
             />
-          </Tooltip>
-          <CopyButton
-            as={ButtonGroup.Button}
-            variant="ghost"
-            aria-label="Copy Share Link"
-            tooltip="Copy Share Link"
-            size="icon-sm"
-            onClick={copyLink}
-          >
-            <IconLink class="size-3.5" />
-          </CopyButton>
-        </HeaderActionGroup>
-        <PullRequestActionsButton actions={props.actions} />
+            <HeaderActionGroup label="Sharing">
+              <Tooltip label="Share pull request">
+                <HeaderActionButton
+                  grouped
+                  label="Share"
+                  icon={
+                    <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                  }
+                  onClick={openShare}
+                />
+              </Tooltip>
+              <CopyButton
+                as={ButtonGroup.Button}
+                variant="ghost"
+                aria-label="Copy Share Link"
+                tooltip="Copy Share Link"
+                size="icon-sm"
+                onClick={copyLink}
+              >
+                <IconLink class="size-3.5" />
+              </CopyButton>
+            </HeaderActionGroup>
+            <PullRequestActionsButton actions={props.actions} />
+          </>
+        )}
       </Show>
       <ChangesToggle />
       <SidePanel.Toggle />
@@ -275,7 +288,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
       >
         <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
+            <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:flex-wrap touch:gap-y-2 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
               <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
               <Show when={detail.data()?.pullRequest.status}>
                 {(status) => <PrStatusIcon status={status()} />}
@@ -358,6 +371,7 @@ function PrMetadata(props: {
           class={cn(PR_PILL_CLASS, 'text-ink-muted hover:bg-hover')}
         >
           {prDisplayName(props.prRef)}
+          <ArrowSquareOut aria-hidden="true" class="size-3.5 shrink-0" />
         </a>
       </Layer>
       <Show

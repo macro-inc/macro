@@ -2,21 +2,25 @@
 //!
 //! `just run_local`, `just run_dev`, and the supporting
 //! `doctor`/`validate`/`status`/`stop`/`reset`/`destroy` recipes all delegate here.
-//! This module owns: building Linux service binaries on the host (zigbuild),
+//! This module owns: building service binaries natively on the host,
 //! the minimal runtime image, the typed service inventory, per-instance
 //! isolation, environment layering, generated docker-compose overrides, local
 //! infra (FusionAuth via kickstart, Mailpit, LocalStack, Postgres/Redis, DB
-//! migrate), the single-origin reverse proxy, and the frontend dev server.
+//! migrate), the single-origin reverse proxy, the frontend dev server, and the
+//! background process that runs all of it when no terminal stays attached.
 //!
 //! Design invariant: Docker never compiles Rust. Binaries are built on the host
 //! and bind-mounted read-only into the runtime image at `/app/out`.
 
 use std::path::PathBuf;
 
+pub mod allocator;
 pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod computers;
+pub mod content_key;
 pub mod db;
 pub mod docker;
 pub mod doctor;
@@ -25,14 +29,17 @@ pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
 pub mod gen_compose;
+pub mod google_emulator;
 pub mod identity;
 pub mod instance;
 pub mod inventory;
 pub mod kafka;
 pub mod kickstart;
+pub mod kubernetes;
 pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
+pub mod microsoft_emulator;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
@@ -43,10 +50,16 @@ pub mod seed_env;
 pub mod snapshot;
 pub mod stack;
 pub mod stage;
+pub mod staleness;
 pub mod status;
 pub mod summary;
+pub mod supervisor;
+mod telemetry;
 pub mod tls;
 pub mod validate;
+
+#[cfg(test)]
+mod test_support;
 
 #[cfg(test)]
 mod test;
@@ -192,44 +205,105 @@ const LOCAL_RECREATE_SERVICE_IMAGES: &[&str] = &[
 /// separately by [`build::ensure_runtime_image`].
 const LOCAL_PULL_SERVICE_IMAGES: &[&str] = &["proxy", "mailpit", "static_file_cdn"];
 
-/// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
-pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
-    if mode.spec().runs_local_infra {
-        // This mode will provision Kafka topics mid-bring-up; reject a build
-        // that can't do that before any containers start.
-        kafka::ensure_available(&format!("run-{}", mode.label()))?;
-    }
-    let stage = Stage::from_env_cli(args.verbose);
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    stage.section(&format!(
-        "macro {} stack — instance {}",
-        mode.label(),
-        instance.name()
-    ));
+/// How a bring-up treats whatever the instance already has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Start {
+    /// Full delete + full create: tear the previous stack and ALL its stateful
+    /// volumes down, so no persisted state (a stale FusionAuth DB, an old
+    /// migration) can poison the run.
+    Fresh,
+    /// Keep the volumes and bring everything up over them. Init steps are all
+    /// idempotent, so this also applies new migrations and restores what
+    /// LocalStack loses on a stop.
+    Resume,
+}
+
+/// What a bring-up should produce. Every flow runs [`bring_up`]; they differ only
+/// in this plan and in what they do once it returns.
+pub(crate) struct BringUp {
+    /// Vite will be started afterwards, so the proxy forwards the app to it.
+    pub vite: bool,
+    /// Build a static bundle and serve it from the proxy.
+    pub static_bundle: bool,
+    /// Open the Cloudflare tunnels that share a fully local stack.
+    pub share_app: bool,
+    /// Stop after infra and init: no app services, proxy, or frontend.
+    pub infra_only: bool,
+    pub start: Start,
+    /// The computers fleet this stack runs.
+    pub computers: computers::Fleet,
+}
+
+/// What a finished [`bring_up`] leaves for its caller.
+pub(crate) struct StackUp {
+    pub env: env_layer::ResolvedEnv,
+    pub target: arch::Target,
+    /// Dropping these closes the tunnels, so they live as long as the stack does.
+    pub tunnels: Vec<cf_tunnel::QuickTunnel>,
+    pub shared_app_url: Option<String>,
+    /// The computers setup on the instance's final port window.
+    pub computers: computers::Computers,
+}
+
+/// The one bring-up every flow shares (`run_local` attached and detached, `run_dev`,
+/// `stack up`): env, binaries, infra, app services, tunnels, a healthy backend
+/// through the proxy, and the recorded state later commands read. Starting Vite is
+/// left to the caller, since only some flows do it.
+pub(crate) fn bring_up(
+    stage: &Stage,
+    mode: Mode,
+    instance: &mut Instance,
+    args: &cli::RunArgs,
+    plan: &BringUp,
+) -> Result<StackUp> {
     if !stage.is_dry_run() {
-        stack::clear_state(&instance)?;
+        stack::clear_state(instance)?;
     }
+    stage.record_bring_up(mode, plan);
 
     // Before `prepare` (which resolves env and reads the OTLP port to decide
     // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
-    // the same auto-wiring as a collector started manually beforehand.
-    ensure_tracing_backend(&stage, args.traces)?;
-    if args.with_chrome {
-        ensure_headless_chrome(&stage);
+    // the same auto-wiring as a collector started manually beforehand. A CI bake
+    // has no services to trace and no one driving a browser, so it skips both.
+    if !plan.infra_only {
+        ensure_tracing_backend(stage, args.traces)?;
+        if args.with_chrome {
+            ensure_headless_chrome(stage);
+        }
     }
 
-    // `run_local`/`run_dev` are full delete + full create: tear the previous
-    // stack and ALL its stateful volumes down so the bring-up is always from a
-    // clean slate. That makes the command unconditionally idempotent — no
-    // persisted state (a stale FusionAuth DB, an old migration) can poison a
-    // later run. (Unclean exits skip the quit-time teardown, so this is also the
-    // idempotency safety net.) Run it in the BACKGROUND: tearing the old stack
-    // down is independent of the host-side build, so the two overlap instead of
-    // summing (stopping ~20 containers is otherwise the slow part of a re-run).
-    let teardown = (!stage.is_dry_run()).then(|| {
+    // The frontend lane starts first, in the background: wasm packages and the
+    // static bundle are host-side work that needs nothing from the service
+    // build, so on a cold checkout they overlap cargo instead of following it.
+    // The static bundle is joined just before `bring_up_app` creates the proxy
+    // container that mounts it; Vite's dependencies before this returns. The
+    // bundle is a snapshot: rebuilding service binaries leaves it alone, and
+    // live frontend edits show on the dev server, not on it. Dry run:
+    // synchronously, so the command preview prints in order.
+    if plan.static_bundle && stage.is_dry_run() {
+        frontend::build_static(stage, instance, mode)?;
+    }
+    let frontend_lane = (!stage.is_dry_run() && (plan.static_bundle || plan.vite)).then(|| {
         let instance = instance.clone();
-        std::thread::spawn(move || teardown_commands(&instance))
+        let stage = stage.background();
+        let static_bundle = plan.static_bundle;
+        std::thread::spawn(move || {
+            if static_bundle {
+                frontend::build_static(&stage, &instance, mode)
+            } else {
+                frontend::prepare(&stage)
+            }
+        })
     });
+
+    // Run the teardown in the BACKGROUND: tearing the old stack down is
+    // independent of the host-side build, so the two overlap instead of summing
+    // (stopping ~20 containers is otherwise the slow part of a re-run).
+    let teardown = if plan.start == Start::Fresh {
+        BackgroundTeardown::start(stage, instance)
+    } else {
+        None
+    };
 
     // Sharing posture (`--with-cf-tunnel`, local only): besides the tunnels,
     // the proxy additionally serves the headless static bundle, because that
@@ -240,7 +314,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // backend-generated absolute links (invite/login emails point at
     // `localhost:{FRONTEND_PORT}`) or the FusionAuth OAuth flow — passwordless
     // login works, with the code readable at `<tunnel>/mailpit`.
-    let share_app = args.with_cf_tunnel && mode == Mode::Local;
+    let share_app = plan.share_app;
     if args.with_cf_tunnel && mode != Mode::Local {
         stage.note("--with-cf-tunnel is ignored by run_dev (tunnels share a fully local stack)");
     }
@@ -252,7 +326,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // `@cursor` sessions reaching local MCP servers.
     let egress_tunnel = (share_app && !stage.is_dry_run())
         .then(|| {
-            match cf_tunnel::open(&instance, "egress", instance.port(Port::AgentHarnessEgress)) {
+            match cf_tunnel::open(instance, "egress", instance.port(Port::AgentHarnessEgress)) {
                 Ok(tunnel) => {
                     stage.note(&format!("cursor egress tunnel: {}", tunnel.url));
                     Some(tunnel)
@@ -276,7 +350,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // this machine or in the compose network.
     let preview_ssh_tunnel = (share_app && !stage.is_dry_run())
         .then(|| {
-            match cf_tunnel::open_tcp(&instance, "preview-ssh", instance.port(Port::PreviewSsh)) {
+            match cf_tunnel::open_tcp(instance, "preview-ssh", instance.port(Port::PreviewSsh)) {
                 Ok(tunnel) => {
                     stage.note(&format!("preview ssh tunnel: {}", tunnel.hostname()));
                     Some(tunnel)
@@ -300,7 +374,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // failure warns and the stack comes up localhost-only.
     let app_tunnel = (share_app && !stage.is_dry_run())
         .then(
-            || match cf_tunnel::open(&instance, "app", instance.port(Port::Proxy)) {
+            || match cf_tunnel::open(instance, "app", instance.port(Port::Proxy)) {
                 Ok(tunnel) => {
                     stage.note(&format!("shared app tunnel: {}/app/", tunnel.url));
                     Some(tunnel)
@@ -319,60 +393,51 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(
-        &stage,
+    let egress_url = egress_tunnel.as_ref().map(|tunnel| tunnel.url.clone());
+    // The open tunnels point at this window's ports, so it can't move under them.
+    let pinned_base = args
+        .instance
+        .port_base
+        .or(share_app.then_some(instance.port_base()));
+    let (env, target) = prepare_on_free_window(
+        stage,
         mode,
-        &instance,
+        instance,
         args,
-        share_app,
-        false,
-        false,
+        plan.static_bundle,
+        plan.infra_only,
+        plan.infra_only,
         local_env::Tunnels {
-            egress: egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
+            egress: egress_url.as_deref(),
             preview_ssh: preview_ssh_tunnel_host.as_deref(),
         },
+        plan.computers,
+        pinned_base,
     )?;
 
-    // Build + stage the shareable bundle in the background (pure host-side
-    // work), joined just before `bring_up_app` creates the proxy container
-    // that mounts the staged dir. The bundle is a share-time snapshot: the
-    // `r` hotkey reloads service binaries, not this bundle — live frontend
-    // edits show on the dev server, not on the shared URL.
-    if share_app && stage.is_dry_run() {
-        frontend::build_static(&stage, &instance, mode)?;
-    }
-    let fe_build = (share_app && !stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        let stage = stage.background();
-        std::thread::spawn(move || frontend::build_static(&stage, &instance, mode))
-    });
-
-    // The init snapshot decision, exactly as `stack up` makes it (see
-    // `stack::up`): hash the init-defining inputs — possible only after
-    // `prepare` wrote the kickstart — and check for a stored snapshot. A hit
+    // The init snapshot decision: hash the init-defining inputs — possible only
+    // after `prepare` wrote the kickstart — and check for a stored snapshot. A hit
     // skips migrate + Kafka topics + the ~1min FusionAuth kickstart + index
     // creation; a miss runs the real init and saves one, which is how the cache
     // seeds itself. The full-delete/full-create idempotency is unchanged: the
     // key *is* the definition of clean, so any input change is a structural miss.
-    let snapshot_plan = (!args.no_snapshot && !stage.is_dry_run())
-        .then(|| snapshot::Plan::compute(&instance))
+    // Resuming keeps the volumes it would otherwise restore over.
+    let snapshot_plan = (plan.start == Start::Fresh && !args.no_snapshot && !stage.is_dry_run())
+        .then(|| snapshot::Plan::compute(instance))
         .transpose()?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
     // overlapped the build above, so this is just whatever's left of stopping the
     // old containers — instant if it already finished.
-    if let Some(handle) = teardown {
-        stage.run_step("Tearing down previous stack", move || {
-            let _ = handle.join();
-            Ok(())
-        })?;
+    if let Some(teardown) = teardown {
+        teardown.finish(stage)?;
     }
     // Both modes run at least Redis + LocalStack locally, and those reference the
     // instance's `external` volumes/networks — which must exist before compose
     // `up`. Unconditional + idempotent, mirroring the unconditional teardown (dev
     // was tearing `macro_redis_data` down each run but never recreating it).
-    ensure_external_resources(&stage, &instance)?;
+    ensure_external_resources(stage, instance)?;
 
     // Bring the backend infra up and fully ready — DB created + migrated,
     // LocalStack provisioned, FusionAuth kickstarted — BEFORE the app services
@@ -381,97 +446,231 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // DynamoDB/OpenSearch connection refused).
     match &snapshot_plan {
         Some(plan) if plan.exists() => {
-            snapshot::restore(&stage, &instance, plan)?;
-            bring_up_infra(&stage, mode, &instance, &env, InfraInit::FromSnapshot)?;
+            snapshot::restore(stage, instance, plan)?;
+            bring_up_infra(stage, mode, instance, &env, InfraInit::FromSnapshot)?;
         }
         Some(plan) => {
-            bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
-            snapshot::save(&stage, &instance, &env, plan)?;
+            bring_up_infra(stage, mode, instance, &env, InfraInit::Full)?;
+            snapshot::save(stage, instance, &env, plan)?;
         }
-        None => bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?,
+        None => bring_up_infra(stage, mode, instance, &env, InfraInit::Full)?,
     }
-    if let Some(handle) = fe_build {
-        stage.run_step("Building frontend (static bundle)", move || {
+    let join_frontend = |label: &str, handle: std::thread::JoinHandle<Result<()>>| {
+        stage.run_step(label, move || {
             handle
                 .join()
                 .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
-        })?;
-    }
-    bring_up_app(&stage, mode, &instance, &env)?;
-    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
-        .then(|| sdk_webhook::start(&instance))
-        .transpose()?;
-
-    // No restart-to-reload step: the teardown means `up` always creates fresh
-    // containers, which start on the just-built binaries bind-mounted at
-    // `/app/out`. (Reloading binaries into an already-running stack is the `r`
-    // hotkey's job — see `restart_services`.)
-
-    // Start the frontend (readiness-gated, output suppressed) BEFORE the
-    // summary so the summary is the last thing printed; then block on the dev
-    // server so `just run_local` stays attached (Ctrl-C stops it while the
-    // backend containers keep running).
-    let frontend = if args.no_frontend {
-        stage.note("frontend disabled (--no-frontend)");
-        None
-    } else {
-        // Mirror `env_layer::resolve`'s port probe: if the collector never
-        // came up (best-effort default backend), don't point the browser
-        // exporter at a dead endpoint.
-        frontend::start(
-            &stage,
-            &instance,
-            mode,
-            args.traces.enabled() && summary::port_open(4318),
-        )?
+        })
+    };
+    let frontend_lane = match frontend_lane {
+        Some(handle) if plan.static_bundle => {
+            join_frontend("Building frontend (static bundle)", handle)?;
+            None
+        }
+        other => other,
     };
 
-    // Sharing moves the Mailpit UI under `/mailpit` (MP_WEBROOT, so a remote
-    // visitor can read their login code through the proxy); show the URL that
-    // actually resolves.
-    let mailpit_url = if share_app {
-        mailpit::proxy_ui_url(&instance)
-    } else {
-        mailpit::direct_ui_url(&instance)
-    };
     let shared_app_url = app_tunnel
         .as_ref()
         .map(|tunnel| format!("{}/app/", tunnel.url));
-    stage.print_timings("bring-up");
+    let tunnels: Vec<cf_tunnel::QuickTunnel> = [egress_tunnel, preview_ssh_tunnel, app_tunnel]
+        .into_iter()
+        .flatten()
+        .collect();
+
+    if plan.infra_only {
+        // No app stack, no proxy: nothing to gate on, and no recorded state —
+        // `update`/`status` on an infra-only bake should say "bring the stack up
+        // first" rather than assume a running app.
+        stage.note("  infra-only: app services, proxy, and frontend skipped");
+        return Ok(StackUp {
+            env,
+            target,
+            tunnels,
+            shared_app_url,
+            computers: computers::Computers::new(mode, plan.computers, instance),
+        });
+    }
+
+    // Pin a Nix binary set before anything mounts it. Dry runs may have no
+    // binaries at all.
+    let active_binaries = if stage.is_dry_run() {
+        None
+    } else {
+        let configured = args
+            .build
+            .binaries_dir
+            .clone()
+            .unwrap_or_else(|| workspace_root().join(target.debug_dir()));
+        let binaries = build::BinariesDir::classify(&configured)?;
+        binaries.pin_gc_root(&instance.artifact_dir())?;
+        Some(binaries.host_dir().to_path_buf())
+    };
+
+    // Containers on a fresh start are new, so they start on the binaries built
+    // above. (Reloading binaries into a running stack is `reload_services`' job.)
+    bring_up_app(stage, mode, instance, &env)?;
+    // The new containers hold today's images now, so older tags can go.
+    gen_compose::prune_content_tagged_images();
+    // A resumed stack's containers can predate the binaries this run just built.
+    // A prebuilt `--binaries-dir` is adopted through the compose mount instead.
+    if plan.start == Start::Resume && args.build.binaries_dir.is_none() && !stage.is_dry_run() {
+        reload_changed_services(stage, mode, instance, &env, target)?;
+    }
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(instance))
+        .transpose()?;
+
+    // "Ready" means the backend answers through the proxy — the caller (a CI step,
+    // an agent) acts on the URL the moment this returns.
+    if mode.spec().wait_backend_before_frontend {
+        frontend::wait_backend_ready(stage, instance)?;
+    }
+    if let Some(handle) = frontend_lane {
+        join_frontend("Preparing frontend dependencies (background)", handle)?;
+    }
+
+    if !stage.is_dry_run() {
+        stack::record(
+            instance,
+            mode,
+            args,
+            plan,
+            active_binaries,
+            egress_url.clone(),
+            preview_ssh_tunnel_host.clone(),
+        )?;
+        build::BinariesDir::release_previous_gc_root(&instance.artifact_dir());
+    }
+    Ok(StackUp {
+        env,
+        target,
+        tunnels,
+        shared_app_url,
+        computers: computers::Computers::new(mode, plan.computers, instance),
+    })
+}
+
+/// Print the ready summary for a finished [`bring_up`].
+pub(crate) fn print_stack_summary(
+    stage: &Stage,
+    mode: Mode,
+    instance: &Instance,
+    up: &StackUp,
+    plan: &BringUp,
+) -> Result<()> {
+    // A static bundle moves the Mailpit UI under `/mailpit` (MP_WEBROOT, so a
+    // remote visitor can read their login code through the proxy); show the URL
+    // that actually resolves.
+    let mailpit_url = if plan.static_bundle {
+        mailpit::proxy_ui_url(instance)
+    } else {
+        mailpit::direct_ui_url(instance)
+    };
+    let frontend_url = if plan.vite {
+        frontend::https_url(instance)?
+    } else if plan.static_bundle {
+        frontend::static_url(instance)
+    } else {
+        "(disabled — --no-frontend)".to_string()
+    };
     summary::print(
         mode,
-        &instance,
-        &env,
-        &frontend::https_url(&instance)?,
+        instance,
+        &up.env,
+        &frontend_url,
         &mailpit_url,
-        shared_app_url.as_deref(),
+        up.shared_app_url.as_deref(),
     );
+    up.computers.print_hint(stage);
+    Ok(())
+}
 
-    match frontend {
-        // Interactive terminal: stay attached with a hotkey loop.
-        Some(mut fe) if stage.is_tty() => {
-            interact(
-                &stage,
-                mode,
+/// `just run_local` / `just run_dev`: attached to a terminal with the hotkey loop
+/// when there is one, otherwise in the background. Run from the attached flow only
+/// if both stdin and stdout are terminals, so an agent's Bash tool, a pipe, or CI
+/// never blocks on a dev server it can't talk to.
+pub fn run_stack(mode: Mode, run: &cli::RunLocalArgs) -> Result<()> {
+    use std::io::IsTerminal;
+
+    if let Some(action) = &run.action {
+        return supervisor::run_action(action);
+    }
+    if run.flags.supervise {
+        return supervisor::supervise(mode, &run.flags, &run.run);
+    }
+    let stage = Stage::from_env_cli(run.run.verbose);
+    let attached = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    if !stage.is_dry_run() && (run.flags.detach || !attached) {
+        return supervisor::start_detached(&run.flags, &run.run);
+    }
+    run_attached(stage, mode, run)
+}
+
+/// Bring the stack up in this process, then stay attached with hotkeys. Always a
+/// full delete + full create: a person at a terminal expects a clean slate.
+fn run_attached(mut stage: Stage, mode: Mode, run: &cli::RunLocalArgs) -> Result<()> {
+    let args = &run.run;
+    if mode.spec().runs_local_infra {
+        // This mode will provision Kafka topics mid-bring-up; reject a build
+        // that can't do that before any containers start.
+        kafka::ensure_available(&format!("run-{}", mode.label()))?;
+    }
+    let mut instance = allocator::allocate(
+        &stage,
+        mode,
+        args.instance.instance.as_deref(),
+        args.instance.port_base,
+    )?;
+    stage.section(&format!(
+        "macro {} stack — instance {}",
+        mode.label(),
+        instance.name()
+    ));
+    let plan = supervisor::plan_for(mode, &run.flags, args, Start::Fresh);
+    let attached_run = (!stage.is_dry_run())
+        .then(|| supervisor::begin_attached(&instance))
+        .transpose()?;
+    if let Some(attached) = &attached_run {
+        stage = stage.with_job(std::sync::Arc::clone(&attached.job));
+    }
+    let stage = &stage;
+
+    let result = (|| {
+        let up = bring_up(stage, mode, &mut instance, args, &plan)?;
+        // Mirror `env_layer::resolve`'s port probe: if the collector never came
+        // up (best-effort default backend), don't point the browser exporter at a
+        // dead endpoint.
+        let frontend = if plan.vite {
+            frontend::start(
+                stage,
                 &instance,
-                &env,
-                target,
-                args.build.build_aux_services,
-                &mut fe,
-            )?;
-        }
-        // Non-interactive (piped/CI): just hold the dev server until it exits.
-        Some(mut fe) => {
-            let status = fe.process.child.wait()?;
-            if !status.success() {
-                let out = fe.tail_output(40);
-                if !out.trim().is_empty() {
-                    eprintln!("{out}");
-                }
-                anyhow::bail!("frontend dev server exited with {status}");
-            }
-        }
-        None => {}
+                mode,
+                args.traces.enabled() && summary::port_open(4318),
+            )?
+        } else {
+            stage.note("frontend disabled (--no-frontend)");
+            None
+        };
+        stage.print_timings("bring-up");
+        print_stack_summary(stage, mode, &instance, &up, &plan)?;
+        Ok((up, frontend))
+    })();
+    let (up, frontend) = match &attached_run {
+        Some(attached) => attached.finish(result)?,
+        None => result?,
+    };
+
+    if let Some(mut fe) = frontend {
+        interact(
+            stage,
+            mode,
+            &instance,
+            &up.env,
+            up.target,
+            args.build.build_aux_services,
+            &mut fe,
+        )?;
     }
     Ok(())
 }
@@ -497,29 +696,37 @@ fn rebuild_and_reload(
     env: &env_layer::ResolvedEnv,
     target: arch::Target,
     build_aux_services: bool,
-) -> Result<()> {
+    only: Option<&[&'static inventory::RustService]>,
+) -> Result<Vec<String>> {
     if stage.is_verbose() {
         // Run each step on the parent stage so the build (per group) and the
         // reload each show their own `Done <elapsed>` — the build-vs-reload
         // split — rather than folding into one line.
-        run_rebuild(stage, mode, instance, env, target, build_aux_services)
+        run_rebuild(stage, mode, instance, env, target, build_aux_services, only)
     } else {
+        let mut reloaded = Vec::new();
         stage.run_step("Rebuilding & reloading services", || {
-            run_rebuild(
+            reloaded = run_rebuild(
                 &stage.quiet(),
                 mode,
                 instance,
                 env,
                 target,
                 build_aux_services,
-            )
-        })
+                only,
+            )?;
+            Ok(())
+        })?;
+        Ok(reloaded)
     }
 }
 
-/// Snapshot binary mtimes, rebuild, and restart only the services whose binary
-/// the build rewrote. Runs on a quiet sub-stage when folded, or the parent stage
-/// under `--verbose` so each step times itself.
+/// Rebuild, then restart only the services running an older binary than the one
+/// on disk. Runs on a quiet sub-stage when folded, or the parent stage under
+/// `--verbose` so each step times itself. Returns the reloaded service names.
+///
+/// `only` rebuilds just those services; the others keep their binaries, and
+/// [`staleness`] records which of them now run older code than the tree.
 fn run_rebuild(
     stage: &Stage,
     mode: Mode,
@@ -527,22 +734,17 @@ fn run_rebuild(
     env: &env_layer::ResolvedEnv,
     target: arch::Target,
     build_aux_services: bool,
-) -> Result<()> {
-    let before: Vec<Option<std::time::SystemTime>> = inventory::services_for_mode(mode)
-        .map(|svc| binary_mtime(target, svc))
-        .collect();
+    only: Option<&[&'static inventory::RustService]>,
+) -> Result<Vec<String>> {
+    let mark = staleness::BuildMark::now(&repo_root());
+    let options = build::BuildOptions {
+        no_build: false,
+        binaries_dir: None,
+        only: only.map(<[_]>::to_vec),
+    };
     if build_aux_services {
         std::thread::scope(|scope| {
-            let rust_build = scope.spawn(|| {
-                build::resolve(
-                    stage,
-                    target,
-                    &build::BuildOptions {
-                        no_build: false,
-                        binaries_dir: None,
-                    },
-                )
-            });
+            let rust_build = scope.spawn(|| build::resolve(stage, target, &options));
             let aux_build = scope.spawn(|| build_aux_service_images(stage, instance, env));
             let binaries = rust_build
                 .join()
@@ -554,39 +756,89 @@ fn run_rebuild(
             aux
         })?;
     } else {
-        build::resolve(
-            stage,
-            target,
-            &build::BuildOptions {
-                no_build: false,
-                binaries_dir: None,
-            },
-        )?;
+        build::resolve(stage, target, &options)?;
     }
-    let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
-        .zip(before)
-        .filter(|(svc, was)| binary_mtime(target, svc) != *was)
-        .map(|(svc, _)| svc)
-        .collect();
     if build_aux_services {
         recreate_aux_service_containers(stage, instance, env)?;
     }
+    let reloaded = reload_changed_services(stage, mode, instance, env, target)?;
+    record_builds(stage, instance, mode, mark, only);
+    Ok(reloaded)
+}
+
+/// Record what each service was just built from, for [`staleness`]. A failure
+/// only loses the stale list, so it is reported, not raised. A dry run built
+/// nothing, so it records nothing.
+fn record_builds(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    mark: Result<staleness::BuildMark>,
+    only: Option<&[&'static inventory::RustService]>,
+) {
+    if stage.is_dry_run() {
+        return;
+    }
+    let all: Vec<&inventory::RustService> = inventory::services_for_mode(mode).collect();
+    let recorded = mark.and_then(|mark| match only {
+        None => staleness::record_full(instance, &mark, all.iter().copied()),
+        Some(built) => {
+            staleness::record_partial(instance, &repo_root(), &mark, built, &all).map(|_| ())
+        }
+    });
+    if let Err(error) = recorded {
+        staleness::clear(instance);
+        eprintln!("could not record which services are on older code: {error:#}");
+    }
+}
+
+/// Recreate each service whose binary is newer than its container, and return
+/// their names. Comparing against the running container rather than a snapshot
+/// taken before the build means a build that relinked some services and then
+/// failed, or was killed, still gets those services reloaded next time.
+fn reload_changed_services(
+    stage: &Stage,
+    mode: Mode,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+    target: arch::Target,
+) -> Result<Vec<String>> {
+    let containers = docker::project_containers(instance.project_name())?;
+    let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
+        .filter(|svc| {
+            let Some(built) = binary_mtime(target, svc) else {
+                return false;
+            };
+            containers
+                .iter()
+                .find(|c| c.service.as_deref() == Some(svc.compose_name))
+                .is_some_and(|c| binary_is_newer(built, c.created))
+        })
+        .collect();
     if !changed.is_empty() {
         reload_services(stage, instance, env, &changed)?;
     }
-    Ok(())
+    Ok(changed
+        .into_iter()
+        .map(|svc| svc.compose_name.to_owned())
+        .collect())
 }
 
-/// Modification time of a service's built binary (`None` if absent). Used to tell
-/// which binaries a rebuild rewrote.
-fn binary_mtime(
-    target: arch::Target,
-    svc: &inventory::RustService,
-) -> Option<std::time::SystemTime> {
+/// Whether a binary built at `built` (unix seconds) was written after a container
+/// created at `created` started from it.
+fn binary_is_newer(built: i64, created: i64) -> bool {
+    built > created
+}
+
+/// Modification time of a service's built binary, in unix seconds (`None` if
+/// absent).
+fn binary_mtime(target: arch::Target, svc: &inventory::RustService) -> Option<i64> {
     let path = workspace_root()
         .join(target.debug_dir())
         .join(svc.cargo_bin);
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+    let modified = std::fs::metadata(path).and_then(|m| m.modified()).ok()?;
+    let since_epoch = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+    i64::try_from(since_epoch.as_secs()).ok()
 }
 
 /// Stay attached to the running stack, handling hotkeys until the user quits or
@@ -629,14 +881,29 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = rebuild_and_reload(stage, mode, instance, env, target, build_aux_services);
+                let _ =
+                    telemetry::RunTelemetry::action(instance, telemetry::RunKind::Rebuild, || {
+                        rebuild_and_reload(
+                            stage,
+                            mode,
+                            instance,
+                            env,
+                            target,
+                            build_aux_services,
+                            None,
+                        )
+                    });
                 print_hotkeys(stage);
             }
             Ok(Key::Char('f' | 'F')) => {
                 let _ = term.clear_last_lines(1);
                 // A failed restart returns with captured output and leaves the
                 // backend containers running, like an unexpected frontend exit.
-                fe.restart(stage)?;
+                telemetry::RunTelemetry::action(
+                    instance,
+                    telemetry::RunKind::RestartFrontend,
+                    || fe.restart(stage),
+                )?;
                 print_hotkeys(stage);
             }
             Ok(Key::Char('q' | 'Q') | Key::Escape | Key::CtrlC) | Err(_) => {
@@ -649,6 +916,8 @@ fn interact(
                 // (its start-of-run teardown then has nothing to stop). Best-effort
                 // — we're exiting regardless.
                 let _ = teardown(stage, instance);
+                let _ = allocator::release(instance);
+                let _ = stack::clear_state(instance);
                 return Ok(());
             }
             _ => {}
@@ -661,8 +930,8 @@ fn interact(
 /// Caddyfile / kickstart. Deliberately does NOT create the external
 /// networks/volumes — that's done after the background teardown joins, since
 /// teardown removes them. `static_frontend` wires the proxy to serve the staged
-/// app bundle (headless `stack up`, and `run_local --with-cf-tunnel`'s shared
-/// app). `infra_only` skips zigbuild: bake never
+/// app bundle (`stack up`, `run_local --static-frontend`, and
+/// `run_local --with-cf-tunnel`'s shared app). `infra_only` skips the service build: bake never
 /// starts Rust services and runs in parallel with the cargo lane. Returns the
 /// resolved env + build target.
 ///
@@ -678,54 +947,80 @@ fn prepare(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    computers: &computers::Computers,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
         instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        static_frontend,
-        tunnels,
-        args.traces.enabled(),
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.as_deref(),
+            static_frontend,
+            tunnels,
+            wire_otel: args.traces.enabled(),
+            computers,
+        },
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
+    if !infra_only {
+        computers.ensure_image(stage, args.build.no_build)?;
+    }
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
     build::ensure_runtime_image(stage, target, false)?;
     let binaries = if infra_only {
         // Compose still emits `/app/out` mounts, but infra-only never starts
-        // those services. Bake runs this in parallel with zigbuild.
+        // those services. Bake runs this in parallel with the service build.
         build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()))
     } else {
-        build::resolve(
+        let mark = staleness::BuildMark::now(&repo_root());
+        let binaries = build::resolve(
             stage,
             target,
             &build::BuildOptions {
                 no_build: args.build.no_build,
                 binaries_dir: args.build.binaries_dir.clone(),
+                only: None,
             },
-        )?
+        )?;
+        if args.build.no_build || args.build.binaries_dir.is_some() {
+            // Not built here, so nothing to compare a later partial rebuild to.
+            staleness::clear(instance);
+        } else {
+            record_builds(stage, instance, mode, mark, None);
+        }
+        binaries
     };
 
     // Generate the override + the Caddyfile (the frontend reaches the services
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    let gmail_forwarder = env
-        .merged
-        .get("GMAIL_FORWARDER_SA_KEY")
-        .is_some_and(|key| !key.trim().is_empty());
-    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    let sidecars = gen_compose::Sidecars::from_env(mode, &env.merged);
+    gen_compose::generate(
+        mode,
+        instance,
+        &binaries,
+        static_frontend,
+        sidecars,
+        computers,
+    )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode == Mode::Local {
         portmap::write(instance)?;
     }
     if mode.spec().runs_local_infra {
-        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        // Without a real Google client the stack's Gmail emulator is Google.
+        let google = kickstart::GoogleIdp::from_env(&env.merged)
+            .unwrap_or_else(|| google_emulator::idp(instance));
         let github = kickstart::GithubIdp::from_env(&env.merged);
-        fusionauth::write_kickstart(instance, google.as_ref(), github.as_ref())?;
+        // Without a real Microsoft client the stack's Outlook emulator is
+        // Microsoft.
+        let microsoft =
+            microsoft_emulator::stands_in(mode, &env.merged).then(microsoft_emulator::idp);
+        fusionauth::write_kickstart(instance, Some(&google), github.as_ref(), microsoft.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -734,6 +1029,53 @@ fn prepare(
         pull_app_service_images(stage, instance, &env)?;
     }
     Ok((env, target))
+}
+
+/// [`prepare`], then make sure the port window survived the build. A tool that
+/// doesn't use the allocator (an older checkout, anything on the host) can take a
+/// port meanwhile, and finding out at `docker compose up` would waste the build.
+/// If so, regenerate on another window; the second build has nothing to compile.
+/// `pinned_base` is a window that mustn't move, which fails here instead.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "prepare's knobs, passed straight through, plus the pinned window"
+)]
+fn prepare_on_free_window(
+    stage: &Stage,
+    mode: Mode,
+    instance: &mut Instance,
+    args: &cli::RunArgs,
+    static_frontend: bool,
+    pull_app_images: bool,
+    infra_only: bool,
+    tunnels: local_env::Tunnels<'_>,
+    fleet: computers::Fleet,
+    pinned_base: Option<u16>,
+) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
+    loop {
+        let prepared = prepare(
+            stage,
+            mode,
+            instance,
+            args,
+            static_frontend,
+            pull_app_images,
+            infra_only,
+            tunnels,
+            &computers::Computers::new(mode, fleet, instance),
+        )?;
+        let current = allocator::allocate(stage, mode, Some(instance.name()), pinned_base)?;
+        if current.port_base() == instance.port_base() {
+            *instance = current;
+            return Ok(prepared);
+        }
+        stage.note(&format!(
+            "port window {} was taken during the build; moving to {}",
+            instance.port_base(),
+            current.port_base()
+        ));
+        *instance = current;
+    }
 }
 
 /// A `docker compose` command wired for this instance's full file set + the
@@ -817,19 +1159,59 @@ fn bring_up_infra(
     } else {
         &["redis", "kafka", "localstack"]
     };
+    // FusionAuth needs only its own database, so it boots alongside the rest
+    // of the infra instead of after it: its JVM start is the longest wait here.
+    let fusionauth_start = spec.runs_local_infra.then(|| {
+        let mut fa = compose_cmd(instance, env);
+        fa.arg("up").arg("-d");
+        // FusionAuth refuses to create the `microsoft` identity provider
+        // unless it can read the discovery document at its issuer, so the
+        // emulator that serves it starts first. It listens within a second;
+        // the kickstart runs after FusionAuth's JVM has booted.
+        if microsoft_emulator::stands_in(mode, &env.merged) {
+            fa.arg(microsoft_emulator::SERVICE);
+        }
+        fa.arg("fusionauth");
+        let stage = stage.background();
+        std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
+    });
+    // LocalStack is ready within seconds, long before OpenSearch: poll its API
+    // and provision S3/SQS/DynamoDB while compose waits on the rest. Compose
+    // also waits for LocalStack's healthcheck, so once it returns the lane
+    // takes one last look instead of polling on (a cold machine may spend
+    // minutes pulling images before the container exists).
+    let (infra_done, infra_done_rx) = std::sync::mpsc::channel::<()>();
+    let localstack_lane = {
+        let instance = instance.clone();
+        let stage = stage.background();
+        std::thread::spawn(move || {
+            let health = format!(
+                "http://localhost:{}/_localstack/health",
+                instance.port(Port::LocalStack)
+            );
+            stage.run_step("Waiting for LocalStack", || {
+                wait_localstack(&health, &infra_done_rx)
+            })?;
+            stage.run_step("Provisioning LocalStack", || {
+                localstack::provision(&instance)
+            })
+        })
+    };
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--wait").args(waited);
-    stage.run("Starting infra (docker compose up -d --wait)", &mut up)?;
-
-    // LocalStack has no healthcheck: poll its API, then provision S3/SQS/DynamoDB.
-    let localstack_health = format!(
-        "http://localhost:{}/_localstack/health",
-        instance.port(Port::LocalStack)
-    );
-    wait_http(stage, "Waiting for LocalStack", &localstack_health)?;
-    stage.run_step("Provisioning LocalStack", || {
-        localstack::provision(instance)
-    })?;
+    let infra = stage.run("Starting infra (docker compose up -d --wait)", &mut up);
+    let _ = infra_done.send(());
+    let fusionauth_started = fusionauth_start.map(|handle| {
+        handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("starting FusionAuth panicked"))?
+    });
+    let localstack_ready = localstack_lane
+        .join()
+        .map_err(|_| anyhow::anyhow!("provisioning LocalStack panicked"))?;
+    infra?;
+    fusionauth_started.transpose()?;
+    localstack_ready?;
 
     if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.
@@ -847,14 +1229,15 @@ fn bring_up_infra(
             stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
         }
 
-        // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
-        // poll it patiently until it's up. On a full init that wait covers the
-        // ~minute kickstart; on a snapshot restore the kickstart is already in
-        // the restored volumes, so this is just JVM boot.
-        let mut fa = compose_cmd(instance, env);
-        fa.arg("up").arg("-d").arg("fusionauth");
-        stage.run("Starting FusionAuth", &mut fa)?;
+        // FusionAuth was started above without `--wait` (its healthcheck is
+        // impatient); poll it patiently until it's up. On a full init that wait
+        // covers the ~minute kickstart; on a snapshot restore the kickstart is
+        // already in the restored volumes, so this is just JVM boot.
         fusionauth::wait_ready(stage, instance)?;
+        fusionauth::apply_redirect_urls(stage, instance)?;
+        if google_emulator::stands_in(mode, &env.merged) {
+            fusionauth::apply_google_authorization_endpoint(stage, instance)?;
+        }
 
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
@@ -912,7 +1295,23 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
              the shell you run this from)"
         );
     }
-    evict_other_collector(stage, service);
+    match collector_action(otlp_port_holder().as_deref(), service) {
+        CollectorAction::Reuse(name) => {
+            // Never `up` a running collector: Compose would recreate it
+            // whenever its config hash differs (each worktree bind-mounts
+            // its own `docker/lgtm` path), dropping the `otel-collector`
+            // attachments other running instances added to it.
+            stage.note(&format!("  reusing running trace collector {name}"));
+            return Ok(());
+        }
+        CollectorAction::Replace(name) => {
+            stage.note(&format!(
+                "  replacing running trace collector {name} (all collectors share the OTLP ports)"
+            ));
+            let _ = Command::new("docker").args(["rm", "-f", &name]).output();
+        }
+        CollectorAction::Start => {}
+    }
     let result =
         start_global_compose_service(stage, profile, service, "trace collector").and_then(|()| {
             // `up -d` returns once the container starts, not once it's accepting
@@ -945,32 +1344,98 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
     }
 }
 
-/// Remove a *different* collector holding the OTLP ports before starting the
-/// requested one. All backends bind 4317/4318, so a leftover collector from a
-/// previous `--traces` choice would otherwise win the port race and keep
-/// receiving the telemetry — silently, since the port probe only asks "is
-/// something listening", not "is it the backend that was asked for".
-fn evict_other_collector(stage: &Stage, wanted_service: &str) {
-    if !summary::port_open(4318) {
-        return;
-    }
-    let Some(holder) = Command::new("docker")
-        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
-        .output()
-        .ok()
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|name| !name.is_empty())
-    else {
-        return; // not a docker container (host collector) — leave it alone
+/// Compose project of the machine-global containers (`name:` in
+/// `docker/docker-compose.yml`).
+const GLOBAL_COMPOSE_PROJECT: &str = "macro";
+
+/// What [`ensure_tracing_backend`] does about the container holding the OTLP
+/// port.
+#[derive(Debug, PartialEq, Eq)]
+enum CollectorAction {
+    /// The wanted global collector is already up: leave it untouched.
+    Reuse(String),
+    /// A *different* container holds the port. All backends bind 4317/4318,
+    /// so a leftover collector from a previous `--traces` choice would
+    /// otherwise keep receiving the telemetry — silently, since the port probe
+    /// only asks "is something listening".
+    Replace(String),
+    /// Nothing (or a host collector, which is left alone) holds the port.
+    Start,
+}
+
+/// Decide from the [`otlp_port_holder`] line (`<name> <project> <service>`).
+/// Ownership is by compose label, not name: the global `macro-lgtm-1` is
+/// name-indistinguishable from an instance named `lgtm`'s containers.
+fn collector_action(holder: Option<&str>, wanted_service: &str) -> CollectorAction {
+    let Some(mut fields) = holder.map(str::split_whitespace) else {
+        return CollectorAction::Start;
     };
-    // Compose names containers `<project>-<service>-<n>`.
-    if holder.contains(&format!("-{wanted_service}-")) {
-        return;
+    let Some(name) = fields.next() else {
+        return CollectorAction::Start;
+    };
+    if fields.next() == Some(GLOBAL_COMPOSE_PROJECT) && fields.next() == Some(wanted_service) {
+        CollectorAction::Reuse(name.to_string())
+    } else {
+        CollectorAction::Replace(name.to_string())
     }
-    stage.note(&format!(
-        "  replacing running trace collector {holder} (all collectors share the OTLP ports)"
-    ));
-    let _ = Command::new("docker").args(["rm", "-f", &holder]).output();
+}
+
+/// The docker container binding host port 4318, as
+/// `<name> <compose project> <compose service>`; `None` when the port is
+/// closed or held by a host process.
+fn otlp_port_holder() -> Option<String> {
+    if !summary::port_open(4318) {
+        return None;
+    }
+    let out = Command::new("docker")
+        .args(["ps", "--filter", "publish=4318", "--format"])
+        .arg(
+            "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}\t\
+             {{.Label \"com.docker.compose.service\"}}\t{{.Ports}}",
+        )
+        .output()
+        .ok()?;
+    pick_otlp_port_holder(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// From tab-separated `docker ps` rows (`name, project, service, ports`),
+/// the one binding host port 4318. `publish=4318` also matches containers
+/// that only expose container port 4318 on another host port (`14318:4318`),
+/// and those must never be taken for the collector.
+fn pick_otlp_port_holder(ps: &str) -> Option<String> {
+    ps.lines().find_map(|row| {
+        let mut fields = row.split('\t');
+        let (name, project, service, ports) = (
+            fields.next()?,
+            fields.next()?,
+            fields.next()?,
+            fields.next()?,
+        );
+        binds_host_otlp_port(ports).then(|| format!("{name} {project} {service}"))
+    })
+}
+
+/// Whether a `{{.Ports}}` value such as `0.0.0.0:4317-4318->4317-4318/tcp,
+/// [::]:4317-4318->4317-4318/tcp` binds host port 4318 (Docker collapses
+/// consecutive ports into ranges).
+fn binds_host_otlp_port(ports: &str) -> bool {
+    ports.split(", ").any(|binding| {
+        // `<host ip>:<host ports>-><container ports>/<proto>`; an exposed but
+        // unpublished port (`4040/tcp`) has no `->`.
+        let Some((_, host_ports)) = binding
+            .split_once("->")
+            .and_then(|(host, _)| host.rsplit_once(':'))
+        else {
+            return false;
+        };
+        match host_ports.split_once('-') {
+            Some((low, high)) => matches!(
+                (low.parse::<u16>(), high.parse::<u16>()),
+                (Ok(low), Ok(high)) if (low..=high).contains(&4318)
+            ),
+            None => host_ports == "4318",
+        }
+    })
 }
 
 /// Start a profile-gated service from the base compose file under the global
@@ -978,6 +1443,9 @@ fn evict_other_collector(stage: &Stage, wanted_service: &str) {
 /// across invocations) — the pattern the trace collectors and headless Chrome
 /// share. Keep other containers in the shared project: the base compose file
 /// does not include generated infrastructure services such as LocalStack.
+/// `--no-recreate`: an existing container is only started, never replaced —
+/// its config hash differs per worktree, and a recreate drops the network
+/// attachments running instances added to it.
 fn start_global_compose_service(
     stage: &Stage,
     profile: &str,
@@ -995,6 +1463,7 @@ fn start_global_compose_service(
         .arg(profile)
         .arg("up")
         .arg("-d")
+        .arg("--no-recreate")
         .arg(service);
     stage.run(&format!("Starting {profile} {label}"), &mut up)
 }
@@ -1025,24 +1494,15 @@ fn ensure_headless_chrome(stage: &Stage) {
 /// errors. Best-effort: "already connected" (rerun) and other failures are
 /// ignored, they only mean traces don't flow.
 fn connect_tracing_network(instance: &Instance) {
-    if !summary::port_open(4318) {
+    let Some(holder) = otlp_port_holder() else {
         return;
-    }
-    // Find the collector container (Jaeger or Datadog agent — both publish the
-    // OTLP HTTP port) by that port rather than assuming a container name, in
-    // case it was started under a different project.
-    let Some(collector) = Command::new("docker")
-        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
-        .output()
-        .ok()
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|name| !name.is_empty())
-    else {
+    };
+    let Some(collector) = holder.split_whitespace().next() else {
         return;
     };
     let _ = Command::new("docker")
         .args(["network", "connect", "--alias", "otel-collector"])
-        .arg(format!("{}_services", instance.project_name()))
+        .arg(instance.network_services())
         .arg(collector)
         .output();
 }
@@ -1053,7 +1513,7 @@ fn connect_tracing_network(instance: &Instance) {
 /// leaves the instance's `services` network behind ("active endpoints",
 /// silently swallowed). Best-effort like its counterpart.
 fn disconnect_tracing_network(instance: &Instance) {
-    let network = format!("{}_services", instance.project_name());
+    let network = instance.network_services();
     let Some(attached) = Command::new("docker")
         .args([
             "network",
@@ -1144,10 +1604,8 @@ fn reload_services(
     stage.run(&format!("Reloading {names}"), &mut up)
 }
 
-/// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the
-/// FusionAuth DB/config. The single list `teardown`, `ensure_external_resources`,
-/// and `destroy` share.
-fn instance_volumes(instance: &Instance) -> [String; 6] {
+/// Volumes created explicitly before Compose starts the instance.
+fn external_volumes(instance: &Instance) -> [String; 6] {
     [
         instance.volume_postgres(),
         instance.volume_redis(),
@@ -1158,21 +1616,35 @@ fn instance_volumes(instance: &Instance) -> [String; 6] {
     ]
 }
 
-/// The instance's external Docker networks.
-fn instance_networks(instance: &Instance) -> [String; 2] {
-    [instance.network_databases(), instance.network_auth()]
+/// Every owned volume removed by intentional full-stack teardown.
+fn instance_volumes(instance: &Instance) -> impl Iterator<Item = String> {
+    external_volumes(instance)
+        .into_iter()
+        .chain([format!("{}_openbao_data", instance.project_name())])
+}
+
+/// Whether the instance already has any data volume, which a bring-up must not
+/// wipe without being told to.
+pub(crate) fn instance_has_volumes(instance: &Instance) -> Result<bool> {
+    for volume in instance_volumes(instance) {
+        if docker::volume_exists(&volume)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// The docker teardown work: stop + remove the instance's stack and ALL its
 /// stateful volumes — the basis of `run_local`'s full-delete/full-create
-/// idempotency, the quit hotkey, and `destroy-local`. Containers + project
-/// networks come down with `down -v`; the data volumes are then removed
-/// explicitly, because FusionAuth's (and named instances' infra) volumes are
-/// declared `external`, which `down -v` leaves behind. Output is captured (this
-/// is best-effort and noisy) so callers surface it as a single line; absent
-/// containers/volumes are ignored.
+/// idempotency, the quit hotkey, and `destroy-local`. Containers come down with
+/// `down -v`; owned data volumes and a named instance's networks are removed
+/// explicitly. External volumes survive `down -v`, and the generated OpenBao
+/// volume is absent from this command's Compose file set. The default networks
+/// are shared with the base Compose files, so they stay. Output is captured
+/// (best-effort and noisy); absent containers and volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
+    computers::remove_containers(instance);
     // Detach the global trace collector first or `down` can't remove the
     // instance's `services` network (foreign container = active endpoint).
     disconnect_tracing_network(instance);
@@ -1198,6 +1670,13 @@ fn teardown_commands(instance: &Instance) {
             .args(["volume", "rm", "-f", &vol])
             .output();
     }
+    if !instance.is_default() {
+        for (network, _) in instance.networks() {
+            let _ = Command::new("docker")
+                .args(["network", "rm", &network])
+                .output();
+        }
+    }
 }
 
 /// [`teardown_commands`] shown as a single progress row (for the quit hotkey and
@@ -1213,14 +1692,50 @@ fn teardown(stage: &Stage, instance: &Instance) -> Result<()> {
     })
 }
 
+/// [`teardown_commands`] on a background thread, overlapping a start's build.
+/// Dropping it waits for the teardown, so a start that fails before joining
+/// can't exit halfway through and leave some of the instance's networks behind.
+struct BackgroundTeardown(Option<std::thread::JoinHandle<()>>);
+
+impl BackgroundTeardown {
+    /// `None` on a dry run, which tears nothing down.
+    fn start(stage: &Stage, instance: &Instance) -> Option<Self> {
+        (!stage.is_dry_run()).then(|| {
+            let instance = instance.clone();
+            Self(Some(std::thread::spawn(move || {
+                teardown_commands(&instance)
+            })))
+        })
+    }
+
+    /// Wait for what's left of the teardown, shown as a step.
+    fn finish(mut self, stage: &Stage) -> Result<()> {
+        let handle = self.0.take();
+        stage.run_step("Tearing down previous stack", move || {
+            if let Some(handle) = handle {
+                let _ = handle.join();
+            }
+            Ok(())
+        })
+    }
+}
+
+impl Drop for BackgroundTeardown {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 /// Create the per-instance external networks and volumes the compose files
 /// reference (idempotent — replaces the old `just create_networks`).
 fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
-    let networks = instance_networks(instance);
-    let volumes = instance_volumes(instance);
+    let networks = instance.networks();
+    let volumes = external_volumes(instance);
     stage.run_step("Ensuring networks & volumes", || {
-        for n in &networks {
-            docker::ensure_network(n)?;
+        for (name, subnet) in &networks {
+            docker::ensure_network(name, subnet.as_deref())?;
         }
         for v in &volumes {
             docker::ensure_volume(v)?;
@@ -1229,35 +1744,55 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     })
 }
 
-fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
-    let ca = proxy::curl_ca_args(url);
-    let ca_flags = ca
-        .iter()
-        .map(|arg| format!("'{arg}'"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let script = format!(
-        "for i in $(seq 1 600); do curl -fsS {ca_flags} --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
-    );
-    let mut cmd = Command::new("bash");
-    cmd.arg("-lc").arg(script);
-    stage.run(label, &mut cmd)
+/// Poll LocalStack until it answers, or until `compose_done` says compose's
+/// own wait has finished and one last look still finds it down.
+fn wait_localstack(url: &str, compose_done: &std::sync::mpsc::Receiver<()>) -> Result<()> {
+    let answers = || {
+        Command::new("curl")
+            .args(["-fsS", "--max-time", "3", "-o", "/dev/null"])
+            .arg(url)
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    loop {
+        if answers() {
+            return Ok(());
+        }
+        match compose_done.recv_timeout(std::time::Duration::from_millis(200)) {
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::ensure!(answers(), "LocalStack is not answering at {url}");
+                return Ok(());
+            }
+        }
+    }
 }
 
-/// `cargo x zigbuild`.
-pub fn zigbuild_only() -> Result<()> {
-    let stage = Stage::from_env();
-    let target = arch::detect()?;
-    let binaries = build::resolve(
-        &stage,
-        target,
-        &build::BuildOptions {
-            no_build: false,
-            binaries_dir: None,
-        },
-    )?;
-    stage.note(&format!("binaries at {}", binaries.host_dir().display()));
-    Ok(())
+/// `cargo x build-services`.
+pub fn build_services_only() -> Result<()> {
+    let (stage, telemetry) = telemetry::RunTelemetry::attach(
+        Stage::from_env(),
+        None,
+        telemetry::RunKind::BuildServices,
+        std::time::SystemTime::now(),
+    );
+    let result = (|| -> Result<()> {
+        let target = arch::detect()?;
+        let binaries = build::resolve(
+            &stage,
+            target,
+            &build::BuildOptions {
+                no_build: false,
+                binaries_dir: None,
+                only: None,
+            },
+        )?;
+        stage.note(&format!("binaries at {}", binaries.host_dir().display()));
+        Ok(())
+    })();
+    telemetry::RunTelemetry::close(telemetry, &result);
+    result
 }
 
 /// `cargo x runtime-image`.
@@ -1267,11 +1802,27 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 }
 
 /// `cargo x gen-compose`.
-pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let computers = computers::Computers::new(
+        Mode::Local,
+        args.computers.fleet(computers::Fleet::Docker),
+        &instance,
+    );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
+    // No env is resolved here, so the sidecars are those of a stack without
+    // integration secrets: the Gmail and Outlook emulators, and no Gmail
+    // forwarder.
+    let sidecars = gen_compose::Sidecars::from_env(Mode::Local, &std::collections::BTreeMap::new());
+    let path = gen_compose::generate(
+        Mode::Local,
+        &instance,
+        &binaries,
+        false,
+        sidecars,
+        &computers,
+    )?;
     println!("{}", path.display());
     Ok(())
 }
@@ -1279,37 +1830,36 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
 /// `cargo x stop-local` — stop the instance's containers (keep volumes).
 pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
-    sdk_webhook::stop(&instance);
-    let mut cmd = Command::new("docker");
-    cmd.args(["compose", "-p", instance.project_name(), "stop"]);
-    stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
+    telemetry::RunTelemetry::action(&instance, telemetry::RunKind::Stop, || {
+        supervisor::stop_processes(&instance);
+        sdk_webhook::stop(&instance);
+        let mut cmd = Command::new("docker");
+        cmd.args(["compose", "-p", instance.project_name(), "stop"]);
+        stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)
+    })
 }
 
 /// `cargo x reset-local` — drop, recreate, and migrate the instance DB.
 pub fn reset(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     db::reset(&stage, &instance)
 }
 
 /// `cargo x destroy-local` — remove the instance's containers, volumes, and
-/// (named instances) external networks.
+/// (named instances) networks, and free its allocation.
 pub fn destroy(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
+    supervisor::stop_processes(&instance);
     // Containers + all volumes (incl. FusionAuth's external ones, which `down -v`
     // leaves behind — the same teardown run_local does for its clean slate).
     teardown(&stage, &instance)?;
-    // The per-instance external networks only exist for named instances; the
-    // default instance's are shared base-compose networks we leave in place.
-    if !instance.is_default() {
-        stage.run_step("Removing instance networks", || {
-            for n in instance_networks(&instance) {
-                let _ = Command::new("docker").args(["network", "rm", &n]).status();
-            }
-            Ok(())
-        })?;
+    stack::clear_state(&instance)?;
+    supervisor::clear_job(&instance);
+    if !stage.is_dry_run() {
+        allocator::release(&instance)?;
     }
     Ok(())
 }

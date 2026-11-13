@@ -22,15 +22,16 @@
 //! available.
 
 pub mod domain;
-#[cfg(any(feature = "ai_tools", feature = "consumer"))]
+#[cfg(any(feature = "axum", feature = "consumer"))]
 pub mod inbound;
 #[cfg(any(feature = "outbound", feature = "consumer"))]
 pub mod outbound;
 
 pub use domain::events::{ActivityMacroEvent, ActivityTopicEvent, ActivityWireRow};
 pub use domain::models::{
-    Action, ActionDecodeError, ActionTag, Activity, ActivityRecord, ActivitySource, Actor,
-    Attribution, CallStart, CommonAction, DomainActivity, EntityType, Ingest, InitiativeTaskChange,
+    AccessRequest, Action, ActionDecodeError, ActionTag, Activity, ActivityRecord, ActivitySource,
+    Actor, AppearanceChange, AppearanceUpdate, Attribution, CallStart, CommonAction,
+    DomainActivity, EntityType, Ingest, InitiativeTaskChange, NON_TOUCH_ACTION_TAGS,
     ParticipantChange, PropertyChange, RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::overview::{
@@ -45,7 +46,7 @@ pub use domain::realtime::{
     ActivitySubscriptionService, ActivitySubscriptionUpdate, ActivityTopicEventConsumer,
     NoOpActivitySubscriptionService,
 };
-#[cfg(feature = "ai_tools")]
+#[cfg(feature = "reads")]
 pub use domain::{
     ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
     service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},

@@ -1,7 +1,7 @@
 use crate::links::get::{
     fetch_inbox_details_for_macro_id, fetch_inboxes_for_macro_id, fetch_link_by_email,
     fetch_link_by_macro_id_and_email_address, fetch_owned_link_for_message,
-    fetch_owned_link_for_thread,
+    fetch_owned_link_for_thread, fetch_readable_owned_inboxes,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -297,7 +297,7 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
     insert_settings(&pool, link_id, true, Some("<p>sig</p>")).await;
     sqlx::query!(
-        "UPDATE email_settings SET read_receipts_enabled = TRUE WHERE link_id = $1",
+        "UPDATE email_settings SET read_receipts_enabled = FALSE WHERE link_id = $1",
         link_id
     )
     .execute(&pool)
@@ -337,7 +337,7 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
     assert_eq!(inbox.link.id, link_id);
     assert!(inbox.settings.signature_on_replies_forwards);
     assert_eq!(inbox.settings.signature.as_deref(), Some("<p>sig</p>"));
-    assert!(inbox.settings.read_receipts_enabled);
+    assert!(!inbox.settings.read_receipts_enabled);
     assert_eq!(
         inbox.latest_backfill_status,
         Some(BackfillJobStatus::Failed)
@@ -630,7 +630,7 @@ async fn fetch_inbox_details_defaults_settings_when_row_missing(
     assert_eq!(inbox.link.id, link_id);
     assert!(!inbox.settings.signature_on_replies_forwards);
     assert!(inbox.settings.signature.is_none());
-    assert!(!inbox.settings.read_receipts_enabled);
+    assert!(inbox.settings.read_receipts_enabled);
 
     Ok(())
 }
@@ -758,4 +758,66 @@ async fn fetch_inbox_details_reports_calendar_data_from_the_account_row(
     );
 
     Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn readable_owned_inboxes_skip_delegated_inactive_and_reauth_links(pool: Pool<Postgres>) {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_user(&pool, PRIMARY, "primary@corp.test").await;
+    let (shared, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_delegation(&pool, PRIMARY, CHILD, shared).await;
+    let (older, _, _) =
+        insert_inbox_with_thread_and_message(&pool, PRIMARY, "primary@corp.test").await;
+    let (newer, _, _) =
+        insert_inbox_with_thread_and_message(&pool, PRIMARY, "work@example.com").await;
+    let (revoked, _, _) =
+        insert_inbox_with_thread_and_message(&pool, PRIMARY, "old@example.com").await;
+    let (inactive, _, _) =
+        insert_inbox_with_thread_and_message(&pool, PRIMARY, "paused@example.com").await;
+    sqlx::query!(
+        "UPDATE email_links SET created_at = now() - interval '1 day' WHERE id = $1",
+        older
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"UPDATE email_links SET provider = 'OUTLOOK', sync_generation = 3, grant_generation = 5
+           WHERE id = $1"#,
+        newer
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth = true WHERE id = $1",
+        revoked
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active = false WHERE id = $1",
+        inactive
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let inboxes = fetch_readable_owned_inboxes(&pool, &macro_id(PRIMARY))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inboxes.iter().map(|inbox| inbox.id).collect::<Vec<_>>(),
+        vec![newer, older]
+    );
+    assert_eq!(inboxes[0].email_address, "work@example.com");
+    assert_eq!(inboxes[0].provider, UserProvider::Outlook);
+    assert_eq!(
+        (inboxes[0].sync_generation, inboxes[0].grant_generation),
+        (3, 5)
+    );
+    assert_eq!(inboxes[1].provider, UserProvider::Gmail);
 }

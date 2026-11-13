@@ -1,23 +1,26 @@
-//! The hourly sweep: classify signal threads the event stream missed.
+//! The hourly sweep: classify threads the event stream missed.
 //!
 //! Events can be lost, a classification can fail, initial sync emits no
 //! events, and a thread can become signal without one. The sweep covers all
 //! of these. The first sweep runs at startup, which backfills a newly
-//! allowlisted inbox. Overlapping sweeps (during a deploy) are harmless: a
-//! stored result for a thread's latest message is never classified again.
+//! allowlisted inbox and decides rows from an older rule again, from their
+//! stored answers. Overlapping sweeps (during a deploy) are harmless: a stored
+//! result for a thread's latest message is never sent to the classifier again.
 
 use std::{sync::Arc, time::Duration};
 
-use email::domain::focus::{FocusClassifier, FocusService, FocusStore, ProfileSource};
+use email::domain::focus::{
+    DueDateExtractor, FocusClassifier, FocusNotifier, FocusService, FocusStore, ProfileSource,
+};
 use rootcause::Report;
 use tokio_util::sync::CancellationToken;
 
-/// Threads one sweep classifies at most; the next sweep continues.
+/// Threads one sweep checks at most; the next sweep continues past them.
 const SWEEP_LIMIT: i64 = 2_000;
 
 /// Sweep every `interval` over the last `window_days` until `shutdown`.
-pub async fn run_sweeps<S, P, C>(
-    service: Arc<FocusService<S, P, C>>,
+pub async fn run_sweeps<S, P, C, N, D>(
+    service: Arc<FocusService<S, P, C, N, D>>,
     interval: Duration,
     window_days: u16,
     shutdown: CancellationToken,
@@ -26,6 +29,8 @@ where
     S: FocusStore,
     P: ProfileSource,
     C: FocusClassifier,
+    N: FocusNotifier,
+    D: DueDateExtractor,
 {
     let window = chrono::Duration::days(i64::from(window_days));
     let mut ticker = tokio::time::interval(interval);
@@ -45,6 +50,7 @@ where
             Ok(report) => tracing::info!(
                 candidates = report.candidates,
                 classified = report.classified,
+                redecided = report.redecided,
                 skipped = report.skipped,
                 failed = report.failed,
                 stopped_early = report.stopped_early,

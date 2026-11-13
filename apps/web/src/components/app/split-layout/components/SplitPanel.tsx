@@ -4,7 +4,11 @@ import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { t } from '@app/lib/i18n';
-import { type PaneId, SplitRouter } from '@app/lib/split-router';
+import {
+  type PaneId,
+  SplitRouter,
+  useOptionalSplitRouter,
+} from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
@@ -21,6 +25,7 @@ import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
@@ -30,11 +35,10 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import { shouldShowSplitCloseButton, splitViewId } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
-import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -63,12 +67,15 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
-  let pointerTarget: Element | undefined;
+  // Weak, so the last element pressed doesn't keep a view this split has
+  // left alive.
+  let pointerTarget: WeakRef<Element> | undefined;
 
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
+  const mobileHeaderOwner = createSignal<symbol>();
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
-  const ownedSlots = createOwnedSlots();
+  const ownedSlots = createOwnedSlots(() => splitViewId(props.handle));
 
   const splitLayoutHelpers = useSplitLayout();
   const isNotUnifiedList = () => {
@@ -152,6 +159,17 @@ export function SplitPanel(props: SplitPanelProps) {
     return manager ? shouldShowSplitCloseButton(manager) : false;
   };
 
+  const router = useOptionalSplitRouter();
+  const hasExternalChat = () =>
+    router
+      ?.entry(props.handle.id as string as PaneId)
+      ?.location.route.matches.some((match) => match.id === 'external-chat');
+
+  const externalAccountPage = () =>
+    props.handle.content().type === 'component' &&
+    props.handle.content().id === 'external' &&
+    !hasExternalChat();
+
   const hasSplitHeader = () => {
     const content = props.handle.content();
     return (
@@ -160,7 +178,8 @@ export function SplitPanel(props: SplitPanelProps) {
         isTouchDevice() &&
         content.type === 'component' &&
         (content.id === LIST_VIEW_ID.search ||
-          content.id === LIST_VIEW_ID.channels)
+          content.id === LIST_VIEW_ID.channels ||
+          externalAccountPage())
       )
     );
   };
@@ -231,6 +250,7 @@ export function SplitPanel(props: SplitPanelProps) {
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
             layoutRefs,
+            mobileHeaderOwner,
             titleFileMenuRef,
             setTitleFileMenuRef,
             titleFileMenuTrigger,
@@ -240,7 +260,10 @@ export function SplitPanel(props: SplitPanelProps) {
             replaceOwnedSlot: ownedSlots.replace,
             panelSize,
             panelRef,
-            pointerTarget: () => pointerTarget,
+            pointerTarget: () => {
+              const target = pointerTarget?.deref();
+              return target?.isConnected ? target : undefined;
+            },
           }}
         >
           <SplitDrawerGroup panelSize={panelSize}>
@@ -276,7 +299,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 capture: true,
                 handleEvent: (e) => {
                   pointerTarget =
-                    e.target instanceof Element ? e.target : undefined;
+                    e.target instanceof Element
+                      ? new WeakRef(e.target)
+                      : undefined;
                 },
               }}
               // A split opened from the keyboard has no pressed element to keep
@@ -375,7 +400,9 @@ export function SplitPanel(props: SplitPanelProps) {
                       )}
                     </Show>
                   </div>
-                  <Show when={!usesComposableLayout()}>
+                  <Show
+                    when={!usesComposableLayout() && !externalAccountPage()}
+                  >
                     <MobileTopEdgeFade />
                   </Show>
                 </Panel.Body>

@@ -9,6 +9,9 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod android_apk_on_release;
+mod android_build;
+mod android_play_publish;
 mod android_play_release;
 mod android_release_drift;
 mod android_release_watch;
@@ -26,6 +29,9 @@ mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
+mod ci_gate_fork;
+mod ci_gate_label;
+mod ci_gate_reminder;
 mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
@@ -35,12 +41,14 @@ mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
+mod deploy_mcp_chatgpt_worker;
+mod deploy_observability;
 mod deploy_on_push;
-mod deploy_preview;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
+mod desktop_qa_macos;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod ios_app_store_publish;
@@ -49,7 +57,9 @@ mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
+mod observability_image;
 mod path_validation;
+mod pr_ci;
 mod pr_privacy_check;
 mod publish_sdk;
 mod pulumi_preview_pr;
@@ -121,6 +131,21 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
+        slug: "observability_image",
+        file_name: "observability_image.yml",
+        render_yaml: || render_gh_workflow(observability_image::observability_image)(),
+    },
+    WorkflowFile {
+        slug: "deploy_observability",
+        file_name: "deploy-observability.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_observability::deploy_observability,
+                deploy_observability::patch,
+            )
+        },
+    },
+    WorkflowFile {
         slug: "export_ci_telemetry",
         file_name: "export-ci-telemetry.yml",
         render_yaml: || render_gh_workflow(export_ci_telemetry::export_ci_telemetry)(),
@@ -154,6 +179,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_dmg_on_tag",
         file_name: "build_dmg_on_tag.yml",
         render_yaml: || render_patched(build_dmg_on_tag::build_dmg, build_dmg_on_tag::patch),
+    },
+    WorkflowFile {
+        slug: "desktop_qa_macos",
+        file_name: "desktop_qa_macos.yml",
+        render_yaml: || render_patched(desktop_qa_macos::desktop_qa_macos, desktop_qa_macos::patch),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
@@ -223,6 +253,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
+        slug: "deploy_mcp_chatgpt_worker",
+        file_name: "deploy_mcp_chatgpt_worker.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_mcp_chatgpt_worker::deploy_mcp_chatgpt_worker,
+                deploy_mcp_chatgpt_worker::patch,
+            )
+        },
+    },
+    WorkflowFile {
         slug: "deploy_all_services",
         file_name: "deploy_all_services.yml",
         render_yaml: || {
@@ -261,11 +301,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "deploy_preview",
-        file_name: "deploy_preview.yml",
-        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
-    },
-    WorkflowFile {
         slug: "deploy_sync_service",
         file_name: "deploy_sync_service.yml",
         render_yaml: || {
@@ -299,6 +334,26 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ios_preview",
         file_name: "ios_preview.yml",
         render_yaml: || render_gh_workflow(ios_preview::ios_preview)(),
+    },
+    WorkflowFile {
+        slug: "pr_ci",
+        file_name: "pr-ci.yml",
+        render_yaml: || render_patched(pr_ci::pr_ci, pr_ci::patch),
+    },
+    WorkflowFile {
+        slug: "ci_gate_reminder",
+        file_name: "ci-gate-reminder.yml",
+        render_yaml: || render_gh_workflow(ci_gate_reminder::ci_gate_reminder)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_label",
+        file_name: "ci-gate-label.yml",
+        render_yaml: || render_gh_workflow(ci_gate_label::ci_gate_label)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_fork",
+        file_name: "ci-gate-fork.yml",
+        render_yaml: || render_gh_workflow(ci_gate_fork::ci_gate_fork)(),
     },
     WorkflowFile {
         slug: "pr_privacy_check",
@@ -344,6 +399,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "android_play_release",
         file_name: "android-play-release.yml",
         render_yaml: || render_gh_workflow(android_play_release::android_play_release)(),
+    },
+    WorkflowFile {
+        slug: "android_apk_on_release",
+        file_name: "android-apk-on-release.yml",
+        render_yaml: || render_gh_workflow(android_apk_on_release::android_apk_on_release)(),
+    },
+    WorkflowFile {
+        slug: "android_play_publish",
+        file_name: "android-play-publish.yml",
+        render_yaml: || render_gh_workflow(android_play_publish::android_play_publish)(),
     },
     WorkflowFile {
         slug: "android_release_watch",
@@ -480,4 +545,58 @@ fn workflows_dir() -> Result<PathBuf> {
         bail!("expected a workflows directory at {}", dir.display());
     }
     Ok(dir)
+}
+
+#[cfg(test)]
+mod handoff_tests {
+    #[test]
+    fn every_handoff_has_a_runtime_bound_and_attempt_scoped_destination() {
+        for workflow in [
+            super::deploy_all_services::deploy_all_services(),
+            super::reusable_deploy_service::reusable_deploy_service(),
+        ] {
+            let workflow = serde_json::to_value(workflow).unwrap();
+            for job in ["build-service-binaries", "build-lambda-artifacts"] {
+                let steps = workflow["jobs"][job]["steps"].as_array().unwrap();
+                let upload_index = steps
+                    .iter()
+                    .position(|step| step["name"] == "Upload handoff artifact")
+                    .unwrap();
+                let upload = &steps[upload_index];
+                assert!(steps[..upload_index].iter().any(|step| {
+                    step["uses"] == "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6"
+                        && step["with"]["bun-version"] == "1.3.13"
+                }));
+                assert_eq!(upload["timeout-minutes"], 20);
+                assert!(upload.get("continue-on-error").is_none());
+                let command = upload["run"].as_str().unwrap();
+                assert!(command.starts_with("bun .github/scripts/upload-handoff-artifact.ts "));
+                assert!(command.ends_with("\"$DEST\""));
+                let destination = upload["env"]["DEST"].as_str().unwrap();
+                assert!(
+                    destination
+                        .starts_with("handoff/${{ github.run_id }}-${{ github.run_attempt }}/")
+                );
+                assert!(destination.ends_with(if job == "build-service-binaries" {
+                    "/prebuilt-binaries.tar.gz"
+                } else {
+                    "/lambda-artifacts.tar.gz"
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn upload_retry_contract_and_process_lifecycle() {
+        let output = std::process::Command::new("bun")
+            .args(["test", "./.github/scripts/upload-handoff-artifact.test.ts"])
+            .current_dir(xtask_paths::repo_root())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
