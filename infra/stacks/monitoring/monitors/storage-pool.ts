@@ -12,14 +12,16 @@
 //   `outcome` (`acquired`, `timed_out` or `failed`). It records 0 while the
 //   pool has an idle connection and queues for one only when none is idle, so
 //   it measures an exhausted pool and nothing else; a timed-out sample reads
-//   the pool's acquire timeout (about 10 s on `readonly`, 30 s on `primary`).
+//   the pool's acquire timeout, about 30 s on either pool.
+// - `db.client.connection.used`: connections in use, sampled every second
+//   (histogram), so its `max` catches bursts the gauges below miss.
 // - `db.client.connection.count`: connections by `db.client.connection.state`
 //   (`idle` or `used`).
 // - `db.client.connection.max`: the pool's maximum.
 //
 // All tagged `db.client.connection.pool.name` (`primary` or `readonly`), plus
-// `env` and `service`. The gauges are per task and tasks may share a series,
-// so they are read with `max`, never `sum`. A task that fell back to the
+// `env` and `service`. The gauges export one reading a minute, are per task
+// and tasks may share a series, so they are read with `max`, never `sum`. A task that fell back to the
 // primary at startup reports no `readonly` series. The dashboard also reads the `perform_unified_search`
 // span (`search.search_on`, `search.caller`) and its child spans from
 // crates/search_service, and the text of sqlx's slow-acquire warning.
@@ -135,7 +137,7 @@ const dashboard = new datadog.Dashboard('storage-pool-saturation', {
       ),
       lines(
         'Connections in use against the maximum, busiest task, by pool',
-        `max:db.client.connection.count{${SERVICE},db.client.connection.state:used} by {${POOL}}, max:db.client.connection.max{${SERVICE}} by {${POOL}}`
+        `max:db.client.connection.used{${SERVICE}} by {${POOL}}, max:db.client.connection.max{${SERVICE}} by {${POOL}}`
       ),
       lines(
         'Idle connections, emptiest task, by pool',

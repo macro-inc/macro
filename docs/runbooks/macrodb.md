@@ -123,8 +123,8 @@ dashboard, linked from the alert, and decide which of two causes it is:
 
 If neither holds, a caller is holding connections across slow work; find the
 longest `soup.pool.acquire` and request spans in APM. Probes that time out
-read the pool's acquire timeout (about 10 s on `readonly`, 30 s on `primary`),
-so a flat line there means nothing is getting a connection at all.
+read the pool's acquire timeout, about 30 s on either pool, so a flat line
+there means nothing is getting a connection at all.
 
 A starved task that still has idle connections does not raise this alert:
 requests are slow but the pool is not the queue. It shows as task CPU and as
