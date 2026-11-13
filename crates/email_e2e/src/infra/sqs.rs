@@ -165,23 +165,7 @@ impl Queues {
             match create_queue(&created.client, prefix, spec).await {
                 Ok(queue) => created.queues.push(queue),
                 Err(error) => {
-                    created.delete().await;
-                    // The queue that failed may have left its dead-letter queue.
-                    let leftovers = created
-                        .client
-                        .list_queues()
-                        .queue_name_prefix(prefix)
-                        .send()
-                        .await;
-                    for url in leftovers.iter().flat_map(|listed| listed.queue_urls()) {
-                        created
-                            .client
-                            .delete_queue()
-                            .queue_url(url)
-                            .send()
-                            .await
-                            .ok();
-                    }
+                    created.delete_all().await;
                     return Err(error);
                 }
             }
@@ -193,9 +177,13 @@ impl Queues {
     /// Creates the queues `document_storage_service` needs on top.
     pub(crate) async fn add_document_storage_queues(&mut self) -> Result<(), Report> {
         for spec in DOCUMENT_STORAGE_QUEUES {
-            // Pushed as soon as it exists, so the stack's teardown deletes it.
-            let queue = create_queue(&self.client, &self.prefix, spec).await?;
-            self.queues.push(queue);
+            match create_queue(&self.client, &self.prefix, spec).await {
+                Ok(queue) => self.queues.push(queue),
+                Err(error) => {
+                    self.delete_all().await;
+                    return Err(error);
+                }
+            }
         }
         Ok(())
     }
@@ -216,10 +204,18 @@ impl Queues {
     /// Puts a message on a queue, as one of the scheduled handlers would.
     pub(crate) async fn send(&self, name: &str, body: String) -> Result<(), Report> {
         let queue = self.named(name)?;
-        self.client
+        let mut message = self
+            .client
             .send_message()
             .queue_url(&queue.url)
-            .message_body(body)
+            .message_body(body);
+        if queue.name.ends_with(FIFO_SUFFIX) {
+            // Every message its own group and its own identity: no ordering
+            // and no deduplication between a scenario's messages.
+            let id = uuid::Uuid::now_v7().to_string();
+            message = message.message_group_id(&id).message_deduplication_id(id);
+        }
+        message
             .send()
             .await
             .context("could not send the queue message")?;
@@ -282,6 +278,22 @@ impl Queues {
             .filter_map(|count| count.parse::<u64>().ok())
             .sum();
         Ok(depth)
+    }
+
+    /// Deletes the scenario's queues and whatever else carries their
+    /// prefix: a queue that failed to be created may have left its
+    /// dead-letter queue, which no [`Queue`] names.
+    async fn delete_all(&self) {
+        self.delete().await;
+        let leftovers = self
+            .client
+            .list_queues()
+            .queue_name_prefix(&self.prefix)
+            .send()
+            .await;
+        for url in leftovers.iter().flat_map(|listed| listed.queue_urls()) {
+            self.client.delete_queue().queue_url(url).send().await.ok();
+        }
     }
 
     /// Deletes the scenario's queues.

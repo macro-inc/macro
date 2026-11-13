@@ -1,6 +1,7 @@
 //! One scenario's world: both provider emulators, the scenario's own
 //! database, Redis database and queues, and the real `email_service` and
-//! `pubsub_workers` binaries running against them.
+//! `pubsub_workers` binaries running against them, with
+//! `document_storage_service` beside them when the scenario asks.
 
 mod document_storage_environment;
 mod environment;
@@ -40,9 +41,9 @@ const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 const GRAPHQL_PATH: &str = "/items/soup/graphql";
 /// The Lambda binary of the scheduled-send sweep.
 const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
-/// How long the API gets to answer its health check.
+/// How long a service gets to answer its health check.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
-/// How often the API is started again on another port when the one picked
+/// How often a service is started again on another port when the one picked
 /// for it was taken in between.
 const PORT_ATTEMPTS: u8 = 3;
 /// What a Rust process writes when a thread panics.
@@ -53,12 +54,12 @@ const SERVING_MARKER: &str = "is up and running";
 /// How a stack differs from the default one.
 #[derive(Clone, Debug, Default)]
 pub struct StackOptions {
-    /// Environment variables for both services, set after the stack's own,
+    /// Environment variables for every service the stack starts, set after the stack's own,
     /// so they can replace them.
     pub env: Vec<(String, String)>,
     /// Also start `document_storage_service`, which serves the GraphQL API
     /// the web app sends mail through ([`User::graphql`]). Off by default:
-    /// it is a second large process per scenario.
+    /// it is a third large process per scenario.
     pub document_storage: bool,
 }
 
@@ -519,7 +520,8 @@ impl Stack {
         queues.depth(&queues.named(queue)?.dead_letter_url).await
     }
 
-    /// The names the queues go by in this crate.
+    /// The names the queues go by in this crate: the email services', and
+    /// on a stack with `document_storage` that service's own as well.
     pub fn queue_names(&self) -> Vec<&'static str> {
         self.queues().all().iter().map(|queue| queue.name).collect()
     }

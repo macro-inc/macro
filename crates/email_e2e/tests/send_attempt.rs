@@ -10,7 +10,7 @@ use uuid::Uuid;
 /// What the user wrote, before Send added the quoted mail below it.
 const WRITTEN: &str = "hello";
 /// The undo window of a scenario that undoes, in seconds.
-const UNDO_WINDOW_SECS: &str = "10";
+const UNDO_WINDOW_SECS: &str = "5";
 
 /// A stack that also serves the GraphQL API.
 async fn stack_with_graphql() -> Result<Stack, Report> {
@@ -155,10 +155,17 @@ async fn undo_restores_the_draft_as_written(provider: Provider) -> Result<(), Re
         restored["draftGeneration"]
     );
 
-    // Whatever was still on its way to Grace would arrive before the marker.
+    // The queue message that would have delivered the mail is handled once
+    // the window has passed; from then on the sweep would deliver a send
+    // that was still live, and the marker arrives after either.
+    eventually(
+        "the undone send's queue message to be handled",
+        DEFAULT_TIMEOUT,
+        async || Ok((stack.queue_depth("scheduled").await? == 0).then_some(())),
+    )
+    .await?;
     stack.run_scheduled_sweep().await?;
     deliver_marker(&from, &to).await?;
-    stack.run_scheduled_sweep().await?;
     assert_eq!(to.previews("inbox").await?.len(), 1);
     assert_eq!(from.previews("drafts").await?.len(), 1);
 
