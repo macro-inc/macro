@@ -353,6 +353,13 @@ regression over the production `ThreadList` is
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
+Inviting an agent teammate from Team → Members (People | Agent in Invite to
+Team, behind `enable-agent-teammates`), its row's Setting up → Running status,
+and its removal have a backend-free browser regression at desktop 1440 and
+phone 390 over a scripted auth service. It launches Chromium with
+`--disable-web-security` because the scripted services answer for other origins:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
 and the Share drawer over the page, have a backend-free

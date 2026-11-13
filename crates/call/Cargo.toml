@@ -8,6 +8,7 @@ version = "0.1.0"
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:ip_extractor",
   "dep:macro_authorization",
@@ -41,6 +42,7 @@ ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages", "d
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+agent_correlation = { path = "../agent_correlation", optional = true }
 agent = { path = "../agent", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }

@@ -617,6 +617,7 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
         search_on: SearchOn::NameContent,
         include_crm: false,
         calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
         collapse: None,
     };
     req.filters.chat_filters.chat_ids = vec![chat_id.to_string()];
@@ -691,6 +692,7 @@ fn the_unified_search_span_defaults_the_page_size() {
         search_on: SearchOn::Content,
         include_crm: false,
         calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
         collapse: None,
     };
     let query_params = SearchPaginationParams {
