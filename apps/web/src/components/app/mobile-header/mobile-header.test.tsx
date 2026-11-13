@@ -110,3 +110,18 @@ it('keeps the entity icon when its own icon renders nothing', () => {
 
   expect(screen.getByRole('img', { name: 'Entity icon' })).toBeTruthy();
 });
+
+it('shows badges between the icon and the label', () => {
+  const pane = renderPane(undefined, () => (
+    <MobileHeader.Title
+      label="Quarterly plan"
+      iconType="md"
+      badges={<span>PNG</span>}
+    />
+  ));
+  pane.setMobileView(true);
+
+  expect(screen.getByRole('banner').textContent).toBe(
+    'PNGQuarterly planShow details'
+  );
+});
