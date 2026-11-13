@@ -583,6 +583,74 @@ async fn a_session_that_hands_nothing_back_says_the_draft_failed() {
     assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
 }
 
+/// A routine as `macro.routines.check` sends a single agent task, which the
+/// SDK still accepts.
+fn agent_task(name: &str, trigger: Value, task: Value) -> ActionConfiguration {
+    ActionConfiguration {
+        task,
+        ..configuration(name, trigger, json!([]))
+    }
+}
+
+/// A session that checks a single agent task hands back the one agent step
+/// it runs as, which the editor saves as steps.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_becomes_its_agent_step() {
+    let task = json!({
+        "prompt": "Read the channel.",
+        "user_prompt": "Summarize it.",
+        "model": "anthropic/claude-sonnet-5-5",
+    });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Recap");
+    assert_eq!(
+        drafted.steps,
+        [json!({
+            "type": "agent",
+            "model": "anthropic/claude-sonnet-5-5",
+            "instructions": "Read the channel.\n\nSummarize it.",
+        })]
+    );
+    let program = RoutineProgram::from_task(&json!({ "steps": drafted.steps })).unwrap();
+    program.validate().unwrap();
+}
+
+/// A single agent task whose step a program wouldn't accept, here blank
+/// instructions, fails the draft as before rather than handing back a step
+/// the editor can't save.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
+    let task = json!({ "prompt": " ", "user_prompt": "", "model": "anthropic/claude-sonnet-5-5" });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    let draft = draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await;
+
+    assert!(matches!(draft, Draft::Failed { .. }), "{draft:?}");
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     let rows = Arc::new(Rows::default());

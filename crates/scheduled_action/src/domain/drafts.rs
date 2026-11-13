@@ -299,6 +299,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         routine.draft.status_reads = tracing::field::Empty,
         routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
+        routine.draft.agent_task = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
         routine.draft.step = tracing::field::Empty,
         routine.draft.outcome = tracing::field::Empty,
@@ -865,6 +866,27 @@ fn routine_data(routine: &RoutineSoFar) -> String {
     )
 }
 
+/// The steps of a checked routine's task. A single agent task, which the
+/// SDK still accepts and a draft's session sometimes checks, becomes the
+/// one agent step it runs as, if that step passes a program's rules: the
+/// editor saves the draft as steps. `None` for anything else.
+fn task_steps(task: &Value) -> Option<Vec<Value>> {
+    if let Some(steps) = task.get("steps").and_then(Value::as_array) {
+        return Some(steps.clone());
+    }
+    let program = RoutineProgram::new(RoutineProgram::from_task(task).ok()?.steps);
+    let steps = program.validate().ok().and_then(|()| {
+        program
+            .steps
+            .iter()
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()
+            .ok()
+    });
+    tracing::Span::current().record("routine.draft.agent_task", steps.is_some());
+    steps
+}
+
 /// The draft `request` asks for, from the session's last check.
 fn drafted(
     request: &DraftRequest,
@@ -874,9 +896,8 @@ fn drafted(
 ) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
-    let steps = match check.routine.task.get("steps").and_then(Value::as_array) {
-        Some(steps) => steps.clone(),
-        None => return failed(request.failed()),
+    let Some(steps) = task_steps(&check.routine.task) else {
+        return failed(request.failed());
     };
     let problems_at = |index: usize| -> Vec<String> {
         check
