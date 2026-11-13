@@ -3,7 +3,7 @@
  * what it is doing. A new agent gets a default one on its first run; after
  * that it changes its own dashboard through the SDK (`macro.dashboards`).
  */
-import type { DashboardView, Macro } from "@macro-inc/sdk";
+import type { Dashboard, DashboardView, Macro } from "@macro-inc/sdk";
 import { behavior } from "@muppet/lib/core/behavior";
 import { module } from "@muppet/lib/core/capability";
 import type { Base } from "../../context/index.ts";
@@ -12,11 +12,17 @@ import type { Base } from "../../context/index.ts";
 export const owner = "dashboard";
 /** Written once the home dashboard exists, so a restart doesn't make another. */
 const createdFile = "home-dashboard";
+/**
+ * The id of the default dashboard, written as soon as it is created and
+ * before it becomes the home, so a run that fails in between reuses it next
+ * time instead of leaving it orphaned and making another.
+ */
+const pendingFile = "home-dashboard-pending";
 
 /** The little of the context the dashboard needs, so a test can give it a fake. */
 export type Needs = {
 	readonly state: Pick<Base["state"], "memory">;
-	readonly disk: Pick<Base["disk"], "write" | "exists">;
+	readonly disk: Pick<Base["disk"], "read" | "write" | "exists">;
 	readonly join: Base["join"];
 	readonly log: Pick<Base["log"], "event">;
 	readonly macro: () => Promise<Pick<Macro, "dashboards" | "me" | "users">>;
@@ -91,20 +97,49 @@ export type Ensured =
 	| { readonly kind: "unavailable" };
 
 /**
+ * Makes the dashboard recorded as pending the home, when one is recorded and
+ * still exists; `undefined` when there is none to reuse.
+ */
+const reusePending = async (
+	context: Needs,
+	macro: Awaited<ReturnType<Needs["macro"]>>,
+	pending: string,
+): Promise<Dashboard | undefined> => {
+	const id = (await context.disk.read(pending))?.trim();
+	if (!id) return undefined;
+	const dashboard = macro.dashboards.byId(id);
+	try {
+		await macro.me.setHomeDashboard(dashboard);
+		return dashboard;
+	} catch (error) {
+		// Deleted since, or dashboards are off: creating answers which.
+		if (status(error) === notFound) return undefined;
+		throw error;
+	}
+};
+
+/**
  * Makes sure the agent has a home dashboard: once, on its first run, it
  * creates the default and makes it its home. An agent that already has one
  * keeps it. While dashboards are off for the agent's account (the server
- * answers 404), nothing is written, so a later run tries again.
+ * answers 404), nothing is written, so a later run tries again. A default
+ * created by a run that failed before making it the home is reused.
  */
 export const ensureHomeDashboard = async (context: Needs): Promise<Ensured> => {
-	const marker = context.join(context.state.memory(owner), createdFile);
+	const memory = context.state.memory(owner);
+	const marker = context.join(memory, createdFile);
 	if (await context.disk.exists(marker)) return { kind: "existing" };
+	const pending = context.join(memory, pendingFile);
 	const macro = await context.macro();
 	try {
 		if ((await macro.me.homeDashboard()) === undefined) {
-			const me = await macro.users.me();
-			const dashboard = await macro.dashboards.create(defaultDashboard(me.id));
-			await macro.me.setHomeDashboard(dashboard);
+			let dashboard = await reusePending(context, macro, pending);
+			if (dashboard === undefined) {
+				const me = await macro.users.me();
+				dashboard = await macro.dashboards.create(defaultDashboard(me.id));
+				await context.disk.write(pending, `${dashboard.id}\n`);
+				await macro.me.setHomeDashboard(dashboard);
+			}
 			await context.disk.write(marker, `${dashboard.webUrl()}\n`);
 			return { kind: "created" };
 		}

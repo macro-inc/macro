@@ -20,6 +20,7 @@ const context = (macro: Macro) => {
 		join: (...parts: readonly string[]) => parts.join("/"),
 		state: { memory: (owner: string) => `/state/memory/${owner}` },
 		disk: {
+			read: async (path: string) => files.get(path),
 			write: async (path: string, text: string) => {
 				files.set(path, text);
 			},
@@ -59,6 +60,77 @@ test("a new agent creates the default dashboard once and makes it its home", asy
 	expect(homes).toEqual([dashboard]);
 	expect(await ensureHomeDashboard(fake)).toEqual({ kind: "existing" });
 	expect(created).toHaveLength(1);
+});
+
+test("a dashboard created by a run that failed before making it the home is reused, not orphaned", async () => {
+	const created: unknown[] = [];
+	const homes: string[] = [];
+	let failNextHome = true;
+	const handle = (id: string) => ({
+		id,
+		webUrl: () => `https://macro.com/app/dashboard/${id}`,
+	});
+	const macro = fakeMacro({
+		dashboards: {
+			create: async (view: unknown) => {
+				created.push(view);
+				return handle("d-1");
+			},
+			byId: handle,
+		},
+		me: {
+			homeDashboard: async () => undefined,
+			setHomeDashboard: async (home: { id: string }) => {
+				if (failNextHome) {
+					failNextHome = false;
+					throw new Error("Macro API error 503");
+				}
+				homes.push(home.id);
+			},
+		},
+	});
+	const fake = context(macro);
+
+	await expect(ensureHomeDashboard(fake)).rejects.toThrow("503");
+	expect(await ensureHomeDashboard(fake)).toEqual({ kind: "created" });
+	expect(created).toHaveLength(1);
+	expect(homes).toEqual(["d-1"]);
+	expect(await ensureHomeDashboard(fake)).toEqual({ kind: "existing" });
+});
+
+test("a pending dashboard deleted since is replaced by a new default", async () => {
+	const created: unknown[] = [];
+	const homes: string[] = [];
+	const handle = (id: string) => ({
+		id,
+		webUrl: () => `https://macro.com/app/dashboard/${id}`,
+	});
+	const macro = fakeMacro({
+		dashboards: {
+			create: async (view: unknown) => {
+				created.push(view);
+				return handle("d-2");
+			},
+			byId: handle,
+		},
+		me: {
+			homeDashboard: async () => undefined,
+			setHomeDashboard: async (home: { id: string }) => {
+				if (home.id === "gone") {
+					throw Object.assign(new Error("Macro API error 404"), {
+						status: 404,
+					});
+				}
+				homes.push(home.id);
+			},
+		},
+	});
+	const fake = context(macro);
+	fake.files.set("/state/memory/dashboard/home-dashboard-pending", "gone\n");
+
+	expect(await ensureHomeDashboard(fake)).toEqual({ kind: "created" });
+	expect(created).toHaveLength(1);
+	expect(homes).toEqual(["d-2"]);
 });
 
 test("an agent that already has a home dashboard keeps it", async () => {
