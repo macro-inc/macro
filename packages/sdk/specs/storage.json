@@ -43431,6 +43431,10 @@
               }
             ]
           },
+          "afterCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount now."
+          },
           "before": {
             "oneOf": [
               {
@@ -43441,6 +43445,10 @@
                 "description": "Its value before; missing when it was empty."
               }
             ]
+          },
+          "beforeCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount before."
           },
           "field": {
             "type": "string",

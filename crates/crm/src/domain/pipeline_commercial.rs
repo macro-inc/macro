@@ -183,10 +183,10 @@ impl CommercialFields {
                         for cells in rows {
                             self.validate(cells)?;
                             if let Some(column) = self.outcome {
-                                default_cell(table, cells, column, "Open")?;
+                                default_cell(table, cells, column, "Open");
                             }
                             for pair in &self.money {
-                                default_cell(table, cells, pair.currency, "USD")?;
+                                default_cell(table, cells, pair.currency, "USD");
                             }
                         }
                     }
@@ -225,14 +225,14 @@ impl CommercialFields {
     }
 }
 
-fn default_cell(
-    table: &TableDetail,
-    cells: &mut Vec<CellWrite>,
-    column: ColumnId,
-    label: &str,
-) -> Result<(), PipelineError> {
+/// Add the default option to an insert that names no value for `column`.
+///
+/// A service from before the fixed-option rule can have renamed or removed the
+/// default's label while it was still deployed. The insert then goes ahead
+/// without a default, which readers accept, instead of failing every new entry.
+fn default_cell(table: &TableDetail, cells: &mut Vec<CellWrite>, column: ColumnId, label: &str) {
     if cells.iter().any(|cell| cell.column == column) {
-        return Ok(());
+        return;
     }
     let option = table
         .columns
@@ -244,13 +244,13 @@ fn default_cell(
                 .property_options
                 .iter()
                 .find(|option| option.value == PropertyOptionValue::String(label.into()))
-        })
-        .ok_or(PipelineError::Invalid(
-            "Pipeline system fields are incomplete",
-        ))?;
+        });
+    let Some(option) = option else {
+        tracing::warn!(column_id = %column, label, "pipeline system field has no default option");
+        return;
+    };
     cells.push(CellWrite {
         column,
         value: CellValue::Options(vec![OptionRef::Id(option.id.into())]),
     });
-    Ok(())
 }

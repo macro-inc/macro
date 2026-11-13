@@ -72,7 +72,9 @@ Open/USD. Readers accept both: a pipeline whose `outcome` is null has no system
 fields and takes writes as before, a blank Outcome shows empty, and an amount
 with no currency counts as USD in every total. The backfill statements are
 idempotent, so a later migration that repeats them repairs such pipelines and
-rows; none is scheduled, because the window is one rollout. A trigger on `database_rows` would instead charge every row insert
+rows; none is scheduled, because the window is one rollout. Such an instance can
+also still rename or remove an option of a system field; an insert whose
+default label is gone is saved without that default instead of being refused. A trigger on `database_rows` would instead charge every row insert
 of every database for a CRM default. Mobile uses the existing responsive field
 editors and Add deal form.
 

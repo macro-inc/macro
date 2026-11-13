@@ -493,6 +493,12 @@ pub struct EntryFieldChange {
     pub before: Option<EntryFieldValue>,
     /// Its value now; missing when it is empty.
     pub after: Option<EntryFieldValue>,
+    /// For a monetary field, the currency code of the amount before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_currency: Option<String>,
+    /// For a monetary field, the currency code of the amount now.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_currency: Option<String>,
 }
 
 impl From<&FieldChange> for EntryFieldChange {
@@ -501,6 +507,8 @@ impl From<&FieldChange> for EntryFieldChange {
             field: change.field.clone(),
             before: change.before.as_ref().map(EntryFieldValue::from),
             after: change.after.as_ref().map(EntryFieldValue::from),
+            before_currency: change.before_currency.clone(),
+            after_currency: change.after_currency.clone(),
         }
     }
 }

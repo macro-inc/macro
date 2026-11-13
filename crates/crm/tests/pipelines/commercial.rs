@@ -78,6 +78,8 @@ async fn backfill_preserves_reserved_fields_and_explicit_currency(pool: PgPool) 
             {"column":currency,"value":{"type":"options","value":[{"label":"EUR"}]}}
         ]]}})).unwrap();
     let explicit = inserted(&write(&s, &a, &upgraded, vec![operation]).await.unwrap());
+    // A second run seeds nothing over a currency the entry already chose.
+    run_backfill(&pool).await;
     let reloaded = s
         .read_rows(
             access(&a, p.id, EntityType::CrmPipeline, OWNER).await,

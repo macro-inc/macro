@@ -10775,6 +10775,12 @@ export const updateCrmPipelineEntriesResponse = zod
                           .describe("A stored value in its field's own terms."),
                       ])
                       .optional(),
+                    afterCurrency: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'For a monetary field, the currency code of the amount now.'
+                      ),
                     before: zod
                       .union([
                         zod.null(),
@@ -10852,6 +10858,12 @@ export const updateCrmPipelineEntriesResponse = zod
                           .describe("A stored value in its field's own terms."),
                       ])
                       .optional(),
+                    beforeCurrency: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'For a monetary field, the currency code of the amount before.'
+                      ),
                     field: zod.string().describe('The field.'),
                   })
                   .describe("One field's value before and after an update.")

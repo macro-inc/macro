@@ -266,6 +266,28 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
         }])
     );
 
+    let (status, repriced) = call(
+        &app,
+        "PATCH",
+        &format!("/crm/pipelines/{id}/entries"),
+        Some(json!({
+            "updates": [{"recordId": globex, "set": [
+                {"field": "Revenue", "value": "900"},
+                {"field": "Revenue currency", "value": "EUR"},
+            ]}],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{repriced}");
+    let amount = repriced["updated"][0]["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|change| change["field"] == "Revenue")
+        .unwrap();
+    assert_eq!(amount["beforeCurrency"], "USD");
+    assert_eq!(amount["afterCurrency"], "EUR");
+
     let (status, stale) = call(
         &app,
         "PATCH",

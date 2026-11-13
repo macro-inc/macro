@@ -666,6 +666,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 <GridCellPreview
                   column={column()}
                   value={rowValue(row(), column().id)}
+                  rowCells={row().cells}
                   canEdit={props.canEdit}
                 />
               )}

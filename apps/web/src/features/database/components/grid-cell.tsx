@@ -585,6 +585,8 @@ function BooleanCell(props: {
 export function GridCellPreview(props: {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
+  /** Other row values, including the denomination of monetary cells. */
+  rowCells?: Record<string, DatabaseCellValue>;
   canEdit: boolean;
 }) {
   const muted = () => !(props.canEdit && canEditCell(props.column));
@@ -643,7 +645,7 @@ export function GridCellPreview(props: {
         <Match when={kind() === 'date'}>
           <span class="flex min-h-9 min-w-0 items-center px-2.5 py-1.5 text-[13px] leading-5 whitespace-nowrap text-ink-muted">
             <span class="truncate">
-              {formatCellValue(props.column, props.value)}
+              {formatCellValue(props.column, props.value, props.rowCells)}
             </span>
           </span>
         </Match>
@@ -656,7 +658,7 @@ export function GridCellPreview(props: {
             }}
           >
             <span class="truncate">
-              {formatCellValue(props.column, props.value)}
+              {formatCellValue(props.column, props.value, props.rowCells)}
             </span>
           </span>
         </Match>

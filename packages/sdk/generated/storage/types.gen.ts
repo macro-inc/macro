@@ -9538,7 +9538,15 @@ export type EntryChanges = {
  */
 export type EntryFieldChange = {
     after?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount now.
+     */
+    afterCurrency?: string | null;
     before?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount before.
+     */
+    beforeCurrency?: string | null;
     /**
      * The field.
      */
