@@ -57,12 +57,10 @@ export function SwipeDownDismissKeyboard() {
   let composerScroll: Element | null = null;
 
   function handleTouchStart(e: TouchEvent) {
-    if (!virtualKeyboardVisible()) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    startY = touch.clientY;
     startedOnInteractive = isInteractiveTarget(e.target);
     composerScroll = composerScrollOf(e.target);
+    const touch = e.touches[0];
+    if (touch) startY = touch.clientY;
   }
 
   function handleTouchMove(e: TouchEvent) {

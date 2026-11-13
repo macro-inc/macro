@@ -650,6 +650,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           )}
         >
           <div
+            data-composer-scroll
             ref={(el) => {
               if (!isMobileCompose()) setScrollContainer(el);
             }}
