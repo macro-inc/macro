@@ -73,7 +73,9 @@ soft delete/restore/purge, and bulk upload into a project tree.
   it commits. The purge enqueues document deletes eight SQS batches at a time.
 - `edit_project.rs` refuses a share permission change from a scoped agent
   session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
-  field joins that check.
+  field that isn't a grant joins that check. Creating a folder in, or moving
+  one under, another calls `project_grants::refuse_filing_in` in the
+  transaction that writes `parentId`.
 
 ## Checks
 

@@ -54,7 +54,9 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
   (`document_cognition_service` tests both).
 - `patch_chat_handler` refuses a share permission change from a scoped agent
   session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
-  field joins that check.
+  field that isn't a grant joins that check. Creating or moving a chat into a
+  folder calls `project_grants::refuse_filing_in` in the transaction that
+  writes `projectId`.
 
 ## Related
 
