@@ -20047,6 +20047,7 @@ name = "suggestions"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
+ "agent_session",
  "async-trait",
  "axum",
  "bot_id",

@@ -11,12 +11,12 @@ use super::*;
 use crate::domain::model::{Category, EntityAction, RunMode, SuggestionStatus};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
-mod runs;
+pub(crate) mod runs;
 
 pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
 const OTHER: &str = "macro|suggestions-other@macro.com";
 
-fn user(id: &'static str) -> MacroUserIdStr<'static> {
+pub(crate) fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap()
 }
 
@@ -260,7 +260,7 @@ fn shown(suggestion: &Suggestion) -> Accept {
 
 impl Harness {
     /// The person accepts suggestion `id` in the app, as it is now.
-    async fn accept(
+    pub(crate) async fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,

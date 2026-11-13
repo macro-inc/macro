@@ -18,10 +18,10 @@ enum StartsAs {
 
 /// A run the fake started.
 #[derive(Clone)]
-struct Started {
-    session: Uuid,
-    action: Uuid,
-    prompt: String,
+pub(crate) struct Started {
+    pub(crate) session: Uuid,
+    pub(crate) action: Uuid,
+    pub(crate) prompt: String,
 }
 
 /// Run sessions whose state the test sets, recording what they started,
@@ -29,7 +29,7 @@ struct Started {
 /// `unreadable` exists but can't be read. A stopped session's turn ends
 /// unfinished, unless `stops_ignored`.
 #[derive(Default)]
-struct FakeRuns {
+pub(crate) struct FakeRuns {
     started: Mutex<Vec<Started>>,
     state: Mutex<HashMap<Uuid, SessionState>>,
     unreadable: Mutex<HashSet<Uuid>>,
@@ -49,7 +49,7 @@ impl FakeRuns {
         self.started.lock().unwrap().clone()
     }
 
-    fn last(&self) -> Started {
+    pub(crate) fn last(&self) -> Started {
         self.started().pop().unwrap()
     }
 }
@@ -137,7 +137,7 @@ fn session_target(session: Uuid) -> Target {
 }
 
 /// A harness whose service runs background suggestions in a [`FakeRuns`].
-async fn run_harness(pool: PgPool) -> (Harness, Arc<FakeRuns>) {
+pub(crate) async fn run_harness(pool: PgPool) -> (Harness, Arc<FakeRuns>) {
     let mut h = harness(pool, true).await;
     let runs = Arc::new(FakeRuns::default());
     h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
@@ -147,7 +147,7 @@ async fn run_harness(pool: PgPool) -> (Harness, Arc<FakeRuns>) {
 impl Harness {
     /// A background prompt suggestion of the person's, from a suggestions
     /// session.
-    async fn background(&self, key: &str) -> Suggestion {
+    pub(crate) async fn background(&self, key: &str) -> Suggestion {
         let session = self.session(OWNER, "suggestions").await;
         self.suggest(session, prompt_suggestion(key, "Compare the supplier quotes"))
             .await
@@ -169,7 +169,7 @@ impl Harness {
     }
 
     /// Suggestion `id` as stored.
-    async fn stored(&self, id: Uuid) -> Suggestion {
+    pub(crate) async fn stored(&self, id: Uuid) -> Suggestion {
         PgSuggestionRepo::new(self.pool.clone())
             .suggestion(&user(OWNER), id)
             .await
@@ -178,7 +178,7 @@ impl Harness {
     }
 
     /// Where run `session` is, as stored.
-    async fn run_state(&self, session: Uuid) -> RunStateName {
+    pub(crate) async fn run_state(&self, session: Uuid) -> RunStateName {
         PgSuggestionRepo::new(self.pool.clone())
             .run(session)
             .await

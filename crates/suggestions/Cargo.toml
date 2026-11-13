@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 agent_correlation = { path = "../agent_correlation" }
+agent_session = { path = "../agent_session", default-features = false }
 async-trait = { workspace = true }
 axum = { workspace = true }
 channels = { path = "../channels", default-features = false, features = ["outbound"] }

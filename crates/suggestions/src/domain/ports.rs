@@ -453,6 +453,20 @@ pub trait SuggestionRuns: Send + Sync + 'static {
     fn reconcile_runs(&self) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send;
 }
 
+/// A shared service moves runs as it does.
+impl<T: SuggestionRuns> SuggestionRuns for std::sync::Arc<T> {
+    fn on_session_event(
+        &self,
+        event: SessionEvent,
+    ) -> impl Future<Output = Result<RunEventOutcome, SuggestionError>> + Send {
+        T::on_session_event(self, event)
+    }
+
+    fn reconcile_runs(&self) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send {
+        T::reconcile_runs(self)
+    }
+}
+
 /// How a session's event went for runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunEventOutcome {
