@@ -667,6 +667,34 @@ async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
     );
 }
 
+/// A single agent task that declares apps fails the draft as before: a
+/// draft holds only steps, so the apps its step needs would be lost.
+#[tokio::test(start_paused = true)]
+async fn a_draft_of_a_single_agent_task_with_apps_fails() {
+    let task = json!({
+        "prompt": "Read the channel.",
+        "user_prompt": "Summarize it.",
+        "model": "anthropic/claude-sonnet-5-5",
+        "mcp_servers": [{ "app_slug": "linear", "server_name": "Linear" }],
+    });
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![plain(agent_task(
+                "Recap",
+                message_posted(&[]),
+                task.clone(),
+            ))]
+        }),
+    ));
+
+    assert_eq!(
+        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await,
+        failed(ROUTINE_FAILED)
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     let rows = Arc::new(Rows::default());

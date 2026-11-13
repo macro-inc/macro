@@ -868,9 +868,9 @@ fn routine_data(routine: &RoutineSoFar) -> String {
 
 /// The steps of a checked routine's task. A single agent task, which the
 /// SDK still accepts and a draft's session sometimes checks, becomes one
-/// agent step holding its prompt and user prompt, if that step passes a
-/// program's rules: the editor saves the draft as steps. `None` for
-/// anything else.
+/// agent step holding its prompt and user prompt, if it declares no apps and
+/// that step passes a program's rules: the editor saves the draft as steps.
+/// `None` for anything else.
 fn task_steps(task: &Value) -> Option<Vec<Value>> {
     if let Some(steps) = task.get("steps").and_then(Value::as_array) {
         return Some(steps.clone());
@@ -880,10 +880,15 @@ fn task_steps(task: &Value) -> Option<Vec<Value>> {
     steps
 }
 
-/// A single agent task as a program's one agent step, if it is one and the
-/// step passes a program's rules.
+/// A single agent task as a program's one agent step, if it is one, declares
+/// no apps (a draft holds only steps, so they would be lost) and the step
+/// passes a program's rules.
 fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
-    let program = RoutineProgram::new(RoutineProgram::from_task(task).ok()?.steps);
+    let task = RoutineProgram::from_task(task).ok()?;
+    if !task.mcp_servers.is_empty() {
+        return None;
+    }
+    let program = RoutineProgram::new(task.steps);
     program.validate().ok()?;
     program
         .steps

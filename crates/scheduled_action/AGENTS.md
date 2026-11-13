@@ -65,7 +65,8 @@ each run.
   does (all bounded by `DRAFT_TIMEOUT`). It turns the last
   passing check (else the last check) into the draft (a single agent task,
   which the SDK still accepts, becomes one agent step holding its prompt
-  and user prompt, or fails the draft if that step breaks a program's
+  and user prompt, or fails the draft if it declares apps, which a draft
+  can't hold, or that step breaks a program's
   rules), then stops and deletes
   the session and the row, also once it sees the request dropped mid-draft
   (the web composer, given no answer, sends the draft once more,
