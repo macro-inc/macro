@@ -1,0 +1,31 @@
+tooling/gitai/gitai-enroll
+  s_8f3ab1e2b99372::t_cf5edaf74df485 21
+  s_8f3ab1e2b99372::t_cb2c4ee216faff 272-278
+  s_8f3ab1e2b99372::t_a5dedc18b02cc9 1-20,22-271,279-464
+tooling/gitai/AGENTS.md
+  s_8f3ab1e2b99372::t_70271b95d1d690 1-35
+tooling/gitai/README.md
+  s_8f3ab1e2b99372::t_13d34e65a8b580 1-74
+tooling/gitai/gitai-why/SKILL.md
+  s_8f3ab1e2b99372::t_90ee7d61840cce 1-16,18-19,21-53
+  s_8f3ab1e2b99372::t_9cd8273e80621d 17,20
+  s_8f3ab1e2b99372::t_69a9fd7735e174 54
+tooling/gitai/CLAUDE.md
+  s_8f3ab1e2b99372::t_1cff422cc070ed 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "55f47a7a9a11511a968246eaa38e0ef3ea764282",
+  "prompts": {},
+  "sessions": {
+    "s_8f3ab1e2b99372": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "841d0591-8f81-4a93-b4ac-0b88fbbea28f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

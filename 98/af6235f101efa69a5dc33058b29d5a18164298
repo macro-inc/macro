@@ -1,0 +1,27 @@
+infra/stacks/observability/nixos/gitai-dashboard.json
+  s_8f3ab1e2b99372::t_7fc3a0d5309540 1-1116
+infra/stacks/observability/nixos/gitai-dashboard.nix
+  s_8f3ab1e2b99372::t_296b7261b1f191 1-21
+infra/stacks/observability/AGENTS.md
+  s_8f3ab1e2b99372::t_8c5267c55c6b21 29-30
+infra/stacks/observability/README.md
+  s_8f3ab1e2b99372::t_166177f6b0073a 657-662
+infra/stacks/observability/nixos/services.nix
+  s_8f3ab1e2b99372::t_296b7261b1f191 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "98af6235f101efa69a5dc33058b29d5a18164298",
+  "prompts": {},
+  "sessions": {
+    "s_8f3ab1e2b99372": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "841d0591-8f81-4a93-b4ac-0b88fbbea28f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

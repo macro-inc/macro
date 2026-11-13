@@ -1,0 +1,41 @@
+tooling/gitai/AGENTS.md
+  s_8f3ab1e2b99372::t_bec5e22b8c0091 33-36
+tooling/gitai/gitai-enroll
+  s_8f3ab1e2b99372::t_76d3471d573629 369
+  s_8f3ab1e2b99372::t_49e13bfb15a5b7 168,278,336-339,355-359,363,372-373,559-568,570-580
+  s_8f3ab1e2b99372::t_bec5e22b8c0091 410
+  s_8f3ab1e2b99372::t_6273ab647bd1db 275-277
+  s_8f3ab1e2b99372::t_2ddc94f12369b5 279-281
+  s_8f3ab1e2b99372::t_587645b4216375 557-558
+  s_467ffae7bfc0ed::t_f8061ad2ab4aab 56,153-166,182-183,227-234,242,274,282-287,366-367,501-506,551-553
+tooling/gitai/README.md
+  s_8f3ab1e2b99372::t_bec5e22b8c0091 23,27,41
+infra/stacks/observability/nixos/gitai-dashboard.json
+  s_467ffae7bfc0ed::t_b1b5c84d961b72 149,354,405,461
+tooling/gitai/gitai-why/SKILL.md
+  s_467ffae7bfc0ed::t_d0ca391cabde8f 12,17-22,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "599312b670840a267722a4638226869c279d013d",
+  "prompts": {},
+  "sessions": {
+    "s_467ffae7bfc0ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08f1dd5d-1128-4aba-b991-7dd6dce0c816",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8f3ab1e2b99372": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "841d0591-8f81-4a93-b4ac-0b88fbbea28f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
