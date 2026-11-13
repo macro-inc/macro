@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { createMutable } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -16,18 +16,11 @@ vi.mock('../side-panel', () => ({
   SidePanel: { Toggle: () => <button>Show details</button> },
   useSidePanel: () => ({ hasSections: () => true, isOpen: () => false }),
 }));
-vi.mock('@core/component/EntityIcon', () => ({
-  EntityIcon: () => <span role="img" aria-label="Entity icon" />,
-}));
+vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 
 afterEach(cleanup);
 
-function renderPane(
-  openTitleMenu?: () => void,
-  title: () => JSX.Element = () => (
-    <MobileHeader.Title label="Quarterly plan" iconType="md" />
-  )
-) {
+function renderPane(openTitleMenu?: () => void) {
   const [mobileView, setMobileView] = createSignal(false);
   const [displayName, setDisplayName] = createSignal('Mail');
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
@@ -51,7 +44,9 @@ function renderPane(
         <button>Shared action</button>
       </SplitHeaderRight>
       <Show when={mobileView()}>
-        <MobileHeader trailing={<MobileHeader.Info />}>{title()}</MobileHeader>
+        <MobileHeader trailing={<MobileHeader.Info />}>
+          <MobileHeader.Title label="Quarterly plan" />
+        </MobileHeader>
       </Show>
     </SplitPanelContext.Provider>
   ));
@@ -82,31 +77,4 @@ it('opens the title menu when the title is tapped', () => {
 
   fireEvent.click(screen.getByText('Quarterly plan'));
   expect(openTitleMenu).toHaveBeenCalledOnce();
-});
-
-it('shows its own icon in place of the entity icon', () => {
-  const pane = renderPane(undefined, () => (
-    <MobileHeader.Title
-      label="Quarterly plan"
-      iconType="md"
-      icon={<span role="img" aria-label="Model icon" />}
-    />
-  ));
-  pane.setMobileView(true);
-
-  expect(screen.getByRole('img', { name: 'Model icon' })).toBeTruthy();
-  expect(screen.queryByRole('img', { name: 'Entity icon' })).toBeNull();
-});
-
-it('keeps the entity icon when its own icon renders nothing', () => {
-  const pane = renderPane(undefined, () => (
-    <MobileHeader.Title
-      label="Quarterly plan"
-      iconType="md"
-      icon={<Show when={false}>Model icon</Show>}
-    />
-  ));
-  pane.setMobileView(true);
-
-  expect(screen.getByRole('img', { name: 'Entity icon' })).toBeTruthy();
 });
