@@ -411,6 +411,40 @@ export function registerMacroElementViews(
       }
     }
   };
+  // The reconciler applies an element's direction, indent and format to its
+  // outer DOM, the wrapper; TableNode alignTableElement toggles the
+  // tableAlignment classes on the table. The builtin view wrote the element
+  // layout onto the table, so it moves to the wrapper here.
+  const ALIGNMENTS = ['', 'left', 'center', 'right', 'justify', 'start', 'end'];
+  const layout = (
+    node: ViewNode,
+    wrapper: HTMLElement,
+    inner: HTMLElement,
+    ctx: RenderContext
+  ) => {
+    const fields = node.elementProps;
+    const alignment = ALIGNMENTS[fields?.format ?? 0] ?? '';
+    inner.removeAttribute('dir');
+    inner.style.textAlign = '';
+    inner.style.paddingInlineStart = '';
+    if (inner.getAttribute('style') === '') inner.removeAttribute('style');
+    applyElementDirection(node, wrapper, ctx);
+    if (alignment || wrapper.style.textAlign)
+      wrapper.style.textAlign = alignment;
+    if (fields?.indent || wrapper.style.paddingInlineStart)
+      wrapper.style.paddingInlineStart = fields?.indent
+        ? `${fields.indent * 40}px`
+        : '';
+    if (wrapper.getAttribute('style') === '') wrapper.removeAttribute('style');
+    for (const format of ['center', 'right'] as const) {
+      const classes = themeClass(ctx.theme, 'tableAlignment', format)
+        .split(' ')
+        .filter(Boolean);
+      if (format === alignment) inner.classList.add(...classes);
+      else inner.classList.remove(...classes);
+    }
+    if (inner.getAttribute('class') === '') inner.removeAttribute('class');
+  };
   registry.replace('table', {
     createDOM(node, ctx) {
       const wrapper = ctx.document.createElement('div');
@@ -420,12 +454,15 @@ export function registerMacroElementViews(
       const inner = table.createDOM(node, ctx);
       wrapper.appendChild(inner);
       frozen(null, node, wrapper, inner, ctx);
+      layout(node, wrapper, inner, ctx);
       return wrapper;
     },
     updateDOM(previous, next, dom, ctx) {
       const inner = innerTable(dom);
       frozen(previous, next, dom, inner, ctx);
-      return table.updateDOM(previous, next, inner, ctx);
+      const replace = table.updateDOM(previous, next, inner, ctx);
+      layout(next, dom, inner, ctx);
+      return replace;
     },
     getDOMSlot(node, dom) {
       const inner = innerTable(dom);
