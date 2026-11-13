@@ -32,11 +32,30 @@ with signed fields filled in), each recipient's place and progress, the
 databases the packet lives in, its expiry and reminder cadence, and the
 activity log. Quick actions depend on status:
 
-- Draft: **Place fields**, **Delete draft**.
+- Draft: **Place fields**, **Merge packet**, **Delete draft**.
 - Sent or Partially Signed: **Resend reminder**, **Re-upload** (replace one
   document; signatures are cleared and signers get new links), **Audit
-  certificate**, **Mark signed offline**, **Void**.
-- Any sent packet: **Audit certificate**.
+  certificate**, **Download PDF**, **Merge packet**, **Mark signed offline**,
+  **Void**.
+- Any sent packet: **Audit certificate**, **Download PDF**.
+
+**Download PDF** saves the packet as one PDF named after it: every document
+page as signed so far, with signatures, entered text and signing dates in
+their fields, followed by the Certificate of Completion. Pages are flattened
+to images.
+
+**Merge packet** folds another open packet (a draft or one out for signature)
+into this one, for a packet created by mistake instead of updating an existing
+one. A dialog lists the packets that can be merged in. The chosen packet's
+documents, recipients, fields and databases move into this packet; a document
+with the same bytes and a recipient with the same email are kept once. The
+merged packet is removed and the activity log records the merge. If this
+packet was already out for signature, signatures are cleared and signers get
+new links.
+
+Reminders follow the packet's cadence on their own: once the cadence has
+passed since a pending signer was last contacted, the activity log records a
+reminder. No email is sent.
 
 A signer whose turn it is shows **Copy signing link**; when that signer is the
 viewer it shows **Sign now**.

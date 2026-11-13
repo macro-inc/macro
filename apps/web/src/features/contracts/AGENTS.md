@@ -26,6 +26,10 @@ link from the packet drawer.
   void, expire, replace a document, mark signed offline) as a pure function.
 - `core/status.ts`: the packet status. It is derived, never stored.
 - `core/audit.ts`: the event hash chain and the packet state digest.
+- `queries/executed-pdf.ts`: the downloadable PDF, drawn page by page on a
+  canvas (documents with their printed fields, then the certificate) and
+  written with `block-pptx/core/pdf`. It receives the certificate as words
+  (`components/certificate-sheet.ts`), so it knows no language.
 - `context/contracts-context.tsx`: what the views need from a host.
 - `contracts.tsx` / `signing.tsx`: production wiring for `/contracts` and
   `/sign/:token`.
@@ -44,6 +48,9 @@ link from the packet drawer.
   `components/field-kind.tsx` → `components/signing-field.tsx` →
   `queries/packet-schema.ts`.
 - Add user-visible text: `lib/i18n/locales/en/contracts.ts`.
+
+- Add a packet operation to the store: wrap it in `traced` (`queries/traced.ts`)
+  with a static `contracts.<area>.<verb>` name and ids or counts only.
 
 ## Checks
 
@@ -73,6 +80,14 @@ link from the packet drawer.
 - Paints of one PDF run one at a time (`queries/pdf-document.ts`), and a
   paint whose page scrolled away is skipped. Pass `renderPage` a real
   `wanted` check; `PdfPage` releases its bitmap when a paint fails.
+- What a signed field prints lives in `core/printed-fields.ts`, and the
+  signature faces in `core/signature-style.ts`. The page and the PDF both
+  read them; change printing there, not in one renderer.
+- Merging keeps the source's log whole under `merged`, never spliced into
+  the target's chain: each event's hash depends on the one before it.
+- The store's clock records expiry and due reminders (`onSchedule`). A
+  transition that returns its packet unchanged writes nothing, so the clock
+  is free when nothing is due.
 - The audit chain shows consistency of the entries present, nothing more:
   the browser holds the log and could rewrite it. Do not word UI or docs as
   if it proved authenticity or completeness.

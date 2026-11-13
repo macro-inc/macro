@@ -5,6 +5,7 @@ import type {
   ContractsData,
   ContractsError,
   DocumentError,
+  ExecutedPdfRequest,
   PdfDocument,
   SigningContext,
   SigningSession,
@@ -47,6 +48,7 @@ import {
   type ContractsSnapshot,
   contractsSnapshotSchema,
 } from './packet-schema';
+import { traced } from './traced';
 
 /** Every account's snapshot is stored under this prefix plus its scope. */
 const STORAGE_KEY_PREFIX = 'macro:contracts:local:v1:';
@@ -471,7 +473,12 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
           });
         }),
 
-      importDocument: importPdf,
+      importDocument: (file) =>
+        traced(
+          'contracts.document.import',
+          { 'document.size_bytes': file.size },
+          () => importPdf(file)
+        ),
       openDocument,
       // Inside the lock, so it runs after a packet that is being stored with
       // this document: bytes a packet is about to use are never dropped.
@@ -482,77 +489,87 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
         ).orElse(() => ok(undefined)),
 
       createDraft: (input) =>
-        writePacket(undefined, (_, lifecycleContext) =>
-          createDraft(input, lifecycleContext)
+        traced(
+          'contracts.packet.create',
+          {
+            'packet.document_count': input.documents.length,
+            'packet.recipient_count': input.recipients.length,
+          },
+          () =>
+            writePacket(undefined, (_, lifecycleContext) =>
+              createDraft(input, lifecycleContext)
+            )
         ),
       saveFields: (packetId, fields) =>
-        transition(packetId, (packet, lifecycleContext) =>
-          setFields(packet, fields, lifecycleContext)
+        traced(
+          'contracts.packet.place_fields',
+          { 'packet.id': packetId, 'packet.field_count': fields.length },
+          () =>
+            transition(packetId, (packet, lifecycleContext) =>
+              setFields(packet, fields, lifecycleContext)
+            )
         ),
-      send: (packetId) => transition(packetId, sendPacket),
-      remind: (packetId) => transition(packetId, remindPending),
+      send: (packetId) =>
+        traced('contracts.packet.send', { 'packet.id': packetId }, () =>
+          transition(packetId, sendPacket)
+        ),
+      remind: (packetId) =>
+        traced('contracts.packet.remind', { 'packet.id': packetId }, () =>
+          transition(packetId, remindPending)
+        ),
       voidPacket: (packetId, reason) =>
-        transition(packetId, (packet, lifecycleContext) =>
-          voidPacket(packet, reason, lifecycleContext)
+        traced('contracts.packet.void', { 'packet.id': packetId }, () =>
+          transition(packetId, (packet, lifecycleContext) =>
+            voidPacket(packet, reason, lifecycleContext)
+          )
         ),
       markSignedOffline: (packetId) =>
-        transition(packetId, (packet, lifecycleContext) =>
-          markSignedOffline(packet, viewer().name, lifecycleContext)
+        traced(
+          'contracts.packet.mark_signed_offline',
+          { 'packet.id': packetId },
+          () =>
+            transition(packetId, (packet, lifecycleContext) =>
+              markSignedOffline(packet, viewer().name, lifecycleContext)
+            )
         ),
 
       replaceDocument: (packetId, documentId, replacement) =>
-        transition(packetId, (packet, lifecycleContext) =>
-          replaceDocument(packet, documentId, replacement, lifecycleContext)
-        ).andThen((packet) =>
-          ResultAsync.fromSafePromise(dropUnreferenced([documentId])).map(
-            () => packet
-          )
+        traced(
+          'contracts.packet.replace_document',
+          {
+            'packet.id': packetId,
+            'document.page_count': replacement.pageCount,
+          },
+          () =>
+            transition(packetId, (packet, lifecycleContext) =>
+              replaceDocument(packet, documentId, replacement, lifecycleContext)
+            ).andThen((packet) =>
+              ResultAsync.fromSafePromise(dropUnreferenced([documentId])).map(
+                () => packet
+              )
+            )
         ),
 
       mergePackets: (targetId, sourceId) =>
-        mutate<Packet>(async (current) => {
-          const target = current.packets.find((each) => each.id === targetId);
-          const source = current.packets.find((each) => each.id === sourceId);
-          if (!target || !source) return err({ kind: 'not_found' });
-
-          const merged = mergePackets(target, source, lifecycle());
-          if (merged.isErr()) return err(merged.error);
-          const sealed = await sealEvents(merged.value, deps.digestText);
-          // The source is gone; every database it was in now lists the target.
-          const packets = current.packets
-            .filter((each) => each.id !== sourceId)
-            .map((each) => (each.id === targetId ? sealed : each));
-          return ok({ next: { ...current, packets }, value: sealed });
-        }),
-
-      deleteDraft: (packetId) =>
-        mutate<PacketDocument[]>(async (current) => {
-          const packet = current.packets.find((each) => each.id === packetId);
-          if (!packet) return err({ kind: 'not_found' });
-          if (packetStatus(packet, deps.clock()) !== 'draft') {
-            return err({ kind: 'not_draft' });
-          }
-          const packets = current.packets.filter((each) => each !== packet);
-          return ok({
-            next: { ...current, packets },
-            value: packet.documents,
-          });
-        }).andThen((documents) =>
-          ResultAsync.fromSafePromise(
-            dropUnreferenced(documents.map((document) => document.id))
-          )
+        traced(
+          'contracts.packet.merge',
+          { 'packet.id': targetId, 'packet.merged_id': sourceId },
+          () => mergeStored(targetId, sourceId)
         ),
 
-      executedPdf: ({ packet, sheet, formatDate }) =>
-        ResultAsync.combine(
-          packet.documents.map((document) =>
-            openDocument(document.id).map((pdf) => ({ document, pdf }))
-          )
-        ).andThen((documents) =>
-          ResultAsync.fromPromise(
-            deps.buildExecutedPdf({ packet, documents, sheet, formatDate }),
-            unreadable
-          )
+      deleteDraft: (packetId) =>
+        traced('contracts.packet.delete_draft', { 'packet.id': packetId }, () =>
+          deleteStoredDraft(packetId)
+        ),
+
+      executedPdf: (request) =>
+        traced(
+          'contracts.packet.export_pdf',
+          {
+            'packet.id': request.packet.id,
+            'packet.document_count': request.packet.documents.length,
+          },
+          () => drawExecutedPdf(request)
         ),
 
       verifyLog: async (packet) =>
@@ -560,6 +577,64 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
 
       signingUrl: deps.signingUrl,
     };
+  }
+
+  function mergeStored(
+    targetId: string,
+    sourceId: string
+  ): ResultAsync<Packet, ContractsError> {
+    return mutate<Packet>(async (current) => {
+      const target = current.packets.find((each) => each.id === targetId);
+      const source = current.packets.find((each) => each.id === sourceId);
+      if (!target || !source) return err({ kind: 'not_found' });
+
+      const merged = mergePackets(target, source, lifecycle());
+      if (merged.isErr()) return err(merged.error);
+      const sealed = await sealEvents(merged.value, deps.digestText);
+      // The source is gone; every database it was in now lists the target.
+      const packets = current.packets
+        .filter((each) => each.id !== sourceId)
+        .map((each) => (each.id === targetId ? sealed : each));
+      return ok({ next: { ...current, packets }, value: sealed });
+    });
+  }
+
+  function deleteStoredDraft(
+    packetId: string
+  ): ResultAsync<void, ContractsError> {
+    return mutate<PacketDocument[]>(async (current) => {
+      const packet = current.packets.find((each) => each.id === packetId);
+      if (!packet) return err({ kind: 'not_found' });
+      if (packetStatus(packet, deps.clock()) !== 'draft') {
+        return err({ kind: 'not_draft' });
+      }
+      const packets = current.packets.filter((each) => each !== packet);
+      return ok({
+        next: { ...current, packets },
+        value: packet.documents,
+      });
+    }).andThen((documents) =>
+      ResultAsync.fromSafePromise(
+        dropUnreferenced(documents.map((document) => document.id))
+      )
+    );
+  }
+
+  function drawExecutedPdf({
+    packet,
+    sheet,
+    formatDate,
+  }: ExecutedPdfRequest): ResultAsync<Blob, DocumentError> {
+    return ResultAsync.combine(
+      packet.documents.map((document) =>
+        openDocument(document.id).map((pdf) => ({ document, pdf }))
+      )
+    ).andThen((documents) =>
+      ResultAsync.fromPromise(
+        deps.buildExecutedPdf({ packet, documents, sheet, formatDate }),
+        unreadable
+      )
+    );
   }
 
   function signing(token: Accessor<string>): SigningContext {
@@ -596,21 +671,32 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
       session,
       openDocument,
       recordView: (userAgent) =>
-        act((packet, signerToken, lifecycleContext) =>
-          recordView(packet, signerToken, userAgent, lifecycleContext)
-        ).map(() => undefined),
+        traced('contracts.signing.view', {}, () =>
+          act((packet, signerToken, lifecycleContext) =>
+            recordView(packet, signerToken, userAgent, lifecycleContext)
+          ).map(() => undefined)
+        ),
       acceptDisclosure: () =>
-        act((packet, signerToken, lifecycleContext) =>
-          acceptDisclosure(packet, signerToken, lifecycleContext)
-        ).map(() => undefined),
+        traced('contracts.signing.accept_disclosure', {}, () =>
+          act((packet, signerToken, lifecycleContext) =>
+            acceptDisclosure(packet, signerToken, lifecycleContext)
+          ).map(() => undefined)
+        ),
       sign: (input) =>
-        act((packet, signerToken, lifecycleContext) =>
-          signPacket(packet, signerToken, input, lifecycleContext)
+        traced(
+          'contracts.signing.sign',
+          { 'signing.value_count': Object.keys(input.values).length },
+          () =>
+            act((packet, signerToken, lifecycleContext) =>
+              signPacket(packet, signerToken, input, lifecycleContext)
+            )
         ),
       decline: (reason) =>
-        act((packet, signerToken, lifecycleContext) =>
-          declinePacket(packet, signerToken, reason, lifecycleContext)
-        ).map(() => undefined),
+        traced('contracts.signing.decline', {}, () =>
+          act((packet, signerToken, lifecycleContext) =>
+            declinePacket(packet, signerToken, reason, lifecycleContext)
+          ).map(() => undefined)
+        ),
     };
   }
 

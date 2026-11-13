@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultAsync } from 'neverthrow';
 import {
@@ -39,6 +40,14 @@ export function createPacketPdfs(
     }
     setPdfs((loaded) => ({ ...loaded, [documentId]: result.value }));
   }
+
+  // Opening the packet's documents is the slow part of every view that
+  // shows them; it is a phase of that view's load.
+  usePending('contracts.documents', () =>
+    documentIds().some(
+      (documentId) => !pdfs()[documentId] && !failed().includes(documentId)
+    )
+  );
 
   createEffect(
     on(documentIds, (ids) => {
