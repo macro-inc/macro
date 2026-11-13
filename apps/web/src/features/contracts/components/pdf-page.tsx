@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
+import { ResultAsync } from 'neverthrow';
 import {
   createEffect,
   createSignal,
@@ -112,7 +113,9 @@ export function PdfPage(props: {
         }
         const previous = paints;
         paints = (async () => {
-          await previous;
+          // A paint that failed is reported where it started; the next
+          // paint still runs, so a resize or revisit can restore the page.
+          await ResultAsync.fromPromise(previous, () => undefined);
           await paint(token, pdf, page, cssWidth);
         })();
         fireAndForget(paints, 'contracts.pdf-page');

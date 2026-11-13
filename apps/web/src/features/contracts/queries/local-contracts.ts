@@ -487,30 +487,43 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
       return { t: 'unavailable' };
     };
 
-    function act(apply: Transition): ResultAsync<Packet, ContractsError> {
+    /**
+     * Apply a signer's action. The link is read once, here: the packet it
+     * selects and the signer the write acts for are always the same link's.
+     */
+    function act(
+      apply: (
+        packet: Packet,
+        signerToken: string,
+        context: LifecycleContext
+      ) => Result<Packet, PacketError>
+    ): ResultAsync<Packet, ContractsError> {
+      const signerToken = token();
       const current = session();
       if (current.t !== 'ready') return errAsync({ kind: 'not_in_flight' });
-      return transition(current.packet.id, apply);
+      return transition(current.packet.id, (packet, lifecycleContext) =>
+        apply(packet, signerToken, lifecycleContext)
+      );
     }
 
     return {
       session,
       openDocument,
       recordView: (userAgent) =>
-        act((packet, lifecycleContext) =>
-          recordView(packet, token(), userAgent, lifecycleContext)
+        act((packet, signerToken, lifecycleContext) =>
+          recordView(packet, signerToken, userAgent, lifecycleContext)
         ).map(() => undefined),
       acceptDisclosure: () =>
-        act((packet, lifecycleContext) =>
-          acceptDisclosure(packet, token(), lifecycleContext)
+        act((packet, signerToken, lifecycleContext) =>
+          acceptDisclosure(packet, signerToken, lifecycleContext)
         ).map(() => undefined),
       sign: (input) =>
-        act((packet, lifecycleContext) =>
-          signPacket(packet, token(), input, lifecycleContext)
+        act((packet, signerToken, lifecycleContext) =>
+          signPacket(packet, signerToken, input, lifecycleContext)
         ),
       decline: (reason) =>
-        act((packet, lifecycleContext) =>
-          declinePacket(packet, token(), reason, lifecycleContext)
+        act((packet, signerToken, lifecycleContext) =>
+          declinePacket(packet, signerToken, reason, lifecycleContext)
         ).map(() => undefined),
     };
   }

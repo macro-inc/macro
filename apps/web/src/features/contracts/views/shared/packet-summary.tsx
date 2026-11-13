@@ -61,11 +61,11 @@ export function PacketSummary(props: {
               {packet().signingOrder === 'sequential'
                 ? t('contracts.sequentialProgress', {
                     signed: props.row.progress.signed,
-                    total: props.row.progress.total,
+                    count: props.row.progress.total,
                   })
                 : t('contracts.parallelProgress', {
                     signed: props.row.progress.signed,
-                    total: props.row.progress.total,
+                    count: props.row.progress.total,
                   })}
             </Show>
           }

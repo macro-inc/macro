@@ -13,7 +13,7 @@ function progressLabel(status: PacketStatus, progress: Progress): string {
     .otherwise(() =>
       t('contracts.signersProgress', {
         signed: progress.signed,
-        total: progress.total,
+        count: progress.total,
       })
     );
 }

@@ -90,9 +90,11 @@ export function ContractsWorkspace() {
   const homeDatabaseId = () =>
     database()?.id ?? context.databases()[0]?.id ?? '';
 
+  /** Another list: leave placement (it saves itself) and close the drawer. */
   function changeScope(next: ContractsScope) {
     setScope(next);
     setPlacingId(undefined);
+    setSelectedId(undefined);
   }
 
   return (

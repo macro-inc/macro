@@ -1,9 +1,9 @@
 # Contracts
 
 Contracts is where a team prepares signing packets and tracks them to
-completion. The `enable-contracts` feature flag controls the `/contracts`
-route and the public signing page at `/sign/<token>`; without it `/contracts`
-redirects to Home. The rail entry starts under **More** and can be moved onto
+completion. The `enable-contracts` feature flag controls the `/app/contracts`
+route and the public signing page at `/app/sign/<token>`; without it
+`/app/contracts` redirects to Home. The rail entry starts under **More** and can be moved onto
 the rail from Customize sidebar.
 
 Packets are stored in the browser for now, separately for each signed-in
@@ -56,7 +56,8 @@ viewer it shows **Sign now**.
    (Signature, Initials, Date Signed, Full Name, Email, Text Input, Checkbox)
    onto a page, or press it to drop it on the current page. Drag a placed
    field to move it and its corner to resize it (it stops at the page edge);
-   arrow keys nudge and Delete removes. Placement is saved when the step is
+   arrow keys nudge, Shift with an arrow key resizes, and Delete removes.
+   Placement is saved when the step is
    left, including by the sidebar. The panel on the right reassigns the selected field, toggles
    Required, and lists what still blocks sending: every signer needs at least
    one signature field. A signer with no signature field in one document is a
@@ -67,7 +68,7 @@ viewer it shows **Sign now**.
 
 ## Signing page
 
-`/sign/<token>` needs no account. It lists the packet's documents with the
+`/app/sign/<token>` needs no account. It lists the packet's documents with the
 fields left in each, shows progress in the header, and **Next field** scrolls
 to the next required field. **Sign here** opens Adopt your signature (Draw,
 Type in one of three faces, or Upload an image); on a phone it is a bottom

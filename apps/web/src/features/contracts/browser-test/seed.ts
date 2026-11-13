@@ -1,5 +1,5 @@
 import { contentHash } from '@core/util/hash';
-import { sealEvents } from '../core/audit';
+import { type Digest, sealEvents } from '../core/audit';
 import { STARTER_DATABASES } from '../core/database';
 import {
   acceptDisclosure,
@@ -64,8 +64,29 @@ function scriptedContext() {
   return context;
 }
 
-function unwrap<T>(result: { isErr(): boolean; _unsafeUnwrap(): T }): T {
-  return result._unsafeUnwrap();
+/** Each packet as it stood after every lifecycle step, oldest first. */
+const steps = new Map<string, Packet[]>();
+
+function unwrap(result: { _unsafeUnwrap(): Packet }): Packet {
+  const packet = result._unsafeUnwrap();
+  steps.set(packet.id, [...(steps.get(packet.id) ?? []), packet]);
+  return packet;
+}
+
+/**
+ * Seal a packet one step at a time, as the store does on every write, so
+ * each event carries the state digest of its own moment.
+ */
+async function sealStepwise(packet: Packet, digest: Digest): Promise<Packet> {
+  let sealed: Packet | undefined;
+  for (const step of [...(steps.get(packet.id) ?? []), packet]) {
+    const done = sealed?.events ?? [];
+    sealed = await sealEvents(
+      { ...step, events: [...done, ...step.events.slice(done.length)] },
+      digest
+    );
+  }
+  return sealed ?? packet;
 }
 
 /** The fields one signer gets on a sample document's signature block. */
@@ -462,7 +483,7 @@ export async function seedDemoPackets() {
       wingtip,
       litware,
       proseware,
-    ].map((packet) => sealEvents(packet, digestText))
+    ].map((packet) => sealStepwise(packet, digestText))
   );
   const snapshot: ContractsSnapshot = { databases, packets };
   localStorage.setItem(FIXTURE_STORAGE_KEY, JSON.stringify(snapshot));

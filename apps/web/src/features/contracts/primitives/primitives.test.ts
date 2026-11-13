@@ -178,6 +178,17 @@ describe('createPlacement', () => {
     expect(placement.selected()?.id).toBe('f-2');
   });
 
+  it('duplicates above a field that sits at the bottom of the page', () => {
+    const placement = newPlacement();
+    placement.add('text', 'msa', 0, { xPct: 0.5, yPct: 0.99 });
+    placement.duplicate('f-1');
+
+    const [original, copy] = placement.fields();
+    expect(copy.box.yPct + copy.box.heightPct).toBeLessThanOrEqual(
+      original.box.yPct
+    );
+  });
+
   it('reports who still needs a signature field as fields change', () => {
     const placement = newPlacement();
     expect(placement.problems().map((problem) => problem.kind)).toEqual([

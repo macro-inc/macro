@@ -104,7 +104,13 @@ export function CertificatePage(props: { certificate: Certificate }) {
             {t('contracts.certificateTitle')}
           </h1>
           <span class="text-[#595959]">
-            {t('contracts.certificateSubtitle', { title: certificate().title })}
+            {certificate().completedAt
+              ? t('contracts.certificateSubtitle', {
+                  title: certificate().title,
+                })
+              : t('contracts.certificateSubtitlePending', {
+                  title: certificate().title,
+                })}
           </span>
         </div>
         <Show when={certificate().completedAt}>

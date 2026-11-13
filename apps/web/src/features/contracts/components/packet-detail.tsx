@@ -77,9 +77,13 @@ export function DocumentThumbnail(props: {
   );
 }
 
-function recipientState(recipient: Recipient): string {
+function recipientState(packet: Packet, recipient: Recipient): string {
   if (recipient.role === 'copy') return t('contracts.roleCopy');
   if (recipient.declinedAt) return t('contracts.recipientDeclined');
+  // A packet closed by hand was signed on paper, not through a link.
+  if (packet.statusOverride?.tag === 'offline') {
+    return t('contracts.recipientSignedOffline');
+  }
   if (recipient.viewedAt) return t('contracts.recipientViewed');
   if (recipient.access) return t('contracts.recipientInvited');
   return t('contracts.recipientWaiting');
@@ -131,7 +135,7 @@ export function RecipientList(props: {
               <span class="truncate text-xs text-ink-extra-muted">
                 {recipient.signedAt
                   ? recipient.email
-                  : recipientState(recipient)}
+                  : recipientState(props.packet, recipient)}
               </span>
             </span>
             <Switch>

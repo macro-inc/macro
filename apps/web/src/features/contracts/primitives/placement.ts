@@ -90,6 +90,19 @@ export function createPlacement(options: {
       });
     },
 
+    /** Grow or shrink a field by one step, for resizing from the keyboard. */
+    grow(fieldId: string, direction: { x: number; y: number }) {
+      const field = state.fields.find((each) => each.id === fieldId);
+      if (!field) return;
+      update(fieldId, {
+        box: resizeBox({
+          ...field.box,
+          widthPct: field.box.widthPct + direction.x * NUDGE_PCT,
+          heightPct: field.box.heightPct + direction.y * NUDGE_PCT,
+        }),
+      });
+    },
+
     assign: (fieldId: string, recipientId: string) =>
       update(fieldId, { recipientId }),
     setRequired: (fieldId: string, required: boolean) =>
@@ -98,12 +111,16 @@ export function createPlacement(options: {
     duplicate(fieldId: string) {
       const field = state.fields.find((each) => each.id === fieldId);
       if (!field) return;
+      // The copy goes just below its source, or just above when the page
+      // ends first, so it never lands on top of the field it came from.
+      const gap = field.box.heightPct + NUDGE_PCT * 2;
+      const fitsBelow = field.box.yPct + gap + field.box.heightPct <= 1;
       const copy: PacketField = {
         ...field,
         id: options.newId(),
         box: clampBox({
           ...field.box,
-          yPct: field.box.yPct + field.box.heightPct + NUDGE_PCT * 2,
+          yPct: field.box.yPct + (fitsBelow ? gap : -gap),
         }),
       };
       setState('fields', (fields) => [...fields, copy]);

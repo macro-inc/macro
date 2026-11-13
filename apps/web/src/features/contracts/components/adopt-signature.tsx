@@ -72,8 +72,11 @@ export function AdoptSignature(props: {
     });
   }
 
+  let chosen = 0;
   async function chooseImage(file: File | undefined) {
     if (!file) return;
+    // Only the latest choice counts, whichever file finishes reading last.
+    const choice = ++chosen;
     setUpload(undefined);
     setUploadProblem(undefined);
 
@@ -81,6 +84,7 @@ export function AdoptSignature(props: {
       readAsDataUrl(file),
       () => undefined
     );
+    if (choice !== chosen) return;
     if (read.isErr()) {
       setUploadProblem(t('contracts.uploadUnreadable'));
       return;

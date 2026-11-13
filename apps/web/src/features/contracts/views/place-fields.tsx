@@ -223,7 +223,9 @@ export function PlaceFields(props: {
     }[event.key];
     if (direction) {
       event.preventDefault();
-      placement.nudge(field.id, direction);
+      // Shift resizes, so a field can be sized without a pointer.
+      if (event.shiftKey) placement.grow(field.id, direction);
+      else placement.nudge(field.id, direction);
       return;
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -592,6 +594,9 @@ export function PlaceFields(props: {
                       total: pdf()?.pageCount ?? field().page + 1,
                     })}
                   </InspectorRow>
+                  <p class="pt-1 text-xs text-ink-extra-muted">
+                    {t('contracts.fieldKeysHint')}
+                  </p>
                 </>
               )}
             </Show>

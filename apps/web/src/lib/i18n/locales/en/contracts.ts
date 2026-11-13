@@ -61,7 +61,7 @@ export default {
     'Signed outside Macro and marked by hand. Recorded in the audit log.',
 
   signersNotSent: 'Not sent',
-  signersProgress: '{{signed}} of {{total}}',
+  signersProgress: { other: '{{signed}} of {{count}}' },
   signersDeclined: { one: '{{count}} declined', other: '{{count}} declined' },
 
   packetPane: 'Packet: {{title}}',
@@ -72,6 +72,10 @@ export default {
   deleteDraftBody: 'This draft was never sent. Deleting it cannot be undone.',
   resendReminder: 'Resend reminder',
   reminderRecorded: 'Reminder recorded',
+  reminderRecordedSubtext: 'No email is sent in this preview.',
+  recipientSignedOffline: 'Signed outside Macro',
+  fieldKeysHint:
+    'Arrow keys move the field. Shift with an arrow key resizes it.',
   reupload: 'Re-upload',
   reuploadWhich: 'Replace a document',
   replaceNamed: 'Replace {{name}}…',
@@ -110,8 +114,10 @@ export default {
     one: '{{count}} page · from DOCX',
     other: '{{count}} pages · from DOCX',
   },
-  sequentialProgress: 'Sequential order · {{signed}} of {{total}} signed',
-  parallelProgress: 'Any order · {{signed}} of {{total}} signed',
+  sequentialProgress: {
+    other: 'Sequential order · {{signed}} of {{count}} signed',
+  },
+  parallelProgress: { other: 'Any order · {{signed}} of {{count}} signed' },
   copyAbbreviation: 'CC',
   you: '(you)',
   youLabel: 'You',
@@ -233,13 +239,14 @@ export default {
     other: '{{count}} for {{name}}',
   },
   reviewPlacement: 'Review placement',
-  reviewWindow: {
-    one: 'Expires in {{count}} day · no reminders',
-    other: 'Expires in {{count}} days · no reminders',
+  reviewExpires: {
+    one: 'Expires in {{count}} day',
+    other: 'Expires in {{count}} days',
   },
-  reviewWindowWithReminders: {
-    one: 'Expires in {{count}} day · reminds every {{reminder}} days',
-    other: 'Expires in {{count}} days · reminds every {{reminder}} days',
+  reviewNoReminders: 'No reminders',
+  reviewReminds: {
+    one: 'Reminds every day',
+    other: 'Reminds every {{count}} days',
   },
   sent: 'Packet sent',
   sentSubtext: 'Copy the signing link from the packet to share it.',
@@ -249,7 +256,10 @@ export default {
     one: '{{sender}} sent you {{count}} document to sign',
     other: '{{sender}} sent you {{count}} documents to sign',
   },
-  fieldsDone: '{{done}} of {{total}} fields done',
+  fieldsDone: {
+    one: '{{done}} of {{count}} field done',
+    other: '{{done}} of {{count}} fields done',
+  },
   otherActions: 'Other actions',
   declineToSign: 'Decline to sign',
   declineTitle: 'Decline to sign?',
@@ -298,9 +308,9 @@ export default {
   adoptAndSign: 'Adopt and sign',
   signedTitle: 'You’re done',
   signedBodyCompleted:
-    'Everyone has signed. Each party receives the completed packet with its audit certificate.',
+    'Everyone has signed. The sender has the completed packet and its audit certificate.',
   signedBodyWaiting:
-    'Your signature is recorded. You’ll receive the completed packet once everyone has signed.',
+    'Your signature is recorded. The packet is complete once everyone has signed.',
   declinedTitle: 'You declined to sign',
   declinedBody: 'The sender has been told. You can close this page.',
   linkUnavailableTitle: 'This signing link isn’t active',
@@ -311,6 +321,8 @@ export default {
   certificateTitle: 'Certificate of Completion',
   certificateSubtitle:
     '{{title}} · signed electronically through Macro Contracts',
+  certificateSubtitlePending:
+    '{{title}} · out for electronic signature through Macro Contracts',
   certificateCompleted: 'Completed',
   certificateEnvelope: 'Envelope ID',
   certificateSender: 'Sender',
@@ -324,12 +336,12 @@ export default {
   certificateRouting: 'Routing',
   certificateSequential: 'Sequential. Signers were invited in order.',
   certificateParallel: 'Parallel. Signers were invited at once.',
-  certificateCopies: '{{names}} received a copy.',
+  certificateCopies: 'Copy recipients: {{names}}.',
   certificateSigners: 'Signers',
   certificateSignerPosition: 'Signer {{position}} of {{total}}',
   certificateEmail: 'Email',
   certificateVerification: 'Verification',
-  certificateEmailLink: 'Tokenized email link',
+  certificateEmailLink: 'Signing link',
   certificateTokenId: 'Token ID',
   certificateIp: 'IP address',
   certificateUserAgent: 'User agent',

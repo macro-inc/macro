@@ -157,7 +157,7 @@ function SigningDesk(props: {
           <span class="text-sm whitespace-nowrap text-ink-muted">
             {t('contracts.fieldsDone', {
               done: progress.doneCount(),
-              total: progress.totalCount(),
+              count: progress.totalCount(),
             })}
           </span>
         </div>

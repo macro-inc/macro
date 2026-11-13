@@ -32,7 +32,9 @@ export function createPacketActions(context: ContractsContext) {
         toast.failure(t('contracts.actionFailed'));
         return;
       }
-      toast.success(t('contracts.reminderRecorded'));
+      toast.success(t('contracts.reminderRecorded'), {
+        subtext: t('contracts.reminderRecordedSubtext'),
+      });
     },
 
     async voidPacket(packet: Packet) {

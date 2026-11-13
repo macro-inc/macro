@@ -7,6 +7,7 @@ import { ReviewCard } from '../components/review-card';
 import { useContractsContext } from '../context/contracts-context';
 import { blocksSending, placementProblems } from '../core/fields';
 import type { Packet } from '../core/packet';
+import { createPacketPdfs } from '../primitives/packet-pdfs';
 import { placementProblemText } from './place-fields';
 
 /** Step three of a new packet: one last look, then send. */
@@ -19,6 +20,14 @@ export function ReviewDialog(props: {
   const context = useContractsContext();
   const [sending, setSending] = createSignal(false);
   const problems = () => placementProblems(props.packet);
+  // A document that cannot be opened here cannot be opened by a signer.
+  const pdfs = createPacketPdfs(context.openDocument, () =>
+    props.packet.documents.map((document) => document.id)
+  );
+  const warnings = () => [
+    ...problems().map((problem) => placementProblemText(props.packet, problem)),
+    ...(pdfs.failed().length > 0 ? [t('contracts.documentUnreadable')] : []),
+  ];
   const databases = () =>
     context
       .databases()
@@ -48,10 +57,8 @@ export function ReviewDialog(props: {
       <ReviewCard
         packet={props.packet}
         databases={databases()}
-        warnings={problems().map((problem) =>
-          placementProblemText(props.packet, problem)
-        )}
-        blocked={problems().some(blocksSending)}
+        warnings={warnings()}
+        blocked={problems().some(blocksSending) || !pdfs.allOpen()}
         sending={sending()}
         onEdit={props.onEdit}
         onSend={() => fireAndForget(send(), 'contracts.send')}

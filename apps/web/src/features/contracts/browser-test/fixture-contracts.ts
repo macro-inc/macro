@@ -34,8 +34,9 @@ export function createFixtureContracts() {
     clock: () => pinned ?? new Date().toISOString(),
     newId: uuidv7,
     newToken: () => toHex(crypto.getRandomValues(new Uint8Array(32))),
+    // The pinned clock travels with the link, so both pages agree on the time.
     signingUrl: (token) =>
-      `${location.origin}/src/features/contracts/browser-test/signing.html?token=${token}`,
+      `${location.origin}/src/features/contracts/browser-test/signing.html?token=${token}${pinned ? `&now=${encodeURIComponent(pinned)}` : ''}`,
   });
 }
 

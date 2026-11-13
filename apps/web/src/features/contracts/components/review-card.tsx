@@ -162,13 +162,14 @@ export function ReviewCard(props: {
 
       <div class="flex flex-wrap items-center gap-2 border-t border-edge-muted pt-3">
         <span class="min-w-48 flex-1 text-xs text-ink-extra-muted">
+          {t('contracts.reviewExpires', {
+            count: props.packet.expirationDays,
+          })}
+          {' · '}
           {props.packet.reminderDays === null
-            ? t('contracts.reviewWindow', {
-                count: props.packet.expirationDays,
-              })
-            : t('contracts.reviewWindowWithReminders', {
-                count: props.packet.expirationDays,
-                reminder: props.packet.reminderDays,
+            ? t('contracts.reviewNoReminders')
+            : t('contracts.reviewReminds', {
+                count: props.packet.reminderDays,
               })}
         </span>
         <Button variant="secondary" size="sm" onClick={() => props.onEdit()}>
