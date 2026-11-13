@@ -1,9 +1,10 @@
 import { errAsync, okAsync } from 'neverthrow';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 
 const getRoutine = vi.hoisted(() => vi.fn());
+const getTemplate = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
-  scheduledActionClient: { getRoutine },
+  scheduledActionClient: { getRoutine, getTemplate },
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@core/constant/allBlocks', () => ({ itemToSafeName: () => '' }));
@@ -17,6 +18,12 @@ vi.mock('../../agent-session/mention-fetchers', () => ({
 }));
 
 import { fetchRestPreviewBatch } from '../fetchers';
+
+beforeEach(() => {
+  getTemplate
+    .mockReset()
+    .mockReturnValue(errAsync([{ code: 'NOT_FOUND', message: 'Not shared' }]));
+});
 
 it('previews a routine the viewer can read, a deleted one as gone, and a hidden one as no access', async () => {
   getRoutine.mockReturnValueOnce(
@@ -68,5 +75,35 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
     type: 'routine',
     access: 'no_access',
     loading: false,
+  });
+});
+
+it('previews someone else’s routine from its shared template', async () => {
+  getRoutine.mockReturnValueOnce(
+    errAsync([{ code: 'UNAUTHORIZED', message: 'Unauthorized access' }])
+  );
+  getTemplate.mockReturnValueOnce(
+    okAsync({
+      id: 'shared',
+      name: 'Weekly digest',
+      author: 'macro|author@example.com',
+      updated_at: '2026-10-02T09:00:00Z',
+      appearance: { icon: null, color: 'green' },
+    })
+  );
+  const shared = await fetchRestPreviewBatch([
+    { type: 'routine', id: 'shared' },
+  ]);
+  expect(getTemplate).toHaveBeenCalledWith('shared');
+  expect(shared.get('shared')).toEqual({
+    id: 'shared',
+    type: 'routine',
+    access: 'access',
+    loading: false,
+    rawName: 'Weekly digest',
+    name: 'Weekly digest',
+    owner: 'macro|author@example.com',
+    updatedAt: '2026-10-02T09:00:00Z',
+    appearance: { icon: null, color: 'green' },
   });
 });
