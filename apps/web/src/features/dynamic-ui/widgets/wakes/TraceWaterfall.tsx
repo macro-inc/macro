@@ -55,14 +55,14 @@ export function TraceWaterfall(props: { agentId: string; wakeId: string }) {
                   TEXT.secondary
                 )}
               >
-                <Show when={loaded().title}>
+                <Show when={loaded().trace.title}>
                   {(title) => (
                     <span class="text-ink font-medium">{title()}</span>
                   )}
                 </Show>
-                <span>{loaded().model ?? loaded().source}</span>
+                <span>{loaded().trace.model ?? loaded().trace.source}</span>
                 <span>{formatDuration(laid().total)}</span>
-                <Show when={loaded().costUsd ?? undefined}>
+                <Show when={loaded().trace.costUsd ?? undefined}>
                   {(cost) => <span>{formatCost(cost())}</span>}
                 </Show>
                 <Show when={traceIsLive(loaded(), now())}>

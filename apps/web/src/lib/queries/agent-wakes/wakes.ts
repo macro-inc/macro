@@ -1,9 +1,12 @@
 import {
+  type HeardTrace,
+  traceHeardAt,
   traceRefreshMs,
   wakesRefreshMs,
 } from '@app/features/dynamic-ui/widgets/wakes/format';
 import {
   type AgentWakesFilter,
+  getAgentWake,
   getAgentWakeTrace,
   listAgentWakes,
 } from '@service-agent-harness/agent-wakes';
@@ -33,13 +36,22 @@ function agentWakesQueryOptions(agentId: string, filter: AgentWakesFilter) {
 function agentWakeTraceQueryOptions(agentId: string, wakeId: string) {
   return queryOptions({
     queryKey: agentWakeKeys.trace(agentId, wakeId).queryKey,
-    queryFn: async ({ signal }) => {
-      const result = await getAgentWakeTrace(agentId, wakeId, signal);
+    queryFn: async ({ signal }): Promise<HeardTrace | null> => {
+      // The wake's row says when it was last heard from, which a live trace's
+      // own timestamps don't while a step runs long.
+      const [result, wake] = await Promise.all([
+        getAgentWakeTrace(agentId, wakeId, signal),
+        getAgentWake(agentId, wakeId, signal),
+      ]);
       if (result.isErr()) {
         if (result.error[0]?.code === 'NOT_FOUND') return null;
         throw new Error(result.error[0]?.message ?? 'Failed to load trace');
       }
-      return result.value;
+      const trace = result.value;
+      return {
+        trace,
+        heardAt: traceHeardAt(trace, wake.isOk() ? wake.value : null),
+      };
     },
     refetchInterval: (query) =>
       query.state.data ? traceRefreshMs(query.state.data, Date.now()) : false,
@@ -60,8 +72,8 @@ export function useAgentWakesQuery(
 }
 
 /**
- * One wake's trace, or `null` when the viewer may not read it, none was
- * uploaded, or it expired.
+ * One wake's trace with when the wake was last heard from, or `null` when the
+ * viewer may not read it, none was uploaded, or it expired.
  */
 export function useAgentWakeTraceQuery(
   agentId: Accessor<string>,

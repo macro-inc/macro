@@ -5,6 +5,7 @@ import {
   LIVE_REFRESH_MS,
   LOST_AFTER_MS,
   LOST_REFRESH_MS,
+  traceHeardAt,
   traceIsLive,
   traceRefreshMs,
   wakeDuration,
@@ -113,7 +114,8 @@ describe('a trace waterfall', () => {
       ],
     };
     const now = Date.parse(trace.endedAt);
-    const { rows, total } = waterfall(trace, now);
+    const heard = { trace, heardAt: traceHeardAt(trace, null) };
+    const { rows, total } = waterfall(heard, now);
     expect(total).toBe(10_000);
     expect(rows.map((row) => [row.label, row.offset, row.duration])).toEqual([
       ['Prompt', 0, 0],
@@ -121,16 +123,58 @@ describe('a trace waterfall', () => {
       ['Bash', 4000, 6000],
     ]);
     expect(rows[2]?.running).toBe(true);
-    expect(waterfall({ ...trace, live: false }, now).rows[2]?.running).toBe(
+    const ended = { ...heard, trace: { ...trace, live: false } };
+    expect(waterfall(ended, now).rows[2]?.running).toBe(false);
+    // A live trace whose wake went unheard from long ago is no longer live.
+    const stale = now + LOST_AFTER_MS + 1;
+    expect(traceIsLive(heard, now)).toBe(true);
+    expect(traceIsLive(heard, stale)).toBe(false);
+    expect(waterfall(heard, stale).rows[2]?.running).toBe(false);
+    expect(traceRefreshMs(heard, now)).toBe(LIVE_REFRESH_MS);
+    expect(traceRefreshMs(heard, stale)).toBe(LOST_REFRESH_MS);
+    expect(traceRefreshMs(ended, now)).toBe(false);
+  });
+});
+
+describe('a live trace in a long silent step', () => {
+  it('stays live while its wake is heard from, by the wake row rule', () => {
+    const trace: WakeTrace = {
+      v: 1,
+      source: 'claude',
+      sessionId: 's1',
+      startedAt: '2026-11-11T09:00:00.000Z',
+      endedAt: '2026-11-11T09:00:10.000Z',
+      live: true,
+      spans: [
+        {
+          kind: 'tool',
+          id: 't1',
+          turn: 0,
+          at: '2026-11-11T09:00:04.000Z',
+          name: 'Bash',
+          input: {},
+          error: false,
+        },
+      ],
+    };
+    // The tool has run for 50 minutes; the heartbeat uploaded a minute ago.
+    const now = Date.parse('2026-11-11T09:50:00.000Z');
+    const row: AgentWake = {
+      ...wake({ phase: 'session' }),
+      traceUpdatedAt: new Date(now - 60_000).toISOString(),
+    };
+    const heard = { trace, heardAt: traceHeardAt(trace, row) };
+    expect(wakeState(row, now)).toBe('running');
+    expect(traceIsLive(heard, now)).toBe(true);
+    expect(waterfall(heard, now).rows[0]?.running).toBe(true);
+    expect(traceRefreshMs(heard, now)).toBe(LIVE_REFRESH_MS);
+    // Without the row, the trace's own last moment is all there is.
+    expect(traceIsLive({ trace, heardAt: traceHeardAt(trace, null) }, now)).toBe(
       false
     );
-    // A live trace that stopped growing long ago is no longer live.
-    const stale = now + LOST_AFTER_MS + 1;
-    expect(traceIsLive(trace, now)).toBe(true);
-    expect(traceIsLive(trace, stale)).toBe(false);
-    expect(waterfall(trace, stale).rows[2]?.running).toBe(false);
-    expect(traceRefreshMs(trace, now)).toBe(LIVE_REFRESH_MS);
-    expect(traceRefreshMs(trace, stale)).toBe(LOST_REFRESH_MS);
-    expect(traceRefreshMs({ ...trace, live: false }, now)).toBe(false);
+    // Once the wake goes lost, so does the trace.
+    const lost = now + LOST_AFTER_MS + 1;
+    expect(wakeState(row, lost)).toBe('lost');
+    expect(traceIsLive(heard, lost)).toBe(false);
   });
 });

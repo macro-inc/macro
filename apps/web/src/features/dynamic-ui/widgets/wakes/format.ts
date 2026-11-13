@@ -38,12 +38,27 @@ export function wakeState(wake: AgentWake, now: number): WakeState {
 }
 
 /**
- * Whether a trace is still being added to: uploaded live, and with something
- * in it newer than `LOST_AFTER_MS`, so a wake that died mid-upload stops
- * looking live.
+ * A wake's trace with when Macro last heard from the wake (`lastHeard`), or,
+ * when the wake's row couldn't be read, the trace's own last timestamp.
  */
-export function traceIsLive(trace: WakeTrace, now: number): boolean {
-  return trace.live && now - Date.parse(trace.endedAt) <= LOST_AFTER_MS;
+export type HeardTrace = { trace: WakeTrace; heardAt: number };
+
+/**
+ * When Macro last heard from a wake whose trace this is: its row's
+ * `lastHeard`, else the newest moment in the trace.
+ */
+export function traceHeardAt(trace: WakeTrace, wake: AgentWake | null): number {
+  return wake ? lastHeard(wake) : Date.parse(trace.endedAt);
+}
+
+/**
+ * Whether a trace is still being added to: uploaded live, by a wake heard
+ * from within `LOST_AFTER_MS`, the rule a wake's row uses for `running`. A
+ * live heartbeat keeps a long silent step live; a wake that died mid-upload
+ * stops looking live.
+ */
+export function traceIsLive(heard: HeardTrace, now: number): boolean {
+  return heard.trace.live && now - heard.heardAt <= LOST_AFTER_MS;
 }
 
 /** While a wake runs, its row is re-read this often to show it ending. */
@@ -67,9 +82,12 @@ export function wakesRefreshMs(
 }
 
 /** How often a trace is re-read: often while live, rarely once a live one goes quiet, else never. */
-export function traceRefreshMs(trace: WakeTrace, now: number): number | false {
-  if (traceIsLive(trace, now)) return LIVE_REFRESH_MS;
-  return trace.live ? LOST_REFRESH_MS : false;
+export function traceRefreshMs(
+  heard: HeardTrace,
+  now: number
+): number | false {
+  if (traceIsLive(heard, now)) return LIVE_REFRESH_MS;
+  return heard.trace.live ? LOST_REFRESH_MS : false;
 }
 
 /** `1.2s`, `14s`, `3m 05s`, `1h 02m`. */
@@ -123,13 +141,14 @@ export type WaterfallRow = {
  * running tool reaches to the trace's end.
  */
 export function waterfall(
-  trace: WakeTrace,
+  heard: HeardTrace,
   now: number
 ): {
   rows: WaterfallRow[];
   total: number;
 } {
-  const live = traceIsLive(trace, now);
+  const { trace } = heard;
+  const live = traceIsLive(heard, now);
   const start = Date.parse(trace.startedAt);
   const end = Date.parse(trace.endedAt);
   const total = Math.max(1, end - start);
