@@ -15,8 +15,13 @@ remain held. Retry initializes the shared engine without changing models. The is
 readiness checks are documented in `apps/web/src/lib/core/document-session/README.md`.
 Both engines use the same Notebook layout, title, document properties, discussion
 and body loading/placeholder chrome. Copy as markdown and downloads use the
-selected body engine. Verify engine parity before treating the flagged path as
-ready; native menus and anchored comments also require their view installers.
+selected body engine. Copy as prompt and task platform actions also capture the
+mounted body engine’s external markdown before fetching discussion threads.
+Check the complete body and comments in the copied prompt or generated launch
+URL. An unavailable body or failed export reports the existing failure and must
+not copy, launch or update the last-used action; a genuinely empty body is valid.
+Verify engine parity before treating the flagged path as ready; native menus and
+anchored comments also require their view installers.
 
 In the native body, type `/checklist`, choose Checklist, and type a label. Check
 heading, list, code and divider choices; `/table` opens the size picker. Image

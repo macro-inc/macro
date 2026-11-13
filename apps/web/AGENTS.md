@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Read document action markdown from the mounted body engine, preferring its native runtime when present; preserve external-export bytes and reject unavailable engines instead of substituting an empty body.
+
 - Grant `local-network-access` in fresh Chromium contexts for the local HTTPS preview before waiting for document initialization; a blocked WebSocket is a harness failure.
 
 - Install the native Markdown Tab route with the body overlay lifecycle so the shared Key(Tab) indentation policy runs instead of the portable InsertTab fallback; retain Code and table key priorities.
