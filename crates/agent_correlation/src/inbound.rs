@@ -108,7 +108,6 @@ fn outside_signed_scope(token: Option<&MacroApiToken>, parts: &Parts) -> bool {
         tracing::warn!(
             ?scope,
             method = %parts.method,
-            path = parts.uri.path(),
             agent_correlation_id = ?token.and_then(|token| token.agent_correlation_id),
             agent_session_id = ?token.and_then(|token| token.agent_session_id),
             "refused a request outside its credential's signed scope"
@@ -198,7 +197,8 @@ async fn propagate_request(
         Err(error) => return error.into_response(),
     };
     // A session minted with a scope makes only the requests inside it, on
-    // every service that accepts its credential.
+    // every service that accepts its credential. The harness signs the same
+    // scope, so this refuses only a credential that doesn't sign one.
     if let Some((id, correlation)) = correlation
         && let Some(scope) = correlation.scope
         && !scope.allows(parts.method.as_str(), parts.uri.path())
@@ -206,7 +206,6 @@ async fn propagate_request(
         tracing::warn!(
             scope = scope.as_str(),
             method = %parts.method,
-            path = parts.uri.path(),
             agent_correlation_id = %id,
             agent_session_id = %correlation.session_id,
             "refused a request outside its session's scope"

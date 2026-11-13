@@ -154,7 +154,11 @@ pub async fn validate_bearer(
     if let JwtToken::MacroApiToken(api) = &jwt_token
         && api.agent_scope.is_some()
     {
-        tracing::warn!("refused a scoped code-mode credential at the MCP endpoint");
+        tracing::warn!(
+            agent_correlation_id = ?api.agent_correlation_id,
+            agent_session_id = ?api.agent_session_id,
+            "refused a scoped code-mode credential at the MCP endpoint"
+        );
         let mut response = Response::new(Body::empty());
         *response.status_mut() = StatusCode::FORBIDDEN;
         return response;
