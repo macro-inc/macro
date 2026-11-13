@@ -18,7 +18,7 @@ export type SetupStageState =
   | 'current'
   | 'upcoming'
   | 'failed'
-  /** Not needed: the agent runs on Macro's Claude. */
+  /** Not needed: the agent runs on Macro credits. */
   | 'skipped';
 
 export type SetupStage = {

@@ -982,7 +982,7 @@ in to Claude", without a timer, once the computer is up). Pressing it
 steps: the same phases the row shows (Updating billing…, Creating the
 computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
 on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
-"Not needed", once Macro's Claude is chosen), done stages with a check and
+"Not needed", once Macro credits is chosen), done stages with a check and
 worded as done (Billing updated, Computer created, Started up, Connected to
 Macro, Signed in to Claude), the current one a spinner and its time. A
 stopped setup replaces the line with one banner at the top of the dialog:

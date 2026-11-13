@@ -513,7 +513,7 @@ export function ComputerSetupSteps(props: {
           <Button type="button" variant="ghost" onClick={props.onClose}>
             {t('common.close')}
           </Button>
-          {/* Choosing Macro's Claude cannot finish a computer that is not up. */}
+          {/* Choosing Macro credits cannot finish a computer that is not up. */}
           <Show when={!setupStopped()}>
             <Button
               type="button"
