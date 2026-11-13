@@ -197,16 +197,31 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(found["entries"][1]["record"]["name"], "Globex");
     assert_eq!(
         found["totals"],
-        json!([{"field": "Revenue", "sum": 1500.0}])
+        json!([{"field": "Revenue", "currency": "USD", "sum": 1500.0}])
     );
     assert_eq!(
-        found["counts"],
-        json!([{"field": "Stage", "counts": [
+        found["counts"][0],
+        json!({"field": "Stage", "counts": [
             {"label": "Prospect", "count": 1},
             {"label": "Demo", "count": 1},
             {"label": "Won", "count": 0},
-        ], "empty": 0}])
+        ], "empty": 0})
     );
+    assert_eq!(
+        found["counts"][1],
+        json!({"field": "Outcome", "counts": [
+            {"label": "Open", "count": 2},
+            {"label": "Won", "count": 0},
+            {"label": "Lost", "count": 0},
+        ], "empty": 0})
+    );
+    let revenue = found["pipeline"]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["name"] == "Revenue")
+        .unwrap();
+    assert_eq!(revenue["currencyField"], "Revenue currency");
     assert_eq!(found["pipeline"]["id"], json!(id));
     assert_eq!(found["pipeline"]["fields"][0]["type"], "company");
     let version = found["pipeline"]["version"].as_i64().unwrap();
@@ -250,6 +265,28 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
             "after": {"type": "labels", "value": ["Won"]},
         }])
     );
+
+    let (status, repriced) = call(
+        &app,
+        "PATCH",
+        &format!("/crm/pipelines/{id}/entries"),
+        Some(json!({
+            "updates": [{"recordId": globex, "set": [
+                {"field": "Revenue", "value": "900"},
+                {"field": "Revenue currency", "value": "EUR"},
+            ]}],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{repriced}");
+    let amount = repriced["updated"][0]["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|change| change["field"] == "Revenue")
+        .unwrap();
+    assert_eq!(amount["beforeCurrency"], "USD");
+    assert_eq!(amount["afterCurrency"], "EUR");
 
     let (status, stale) = call(
         &app,
@@ -453,7 +490,18 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
         .iter()
         .map(|field| field["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["Contact", "Stage", "Owner", "Revenue", "Role"]);
+    assert_eq!(
+        names,
+        [
+            "Contact",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency",
+            "Role"
+        ]
+    );
     let stage = fields
         .iter()
         .find(|field| field["name"] == "Stage")

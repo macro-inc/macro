@@ -33,11 +33,16 @@ export type PipelineFieldValue = EntryFieldValue;
 /** A field of a pipeline as entries and filters name it. */
 export type PipelineField = PipelineFieldSummary;
 
-/** A field's value before and after an update; `undefined` when empty. */
+/**
+ * A field's value before and after an update; `undefined` when empty. A
+ * monetary field also carries the currency code of each amount.
+ */
 export type PipelineFieldChange = {
   field: string;
   before: PipelineFieldValue | undefined;
   after: PipelineFieldValue | undefined;
+  beforeCurrency?: string;
+  afterCurrency?: string;
 };
 
 /** The company or contact an entry tracks, or a contact's email to add (in a company pipeline, its company). */
@@ -187,5 +192,7 @@ export function fieldChange(change: EntryFieldChange): PipelineFieldChange {
     field: change.field,
     before: change.before ?? undefined,
     after: change.after ?? undefined,
+    ...(change.beforeCurrency ? { beforeCurrency: change.beforeCurrency } : {}),
+    ...(change.afterCurrency ? { afterCurrency: change.afterCurrency } : {}),
   };
 }
