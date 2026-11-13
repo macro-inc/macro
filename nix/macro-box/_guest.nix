@@ -166,10 +166,12 @@ in
     systemd.network.wait-online = {
       anyInterface = true;
       timeout = 30;
-      # Online once DHCPv4 answers. Waiting for IPv6 too held enrollment ~2 s
-      # for a link-local address nothing here uses.
-      extraArgs = [ "--ipv4" ];
     };
+    # The link is configured, and so online, only once its IPv6 link-local
+    # address passes duplicate address detection, ~1 s after DHCPv4 already
+    # answered. The NIC is alone on its Incus bridge, so skip DAD.
+    systemd.network.networks."99-ethernet-default-dhcp".networkConfig.IPv6DuplicateAddressDetection =
+      0;
     time.timeZone = "UTC";
     i18n.defaultLocale = "en_US.UTF-8";
 

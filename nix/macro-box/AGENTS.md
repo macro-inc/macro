@@ -247,8 +247,9 @@ The control plane, per computer:
 
 - OVMF → systemd-boot (timeout 0) → kernel + initrd; Secure Boot is off in
   the `macro-box` profile, so nothing is signed.
-- `systemd-networkd-wait-online` waits for any link (30 s cap), not all, and
-  for IPv4 only (`--ipv4`): IPv6 link-local took ~2 s more and nothing needs it.
+- `systemd-networkd-wait-online` waits for any link (30 s cap), not all. The
+  NIC skips IPv6 duplicate address detection, which otherwise held the link
+  unconfigured (so not online) ~1 s after DHCPv4 answered.
 - The kernel command line has `quiet`; `ttyS0` stays the recovery console.
 - `check-enrollment-source` waits up to 60 s for the Incus socket to appear,
   checking every 0.1 s, then gives the request 2 s.
