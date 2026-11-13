@@ -155,6 +155,7 @@ vi.mock('@queries/agents/capabilities', () => ({
 
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
+  useRunnableHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
     isPending: false,
