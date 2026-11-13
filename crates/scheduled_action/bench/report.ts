@@ -57,6 +57,9 @@ export type Results = {
 export const passedAll = (attempt: Attempt) =>
   attempt.quality.length > 0 && attempt.quality.every((check) => check.holds) && (attempt.run?.holds ?? true);
 
+/** The eval itself couldn't finish the draft (`tryAttempt`'s second failure). */
+export const evalFailed = (attempt: Attempt) => attempt.error?.startsWith('eval:') === true;
+
 /** A bare session asked which item the person meant where the case leaves it open: the right answer, with no routine. */
 const askedRightly = (attempt: Attempt) => attempt.arm === 'bare' && attempt.asked === true && passedAll(attempt);
 
@@ -103,7 +106,7 @@ export function summary(attempts: Attempt[]) {
     median: median(wall),
     p90: quantile(wall, 0.9),
     worst: wall.length ? Math.max(...wall) : Number.NaN,
-    // Of every request: one that got no routine didn't get one in 15 s.
+    // Of every request: one that got no answer didn't get one in 15 s.
     under: timed.filter((attempt) => attempt.wallMs < TARGET_MS).length / attempts.length,
     errors: attempts.filter((attempt) => attempt.error !== undefined).length,
     quality: attempts.filter(passedAll).length / attempts.length,
@@ -227,9 +230,10 @@ export function verdict(a: Attempt[], b: Attempt[], margin: number): Verdict {
   const sample = pairs(a, b);
   if (sample.length < 5) throw new Error(`only ${sample.length} paired attempts; run both sides on the same rounds`);
   // Time compares the pairs where either side answered and the eval itself
-  // failed on neither, which says nothing of a build's speed; quality counts every pair.
+  // failed on neither, which says nothing of a build's speed (the draft
+  // endpoint's error or a turn that never ended is no answer); quality counts every pair.
   const timedPairs = sample.filter(
-    (pair) => pair.a.error === undefined && pair.b.error === undefined && (delivered(pair.a) || delivered(pair.b)),
+    (pair) => !evalFailed(pair.a) && !evalFailed(pair.b) && (delivered(pair.a) || delivered(pair.b)),
   );
   if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where either side answered`);
   const ratio = (drawn: Pair[]) => Math.exp(median(drawn.map(logRatio)));
