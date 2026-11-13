@@ -447,7 +447,7 @@ describe('opening a channel while the cache is still starting', () => {
     mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
     mocks.fetchLatestChannelPage.mockReturnValue(after(100, SERVER));
     const opened = open();
-    await vi.advanceTimersByTimeAsync(2_200);
+    await vi.advanceTimersByTimeAsync(200);
     await opened;
     expect(loadedIds()).toEqual([['m2', 'm1']]);
     expect(channelSyncSeq(CHANNEL.id)).toBe(9);
