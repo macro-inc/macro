@@ -12,6 +12,7 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '../priority-collapse/PriorityCollapseOverflowSensor';
+import { useTouchTopBarsFloat } from '../view-shell/touch-top-bar';
 import { ViewShell } from '../view-shell/ViewShell';
 import {
   SplitPanelContext,
@@ -118,10 +119,17 @@ function useScopeOrThrow() {
  */
 function TopBar(props: { leading?: JSX.Element; class?: string }) {
   const scope = useScopeOrThrow();
+  const floats = useTouchTopBarsFloat();
   return (
     <ViewShell.TopBar
       ref={scope.headerCollapse.setRow}
-      class={cn('relative w-full py-0 touch:flex', props.class)}
+      class={cn(
+        'relative w-full py-0 touch:flex',
+        // Outside a workspace pane the bar stays in flow below the safe area.
+        !floats() &&
+          'touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]',
+        props.class
+      )}
     >
       <Show when={props.leading}>
         <ViewShell.TopBarTitle class="shrink-0">

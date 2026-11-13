@@ -173,6 +173,19 @@ function StackEntityDetail(props: {
       <Match when={true}>
         <EntityDetail
           target={props.entry.data}
+          onClose={navigationStack.pop}
+          onDuplicate={(id, name) => {
+            const target = props.entry.data;
+            if (target.type !== 'document') return;
+            navigationStack.navigate(
+              entityDetailTarget.document({
+                id,
+                fileType: target.fileType,
+                subType: target.subType,
+                fallbackName: name,
+              })
+            );
+          }}
           previewHeaderLeading={
             <Show when={hasBlockHeader(props.entry.data)}>
               <DriveBreadcrumbsOutlet

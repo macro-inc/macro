@@ -101,7 +101,9 @@ A detail whose standalone view has a split header shows that same header in a
 touch preview. The host wraps the pane in `SplitHeaderScope.Root` and renders
 `SplitHeaderScope.TopBar`; the detail contributes through `SplitHeaderLeft`,
 `SplitHeaderRight`, and the title file menu as it does in its own split
-(`MarkdownSplitHeader` for documents and tasks). `entityDetailHostsSplitHeader`
+(`MarkdownSplitHeader` for documents and tasks, `FileSplitHeader` for Drive
+files, `AgentSessionHeader` for agent sessions, `PrSplitHeader` for pull
+requests). `entityDetailHostsSplitHeader`
 lists the detail types that do; add a type there once its detail renders its
 standalone header from block-free parts (`EntitySplitLabel`,
 `ResponsiveDocumentToolbar`, `ResponsiveAccessBadge`). Inline block previews

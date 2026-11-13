@@ -222,6 +222,8 @@ function CrmDocumentDetail(props: {
         <EntityDetail
           target={props.target}
           previewHeaderLeading={props.headerLeading}
+          onClose={route.closeItem}
+          onDuplicate={duplicate}
         >
           {(context) => {
             if (context.type !== 'document') return null;
