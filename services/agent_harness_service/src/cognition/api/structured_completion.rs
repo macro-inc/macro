@@ -119,9 +119,30 @@ pub async fn structured_completion(
 
     let user_id = user.authorization.user.macro_user_id.clone();
 
+    // A scoped hidden session (a generation, or a run that sends nothing)
+    // gets tool-free completions only: tools run here, past the scope its
+    // credential carries. A generation session's are its own work, recorded
+    // with it and never counted against the person's allowance.
+    let scope = agent_correlation::context::current_scope();
+    if scope.is_some() && !matches!(request.toolset, ToolSet::None) {
+        return Err(StructuredCompletionError {
+            error: "this session's completions take no tools".into(),
+            status: StatusCode::FORBIDDEN,
+            code: None,
+        });
+    }
+    let session = (scope == Some(agent_correlation::scope::SessionScope::Generation))
+        .then(agent_correlation::context::current_session)
+        .flatten();
+    let feature = if session.is_some() {
+        ai_usage::AiFeature::NonBillableAgentSession
+    } else {
+        ai_usage::AiFeature::DynamicCompletionsApi
+    };
+
     // One admission covers both the agent and final formatting phases.
     ctx.ai_admission
-        .admit(&user_id, ai_usage::AiFeature::DynamicCompletionsApi)
+        .admit(&user_id, feature)
         .await
         .map_err(|error| StructuredCompletionError {
             error: error.to_string(),
@@ -146,6 +167,7 @@ pub async fn structured_completion(
                     prompt: request.prompt,
                     schema: request.output_schema,
                     thinking: request.thinking,
+                    session,
                 },
             )
             .await
