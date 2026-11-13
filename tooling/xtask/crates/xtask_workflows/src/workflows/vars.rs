@@ -67,11 +67,12 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 /// the workspace dependency checks.
 pub const CI_SCCACHE_NAME: &str = "sccache-ci";
 
-/// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
-/// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
-/// gives the frontend its own volume — isolated both from the Rust CI volume
-/// ([`CI_CACHE_TAG`]) and from the deploy workflows' heavily-churned default
-/// `linux-mid` volume.
+/// Namespace cache tag for the web-app jobs: PR checks, preview deploys, and
+/// the web build and deploy jobs of dev and prod deploys. Cache volumes are
+/// keyed workspace-wide by tag alone, so a dedicated tag gives the frontend its
+/// own volume — isolated both from the Rust CI volume ([`CI_CACHE_TAG`]) and
+/// from the other deploy workflows' heavily-churned default `linux-mid`
+/// volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
 /// Nix-only PR checks. They read a Nix store back, so they stay off the small

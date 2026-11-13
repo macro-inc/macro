@@ -5,6 +5,8 @@ export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   list: null,
   /** Every active routine another routine's run created. */
   subRoutines: null,
+  /** The caller's background drafts: drafting, ready and failed. */
+  draftJobs: null,
   /** What one routine's runs created, finished one-time ones included. */
   children: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId],

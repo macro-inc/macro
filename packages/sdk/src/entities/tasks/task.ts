@@ -6,7 +6,7 @@ import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
-import type { Team } from '../teams/team';
+import { Team } from '../teams/team';
 import { User } from '../users/user';
 
 /**
@@ -221,6 +221,28 @@ export class Task extends Document {
       value?.type === 'SelectOption' &&
       value.value.includes(COMPLETED_STATUS_OPTION_ID)
     );
+  }
+
+  /**
+   * The task's team slug, such as `DB-245`, the short name to put in git
+   * branch names. It is the slug of the team the task is numbered in, then
+   * the task's number in that team; `documents.byTeamSlug` resolves a slug of
+   * the caller's current team back to its task. `undefined` when the task has
+   * no team number, or that team is not one of the caller's. `branchName()`
+   * suggests a whole branch name, but takes its prefix from the caller's first
+   * team, so it can differ from this slug.
+   *
+   * @readonly
+   */
+  async slug(): Promise<string | undefined> {
+    const { teamId, teamTaskId } = await this.detail.get();
+    if (!teamId || !teamTaskId) return undefined;
+
+    const teams = await Team.list(this.client);
+    const taskTeam = teams.find((team) => team.id === teamId);
+    if (!taskTeam) return undefined;
+
+    return `${await taskTeam.slug()}-${teamTaskId}`;
   }
 
   /**

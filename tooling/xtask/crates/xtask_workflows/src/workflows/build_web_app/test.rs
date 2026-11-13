@@ -2,29 +2,67 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 
+fn rendered() -> serde_yaml::Value {
+    serde_yaml::from_str(
+        &crate::workflows::render_patched(build_web_app, patch).expect("workflow yaml"),
+    )
+    .expect("parse workflow")
+}
+
+fn build_steps() -> Vec<serde_yaml::Value> {
+    rendered()["jobs"]["build"]["steps"]
+        .as_sequence()
+        .expect("build steps")
+        .clone()
+}
+
+fn uses(step: &serde_yaml::Value, action: &str) -> bool {
+    step["uses"]
+        .as_str()
+        .is_some_and(|uses| uses.starts_with(&format!("{action}@")))
+}
+
+fn runs(step: &serde_yaml::Value, command: &str) -> bool {
+    step["run"]
+        .as_str()
+        .is_some_and(|script| script.contains(command))
+}
+
+/// Pull request jobs write the `web-ci` sccache, Namespace's HTTP cache and
+/// the cargo and wasm-pack directories on the cache volume. Dev deploys on main
+/// save the wasm packages production releases restore, so no deploy build
+/// mounts more of the volume than the production release's own build job did
+/// (the Nix store and Bun's package cache) or reads the shared caches.
 #[test]
-fn build_uses_remote_sccache_and_wasm_cache() {
-    let yaml = build_web_app().to_string().expect("workflow yaml");
-    let job = yaml.split("\n  build:\n").nth(1).expect("build job");
-    assert!(
-        job.contains("nsc cache sccache setup --cache_name web-ci"),
-        "build must use the shared web-ci remote sccache: {job}"
-    );
-    let configure = job
-        .find("nsc cache sccache setup")
-        .expect("remote cache configuration");
-    let start = job
-        .find("run: sccache --start-server")
-        .expect("start the server in a separate step with the exported credentials");
-    let build_command = job.find("just build-").expect("web build command");
-    assert!(configure < start && start < build_command);
-    assert!(
-        job.contains(".wasm-pack"),
-        "build must persist wasm-pack's wasm-opt cache: {job}"
+fn deploy_builds_mount_only_nix_and_bun_and_no_shared_cache() {
+    let steps = build_steps();
+    let mounts: Vec<&serde_yaml::Value> = steps
+        .iter()
+        .filter(|step| uses(step, "namespacelabs/nscloud-cache-action"))
+        .collect();
+    assert_eq!(mounts.len(), 1, "{mounts:?}");
+    assert_eq!(mounts[0]["with"]["cache"].as_str(), Some("nix"));
+    assert_eq!(
+        mounts[0]["with"]["path"].as_str(),
+        Some(vars::BUN_CACHE_VOLUME_DIR)
     );
     assert!(
-        job.contains("just build-${{ inputs.environment }}"),
-        "build still runs via just: {job}"
+        !steps
+            .iter()
+            .any(|step| runs(step, "nsc cache sccache setup")),
+        "deploy builds must not read the web-ci sccache"
+    );
+    assert!(
+        steps
+            .iter()
+            .all(|step| step["with"]["seed-cache"].is_null()),
+        "deploy builds must not seed the Nix store from the HTTP cache"
+    );
+    assert!(
+        steps
+            .iter()
+            .any(|step| runs(step, "just build-${{ inputs.environment }}")),
+        "build still runs via just"
     );
 }
 
@@ -42,23 +80,10 @@ fn build_reuses_wasm_packages_only_from_the_actions_cache() {
     // PR jobs write the Namespace HTTP cache and the cache volume; a deploy
     // must read neither.
     assert!(!job.contains("WASM_PKG_HTTP_CACHE"), "{job}");
-    let mount = job
-        .split("- name: Mount Namespace cache volume")
-        .nth(1)
-        .and_then(|rest| rest.split("\n    - ").next())
-        .expect("volume mount step");
-    let mounted: Vec<&str> = mount
-        .lines()
-        .map(|line| line.trim().trim_start_matches("path: |-").trim())
-        .filter(|line| line.starts_with('/'))
-        .collect();
-    assert!(!mounted.is_empty(), "{mount}");
-    for path in mounted {
-        assert!(
-            !vars::DEPLOY_WASM_PKG_CACHE_DIR.starts_with(path),
-            "the deploy's packages must stay off the PR-writable volume ({path}): {mount}"
-        );
-    }
+    assert!(
+        !vars::DEPLOY_WASM_PKG_CACHE_DIR.starts_with(vars::BUN_CACHE_VOLUME_DIR),
+        "the deploy's packages must stay off the PR-writable volume"
+    );
 
     let restore = job.find("actions/cache/restore@").expect("restore step");
     let wasm = job.find("just build-wasm").expect("wasm packages step");

@@ -29,7 +29,7 @@ export default defineConfig({
       },
     ],
   },
-  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  optimizeDeps: { rolldownOptions: { transform: { target: 'esnext' } } },
   server: {
     host: '127.0.0.1',
     strictPort: true,

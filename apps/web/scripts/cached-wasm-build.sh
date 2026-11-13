@@ -10,10 +10,11 @@
 # on main reads only what main's runs saved, and leave the HTTP cache off: PR
 # jobs can write it.
 #
-# wasm-cache-key.ts computes the key from the package's workspace dependency
-# closure (.github/workspace-dep-closures.json), its slice of Cargo.lock, the
-# root manifest, the toolchain and Nix definitions, the shared assets build
-# scripts read, its profile's env and the build command.
+# wasm-cache-key.ts computes the key from the workspace crates a wasm32 build of
+# the package compiles (`wasm_closures` in .github/workspace-dep-closures.json),
+# their slice of Cargo.lock, the root manifest, the toolchain and Nix
+# definitions, the shared assets build scripts read, its profile's env and the
+# build command.
 #
 # usage: cached-wasm-build.sh <closure package> <out dir> -- <build command...>
 set -euo pipefail
