@@ -53,7 +53,7 @@ vi.mock('@app/features/agents-view/views/AgentSessionListItem', () => ({
   ),
 }));
 
-import { AgentScope } from '../../context/agent-scope';
+import { AgentScope } from '../panes/agent-scope';
 import { Routines } from './Routines';
 import { Sessions } from './Sessions';
 import { Spend } from './Spend';

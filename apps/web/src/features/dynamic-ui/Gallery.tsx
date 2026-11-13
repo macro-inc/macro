@@ -3,9 +3,9 @@ import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { useUserId } from '@core/context/user';
 import { Input } from '@ui';
 import { createSignal, ErrorBoundary, For, Show, Suspense } from 'solid-js';
-import { AgentScope } from './context/agent-scope';
 import type { View, Widget } from './view';
 import { Widget as WidgetNS } from './widget';
+import { AgentScope } from './widgets/panes/agent-scope';
 
 /**
  * Debug gallery for the dynamic-ui widget library.

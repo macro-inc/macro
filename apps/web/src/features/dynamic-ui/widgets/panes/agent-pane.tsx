@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { TraceFlow } from '@app/observability/flow';
 import { type JSX, type ParentProps, Show, Suspense } from 'solid-js';
-import { useScopedAgentId } from '../../context/agent-scope';
+import { useScopedAgentId } from './agent-scope';
 import {
   DashboardsOnly,
   Pane,
