@@ -13,6 +13,7 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { PropertyIcon } from '../../database/components/property-icon';
 import type { PipelineEntry, PipelineEntryCell } from '../core/pipeline-entry';
 import {
@@ -101,14 +102,15 @@ function PipelineEntryCard(props: {
     Object.fromEntries(
       props.entry.cells.map((cell) => [cell.column.id, isEmptyCell(cell)])
     );
-  const [settledEmpty, setSettledEmpty] = createSignal(readEmpty());
+  const [view, setView] = createStore<{
+    fold: PipelineEntryFold;
+    settledEmpty: Record<string, boolean>;
+  }>({ fold: 'collapsed', settledEmpty: readEmpty() });
+  const fold = () => view.fold;
   const isEmpty = (cell: PipelineEntryCell) =>
-    (settledEmpty()[cell.column.id] ?? true) && isEmptyCell(cell);
-  const [fold, setFoldState] = createSignal<PipelineEntryFold>('collapsed');
-  const setFold = (next: PipelineEntryFold) => {
-    setSettledEmpty(readEmpty());
-    setFoldState(next);
-  };
+    (view.settledEmpty[cell.column.id] ?? true) && isEmptyCell(cell);
+  const setFold = (next: PipelineEntryFold) =>
+    setView({ fold: next, settledEmpty: readEmpty() });
   // Every row reads it for its fit, so it is worked out once per change.
   const fields = createMemo(() =>
     pipelineEntryFields(props.entry.cells, isEmpty, fold())
