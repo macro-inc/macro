@@ -255,6 +255,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "scheduled-action.retireRoutineSuggestion",
         "scheduled-action.suggestRoutine",
         "scheduled-action.draftRoutine",
+        "scheduled-action.startRoutineDraftJob",
+        "scheduled-action.discardRoutineDraftJob",
         "scheduled-action.deleteScheduledAction",
         // Detaching only moves the owner's own sub-routine to their list.
         "scheduled-action.detachScheduledAction",
