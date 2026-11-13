@@ -101,3 +101,16 @@ async fn the_answer_is_read_again_after_its_lifetime() {
 
     assert_eq!(flags.loads.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test(start_paused = true)]
+async fn lapsed_answers_are_dropped() {
+    let rollout = FlaggedTermMatching::new(CountingFlags::new(Ok(true)));
+
+    rollout.dynamic_enabled_for(caller(PERSON)).await;
+    tokio::time::advance(DECISION_LIFETIME).await;
+    rollout.dynamic_enabled_for(caller(COLLEAGUE)).await;
+
+    let decisions = rollout.decisions.lock().unwrap();
+    let callers: Vec<&str> = decisions.by_caller.keys().map(String::as_str).collect();
+    assert_eq!(callers, [COLLEAGUE]);
+}

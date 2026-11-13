@@ -25,7 +25,14 @@ const DECISION_LIFETIME: Duration = Duration::from_secs(300);
 /// every search.
 pub struct FlaggedTermMatching<F> {
     flags: F,
-    decisions: Mutex<HashMap<String, Decision>>,
+    decisions: Mutex<Decisions>,
+}
+
+#[derive(Default)]
+struct Decisions {
+    by_caller: HashMap<String, Decision>,
+    /// When lapsed entries are next dropped; `None` until the first answer.
+    prune_at: Option<Instant>,
 }
 
 #[derive(Clone, Copy)]
@@ -39,7 +46,7 @@ impl<F> FlaggedTermMatching<F> {
     pub fn new(flags: F) -> Self {
         Self {
             flags,
-            decisions: Mutex::new(HashMap::new()),
+            decisions: Mutex::new(Decisions::default()),
         }
     }
 
@@ -48,7 +55,7 @@ impl<F> FlaggedTermMatching<F> {
             .decisions
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let decision = decisions.get(caller)?;
+        let decision = decisions.by_caller.get(caller)?;
         (decision.expires_at > Instant::now()).then_some(decision.enabled)
     }
 
@@ -58,10 +65,15 @@ impl<F> FlaggedTermMatching<F> {
             .decisions
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        // Dropping lapsed entries here keeps the map to callers who searched
-        // within one lifetime.
-        decisions.retain(|_, decision| decision.expires_at > now);
-        decisions.insert(
+        // Dropping lapsed entries once per lifetime keeps the map to callers
+        // who searched within the last two, without a scan on every miss.
+        if decisions.prune_at.is_none_or(|prune_at| prune_at <= now) {
+            decisions
+                .by_caller
+                .retain(|_, decision| decision.expires_at > now);
+            decisions.prune_at = Some(now + DECISION_LIFETIME);
+        }
+        decisions.by_caller.insert(
             caller.to_owned(),
             Decision {
                 enabled,
