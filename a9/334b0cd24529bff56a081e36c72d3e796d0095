@@ -1,0 +1,35 @@
+agent-teammates/starter-agent/README.md
+  s_82939d9d17c700::t_5912019d420c71 109-125,155
+agent-teammates/starter-agent/index.ts
+  s_82939d9d17c700::t_d3a21712c26456 63
+  s_82939d9d17c700::t_16ff53e54b4c4a 13,45,58-62
+agent-teammates/starter-agent/behavior/agent/telemetry.ts
+  s_82939d9d17c700::t_9b431acae68df4 1-91,93-107,111-184
+  s_82939d9d17c700::t_05c6c6c57dd7a5 92,108-110
+agent-teammates/starter-agent/behavior/agent/claude.ts
+  s_82939d9d17c700::t_05c6c6c57dd7a5 6,23-26
+  s_82939d9d17c700::t_d9c0616f8bf3a9 7,22,27-32,62-63,163,171-176,193
+agent-teammates/starter-agent/ARCHITECTURE.md
+  s_82939d9d17c700::t_c1aa87632cd323 23
+agent-teammates/starter-agent/behavior/context/config.ts
+  s_82939d9d17c700::t_54f729c51c5aa4 36-37,81
+agent-teammates/starter-agent/behavior/agent/test/telemetry.test.ts
+  s_82939d9d17c700::t_687be6e5f98e1c 85-97
+  s_82939d9d17c700::t_12f532fbe7a52b 1-84,98-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a9334b0cd24529bff56a081e36c72d3e796d0095",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
