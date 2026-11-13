@@ -22,7 +22,9 @@ It runs on a local stack against the live model, one draft at a time.
 ## What it measures
 
 **Time.** The `draft` arm is timed from the request to the answer; the `bare`
-arm from the message to the routine existing (its turn's end is kept too).
+arm from the message to the routine existing (its turn's end is kept too); a
+routine the agent deleted and saved again is the one checked, timed to when
+it was made.
 Only drafts that came back with an answer are timed: a routine or a step, or
 in the `bare` arm the question a case wants asked, timed to its turn's end.
 The share under 15 s is out of every request, and `compare` counts a draft

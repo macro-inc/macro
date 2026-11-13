@@ -252,9 +252,16 @@ export async function bareArm(
   ended ??= question?.at;
   if (question) reply = `${reply}\n\nAsked: ${question.text}`.trim();
   const turnMs = ended ? ended - startedAtMs : undefined;
-  // The routine as the turn left it: the agent may fix it after saving.
-  const final = found ? (await listRoutines(at, token)).find((routine) => routine.id === found?.routine.id) : undefined;
-  const routine = final ?? found?.routine;
+  // The routine as the turn left it: the agent may fix it after saving, or
+  // delete it and save another, timed to when that one was made.
+  let kept: { routine: SavedRoutine; at: number } | undefined;
+  if (found) {
+    const first = found;
+    const list = await listRoutines(at, token);
+    const same = list.find((routine) => routine.id === first.routine.id);
+    kept = same ? { routine: same, at: first.at } : changed(list, base, startedAtMs);
+  }
+  const routine = kept?.routine;
   const draft: DraftResult = routine
     ? asDraft(item, routine, baseShape)
     : { outcome: 'failed', message: reply.slice(0, 2000) };
@@ -262,7 +269,7 @@ export async function bareArm(
     traceId,
     startedAtMs,
     // Without a routine, the time is the whole turn (or the timeout).
-    wallMs: found ? found.at - startedAtMs : (turnMs ?? performance.now() - started),
+    wallMs: kept ? kept.at - startedAtMs : (turnMs ?? performance.now() - started),
     draft,
     // A routine that exists is an answer, even from a turn still running.
     error: ended || routine ? undefined : 'turn did not end',
