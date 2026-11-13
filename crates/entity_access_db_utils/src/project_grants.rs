@@ -174,8 +174,8 @@ pub async fn refuse_unregistered_filing(
 }
 
 /// Who a document without `entity_access` rows filed in `project_id` reaches,
-/// and how far: each grantee of the folder chain, and each folder's owner at
-/// edit.
+/// and how far, as its access is read: each grant on a live folder of the
+/// chain, and each such folder's owner at edit.
 async fn unregistered_reach(
     transaction: &mut Transaction<'_, Postgres>,
     project_id: &str,
@@ -183,11 +183,13 @@ async fn unregistered_reach(
     let chain = sqlx::query!(
         r#"
         WITH RECURSIVE chain AS (
-            SELECT id, "parentId", "userId" FROM "Project" WHERE id = $1
+            SELECT id, "parentId", "userId" FROM "Project"
+            WHERE id = $1 AND "deletedAt" IS NULL
             UNION
             SELECT p.id, p."parentId", p."userId"
             FROM "Project" p
             JOIN chain c ON p.id = c."parentId"
+            WHERE p."deletedAt" IS NULL
         )
         SELECT id AS "id!", "userId" AS "user_id!" FROM chain
         "#,
@@ -199,7 +201,19 @@ async fn unregistered_reach(
         .iter()
         .filter_map(|folder| macro_uuid::string_to_uuid(&folder.id).ok())
         .collect();
-    let sources = project_grant_sources(transaction, &project_ids).await?;
+    let grants = sqlx::query!(
+        r#"
+        SELECT
+        source_id,
+        source_type as "source_type:EntityAccessSourceType",
+        access_level as "access_level:AccessLevel"
+        FROM entity_access
+        WHERE entity_id = ANY($1) AND entity_type = 'project'
+        "#,
+        &project_ids,
+    )
+    .fetch_all(transaction.as_mut())
+    .await?;
     Ok(chain
         .into_iter()
         .map(|folder| {
@@ -210,9 +224,9 @@ async fn unregistered_reach(
             )
         })
         .chain(
-            sources
+            grants
                 .into_iter()
-                .map(|source| (source.source_id, source.source_type, source.access_level)),
+                .map(|grant| (grant.source_id, grant.source_type, grant.access_level)),
         )
         .collect())
 }
