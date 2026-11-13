@@ -100,7 +100,6 @@ pub fn sources(event: LifecycleEvent) -> Vec<SuggestionState> {
         .collect()
 }
 
-
 /// Whether moving a suggestion to `to` cancels its unsettled run: it closed
 /// without being done (dismissed, resolved or retired).
 pub fn cancels_run(to: SuggestionState) -> bool {

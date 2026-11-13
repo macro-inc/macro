@@ -17,8 +17,8 @@
 //! stopped, is gone, or was deleted.
 
 use chrono::{DateTime, TimeDelta, Utc};
-use serde::{Deserialize, Serialize};
 use macro_uuid::Uuid;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::model::{SessionReadError, SessionState};

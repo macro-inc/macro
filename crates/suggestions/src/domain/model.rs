@@ -93,9 +93,7 @@ pub fn result_of(
 }
 
 /// What a suggestion's card shows, from its state and its latest run.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::AsRefStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::AsRefStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum SuggestionStatus {
@@ -120,12 +118,11 @@ impl SuggestionStatus {
     pub fn of(state: SuggestionState, run: Option<&SuggestionRun>) -> Self {
         match (state, run.map(|run| run.state)) {
             (SuggestionState::Done, _) => Self::Done,
-            (SuggestionState::Dismissed | SuggestionState::Resolved | SuggestionState::Retired, _) => {
-                Self::Closed
-            }
-            (_, Some(run)) if !run.is_settled() && run != RunStateName::Cancelling => {
-                Self::Running
-            }
+            (
+                SuggestionState::Dismissed | SuggestionState::Resolved | SuggestionState::Retired,
+                _,
+            ) => Self::Closed,
+            (_, Some(run)) if !run.is_settled() && run != RunStateName::Cancelling => Self::Running,
             (SuggestionState::Accepted, Some(RunStateName::Failed)) => Self::Failed,
             (SuggestionState::Proposed | SuggestionState::Accepted, _) => Self::Open,
         }

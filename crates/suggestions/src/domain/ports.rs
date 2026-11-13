@@ -100,7 +100,10 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Run `session`, if it is one.
-    fn run(&self, session: Uuid) -> impl Future<Output = Result<Option<StoredRun>, Self::Err>> + Send;
+    fn run(
+        &self,
+        session: Uuid,
+    ) -> impl Future<Output = Result<Option<StoredRun>, Self::Err>> + Send;
 
     /// Unsettled runs nobody holds at `now`, least recently checked first,
     /// at most `limit`.
@@ -496,7 +499,9 @@ pub trait SuggestionRuns: Send + Sync + 'static {
     /// Check the runs nobody holds, least recently checked first: read each
     /// one's session and move it on, giving up the ones over their time. One
     /// run failing never stops the others.
-    fn reconcile_runs(&self) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send;
+    fn reconcile_runs(
+        &self,
+    ) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send;
 }
 
 /// A shared service moves runs as it does.
@@ -508,7 +513,9 @@ impl<T: SuggestionRuns> SuggestionRuns for std::sync::Arc<T> {
         T::on_session_event(self, event)
     }
 
-    fn reconcile_runs(&self) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send {
+    fn reconcile_runs(
+        &self,
+    ) -> impl Future<Output = Result<RunsReconciled, SuggestionError>> + Send {
         T::reconcile_runs(self)
     }
 }

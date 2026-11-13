@@ -18,7 +18,12 @@ async fn runs_to_check_take_turns(pool: PgPool) {
     }
     let now = Utc::now();
     let to_check = |limit| f.repo.runs_to_check(Utc::now(), limit);
-    let first: Vec<_> = to_check(3).await.unwrap().iter().map(|run| run.session).collect();
+    let first: Vec<_> = to_check(3)
+        .await
+        .unwrap()
+        .iter()
+        .map(|run| run.session)
+        .collect();
     assert_eq!(first, runs);
     // Checked runs go to the back.
     let held = f
@@ -45,7 +50,12 @@ async fn runs_to_check_take_turns(pool: PgPool) {
             .await
             .unwrap()
     );
-    let left: Vec<_> = to_check(3).await.unwrap().iter().map(|run| run.session).collect();
+    let left: Vec<_> = to_check(3)
+        .await
+        .unwrap()
+        .iter()
+        .map(|run| run.session)
+        .collect();
     assert_eq!(left, [held.session]);
 }
 
@@ -58,16 +68,40 @@ async fn a_run_has_one_holder_at_a_time(pool: PgPool) {
     let session = f.start(id).await.unwrap().session;
     let now = Utc::now();
     let until = now + chrono::Duration::minutes(2);
-    assert!(f.repo.claim_run(session, now, until).await.unwrap().is_some());
-    assert!(f.repo.claim_run(session, now, until).await.unwrap().is_none());
+    assert!(
+        f.repo
+            .claim_run(session, now, until)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        f.repo
+            .claim_run(session, now, until)
+            .await
+            .unwrap()
+            .is_none()
+    );
     // Someone else's release lets nothing go.
     f.repo
         .release_run(session, until + chrono::Duration::seconds(1))
         .await
         .unwrap();
-    assert!(f.repo.claim_run(session, now, until).await.unwrap().is_none());
+    assert!(
+        f.repo
+            .claim_run(session, now, until)
+            .await
+            .unwrap()
+            .is_none()
+    );
     f.repo.release_run(session, until).await.unwrap();
-    assert!(f.repo.claim_run(session, now, until).await.unwrap().is_some());
+    assert!(
+        f.repo
+            .claim_run(session, now, until)
+            .await
+            .unwrap()
+            .is_some()
+    );
     // A hold that ran out is anyone's.
     assert!(
         f.repo
@@ -87,7 +121,12 @@ async fn a_run_moves_only_from_where_it_was_read(pool: PgPool) {
     let read = f.start(id).await.unwrap();
     let now = Utc::now();
     let until = now + chrono::Duration::minutes(2);
-    let held = f.repo.claim_run(read.session, now, until).await.unwrap().unwrap();
+    let held = f
+        .repo
+        .claim_run(read.session, now, until)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(
         f.repo
             .move_run(&held, RunState::Running, now, &[], now)
@@ -95,7 +134,12 @@ async fn a_run_moves_only_from_where_it_was_read(pool: PgPool) {
             .unwrap()
     );
     // Let go of: anyone may hold it now.
-    let running = f.repo.claim_run(read.session, now, until).await.unwrap().unwrap();
+    let running = f
+        .repo
+        .claim_run(read.session, now, until)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(running.state, RunState::Running);
     // A step decided on the old read lands nowhere.
     assert!(

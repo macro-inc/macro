@@ -149,10 +149,13 @@ impl Harness {
     /// session.
     pub(crate) async fn background(&self, key: &str) -> Suggestion {
         let session = self.session(OWNER, "suggestions").await;
-        self.suggest(session, prompt_suggestion(key, "Compare the supplier quotes"))
-            .await
-            .suggestion
-            .unwrap()
+        self.suggest(
+            session,
+            prompt_suggestion(key, "Compare the supplier quotes"),
+        )
+        .await
+        .suggestion
+        .unwrap()
     }
 
     /// Suggestion `id` as the person's feed shows it, open or done.
@@ -435,7 +438,10 @@ async fn a_background_suggestion_runs_only_as_the_person_saw_it(pool: PgPool) {
     let (h, runs) = run_harness(pool).await;
     let session = h.session(OWNER, "suggestions").await;
     let suggestion = h
-        .suggest(session, prompt_suggestion("quotes:compare", "Compare quotes"))
+        .suggest(
+            session,
+            prompt_suggestion("quotes:compare", "Compare quotes"),
+        )
         .await
         .suggestion
         .unwrap();
@@ -623,9 +629,7 @@ async fn a_run_whose_prompt_may_have_arrived_is_never_started_twice(pool: PgPool
 /// A run whose session is confirmed missing before it confirmed starting may
 /// still be opening: it is given up only after its start window.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_starting_run_whose_session_is_missing_is_given_up_after_its_start_window(
-    pool: PgPool,
-) {
+async fn a_starting_run_whose_session_is_missing_is_given_up_after_its_start_window(pool: PgPool) {
     let (h, runs) = run_harness(pool).await;
     let suggestion = h.background("quotes:compare").await;
     *runs.starts_as.lock().unwrap() = StartsAs::Uncertain;
@@ -813,7 +817,11 @@ async fn a_running_suggestions_prompt_and_sends_stay_as_run(pool: PgPool) {
     let session = h.session(OWNER, "suggestions").await;
     let mut posting = prompt_suggestion("ops:weekly-status", "Post the weekly status summary");
     posting.sends = Some("Posts the weekly status summary in #ops".to_owned());
-    let suggestion = h.suggest(session, posting.clone()).await.suggestion.unwrap();
+    let suggestion = h
+        .suggest(session, posting.clone())
+        .await
+        .suggestion
+        .unwrap();
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     let run = runs.last();
     for refused in [
@@ -839,8 +847,8 @@ async fn a_running_suggestions_prompt_and_sends_stay_as_run(pool: PgPool) {
             session,
             suggestion.id,
             RewriteSuggestion {
-        summary: Some("The status doc changed this morning.".to_owned()),
-        ..RewriteSuggestion::default()
+                summary: Some("The status doc changed this morning.".to_owned()),
+                ..RewriteSuggestion::default()
             },
         )
         .await;
@@ -869,8 +877,8 @@ async fn a_running_suggestions_prompt_and_sends_stay_as_run(pool: PgPool) {
             session,
             suggestion.id,
             RewriteSuggestion {
-        sends: Some("Posts the weekly status summary in #ops-leads".to_owned()),
-        ..RewriteSuggestion::default()
+                sends: Some("Posts the weekly status summary in #ops-leads".to_owned()),
+                ..RewriteSuggestion::default()
             },
         )
         .await;

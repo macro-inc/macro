@@ -30,8 +30,16 @@ async fn state_moves_follow_the_table(pool: PgPool) {
                 .set_state(&f.user, id, &sources(event), to, None, Utc::now())
                 .await
                 .unwrap();
-            assert_eq!(moved, transition(from, event).is_some(), "{event:?} from {from:?}");
-            assert_eq!(f.state(id).await, after(from, event), "{event:?} from {from:?}");
+            assert_eq!(
+                moved,
+                transition(from, event).is_some(),
+                "{event:?} from {from:?}"
+            );
+            assert_eq!(
+                f.state(id).await,
+                after(from, event),
+                "{event:?} from {from:?}"
+            );
         }
     }
 }
@@ -65,8 +73,16 @@ async fn moves_as_shown_follow_the_table_and_the_card(pool: PgPool) {
                 .set_state_as_shown(&f.user, id, &sources(event), to, shown, Utc::now())
                 .await
                 .unwrap();
-            assert_eq!(moved, transition(from, event).is_some(), "{event:?} from {from:?}");
-            assert_eq!(f.state(id).await, after(from, event), "{event:?} from {from:?}");
+            assert_eq!(
+                moved,
+                transition(from, event).is_some(),
+                "{event:?} from {from:?}"
+            );
+            assert_eq!(
+                f.state(id).await,
+                after(from, event),
+                "{event:?} from {from:?}"
+            );
         }
     }
 }
@@ -260,8 +276,16 @@ async fn routine_suggestion_moves_follow_the_table(pool: PgPool) {
                     .unwrap()
                 }
             };
-            assert_eq!(moved, transition(from, event).is_some(), "{event:?} from {from:?}");
-            assert_eq!(f.state(id).await, after(from, event), "{event:?} from {from:?}");
+            assert_eq!(
+                moved,
+                transition(from, event).is_some(),
+                "{event:?} from {from:?}"
+            );
+            assert_eq!(
+                f.state(id).await,
+                after(from, event),
+                "{event:?} from {from:?}"
+            );
         }
     }
 }
@@ -276,7 +300,12 @@ async fn undismissing_follows_the_table_within_its_window(pool: PgPool) {
         let changed = f.suggestion(id).await.state_changed_at;
         let late = f
             .repo
-            .undismiss(&f.user, id, changed + chrono::Duration::seconds(1), Utc::now())
+            .undismiss(
+                &f.user,
+                id,
+                changed + chrono::Duration::seconds(1),
+                Utc::now(),
+            )
             .await
             .unwrap();
         assert!(!late, "from {from:?}");
@@ -307,7 +336,13 @@ async fn a_draft_attaches_only_as_the_table_says(pool: PgPool) {
         let id = f.prompt_in(from).await;
         let attached = f
             .repo
-            .set_draft(&f.user, id, &draft, None, &f.change(ChangeAction::Rewritten))
+            .set_draft(
+                &f.user,
+                id,
+                &draft,
+                None,
+                &f.change(ChangeAction::Rewritten),
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -334,7 +369,9 @@ async fn replacing_follows_the_table_from_the_state_read(pool: PgPool) {
         let to = transition(from, event).unwrap();
         let id = f.prompt_in(from).await;
         let content = SuggestionContent::of(&f.suggestion(id).await);
-        let elsewhere = SuggestionState::iter().find(|state| *state != from).unwrap();
+        let elsewhere = SuggestionState::iter()
+            .find(|state| *state != from)
+            .unwrap();
         let stale = f
             .repo
             .replace(
@@ -373,9 +410,17 @@ async fn replacing_follows_the_table_from_the_state_read(pool: PgPool) {
 async fn closing_a_suggestion_cancels_its_run_as_the_machine_says(pool: PgPool) {
     let f = fixture(pool).await;
     let close: [(&str, LifecycleEvent, SuggestionState); 4] = [
-        ("dismiss", LifecycleEvent::Dismiss, SuggestionState::Dismissed),
+        (
+            "dismiss",
+            LifecycleEvent::Dismiss,
+            SuggestionState::Dismissed,
+        ),
         ("retire", LifecycleEvent::Retire, SuggestionState::Retired),
-        ("resolve", LifecycleEvent::Resolve, SuggestionState::Resolved),
+        (
+            "resolve",
+            LifecycleEvent::Resolve,
+            SuggestionState::Resolved,
+        ),
         ("complete", LifecycleEvent::Complete, SuggestionState::Done),
     ];
     for name in RunStateName::iter().filter(|name| !name.is_settled()) {

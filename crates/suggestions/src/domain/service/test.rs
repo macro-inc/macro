@@ -858,7 +858,6 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
     assert_eq!(feed.suggestions[0].dedup_key, "quotes:compare");
 }
 
-
 /// One suggestion whose items can't be checked is left out; the rest of the
 /// feed is read.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -964,8 +963,15 @@ async fn the_feed_returns_at_most_limit_open_suggestions_and_counts_all(pool: Pg
     let done = feed.done.unwrap();
     assert_eq!(keys(&done), ["f:done-last", "e:done-first"]);
     assert_eq!(feed.counts, counts);
-    assert!(feed.suggestions.iter().all(|suggestion| suggestion.status == SuggestionStatus::Open));
-    assert!(done.iter().all(|suggestion| suggestion.status == SuggestionStatus::Done));
+    assert!(
+        feed.suggestions
+            .iter()
+            .all(|suggestion| suggestion.status == SuggestionStatus::Open)
+    );
+    assert!(
+        done.iter()
+            .all(|suggestion| suggestion.status == SuggestionStatus::Done)
+    );
 }
 
 /// Reading the feed counts the person in once per timezone while it is
@@ -1752,7 +1758,11 @@ async fn resolving_a_reply_clears_who_it_waits_on(pool: PgPool) {
             .await
             .unwrap()
     );
-    let resolved = repo.suggestion(&user(OWNER), reply.id).await.unwrap().unwrap();
+    let resolved = repo
+        .suggestion(&user(OWNER), reply.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(matches!(
         resolved.kind,
         SuggestionKind::Entity {
@@ -1790,7 +1800,10 @@ async fn the_person_restores_a_suggestion_they_just_dismissed(pool: PgPool) {
         .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
         .await
         .unwrap();
-    assert!(matches!(restore(OTHER).await, Err(SuggestionError::NotFound)));
+    assert!(matches!(
+        restore(OTHER).await,
+        Err(SuggestionError::NotFound)
+    ));
     // Hidden sessions only manage the feed through their own tools.
     assert!(matches!(
         h.service
@@ -1813,7 +1826,11 @@ async fn the_person_restores_a_suggestion_they_just_dismissed(pool: PgPool) {
     assert_eq!(feed.suggestions[0].id, suggestion.id);
     assert_eq!(feed.suggestions[0].state, SuggestionState::Proposed);
     assert_eq!(feed.suggestions[0].status, SuggestionStatus::Open);
-    assert_eq!(h.changes(suggestion.id).await.len(), 1, "restoring logs no change");
+    assert_eq!(
+        h.changes(suggestion.id).await.len(),
+        1,
+        "restoring logs no change"
+    );
 
     // Dismissed longer ago than the window: it stays dismissed.
     h.service

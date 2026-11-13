@@ -96,7 +96,11 @@ fn a_suggestions_result_is_what_its_settled_run_made() {
     // A finished run that made nothing but its session opens the session.
     let finished = run(RunStateName::Finished);
     assert_eq!(
-        result_of(SuggestionState::Done, Some(&finished), &[session_of(&finished)]),
+        result_of(
+            SuggestionState::Done,
+            Some(&finished),
+            &[session_of(&finished)]
+        ),
         Some(session_of(&finished))
     );
     assert_eq!(
@@ -123,7 +127,10 @@ fn a_draft_preview_is_the_start_of_its_words() {
 
 #[test]
 fn a_sender_is_shown_by_a_plain_name_only() {
-    assert_eq!(sender_name("  Ada Lovelace "), Some("Ada Lovelace".to_owned()));
+    assert_eq!(
+        sender_name("  Ada Lovelace "),
+        Some("Ada Lovelace".to_owned())
+    );
     for refused in [
         "",
         "   ",

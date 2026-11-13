@@ -464,8 +464,5 @@ async fn a_restore_too_late_is_a_conflict() {
         let status = send(&service, "POST", &uri, SESSION_JWT, false, None).await;
         assert_eq!(status, expected, "{uri}");
     }
-    assert_eq!(
-        service.callers.lock().unwrap()[0].1,
-        SuggestionCaller::User
-    );
+    assert_eq!(service.callers.lock().unwrap()[0].1, SuggestionCaller::User);
 }

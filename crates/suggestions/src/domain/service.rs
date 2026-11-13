@@ -21,9 +21,10 @@ use super::check;
 use super::lifecycle::{self, LifecycleEvent};
 use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, FeedCounts, GenerationSession,
-    GenerationTrigger, KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, SessionKind,
-    Suggestion, SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed,
-    SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target, Waiting,
+    GenerationTrigger, KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
+    RunMode, SessionKind, Suggestion, SuggestionCaller, SuggestionContent, SuggestionError,
+    SuggestionFeed, SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target, Waiting,
 };
 use super::ports::{
     GenerationSessions, Limits, ReplyWaits, RequestSessions, RoutineSuggestionDismissal,
@@ -493,8 +494,12 @@ fn run_going(existing: &Suggestion, content: &SuggestionContent, problems: &mut 
     let SuggestionKind::Prompt { prompt, sends, .. } = &existing.kind else {
         return;
     };
-    let changes = content.prompt.as_ref().is_some_and(|new| new != prompt) || content.sends != *sends;
-    let going = existing.run.as_ref().is_some_and(|run| !run.state.is_settled());
+    let changes =
+        content.prompt.as_ref().is_some_and(|new| new != prompt) || content.sends != *sends;
+    let going = existing
+        .run
+        .as_ref()
+        .is_some_and(|run| !run.state.is_settled());
     if changes && going {
         problems.push(RUN_GOING.to_owned());
     }
@@ -1140,15 +1145,7 @@ where
         };
         let written = self
             .repo
-            .replace(
-                &user,
-                id,
-                &content,
-                existing.state,
-                to,
-                LIMITS,
-                &change,
-            )
+            .replace(&user, id, &content, existing.state, to, LIMITS, &change)
             .await
             .map_err(SuggestionError::internal)?;
         if let Some(problem) = written_problem(written) {

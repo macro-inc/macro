@@ -120,13 +120,24 @@ async fn a_draft_previews_the_start_of_its_text(pool: PgPool) {
     .unwrap();
     let drafts = EmailSuggestionDrafts(EmailPgRepo::new(pool.clone()));
 
-    let found = drafts.email_draft(&user(OWNER), text).await.unwrap().unwrap();
+    let found = drafts
+        .email_draft(&user(OWNER), text)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(found.thread, text_thread);
     let preview = found.preview.unwrap();
-    assert_eq!(preview.chars().count(), crate::domain::model::DRAFT_PREVIEW_CHARS);
+    assert_eq!(
+        preview.chars().count(),
+        crate::domain::model::DRAFT_PREVIEW_CHARS
+    );
     assert!(preview.starts_with("word word"));
 
-    let found = drafts.email_draft(&user(OWNER), html).await.unwrap().unwrap();
+    let found = drafts
+        .email_draft(&user(OWNER), html)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         found,
         FoundDraft {
@@ -135,7 +146,11 @@ async fn a_draft_previews_the_start_of_its_text(pool: PgPool) {
         }
     );
 
-    let found = drafts.email_draft(&user(OWNER), empty).await.unwrap().unwrap();
+    let found = drafts
+        .email_draft(&user(OWNER), empty)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         found,
         FoundDraft {

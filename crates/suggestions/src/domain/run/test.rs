@@ -91,7 +91,12 @@ fn cases() -> Vec<Case> {
         case(Starting, observed(Working), 60, with(stopping(60), Stop)),
         case(Starting, observed(Paused), 1, to(waiting(1))),
         case(Starting, observed(Paused), 60, with(stopping(60), Stop)),
-        case(Starting, observed(Observation::Finished), 1, with(Finished, ReadProduced)),
+        case(
+            Starting,
+            observed(Observation::Finished),
+            1,
+            with(Finished, ReadProduced),
+        ),
         case(Starting, observed(Observation::Failed), 1, to(Failed)),
         case(Starting, observed(Gone), 9, to(Starting)),
         case(Starting, observed(Gone), 10, to(Failed)),
@@ -99,8 +104,18 @@ fn cases() -> Vec<Case> {
         case(Starting, observed(Unreadable), 60, with(Failed, Delete)),
         // Running.
         case(Running, RunEvent::Started, 1, Err(Refused::AlreadyStarted)),
-        case(Running, RunEvent::StartUncertain, 1, Err(Refused::AlreadyStarted)),
-        case(Running, RunEvent::StartRefused, 1, Err(Refused::AlreadyStarted)),
+        case(
+            Running,
+            RunEvent::StartUncertain,
+            1,
+            Err(Refused::AlreadyStarted),
+        ),
+        case(
+            Running,
+            RunEvent::StartRefused,
+            1,
+            Err(Refused::AlreadyStarted),
+        ),
         case(Running, RunEvent::Cancel, 30, to(cancelling(30))),
         case(Running, observed(AwaitingPrompt), 9, to(Running)),
         case(Running, observed(AwaitingPrompt), 10, with(Failed, Delete)),
@@ -108,54 +123,134 @@ fn cases() -> Vec<Case> {
         case(Running, observed(Working), 60, with(stopping(60), Stop)),
         case(Running, observed(Paused), 20, to(waiting(20))),
         case(Running, observed(Paused), 60, with(stopping(60), Stop)),
-        case(Running, observed(Observation::Finished), 30, with(Finished, ReadProduced)),
+        case(
+            Running,
+            observed(Observation::Finished),
+            30,
+            with(Finished, ReadProduced),
+        ),
         case(Running, observed(Observation::Failed), 30, to(Failed)),
         case(Running, observed(Gone), 1, to(Failed)),
         case(Running, observed(Unreadable), 59, to(Running)),
         case(Running, observed(Unreadable), 60, with(Failed, Delete)),
         // Waiting, since minute 20: its window runs from then, not the start.
-        case(waiting(20), RunEvent::Started, 25, Err(Refused::AlreadyStarted)),
-        case(waiting(20), RunEvent::StartUncertain, 25, Err(Refused::AlreadyStarted)),
-        case(waiting(20), RunEvent::StartRefused, 25, Err(Refused::AlreadyStarted)),
+        case(
+            waiting(20),
+            RunEvent::Started,
+            25,
+            Err(Refused::AlreadyStarted),
+        ),
+        case(
+            waiting(20),
+            RunEvent::StartUncertain,
+            25,
+            Err(Refused::AlreadyStarted),
+        ),
+        case(
+            waiting(20),
+            RunEvent::StartRefused,
+            25,
+            Err(Refused::AlreadyStarted),
+        ),
         case(waiting(20), RunEvent::Cancel, 25, to(cancelling(25))),
         case(waiting(2), observed(AwaitingPrompt), 5, to(waiting(2))),
-        case(waiting(20), observed(AwaitingPrompt), 25, with(Failed, Delete)),
+        case(
+            waiting(20),
+            observed(AwaitingPrompt),
+            25,
+            with(Failed, Delete),
+        ),
         case(waiting(20), observed(Working), 25, to(Running)),
         case(waiting(20), observed(Working), 60, with(stopping(60), Stop)),
         case(waiting(20), observed(Paused), 29, to(waiting(20))),
         case(waiting(20), observed(Paused), 30, with(stopping(30), Stop)),
         case(waiting(55), observed(Paused), 59, to(waiting(55))),
         case(waiting(55), observed(Paused), 60, with(stopping(60), Stop)),
-        case(waiting(20), observed(Observation::Finished), 25, with(Finished, ReadProduced)),
+        case(
+            waiting(20),
+            observed(Observation::Finished),
+            25,
+            with(Finished, ReadProduced),
+        ),
         case(waiting(20), observed(Observation::Failed), 25, to(Failed)),
         case(waiting(20), observed(Gone), 25, to(Failed)),
         case(waiting(20), observed(Unreadable), 59, to(waiting(20))),
         case(waiting(20), observed(Unreadable), 60, with(Failed, Delete)),
         // Stopping (over its time) since minute 60: settles failed.
-        case(stopping(60), RunEvent::Started, 61, with(stopping(60), Stop)),
+        case(
+            stopping(60),
+            RunEvent::Started,
+            61,
+            with(stopping(60), Stop),
+        ),
         case(stopping(60), RunEvent::StartUncertain, 61, to(stopping(60))),
         case(stopping(60), RunEvent::StartRefused, 61, to(Failed)),
         case(stopping(60), RunEvent::Cancel, 61, to(cancelling(60))),
-        case(stopping(60), observed(Observation::Finished), 61, with(Finished, ReadProduced)),
+        case(
+            stopping(60),
+            observed(Observation::Finished),
+            61,
+            with(Finished, ReadProduced),
+        ),
         case(stopping(60), observed(Observation::Failed), 61, to(Failed)),
         case(stopping(60), observed(Gone), 61, to(Failed)),
         // Cancelling since minute 30: settles cancelled.
-        case(cancelling(30), RunEvent::Started, 31, with(cancelling(30), Stop)),
-        case(cancelling(30), RunEvent::StartUncertain, 31, to(cancelling(30))),
+        case(
+            cancelling(30),
+            RunEvent::Started,
+            31,
+            with(cancelling(30), Stop),
+        ),
+        case(
+            cancelling(30),
+            RunEvent::StartUncertain,
+            31,
+            to(cancelling(30)),
+        ),
         case(cancelling(30), RunEvent::StartRefused, 31, to(Cancelled)),
         case(cancelling(30), RunEvent::Cancel, 31, to(cancelling(30))),
-        case(cancelling(30), observed(Observation::Finished), 31, with(Finished, ReadProduced)),
-        case(cancelling(30), observed(Observation::Failed), 31, to(Cancelled)),
+        case(
+            cancelling(30),
+            observed(Observation::Finished),
+            31,
+            with(Finished, ReadProduced),
+        ),
+        case(
+            cancelling(30),
+            observed(Observation::Failed),
+            31,
+            to(Cancelled),
+        ),
         case(cancelling(30), observed(Gone), 31, to(Cancelled)),
     ];
     // A stopped session that may still be going is asked again to stop until
     // its grace runs out, then deleted.
     for observation in [AwaitingPrompt, Working, Paused, Unreadable] {
         cases.extend([
-            case(stopping(60), observed(observation), 64, with(stopping(60), Stop)),
-            case(stopping(60), observed(observation), 65, with(Failed, Delete)),
-            case(cancelling(30), observed(observation), 34, with(cancelling(30), Stop)),
-            case(cancelling(30), observed(observation), 35, with(Cancelled, Delete)),
+            case(
+                stopping(60),
+                observed(observation),
+                64,
+                with(stopping(60), Stop),
+            ),
+            case(
+                stopping(60),
+                observed(observation),
+                65,
+                with(Failed, Delete),
+            ),
+            case(
+                cancelling(30),
+                observed(observation),
+                34,
+                with(cancelling(30), Stop),
+            ),
+            case(
+                cancelling(30),
+                observed(observation),
+                35,
+                with(Cancelled, Delete),
+            ),
         ]);
     }
     for settled in [Finished, Failed, Cancelled] {
@@ -311,7 +406,11 @@ fn a_run_is_stopped_at_its_maximum_time_however_it_is_going() {
     let limit = started + MAX_RUN_TIME;
     for state in [RunState::Starting, RunState::Running, waiting(55)] {
         for observation in [Observation::Working, Observation::Paused] {
-            let before = state.on(observed(observation), started, limit - TimeDelta::seconds(1));
+            let before = state.on(
+                observed(observation),
+                started,
+                limit - TimeDelta::seconds(1),
+            );
             assert!(
                 before.is_ok_and(|step| step.effect != Some(RunEffect::Stop)),
                 "{state:?} {observation:?}"
@@ -388,7 +487,10 @@ fn a_cancel_needs_nothing_done_first() {
 fn a_session_read_is_one_observation() {
     use super::super::model::{SessionReadError, SessionState};
     for (read, expected) in [
-        (Ok(SessionState::AwaitingPrompt), Observation::AwaitingPrompt),
+        (
+            Ok(SessionState::AwaitingPrompt),
+            Observation::AwaitingPrompt,
+        ),
         (Ok(SessionState::Running), Observation::Working),
         (Ok(SessionState::Disconnected), Observation::Paused),
         (Ok(SessionState::NeedsApproval), Observation::Paused),
