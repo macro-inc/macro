@@ -60,6 +60,7 @@ it('loads and copies only the username without disclosing or caching the passwor
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -141,6 +142,7 @@ it.each(['username', 'copyUsername'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: clipboard,
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           }}
         >
           <Probe />

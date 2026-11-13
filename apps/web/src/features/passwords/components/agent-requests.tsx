@@ -1,106 +1,52 @@
 import { t } from '@app/lib/i18n';
-import { getDisplayName, tryMacroId } from '@core/user';
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { PasswordAgentAccessRequestState } from '@service-storage/generated/schemas/passwordAgentAccessRequestState';
 import type { PasswordAgentRevokeScope } from '@service-storage/generated/schemas/passwordAgentRevokeScope';
-import type { PasswordPermission } from '@service-storage/generated/schemas/passwordPermission';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import { Button, Dropdown } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
-import { usePasswords } from '../context/passwords-context';
-import {
-  type AgentRequestFailure,
-  type AgentRequestSource,
-  agentRequestsQueryOptions,
-} from '../queries/agent-requests';
-import { passwordKeys } from '../queries/keys';
+import { For, Show } from 'solid-js';
+import type { AgentRequestDecision } from '../core/types';
 
 /**
- * Agents waiting for, or holding, access to one item. Only people who can
- * manage the item see it; the server decides who may review, so a refusal
- * hides the section rather than showing controls that cannot work.
+ * Agents waiting for, or holding, access to one item. Renders nothing without
+ * states, so a refusal to list them hides the section rather than showing
+ * controls that cannot work.
  */
 export function AgentRequests(props: {
-  source: AgentRequestSource;
-  itemId: string;
+  states: PasswordAgentAccessRequestState[];
+  nameOf: (agentAccountId: string) => string;
+  busy: boolean;
+  /** The last decision answered a request that had since changed. */
+  stale: boolean;
+  /** The last decision did not go through; the controls stay to retry. */
+  failed: boolean;
+  onResolve: (
+    state: PasswordAgentAccessRequestState,
+    decision: AgentRequestDecision
+  ) => void;
+  onRevoke: (
+    state: PasswordAgentAccessRequestState,
+    scope: PasswordAgentRevokeScope
+  ) => void;
 }) {
-  const { scope } = usePasswords();
-  const queryClient = useQueryClient();
-  const key = () =>
-    passwordKeys.agentRequests(scope.key, props.itemId).queryKey;
-  const states = useQuery(() =>
-    agentRequestsQueryOptions(scope.key, props.source, props.itemId)
-  );
-  const [busy, setBusy] = createSignal(false);
-  const [stale, setStale] = createSignal(false);
-  const shown = () =>
-    (states.data ?? []).filter(
-      (state) => state.status === 'pending' || state.access.useBasis !== null
-    );
-
-  async function settle(
-    work: () => Promise<{ isErr(): boolean; error?: AgentRequestFailure }>
-  ) {
-    if (busy()) return;
-    setBusy(true);
-    setStale(false);
-    const result = await work();
-    if (result.isErr() && result.error === 'stale') setStale(true);
-    await queryClient.invalidateQueries({ queryKey: key() });
-    setBusy(false);
-  }
-  const resolve = (
-    state: PasswordAgentAccessRequestState,
-    decision: PasswordPermission | 'deny'
-  ) => {
-    const requestId = state.requestId;
-    if (!requestId) return;
-    fireAndForget(
-      settle(() =>
-        props.source.resolve(
-          props.itemId,
-          requestId,
-          decision === 'deny'
-            ? { decision: 'deny', revision: state.revision }
-            : {
-                decision: 'approve',
-                revision: state.revision,
-                permission: decision,
-              }
-        )
-      ),
-      'passwords-agent-requests'
-    );
-  };
-  const revoke = (
-    state: PasswordAgentAccessRequestState,
-    revokeScope: PasswordAgentRevokeScope
-  ) =>
-    fireAndForget(
-      settle(() =>
-        props.source.revoke(props.itemId, state.agentAccountId, {
-          expectedPermissionRevision: state.access.permissionRevision,
-          scope: revokeScope,
-        })
-      ),
-      'passwords-agent-requests'
-    );
-
   return (
-    <Show when={shown().length > 0}>
+    <Show when={props.states.length > 0}>
       <section
         aria-label={t('passwords.agentAccess')}
         class="flex flex-col gap-2 border-t border-edge-muted py-3"
       >
         <h3 class="text-xs text-ink-muted">{t('passwords.agentAccess')}</h3>
-        <Show when={stale()}>
+        <Show when={props.stale}>
           <p role="status" class="text-xs text-ink-muted">
             {t('passwords.agentStale')}
           </p>
         </Show>
-        <For each={shown()}>
+        <Show when={props.failed}>
+          <p role="alert" class="text-xs text-failure-ink">
+            {t('passwords.agentActionFailed')}
+          </p>
+        </Show>
+        <For each={props.states}>
           {(state) => {
-            const name = () => getDisplayName(tryMacroId(state.agentAccountId));
+            const name = () => props.nameOf(state.agentAccountId);
             return (
               <div class="flex flex-wrap items-center gap-2 text-sm">
                 <span class="min-w-0 flex-1">
@@ -125,7 +71,7 @@ export function AgentRequests(props: {
                       <Dropdown.Trigger
                         variant="secondary"
                         size="sm"
-                        disabled={busy()}
+                        disabled={props.busy}
                         aria-label={t('passwords.agentRevoke', {
                           name: name(),
                         })}
@@ -135,13 +81,15 @@ export function AgentRequests(props: {
                       <Dropdown.Content>
                         <Show when={state.access.useBasis === 'approved_grant'}>
                           <Dropdown.Item
-                            onSelect={() => revoke(state, 'approval')}
+                            onSelect={() => props.onRevoke(state, 'approval')}
                           >
                             {t('passwords.agentRevokeApproval')}
                           </Dropdown.Item>
                         </Show>
                         <Dropdown.Item
-                          onSelect={() => revoke(state, 'grant_and_approval')}
+                          onSelect={() =>
+                            props.onRevoke(state, 'grant_and_approval')
+                          }
                         >
                           {t('passwords.agentRevokeGrant')}
                         </Dropdown.Item>
@@ -152,24 +100,24 @@ export function AgentRequests(props: {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={busy()}
-                    onClick={() => resolve(state, 'view')}
+                    disabled={props.busy}
+                    onClick={() => props.onResolve(state, 'view')}
                   >
                     {t('passwords.agentAllowView')}
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={busy()}
-                    onClick={() => resolve(state, 'edit')}
+                    disabled={props.busy}
+                    onClick={() => props.onResolve(state, 'edit')}
                   >
                     {t('passwords.agentAllowEdit')}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={busy()}
-                    onClick={() => resolve(state, 'deny')}
+                    disabled={props.busy}
+                    onClick={() => props.onResolve(state, 'deny')}
                   >
                     {t('passwords.agentDeny')}
                   </Button>

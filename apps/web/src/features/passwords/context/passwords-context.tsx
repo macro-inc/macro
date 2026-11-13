@@ -78,6 +78,8 @@ export type PasswordCapabilities = {
   recipientsLoading: Accessor<boolean>;
   recipientsError: Accessor<boolean>;
   writeClipboard(value: string): Promise<void>;
+  /** Name to show for an account, such as an agent asking for access. */
+  displayName(accountId: string): string;
 };
 const PasswordsContext = createContext<PasswordCapabilities>();
 export function PasswordsProvider(

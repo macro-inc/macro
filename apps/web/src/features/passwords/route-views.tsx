@@ -12,6 +12,7 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { SplitPanel } from '@components/app/split-panel';
 import { enablePasswords } from '@core/constant/featureFlags';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { idToDisplayName } from '@core/user/util';
 import LockIcon from '@icon/system/regular/lock.svg';
 import { useUserNames } from '@queries/auth';
@@ -161,6 +162,8 @@ function PasswordsTeamView() {
                       names().some((name) => Boolean(name.error)),
                     writeClipboard: (value) =>
                       navigator.clipboard.writeText(value),
+                    displayName: (accountId) =>
+                      getDisplayName(tryMacroId(accountId)),
                   }}
                 >
                   <VaultView

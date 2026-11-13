@@ -3,6 +3,7 @@ import '@app/index.css';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getDisplayName, tryMacroId } from '@core/user';
 import type { PasswordAgentAccessRequestState } from '@service-storage/generated/schemas/passwordAgentAccessRequestState';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
@@ -231,6 +232,7 @@ const View = () => (
         writeClipboard: async (value) => {
           document.body.dataset.copied = value;
         },
+        displayName: (accountId) => getDisplayName(tryMacroId(accountId)),
       }}
     >
       <ItemDndProvider>

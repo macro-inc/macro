@@ -34,7 +34,6 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { AgentRequests } from '../components/agent-requests';
 import { FavoriteToggle, ItemDetailBody } from '../components/item-detail';
 import { ItemForm } from '../components/item-form';
 import { ItemList } from '../components/item-list';
@@ -60,6 +59,7 @@ import {
 import { createPasswordFolderDrag } from '../primitives/folder-drag';
 import { createVault, type VaultController } from '../primitives/vault';
 import type { AgentRequestSource } from '../queries/agent-requests';
+import { ItemAgentRequests } from './item-agent-requests';
 
 type MobileTab = 'all' | 'favorites' | 'recent' | 'shared' | 'folders';
 
@@ -289,7 +289,7 @@ function ItemPane(props: {
               />
               <Show when={props.item.canManage && props.agentRequests}>
                 {(source) => (
-                  <AgentRequests source={source()} itemId={props.item.id} />
+                  <ItemAgentRequests source={source()} itemId={props.item.id} />
                 )}
               </Show>
             </>

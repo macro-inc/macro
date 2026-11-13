@@ -41,6 +41,7 @@ function mountVault(source: PasswordSource, clipboard = async () => {}) {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -302,6 +303,7 @@ it('discards a reveal that completes after the vault locks', async () => {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: async () => {},
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -378,6 +380,7 @@ it('does not copy a late response for a credential that is no longer selected', 
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -464,6 +467,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           }}
         >
           <Probe />
@@ -547,6 +551,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           }}
         >
           <Probe />
@@ -608,6 +613,7 @@ it('drops a reveal, copy and clipboard write that finish after the viewer change
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
         <Probe />
@@ -657,6 +663,7 @@ it('never carries a dirty draft into another account or sign-in session', async 
               recipientsLoading: () => false,
               recipientsError: () => false,
               writeClipboard: async () => {},
+              displayName: (accountId) => accountId.replace(/^macro\|/, ''),
             }}
           >
             <Probe />

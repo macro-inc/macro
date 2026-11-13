@@ -194,4 +194,5 @@ export default {
   agentRevokeApproval: 'Remove approval',
   agentRevokeGrant: 'Remove access',
   agentStale: 'This request changed. Showing the latest.',
+  agentActionFailed: 'That did not go through. Try again.',
 };

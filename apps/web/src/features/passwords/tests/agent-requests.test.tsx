@@ -11,13 +11,14 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
 import { err, ok } from 'neverthrow';
+import { Suspense } from 'solid-js';
 import { afterEach, expect, it } from 'vitest';
-import { AgentRequests } from '../components/agent-requests';
 import { PasswordsProvider } from '../context/passwords-context';
 import type {
   AgentRequestFailure,
   AgentRequestSource,
 } from '../queries/agent-requests';
+import { ItemAgentRequests } from '../views/item-agent-requests';
 import { createFakePasswordSource } from './fake-source';
 import { FIXTURE_SCOPE } from './fixture-scope';
 
@@ -149,9 +150,10 @@ function mount(source: AgentRequestSource) {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: async () => {},
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         }}
       >
-        <AgentRequests source={source} itemId={ITEM} />
+        <ItemAgentRequests source={source} itemId={ITEM} />
       </PasswordsProvider>
     </QueryClientProvider>
   ));
@@ -238,4 +240,52 @@ it('shows nothing when the agent vault is off or the viewer cannot review', asyn
   expect(calls.lists).toBe(1);
   expect(screen.queryByRole('region', { name: 'Agent access' })).toBeNull();
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+it('says a decision did not go through and keeps the controls to retry', async () => {
+  const { source, calls } = fakeSource([[PENDING]], 'failed');
+  mount(source);
+  await screen.findByText(
+    'agent-reviewed@example.test asked to edit this item'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Allow view' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'That did not go through. Try again.'
+  );
+  expect(screen.getByRole('button', { name: 'Allow view' })).toBeTruthy();
+  expect(calls.resolves).toHaveLength(1);
+});
+
+it('keeps the item on screen while its agent list loads', async () => {
+  let answer: (() => void) | undefined;
+  const { source } = fakeSource([[PENDING]]);
+  const forItem = source.forItem;
+  source.forItem = (itemId) =>
+    new Promise((resolve) => {
+      answer = () => resolve(forItem(itemId));
+    });
+  render(() => (
+    <QueryClientProvider client={new QueryClient()}>
+      <Suspense fallback={<p>vault loading</p>}>
+        <p>item detail</p>
+        <PasswordsProvider
+          value={{
+            scope: FIXTURE_SCOPE,
+            source: createFakePasswordSource(),
+            recipients: () => [],
+            recipientsLoading: () => false,
+            recipientsError: () => false,
+            writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          }}
+        >
+          <ItemAgentRequests source={source} itemId={ITEM} />
+        </PasswordsProvider>
+      </Suspense>
+    </QueryClientProvider>
+  ));
+  expect(screen.getByText('item detail')).toBeTruthy();
+  expect(screen.queryByText('vault loading')).toBeNull();
+  answer?.();
+  expect(await screen.findByText(/asked to edit this item/)).toBeTruthy();
 });
