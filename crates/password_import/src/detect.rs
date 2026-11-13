@@ -42,6 +42,8 @@ pub fn detect(bytes: &[u8]) -> Result<SourceFormat, ImportError> {
 
     if has_all(&bitwarden_csv::REQUIRED_COLUMNS) {
         Ok(SourceFormat::BitwardenCsv)
+    } else if one_password_csv::is_one_password_7(&headers) {
+        Err(ImportError::UnsupportedVersion)
     } else if has_all(&one_password_csv::REQUIRED_COLUMNS) {
         Ok(SourceFormat::OnePasswordCsv)
     } else {

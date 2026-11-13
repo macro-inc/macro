@@ -5,12 +5,18 @@ use crate::error::ImportError;
 use crate::model::{ItemKind, Limits, SkipReason, SourceKey};
 
 pub(crate) const REQUIRED_COLUMNS: [&str; 4] = ["title", "url", "username", "password"];
+/// Columns only 1Password 7's CSV export writes. That layout spreads card and
+/// identity data over numbered `SECTION n:` columns and is refused, not guessed at.
+const ONE_PASSWORD_7_COLUMNS: [&str; 3] = ["uuid", "scope", "autosubmit"];
 const KNOWN_COLUMNS: [&str; 9] = [
     "title", "url", "username", "password", "otpauth", "favorite", "archived", "tags", "notes",
 ];
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
     let table = csv_table::read(bytes, limits)?;
+    if is_one_password_7(&table.headers) {
+        return Err(ImportError::UnsupportedVersion);
+    }
     if REQUIRED_COLUMNS
         .iter()
         .any(|name| table.column(name).is_none())
@@ -74,6 +80,12 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     }
 
     Ok(parts)
+}
+
+/// A 1Password 7 CSV: a `title` column next to a column only 1Password 7 writes.
+pub(crate) fn is_one_password_7(headers: &[String]) -> bool {
+    let has = |name: &str| headers.iter().any(|header| header == name);
+    has("title") && ONE_PASSWORD_7_COLUMNS.iter().any(|name| has(name))
 }
 
 fn is_true(value: &str) -> bool {

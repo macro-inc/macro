@@ -52,7 +52,8 @@ pub enum ImportError {
         /// 1-based row of the error.
         row: usize,
     },
-    /// Valid JSON in a layout this crate doesn't read.
+    /// A readable file in a layout or version this crate doesn't read, such as
+    /// a Bitwarden JSON without `items` or a 1Password 7 CSV.
     #[error("unsupported export version")]
     UnsupportedVersion,
 }

@@ -196,3 +196,19 @@ fn unknown_inputs_are_typed_errors() {
         Some(ImportError::UnsupportedVersion)
     );
 }
+
+/// Synthetic 1Password 7 Windows CSVs: a login row, and a card export that has
+/// no username or password column at all.
+const ONE_PASSWORD_7_LOGIN: &[u8] = b"\"UUID\",\"TITLE\",\"USERNAME\",\"PASSWORD\",\"URL\",\"URLS\",\"SCOPE\",\"AUTOSUBMIT\",\"TAGS\",\"NOTES\",\"SECTION 1: NAME\",\"NAME 1: FIRST NAME\"\n\"aaaaaaaaaaaaaaaaaaaaaaaaaa\",\"Example login\",\"user-one\",\"not-a-real-password\",\"https://example.com\",\"https://example.com\",\"Default\",\"Default\",\"\",\"\",\"\",\"\"\n";
+const ONE_PASSWORD_7_CARD: &[u8] = b"\"UUID\",\"TITLE\",\"SCOPE\",\"AUTOSUBMIT\",\"1: CARDHOLDER NAME\",\"2: NUMBER\"\n\"bbbbbbbbbbbbbbbbbbbbbbbbbb\",\"Example card\",\"Default\",\"Default\",\"Card Holder\",\"4000000000000002\"\n";
+
+#[test]
+fn one_password_7_csv_is_refused_as_an_unsupported_version() {
+    for file in [ONE_PASSWORD_7_LOGIN, ONE_PASSWORD_7_CARD] {
+        assert_eq!(detect(file), Err(ImportError::UnsupportedVersion));
+        assert_eq!(
+            parse(file, SourceFormat::OnePasswordCsv, &Limits::default()).err(),
+            Some(ImportError::UnsupportedVersion)
+        );
+    }
+}
