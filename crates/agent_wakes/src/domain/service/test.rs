@@ -413,7 +413,10 @@ async fn a_live_trace_after_the_end_leaves_the_final_trace() {
         .await
         .unwrap();
     assert_eq!(
-        service.get_trace(&caller(AGENT), &agent, "w1").await.unwrap(),
+        service
+            .get_trace(&caller(AGENT), &agent, "w1")
+            .await
+            .unwrap(),
         live
     );
 
@@ -431,13 +434,13 @@ async fn a_live_trace_after_the_end_leaves_the_final_trace() {
         .unwrap();
 
     assert_eq!(
-        service.get_trace(&caller(AGENT), &agent, "w1").await.unwrap(),
+        service
+            .get_trace(&caller(AGENT), &agent, "w1")
+            .await
+            .unwrap(),
         trace()
     );
-    assert_eq!(
-        *service.repository.traced.lock().unwrap(),
-        vec!["w1", "w1"]
-    );
+    assert_eq!(*service.repository.traced.lock().unwrap(), vec!["w1", "w1"]);
 }
 
 #[test]
