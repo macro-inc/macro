@@ -1,0 +1,21 @@
+apps/web/justfile
+  s_c1146e8a8b951b::t_3aacc39ea5afc2 536-541
+apps/web/package.json
+  s_c1146e8a8b951b::t_11117358710d7a 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "38370daa9fe1d3750f00a26e579c9f1101e51c41",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
