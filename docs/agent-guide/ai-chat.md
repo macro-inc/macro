@@ -696,8 +696,12 @@ the shimmer.
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
   back after opening a session and returning, the same way channel replies persist
-  when switching channels. Home's agent input also restores unsent text, under a
-  separate key from the Agents page composer. Check the Home path explicitly:
+  when switching channels. The phone Agents list's composer and the desktop
+  list views' AI input hold that same draft and attachments, so an edit in one
+  shows in the other at once: type on the composer page, go Back to the list,
+  edit there, and return; neither should show an older version. Home's agent
+  input also restores unsent text, under a separate key from the Agents page
+  composer. Check the Home path explicitly:
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.

@@ -703,7 +703,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
         <Show
           when={savedViews?.view().kind === 'new'}
           fallback={
-            <HeaderActionGroup label="Saved view actions">
+            <HeaderActionGroup label="Saved view actions" size="md">
               <Show when={selected()?.record.ownerId === viewerId()}>
                 <ButtonGroup.Button
                   variant="primary"
@@ -740,7 +740,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
       </Show>
       <Show when={failure()}>
         {(error) => (
-          <HeaderActionGroup label="Saved view save error">
+          <HeaderActionGroup label="Saved view save error" size="md">
             <span
               role="alert"
               class="max-w-48 truncate text-xs text-failure-ink"

@@ -57,6 +57,7 @@ describe('result cells from the engine’s typed cells', () => {
           kind: 'text',
           source: {
             markdown: true,
+            link: false,
             options: [],
             tag: false,
             target: null,
@@ -65,6 +66,27 @@ describe('result cells from the engine’s typed cells', () => {
         }
       )
     ).toEqual({ kind: 'markdown', markdown: '**Skyline** Rooftop' });
+  });
+
+  it('reads a URL column’s text as a link', () => {
+    const cell = resultCell(
+      { type: 'text', value: 'https://example.com/pricing' },
+      {
+        name: 'Website',
+        kind: 'text',
+        source: {
+          markdown: false,
+          link: true,
+          options: [],
+          tag: false,
+          target: null,
+          relatedTable: null,
+        },
+      }
+    );
+
+    expect(cell).toEqual({ kind: 'link', url: 'https://example.com/pricing' });
+    expect(resultCellText(cell)).toBe('https://example.com/pricing');
   });
 
   it('shows a missing value and empty text as empty', () => {
@@ -84,6 +106,7 @@ describe('result cells from the engine’s typed cells', () => {
         kind: 'select',
         source: {
           markdown: false,
+          link: false,
           options: [
             { id: 'option-vegan', label: 'Vegan', color: '#2f9e44' },
             { id: 'option-nuts', label: 'No nuts', color: null },
@@ -114,6 +137,7 @@ describe('result cells from the engine’s typed cells', () => {
         kind: 'select',
         source: {
           markdown: false,
+          link: false,
           options: [{ id: 'option-vegan', label: 'Vegan', color: '#2f9e44' }],
           tag: false,
           target: null,
@@ -151,6 +175,7 @@ describe('result cells from the engine’s typed cells', () => {
           kind: 'entity',
           source: {
             markdown: false,
+            link: false,
             options: [],
             tag: false,
             target: 'DOCUMENT',
@@ -174,6 +199,7 @@ describe('result cells from the engine’s typed cells', () => {
           kind: 'entity',
           source: {
             markdown: false,
+            link: false,
             options: [],
             tag: false,
             target: 'DATABASE_ROW',

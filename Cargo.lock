@@ -404,13 +404,20 @@ name = "agent_credentials"
 version = "0.1.0"
 dependencies = [
  "constant_time_eq 0.3.1",
+ "feature_flags",
  "hex",
  "lazy-regex",
+ "macro_db_migrator",
+ "macro_user_id",
  "rand 0.9.4",
+ "rootcause",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
  "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "user_api_key",
  "workspace-hack",
  "zeroize",
@@ -2294,6 +2301,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
+ "agent_credentials",
  "agent_git",
  "ai_billing",
  "ai_usage",
@@ -4536,8 +4544,6 @@ dependencies = [
 [[package]]
 name = "chrono-tz"
 version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
 dependencies = [
  "chrono",
  "phf 0.12.1",
@@ -7977,6 +7983,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -9573,6 +9580,7 @@ dependencies = [
  "soup",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -9631,6 +9639,7 @@ dependencies = [
  "model-entity",
  "rootcause",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -10381,6 +10390,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -11316,6 +11326,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "http-body-util",
+ "log",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -11340,6 +11351,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "unicode-segmentation",
  "utoipa",
  "uuid",
@@ -22890,6 +22902,7 @@ dependencies = [
  "macro_env",
  "macro_service_urls",
  "nom 8.0.0",
+ "reqwest 0.13.4",
  "rootcause",
  "rustls",
  "serde",

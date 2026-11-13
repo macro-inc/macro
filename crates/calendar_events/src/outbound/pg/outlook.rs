@@ -240,7 +240,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                             CalendarChangeOp::UpsertCalendar(target.calendar_id),
                         );
                     }
-                    sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,consecutive_sync_failures=0,
+                    sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,last_sync_error_kind=NULL,consecutive_sync_failures=0,
                         materialized_starts_at=$2,materialized_ends_at=$3,materialized_start_date=$4,materialized_end_date=$5 WHERE id=$1"#,
                         target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
                     sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status=CASE WHEN EXISTS(SELECT 1 FROM calendars c WHERE c.account_id=a.id AND NOT c.is_deleted AND c.synced_at IS NULL) THEN 'syncing' ELSE 'ready' END,
@@ -465,7 +465,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             retire_sources(&mut tx, &mut log, target.calendar_id, &observed).await?;
         }
         sqlx::query!("UPDATE calendar_outlook_work SET cursor=$2,lease_id=NULL,lease_until=NULL,next_run_at=now()+interval '2 minutes',last_error=NULL,attempts=0 WHERE id=$1",lease.id,cursor).execute(&mut *tx).await.map_err(report)?;
-        sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,consecutive_sync_failures=0,
+        sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,last_sync_error_kind=NULL,consecutive_sync_failures=0,
             materialized_starts_at=$2,materialized_ends_at=$3,materialized_start_date=$4,materialized_end_date=$5 WHERE id=$1"#,
             target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
         sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status=CASE WHEN EXISTS(SELECT 1 FROM calendars c WHERE c.account_id=a.id AND NOT c.is_deleted AND c.synced_at IS NULL) THEN 'syncing' ELSE 'ready' END,
@@ -492,7 +492,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             next_run_at=now()+make_interval(secs=>LEAST(900,30*power(2,LEAST(attempts,5)))::int) WHERE id=$1"#,lease.id,message).execute(&mut *tx).await.map_err(report)?;
         if let Some(target) = &lease.target {
             let shown_before = visible_calendar_sync_error_tx(&mut tx, target.calendar_id).await?;
-            let failures = sqlx::query_scalar!("UPDATE calendars SET last_sync_error=$2,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1 RETURNING consecutive_sync_failures",target.calendar_id,message).fetch_optional(&mut *tx).await.map_err(report)?;
+            let failures = sqlx::query_scalar!("UPDATE calendars SET last_sync_error=$2,last_sync_error_kind=$3,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1 RETURNING consecutive_sync_failures",target.calendar_id,message,super::sync_health::stored_sync_failure(kind.into())).fetch_optional(&mut *tx).await.map_err(report)?;
             if failures.is_some_and(|failures| {
                 failure_changes_sync_error_badge(shown_before.as_deref(), failures, message)
             }) {

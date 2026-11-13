@@ -129,6 +129,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               Action: [
                 'elasticfilesystem:ClientMount',
                 'elasticfilesystem:ClientWrite',
+                'elasticfilesystem:ClientRootAccess',
               ],
               Resource: [repoStorage.fileSystem.arn],
               Effect: 'Allow',
@@ -287,6 +288,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               Action: [
                 'elasticfilesystem:ClientMount',
                 'elasticfilesystem:ClientWrite',
+                'elasticfilesystem:ClientRootAccess',
               ],
               Resource: repoStorage.fileSystem.arn,
               Condition: {
@@ -747,6 +749,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
    * The access point maps every client to root (uid/gid 0), the user the
    * container already runs as, so the repositories' owner matches the process
    * and git's `safe.directory` ownership check passes without configuration.
+   * With IAM authorization EFS squashes root unless the task role also has
+   * `elasticfilesystem:ClientRootAccess`, so both policies grant it.
    */
   private initializeRepoStorage({
     vpcId,

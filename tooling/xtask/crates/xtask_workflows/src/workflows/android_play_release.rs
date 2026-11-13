@@ -113,13 +113,15 @@ fn preconditions() -> Step<Run> {
             include_str!("scripts/android_git_fetch.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
             include_str!("scripts/merge_result_native_check.sh"),
-            include_str!("scripts/android_release_preconditions.sh")
+            include_str!("scripts/android_release_preconditions.sh"),
+            include_str!("scripts/release_wait_for_checks.sh")
         ),
     )
     .id("preconditions")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
     .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
     .add_env(("WAIT_MINUTES", "30"))
+    .add_env(("RELEASE_LABEL", "android-update"))
 }
 
 fn setup_nix() -> Step<Use> {
@@ -285,3 +287,6 @@ fn pr_comment() -> Step<Use> {
             "#},
         ))
 }
+
+#[cfg(test)]
+mod test;

@@ -449,6 +449,7 @@ describe('createWorkerCacheHost', () => {
         document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
         keys: ['GraphqlSoupDocument:item-1'],
+        priority: 'typed-search',
       }),
       host.search({
         profile: 'quick-access-v1',
@@ -507,6 +508,9 @@ describe('createWorkerCacheHost', () => {
     expect(
       requests.find((request) => request.kind === 'rollback-optimistic-write')
     ).toMatchObject({ errorCode: 'DRAFT_ALREADY_SENT', error: 'denied' });
+    expect(
+      requests.find((request) => request.kind === 'read-records-by-keys')
+    ).toMatchObject({ priority: 'typed-search' });
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],

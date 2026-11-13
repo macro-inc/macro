@@ -55,26 +55,33 @@ pub mod env_keys {
 }
 
 /// The agent teammates service, over its ports.
-pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Flags> {
+pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags> {
     repository: Repository,
     membership: Membership,
     api_keys: ApiKeys,
     repos: Repos,
     computers: Computer,
+    /// Whose rollout each agent follows, for its enrollment.
+    creators: Creators,
     flags: Option<Flags>,
     environment: Box<dyn EnrollmentEnvironment>,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Flags>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
 {
     /// Build the service. Without `flags`, agent teammates stay off.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a separate port the service runs on; bundling them only moves the list"
+    )]
     pub fn new(
         repository: Repository,
         membership: Membership,
         api_keys: ApiKeys,
         repos: Repos,
         computers: Computer,
+        creators: Creators,
         flags: Option<Flags>,
         environment: impl EnrollmentEnvironment,
     ) -> Self {
@@ -84,6 +91,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Flags>
             api_keys,
             repos,
             computers,
+            creators,
             flags,
             environment: Box::new(environment),
         }
@@ -196,14 +204,15 @@ struct Undo {
     repo: bool,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Flags>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
+    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
     Repos: AgentRepos,
     Computer: Computers,
+    Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
     async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
@@ -336,14 +345,15 @@ where
     }
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Flags> TeamAgentService
-    for TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Flags>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags> TeamAgentService
+    for TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags>
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
     Repos: AgentRepos,
     Computer: Computers,
+    Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(
@@ -544,11 +554,15 @@ where
             })?
             .ok_or(AgentEnrollmentError::NotFound)?;
 
-        // With the rollout off for the agent (as its brain checks it), the
-        // computer enrolls as a plain one: no fresh key or repo token, no
-        // agent environment, so the agent doesn't start.
-        if ensure_enabled(self.flags.as_ref(), &agent).await.is_err() {
-            tracing::warn!("agent teammates are off for this agent; enrolling without it");
+        // With the rollout off for the agent's creator (as its brain checks
+        // it), the computer enrolls as a plain one: no fresh key or repo
+        // token, no agent environment, so the agent doesn't start.
+        if !agent_credentials::agent_teammates_enabled(&self.creators, self.flags.as_ref(), &agent)
+            .await
+        {
+            tracing::warn!(
+                "agent teammates are off for this agent (its creator's rollout); enrolling without it"
+            );
             return Ok(None);
         }
 

@@ -14,19 +14,30 @@ use super::*;
 use crate::domain::models::{AgentRepo, RepoTokenHash};
 use crate::domain::template::{PersonaSeed, RenderedFile, WORKSPACE_TEMPLATE};
 
-/// The agent teammates rollout, on or off for everyone.
+/// The agent teammates rollout, on or off for [`ADMIN`], who invited
+/// [`AGENT`]. Like PostHog's targeting, it never matches the agent itself.
 struct Rollout(bool);
 
 impl feature_flags::FeatureFlags for Rollout {
     async fn load(
         &self,
-        _: &MacroUserIdStr<'_>,
+        user: &MacroUserIdStr<'_>,
     ) -> Result<feature_flags::FlagSnapshot, rootcause::Report> {
         Ok(feature_flags::FlagSnapshot::new([(
             agent_credentials::AGENT_TEAMMATES_FLAG.to_owned(),
-            feature_flags::FlagValue::Boolean(self.0),
+            feature_flags::FlagValue::Boolean(self.0 && user.as_ref() == ADMIN),
         )]))
     }
+}
+
+/// [`AGENT`] was invited by [`ADMIN`].
+fn invited_by_admin() -> agent_credentials::FakeAgentCreators {
+    let mut creators = agent_credentials::FakeAgentCreators::default();
+    creators.set(
+        MacroUserIdStr::try_from(AGENT.to_owned()).unwrap(),
+        MacroUserIdStr::try_from(ADMIN.to_owned()).unwrap(),
+    );
+    creators
 }
 
 #[derive(Clone, Default)]
@@ -359,6 +370,7 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: backend.clone(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -446,6 +458,7 @@ async fn creating_again_replaces_the_token_and_another_team_is_refused() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -508,6 +521,7 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
                 remaining: Arc::new(Mutex::new(1)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -566,6 +580,7 @@ async fn a_full_repo_refuses_the_push_advertisement() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -608,6 +623,7 @@ async fn deleting_removes_the_repo_and_the_row() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -648,6 +664,7 @@ async fn voices_are_read_and_committed_only_for_the_repos_team() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -802,6 +819,39 @@ fn a_seed_without_an_owner_is_refused() {
 }
 
 #[tokio::test]
+async fn creating_a_repo_without_a_creator_is_refused() {
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            creators: invited_by_admin(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let mut persona = seed();
+    persona.creator_id = None;
+
+    let created = service
+        .create_repo(
+            MacroUserIdStr::try_from(AGENT.to_owned()).unwrap(),
+            TEAM,
+            &persona,
+        )
+        .await;
+
+    assert!(matches!(created, Err(AgentGitError::MissingCreator)));
+}
+
+#[tokio::test]
 async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {
@@ -812,6 +862,7 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -940,6 +991,7 @@ async fn deletion_waits_for_recovery_and_removes_its_published_storage() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -978,6 +1030,7 @@ async fn a_push_holds_the_repo_lock_until_its_response_ends_and_management_takes
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -1037,6 +1090,7 @@ async fn a_second_push_while_one_holds_the_repo_is_busy_and_a_rate_limited_one_n
             admins: FakeAdmins::default(),
             limiter: limiter.clone(),
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(true)),
         },
         RepoLimits {
@@ -1067,7 +1121,7 @@ async fn a_second_push_while_one_holds_the_repo_is_busy_and_a_rate_limited_one_n
 }
 
 #[tokio::test]
-async fn with_the_rollout_off_for_the_agent_its_repo_is_closed_to_every_credential() {
+async fn with_the_rollout_off_for_its_creator_the_agents_repo_is_closed_to_every_credential() {
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {
             repos: FakeRepos::default(),
@@ -1077,6 +1131,7 @@ async fn with_the_rollout_off_for_the_agent_its_repo_is_closed_to_every_credenti
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            creators: invited_by_admin(),
             flags: Some(Rollout(false)),
         },
         RepoLimits {

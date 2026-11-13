@@ -271,7 +271,14 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
             .iter()
             .map(|f| f.name.as_str())
             .collect::<Vec<_>>(),
-        ["Company", "Stage", "Owner", "Revenue"]
+        [
+            "Company",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency"
+        ]
     );
 
     let added = workflows
@@ -360,7 +367,14 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
         ]
     );
     assert_eq!(stages.empty, 1);
-    assert_eq!(all.totals, [(String::from("Revenue"), 48_000.0)]);
+    assert_eq!(
+        all.totals,
+        [crm::domain::pipeline_workflows::FieldTotal {
+            field: "Revenue".into(),
+            currency: Some("USD".into()),
+            sum: 48_000.0
+        }]
+    );
     let found = workflows
         .find(&owner, id, query(Vec::new(), Some("GLOB")))
         .await
@@ -699,6 +713,9 @@ async fn pipelines_are_created_with_stages_and_edited_by_name(pool: PgPool) {
             .is_err()
     );
 }
+
+#[path = "pipeline_workflows/commercial.rs"]
+mod commercial;
 
 #[path = "pipeline_workflows/requirements.rs"]
 mod requirements;

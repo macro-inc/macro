@@ -749,7 +749,9 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'document',
           'fragmentName',
           'keys',
+          'priority',
         ]) &&
+        (value.priority === undefined || value.priority === 'typed-search') &&
         isString(value.document) &&
         isString(value.fragmentName) &&
         Array.isArray(value.keys) &&

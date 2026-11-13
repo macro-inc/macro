@@ -16,6 +16,8 @@ export type ResultCell =
   | { kind: 'empty' }
   | { kind: 'text'; text: string }
   | { kind: 'markdown'; markdown: string }
+  /** A URL column's value: a web or email address. */
+  | { kind: 'link'; url: string }
   | { kind: 'number'; value: number }
   | { kind: 'boolean'; checked: boolean }
   | { kind: 'date'; date: Date; calendarDay: boolean }
@@ -49,9 +51,11 @@ export function resultCell(
     .with({ type: 'text' }, ({ value }) =>
       !value
         ? { kind: 'empty' }
-        : source?.markdown
-          ? { kind: 'markdown', markdown: value }
-          : { kind: 'text', text: value }
+        : source?.link
+          ? { kind: 'link', url: value }
+          : source?.markdown
+            ? { kind: 'markdown', markdown: value }
+            : { kind: 'text', text: value }
     )
     .with({ type: 'number' }, ({ value }) => ({ kind: 'number', value }))
     .with({ type: 'bool' }, ({ value }) => ({
@@ -145,6 +149,7 @@ export function resultCellText(
     .with({ kind: 'empty' }, () => '—')
     .with({ kind: 'text' }, ({ text }) => text)
     .with({ kind: 'markdown' }, ({ markdown }) => markdownToPlainText(markdown))
+    .with({ kind: 'link' }, ({ url }) => url)
     .with({ kind: 'number' }, ({ value }) => formatQueryValue(value))
     .with({ kind: 'boolean' }, ({ checked }) => (checked ? 'True' : 'False'))
     .with({ kind: 'date' }, ({ date, calendarDay }) =>
@@ -173,6 +178,21 @@ export function resultCellText(
 }
 
 const SHOWN_NAMES = 3;
+
+/** A relation's first three named rows and how many more, as `referenceList` reads them. */
+export function namedRows(
+  ids: string[],
+  table: string | null,
+  names: ReferenceNames
+): { rows: { id: string; label: string }[]; more: number } {
+  const rows = ids
+    .flatMap((id) => {
+      const label = names({ kind: 'DATABASE_ROW', id, table });
+      return label ? [{ id, label }] : [];
+    })
+    .slice(0, SHOWN_NAMES);
+  return { rows, more: ids.length - rows.length };
+}
 
 /** Up to three names, then how many more; the count when no name is known. */
 export function referenceList(

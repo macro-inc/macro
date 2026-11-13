@@ -197,6 +197,9 @@ pub enum AgentGitError {
     /// `main` has no readable `config/voice.json`.
     #[error("the agent's repo has no valid config/voice.json")]
     NoVoice,
+    /// The persona seed names no creator to own the agent.
+    #[error("the persona seed has no creator to own the agent")]
+    MissingCreator,
     /// Anything else.
     #[error("internal error: {0}")]
     Internal(rootcause::Report),
