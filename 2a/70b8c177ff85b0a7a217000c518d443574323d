@@ -1,0 +1,23 @@
+crates/ai_usage/src/domain/spend.rs
+  s_82939d9d17c700::t_d1288f4f169568 74-75,84-85
+crates/ai_usage/src/outbound/pg_agent_spend_repo/test.rs
+  s_82939d9d17c700::t_723dd0556ff14e 127-131,177-180,193-196,279-286,317-320
+services/agent_harness_service/src/cognition/server.rs
+  s_82939d9d17c700::t_b9e43a9f25150f 1005-1008
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2a70b8c177ff85b0a7a217000c518d443574323d",
+  "prompts": {},
+  "sessions": {
+    "s_82939d9d17c700": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bebbfa1f-b141-4a2c-ae6c-41735d9a70be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
