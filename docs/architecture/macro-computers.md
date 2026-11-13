@@ -375,7 +375,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   latches), `Failed` when a not-yet-connected computer gives up, once per
   attempt. The fleet worker sends it to the buyer (`created_by`) through the
   `SetupNotices` port as a `computer_setup` notification; a send that keeps
-  failing is dropped after its retries and never fails the computer.
+  failing is dropped after its retries and never fails the computer. For an
+  agent teammate's computer the notice carries the agent (`agent_of`) and goes
+  to the agent's inviter by the agent's name: "<name> is ready".
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 
