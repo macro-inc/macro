@@ -36,6 +36,11 @@ import { useMutation } from '@tanstack/solid-query';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
+import {
+  channelWriteResponseApplies,
+  channelWriteStarted,
+  reconcileFailedChannelWrite,
+} from './graphql/channel-sync';
 import { MessageNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
@@ -462,6 +467,7 @@ export function useSendMessageMutation(
       {
         onMutate: async (vars) => {
           registerMessageNonces(vars.optimisticId);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -534,7 +540,8 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          applyMessage(data, 'posted');
+          if (channelWriteResponseApplies(variables.parent, variables))
+            applyMessage(data, 'posted');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -543,6 +550,7 @@ export function useSendMessageMutation(
             rollbackInsertChannelMessage(vars.parent, context.insert);
           }
           context?.updatedAt?.rollback();
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(
@@ -605,6 +613,7 @@ export function useDeleteMessageMutation(
       {
         onMutate: async (vars) => {
           deleteNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -614,8 +623,9 @@ export function useDeleteMessageMutation(
             threadId: vars.threadID,
           });
         },
-        onSuccess(data, _vars, context) {
-          applyRootDeletion(data, context?.threadState);
+        onSuccess(data, vars, context) {
+          if (channelWriteResponseApplies(vars.parent, vars))
+            applyRootDeletion(data, context?.threadState);
           // The deleted message may have referenced a CRM record.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
@@ -625,6 +635,7 @@ export function useDeleteMessageMutation(
           if (context) {
             rollbackDeleteMessage(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
@@ -695,6 +706,7 @@ export function usePatchMessageMutation(
       {
         onMutate: async (vars) => {
           patchNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -706,8 +718,9 @@ export function usePatchMessageMutation(
             attachments_to_add: vars.attachmentsToAdd,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'edited');
+        onSuccess(data, vars) {
+          if (channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'edited');
           // An edit can add or remove a CRM record reference.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
@@ -717,6 +730,7 @@ export function usePatchMessageMutation(
           if (context) {
             rollbackUpdateMessage(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);

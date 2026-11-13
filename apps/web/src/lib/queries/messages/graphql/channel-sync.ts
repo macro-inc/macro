@@ -73,6 +73,8 @@ type ChannelSyncState = {
   /** A catch-up was asked for while one ran. */
   rerun: boolean;
   persist: ReturnType<typeof debounce> | null;
+  /** Checks that a page read asked for by `readAgain` was not lost. */
+  recover: ReturnType<typeof debounce> | null;
 };
 
 const STATES = new Map<string, ChannelSyncState>();
@@ -90,6 +92,7 @@ function track(channelId: string, userId: string) {
     running: null,
     rerun: false,
     persist: null,
+    recover: null,
   };
   STATES.set(channelId, created);
   return created;
@@ -155,9 +158,116 @@ export function channelSyncSeq(channelId: string): number | undefined {
   return timelineSeq({ type: 'channel', id: channelId });
 }
 
+/**
+ * The cache host of a channel whose loaded timeline follows the change
+ * sequence: it was read with a sequence number and its latest page is loaded.
+ */
+function trackedHost(parent: MessageParent): CacheHost | undefined {
+  if (parent.type !== 'channel' || !STATES.has(parent.id)) return undefined;
+  if (timelineSeq(parent) === undefined) return undefined;
+  return channelCacheHost();
+}
+
+/**
+ * Whether the channel's loaded timeline is kept current by its change
+ * sequence. Such a timeline is never marked stale or read again to pick up a
+ * change: what it lacks is exactly the changes after its sequence number.
+ */
+export function isChannelTracked(parent: MessageParent): boolean {
+  return trackedHost(parent) !== undefined;
+}
+
+/**
+ * Bring a tracked channel current from the server's changes. Returns false
+ * for a parent that is not tracked, which the caller reads again instead.
+ */
+export function catchUpTrackedChannel(parent: MessageParent): boolean {
+  const host = trackedHost(parent);
+  if (!host) return false;
+  fireAndForget(catchUpChannel(host, parent), SURFACE);
+  return true;
+}
+
+/** Where a pushed change's sequence number falls for the loaded timeline. */
+export type ChannelEventAdmission =
+  /** The timeline does not follow the sequence; the event applies as before. */
+  | 'untracked'
+  /** The change right after the timeline's own: apply it. */
+  | 'next'
+  /** Already in the timeline, from a page or a catch-up. */
+  | 'duplicate'
+  /** Changes between are missing; only a catch-up can bring them. */
+  | 'gap';
+
+export function admitChannelEvent(
+  parent: MessageParent,
+  seq: number | null | undefined
+): ChannelEventAdmission {
+  const current = timelineSeq(parent);
+  if (typeof seq !== 'number' || current === undefined || !trackedHost(parent))
+    return 'untracked';
+  if (seq <= current) return 'duplicate';
+  return seq === current + 1 ? 'next' : 'gap';
+}
+
+/** The timeline now holds the pushed change numbered `seq`. */
+export function channelEventApplied(parent: MessageParent, seq: number) {
+  const host = trackedHost(parent);
+  if (!host || seq - 1 !== timelineSeq(parent)) return;
+  setTimelineSeq(parent, seq);
+  schedulePersist(host, parent);
+}
+
+/**
+ * A message write failed and its optimistic change was rolled back. The
+ * server may have committed it all the same, and its pushed echo may already
+ * have moved the timeline past it, so the rows are read again; asking for
+ * the changes after the timeline's number would not bring it.
+ */
+export function reconcileFailedChannelWrite(parent: MessageParent) {
+  if (trackedHost(parent)) readAgain(parent);
+}
+
+const WRITE_STARTS = new WeakMap<object, number | undefined>();
+
+/**
+ * Whether the channel's timeline was read through the device cache, with or
+ * without a number at the moment.
+ */
+export function isChannelSequenced(parent: MessageParent): boolean {
+  return (
+    parent.type === 'channel' &&
+    STATES.has(parent.id) &&
+    channelCacheHost() !== undefined
+  );
+}
+
+/** A write is starting: remember the number the timeline is at. */
+export function channelWriteStarted(parent: MessageParent, write: object) {
+  WRITE_STARTS.set(write, timelineSeq(parent));
+}
+
+/**
+ * Whether a write's response may still be put into the timeline. Once the
+ * number has moved, the timeline holds changes the response may predate: a
+ * response applied then would put an older row under a newer number, which
+ * no catch-up corrects. The write's own change has arrived by its number, or
+ * will.
+ */
+export function channelWriteResponseApplies(
+  parent: MessageParent,
+  write: object
+): boolean {
+  if (!WRITE_STARTS.has(write) || !trackedHost(parent)) return true;
+  return WRITE_STARTS.get(write) === timelineSeq(parent);
+}
+
 /** Forget every channel's position; the next open reads its page again. */
 export function resetChannelSync() {
-  for (const state of STATES.values()) state.persist?.clear();
+  for (const state of STATES.values()) {
+    state.persist?.clear();
+    state.recover?.clear();
+  }
   STATES.clear();
 }
 
@@ -430,12 +540,51 @@ function latestPageLoaded(parent: MessageParent): Promise<boolean> {
  */
 function readAgain(parent: MessageParent) {
   forgetTimelineSeq(parent);
+  invalidatePages(parent);
+  scheduleRecover(parent);
+}
+
+function invalidatePages(parent: MessageParent) {
   queryClient.invalidateQueries({
     queryKey: getMessageTimelineQueryKeyPrefix(parent),
   });
   queryClient.invalidateQueries({
     queryKey: getThreadRepliesQueryKeyPrefix(parent),
   });
+}
+
+/**
+ * An optimistic write cancels a page read in flight and clears the mark that
+ * would start another, which would leave the timeline without a number for
+ * good. Once the channel is quiet, ask for the read again if it never landed.
+ */
+function recoverLostRead(parent: MessageParent) {
+  const key = getMessageTimelineQueryKey(parent, null);
+  const data = queryClient.getQueryData<MessageTimelineData>(key);
+  if (!data || data.pageParams[0] != null) return;
+  if (data.pages[0]?.channel_seq !== undefined || !channelCacheHost()) return;
+  const query = queryClient.getQueryState(key);
+  // A read in flight or waiting for the connection may still be cancelled by
+  // the next write, so look again until the number is back.
+  if (query?.fetchStatus !== 'idle' || hasPendingWrite(parent.id)) {
+    scheduleRecover(parent);
+    return;
+  }
+  // A read the server failed is not asked for in a loop: a reconnect or the
+  // next open reads the channel again.
+  if (query.status === 'error') return;
+  invalidatePages(parent);
+  scheduleRecover(parent);
+}
+
+function scheduleRecover(parent: MessageParent) {
+  const state = STATES.get(parent.id);
+  if (!state) return;
+  state.recover ??= debounce(
+    (recoverParent: MessageParent) => recoverLostRead(recoverParent),
+    PERSIST_DELAY_MS
+  );
+  state.recover(parent);
 }
 
 /**
@@ -623,7 +772,7 @@ async function persistLatestPage(host: CacheHost, parent: MessageParent) {
 }
 
 /** Write the loaded latest page back to the cache once the timeline is quiet. */
-export function schedulePersist(host: CacheHost, parent: MessageParent) {
+function schedulePersist(host: CacheHost, parent: MessageParent) {
   const state = STATES.get(parent.id);
   if (!state) return;
   state.persist ??= debounce(
