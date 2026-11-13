@@ -38,7 +38,7 @@ pub(super) struct Report {
     pub(super) view_index: usize,
 }
 
-pub(super) fn model_error(effect: &document_session::ViewEffect) -> Option<&Error> {
+pub(crate) fn model_error(effect: &document_session::ViewEffect) -> Option<&Error> {
     use document_session::{SessionError, ViewEffect};
     match effect {
         ViewEffect::Error(SessionError::Model(error)) => Some(error),

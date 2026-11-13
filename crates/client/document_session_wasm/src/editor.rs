@@ -84,20 +84,24 @@ impl EditorSession {
             _ => {
                 return Err(js(BoundaryError::Invalid(
                     "code tokenizer and profile must be supplied together",
-                )))
+                )));
             }
         };
+        let mut machine = machine::Machine::create_macro_with_namespace(
+            abi_major,
+            config,
+            now,
+            wall,
+            namespace,
+            write_root_search_text.unwrap_or(false),
+            tokens,
+        )
+        .map_err(js)?;
+        if let Some(registration) = &code_tokens {
+            machine.bind_code_tokens(registration.token()).map_err(js)?;
+        }
         Ok(Self {
-            machine: machine::Machine::create_macro_with_namespace(
-                abi_major,
-                config,
-                now,
-                wall,
-                namespace,
-                write_root_search_text.unwrap_or(false),
-                tokens,
-            )
-            .map_err(js)?,
+            machine,
             hostname,
             #[cfg(feature = "compatibility")]
             compatibility: None,
@@ -161,6 +165,24 @@ impl EditorSession {
     #[wasm_bindgen(js_name=takeViewCommandFailure)]
     pub fn take_view_command_failure(&self) -> Result<Option<crate::ViewCommandFailure>, JsError> {
         self.machine.take_view_command_failure().map_err(js)
+    }
+    /// Recorded code-tokenizer throws reported in the latest output, taken once.
+    #[wasm_bindgen(js_name=takeCodeTokenFailure)]
+    pub fn take_code_token_failure(&mut self) -> Option<crate::code_tokens::CodeTokenFailure> {
+        self.machine.take_code_token_failure()
+    }
+    /// The original thrown value as `[value]`, so a thrown `undefined` is distinguishable;
+    /// `undefined` for any pair this session did not report or already gave out.
+    #[wasm_bindgen(js_name=takeCodeTokenCause)]
+    pub fn take_code_token_cause(&self, entry: u64, cause: u32) -> Option<js_sys::Array> {
+        self.machine
+            .take_code_token_cause(entry, cause)
+            .map(|value| js_sys::Array::of1(&value))
+    }
+    /// Throws this session's tokenizer could not retain (a second in one entry, or past the bound).
+    #[wasm_bindgen(js_name=codeTokenCausesDropped)]
+    pub fn code_token_causes_dropped(&self) -> u32 {
+        self.machine.code_token_causes_dropped()
     }
     /// Admit a genuine programmatic Enter with an explicit null JS event payload.
     #[wasm_bindgen(js_name=viewCommandEnter)]

@@ -10,6 +10,7 @@ use std::sync::{
 mod block_navigation;
 mod exports;
 mod failure;
+pub(crate) use failure::model_error;
 pub use failure::ViewCommandFailure;
 mod host;
 mod registry;

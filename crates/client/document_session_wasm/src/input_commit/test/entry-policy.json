@@ -15,6 +15,10 @@
     "policy": "preserve-readonly",
     "jsName": "clipboardDom"
   },
+  "code_token_causes_dropped": {
+    "policy": "preserve-readonly",
+    "jsName": "codeTokenCausesDropped"
+  },
   "command": {
     "policy": "invalidate-before-decode",
     "jsName": "command"
@@ -158,6 +162,14 @@
   "storage_loaded": {
     "policy": "invalidate-before-decode",
     "jsName": "storageLoaded"
+  },
+  "take_code_token_cause": {
+    "policy": "preserve-registration-only",
+    "jsName": "takeCodeTokenCause"
+  },
+  "take_code_token_failure": {
+    "policy": "preserve-registration-only",
+    "jsName": "takeCodeTokenFailure"
   },
   "take_output": {
     "policy": "preserve-output-or-observation-only",

@@ -60,6 +60,13 @@ pub enum CodeTokenError {
     /// The host tokenizer threw or was retired.
     #[error("host code tokenizer failed")]
     Host,
+    /// The host tokenizer threw; the host retains the thrown value as `cause` of the current
+    /// session entry. Same text as `Host`: the formatted error never carries the value.
+    #[error("host code tokenizer failed")]
+    Thrown {
+        /// Host-assigned id of the thrown value within the current entry.
+        cause: u32,
+    },
     /// The host returned descriptors that do not reproduce the requested text.
     #[error("host code tokens do not match the code text")]
     Mismatch,

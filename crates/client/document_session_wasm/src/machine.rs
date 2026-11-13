@@ -32,6 +32,12 @@ pub(crate) struct Machine {
     initial_telemetry: Vec<wire::TelemetryMsg>,
     constructor_clock: Option<Arc<AtomicI64>>,
     view_commands: Option<Arc<crate::view_command_scope::Registry>>,
+    /// Last issued session entry; never 0 once a call began, never wraps.
+    entry: u64,
+    /// The session's code tokenizer token.
+    code_tokens: Option<u64>,
+    /// Recorded throws reported in the latest output; replaced by the next entry.
+    code_token_failure: Option<crate::code_tokens::CodeTokenFailure>,
     #[cfg(test)]
     pub(crate) fail_next_output_generation: bool,
     #[cfg(not(feature = "compatibility"))]
@@ -213,6 +219,9 @@ impl Machine {
             initial_telemetry: capture.finish(),
             constructor_clock,
             view_commands: None,
+            entry: 0,
+            code_tokens: None,
+            code_token_failure: None,
             #[cfg(test)]
             fail_next_output_generation: false,
             #[cfg(not(feature = "compatibility"))]
@@ -277,6 +286,32 @@ impl Machine {
         self.view_commands = Some(registry);
         Ok(())
     }
+    /// Bind the session's code tokenizer once, before any call.
+    pub(crate) fn bind_code_tokens(&mut self, token: u64) -> Result<(), BoundaryError> {
+        if self.code_tokens.is_some() || self.entry != 0 {
+            return Err(BoundaryError::Invalid(
+                "code tokenizer bound after construction",
+            ));
+        }
+        self.code_tokens = Some(token);
+        Ok(())
+    }
+    pub(crate) fn take_code_token_failure(
+        &mut self,
+    ) -> Option<crate::code_tokens::CodeTokenFailure> {
+        self.code_token_failure.take()
+    }
+    /// Remove a reported cause by its exact (entry, cause); any other pair misses.
+    pub(crate) fn take_code_token_cause(
+        &self,
+        entry: u64,
+        cause: u32,
+    ) -> Option<wasm_bindgen::JsValue> {
+        crate::code_tokens::take(self.code_tokens?, entry, cause)
+    }
+    pub(crate) fn code_token_causes_dropped(&self) -> u32 {
+        self.code_tokens.map_or(0, crate::code_tokens::dropped)
+    }
     pub(crate) fn take_view_command_failure(
         &self,
     ) -> Result<Option<crate::ViewCommandFailure>, BoundaryError> {
@@ -316,6 +351,29 @@ impl Machine {
         )
     }
     fn call_inner_observed(
+        &mut self,
+        input: SessionInput,
+        mono: f64,
+        wall: Option<f64>,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+    ) -> Result<u32, BoundaryError> {
+        // Entry ids key recorded tokenizer throws; nesting cannot reach here (&mut self).
+        let entry = self
+            .entry
+            .checked_add(1)
+            .ok_or(BoundaryError::Invalid("session entry id space"))?;
+        self.entry = entry;
+        self.code_token_failure = None;
+        if let Some(token) = self.code_tokens {
+            crate::code_tokens::begin_entry(token, entry);
+        }
+        let result = self.call_entry(input, mono, wall, main_commit);
+        if let Some(token) = self.code_tokens {
+            crate::code_tokens::end_entry(token);
+        }
+        result
+    }
+    fn call_entry(
         &mut self,
         input: SessionInput,
         mono: f64,
@@ -583,6 +641,9 @@ impl Machine {
         }
         if let Some(registry) = &self.view_commands {
             registry.bind_output(&out.view);
+        }
+        if let Some(token) = self.code_tokens {
+            self.code_token_failure = crate::code_tokens::bind_output(token, self.entry, &out.view);
         }
         if command
             && flags & 16 == 0
