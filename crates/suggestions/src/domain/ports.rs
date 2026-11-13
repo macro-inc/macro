@@ -9,10 +9,11 @@ use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Accept, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion, OpenTarget,
-    ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunSettled, RunStartError,
-    SessionReadError, SessionState, StoredRun, Suggestion, SuggestionContent, SuggestionError,
-    SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
+    Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion,
+    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunSettled,
+    RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionContent,
+    SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 
@@ -165,6 +166,16 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Make `draft` the draft of the person's suggestion `id` while it is open,
+    /// replacing any draft it had, logging `change`; whether it was open.
+    fn set_draft(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        draft: &Target,
+        change: &Change,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Move the person's suggestion `id` to `to` when it is in one of `from` and
     /// still last changed at `shown_updated_at`: acting on it as the caller
     /// saw it. Whether it moved.
@@ -224,6 +235,20 @@ pub trait SuggestionAccess: Send + Sync + 'static {
 pub trait RunScopes: Send + Sync + 'static {
     /// Whether `session` runs a suggestion that says it sends nothing.
     async fn sends_nothing(&self, session: Uuid) -> Result<bool, rootcause::Report>;
+}
+
+/// The person's drafts, as the domain that keeps them sees them.
+pub trait SuggestionDrafts: Send + Sync + 'static {
+    /// The error type returned by draft reads.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The thread of email draft `draft` when it is an unsent draft in one
+    /// of the person's own inboxes; `None` for anything else.
+    fn email_draft_thread(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        draft: Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 }
 
 /// The agent session behind a code-mode request. Object-safe, so one
@@ -367,6 +392,16 @@ pub trait SuggestionApi: Send + Sync + 'static {
         correlation: Option<Uuid>,
         id: Uuid,
         request: RetireSuggestionRequest,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
+
+    /// Make a reply draft the session wrote the draft of an open reply suggestion,
+    /// replacing the one it had.
+    fn attach_draft(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        id: Uuid,
+        request: AttachDraft,
     ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 }
 

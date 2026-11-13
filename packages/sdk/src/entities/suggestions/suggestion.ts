@@ -11,6 +11,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
+import { EmailDraft } from '../email/draft';
 import type { MacroEntityType } from '../entity';
 
 /** An item a suggestion is about: any handle with an entity type, such as an `EmailThread`, and optionally a part of it, such as one message in a channel. */
@@ -187,6 +188,13 @@ export class Suggestion {
     return this.record.kind === 'entity' ? this.record.action : undefined;
   }
 
+  /** A reply suggestion's draft, once a session attached one; it no longer loads once the user deleted it. */
+  get draft(): EmailDraft | undefined {
+    if (this.record.kind !== 'entity') return undefined;
+    const partId = this.record.draft?.partId;
+    return partId ? EmailDraft.byId(this.client, partId) : undefined;
+  }
+
   /**
    * Rewrite this open suggestion's title, summary, prompt, importance, categories
    * or items, with a `reason`. Only a suggestions generation session may; its kind,
@@ -200,6 +208,28 @@ export class Suggestion {
         await this.client.scheduledAction.rewriteSuggestion({
           path: { id: this.id },
           body: { ...rest, about: about ? targets(about) : undefined },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Attach a reply draft to this open reply suggestion, with a `reason`; it replaces
+   * the suggestion's old draft. Only a suggestions generation session may. The draft is
+   * the user's own unsent draft in the thread the suggestion is about, from
+   * `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`.
+   * Nothing is sent.
+   */
+  async attachDraft(
+    draft: EmailDraft,
+    reason: string,
+  ): Promise<SuggestionWriteOutcome> {
+    return outcome(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.attachSuggestionDraft({
+          path: { id: this.id },
+          body: { emailDraftId: draft.id, reason },
         }),
       ),
     );

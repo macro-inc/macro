@@ -43,6 +43,9 @@ pub const SYMBOLS: &[&str] = &[
     "RoutineNamespace.list",
     "AgentNamespace.list",
     "DatabaseNamespace.list",
+    "EmailThread.drafts",
+    "EmailNamespace.createDraft",
+    "Suggestion.attachDraft",
     "AiNamespace.structuredCompletion",
 ];
 
