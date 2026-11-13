@@ -115,6 +115,86 @@ pub enum Widget {
         title: Option<String>,
         children: Vec<Widget>,
     },
+    // The variants below are agent panes (`DASHBOARD_WIDGETS`). They decode
+    // everywhere, but `ViewWithoutDashboards`, the schema most models read,
+    // leaves them out: only people with agent dashboards are offered them.
+    /// An agent's sessions and the sub-agents they started, as a tree with
+    /// live status and the questions waiting on someone.
+    #[serde(rename_all = "camelCase")]
+    Sessions {
+        /// The agent account's user id; omitted, the dashboard's agent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        agent_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        /// Cap the number of top-level sessions shown, 1-50.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<u8>", range(min = 1, max = 50))]
+        #[specta(optional, type = u8)]
+        limit: Option<PaneLimit>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
+    /// What an agent did in the workspace, newest first: everything it did,
+    /// or only what one of its sessions did.
+    #[serde(rename_all = "camelCase")]
+    Activity {
+        /// The agent account's user id; omitted, the dashboard's agent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        agent_id: Option<String>,
+        /// Only this agent session's activity.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        session_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        /// Cap the number of entries shown, 1-50.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<u8>", range(min = 1, max = 50))]
+        #[specta(optional, type = u8)]
+        limit: Option<PaneLimit>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
+    /// The routines an agent owns, with each one's next run and last result.
+    #[serde(rename_all = "camelCase")]
+    Routines {
+        /// The agent account's user id; omitted, the dashboard's agent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        agent_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
+    /// An agent's AI cost as a bar chart, one bar per day, week, month or
+    /// year.
+    #[serde(rename_all = "camelCase")]
+    Spend {
+        /// The agent account's user id; omitted, the dashboard's agent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        agent_id: Option<String>,
+        /// One bar per this period; day when omitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = SpendBucket)]
+        bucket: Option<SpendBucket>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
 }
 
 /// The space between a container's children, as a Tailwind-ish step.
@@ -323,4 +403,23 @@ pub enum Justify {
     Center,
     End,
     Between,
+}
+
+/// How many rows an agent pane shows, 1-50.
+#[nutype(
+    validate(greater_or_equal = 1, less_or_equal = 50),
+    derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize),
+    derive_unchecked(Type)
+)]
+pub struct PaneLimit(u8);
+
+/// The period a spend pane's bars cover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "DashboardSpendBucket")]
+pub enum SpendBucket {
+    Day,
+    Week,
+    Month,
+    Year,
 }

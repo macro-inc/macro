@@ -1,4 +1,4 @@
-use crate::{View, Widget, decode_view, present_view_schema};
+use crate::{Offer, View, Widget, decode_view, present_view_schema};
 use serde_json::json;
 
 /// One of every widget, with every field the types name.
@@ -238,8 +238,118 @@ fn a_problem_never_repeats_what_the_view_holds() {
 #[test]
 fn the_present_view_schema_is_pinned() {
     let schema: serde_json::Value =
-        serde_json::from_str(&present_view_schema()).expect("the schema is JSON");
+        serde_json::from_str(&present_view_schema(Offer::Views)).expect("the schema is JSON");
     insta::with_settings!({ sort_maps => true }, {
         insta::assert_json_snapshot!(schema);
     });
+}
+
+#[test]
+fn the_dashboard_schema_is_pinned() {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema(Offer::Dashboards)).expect("the schema is JSON");
+    insta::with_settings!({ sort_maps => true }, {
+        insta::assert_json_snapshot!(schema);
+    });
+}
+
+/// The widget types a schema offers the model.
+fn offered_types(offer: Offer) -> Vec<String> {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema(offer)).expect("the schema is JSON");
+    schema["$defs"]["Widget"]["oneOf"]
+        .as_array()
+        .expect("widget variants")
+        .iter()
+        .map(|variant| {
+            variant["properties"]["type"]["const"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect()
+}
+
+/// Without agent dashboards the model never reads the agent panes, though a
+/// view holding them still decodes.
+#[test]
+fn only_dashboards_offer_agent_panes() {
+    let views = [
+        "md",
+        "timeline",
+        "list",
+        "channelMessage",
+        "events",
+        "cards",
+        "tags",
+        "agentUpdates",
+        "container",
+    ];
+    assert_eq!(offered_types(Offer::Views), views);
+    let mut dashboards = views.to_vec();
+    dashboards.extend(["sessions", "activity", "routines", "spend"]);
+    assert_eq!(offered_types(Offer::Dashboards), dashboards);
+
+    let views_schema = present_view_schema(Offer::Views);
+    for name in ["DashboardSpendBucket", "agentId", "sessionId", "bucket"] {
+        assert!(!views_schema.contains(&format!("\"{name}\"")), "{name}");
+    }
+}
+
+/// Every agent pane, with every field the types name, and with none.
+#[test]
+fn a_dashboard_of_every_agent_pane_decodes() {
+    let view = json!({
+        "title": "Tod",
+        "widgets": [
+            { "type": "sessions", "agentId": "macro|agent@example.com", "title": "Running", "limit": 10, "dense": true },
+            {
+                "type": "activity",
+                "agentId": "macro|agent@example.com",
+                "sessionId": "session-1",
+                "title": "Feed",
+                "limit": 25,
+                "dense": false
+            },
+            { "type": "routines", "agentId": "macro|agent@example.com", "title": "Schedules", "dense": true },
+            { "type": "spend", "agentId": "macro|agent@example.com", "bucket": "week", "title": "Spend", "dense": true },
+            { "type": "sessions" },
+            { "type": "activity" },
+            { "type": "routines" },
+            { "type": "spend" }
+        ]
+    });
+    let decoded = decode_view(&view).expect("every agent pane decodes");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
+}
+
+#[test]
+fn an_agent_pane_out_of_bounds_is_named_by_its_place() {
+    let cases = [
+        (
+            json!({ "widgets": [{ "type": "sessions", "limit": 0 }] }),
+            "view.widgets[0] should be greater or equal to 1",
+        ),
+        (
+            json!({ "widgets": [{ "type": "activity", "limit": 51 }] }),
+            "view.widgets[0] should be less or equal to 50",
+        ),
+        (
+            json!({ "widgets": [{ "type": "spend", "bucket": "hour" }] }),
+            "view.widgets[0] should be one of `day`, `week`, `month`, `year`",
+        ),
+    ];
+    for (view, problem) in cases {
+        assert_eq!(decode_view(&view), Err(problem.to_owned()), "{view}");
+    }
+}
+
+/// A problem with a widget's type never suggests an agent pane: it reaches
+/// models that were never offered them.
+#[test]
+fn an_unknown_widget_never_suggests_agent_panes() {
+    let problem = decode_view(&json!({ "widgets": [{ "type": "piechart" }] })).unwrap_err();
+    for pane in ["sessions", "activity", "routines", "spend"] {
+        assert!(!problem.contains(pane), "{problem}");
+    }
 }
