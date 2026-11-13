@@ -1,7 +1,7 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { onlineManager, QueryClient } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { channelReadNetworkMode } from '../flag';
+import { channelReadNetworkMode, retryOnceOnline } from '../flag';
 import { fakeHost } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -43,5 +43,64 @@ describe('channelReadNetworkMode', () => {
         networkMode: channelReadNetworkMode(channel, host),
       })
     ).resolves.toBe('held page');
+  });
+});
+
+describe('retryOnceOnline', () => {
+  afterEach(() => onlineManager.setOnline(true));
+
+  const once = (failureCount: number, error: Error) =>
+    error.message !== 'terminal' && failureCount < 1;
+  const failed = new Error('failed');
+
+  it('keeps the policy unchanged while online', () => {
+    const retry = retryOnceOnline(once);
+    expect(retry(0, failed)).toBe(true);
+    expect(retry(1, failed)).toBe(false);
+  });
+
+  it('does not spend the retry on a failure while offline', () => {
+    const retry = retryOnceOnline(once);
+    onlineManager.setOnline(false);
+    expect(retry(0, failed)).toBe(true);
+    expect(retry(1, failed)).toBe(true);
+    onlineManager.setOnline(true);
+    expect(retry(2, failed)).toBe(true);
+    expect(retry(3, failed)).toBe(false);
+    // The next fetch starts with the plain policy again.
+    expect(retry(0, failed)).toBe(true);
+    expect(retry(1, failed)).toBe(false);
+  });
+
+  it('still ends on an error the policy never retries', () => {
+    const retry = retryOnceOnline(once);
+    onlineManager.setOnline(false);
+    expect(retry(0, new Error('terminal'))).toBe(false);
+  });
+
+  it('pauses an offline read the device cannot serve until the connection returns', async () => {
+    onlineManager.setOnline(false);
+    const client = new QueryClient();
+    // Mounting is what resumes paused reads when the connection returns.
+    client.mount();
+    const read = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(failed)
+      .mockRejectedValueOnce(failed)
+      .mockResolvedValue('server page');
+    const result = client.fetchQuery({
+      queryKey: ['unheld'],
+      queryFn: read,
+      networkMode: 'offlineFirst',
+      retry: retryOnceOnline(once),
+      retryDelay: 0,
+    });
+    await vi.waitFor(() =>
+      expect(client.getQueryState(['unheld'])?.fetchStatus).toBe('paused')
+    );
+    expect(read).toHaveBeenCalledTimes(1);
+    onlineManager.setOnline(true);
+    await expect(result).resolves.toBe('server page');
+    expect(read).toHaveBeenCalledTimes(3);
   });
 });

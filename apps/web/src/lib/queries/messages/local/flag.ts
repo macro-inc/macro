@@ -7,6 +7,7 @@ import {
   getGraphqlSoupCacheHost,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
+import { onlineManager } from '@tanstack/solid-query';
 
 // Hosts whose native engine predates channel timelines stay on REST.
 const unsupportedHosts = new WeakSet<CacheHost>();
@@ -57,4 +58,25 @@ export function channelReadNetworkMode(
   host: CacheHost | undefined = channelCacheHost()
 ): 'offlineFirst' | 'online' {
   return parent.type === 'channel' && host ? 'offlineFirst' : 'online';
+}
+
+type RetryPolicy = (failureCount: number, error: Error) => boolean;
+
+/**
+ * A retry policy for reads that run offline. A read the device could not serve
+ * fails while offline; that failure waits for the connection instead of
+ * ending the read, and does not count against the retries `policy` allows
+ * once the connection is back. Errors `policy` never retries still end it.
+ */
+export function retryOnceOnline(policy: RetryPolicy): RetryPolicy {
+  let offlineFailures = 0;
+  return (failureCount, error) => {
+    if (failureCount === 0) offlineFailures = 0;
+    if (!onlineManager.isOnline()) {
+      if (!policy(0, error)) return false;
+      offlineFailures = failureCount + 1;
+      return true;
+    }
+    return policy(failureCount - offlineFailures, error);
+  };
 }
