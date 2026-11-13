@@ -1591,8 +1591,7 @@ away leaves focus where the user put it. The backend-free regression is
 
 Use only the current team roster and available agents for new Assignee selections.
 Keep initially selected outsiders visible and removable, and allow them to be
-re-added during the same editing session without contact discovery. Once the
-editor closes without them, they cannot be added again unless they join the team.
+re-added while the record stays mounted, without contact discovery.
 Reuse the existing selected-first ordering at opening and keep row positions
 stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
 Preserve each picker’s existing placeholder, sizing, and row styling.
