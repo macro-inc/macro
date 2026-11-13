@@ -103,7 +103,7 @@ like CI's, and a killed run arrives with `outcome="interrupted"`.
 
 | `event` | Fields |
 | --- | --- |
-| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `host_name` (the readable machine name, only from machines with `services = true`), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
 | `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
 | `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
 | `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |
@@ -117,6 +117,22 @@ quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="
 `nixos/local-report.json` holds the queries for the `Macro run_local` dashboard
 (`/d/macro-run-local`) and for `scripts/ci-report.ts --spec local`. Both
 dashboards build their Loki panels with `nixos/loki-report-panels.nix`.
+
+### Local stacks' own telemetry
+
+A developer who sets `services = true` in their local telemetry settings also
+sends their local stacks' service traces, logs and metrics through the same
+route and token (`docs/development/running-locally.md`). A Grafana Alloy
+forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
+error trace and a tenth of the rest, drops the local collector's own telemetry,
+and tags resources and metric datapoints with `host.name` (the machine's name)
+and `deployment.environment="local"`; services add `macro.local.instance`. Dev
+dashboards and alerts select `dev`/`development`, so this data stays out of
+them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
+under `deployment_environment="local"`. The `Macro run_local` dashboard's
+`Machine` variable lists `host_name` from those metrics, and its last row
+(`nixos/local-dashboard.nix`, not the shared report spec) shows bring-ups,
+stacks, sampled traces, error logs and logs by machine.
 
 ### Pinned exporter limits
 
