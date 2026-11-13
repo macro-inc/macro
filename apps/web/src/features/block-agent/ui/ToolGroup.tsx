@@ -58,10 +58,15 @@ export function ToolGroup(props: ToolGroupProps) {
         <Show
           when={props.live}
           fallback={
-            <span class="min-w-0 truncate">
-              {`Used ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`}
+            <span class="flex min-w-0">
+              <span class="min-w-0 truncate">
+                {`Used ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`}
+              </span>
+              {/* Never cut off: a narrow row shortens the count first. */}
               <Show when={failed() > 0}>
-                <span class="text-failure">{` · ${failed()} failed`}</span>
+                <span class="shrink-0 whitespace-pre text-failure">
+                  {` · ${failed()} failed`}
+                </span>
               </Show>
             </span>
           }

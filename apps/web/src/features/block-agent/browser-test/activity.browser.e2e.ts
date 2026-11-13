@@ -111,6 +111,27 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
     .toBeLessThanOrEqual(1);
   expect((await calls.boundingBox())?.height).toBeGreaterThan(600);
 
+  // A row too narrow for its label shortens the count, never the failures.
+  await runs.nth(1).evaluate((row) => {
+    row.style.maxWidth = '140px';
+  });
+  const failures = runs.nth(1).getByText('· 2 failed', { exact: true });
+  const caret = runs.nth(1).locator('svg').last();
+  const [suffix, end] = await Promise.all([
+    failures.boundingBox(),
+    caret.boundingBox(),
+  ]);
+  // The row really is too narrow: the count is the part cut short.
+  await expect
+    .poll(() =>
+      runs
+        .nth(1)
+        .getByText('Used 74 tools', { exact: true })
+        .evaluate((count) => count.scrollWidth > count.clientWidth)
+    )
+    .toBe(true);
+  expect(suffix && end).toBeTruthy();
+  if (suffix && end) expect(suffix.x + suffix.width).toBeLessThanOrEqual(end.x);
 });
 
 test("the live line carries the session's status line when it has one", async ({
