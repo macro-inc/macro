@@ -34,7 +34,9 @@ code, not in its prompt. The harness also signs the scope into the credential
   `agent_scope` authenticates as `ScopedMacroApiJwt`, which
   `AccountHolderOrInternal` refuses on every route that issues a credential.
   `SignedScope` reads the `agent_scope` claim; a name this build doesn't know
-  allows only reads. No scope may share (`allows_sharing`).
+  allows only reads. `ANY_WRITE` lists paths that run any write whatever the
+  method (DSS GraphQL, by POST or its WebSocket); every scope, and an unknown
+  one, is refused them. No scope may share (`allows_sharing`).
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, the validated session
   (`current_session`), and the scope stored with it, else the one the

@@ -173,6 +173,11 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/mcp/servers"),
 ];
 
+/// Requests that run any of a service's writes behind one path, outside
+/// every scope whatever their method: GraphQL runs mutations sent by POST or
+/// over its WebSocket, which opens with a GET. The SDK sends neither.
+const ANY_WRITE: &[(&str, &str)] = &[("POST", "/soup/graphql"), ("GET", "/soup/graphql/ws")];
+
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
 const GENERATION_WRITES: &[(&str, &str)] = &[
@@ -245,13 +250,17 @@ impl SessionScope {
     }
 
     /// Whether a request with `method` to `path` is inside the scope. Reads
-    /// by method always are. A generation session makes other requests only
-    /// on its list or [`POST_READS`]; a run that sends nothing makes any but
-    /// the ones that reach someone else. `path` may carry one service prefix
-    /// before the SDK's path. Credentials are not decided here: a scoped
+    /// by method are, unless the path runs writes too ([`ANY_WRITE`]). A
+    /// generation session makes other requests only on its list or
+    /// [`POST_READS`]; a run that sends nothing makes any but the ones that
+    /// reach someone else. `path` may carry one service prefix before the
+    /// SDK's path. Credentials are not decided here: a scoped
     /// credential is a `ScopedMacroApiJwt`, which `AccountHolderOrInternal`
     /// refuses on every route that issues one.
     pub fn allows(self, method: &str, path: &str) -> bool {
+        if listed(ANY_WRITE, method, path) {
+            return false;
+        }
         if reads_by_method(method) {
             return true;
         }
@@ -283,7 +292,7 @@ pub enum SignedScope {
     /// A scope this build knows.
     Known(SessionScope),
     /// A name this build doesn't know, signed by a newer harness: only reads
-    /// by method are inside it.
+    /// by method are inside it, and not those that run writes too.
     Unknown,
 }
 
@@ -301,7 +310,7 @@ impl SignedScope {
         match self {
             Self::Unscoped => true,
             Self::Known(scope) => scope.allows(method, path),
-            Self::Unknown => reads_by_method(method),
+            Self::Unknown => reads_by_method(method) && !listed(ANY_WRITE, method, path),
         }
     }
 

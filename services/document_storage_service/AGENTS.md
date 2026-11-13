@@ -124,7 +124,8 @@ threads, pins, recents, notifications, folders, activity.
 - Thread edits (`api/threads/edit_thread.rs`) and saved view definition
   updates refuse sharing changes from a scoped agent session
   (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
-  joins that check.
+  joins that check. Every agent session scope is refused `/soup/graphql` and
+  its WebSocket (`agent_correlation::scope`).
 
 ## Related
 

@@ -175,3 +175,25 @@ fn a_signed_scope_is_read_from_its_claim() {
     assert!(generation.allows("POST", "/dss/search"));
     assert!(SignedScope::Unscoped.allows("DELETE", "/api/file/01a1"));
 }
+
+/// GraphQL runs mutations behind one path, by POST or over a WebSocket that
+/// opens with a GET, so no scope reaches it, under any service prefix.
+#[test]
+fn no_scope_reaches_graphql() {
+    for scope in [
+        SignedScope::Known(SessionScope::Generation),
+        SignedScope::Known(SessionScope::NoSend),
+        SignedScope::Unknown,
+    ] {
+        for (method, path) in [
+            ("POST", "/soup/graphql"),
+            ("POST", "/dss/soup/graphql"),
+            ("GET", "/soup/graphql/ws"),
+            ("GET", "/dss/soup/graphql/ws"),
+        ] {
+            assert!(!scope.allows(method, path), "{scope:?} {method} {path}");
+        }
+        assert!(scope.allows("GET", "/dss/documents/01a1"), "{scope:?}");
+    }
+    assert!(SignedScope::Unscoped.allows("POST", "/dss/soup/graphql"));
+}
