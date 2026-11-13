@@ -1,0 +1,23 @@
+crates/agent_wakes/src/outbound/clock.rs
+  s_9adf6dfdfe2ddd::t_94b29fe3cb0fd6 1-15
+crates/agent_wakes/src/outbound/mod.rs
+  s_9adf6dfdfe2ddd::t_4015af52d4251a 3,8
+crates/agent_wakes/src/outbound/postgres.rs
+  s_9adf6dfdfe2ddd::t_91fca88c303564 190-192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0cf6cd0b3111f0d79224c2e0374b90cb4e338c26",
+  "prompts": {},
+  "sessions": {
+    "s_9adf6dfdfe2ddd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c35b1b8-462f-45fe-960d-31815e6c0d47",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
