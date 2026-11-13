@@ -28,8 +28,8 @@ import {
   createUniqueId,
   For,
   type JSX,
-  on,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -491,7 +491,8 @@ export function ComputerSetupSteps(props: {
             </p>
           </Show>
         </ActionDialogShell.Body>
-        <ActionDialogShell.Footer>
+        {/* Three actions do not fit one phone row: stack them, Try it on top. */}
+        <ActionDialogShell.Footer class="touch:flex-col-reverse touch:items-stretch">
           <Button type="button" variant="ghost" onClick={props.onClose}>
             {t('computers.done')}
           </Button>

@@ -71,6 +71,7 @@ import {
   on,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
@@ -167,7 +168,16 @@ export function Agents(props: {
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
-  const [creating, setCreating] = createSignal(false);
+  // A create request already waiting opens the form on first render, so the
+  // list never flashes before it.
+  const pendingCreate = untrack(agentSettingsRequest);
+  const [creating, setCreating] = createSignal(
+    pendingCreate?.type === 'create'
+  );
+  // A machine chosen elsewhere, such as a Macro computer just set up.
+  const [createHarnessId, setCreateHarnessId] = createSignal(
+    pendingCreate?.type === 'create' ? pendingCreate.harnessId : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
@@ -284,8 +294,6 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
-  // A machine chosen elsewhere, such as a Macro computer just set up.
-  const [createHarnessId, setCreateHarnessId] = createSignal<string>();
   createEffect(
     on(agentSettingsRequest, (request) => {
       if (request?.type !== 'create') return;
@@ -924,7 +932,9 @@ function AgentEditorPage(props: {
                     )
                   }
                   fallback={
-                    <p class="settings-input text-ink-muted">
+                    // A status line, not a field: it wraps on a phone
+                    // instead of spilling out of an input's fixed height.
+                    <p class="flex min-h-9 not-touch:min-h-8 items-center text-sm text-ink-muted">
                       {t('computers.modelsWhenOn')}
                     </p>
                   }
@@ -1342,7 +1352,8 @@ function AgentEditorPage(props: {
                 title="Where it runs"
                 description="Pick where this agent does its work."
               >
-                <fieldset class="flex flex-col gap-2">
+                {/* A fieldset is min-content wide by default; a long option would widen the phone form. */}
+                <fieldset class="flex min-w-0 flex-col gap-2">
                   <legend class="sr-only">Where it runs</legend>
                   <WhereItRunsOption
                     value="in-memory"
