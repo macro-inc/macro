@@ -12,9 +12,20 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
+import { deepEqual } from '@core/util/compareUtils';
 import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { children, createSignal, For, type ParentProps, Show } from 'solid-js';
+import {
+  type Accessor,
+  children,
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  For,
+  on,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   canRunRoutine,
@@ -61,83 +72,113 @@ type RoutineRowMenuProps = {
 type RoutineMenuEntry = {
   id: RoutineMenuItem;
   label: string;
-  disabled?: boolean;
-  destructive?: boolean;
+  /** Read where it renders: it follows the row. */
+  readonly disabled: boolean;
+  destructive: boolean;
+  /** Acts on the row as it is when chosen. */
   run(): void;
 };
 
-function routineMenuEntries(
+function routineMenuEntry(
+  id: RoutineMenuItem,
   props: RoutineRowMenuProps,
   actions: RoutineRowMenuActions
-): RoutineMenuEntry[][] {
-  const row = props.row;
+): RoutineMenuEntry {
   const entry = (
-    id: RoutineMenuItem,
     label: string,
-    run: () => void,
-    extra: { disabled?: boolean; destructive?: boolean } = {}
-  ): RoutineMenuEntry => ({ id, label, run, ...extra });
-  // Phones show one pane, so nothing opens beside the list there.
-  const desktop = !isMobile();
-  return routineMenuGroups(row, {
-    nested: Boolean(props.nested),
-    splits: desktop && Boolean(actions.onOpenInNewSplit),
-    tabs: desktop && Boolean(actions.onOpenInNewTab) && canOpenInNewTab(),
-    share: Boolean(actions.onShare),
-  }).map((group) =>
-    group.map((item) =>
-      match(item)
-        .with('open-in-split', (id) =>
-          entry(
-            id,
-            t('entityActions.openInNewSplit'),
-            () => actions.onOpenInNewSplit?.(row),
-            { disabled: !actions.canOpenInNewSplit() }
-          )
-        )
-        .with('open-in-tab', (id) =>
-          entry(id, t('entityActions.openInNewTab'), () =>
-            actions.onOpenInNewTab?.(row)
-          )
-        )
-        .with('run-now', (id) =>
-          entry(id, t('routineMenu.runNow'), () => actions.onRun(row), {
-            disabled: !canRunRoutine(row, actions.runPending(row)),
-          })
-        )
-        .with('turn-off', 'turn-on', (id) =>
-          entry(
-            id,
-            id === 'turn-off'
-              ? t('routineMenu.turnOff')
-              : t('routineMenu.turnOn'),
-            () => props.onToggle(row),
-            { disabled: !canToggleRoutine(row, props.pending) }
-          )
-        )
-        .with('duplicate', (id) =>
-          entry(id, t('entityActions.duplicate'), () =>
-            actions.onDuplicate(row)
-          )
-        )
-        .with('keep', (id) =>
-          entry(id, t('subRoutines.keep'), () => actions.onKeep(row))
-        )
-        .with('copy-link', (id) =>
-          entry(id, t('entityActions.copyLink'), () => actions.onCopyLink(row))
-        )
-        .with('copy-id', (id) =>
-          entry(id, t('entityActions.copyId'), () => actions.onCopyId(row))
-        )
-        .with('share', (id) =>
-          entry(id, t('entityActions.share'), () => actions.onShare?.(row))
-        )
-        .with('delete', (id) =>
-          entry(id, t('entityActions.delete'), () => actions.onDelete(row), {
-            destructive: true,
-          })
-        )
-        .exhaustive()
+    run: (row: RoutineRow) => void,
+    disabled: () => boolean = () => false,
+    destructive = false
+  ): RoutineMenuEntry => ({
+    id,
+    label,
+    get disabled() {
+      return disabled();
+    },
+    destructive,
+    run: () => run(props.row),
+  });
+  return match(id)
+    .with('open-in-split', () =>
+      entry(
+        t('entityActions.openInNewSplit'),
+        (row) => actions.onOpenInNewSplit?.(row),
+        () => !actions.canOpenInNewSplit()
+      )
+    )
+    .with('open-in-tab', () =>
+      entry(t('entityActions.openInNewTab'), (row) =>
+        actions.onOpenInNewTab?.(row)
+      )
+    )
+    .with('run-now', () =>
+      entry(
+        t('routineMenu.runNow'),
+        (row) => actions.onRun(row),
+        () => !canRunRoutine(props.row, actions.runPending(props.row))
+      )
+    )
+    .with('turn-off', 'turn-on', (toggle) =>
+      entry(
+        toggle === 'turn-off'
+          ? t('routineMenu.turnOff')
+          : t('routineMenu.turnOn'),
+        (row) => props.onToggle(row),
+        () => !canToggleRoutine(props.row, props.pending)
+      )
+    )
+    .with('duplicate', () =>
+      entry(t('entityActions.duplicate'), (row) => actions.onDuplicate(row))
+    )
+    .with('keep', () =>
+      entry(t('subRoutines.keep'), (row) => actions.onKeep(row))
+    )
+    .with('copy-link', () =>
+      entry(t('entityActions.copyLink'), (row) => actions.onCopyLink(row))
+    )
+    .with('copy-id', () =>
+      entry(t('entityActions.copyId'), (row) => actions.onCopyId(row))
+    )
+    .with('share', () =>
+      entry(t('entityActions.share'), (row) => actions.onShare?.(row))
+    )
+    .with('delete', () =>
+      entry(
+        t('entityActions.delete'),
+        (row) => actions.onDelete(row),
+        () => false,
+        true
+      )
+    )
+    .exhaustive();
+}
+
+/**
+ * The row's entries, rebuilt only when which entries it has changes: a list
+ * update makes a new row object, and rebuilding the entries of an open menu
+ * would remount its items and drop the one in focus.
+ */
+function createRoutineMenuEntries(
+  props: RoutineRowMenuProps,
+  actions: Accessor<RoutineRowMenuActions>
+) {
+  const groups = createMemo(
+    () => {
+      // Phones show one pane, so nothing opens beside the list there.
+      const desktop = !isMobile();
+      return routineMenuGroups(props.row, {
+        nested: Boolean(props.nested),
+        splits: desktop && Boolean(actions().onOpenInNewSplit),
+        tabs: desktop && Boolean(actions().onOpenInNewTab) && canOpenInNewTab(),
+        share: Boolean(actions().onShare),
+      });
+    },
+    undefined,
+    { equals: deepEqual }
+  );
+  return createMemo(() =>
+    groups().map((group) =>
+      group.map((id) => routineMenuEntry(id, props, actions()))
     )
   );
 }
@@ -149,7 +190,9 @@ const drawerGroups = (
     items: group.map((entry) => ({
       id: entry.id,
       label: entry.label,
-      disabled: entry.disabled,
+      get disabled() {
+        return entry.disabled;
+      },
       destructive: entry.destructive,
       onClick: entry.run,
     })),
@@ -168,63 +211,76 @@ export function RoutineRowMenu(props: ParentProps<RoutineRowMenuProps>) {
   };
   return (
     <Show when={props.actions} fallback={row()}>
-      {(actions) => (
-        <>
-          <ContextMenu>
-            <ContextMenuTrigger
-              as="div"
-              class="group/routine-menu"
-              disabled={isMobile()}
-              ref={(element: HTMLElement) => {
-                // A tablet gets the context menu's own long press.
-                if (isMobile())
-                  touchHandler(element, () => ({ onLongPress: openDrawer }));
-              }}
-              onContextMenu={(event: MouseEvent) => {
-                // Android reports a long press as a context menu too.
-                if (!isMobile()) return;
-                event.preventDefault();
-                openDrawer();
-              }}
-            >
-              {row()}
-            </ContextMenuTrigger>
-            <ContextMenu.Portal>
-              <ContextMenuContent class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
-                <For each={routineMenuEntries(props, actions())}>
-                  {(group, index) => (
-                    <>
-                      <Show when={index() > 0}>
-                        <MenuSeparator />
-                      </Show>
-                      <For each={group}>
-                        {(entry) => (
-                          <MenuItem
-                            text={entry.label}
-                            disabled={entry.disabled}
-                            class={
-                              entry.destructive ? 'text-failure-ink' : undefined
-                            }
-                            onClick={entry.run}
-                          />
-                        )}
-                      </For>
-                    </>
-                  )}
-                </For>
-              </ContextMenuContent>
-            </ContextMenu.Portal>
-          </ContextMenu>
-          <Show when={drawerOpen()}>
-            <SoupEntityActionDrawer
-              entity={actions().entity(props.row)}
-              groups={drawerGroups(routineMenuEntries(props, actions()))}
-              open
-              onOpenChange={setDrawerOpen}
-            />
-          </Show>
-        </>
-      )}
+      {(actions) => {
+        const entries = createRoutineMenuEntries(props, actions);
+        const drawer = createMemo(() => drawerGroups(entries()));
+        return (
+          <>
+            <ContextMenu>
+              <ContextMenuTrigger
+                as="div"
+                class="group/routine-menu"
+                disabled={isMobile()}
+                ref={(element: HTMLElement) =>
+                  // A tablet gets the context menu's own long press, and a
+                  // phone turned past the phone width becomes one.
+                  createRenderEffect(
+                    on(isMobile, (mobile) => {
+                      if (mobile)
+                        touchHandler(element, () => ({
+                          onLongPress: openDrawer,
+                        }));
+                    })
+                  )
+                }
+                onContextMenu={(event: MouseEvent) => {
+                  // Android reports a long press as a context menu too.
+                  if (!isMobile()) return;
+                  event.preventDefault();
+                  openDrawer();
+                }}
+              >
+                {row()}
+              </ContextMenuTrigger>
+              <ContextMenu.Portal>
+                <ContextMenuContent class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
+                  <For each={entries()}>
+                    {(group, index) => (
+                      <>
+                        <Show when={index() > 0}>
+                          <MenuSeparator />
+                        </Show>
+                        <For each={group}>
+                          {(entry) => (
+                            <MenuItem
+                              text={entry.label}
+                              disabled={entry.disabled}
+                              class={
+                                entry.destructive
+                                  ? 'text-failure-ink'
+                                  : undefined
+                              }
+                              onClick={entry.run}
+                            />
+                          )}
+                        </For>
+                      </>
+                    )}
+                  </For>
+                </ContextMenuContent>
+              </ContextMenu.Portal>
+            </ContextMenu>
+            <Show when={drawerOpen()}>
+              <SoupEntityActionDrawer
+                entity={actions().entity(props.row)}
+                groups={drawer()}
+                open
+                onOpenChange={setDrawerOpen}
+              />
+            </Show>
+          </>
+        );
+      }}
     </Show>
   );
 }

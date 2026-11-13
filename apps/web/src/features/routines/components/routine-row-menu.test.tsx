@@ -11,21 +11,40 @@ import type { RoutineRow } from '../core/types';
 import type { RoutineRowMenuActions } from './routine-row-menu';
 import { RoutinesList } from './routines-list';
 
-const device = vi.hoisted(() => ({ mobile: false, tabs: true }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.mobile }));
+const device = vi.hoisted(() => ({
+  tabs: true,
+  setMobile: (_mobile: boolean): void => {},
+  /** Rows with a long-press handler attached now. */
+  pressable: 0,
+}));
+// The phone width is a signal: a phone turned sideways passes 640px.
+vi.mock('@core/mobile/isMobile', async () => {
+  const { createSignal } = await import('solid-js');
+  const [mobile, setMobile] = createSignal(false);
+  device.setMobile = setMobile;
+  return { isMobile: mobile };
+});
 vi.mock('@components/app/tab-layout/open-in-new-tab', () => ({
   canOpenInNewTab: () => device.tabs,
 }));
 // Touch timing is covered by the directive; a test event stands in for it.
-vi.mock('@core/directive/touchHandler', () => ({
-  touchHandler: (
-    element: HTMLElement,
-    options: () => { onLongPress?: () => void }
-  ) =>
-    element.addEventListener('test-long-press', () =>
-      options().onLongPress?.()
-    ),
-}));
+vi.mock('@core/directive/touchHandler', async () => {
+  const { onCleanup } = await import('solid-js');
+  return {
+    touchHandler: (
+      element: HTMLElement,
+      options: () => { onLongPress?: () => void }
+    ) => {
+      const press = () => options().onLongPress?.();
+      element.addEventListener('test-long-press', press);
+      device.pressable++;
+      onCleanup(() => {
+        element.removeEventListener('test-long-press', press);
+        device.pressable--;
+      });
+    },
+  };
+});
 vi.mock('@entity', () => ({
   InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
 }));
@@ -150,7 +169,7 @@ function choose(name: string) {
 }
 
 beforeEach(() => {
-  device.mobile = false;
+  device.setMobile(false);
   device.tabs = true;
 });
 afterEach(cleanup);
@@ -280,11 +299,16 @@ describe('routine row menu', () => {
     ));
     await openMenu('Morning briefing');
     const open = screen.getByRole('menu');
+    const runNow = screen.getByRole('menuitem', { name: 'Run now' });
+    runNow.focus();
     // A refetch makes new objects for the same routines.
     setRows([{ ...briefing }, { ...paused, name: 'Weekly summary' }]);
     // The open menu hides the rest of the page from the accessibility tree.
     await screen.findByRole('button', { name: 'Weekly summary', hidden: true });
     expect(screen.getByRole('menu')).toBe(open);
+    // The item in focus stays, so arrow keys and Enter keep working.
+    expect(screen.getByRole('menuitem', { name: 'Run now' })).toBe(runNow);
+    expect(document.activeElement).toBe(runNow);
     choose('Run now');
     await waitFor(() =>
       expect(menu.onRun).toHaveBeenCalledWith(
@@ -304,7 +328,7 @@ describe('routine row menu', () => {
   });
 
   it('opens the actions in a drawer on a long press on a phone', async () => {
-    device.mobile = true;
+    device.setMobile(true);
     const menu = menuActions();
     setup([briefing], menu);
     screen
@@ -332,8 +356,28 @@ describe('routine row menu', () => {
     await waitFor(() => expect(menu.onRun).toHaveBeenCalledWith(briefing));
   });
 
+  it('takes the long press only while at phone width', async () => {
+    device.setMobile(true);
+    setup([briefing]);
+    expect(device.pressable).toBe(1);
+    // Turned sideways past the phone width: the context menu's own long press
+    // takes over, and no handler is left to swallow the tap.
+    device.setMobile(false);
+    expect(device.pressable).toBe(0);
+    // Upright again: the long press opens the drawer.
+    device.setMobile(true);
+    expect(device.pressable).toBe(1);
+    screen
+      .getByRole('button', { name: 'Morning briefing' })
+      .closest('[role="row"]')
+      ?.parentElement?.parentElement?.dispatchEvent(
+        new Event('test-long-press')
+      );
+    await screen.findByRole('dialog', { name: 'Entity actions' });
+  });
+
   it('opens the drawer for a phone’s own context menu event', async () => {
-    device.mobile = true;
+    device.setMobile(true);
     setup([briefing]);
     expect(
       fireEvent.contextMenu(
