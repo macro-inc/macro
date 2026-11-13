@@ -57,12 +57,16 @@ function pageRequest(
   };
 }
 
+/** Reports a device read that failed; offline, a read the device cannot serve is expected. */
+function reportDeviceFault(error: unknown): void {
+  if (!onlineManager.isOnline()) return;
+  Telemetry.error(error);
+}
+
 function reportFallback(error: unknown, signal?: AbortSignal): void {
   // A cancelled read is the caller's doing, not a failure of the device path.
   if (signal?.aborted) throw error;
-  // Offline, a read the device cannot serve is expected, not a fault.
-  if (!onlineManager.isOnline()) return;
-  Telemetry.error(error);
+  reportDeviceFault(error);
 }
 
 /**
@@ -159,7 +163,7 @@ export async function loadLocalChannelThread(
     }
     return loaded?.thread;
   } catch (error) {
-    Telemetry.error(error);
+    reportDeviceFault(error);
     return undefined;
   }
 }
@@ -193,7 +197,7 @@ export async function resolveLocalChannelMessage(
       created_at: message.createdAt,
     };
   } catch (error) {
-    Telemetry.error(error);
+    reportDeviceFault(error);
     return undefined;
   }
 }

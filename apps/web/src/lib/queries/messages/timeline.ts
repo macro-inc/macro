@@ -236,6 +236,19 @@ export function messageTimelineQueryOptions(
   parent: MessageParent,
   loadAroundMessageId: string | null
 ) {
+  const networkMode = channelReadNetworkMode(parent);
+  const retryPolicy = (failureCount: number, error: Error) => {
+    if (loadAroundMessageId && isMissingMessageError(error)) {
+      return false;
+    }
+    if (
+      thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+      thrownResultErrorHasCode(error, 'FORBIDDEN')
+    ) {
+      return false;
+    }
+    return failureCount < 1;
+  };
   return {
     queryKey: messageKeys.messages(parent, loadAroundMessageId).queryKey,
     queryFn: async ({
@@ -341,20 +354,13 @@ export function messageTimelineQueryOptions(
             previous_cursor: firstPage.previous_cursor,
           }
         : null,
-    networkMode: channelReadNetworkMode(parent),
+    networkMode,
     staleTime: Infinity,
-    retry: retryOnceOnline((failureCount: number, error: Error) => {
-      if (loadAroundMessageId && isMissingMessageError(error)) {
-        return false;
-      }
-      if (
-        thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
-        thrownResultErrorHasCode(error, 'FORBIDDEN')
-      ) {
-        return false;
-      }
-      return failureCount < 1;
-    }),
+    // Only a read that runs offline can fail offline.
+    retry:
+      networkMode === 'offlineFirst'
+        ? retryOnceOnline(retryPolicy)
+        : retryPolicy,
   };
 }
 
