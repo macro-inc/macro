@@ -12,6 +12,7 @@ import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
+import { RoutineRowMenu, type RoutineRowMenuActions } from './routine-row-menu';
 import { RoutineTemplateStrip } from './routine-template-strip';
 
 /**
@@ -43,6 +44,8 @@ export function RoutinesList(props: {
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   onRetry: () => void;
+  /** What each row's context menu does; absent where rows have none. */
+  menu?: RoutineRowMenuActions;
   /**
    * Templates to start from, above the list; absent where none are offered.
    * Suggestions take their place where they are on.
@@ -230,6 +233,7 @@ function RoutinesTable(props: {
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
+  menu?: RoutineRowMenuActions;
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
   discover?: RoutinesDiscover;
@@ -312,32 +316,47 @@ function RoutinesTable(props: {
                 <For each={group.rows}>
                   {(row) => (
                     <>
-                      <RoutineListRow
+                      <RoutineRowMenu
                         row={row}
                         pending={props.pendingId === row.id}
-                        onOpen={props.onOpen}
                         onToggle={props.onToggle}
-                        expanded={props.isExpanded(row)}
-                        caretGutter={props.rows.some(
-                          (other) => other.children.length > 0
-                        )}
-                        onExpand={
-                          row.children.length > 0
-                            ? (open) => props.onExpand(row.id, open)
-                            : undefined
-                        }
-                      />
+                        actions={props.menu}
+                      >
+                        <RoutineListRow
+                          row={row}
+                          pending={props.pendingId === row.id}
+                          onOpen={props.onOpen}
+                          onToggle={props.onToggle}
+                          expanded={props.isExpanded(row)}
+                          caretGutter={props.rows.some(
+                            (other) => other.children.length > 0
+                          )}
+                          onExpand={
+                            row.children.length > 0
+                              ? (open) => props.onExpand(row.id, open)
+                              : undefined
+                          }
+                        />
+                      </RoutineRowMenu>
                       <Show when={props.isExpanded(row)}>
                         <For each={row.children}>
                           {(child) => (
-                            <RoutineListRow
+                            <RoutineRowMenu
                               nested
-                              caretGutter
                               row={child}
                               pending={props.pendingId === child.id}
-                              onOpen={props.onOpen}
                               onToggle={props.onToggle}
-                            />
+                              actions={props.menu}
+                            >
+                              <RoutineListRow
+                                nested
+                                caretGutter
+                                row={child}
+                                pending={props.pendingId === child.id}
+                                onOpen={props.onOpen}
+                                onToggle={props.onToggle}
+                              />
+                            </RoutineRowMenu>
                           )}
                         </For>
                       </Show>

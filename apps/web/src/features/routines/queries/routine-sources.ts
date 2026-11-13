@@ -7,6 +7,7 @@ import type {
   RoutineCreatorSource,
   RoutineDetailSource,
   RoutineListSource,
+  RoutineRowOperations,
 } from '../context/routine-sources';
 import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
@@ -251,5 +252,65 @@ export function createRoutineListSource(
     pendingId: () =>
       toggle.isPending ? toggle.variables?.scheduleId : undefined,
     setEnabled: (id, enabled) => toggle.mutate({ scheduleId: id, enabled }),
+  };
+}
+
+type RowOperationCallbacks = {
+  /** Which operation failed, for the host to say so. */
+  onError(operation: 'run' | 'duplicate' | 'keep', error: unknown): void;
+  onRunStarted(): void;
+  onDuplicated(id: string): void;
+  /** The sub-routine became the owner's own routine. */
+  onKept(): void;
+};
+
+/**
+ * What the list's row menus do, over the list's own queries: routines and
+ * sub-routines both, since either can be a row.
+ */
+export function createRoutineRowOperations(
+  callbacks: RowOperationCallbacks
+): RoutineRowOperations {
+  const list = useSchedulesQuery(() => true);
+  const children = useSubRoutinesQuery(() => true);
+  const find = (id: string) =>
+    (list.isSuccess || list.isError ? list.data : undefined)?.find(
+      (item) => item.id === id
+    ) ??
+    (children.isSuccess || children.isError ? children.data : undefined)?.find(
+      (item) => item.id === id
+    );
+  const run = useRunScheduleNowMutation({
+    onSuccess: () => callbacks.onRunStarted(),
+    onError: (error) => callbacks.onError('run', error),
+  });
+  const duplicate = useCreateScheduleMutation(
+    {
+      onSuccess: (created) => {
+        if (created.id) callbacks.onDuplicated(created.id);
+      },
+      onError: (error) => callbacks.onError('duplicate', error),
+    },
+    'duplicate'
+  );
+  const keep = useDetachScheduleMutation({
+    onSuccess: () => callbacks.onKept(),
+    onError: (error) => callbacks.onError('keep', error),
+  });
+  return {
+    entity(id) {
+      const schedule = find(id);
+      return schedule ? scheduleToEntity(schedule) : undefined;
+    },
+    run: (id) => run.mutate({ scheduleId: id }),
+    runPendingId: () => (run.isPending ? run.variables?.scheduleId : undefined),
+    duplicate(id) {
+      const schedule = find(id);
+      const body = schedule && scheduleToDuplicateBody(schedule);
+      if (body && !duplicate.isPending) duplicate.mutate({ body });
+    },
+    keepAsOwn(id) {
+      if (!keep.isPending) keep.mutate({ scheduleId: id });
+    },
   };
 }
