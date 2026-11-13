@@ -56,6 +56,7 @@ to `state/memory/identity/identity.md`.
 | ----------- | ----------------------------------------------------------------------- | ----------------------------------- |
 | `chat`      | Read and post in Macro channels, threads and DMs; answer when spoken to | nothing                             |
 | `identity`  | Know who it is, from what its owner told it                             | nothing                             |
+| `dashboard` | A home dashboard on its Macro page, made on its first run               | `enable-agent-dashboards` on        |
 | `later`     | Hand itself longer tasks to do in a run of their own                    | nothing                             |
 | `people`    | Remember the people it talks with, on this machine only                 | nothing                             |
 | `heartbeat` | Schedules, its own clock, and changing its own code (`commit`, `land`)  | nothing                             |

@@ -1,3 +1,7 @@
+import {
+  AGENT_DASHBOARD_ROUTE_ID,
+  DASHBOARD_ROUTE_ID,
+} from '@app/features/agent-dashboards/dashboard-navigation';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
@@ -622,6 +626,29 @@ export const routineDetailRoute = defineRoute({
   remountKey: ({ routineId }) => routineId,
   claim: ({ routineId }) => ({ namespace: 'routine', id: routineId }),
   toReference: ({ routineId }) => uuidRouteReference(routineId, 'routine'),
+});
+
+/**
+ * An agent account's page: its identity and its home dashboard. Not under
+ * `agent/`, which legacy agent-session links own, nor the Agents workspace.
+ */
+export const agentDashboardRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: AGENT_DASHBOARD_ROUTE_ID,
+  path: 'agent-accounts/:userId',
+  params: z.object({ userId: z.string().min(1) }),
+  remountKey: ({ userId }) => userId,
+  claim: ({ userId }) => ({ namespace: 'agent-account', id: userId }),
+});
+
+/** Any dashboard by id, read-only. */
+export const dashboardRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: DASHBOARD_ROUTE_ID,
+  path: 'dashboard/:dashboardId',
+  params: z.object({ dashboardId: z.string().min(1) }),
+  remountKey: ({ dashboardId }) => dashboardId,
+  claim: ({ dashboardId }) => ({ namespace: 'dashboard', id: dashboardId }),
 });
 
 export const agentsViewRoute = defineRoute({

@@ -464,6 +464,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -524,6 +525,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::Initiative
             | EntityType::ExternalChat
             | EntityType::DatabaseRow => {
@@ -578,6 +580,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::Initiative
             // Databases are shared by granting access directly; they carry no
             // public/channel share policy.
@@ -641,6 +644,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -679,6 +683,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -737,6 +742,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -887,6 +893,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::Initiative
             | EntityType::ExternalChat
             | EntityType::Form

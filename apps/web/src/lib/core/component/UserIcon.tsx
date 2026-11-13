@@ -1,3 +1,4 @@
+import { useAgentProfile } from '@app/features/agent-dashboards/agent-profile';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
@@ -159,9 +160,18 @@ export function UserIcon(props: UserIconProps) {
 
   const openDirectMessage = useOpenDirectMessage();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
+  const agentProfile = useAgentProfile();
 
+  // A press on an agent teammate's picture opens its profile where a
+  // person's opens the DM: same moment, and like the DM it leaves the press to
+  // whatever row the picture sits in.
   const openDm = (event: MouseEvent) => {
     if (!props.id || isConnectedSecondaryInbox(props.id)) return;
+    const profileId = agentProfile.profileOf(props.id);
+    if (profileId) {
+      agentProfile.open(profileId, 'avatar', event);
+      return;
+    }
     fireAndForget(
       openDirectMessage(props.id, {
         activate: true,
@@ -178,6 +188,10 @@ export function UserIcon(props: UserIconProps) {
   // its actions rather than jumping straight into a conversation.
   const avatarMouseDown = () =>
     props.suppressClick || isTouchDevice() ? undefined : openDm;
+  // On touch the tap goes to the card trigger, which opens an agent's profile
+  // instead of the card; a pointer opens it on press, above.
+  const profileSurface = () =>
+    props.suppressClick || !isTouchDevice() ? undefined : 'avatar';
 
   const triggerClass = () =>
     size() === 'fill' ? 'size-full' : 'inline-flex shrink-0';
@@ -242,6 +256,7 @@ export function UserIcon(props: UserIconProps) {
             triggerAs="div"
             triggerClass={triggerClass()}
             triggerTabIndex={isTouchDevice() ? 0 : -1}
+            profileSurface={profileSurface()}
             user={{
               displayName: displayName() || email() || '',
               email: email(),

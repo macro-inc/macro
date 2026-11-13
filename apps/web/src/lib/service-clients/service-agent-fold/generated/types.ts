@@ -4065,7 +4065,7 @@ export type Widget_Deserialize =
    *  Markdown text: the narrative between the other widgets. Its type is
    *  "md", never "markdown".
    */
-  | ({ type: 'md'; markdown: string } & {
+  | ({ type: 'md'; id?: string; markdown: string } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4085,6 +4085,7 @@ export type Widget_Deserialize =
   /**  A chronological sequence of events. Great for "what happened" answers. */
   | ({
       type: 'timeline';
+      id?: string;
       title?: string;
       events: TimelineEvent_Deserialize[];
     } & {
@@ -4109,6 +4110,7 @@ export type Widget_Deserialize =
    */
   | ({
       type: 'list';
+      id?: string;
       title?: string;
       source: ListSource_Deserialize;
       /**  Group rows by a facet. */
@@ -4132,6 +4134,7 @@ export type Widget_Deserialize =
   /**  A single channel message with surrounding context. */
   | ({
       type: 'channelMessage';
+      id?: string;
       /**  The channel the message belongs to. */
       channelId: string;
       /**  The message to render. */
@@ -4157,7 +4160,12 @@ export type Widget_Deserialize =
    *  and attendees, loaded live from the user's calendars. Use it whenever
    *  an answer is about calendar events instead of listing them in text.
    */
-  | ({ type: 'events'; title?: string; events: AgendaEvent_Deserialize[] } & {
+  | ({
+      type: 'events';
+      id?: string;
+      title?: string;
+      events: AgendaEvent_Deserialize[];
+    } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4180,7 +4188,7 @@ export type Widget_Deserialize =
    *  item, and a routine's card can pause it or run it now. Use a list
    *  widget for longer sets.
    */
-  | ({ type: 'cards'; title?: string; items: CardItem[] } & {
+  | ({ type: 'cards'; id?: string; title?: string; items: CardItem[] } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4202,7 +4210,12 @@ export type Widget_Deserialize =
    *  what it is for. Use it whenever an answer is about tags, instead of a
    *  table or a list in markdown.
    */
-  | ({ type: 'tags'; title?: string; tags: TagNode_Deserialize[] } & {
+  | ({
+      type: 'tags';
+      id?: string;
+      title?: string;
+      tags: TagNode_Deserialize[];
+    } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4224,7 +4237,7 @@ export type Widget_Deserialize =
    *  items macro.agentSessions.updates() returned, unchanged, whenever it
    *  returns any: these cards are the only place the user can answer them.
    */
-  | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+  | ({ type: 'agentUpdates'; id?: string; items: AgentUpdateItem[] } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4244,6 +4257,7 @@ export type Widget_Deserialize =
   /**  A nestable flex container of widgets. */
   | ({
       type: 'container';
+      id?: string;
       direction?: Direction;
       /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
       gap?: Gap;
@@ -4273,7 +4287,7 @@ export type Widget_Serialize =
    *  Markdown text: the narrative between the other widgets. Its type is
    *  "md", never "markdown".
    */
-  | ({ type: 'md'; markdown: string } & {
+  | ({ type: 'md'; id?: string; markdown: string } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4291,7 +4305,12 @@ export type Widget_Serialize =
       wrap?: never;
     })
   /**  A chronological sequence of events. Great for "what happened" answers. */
-  | ({ type: 'timeline'; title?: string; events: TimelineEvent_Serialize[] } & {
+  | ({
+      type: 'timeline';
+      id?: string;
+      title?: string;
+      events: TimelineEvent_Serialize[];
+    } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4313,6 +4332,7 @@ export type Widget_Serialize =
    */
   | ({
       type: 'list';
+      id?: string;
       title?: string;
       source: ListSource_Serialize;
       /**  Group rows by a facet. */
@@ -4336,6 +4356,7 @@ export type Widget_Serialize =
   /**  A single channel message with surrounding context. */
   | ({
       type: 'channelMessage';
+      id?: string;
       /**  The channel the message belongs to. */
       channelId: string;
       /**  The message to render. */
@@ -4361,7 +4382,12 @@ export type Widget_Serialize =
    *  and attendees, loaded live from the user's calendars. Use it whenever
    *  an answer is about calendar events instead of listing them in text.
    */
-  | ({ type: 'events'; title?: string; events: AgendaEvent_Serialize[] } & {
+  | ({
+      type: 'events';
+      id?: string;
+      title?: string;
+      events: AgendaEvent_Serialize[];
+    } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4384,7 +4410,7 @@ export type Widget_Serialize =
    *  item, and a routine's card can pause it or run it now. Use a list
    *  widget for longer sets.
    */
-  | ({ type: 'cards'; title?: string; items: CardItem[] } & {
+  | ({ type: 'cards'; id?: string; title?: string; items: CardItem[] } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4406,7 +4432,12 @@ export type Widget_Serialize =
    *  what it is for. Use it whenever an answer is about tags, instead of a
    *  table or a list in markdown.
    */
-  | ({ type: 'tags'; title?: string; tags: TagNode_Serialize[] } & {
+  | ({
+      type: 'tags';
+      id?: string;
+      title?: string;
+      tags: TagNode_Serialize[];
+    } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4428,7 +4459,7 @@ export type Widget_Serialize =
    *  items macro.agentSessions.updates() returned, unchanged, whenever it
    *  returns any: these cards are the only place the user can answer them.
    */
-  | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+  | ({ type: 'agentUpdates'; id?: string; items: AgentUpdateItem[] } & {
       align?: never;
       channelId?: never;
       children?: never;
@@ -4448,6 +4479,7 @@ export type Widget_Serialize =
   /**  A nestable flex container of widgets. */
   | ({
       type: 'container';
+      id?: string;
       direction?: Direction;
       /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
       gap?: Gap;

@@ -66,6 +66,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::Skill
         | AccessEntityType::AgentSession
         | AccessEntityType::Harness
+        | AccessEntityType::Dashboard
         | AccessEntityType::ScheduledAction => None,
     }
 }

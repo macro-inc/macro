@@ -96,6 +96,8 @@ pub enum GraphqlEntityType {
     WhatsappGroup,
     /// A registered runtime.
     Harness,
+    /// A saved dynamic-UI view with its own grants and versions.
+    Dashboard,
 }
 
 impl GraphqlSoupEntityType {
@@ -134,6 +136,7 @@ impl GraphqlSoupEntityType {
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::ExternalChat
+            | EntityType::Dashboard
             | EntityType::Form => return None,
         })
     }
@@ -189,6 +192,7 @@ impl GraphqlEntityType {
             EntityType::Form => Self::Form,
             EntityType::ExternalChat => Self::ExternalChat,
             EntityType::Harness => Self::Harness,
+            EntityType::Dashboard => Self::Dashboard,
         }
     }
 
@@ -226,6 +230,7 @@ impl GraphqlEntityType {
             Self::Form => EntityType::Form,
             Self::ExternalChat => EntityType::ExternalChat,
             Self::Harness => EntityType::Harness,
+            Self::Dashboard => EntityType::Dashboard,
             Self::WhatsappGroup => {
                 return Err(async_graphql::Error::new(
                     "WHATSAPP_GROUP is no longer an entity type; use EXTERNAL_CHAT",

@@ -25,6 +25,11 @@ files:
   - apps/web/src/features/passwords/components/**
   - apps/web/src/features/passwords/views/**
   - apps/web/src/features/passwords/context/**
+  - apps/web/src/features/agent-dashboards/queries/**
+  - apps/web/src/features/agent-dashboards/primitives/**
+  - apps/web/src/features/agent-dashboards/components/**
+  - apps/web/src/features/agent-dashboards/views/**
+  - apps/web/src/features/agent-dashboards/context/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/notifications-inbox/components/**

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO dashboard_homes (user_id, dashboard_id)\n            VALUES ($1, $2)\n            ON CONFLICT (user_id) DO UPDATE\n            SET dashboard_id = EXCLUDED.dashboard_id, updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ad0d1634c7b9c492a553f98bc698a1d391b80518fb9586bb1b791b0005a3c1c"
+}

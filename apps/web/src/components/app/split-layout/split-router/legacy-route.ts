@@ -1,4 +1,8 @@
 import {
+  dashboardContentFromLocation,
+  dashboardLocationFromContent,
+} from '@app/features/agent-dashboards/dashboard-navigation';
+import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
@@ -278,6 +282,9 @@ export function splitLocationFromContent(
     };
   }
 
+  const dashboard = dashboardLocationFromContent(content);
+  if (dashboard) return dashboard;
+
   if (content.type === 'pr') {
     return {
       route: paneRoute({
@@ -418,6 +425,9 @@ export function splitContentFromLocation(
       return routineContent(routineId);
     throw new Error('Invalid routine detail split route');
   }
+
+  const dashboard = dashboardContentFromLocation(location);
+  if (dashboard) return dashboard;
 
   if (root.id.startsWith('view-'))
     return { type: 'component', id: root.id.slice('view-'.length) };

@@ -16,7 +16,7 @@
 		"@livekit/agents-plugin-deepgram": "1.9.5",
 		"@livekit/agents-plugin-inworld": "1.9.5",
 		"@livekit/rtc-node": "1.2.1",
-		"@macro-inc/sdk": "0.4.1",
+		"@macro-inc/sdk": "0.6.0",
 		"@muppet/lib": "link:@muppet/lib",
 		"typescript": "5.9.3",
 		"zod": "4.6.7"

@@ -1,3 +1,7 @@
+import {
+  type AgentProfileSurface,
+  useAgentProfile,
+} from '@app/features/agent-dashboards/agent-profile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn } from '@ui/utils/classname';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -16,6 +20,12 @@ type UserCardTriggerProps = {
   triggerAs?: 'span' | 'div';
   triggerClass?: string;
   triggerTabIndex?: number;
+  /**
+   * Where this trigger sits. With it, a click or tap on an agent teammate
+   * opens its profile (when agent dashboards are on); the hover card still
+   * shows on hover. People, and triggers without it, keep the card.
+   */
+  profileSurface?: AgentProfileSurface;
 };
 
 /**
@@ -25,6 +35,28 @@ type UserCardTriggerProps = {
  */
 export function UserCardTrigger(props: UserCardTriggerProps) {
   const [open, setOpen] = createSignal(false);
+  const agentProfile = useAgentProfile();
+  const profileId = () =>
+    props.profileSurface ? agentProfile.profileOf(props.user.id) : undefined;
+
+  /** Opens the agent's profile; false when this is not an agent's trigger. */
+  const openProfile = (event: Event): boolean => {
+    const id = profileId();
+    const surface = props.profileSurface;
+    if (!id || !surface) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(false);
+    agentProfile.open(id, surface, event);
+    return true;
+  };
+
+  const activateOnTouch = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (openProfile(event)) return;
+    openUserCard(props.user);
+  };
 
   return (
     <Show
@@ -41,16 +73,10 @@ export function UserCardTrigger(props: UserCardTriggerProps) {
           // A tap on a mention inside an editor would otherwise move the
           // caret and raise the keyboard behind the sheet.
           onMouseDown={(event: MouseEvent) => event.preventDefault()}
-          onClick={(event: MouseEvent) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openUserCard(props.user);
-          }}
+          onClick={activateOnTouch}
           onKeyDown={(event: KeyboardEvent) => {
             if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            event.stopPropagation();
-            openUserCard(props.user);
+            activateOnTouch(event);
           }}
         >
           {props.trigger}
@@ -65,6 +91,9 @@ export function UserCardTrigger(props: UserCardTriggerProps) {
         triggerAs={props.triggerAs ?? 'span'}
         triggerClass={props.triggerClass}
         triggerTabIndex={props.triggerTabIndex}
+        triggerOnClick={(event) => {
+          openProfile(event);
+        }}
         trigger={props.trigger}
         content={<UserTooltip {...props.user} onClose={() => setOpen(false)} />}
       />

@@ -309,6 +309,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/dashboards",
+            dashboards::inbound::axum_router::dashboards_router(state.dashboard_state.clone()),
+        )
+        .nest(
             "/account-managers",
             account_manager::inbound::axum_router::account_manager_router(
                 state.account_manager_state.clone(),

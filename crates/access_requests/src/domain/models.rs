@@ -32,6 +32,8 @@ pub enum ShareEntityType {
     /// Runtimes, with Read and User roles: shared only with teammates, and only
     /// by the owner in person.
     Harness,
+    /// Dashboards: saved views read or edited, never commented on.
+    Dashboard,
 }
 impl From<ShareEntityType> for EntityType {
     fn from(value: ShareEntityType) -> Self {
@@ -46,6 +48,7 @@ impl From<ShareEntityType> for EntityType {
             ShareEntityType::AgentSession => Self::AgentSession,
             ShareEntityType::ExternalChat => Self::ExternalChat,
             ShareEntityType::Harness => Self::Harness,
+            ShareEntityType::Dashboard => Self::Dashboard,
         }
     }
 }

@@ -262,6 +262,8 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
+| `/app/agent-accounts/<macro-id>` | An agent teammate's profile with its home dashboard, opened by clicking the agent (requires `enable-agent-dashboards`; see [Agent dashboards](agent-dashboards.md)) |
+| `/app/dashboard/<uuid>` | Any dashboard by id, read-only (requires `enable-agent-dashboards`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -1137,6 +1139,14 @@ the DM anyway, as an empty DM under a temporary `pending-dm-` id that nothing on
 the server knows; the first message creates the DM and replaces it, so opening
 someone never adds an empty DM to either person's list. See
 [Empty direct messages](channels.md#empty-direct-messages).
+
+With `enable-agent-dashboards` on, an agent teammate (an agent account, the
+people marked **Agent**) is opened rather than messaged: clicking or tapping its
+picture, its name beside its channel messages, an `@mention` of it, or its row in
+a channel's member list opens its profile (`/app/agent-accounts/<macro-id>`,
+with its dashboard) in a new pane, in front on phones. Its hover card leads with
+**Open profile** and keeps its other actions. People, and agents with the flag
+off, behave as above. See [Agent dashboards](agent-dashboards.md).
 
 `Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.

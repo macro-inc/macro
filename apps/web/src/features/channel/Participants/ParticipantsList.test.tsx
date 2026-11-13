@@ -147,3 +147,47 @@ it('virtualizes a large unfiltered list in the Scroll viewport and supports filt
   await measure(viewport);
   expect(mountedRows().length).toBeLessThan(40);
 });
+
+it("labels an agent teammate's row as opening its profile", async () => {
+  const people: ChannelParticipant[] = [
+    {
+      channel_id: 'channel',
+      user_id: 'agent@example.com',
+      joined_at: '2026-10-05T00:00:00Z',
+      role: 'member',
+    },
+    {
+      channel_id: 'channel',
+      user_id: 'person@example.com',
+      joined_at: '2026-10-05T00:00:00Z',
+      role: 'member',
+    },
+  ];
+  const onParticipantClick = vi.fn();
+  const { container } = render(() => (
+    <ParticipantsList
+      participants={() => people}
+      searchQuery={() => ''}
+      editable={false}
+      onParticipantClick={onParticipantClick}
+      onRemoveParticipant={vi.fn()}
+      opensProfile={(id) => id === 'agent@example.com'}
+    />
+  ));
+  await measure(
+    container.querySelector<HTMLDivElement>(
+      '[aria-label="Participants list"] > div'
+    )!
+  );
+
+  expect(
+    screen.getByRole('link', { name: 'Message person@example.com' })
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole('link', { name: 'Open agent@example.com’s profile' })
+  );
+  expect(onParticipantClick).toHaveBeenCalledWith(
+    'agent@example.com',
+    expect.any(MouseEvent)
+  );
+});

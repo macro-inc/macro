@@ -6104,6 +6104,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashboards"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "dynamic_ui",
+ "entity_access",
+ "entity_access_db_utils",
+ "feature_flags",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_owner",
+ "models_permissions",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "dashmap"
 version = "6.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6772,6 +6801,7 @@ dependencies = [
  "connection_gateway_client",
  "contacts",
  "crm",
+ "dashboards",
  "database_webhooks",
  "databases",
  "databases_sql",

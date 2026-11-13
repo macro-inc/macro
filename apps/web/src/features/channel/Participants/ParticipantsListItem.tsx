@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -10,6 +11,8 @@ export function ParticipantsListItem(props: {
   participant: ChannelParticipant;
   currentUserId?: string;
   editable: boolean;
+  /** The row opens the participant's profile (an agent) rather than a DM. */
+  opensProfile?: boolean;
   onClick: (event: MouseEvent) => void | Promise<void>;
   onRemove: () => void;
 }) {
@@ -37,7 +40,11 @@ export function ParticipantsListItem(props: {
         {...navigationHandlers}
         role="link"
         tabIndex={0}
-        aria-label={`Message ${displayName()}`}
+        aria-label={
+          props.opensProfile
+            ? t('agentDashboards.openProfileOf', { name: displayName() })
+            : `Message ${displayName()}`
+        }
         class="block rounded-xl hover:bg-hover focus-visible:outline-2 focus-visible:outline-edge"
         onKeyDown={(event) => {
           if (event.key !== 'Enter') return;

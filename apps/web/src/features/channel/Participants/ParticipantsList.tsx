@@ -15,6 +15,8 @@ export function ParticipantsList(props: {
     event: MouseEvent
   ) => void | Promise<void>;
   onRemoveParticipant: (participantId: string) => void;
+  /** Whether a click on this participant opens its profile, not a DM. */
+  opensProfile?: (participantId: string) => boolean;
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
 
@@ -35,6 +37,9 @@ export function ParticipantsList(props: {
                 participant={participant}
                 currentUserId={props.currentUserId}
                 editable={props.editable}
+                opensProfile={
+                  props.opensProfile?.(participant.user_id) ?? false
+                }
                 onClick={(event) =>
                   props.onParticipantClick(participant.user_id, event)
                 }

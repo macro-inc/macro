@@ -5476,6 +5476,10 @@ enum GraphqlEntityType {
 	A registered runtime.
 	"""
 	HARNESS
+	"""
+	A saved dynamic-UI view with its own grants and versions.
+	"""
+	DASHBOARD
 }
 
 """

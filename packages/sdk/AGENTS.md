@@ -118,6 +118,12 @@ enforced by the ordinary backend APIs.
   `StaticImage` for static file URLs (path `/file/<uuid>`, any public base) and an
   `ExternalProfilePicture` (`{ url }`) for legacy ones (`users/profile-picture.ts`). `team.invite(emails, { agent: true })`
   invites agents; their token only ever appears in the web app's setup modal.
+- `src/entities/dashboards/`: `macro.dashboards` (`create(view)`, `list`,
+  `home(user)`) and `Dashboard` (`update`, `patch(paneId, widget)`,
+  `versions`, `viewAt`, `revert`, `delete`, `access`) over DSS `/dashboards`;
+  `macro.me.setHomeDashboard(dashboard)` / `homeDashboard()` set and read the
+  caller's home. Views are opaque on the wire (`DashboardView`), decoded on
+  the server with `dynamic_ui::decode_view`; writes keep the returned record.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,

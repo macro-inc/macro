@@ -2872,20 +2872,20 @@ export type Widget_Deserialize =
  *  Markdown text: the narrative between the other widgets. Its type is
  *  "md", never "markdown".
  */
-({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "md"; id?: string; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A chronological sequence of events. Great for "what happened" answers. */
-({ type: "timeline"; title?: string; events: TimelineEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "timeline"; id?: string; title?: string; events: TimelineEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
 /**
  *  A list of workspace items, fetched by a filter query or given as a
  *  fixed set of entity references.
  */
-({ type: "list"; title?: string; source: ListSource_Deserialize;
+({ type: "list"; id?: string; title?: string; source: ListSource_Deserialize;
 /**  Group rows by a facet. */
 groupBy?: GroupBy;
 /**  Cap the number of rows shown. */
 limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; tags?: never; wrap?: never } |
 /**  A single channel message with surrounding context. */
-({ type: "channelMessage";
+({ type: "channelMessage"; id?: string;
 /**  The channel the message belongs to. */
 channelId: string;
 /**  The message to render. */
@@ -2895,7 +2895,7 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  and attendees, loaded live from the user's calendars. Use it whenever
  *  an answer is about calendar events instead of listing them in text.
  */
-({ type: "events"; title?: string; events: AgendaEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "events"; id?: string; title?: string; events: AgendaEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
 /**
  *  Rich cards for the one to four specific items the answer is about: a
  *  document or spreadsheet, an email thread, a calendar event, a project,
@@ -2903,23 +2903,23 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  item, and a routine's card can pause it or run it now. Use a list
  *  widget for longer sets.
  */
-({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "cards"; id?: string; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
 /**
  *  Tags as coloured pills, nested to any depth: the user's tags, a
  *  taxonomy the answer proposes, or any other ontology of tags, each with
  *  what it is for. Use it whenever an answer is about tags, instead of a
  *  table or a list in markdown.
  */
-({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+({ type: "tags"; id?: string; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
 /**
  *  Live cards on which the user answers coding agents' waiting
  *  permission requests and questions, and sees stalled sessions. Pass the
  *  items macro.agentSessions.updates() returned, unchanged, whenever it
  *  returns any: these cards are the only place the user can answer them.
  */
-({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "agentUpdates"; id?: string; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
-({ type: "container"; direction?: Direction;
+({ type: "container"; id?: string; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
 gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Deserialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never };
 
@@ -2932,20 +2932,20 @@ export type Widget_Serialize =
  *  Markdown text: the narrative between the other widgets. Its type is
  *  "md", never "markdown".
  */
-({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "md"; id?: string; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A chronological sequence of events. Great for "what happened" answers. */
-({ type: "timeline"; title?: string; events: TimelineEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "timeline"; id?: string; title?: string; events: TimelineEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
 /**
  *  A list of workspace items, fetched by a filter query or given as a
  *  fixed set of entity references.
  */
-({ type: "list"; title?: string; source: ListSource_Serialize;
+({ type: "list"; id?: string; title?: string; source: ListSource_Serialize;
 /**  Group rows by a facet. */
 groupBy?: GroupBy;
 /**  Cap the number of rows shown. */
 limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; tags?: never; wrap?: never } |
 /**  A single channel message with surrounding context. */
-({ type: "channelMessage";
+({ type: "channelMessage"; id?: string;
 /**  The channel the message belongs to. */
 channelId: string;
 /**  The message to render. */
@@ -2955,7 +2955,7 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  and attendees, loaded live from the user's calendars. Use it whenever
  *  an answer is about calendar events instead of listing them in text.
  */
-({ type: "events"; title?: string; events: AgendaEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "events"; id?: string; title?: string; events: AgendaEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
 /**
  *  Rich cards for the one to four specific items the answer is about: a
  *  document or spreadsheet, an email thread, a calendar event, a project,
@@ -2963,22 +2963,22 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  item, and a routine's card can pause it or run it now. Use a list
  *  widget for longer sets.
  */
-({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "cards"; id?: string; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
 /**
  *  Tags as coloured pills, nested to any depth: the user's tags, a
  *  taxonomy the answer proposes, or any other ontology of tags, each with
  *  what it is for. Use it whenever an answer is about tags, instead of a
  *  table or a list in markdown.
  */
-({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+({ type: "tags"; id?: string; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
 /**
  *  Live cards on which the user answers coding agents' waiting
  *  permission requests and questions, and sees stalled sessions. Pass the
  *  items macro.agentSessions.updates() returned, unchanged, whenever it
  *  returns any: these cards are the only place the user can answer them.
  */
-({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "agentUpdates"; id?: string; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
-({ type: "container"; direction?: Direction;
+({ type: "container"; id?: string; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
 gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Serialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never };

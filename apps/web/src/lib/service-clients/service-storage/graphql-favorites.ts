@@ -50,6 +50,8 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   form: 'FORM',
   external_chat: 'EXTERNAL_CHAT',
   harness: 'HARNESS',
+  // Dashboards aren't favoritable: the backend refuses them.
+  dashboard: 'DASHBOARD',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -81,8 +83,12 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
 } satisfies Record<ReturnedGraphqlEntityType, FavoriteEntityType>;
 
 /** `WHATSAPP_GROUP` is a schema-only stub kept for released clients; the
- * server never returns it. Remove with it after 2026-11-30. */
-type ReturnedGraphqlEntityType = Exclude<GraphqlEntityType, 'WHATSAPP_GROUP'>;
+ * server never returns it. Remove with it after 2026-11-30. Dashboards aren't
+ * favoritable, so the server never returns them either. */
+type ReturnedGraphqlEntityType = Exclude<
+  GraphqlEntityType,
+  'WHATSAPP_GROUP' | 'DASHBOARD'
+>;
 
 /** Convert a REST favorite entity type into its GraphQL equivalent. */
 export function toGraphqlFavoriteEntityType(
@@ -96,7 +102,9 @@ export function mapGraphqlFavorite(
   favorite: FavoriteFieldsFragment
 ): (Favorite & { id: string }) | undefined {
   const { entityType } = favorite;
-  if (entityType === 'WHATSAPP_GROUP') return undefined;
+  if (entityType === 'WHATSAPP_GROUP' || entityType === 'DASHBOARD') {
+    return undefined;
+  }
   return {
     // urql-solid reconciles lists by id. Preserve it so a mounted row's
     // preview/avatar subscriptions keep pointing at the same entity.
@@ -166,6 +174,8 @@ function favoriteSoupEffects(
     // Standalone groups have no Soup entity.
     external_chat: undefined,
     harness: undefined,
+    // Dashboards aren't favoritable and have no Soup entity.
+    dashboard: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];
   return typename

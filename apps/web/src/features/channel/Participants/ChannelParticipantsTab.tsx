@@ -1,3 +1,4 @@
+import { useAgentProfile } from '@app/features/agent-dashboards/agent-profile';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -41,6 +42,7 @@ export function ChannelParticipantsTab(props: {
   const addParticipantsMutation = useAddParticipantsMutation();
   const removeParticipantsMutation = useRemoveParticipantsMutation();
   const openDm = useOpenDirectMessage();
+  const agentProfile = useAgentProfile();
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
@@ -135,7 +137,13 @@ export function ChannelParticipantsTab(props: {
     });
   };
 
-  const openDirectMessage = (participantId: string, event: MouseEvent) => {
+  // An agent teammate's row opens its profile; a person's opens the DM.
+  const openParticipant = (participantId: string, event: MouseEvent) => {
+    const profileId = agentProfile.profileOf(participantId);
+    if (profileId) {
+      agentProfile.open(profileId, 'member-list', event);
+      return;
+    }
     fireAndForget(
       openDm(participantId, { activate: true, preferNewSplit: event.shiftKey }),
       'channel-participants'
@@ -208,7 +216,8 @@ export function ChannelParticipantsTab(props: {
                       searchQuery={searchQuery}
                       currentUserId={userId() ?? undefined}
                       editable={isEditable()}
-                      onParticipantClick={openDirectMessage}
+                      onParticipantClick={openParticipant}
+                      opensProfile={(id) => !!agentProfile.profileOf(id)}
                       onRemoveParticipant={removeParticipant}
                     />
                   </div>
@@ -233,7 +242,8 @@ export function ChannelParticipantsTab(props: {
             searchQuery={searchQuery}
             currentUserId={userId() ?? undefined}
             editable={isEditable()}
-            onParticipantClick={openDirectMessage}
+            onParticipantClick={openParticipant}
+            opensProfile={(id) => !!agentProfile.profileOf(id)}
             onRemoveParticipant={removeParticipant}
           />
         )}

@@ -79,3 +79,14 @@ fn form_round_trips_as_snake_case() {
     assert_eq!(EntityType::Form.as_ref(), "form");
     assert_eq!(EntityType::from_str("form").unwrap(), EntityType::Form);
 }
+
+#[test]
+fn dashboard_round_trips_as_snake_case() {
+    let encoded = serde_json::to_string(&EntityType::Dashboard).unwrap();
+    assert_eq!(encoded, "\"dashboard\"");
+    assert_eq!(
+        EntityType::from_str("dashboard").unwrap(),
+        EntityType::Dashboard
+    );
+    assert!(!EntityType::Dashboard.is_valid_entity_access_entity());
+}

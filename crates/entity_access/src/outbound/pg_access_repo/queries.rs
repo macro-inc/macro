@@ -32,6 +32,7 @@ pub mod chat_access;
 pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod crm_entity_users;
+pub mod dashboard_access;
 pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;

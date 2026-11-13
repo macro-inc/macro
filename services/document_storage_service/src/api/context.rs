@@ -671,6 +671,19 @@ pub(crate) type AccountManagerServiceType = AccountManagerServiceImpl<
 >;
 
 /// Type alias for the account manager router state.
+pub(crate) type DashboardServiceType = dashboards::domain::service::DashboardServiceImpl<
+    dashboards::outbound::pg_dashboard_repo::PgDashboardRepo,
+    dashboards::outbound::access::EntityDashboardAccess<EntityAccessService>,
+    dashboards::outbound::gate::FlaggedDashboards<
+        feature_flags::outbound::posthog::PostHogFeatureFlags,
+    >,
+>;
+
+pub(crate) type DssDashboardState = dashboards::inbound::axum_router::DashboardRouterState<
+    DashboardServiceType,
+    AuthorizationService,
+>;
+
 pub(crate) type DssAccountManagerState =
     AccountManagerRouterState<AccountManagerServiceType, AuthorizationService>;
 
@@ -983,6 +996,7 @@ pub(crate) struct ApiContext {
     pub channel_sections_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
+    pub dashboard_state: DssDashboardState,
     pub reminders_state: DssRemindersState,
     pub access_requests_state: AccessRequestsState,
     pub slack_state: DssSlackState,

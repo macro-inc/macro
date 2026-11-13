@@ -441,6 +441,13 @@ impl AccessRepository for MockRepo {
         Ok(*self.initiative_access.lock().await)
     }
 
+    async fn get_dashboard_access(
+        &self,
+        _id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(None)
+    }
     async fn get_pipeline_access(
         &self,
         _id: &str,

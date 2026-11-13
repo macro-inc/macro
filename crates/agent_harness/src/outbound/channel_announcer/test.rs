@@ -574,6 +574,7 @@ fn a_stored_step_keeps_the_view_it_presented() {
     let view = dynamic_ui::View {
         title: Some("Launch notes".to_owned()),
         widgets: vec![dynamic_ui::Widget::Md {
+            id: None,
             markdown: "Shipped.".to_owned(),
         }],
     };

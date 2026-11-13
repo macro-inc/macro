@@ -24,6 +24,7 @@ ignores:
   # Entries: the one device switch of each split view.
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
+  - apps/web/src/features/agent-dashboards/route-views.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx

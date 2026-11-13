@@ -7115,6 +7115,7 @@ export const getCollabSurfaceResponse = zod
         'database_row',
         'form',
         'external_chat',
+        'dashboard',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -7173,6 +7174,7 @@ export const ensureCollabSurfaceBody = zod
         'database_row',
         'form',
         'external_chat',
+        'dashboard',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity access derives from.'),
@@ -7212,6 +7214,7 @@ export const ensureCollabSurfaceResponse = zod
         'database_row',
         'form',
         'external_chat',
+        'dashboard',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -16424,6 +16427,361 @@ export const putCrmTeamStagesResponse = zod
       .describe('Stages in pipeline order.'),
   })
   .describe("The team's custom stage set.");
+
+/**
+ * @summary List the dashboards the caller owns.
+ */
+export const listDashboardsResponseDashboardsItemVersionMin = 0;
+
+export const listDashboardsResponse = zod
+  .object({
+    dashboards: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe("A dashboard's id."),
+            ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+            title: zod.string().nullish().describe("The current view's title."),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When its current version was saved.'),
+            version: zod
+              .number()
+              .min(listDashboardsResponseDashboardsItemVersionMin)
+              .describe('A saved version number; the first save is 1.'),
+          })
+          .describe('A dashboard in a list.')
+      )
+      .describe('Most recently saved first.'),
+  })
+  .describe("The caller's dashboards.");
+
+/**
+ * @summary Save a view as a new dashboard the caller owns.
+ */
+export const createDashboardBody = zod
+  .object({
+    view: zod
+      .object({})
+      .describe(
+        'A dynamic-UI view, in the format of the PresentView schema; widgets may\ncarry a stable `id` so they can be patched later.'
+      ),
+  })
+  .describe('A new dashboard.');
+
+export const createDashboardResponseVersionMin = 0;
+
+export const createDashboardResponse = zod
+  .object({
+    accessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    id: zod.uuid().describe("A dashboard's id."),
+    ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+    title: zod
+      .string()
+      .nullish()
+      .describe("The view's title, when it has one."),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When its current version was saved.'),
+    version: zod
+      .number()
+      .min(createDashboardResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe('The dynamic-UI view, decoded and checked when it was saved.'),
+  })
+  .describe('A dashboard as one caller reads it.');
+
+/**
+ * @summary Make a dashboard the caller can edit the caller's home dashboard: what
+people see on the account's page.
+ */
+export const setHomeDashboardBody = zod
+  .object({
+    dashboardId: zod.uuid().describe("A dashboard's id."),
+  })
+  .describe("The caller's new home dashboard.");
+
+/**
+ * @summary Read an account's home dashboard, when the caller can read it.
+ */
+export const getHomeDashboardParams = zod.object({
+  user_id: zod.string().describe('The account (`macro|...`).'),
+});
+
+export const getHomeDashboardResponseVersionMin = 0;
+
+export const getHomeDashboardResponse = zod
+  .object({
+    accessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    id: zod.uuid().describe("A dashboard's id."),
+    ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+    title: zod
+      .string()
+      .nullish()
+      .describe("The view's title, when it has one."),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When its current version was saved.'),
+    version: zod
+      .number()
+      .min(getHomeDashboardResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe('The dynamic-UI view, decoded and checked when it was saved.'),
+  })
+  .describe('A dashboard as one caller reads it.');
+
+/**
+ * @summary Read a dashboard.
+ */
+export const getDashboardParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+});
+
+export const getDashboardResponseVersionMin = 0;
+
+export const getDashboardResponse = zod
+  .object({
+    accessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    id: zod.uuid().describe("A dashboard's id."),
+    ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+    title: zod
+      .string()
+      .nullish()
+      .describe("The view's title, when it has one."),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When its current version was saved.'),
+    version: zod
+      .number()
+      .min(getDashboardResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe('The dynamic-UI view, decoded and checked when it was saved.'),
+  })
+  .describe('A dashboard as one caller reads it.');
+
+/**
+ * @summary Replace a dashboard's view, as a new version.
+ */
+export const updateDashboardParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+});
+
+export const updateDashboardBodyExpectedVersionMin = 0;
+
+export const updateDashboardBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .min(updateDashboardBodyExpectedVersionMin)
+      .nullish()
+      .describe(
+        'Refuse the save when the current version is no longer this one.'
+      ),
+    view: zod.object({}).describe('The view.'),
+  })
+  .describe('A whole new view.');
+
+export const updateDashboardResponseVersionMin = 0;
+
+export const updateDashboardResponse = zod
+  .object({
+    accessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    id: zod.uuid().describe("A dashboard's id."),
+    ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+    title: zod
+      .string()
+      .nullish()
+      .describe("The view's title, when it has one."),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When its current version was saved.'),
+    version: zod
+      .number()
+      .min(updateDashboardResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe('The dynamic-UI view, decoded and checked when it was saved.'),
+  })
+  .describe('A dashboard as one caller reads it.');
+
+/**
+ * @summary Delete a dashboard the caller owns.
+ */
+export const deleteDashboardParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+});
+
+/**
+ * @summary Replace one pane's widget, as a new version.
+ */
+export const patchDashboardPaneParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+  pane_id: zod.string().describe("The pane's widget id."),
+});
+
+export const patchDashboardPaneBodyExpectedVersionMin = 0;
+
+export const patchDashboardPaneBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .min(patchDashboardPaneBodyExpectedVersionMin)
+      .nullish()
+      .describe(
+        'Refuse the save when the current version is no longer this one.'
+      ),
+    widget: zod
+      .object({})
+      .describe(
+        "The widget replacing the pane; give it the pane's id to keep the pane\naddressable."
+      ),
+  })
+  .describe("One pane's new widget.");
+
+export const patchDashboardPaneResponseVersionMin = 0;
+
+export const patchDashboardPaneResponse = zod
+  .object({
+    accessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    id: zod.uuid().describe("A dashboard's id."),
+    ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+    title: zod
+      .string()
+      .nullish()
+      .describe("The view's title, when it has one."),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When its current version was saved.'),
+    version: zod
+      .number()
+      .min(patchDashboardPaneResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe('The dynamic-UI view, decoded and checked when it was saved.'),
+  })
+  .describe('A dashboard as one caller reads it.');
+
+/**
+ * @summary List a dashboard's versions, newest first.
+ */
+export const listDashboardVersionsParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+});
+
+export const listDashboardVersionsResponseVersionsItemVersionMin = 0;
+
+export const listDashboardVersionsResponse = zod
+  .object({
+    versions: zod
+      .array(
+        zod
+          .object({
+            authorId: zod.string().describe('Who saved it (`macro|...`).'),
+            createdAt: zod.iso.datetime({}).describe('When it was saved.'),
+            version: zod
+              .number()
+              .min(listDashboardVersionsResponseVersionsItemVersionMin)
+              .describe('A saved version number; the first save is 1.'),
+          })
+          .describe('One saved version, without its view.')
+      )
+      .describe('Newest first, at most 100.'),
+  })
+  .describe("A dashboard's history.");
+
+/**
+ * @summary Read one version with its view.
+ */
+export const getDashboardVersionPathNumberMin = 0;
+
+export const getDashboardVersionParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+  number: zod
+    .number()
+    .min(getDashboardVersionPathNumberMin)
+    .describe('Version number.'),
+});
+
+export const getDashboardVersionResponseVersionMin = 0;
+
+export const getDashboardVersionResponse = zod
+  .object({
+    authorId: zod.string().describe('Who saved it (`macro|...`).'),
+    createdAt: zod.iso.datetime({}).describe('When it was saved.'),
+    version: zod
+      .number()
+      .min(getDashboardVersionResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe(
+        "The view as that save left it, undecoded: an old version may not\nmatch today's schema."
+      ),
+  })
+  .describe('One saved version with the view it saved.');
+
+/**
+ * @summary Save an earlier version's view as the newest version.
+ */
+export const revertDashboardPathNumberMin = 0;
+
+export const revertDashboardParams = zod.object({
+  id: zod.uuid().describe('Dashboard id.'),
+  number: zod
+    .number()
+    .min(revertDashboardPathNumberMin)
+    .describe('Version number.'),
+});
+
+export const revertDashboardResponseVersionMin = 0;
+
+export const revertDashboardResponse = zod
+  .object({
+    accessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    createdAt: zod.iso.datetime({}).describe('When it was created.'),
+    id: zod.uuid().describe("A dashboard's id."),
+    ownerId: zod.string().describe('Who owns it (`macro|...`).'),
+    title: zod
+      .string()
+      .nullish()
+      .describe("The view's title, when it has one."),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When its current version was saved.'),
+    version: zod
+      .number()
+      .min(revertDashboardResponseVersionMin)
+      .describe('A saved version number; the first save is 1.'),
+    view: zod
+      .object({})
+      .describe('The dynamic-UI view, decoded and checked when it was saved.'),
+  })
+  .describe('A dashboard as one caller reads it.');
 
 /**
  * @summary List the caller's databases.
@@ -39027,6 +39385,7 @@ export const accessRequestsStateParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
 });
@@ -39198,6 +39557,7 @@ export const accessRequestsSubmitParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
 });
@@ -39271,6 +39631,7 @@ export const accessRequestsCancelParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
 });
@@ -39298,6 +39659,7 @@ export const accessRequestsResolveParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
   request_id: zod.uuid(),
@@ -39372,6 +39734,7 @@ export const accessRequestsDirectParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
 });
@@ -39405,6 +39768,7 @@ export const accessRequestsSetDirectParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -39444,6 +39808,7 @@ export const accessRequestsRemoveDirectParams = zod.object({
     'agent_session',
     'external_chat',
     'harness',
+    'dashboard',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -41362,6 +41727,7 @@ export const listFavoritesQueryParams = zod.object({
           'database_row',
           'form',
           'external_chat',
+          'dashboard',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -41428,6 +41794,7 @@ export const listFavoritesResponse = zod
                 'database_row',
                 'form',
                 'external_chat',
+                'dashboard',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -41482,6 +41849,7 @@ export const addFavoriteBody = zod
         'database_row',
         'form',
         'external_chat',
+        'dashboard',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -41537,6 +41905,7 @@ export const addFavoriteResponse = zod
         'database_row',
         'form',
         'external_chat',
+        'dashboard',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -41589,6 +41958,7 @@ export const reorderFavoritesBody = zod
                 'database_row',
                 'form',
                 'external_chat',
+                'dashboard',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -41634,6 +42004,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'database_row',
       'form',
       'external_chat',
+      'dashboard',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
