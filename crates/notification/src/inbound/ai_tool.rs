@@ -325,6 +325,7 @@ where
                         .into_iter()
                         .map(NotificationEntityFilter::into_entity)
                         .collect(),
+                    lane: crate::domain::models::NotificationLane::Signal,
                 },
             )
             .await

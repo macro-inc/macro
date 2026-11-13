@@ -9,6 +9,7 @@ use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use model_notifications::NotifEvent;
+pub use notification::domain::models::NotificationLane;
 use notification::domain::models::{NotificationState, UserNotificationRow};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -188,6 +189,9 @@ pub struct CandidateRequest {
     pub viewer: FeedViewer,
     /// How notifications key to candidates.
     pub keying: CandidateKeying,
+    /// The lane the feed reads. Only this lane's notifications place
+    /// candidates, and only they are loaded for them.
+    pub lane: NotificationLane,
     /// Whether the viewer's own work admits candidates besides attention.
     pub own_work: bool,
     /// Candidate entity types to include.
@@ -336,6 +340,9 @@ impl From<rootcause::Report> for FeedError {
 
 /// Whether a notification makes its entry unread. Channel events other than
 /// messages, mentions and reactions (invites, calls) never do.
+///
+/// A feed loads one lane, so noise reaches this only in the Noise view, where
+/// an unseen row is shown as unread. It never reaches a signal feed.
 pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool {
     if notification.state != NotificationState::Unseen {
         return false;

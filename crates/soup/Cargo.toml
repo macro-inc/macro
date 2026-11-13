@@ -80,6 +80,7 @@ models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
+notification_state = { path = "../notification_state" }
 non_empty = { path = "../non_empty" }
 properties = { path = "../properties", default-features = false }
 readonly_pool = { path = "../readonly_pool", optional = true }

@@ -81,6 +81,7 @@ where
                         CandidateKeying::ThreadScoped => AttentionKeying::ThreadScoped,
                         CandidateKeying::FiledEntity => AttentionKeying::FiledEntity,
                     },
+                    lane: request.lane,
                     types: request.types,
                     filter: request.filter,
                     after: request.after.map(|after| AttentionPagePosition {

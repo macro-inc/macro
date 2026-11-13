@@ -95,14 +95,16 @@ DMs, and the shared message store other domains discuss things on.
   records, calls) are authorized in `ChannelServiceImpl::get_attachment_references`
   through the `CommentParentAccess` port; the repo returns every parent. A
   service built without `with_comment_parent_access` withholds them.
+- Notification filters count signal notifications only (`un.lane = 'signal'`):
+  a channel or thread whose only unseen notifications are noise is not unread.
 - Notification filters read `user_notification`'s copied entity columns, never a
   `notification` join: through `notification`, a per-channel check walks every
   user's history on the channel (once ~24% of the prod read replica's buffer
-  hits). The channel list seeks `idx_user_notification_viewer_entity` once per
-  candidate channel; an array of the user's notified channels reads every
+  hits). The channel list seeks `idx_user_notification_viewer_entity_lane` once
+  per candidate channel; an array of the user's notified channels reads every
   notification the user has in that state, PR ones included.
 - The thread feed's notified roots skip `channel_message_send` rows, which never
-  name a thread, so `idx_user_notification_channel_threads` holds only rows
+  name a thread, so `idx_user_notification_channel_threads_lane` holds only rows
   that can. Web Home sends `(unseen OR seen) AND unseen`;
   `drop_implied_notification_conjuncts` folds that to one notification read.
 

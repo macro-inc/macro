@@ -1,3 +1,5 @@
+use attention_feed::domain::models::NotificationLane;
+
 use super::*;
 
 #[test]
@@ -31,6 +33,7 @@ fn scope_input_maps_row_types() {
             GraphqlNotificationInboxRowType::ChannelThread,
         ]),
         unread_only: None,
+        lane: None,
     }
     .into_scope();
     assert_eq!(
@@ -38,6 +41,30 @@ fn scope_input_maps_row_types() {
         vec![InboxRowType::Agent, InboxRowType::ChannelThread]
     );
     assert!(!scope.unread_only);
+    assert_eq!(scope.lane, NotificationLane::Signal);
+}
+
+#[test]
+fn scope_input_carries_the_noise_lane_into_every_request() {
+    let noise = || NotificationInboxScopeInput {
+        lane: Some(GraphqlNotificationLane::Noise),
+        ..Default::default()
+    };
+    let query = NotificationInboxInput {
+        scope: Some(noise()),
+        ..Default::default()
+    }
+    .into_query()
+    .unwrap();
+    assert_eq!(query.scope.lane, NotificationLane::Noise);
+
+    let clear = ClearNotificationInboxInput {
+        scope: Some(noise()),
+        ..Default::default()
+    }
+    .into_request()
+    .unwrap();
+    assert_eq!(clear.scope.lane, NotificationLane::Noise);
 }
 
 #[test]
@@ -45,6 +72,7 @@ fn scope_input_carries_unread_only_into_pages_and_clears() {
     let unread = || NotificationInboxScopeInput {
         row_types: None,
         unread_only: Some(true),
+        lane: None,
     };
     let query = NotificationInboxInput {
         scope: Some(unread()),

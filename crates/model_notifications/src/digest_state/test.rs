@@ -14,6 +14,7 @@ fn row_of<T: Notification>() -> UserNotificationRow<Arc<()>> {
         entity: EntityType::Team.with_entity_str("11111111-1111-1111-1111-111111111111"),
         sent: false,
         state: NotificationState::Unseen,
+        lane: notification::domain::models::NotificationLane::Signal,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

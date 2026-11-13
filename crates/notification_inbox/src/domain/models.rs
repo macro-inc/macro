@@ -2,7 +2,7 @@
 //! viewers and errors are the shared feed layer's (`attention_feed`).
 
 use attention_feed::domain::models::{
-    DoneReceipt, FeedKey, FeedNotification, FeedPosition, FeedRevision,
+    DoneReceipt, FeedKey, FeedNotification, FeedPosition, FeedRevision, NotificationLane,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -51,17 +51,25 @@ pub enum InboxRowType {
     AccessRemoved,
 }
 
-/// A row's identity: the group it belongs to and its slot in the group,
-/// `<group id>#<slot>`. A row's contents depend only on the viewer's
-/// notifications, so one id names one row in every scope; the row type is
-/// left out so a thread row keeps its id between mention and reply.
+/// A row's identity: the group it belongs to, its lane, and its slot in the
+/// group. A signal row is `<group id>#<slot>`; a noise row is
+/// `<group id>#noise#<slot>`. A row's contents depend only on the viewer's
+/// notifications in its lane, so one id names one row in every scope; the
+/// same slot in the other lane is another row, with another id. The row type
+/// is left out so a thread row keeps its id between mention and reply.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InboxRowId {
     /// The group the row belongs to.
     pub group: FeedKey,
+    /// The lane of the notifications the row stands for.
+    pub lane: NotificationLane,
     /// The row's slot within the group.
     pub slot: String,
 }
+
+/// Marks a noise row's id between its group and its slot. No slot contains
+/// a `#`.
+const NOISE_ROW_MARK: &str = "noise#";
 
 /// A row id that does not name a row.
 #[derive(Debug, thiserror::Error)]
@@ -71,17 +79,27 @@ pub struct InvalidInboxRowId;
 impl InboxRowId {
     /// The row's global id.
     pub fn id(&self) -> String {
-        format!("{}#{}", self.group.id(), self.slot)
+        let group = self.group.id();
+        let slot = &self.slot;
+        match self.lane {
+            NotificationLane::Signal => format!("{group}#{slot}"),
+            NotificationLane::Noise => format!("{group}#{NOISE_ROW_MARK}{slot}"),
+        }
     }
 
     /// Parse an id produced by [`Self::id`].
     pub fn parse(id: &str) -> Result<Self, InvalidInboxRowId> {
-        let (group, slot) = id.split_once('#').ok_or(InvalidInboxRowId)?;
+        let (group, rest) = id.split_once('#').ok_or(InvalidInboxRowId)?;
+        let (lane, slot) = match rest.strip_prefix(NOISE_ROW_MARK) {
+            Some(slot) => (NotificationLane::Noise, slot),
+            None => (NotificationLane::Signal, rest),
+        };
         if slot.is_empty() {
             return Err(InvalidInboxRowId);
         }
         Ok(Self {
             group: FeedKey::parse(group).map_err(|_| InvalidInboxRowId)?,
+            lane,
             slot: slot.to_string(),
         })
     }
@@ -204,6 +222,12 @@ pub struct InboxEntry<E> {
 /// Which rows one inbox shows.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxScope {
+    /// The lane the inbox reads: signal by default, or the Noise view, which
+    /// lists what the viewer's stacks captured. Rows are built from this
+    /// lane's notifications alone and carry it in their id. The low-value
+    /// kinds a row hides (see `rows`) are unrelated to lanes and are hidden
+    /// in either one.
+    pub lane: NotificationLane,
     /// The row kinds to include; empty means every kind.
     pub row_types: Vec<InboxRowType>,
     /// Only unread rows, by each row's own unread rule (mail by its unread

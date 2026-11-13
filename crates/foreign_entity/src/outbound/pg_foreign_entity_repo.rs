@@ -266,6 +266,7 @@ impl PgForeignEntityRepo {
                         JOIN user_notification un ON un.notification_id = n.id
                         WHERE un.user_id = $9::text
                           AND un.deleted_at IS NULL
+                          AND un.lane = 'signal'
                           AND n.event_item_type = 'foreign_entity'
                           AND n.event_item_id = fe.id::text
                     ) = ANY($8::int[]))

@@ -37,7 +37,8 @@ mutations, and the `notificationInboxUpdates` subscription. Its shapes mirror
 ## Gotchas
 
 - `NotificationInboxEntry` has no `id` (it is per scope); `NotificationInboxRow.id`
-  is the normalized key and must stay globally consistent.
+  is the normalized key and must stay globally consistent. A row of the Noise
+  lane has its own id, so a scope's `lane` never changes what an id names.
 
 ## Related
 

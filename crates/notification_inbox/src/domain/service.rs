@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedRevision, FeedViewer, Loaded, MailFacts,
+        FeedRevision, FeedViewer, Loaded, MailFacts, NotificationLane,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -55,7 +55,8 @@ pub trait NotificationInboxService: Send + Sync + 'static {
     /// Acknowledge what the caller observed on each row: the notifications
     /// it shows and hides, up to its revision, move to done, and an email
     /// row's thread is archived. Underlying tasks, requests and pull
-    /// requests are not completed.
+    /// requests are not completed. A row id names its lane, so done never
+    /// reaches the same slot's row in the other lane.
     fn mark_done(
         &self,
         viewer: FeedViewer,
@@ -66,6 +67,8 @@ pub trait NotificationInboxService: Send + Sync + 'static {
     /// for, then recompute the row's group for the caller's inbox. The row's
     /// last shown notification completes the row, as `mark_done` does. A
     /// notification the row no longer shows has nothing left to acknowledge.
+    /// The changes describe the caller's inbox alone: a row of the other lane
+    /// is still acknowledged, and its own inbox learns from its live updates.
     fn mark_notification_done(
         &self,
         viewer: FeedViewer,
@@ -93,7 +96,9 @@ pub trait NotificationInboxService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<InboxChange<Self::Entity>>, FeedError>> + Send;
 
     /// Mark the rows' shown and hidden notifications seen, then recompute
-    /// their groups for the caller's inbox.
+    /// their groups for the caller's inbox. The changes describe that inbox
+    /// alone: a row of the other lane is still marked seen, and its own inbox
+    /// learns from its live updates.
     fn mark_seen(
         &self,
         viewer: FeedViewer,
@@ -125,12 +130,13 @@ where
     }
 }
 
-/// The candidate request for the viewer's inbox. The reader sets the limit,
-/// cursor and key restriction per read.
-fn candidate_request(viewer: &FeedViewer) -> CandidateRequest {
+/// The candidate request for the viewer's inbox in `lane`. The reader sets
+/// the limit, cursor and key restriction per read.
+fn candidate_request(viewer: &FeedViewer, lane: NotificationLane) -> CandidateRequest {
     CandidateRequest {
         viewer: viewer.clone(),
         keying: CandidateKeying::FiledEntity,
+        lane,
         own_work: false,
         types: policy::CANDIDATE_TYPES.to_vec(),
         filter: policy::inbox_filter(),
@@ -251,20 +257,45 @@ where
     M: FeedMail,
     G: FeedSignals,
 {
-    /// Every row of each current group in `keys`, keyed by group.
+    /// Every row of each current group in `keys` in `lane`, keyed by group.
     async fn current(
         &self,
         viewer: &FeedViewer,
+        lane: NotificationLane,
         keys: &[FeedKey],
     ) -> Result<HashMap<FeedKey, Group<S::Entity>>, Report> {
         let now = Utc::now();
         Ok(self
             .reader
-            .current(candidate_request(viewer), keys)
+            .current(candidate_request(viewer, lane), keys)
             .await?
             .into_iter()
             .map(|(key, loaded)| (key, Group::cut(loaded, viewer, now)))
             .collect())
+    }
+
+    /// The current groups of `rows`, read in each row's own lane and keyed
+    /// by lane and group.
+    async fn current_groups<'a>(
+        &self,
+        viewer: &FeedViewer,
+        rows: impl Iterator<Item = &'a InboxRowId>,
+    ) -> Result<HashMap<(NotificationLane, FeedKey), Group<S::Entity>>, Report> {
+        let mut groups_by_lane: HashMap<NotificationLane, Vec<FeedKey>> = HashMap::new();
+        for row in rows {
+            groups_by_lane
+                .entry(row.lane)
+                .or_default()
+                .push(row.group.clone());
+        }
+        let mut current = HashMap::new();
+        for (lane, groups) in groups_by_lane {
+            let groups = unique(groups);
+            for (key, group) in self.current(viewer, lane, &groups).await? {
+                current.insert((lane, key), group);
+            }
+        }
+        Ok(current)
     }
 
     async fn recompute_groups(
@@ -277,7 +308,7 @@ where
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        let mut current = self.current(viewer, &keys).await?;
+        let mut current = self.current(viewer, scope.lane, &keys).await?;
         Ok(keys
             .into_iter()
             .map(
@@ -320,7 +351,7 @@ where
         let request = CandidateRequest {
             limit: query.limit,
             after: query.after,
-            ..candidate_request(&viewer)
+            ..candidate_request(&viewer, query.scope.lane)
         };
         let now = Utc::now();
         let page = self
@@ -386,10 +417,12 @@ where
                 receipt: DoneReceipt::default(),
             });
         }
-        // Rows are found among every row of their group, whatever inbox the
-        // caller was looking at, so done acknowledges what they observed.
-        let groups = unique(targets.iter().map(|target| target.id.group.clone()));
-        let current = self.current(&viewer, &groups).await?;
+        // Rows are found among every row of their group in their lane,
+        // whatever inbox the caller was looking at, so done acknowledges what
+        // they observed.
+        let current = self
+            .current_groups(&viewer, targets.iter().map(|target| &target.id))
+            .await?;
 
         let rows: Vec<InboxRowId> = targets.iter().map(|target| target.id.clone()).collect();
         let mut found = Vec::new();
@@ -398,7 +431,7 @@ where
             // A row already gone, or outside the viewer's groups, has nothing
             // left to acknowledge but is still reported done.
             let current_row = current
-                .get(&target.id.group)
+                .get(&(target.id.lane, target.id.group.clone()))
                 .and_then(|group| Some((group, group.row(&target.id)?)));
             let acknowledgment = match current_row {
                 Some((group, row)) => {
@@ -443,7 +476,7 @@ where
         notification: Uuid,
     ) -> Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError> {
         let groups = vec![row.group.clone()];
-        let current = self.current(&viewer, &groups).await?;
+        let current = self.current(&viewer, row.lane, &groups).await?;
         let acknowledgment = match current.get(&row.group).and_then(|group| {
             let found = group.row(&row)?;
             Some((group, found))
@@ -493,7 +526,7 @@ where
         let candidates = CandidateRequest {
             limit: request.limit,
             after: request.after.clone(),
-            ..candidate_request(&viewer)
+            ..candidate_request(&viewer, request.scope.lane)
         };
         let now = Utc::now();
         // Every group read comes back, cleared or not, so the batch knows how
@@ -587,10 +620,10 @@ where
         if groups.is_empty() {
             return Ok(Vec::new());
         }
-        let current = self.current(&viewer, &groups).await?;
+        let current = self.current_groups(&viewer, rows.iter()).await?;
         let notification_ids: Vec<Uuid> = rows
             .iter()
-            .filter_map(|id| current.get(&id.group)?.row(id))
+            .filter_map(|id| current.get(&(id.lane, id.group.clone()))?.row(id))
             .flat_map(|row| row.all_notifications().map(|n| n.notification_id))
             .collect();
         let changed = self

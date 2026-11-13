@@ -123,6 +123,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
+- Notification-state filters and the notified-at feed count signal
+  notifications only (`SIGNAL_LANE_SQL`); the attention query reads the one lane
+  its request names. A new read of `user_notification` must do one or the
+  other, or noise shows up as unread.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
   fence so the caller's `user_notification` rows drive the join; aggregate the
   latest notification before applying the cursor or notification-state gates.
@@ -130,8 +134,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   notifications (`strip_notification_conjunction`, which folds `(unseen OR
   seen) AND unseen` to `unseen`): the dynamic query joins `NotificationItems`,
   the calendar leg semi-joins `notified_event_ids_sql` over
-  `idx_user_notification_viewer_entity`. The per-row `EXISTS` fold stays only
-  for trees the stripper rejects; on the calendar leg it seq-scanned every
+  `idx_user_notification_viewer_entity_lane`. The per-row `EXISTS` fold stays
+  only for trees the stripper rejects; on the calendar leg it seq-scanned every
   event in the table.
 - Calendar access is `owner_id = $1 OR source_link_id = ANY(ARRAY(...))`, not
   an `EXISTS` over `macro_user_links`, so the planner can index both sides of

@@ -365,15 +365,19 @@ pub struct NotificationListFilters {
     pub include_types: Vec<NotificationCategory>,
     /// Optional specific entities to include. Empty means include all entities.
     pub entities: Vec<Entity<'static>>,
+    /// The one lane to list. Lists never mix lanes.
+    pub lane: super::NotificationLane,
 }
 
 impl NotificationListFilters {
-    /// Default product behavior: list active notifications, which excludes done notifications.
+    /// Default product behavior: list active signal notifications, which
+    /// excludes done notifications and noise.
     pub fn active() -> Self {
         Self {
             states: super::NotificationState::ACTIVE.to_vec(),
             include_types: Vec::new(),
             entities: Vec::new(),
+            lane: super::NotificationLane::Signal,
         }
     }
 }

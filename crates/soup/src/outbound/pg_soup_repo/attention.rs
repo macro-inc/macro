@@ -22,6 +22,8 @@
 //!
 //! Done notifications never place an item, so the query reads only the
 //! viewer's pending ones, once, and both streams look attention up there.
+//! It reads one lane: a signal feed never sees noise, and the Noise view
+//! reads only noise.
 //! It also reads them only back to a floor: a full page of own work holds
 //! `limit` items placed at or after its oldest touch, so nothing placed
 //! earlier can reach the page. Reading every notification instead made a
@@ -264,6 +266,7 @@ pub(super) async fn attention_soup_page(
         .bind(req.own_work)
         .bind(only_types)
         .bind(only_ids)
+        .bind(req.lane.as_str())
         // Unnamed statement, same reasoning as the other candidate queries:
         // the SQL text varies per filter shape.
         .persistent(false)

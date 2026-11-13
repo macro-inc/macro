@@ -1,3 +1,4 @@
+mod lane;
 mod publication;
 mod state;
 
@@ -849,6 +850,7 @@ async fn test_get_user_notifications_filters_exact_states(pool: Pool<Postgres>) 
                 states: vec![NotificationState::Done],
                 include_types: Vec::new(),
                 entities: Vec::new(),
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -864,6 +866,7 @@ async fn test_get_user_notifications_filters_exact_states(pool: Pool<Postgres>) 
                 states: vec![NotificationState::Unseen],
                 include_types: Vec::new(),
                 entities: Vec::new(),
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -887,6 +890,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
                 states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![crate::domain::models::request::NotificationCategory::Document],
                 entities: Vec::new(),
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -902,6 +906,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
                 states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![crate::domain::models::request::NotificationCategory::Email],
                 entities: Vec::new(),
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -917,6 +922,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
                 states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::Document.with_entity_string("item-1".to_string())],
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -932,6 +938,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
                 states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::EmailThread.with_entity_string("item-1".to_string())],
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -1155,6 +1162,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
                 states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![NotificationCategory::Github],
                 entities: Vec::new(),
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -1207,6 +1215,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
                 entities: vec![
                     EntityType::ForeignEntity.with_entity_string(foreign_entity_id.clone()),
                 ],
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -1232,6 +1241,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
                     EntityType::ForeignEntity
                         .with_entity_string(check_run_foreign_entity_id.clone()),
                 ],
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await
@@ -1259,6 +1269,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
                 states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::Document.with_entity_string(foreign_entity_id)],
+                lane: crate::domain::models::NotificationLane::Signal,
             },
         )
         .await

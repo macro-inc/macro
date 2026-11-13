@@ -669,6 +669,9 @@ pub fn rows(
                 },
                 id: InboxRowId {
                     group: group.clone(),
+                    // A feed loads one lane, so the row's lane is that of
+                    // any notification it shows.
+                    lane: notifications[0].lane,
                     slot: slot.id(),
                 },
                 notifications,

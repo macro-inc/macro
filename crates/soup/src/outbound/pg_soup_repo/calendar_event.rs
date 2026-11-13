@@ -15,7 +15,9 @@ use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use super::candidate_gates::UUID_PATTERN;
-use super::expanded::dynamic::{NotificationPredicate, strip_notification_conjunction};
+use super::expanded::dynamic::{
+    NotificationPredicate, SIGNAL_LANE_SQL, strip_notification_conjunction,
+};
 use crate::domain::models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest};
 
 #[derive(FromRow)]
@@ -165,13 +167,13 @@ fn push_access(query: &mut QueryBuilder<'_, Postgres>, user_id: MacroUserIdStr<'
 
 /// Ids of the events the caller holds a non-deleted notification for in the
 /// predicate's states. Each recipient row carries its notification's entity,
-/// so `idx_user_notification_viewer_entity` answers this without touching
+/// so `idx_user_notification_viewer_entity_lane` answers this without touching
 /// `notification`. The id column is unconstrained text: a malformed id is
 /// filtered out before the projection casts it.
 fn notified_event_ids_sql(predicate: NotificationPredicate) -> String {
     format!(
         "SELECT un.event_item_id::uuid FROM user_notification un \
-         WHERE un.user_id = $1 AND un.deleted_at IS NULL \
+         WHERE un.user_id = $1 AND un.deleted_at IS NULL AND {SIGNAL_LANE_SQL} \
          AND un.event_item_type = 'calendar_event' AND {} \
          AND un.event_item_id ~ '{UUID_PATTERN}'",
         predicate.sql()

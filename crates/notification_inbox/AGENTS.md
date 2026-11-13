@@ -18,8 +18,9 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 ## Scope
 
-- Owns: row kinds, row ids (`<group id>#<slot>`), shown and hidden
-  notifications, row state and revision, inbox membership.
+- Owns: row kinds, row ids (`<group id>#<slot>`, or `<group id>#noise#<slot>`
+  for a row of the Noise lane), shown and hidden notifications, row state and
+  revision, inbox membership.
 - Not here: paging, refill, done/seen/undo plumbing, live batching and
   adapters → `crates/attention_feed`; GraphQL → `crates/graphql_notification_inbox`;
   candidate SQL and access gates → `crates/soup` (`attention.rs`).
@@ -54,8 +55,15 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 - Only rows have an `id` in GraphQL; the client cache reads any `id` field as
   entity identity and requires `ID!`, so other inbox types use other names
   (`groupId`, `principalId`, `targetId`).
-- Row contents must not depend on the scope; scopes only filter rows, so the
-  web cache can normalize rows by id across inboxes.
+- Row contents must not depend on the scope's row types or unread filter;
+  those only filter rows, so the web cache can normalize rows by id across
+  inboxes. The lane is different: the same slot holds other notifications in
+  each lane, so the lane is part of the row id, and done, seen and
+  notification-done find a row in the lane its id names. The changes they
+  return describe the scope's lane alone; a row of the other lane is still
+  acted on and reaches its own inbox through live updates.
+- "Noise" in `rows.rs` (low-value kinds hidden inside a row) is unrelated to
+  the Noise lane and applies in either lane.
 - An unread scope filters on each row's `unseen`, which follows the row's own
   rule (mail by its unread messages), so a row leaves or returns through the
   same recompute as any other change.

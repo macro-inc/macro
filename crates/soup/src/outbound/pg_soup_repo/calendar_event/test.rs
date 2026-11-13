@@ -434,3 +434,42 @@ async fn notified_semi_join_matches_the_per_event_fold(pool: PgPool) -> anyhow::
     );
     Ok(())
 }
+
+/// Noise never counts as being notified, through the semi-join or the
+/// per-event fold.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn noise_does_not_make_an_event_unseen(pool: PgPool) -> anyhow::Result<()> {
+    let fixture = seed_unread(&pool).await?;
+    // The `unseen` event holds a single notification.
+    sqlx::query!(
+        "UPDATE user_notification SET lane = 'noise' WHERE user_id = $1 AND event_item_id = $2",
+        UNREAD_OWNER,
+        fixture.unseen.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+    let folded = Expr::or(
+        state(NotificationState::Unseen),
+        Expr::and(
+            state(NotificationState::Unseen),
+            Expr::val(CalendarEventLiteral::Id(Uuid::nil())),
+        ),
+    );
+
+    let semi_joined = cursor_soup(
+        &pool,
+        owner_request(state(NotificationState::Unseen), 10, None),
+    )
+    .await?;
+    let per_event = cursor_soup(&pool, owner_request(folded, 10, None)).await?;
+
+    assert_eq!(
+        event_ids(&semi_joined),
+        vec![fixture.delegated, fixture.twice]
+    );
+    assert_eq!(
+        event_ids(&per_event),
+        vec![fixture.delegated, fixture.twice]
+    );
+    Ok(())
+}

@@ -7,7 +7,8 @@ use activity::{Action, ActivitySubscriptionService, ActivitySubscriptionUpdate, 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::NotifEvent;
 use notification::domain::{
-    models::NotificationSubscriptionUpdate, ports::WebSocketNotificationSubscriptionService,
+    models::{NotificationLane, NotificationSubscriptionUpdate},
+    ports::WebSocketNotificationSubscriptionService,
 };
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 use tokio::sync::mpsc;
@@ -17,6 +18,9 @@ use crate::domain::{
     models::{CandidateKeying, FeedTrigger},
     ports::FeedTriggers,
 };
+
+#[cfg(test)]
+mod test;
 
 /// Triggers buffered per subscriber before upstream reads wait.
 const TRIGGER_BUFFER: usize = 64;
@@ -61,17 +65,21 @@ fn activity_trigger(
     }
 }
 
+/// The trigger a notification update implies for a feed reading `lane`. A
+/// row in another lane cannot change the feed, so a busy noise channel costs
+/// a signal feed nothing.
 fn notification_trigger(
     update: NotificationSubscriptionUpdate<NotifEvent>,
     keying: CandidateKeying,
-) -> FeedTrigger {
+    lane: NotificationLane,
+) -> Option<FeedTrigger> {
     match update {
         NotificationSubscriptionUpdate::New(row) | NotificationSubscriptionUpdate::Updated(row) => {
-            FeedTrigger::Changed(trigger_keys(&row, keying))
+            (row.lane == lane).then(|| FeedTrigger::Changed(trigger_keys(&row, keying)))
         }
         // A deleted row no longer names its entity; refetching is the only
         // way to learn which entry lost a reason.
-        NotificationSubscriptionUpdate::Deleted(_) => FeedTrigger::Invalidated,
+        NotificationSubscriptionUpdate::Deleted(_) => Some(FeedTrigger::Invalidated),
     }
 }
 
@@ -85,6 +93,7 @@ where
         &self,
         user: MacroUserIdStr<'static>,
         keying: CandidateKeying,
+        lane: NotificationLane,
         own_work: bool,
     ) -> mpsc::Receiver<FeedTrigger> {
         let (sender, receiver) = mpsc::channel(TRIGGER_BUFFER);
@@ -96,7 +105,7 @@ where
                 let trigger = tokio::select! {
                     () = sender.closed() => return,
                     update = notifications.recv() => match update {
-                        Some(update) => Some(notification_trigger(update, keying)),
+                        Some(update) => notification_trigger(update, keying, lane),
                         None => break,
                     },
                     update = async {

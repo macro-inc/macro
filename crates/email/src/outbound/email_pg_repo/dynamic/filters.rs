@@ -352,7 +352,7 @@ fn build_thread_literal_predicate(
         // These literals are handled outside the thread/message predicate.
         EmailLiteral::NotificationState(state) => {
             let mut f = SqlFragment::raw(format!(
-                "EXISTS (SELECT 1 FROM notification n JOIN user_notification un ON un.notification_id = n.id WHERE n.event_item_type = 'email_thread' AND n.event_item_id = {thread_alias}.id::text AND un.deleted_at IS NULL AND un.user_id = "
+                "EXISTS (SELECT 1 FROM notification n JOIN user_notification un ON un.notification_id = n.id WHERE n.event_item_type = 'email_thread' AND n.event_item_id = {thread_alias}.id::text AND un.deleted_at IS NULL AND un.lane = 'signal' AND un.user_id = "
             ));
             f.extend(SqlFragment::bind_viewer());
             f.push_raw(" AND un.state = ");

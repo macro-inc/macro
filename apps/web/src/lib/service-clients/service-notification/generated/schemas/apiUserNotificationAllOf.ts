@@ -8,6 +8,7 @@ import type { ApiUserNotificationAllOfDeletedAt } from './apiUserNotificationAll
 import type { ApiUserNotificationAllOfSenderId } from './apiUserNotificationAllOfSenderId';
 import type { ApiUserNotificationAllOfViewedAt } from './apiUserNotificationAllOfViewedAt';
 import type { NotifEvent } from './notifEvent';
+import type { NotificationLane } from './notificationLane';
 import type { NotificationState } from './notificationState';
 
 export type ApiUserNotificationAllOf = {
@@ -17,6 +18,10 @@ export type ApiUserNotificationAllOf = {
   deleted_at?: ApiUserNotificationAllOfDeletedAt;
   /** The notification ID. */
   id: string;
+  /** The lane the notification was routed into for its owner. Always sent;
+optional in the schema because clients also read notifications stored
+or delivered before lanes existed, which are signal. */
+  lane?: NotificationLane;
   /** The notification event type string (e.g. "channel_mention").
 TODO make this a new type */
   notification_event_type: string;

@@ -31,6 +31,8 @@ notified AS NOT MATERIALIZED (
     ) n
     WHERE un.user_id = $1
     AND un.deleted_at IS NULL
+    -- Noise never counts as being notified.
+    AND un.lane = 'signal'
 ),
 latest AS NOT MATERIALIZED (
     SELECT

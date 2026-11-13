@@ -14,6 +14,7 @@ fn work_request<'a>(
         limit: 50,
         own_work,
         keying: AttentionKeying::ThreadScoped,
+        lane: notification_state::NotificationLane::Signal,
         after: None,
         types: &[EntityType::AgentSession],
         filter: Some(filter),

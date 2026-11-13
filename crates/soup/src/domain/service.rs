@@ -955,6 +955,7 @@ where
                     limit,
                     own_work: req.own_work,
                     keying: req.keying,
+                    lane: req.lane,
                     after: after.clone(),
                     types: &req.types,
                     filter: Some(&req.filter),

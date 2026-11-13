@@ -167,6 +167,10 @@ pub struct RealtimeNotif<T> {
     pub sent: bool,
     /// The authoritative lifecycle state, independent of viewing timestamps.
     pub state: super::NotificationState,
+    /// The lane every recipient of this payload was routed into. Messages
+    /// queued before lanes existed are signal.
+    #[serde(default)]
+    pub lane: super::NotificationLane,
     /// When the notification was created.
     pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
@@ -209,6 +213,7 @@ impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
                 entity: req.req.notification_entity.clone().into_owned(),
                 sent: true,
                 state: super::NotificationState::Unseen,
+                lane: super::NotificationLane::Signal,
                 created_at: Utc::now(),
                 viewed_at: None,
                 updated_at: Utc::now(),
@@ -233,6 +238,7 @@ impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
                     entity,
                     sent,
                     state,
+                    lane,
                     created_at,
                     viewed_at,
                     updated_at,
@@ -250,6 +256,7 @@ impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
                 entity,
                 sent,
                 state,
+                lane,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -291,6 +298,7 @@ impl<'a, T, U> NotificationChannel<'a, T, U> {
                         entity,
                         sent,
                         state,
+                        lane,
                         created_at: _,
                         viewed_at,
                         updated_at: _,
@@ -306,6 +314,7 @@ impl<'a, T, U> NotificationChannel<'a, T, U> {
                     entity,
                     sent,
                     state,
+                    lane,
                     created_at,
                     viewed_at,
                     updated_at,

@@ -4,12 +4,17 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { NotificationLane } from './notificationLane';
 
 export type GetTypedNotificationsByEventItemIdParams = {
   /**
    * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
    */
   states?: string;
+  /**
+   * The lane to list: signal or noise. Omitted lists signal.
+   */
+  lane?: NotificationLane;
   /**
    * Size limit per page.
    * @minimum 0

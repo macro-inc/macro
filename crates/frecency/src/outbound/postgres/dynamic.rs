@@ -81,6 +81,7 @@ fn build_notification_exists_clause(
             JOIN user_notification un ON un.notification_id = n.id
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
+              AND un.lane = 'signal'
               AND n.event_item_type = '{entity_type}'
               AND n.event_item_id = {entity_id_sql}
               AND {predicate_sql}

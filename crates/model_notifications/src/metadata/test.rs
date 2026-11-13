@@ -1153,6 +1153,7 @@ fn notification_status_patch_decodes_notif_event_metadata() {
         entity: EntityType::Document.with_entity_string("document-id".to_string()),
         sent: true,
         state: notification::domain::models::NotificationState::Unseen,
+        lane: notification::domain::models::NotificationLane::Signal,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

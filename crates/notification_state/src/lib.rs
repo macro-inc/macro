@@ -1,10 +1,14 @@
 #![deny(missing_docs)]
-//! Shared notification lifecycle state and transition policy.
+//! Shared notification lifecycle state and transition policy, and the lane a
+//! notification is routed into.
 //!
 //! Viewing timestamps are historical metadata, not another representation of state.
 //! In particular, a notification backfilled as done may never have recorded a view.
 
 pub mod graphql;
+mod lane;
+
+pub use lane::NotificationLane;
 
 #[cfg(feature = "postgres")]
 pub mod postgres;

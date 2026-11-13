@@ -4,7 +4,7 @@ use ::attention_feed::{
     domain::{
         models::{
             CandidateKeying, DoneReceipt, FeedError, FeedKey, FeedPosition, FeedRevision,
-            FeedTrigger, FeedViewer,
+            FeedTrigger, FeedViewer, NotificationLane,
         },
         ports::FeedTriggers,
     },
@@ -40,6 +40,7 @@ fn doc_group() -> FeedKey {
 fn thread_row_id() -> InboxRowId {
     InboxRowId {
         group: doc_group(),
+        lane: NotificationLane::Signal,
         slot: "thread:a".to_string(),
     }
 }
@@ -63,6 +64,7 @@ fn comment(id: u128, minute: u32) -> Arc<UserNotificationRow<NotifEvent>> {
         entity: doc_group().entity().clone(),
         sent: true,
         state: NotificationState::Unseen,
+        lane: NotificationLane::Signal,
         created_at: at(minute),
         viewed_at: None,
         updated_at: at(minute),
@@ -250,7 +252,7 @@ impl NotificationInboxGraphqlService for Recording {
 #[derive(Default, Clone)]
 struct ManualTriggers {
     sender: Arc<Mutex<Option<tokio::sync::mpsc::Sender<FeedTrigger>>>>,
-    subscribed: Arc<Mutex<Vec<(CandidateKeying, bool)>>>,
+    subscribed: Arc<Mutex<Vec<(CandidateKeying, NotificationLane, bool)>>>,
 }
 
 impl FeedTriggers for ManualTriggers {
@@ -258,11 +260,15 @@ impl FeedTriggers for ManualTriggers {
         &self,
         _user: MacroUserIdStr<'static>,
         keying: CandidateKeying,
+        lane: NotificationLane,
         own_work: bool,
     ) -> tokio::sync::mpsc::Receiver<FeedTrigger> {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
         *self.sender.lock().unwrap() = Some(sender);
-        self.subscribed.lock().unwrap().push((keying, own_work));
+        self.subscribed
+            .lock()
+            .unwrap()
+            .push((keying, lane, own_work));
         receiver
     }
 }
@@ -584,7 +590,7 @@ async fn notification_inbox_updates_batch_recomputed_patches() {
         FeedKey::new(ModelEntityType::Chat.with_entity_string(Uuid::from_u128(0xC4A7).to_string()));
 
     let request = async_graphql::Request::new(
-        r#"subscription { notificationInboxUpdates(scope: { rowTypes: [DISCUSSION_THREAD], unreadOnly: true }) {
+        r#"subscription { notificationInboxUpdates(scope: { lane: NOISE, rowTypes: [DISCUSSION_THREAD], unreadOnly: true }) {
             __typename
             ... on NotificationInboxEntryUpserted { entry { groupId rows { id } } }
             ... on NotificationInboxEntryRemoved { groupId }
@@ -633,11 +639,13 @@ async fn notification_inbox_updates_batch_recomputed_patches() {
         let recomputes = service.recomputes.lock().unwrap();
         assert_eq!(recomputes.len(), 1);
         assert!(recomputes[0].0.unread_only);
+        assert_eq!(recomputes[0].0.lane, NotificationLane::Noise);
         assert_eq!(recomputes[0].1, vec![doc_group(), other.clone()]);
     }
+    // The inbox's lane decides which notifications trigger it.
     assert_eq!(
         triggers.subscribed.lock().unwrap().as_slice(),
-        &[(CandidateKeying::FiledEntity, false)]
+        &[(CandidateKeying::FiledEntity, NotificationLane::Noise, false)]
     );
 
     let sender = first.await.unwrap();

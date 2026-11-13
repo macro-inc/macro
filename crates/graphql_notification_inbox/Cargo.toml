@@ -15,6 +15,7 @@ graphql_notification = { path = "../graphql_notification" }
 graphql_soup = { path = "../graphql_soup" }
 macro_user_id = { path = "../macro_user_id" }
 notification_inbox = { path = "../notification_inbox" }
+notification_state = { path = "../notification_state", features = ["graphql"] }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 tracing = { workspace = true }
 uuid = { workspace = true }

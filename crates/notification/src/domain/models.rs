@@ -22,7 +22,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 pub use mobile::{DeviceEndpoint, HashedCollapseKey, NotifCollapseKey};
 use model_entity::Entity;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
-pub use notification_state::{NotificationAction, NotificationState};
+pub use notification_state::{NotificationAction, NotificationLane, NotificationState};
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
@@ -182,6 +182,10 @@ pub struct UserNotificationRow<T> {
     pub sent: bool,
     /// The authoritative lifecycle state, independent of viewing timestamps.
     pub state: NotificationState,
+    /// The lane ingress routed this recipient's notification into. Rows
+    /// serialized before lanes existed are signal.
+    #[serde(default)]
+    pub lane: NotificationLane,
     /// When the notification was created.
     pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
@@ -209,6 +213,7 @@ impl<T> UserNotificationRow<T> {
             entity,
             sent,
             state,
+            lane,
             created_at,
             viewed_at,
             updated_at,
@@ -224,6 +229,7 @@ impl<T> UserNotificationRow<T> {
             entity,
             sent,
             state,
+            lane,
             created_at,
             viewed_at,
             updated_at,
@@ -245,6 +251,7 @@ impl<T> UserNotificationRow<T> {
             entity,
             sent,
             state,
+            lane,
             created_at,
             viewed_at,
             updated_at,
@@ -260,6 +267,7 @@ impl<T> UserNotificationRow<T> {
             entity,
             sent,
             state,
+            lane,
             created_at,
             viewed_at,
             updated_at,
