@@ -228,14 +228,17 @@ export function SuggestionDiscoverGrid(props: {
   );
 }
 
-/** Card columns a row starts with, until it is measured. */
-const ROW_CARD_COLUMNS = 3;
+/**
+ * Card columns a row starts with, until it is measured before the first
+ * paint. One, so no card mounts (and counts as shown) only to be dropped.
+ */
+const ROW_CARD_COLUMNS = 1;
 
 /**
- * The one row above the routines list: up to three of Discover's cards, at
- * Discover's size, with how many more Discover has in a narrow last column.
- * Two cards, then one, where the page is too narrow for three of at least
- * 18rem. Nothing while loading, failed or empty, so the list never waits on
+ * The one row above the routines list: up to three of Discover's cards, of
+ * at least 18rem like Discover's, with how many more Discover has in a
+ * narrow last column. Two cards, then one, where the page is too narrow for
+ * three. Nothing while loading, failed or empty, so the list never waits on
  * it.
  */
 export function SuggestionRow(props: {
