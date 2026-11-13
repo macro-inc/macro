@@ -256,6 +256,14 @@ Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
+Wrapped and multi-line text cells have backend-free regressions in a plain
+database and a CRM pipeline: Shift+Enter and Alt+Enter add lines without leaving
+the row, a trailing new line takes the caret, arrows move through wrapped lines
+before leaving the cell, the closed cell shows every line, and the editor keeps
+the value's weight and line height:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts multiline.browser.e2e.ts`
+and `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts editor.browser.e2e.ts`.
+
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
 It uses the real records view with a local source and picker to exercise opening,
