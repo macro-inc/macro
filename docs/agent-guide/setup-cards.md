@@ -101,8 +101,8 @@ seconds.
   `Open <name>` and opens the routine.
 - **Turn on** (`Turn on <name>`, AI's catalog picks) saves the routine in one
   click with the values on the card, switched on and pointing back at its
-  suggestion; the card then shows **Enabled**, which opens it, and its values
-  read as plain text. Turn on, the underlined values and **×** sit above the
+  suggestion; the card then shows an **Enabled** badge and its values read as
+  plain text. Turn on, the underlined values and **×** sit above the
   card's own target, so clicking them does only that.
 - The card's **×** on hover (`Not interested in <name>`) dismisses it at once
   in every area's list and the Routines page; it isn't suggested again.

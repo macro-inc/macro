@@ -128,7 +128,9 @@ describe('suggestion cards', () => {
     expect(
       screen.getByText('Tag each new email Answer within 14 days.')
     ).toBeTruthy();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enabled' }));
+    expect(await screen.findByText('Enabled')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enabled' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Tag new email' }));
     expect(host.onOpenRoutine).toHaveBeenCalledWith('routine-1');
   });
 

@@ -88,25 +88,20 @@ function CardTarget(props: { model: SuggestionCardModel; onOpen(): void }) {
 /**
  * The card's one visible action: Turn on for AI's catalog picks; for a
  * drafted routine or a template, a quiet label for what clicking the card
- * does; once on, Enabled, which opens the routine.
+ * does; once on, an Enabled badge (the card itself opens the routine).
  */
 function CardAction(
-  props: Pick<CardHandlers, 'onOpen' | 'onTurnOn'> & {
+  props: Pick<CardHandlers, 'onTurnOn'> & {
     model: SuggestionCardModel;
   }
 ) {
   return (
     <Switch>
       <Match when={props.model.status.kind === 'enabled'}>
-        <Button
-          variant="success"
-          size="xs"
-          class="relative"
-          onClick={() => props.onOpen()}
-        >
+        <Badge variant="success" size="xs">
           <CheckIcon class="size-3" aria-hidden="true" />
           {t('routineSuggestions.enabled')}
-        </Button>
+        </Badge>
       </Match>
       <Match when={props.model.action === 'turn-on'}>
         <Button
@@ -306,11 +301,7 @@ export function SuggestionCard(
             {props.model.reason ??
               (props.model.picked ? '' : t('routineSuggestions.fromMacro'))}
           </span>
-          <CardAction
-            model={props.model}
-            onOpen={props.onOpen}
-            onTurnOn={props.onTurnOn}
-          />
+          <CardAction model={props.model} onTurnOn={props.onTurnOn} />
         </div>
       </CardSurface>
     </li>
