@@ -101,11 +101,22 @@ async function listDraftJob(job: DraftJob) {
   const queryKey = scheduledActionKeys.draftJobs.queryKey;
   const reading = queryClient.isFetching({ queryKey }) > 0;
   if (reading) await queryClient.cancelQueries({ queryKey });
-  queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) => [
-    job,
-    ...(current ?? []).filter((each) => each.id !== job.id),
-  ]);
+  queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) =>
+    withDraftJob(current ?? [], job)
+  );
   if (reading) queryClient.invalidateQueries({ queryKey });
+}
+
+/**
+ * The list with `job` at the top, unless it lists that job further along:
+ * its updates can arrive before the answer that started it.
+ */
+function withDraftJob(jobs: DraftJob[], job: DraftJob): DraftJob[] {
+  const listed = jobs.find((each) => each.id === job.id);
+  const further =
+    listed && (listed.state !== 'drafting' || job.state === 'drafting');
+  if (further) return jobs;
+  return [job, ...jobs.filter((each) => each.id !== job.id)];
 }
 
 /**

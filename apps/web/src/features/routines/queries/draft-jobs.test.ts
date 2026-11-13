@@ -117,6 +117,18 @@ describe('startDraftJob', () => {
     expect(queryClient.getQueryState(KEY)?.isInvalidated).toBe(true);
   });
 
+  it('keeps a draft its updates moved on before its start answered', async () => {
+    // Updates came first: one draft got further, the other finished.
+    const moved = drafting('moved', 'writing');
+    queryClient.setQueryData(KEY, [moved, failed('finished')]);
+    client.startRoutineDraftJob
+      .mockResolvedValueOnce(ok(drafting('moved')))
+      .mockResolvedValueOnce(ok(drafting('finished')));
+    await startDraftJob(REQUEST, context);
+    await startDraftJob(REQUEST, context);
+    expect(listed()).toEqual([moved, failed('finished')]);
+  });
+
   it('sends the same start again when its connection drops', async () => {
     vi.useFakeTimers();
     client.startRoutineDraftJob
