@@ -109,13 +109,91 @@ test("redacts strings nested in JSON, and JSON inside a string", () => {
 	);
 });
 
-test("credentialValues reads every credential, leaving out ones it can't", async () => {
+test("credentialValues reads every credential, leaving out names with no value", async () => {
 	const values = credentialValues({
 		names: async () => ["a", "b", "c"],
+		has: async (name) => name !== "b",
+		get: async (name) => `value-of-${name}`,
+	});
+	expect(await values()).toEqual(["value-of-a", "value-of-c"]);
+});
+
+test("credentialValues fails closed when a credential can't be read", async () => {
+	const unreadable = credentialValues({
+		names: async () => ["a", "b"],
+		has: async () => true,
 		get: async (name) => {
-			if (name === "b") throw new Error("gone");
+			if (name === "b") throw new Error("keychain locked");
 			return `value-of-${name}`;
 		},
 	});
-	expect(await values()).toEqual(["value-of-a", "value-of-c"]);
+	await expect(unreadable()).rejects.toThrow("keychain locked");
+	const unknown = credentialValues({
+		names: async () => ["a"],
+		has: async () => {
+			throw new Error("store unavailable");
+		},
+		get: async () => "never",
+	});
+	await expect(unknown()).rejects.toThrow("store unavailable");
+});
+
+test("redacts env-style secret assignments, in export lines and .env dumps", () => {
+	const redact = redactor([]);
+	expect(
+		redact.text(
+			[
+				"STRIPE_KEY=abc123",
+				'export GITHUB_TOKEN="ghtok en"',
+				"export AWS_SECRET_ACCESS_KEY='xyz'",
+				"DB_PASSWORD = hunter2",
+				"APIKEY=k1 SENTRY_DSN=https://k@o.test/1",
+				"NODE_ENV=production PORT=8080 MAX_TOKENS=4096 KEYBOARD=us",
+			].join("\n"),
+		),
+	).toBe(
+		[
+			"STRIPE_KEY=[secret]",
+			"export GITHUB_TOKEN=[secret]",
+			"export AWS_SECRET_ACCESS_KEY=[secret]",
+			"DB_PASSWORD = [secret]",
+			"APIKEY=[secret] SENTRY_DSN=[secret]",
+			"NODE_ENV=production PORT=8080 MAX_TOKENS=4096 KEYBOARD=us",
+		].join("\n"),
+	);
+});
+
+test("redacts passwords and tokens in URL userinfo, keeping the rest", () => {
+	const redact = redactor([]);
+	expect(
+		redact.text(
+			"postgres://app:s3cret@db.test:5432/main and https://x-access-token:tok123@github.test/o/r.git",
+		),
+	).toBe(
+		"postgres://app:[secret]@db.test:5432/main and https://x-access-token:[secret]@github.test/o/r.git",
+	);
+	expect(
+		redact.text(`https://${fill(20)}@git.test/r ssh://git@host.test`),
+	).toBe("https://[secret]@git.test/r ssh://git@host.test");
+});
+
+test("keeps token counts, which are numbers under token-ish keys", () => {
+	const redact = redactor([]);
+	expect(
+		redact.value({
+			max_tokens: 4096,
+			usage: { input_tokens: 12, output_tokens: 3, cache_read_input_tokens: 0 },
+			maxTokens: 100,
+			tokens: 5,
+			token: 1234,
+			api_token: "abc",
+		}),
+	).toEqual({
+		max_tokens: 4096,
+		usage: { input_tokens: 12, output_tokens: 3, cache_read_input_tokens: 0 },
+		maxTokens: 100,
+		tokens: 5,
+		token: "[secret]",
+		api_token: "[secret]",
+	});
 });

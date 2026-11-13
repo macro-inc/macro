@@ -4,8 +4,10 @@
  * runs, so a pattern that matches only part of one can't leave the rest; then
  * anything shaped like a credential (private keys, GitHub, Anthropic, OpenAI,
  * Google, Slack and AWS tokens, JWTs, `Bearer`/`Basic` values, `password=`,
- * secret URL parameters, one-time codes in prose) and, in JSON, the value of
- * any secret-looking key.
+ * env-style `STRIPE_KEY=…` assignments (`export` lines and `.env` dumps too),
+ * passwords in URLs, secret URL parameters, one-time codes in prose) and, in
+ * JSON, the value of any secret-looking key. A token count (`max_tokens`,
+ * `input_tokens`) is a number, not a secret, and stays.
  */
 import type { Credentials } from "../credentials/index.ts";
 
@@ -18,6 +20,11 @@ export type Redactor = {
 
 const secretKey =
 	/pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key|otp|totp|^code$|reset|session[_-]?token/i;
+/** A model's token counts, e.g. `max_tokens` or `input_tokens`: numbers, not secrets. */
+const tokenCount = /tokens$|token_?count$/i;
+/** An env-style variable name whose value is a secret: a segment ending in one of these, e.g. `STRIPE_KEY`, `GITHUB_TOKEN`, `DB_PASSWORD`. */
+const secretVariable =
+	/(?:^|_)[A-Z0-9]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|PASS|CREDENTIALS?|AUTH|DSN|COOKIE)(?:_|$)/;
 /** A process's exit code is a number under `code` too, and isn't a secret. */
 const exitCode = /^(exit_?)?code$/i;
 /** Under `code`, a string with spaces or lines in it is program text, not a one-time code. */
@@ -47,6 +54,21 @@ export const redactor = (secrets: readonly string[]): Redactor => {
 		);
 		result = result.replace(/\b(Bearer|Basic)(\s+)[^\s,;]+/gi, "$1$2[secret]");
 		result = result.replace(/\b(password\s*[:=]\s*)[^\s&;,]+/gi, "$1[secret]");
+		// `STRIPE_KEY=…`, `export GITHUB_TOKEN="…"`, a line of a `.env` file.
+		result = result.replace(
+			/\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)(\s*=\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s"'`&;,]+)/g,
+			(match, name: string, equals: string) =>
+				secretVariable.test(name) ? `${name}${equals}[secret]` : match,
+		);
+		// A password in a URL (`postgres://user:pass@host`), or a token as its whole userinfo.
+		result = result.replace(
+			/\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/?#'"]+):([^\s@/?#'"]+)@/gi,
+			"$1$2:[secret]@",
+		);
+		result = result.replace(
+			/\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/?#'"]{16,})@/gi,
+			"$1[secret]@",
+		);
 		// JSON written out as text, e.g. a tool's result: the value of a secret-looking key.
 		result = result.replace(
 			/("([\w-]+)"\s*:\s*)"(?:[^"\\]|\\.)*"/g,
@@ -81,7 +103,8 @@ export const redactor = (secrets: readonly string[]): Redactor => {
 					!(exitCode.test(key) && sourceCode.test(entry))) ||
 				(typeof entry === "number" &&
 					secretKey.test(key) &&
-					!exitCode.test(key))
+					!exitCode.test(key) &&
+					!tokenCount.test(key))
 					? "[secret]"
 					: value(entry),
 			]),
@@ -90,13 +113,21 @@ export const redactor = (secrets: readonly string[]): Redactor => {
 	return { text, value };
 };
 
-/** Every credential's value, for `redactor`. Read each time it is called, so a changed credential is redacted too. A credential that can't be read is left out. */
+/**
+ * Every credential's value, for `redactor`. Read each time it is called, so a
+ * changed credential is redacted too. Fails closed: if any credential can't
+ * be read, it rejects, so whatever it was for (a trace upload) is skipped
+ * rather than sent with that credential unredacted. A name with no value
+ * (`has` answers false) has nothing to redact and is left out.
+ */
 export const credentialValues =
-	(credentials: Pick<Credentials, "names" | "get">) =>
+	(credentials: Pick<Credentials, "names" | "has" | "get">) =>
 	async (): Promise<readonly string[]> => {
 		const names = await credentials.names();
 		const values = await Promise.all(
-			names.map((name) => credentials.get(name).catch(() => "")),
+			names.map(async (name) =>
+				(await credentials.has(name)) ? credentials.get(name) : "",
+			),
 		);
 		return values.filter((value) => value !== "");
 	};
