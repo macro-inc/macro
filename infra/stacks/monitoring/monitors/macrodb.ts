@@ -60,6 +60,56 @@ const dashboard = new datadog.Dashboard('macrodb-alerts', {
         warning: '0.005',
       }),
     ]),
+    graphGroup('Instance I/O credits', [
+      thresholdGraph({
+        title: 'macro-db-prod instance I/O credits draining',
+        query:
+          'min:aws.rds.ebsiobalance{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}',
+        critical: '40',
+        warning: '70',
+      }),
+      {
+        timeseriesDefinition: {
+          title:
+            'Read plus write IOPS against the instance baseline (6,000 sustained; provisioned storage allows 12,000)',
+          requests: [
+            {
+              q: 'avg:aws.rds.read_iops{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} + avg:aws.rds.write_iops{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}',
+              displayType: 'line',
+            },
+          ],
+          markers: [
+            {
+              label: 'instance baseline',
+              value: 'y = 6000',
+              displayType: 'warning dashed',
+            },
+          ],
+        },
+      },
+      {
+        timeseriesDefinition: {
+          title: 'Disk queue depth',
+          requests: [
+            {
+              q: 'avg:aws.rds.disk_queue_depth{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}',
+              displayType: 'line',
+            },
+          ],
+        },
+      },
+      {
+        timeseriesDefinition: {
+          title: 'Instance throughput credits (EBSByteBalance%)',
+          requests: [
+            {
+              q: 'min:aws.rds.ebsbyte_balance{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}',
+              displayType: 'line',
+            },
+          ],
+        },
+      },
+    ]),
     graphGroup('Connections and replication', [
       thresholdGraph({
         title: 'macro-db-prod connections high',
@@ -232,6 +282,28 @@ prodMonitor('macrodb-read-latency', {
     '{{dbinstanceidentifier.name}} disk reads take {{value}} seconds on average. Normal is about 0.6 ms.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#load',
+});
+
+// The instance class sustains 6,000 IOPS; above that it spends EBSIOBalance%,
+// which is separate from the storage volume's 12,000 provisioned IOPS and from
+// CPU credits (this class has none). At zero the instance is held to the
+// baseline, reads queue and the replica stops keeping up. In the 30 days to
+// 2026-11-13 the balance fell below 70 twice (to 56 on 2026-10-14 and to zero
+// on 2026-10-27) and below 40 only on 2026-10-27, when the warning would have
+// fired about 4 hours and the critical about 2.5 hours before it reached zero.
+// IOPS above the baseline and disk queue depth are graphed, not alerted on:
+// both cross any useful threshold most nights without draining the balance.
+prodMonitor('macrodb-io-credits', {
+  title: 'macro-db-prod instance I/O credits draining',
+  service: 'macro-db-prod',
+  query:
+    'avg(last_15m):min:aws.rds.ebsiobalance{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} < 40',
+  monitorThresholds: { critical: '40', warning: '70' },
+  pages: false,
+  description:
+    '{{dbinstanceidentifier.name}} has {{value}}% of its instance I/O credits left (EBSIOBalance%). Normal is 99%. Read plus write IOPS have been above the 6,000 the instance class sustains; at 0% the instance is held to that baseline, disk reads queue and the replica falls behind. This is not the storage volume (12,000 provisioned IOPS) and not CPU credits. Find the query doing the reads before the balance reaches zero.',
+  dashboard: dashboard.url,
+  runbook: 'docs/runbooks/macrodb.md#io-credits',
 });
 
 prodMonitor('macrodb-free-storage', {

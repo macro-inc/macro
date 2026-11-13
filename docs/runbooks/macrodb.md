@@ -1,7 +1,9 @@
 # MacroDB alerts
 
 Runbook for the `macro-db-prod` and `macro-db-prod-read-replica` monitors in
-[`monitors/macrodb.ts`](../../infra/stacks/monitoring/monitors/macrodb.ts). Both instances are
+[`monitors/macrodb.ts`](../../infra/stacks/monitoring/monitors/macrodb.ts), and the
+cloud-storage-service pool monitor in
+[`monitors/storage-pool.ts`](../../infra/stacks/monitoring/monitors/storage-pool.ts). Both instances are
 `db.m9g.2xlarge`: 8 vCPU, about 30 GB of memory, `max_connections` 3,439.
 
 Start in three places:
@@ -66,6 +68,64 @@ so users see stale lists and items they just created go missing.
 - Look for long-running queries on the replica in Database Monitoring.
 - Levers: stop the write burst (often a backfill); cancel the long replica
   query.
+
+## I/O credits
+
+Instance I/O credits (`EBSIOBalance%`) are draining on one instance. Three
+limits are easy to confuse:
+
+- **Instance I/O credits.** The instance class sustains 6,000 read plus write
+  IOPS and bursts above that by spending `EBSIOBalance%`. This alert. At zero
+  the instance is held to the baseline whatever the volume allows.
+- **Provisioned storage IOPS.** The volume allows 12,000. It is not the limit
+  here, and raising it does not help.
+- **CPU credits.** Burstable classes only (`CPUCreditBalance`); these
+  instances have none. CPU stays moderate through an I/O credit drain.
+
+On 2026-10-27 the replica's balance fell from 99% to zero in five and a half
+hours. Once at zero, IOPS sat flat at 6,000, disk queue depth and read latency
+rose tenfold, active sessions reached 65 per vCPU and the replica fell 30
+minutes behind for about two hours. The warning (70%) leaves about four hours
+at that rate and the critical (40%) about two and a half.
+
+- On the MacroDB alerts dashboard, check read plus write IOPS against the
+  6,000 line. A nightly burst at about 06:00 UTC crosses it for an hour and
+  costs a few percent; a drain is hours above it.
+- In Performance Insights, `IO:DataFileRead` and `IO:BufFileRead` waits name
+  the SQL doing the reads. Bytes rather than operations would show in
+  `EBSByteBalance%`, which has not moved in any incident.
+- Levers: cancel or bound the query doing the reads; move its callers off the
+  replica while it recovers (the balance refills at about 12% an hour once
+  IOPS are back under the baseline); a larger instance class raises the
+  baseline, and a resize restarts the instance.
+
+## Pool waits
+
+cloud-storage-service took long to hand out a connection from one of its sqlx
+pools (`primary`, or `readonly` for the replica). The alert names the pool.
+Each task measures this by acquiring one connection per pool every second.
+This is time queued inside the service before any SQL runs; slow SQL shows in
+the `sqlx::query` slow-statement logs and Database Monitoring instead. Open the
+[Search and database saturation](../../infra/stacks/monitoring/monitors/storage-pool.ts)
+dashboard, linked from the alert, and decide which of two causes it is:
+
+- **The database is slow**, so connections come back late and the pool is the
+  queue. Connections in use sit at the pool maximum, active sessions per vCPU
+  on that pool's instance are above 1 or its I/O credits are low, and task CPU
+  is normal or low. On 2026-11-09 the primary ran at 11 sessions per
+  vCPU for an hour while task CPU fell to 2%. Go to [Load](#load),
+  [Locks](#locks) or [I/O credits](#io-credits).
+- **The service is starved**, so it cannot get to the connections it has.
+  Connections in use stay below the pool maximum, the busiest task's CPU is
+  near 100% and the database is idle. On 2026-11-13 in dev one task sat at 95-99% CPU
+  with one active query on the database. Find what is burning CPU (a large
+  response, a retry loop); more tasks help, a larger pool does not.
+
+If connections in use sit at the pool maximum and the database is idle, a
+caller is holding connections across slow work; find the longest
+`soup.pool.acquire` and request spans in APM. Probes that time out read the
+pool's acquire timeout, so a flat line at that value means nothing is getting
+a connection at all.
 
 ## Storage
 
