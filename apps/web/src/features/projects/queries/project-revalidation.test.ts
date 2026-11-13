@@ -100,7 +100,7 @@ it('sends no read when the window gains focus or the tab is shown', async () => 
   dispose();
 });
 
-it('reads once for an activity push or reconnect, and once more for pushes during it', async () => {
+it('reads once per activity revalidation, and once more for those during it', async () => {
   const { read, answer, dispose } = register();
 
   const first = activity.refresh?.();
@@ -132,4 +132,18 @@ it('stays quiet when disabled or disposed', async () => {
   window.dispatchEvent(new Event('focus'));
   await vi.advanceTimersByTimeAsync(0);
   expect(disposed.read).not.toHaveBeenCalled();
+});
+
+it('drops a queued read when disposed during the one in flight', async () => {
+  const { read, answer, dispose } = register();
+  const refresh = activity.refresh;
+  const first = refresh?.();
+  await vi.advanceTimersByTimeAsync(0);
+  const queued = refresh?.();
+  expect(read).toHaveBeenCalledOnce();
+
+  dispose();
+  await answer();
+  await Promise.all([first, queued]);
+  expect(read).toHaveBeenCalledOnce();
 });
