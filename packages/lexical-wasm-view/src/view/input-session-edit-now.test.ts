@@ -268,6 +268,24 @@ test('entry admission false cancels before the factory', async () => {
   }
 });
 
+for (const bound of [true, false]) {
+  test(`a ${bound ? 'bound' : 'unbound'} view is unmounted as soon as close starts`, async () => {
+    // The AI-edit host classifies retirement from this owned state before
+    // entry, never from a caught admission throw.
+    const runtime = mount(bound);
+    try {
+      expect(runtime.view.isMounted).toBe(true);
+      const closing = runtime.close();
+      expect(runtime.view.isMounted).toBe(false);
+      await closing;
+      expect(runtime.view.isMounted).toBe(false);
+    } finally {
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+}
+
 test('a closing unbound session cancels before the factory, like the queued method', async () => {
   const runtime = mount(false);
   let calls = 0;
