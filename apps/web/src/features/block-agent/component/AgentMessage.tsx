@@ -43,6 +43,7 @@ import { thoughtIsStreaming } from '../state/thought-streaming';
 import {
   isCodeExecution,
   liveToolSegment,
+  type PartSegment,
   segmentParts,
 } from '../state/tool-groups';
 import {
@@ -272,15 +273,28 @@ function ToolGroupPart(props: {
  * Whether an open turn should show the working row at its tail.
  *
  * Skipped wherever the transcript already shows the turn is alive — prose
- * streaming in, a thought shimmering, a run of calls on its live line — and
- * wherever it is not: a permission or elicitation prompt is waiting on the
- * reader, not working.
+ * streaming in, a thought shimmering, a run of calls on its live line, a
+ * call working on its own row — and wherever it is not: a permission or
+ * elicitation prompt is waiting on the reader, not working. A call still out
+ * in an earlier run doesn't count, since that run reads as settled.
  */
-function showsWorkingLine(message: FoldedMessage, liveRun: boolean): boolean {
-  if (liveRun) return false;
+function showsWorkingLine(
+  message: FoldedMessage,
+  segments: readonly PartSegment[],
+  liveRun: number
+): boolean {
+  if (liveRun !== -1) return false;
+  const inRun = (index: number) =>
+    segments.some(
+      (segment) =>
+        segment.kind === 'tools' &&
+        segment.start <= index &&
+        index < segment.end
+    );
   if (
     message.parts.some(
-      (part) => part.kind === 'tool_use' && isToolActive(part.status)
+      (part, index) =>
+        part.kind === 'tool_use' && isToolActive(part.status) && !inRun(index)
     )
   )
     return false;
@@ -424,8 +438,9 @@ export function Message(props: {
 }) {
   const inFlight = () => props.inFlight;
   const segments = createMemo(() => segmentParts(props.message.parts));
-  const liveRun = () =>
-    inFlight() ? liveToolSegment(props.message.parts, segments()) : -1;
+  const liveRun = createMemo(() =>
+    inFlight() ? liveToolSegment(props.message.parts, segments()) : -1
+  );
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
@@ -477,7 +492,8 @@ export function Message(props: {
               naming the work, so the wait reads as work rather than a stall. */}
             <Show
               when={
-                inFlight() && showsWorkingLine(props.message, liveRun() !== -1)
+                inFlight() &&
+                showsWorkingLine(props.message, segments(), liveRun())
               }
             >
               <WorkingLine label={workingLabel(props.message)} />

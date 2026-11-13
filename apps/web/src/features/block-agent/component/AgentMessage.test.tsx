@@ -779,6 +779,28 @@ describe('Message working tail', () => {
     expect(view.getByTestId('working').textContent).toBe('Working');
   });
 
+  it('reads as working when only a settled run still has a call out', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            tool('a', { status: 'running' }),
+            text('Here is what I found.'),
+            tool('display', {
+              name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+              detail: { kind: 'view', view: null, error: null },
+            }),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    // The earlier run reads as settled, so it can't be the turn's indicator.
+    expect(view.getByTestId('group').dataset.liveLine).toBe('false');
+    expect(view.getByTestId('working').textContent).toBe('Working');
+  });
+
   it('does not duplicate the active tool or group with a working shimmer', () => {
     const view = render(() => (
       <Message

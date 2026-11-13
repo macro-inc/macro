@@ -1,8 +1,9 @@
 /**
  * Where a message's parts fold for display: consecutive ordinary tool calls
  * and their thinking blocks share a group, everything else stays visible.
- * The group starts with the first call so receiving another call does not
- * replace the first call's host in the middle of its animation.
+ * The group starts at the run's first part, a thought before its first call
+ * included, so receiving another call does not replace the first call's host
+ * in the middle of its animation.
  * Subagents and user tools stay outside groups so delegated work and user
  * interactions remain visible regardless of the surrounding tool traffic.
  * Tools with their own answer or session view always break the run, including
