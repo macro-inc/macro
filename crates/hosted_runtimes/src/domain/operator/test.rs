@@ -1,6 +1,7 @@
 use std::str::FromStr;
 mod data_disk;
 mod redeploy;
+mod setup_notice;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
@@ -13,7 +14,7 @@ use crate::domain::models::ComputerName;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
+use crate::domain::fakes::{FakeError, FakeRepo, FakeSetupNotices, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::{ControlPlaneId, HostRegistration, NewReservation};
 use crate::domain::ports::{DefaultAgent, GuestProcess, HostedPairing};
@@ -224,6 +225,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
             ..Default::default()
         },
         FakeHarnesses::default(),
+        FakeSetupNotices::default(),
         TestClock(Mutex::new(now())),
         std::sync::Arc::new(crate::domain::fakes::FixedDeployment),
     )
@@ -326,7 +328,7 @@ impl Harnesses for FakeHarnesses {
 
 async fn operator(
     fleet: FakeFleet,
-) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock> {
+) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices> {
     ComputerOperator::start(
         FakeRepo {
             sold_units: 9,
@@ -334,6 +336,7 @@ async fn operator(
         },
         fleet,
         FakeHarnesses::default(),
+        FakeSetupNotices::default(),
         FixedClock,
         std::sync::Arc::new(crate::domain::fakes::FixedDeployment),
     )
@@ -342,7 +345,7 @@ async fn operator(
 }
 
 async fn paid_computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
 ) -> ComputerId {
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     operator
@@ -572,7 +575,8 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
             retry: None,
         }
     );
-    // The page goes out, then nothing is left to do.
+    // The page and the buyer's notice go out, then nothing is left to do.
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
 }
@@ -612,7 +616,8 @@ async fn a_rejected_create_fails_the_computer_without_retrying() {
         status.failure_reason.as_deref(),
         Some("The computer couldn't be created on the host.")
     );
-    // The page goes out, then nothing is left to do.
+    // The page and the buyer's notice go out, then nothing is left to do.
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
 }
@@ -679,6 +684,7 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
     operator.macrod_connected(HARNESS).await.unwrap();
+    operator.run_fleet_effects().await.unwrap(); // The ready notice.
     operator
         .repo
         .apply(
@@ -801,6 +807,7 @@ async fn a_lost_guest_is_recreated_with_a_fresh_pairing() {
     operator.run_fleet_effects().await.unwrap();
     // Connecting happens after the guest claims its approved pairing.
     operator.macrod_connected(HARNESS).await.unwrap();
+    operator.run_fleet_effects().await.unwrap(); // The ready notice.
 
     operator.fleet.created.lock().unwrap().remove(&id);
     operator
