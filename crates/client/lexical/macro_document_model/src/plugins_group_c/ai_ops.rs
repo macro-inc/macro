@@ -776,7 +776,7 @@ pub(crate) fn plan(tx: &Transaction<'_>, op: &AiOp) -> OpResult<Vec<text::Write>
 }
 
 /// Source MarkdownPopup `resolveSelectedNodeIds`: durable ids of every
-/// top-level block the range selection touches, deduplicated in order.
+/// top-level block the range or table selection touches, deduplicated in order.
 pub(super) fn query(
     name: &str,
     _data: &serde_json::Value,
@@ -787,11 +787,15 @@ pub(super) fn query(
         return Ok(None);
     }
     let view = state.view();
-    let Some(Selection::Range(selection)) = view.selection() else {
-        return Ok(Some(serde_json::Value::Array(Vec::new())));
+    // Source reads `getNodes()` of the popup's range or table selection; a
+    // table selection yields the table, its rows and the selected cell
+    // subtrees in document order.
+    let nodes = match view.selection() {
+        Some(selection @ (Selection::Range(_) | Selection::Table(_))) => selection.nodes(view)?,
+        _ => return Ok(Some(serde_json::Value::Array(Vec::new()))),
     };
     let mut ids: Vec<serde_json::Value> = Vec::new();
-    for node in selection.nodes(view)? {
+    for node in nodes {
         let top = view.top_level_element(node)?.unwrap_or(node);
         if let Some(id) = crate::node_ids::get_id(view, top)? {
             let id = serde_json::Value::String(id.into());
