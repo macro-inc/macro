@@ -1,0 +1,179 @@
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/entityType.ts
+  s_8703f73ae8e37d::t_b41c21e6a615b4 40
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_8703f73ae8e37d::t_71398bfdc3eecd 6589-6590
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/entityType.ts
+  s_8703f73ae8e37d::t_4b51b9300636b4 40
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_39f63794c112b9::t_eb218954e62271 16641
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_8703f73ae8e37d::t_26a3173a63b35b 4770-4771
+apps/web/src/lib/service-clients/service-connection/generated/schemas/entityType.ts
+  s_8703f73ae8e37d::t_2a7f054330471c 40
+apps/web/src/lib/service-clients/service-connection/openapi.json
+  s_8703f73ae8e37d::t_4eb9932772be1c 319-320
+apps/web/src/lib/service-clients/service-notification/generated/schemas/entityType.ts
+  s_8703f73ae8e37d::t_23f887e9510395 40
+apps/web/src/lib/service-clients/service-notification/generated/zod.ts
+  s_8703f73ae8e37d::t_348faf2e9cc9b0 72,120,165,216,331,2549,4717,6890
+apps/web/src/lib/service-clients/service-notification/openapi.json
+  s_8703f73ae8e37d::t_d7e7edf9e02cc4 2076-2077
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/createdItemEntityType.ts
+  s_8703f73ae8e37d::t_b9ff4b41e14ac3 37-38
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftCreatedEntityType.ts
+  s_8703f73ae8e37d::t_671f9989055dcb 37-38
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_8703f73ae8e37d::t_80e485c07d7590 2226-2227,2375-2376
+apps/web/src/lib/service-clients/service-storage/generated/schemas/addFavoriteRequestEntityType.ts
+  s_39f63794c112b9::t_04d4d0fc73ae3d 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/collabSurfaceResponseParentEntityType.ts
+  s_39f63794c112b9::t_f36ea6b6ad7391 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createDashboardBody.ts
+  s_39f63794c112b9::t_8c8780704c60d4 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createDashboardBodyView.ts
+  s_39f63794c112b9::t_7b4bc6b8d91fc2 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboard.ts
+  s_39f63794c112b9::t_a2ef3b7f8b30e7 1-33
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardId.ts
+  s_39f63794c112b9::t_1c54cdb6db7b87 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardList.ts
+  s_39f63794c112b9::t_19395d5de8d798 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardSummary.ts
+  s_39f63794c112b9::t_6b66918b6b47a2 1-25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardSummaryTitle.ts
+  s_39f63794c112b9::t_fa1826ea80843d 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardTitle.ts
+  s_39f63794c112b9::t_f34fe97a56d1a0 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersion.ts
+  s_39f63794c112b9::t_5150f20012b59d 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersionList.ts
+  s_39f63794c112b9::t_90a65758437831 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersionSummary.ts
+  s_39f63794c112b9::t_fdf13becc3d384 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardVersionView.ts
+  s_39f63794c112b9::t_76a9c64c47dfec 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/dashboardView.ts
+  s_39f63794c112b9::t_0c5cb3b6e8462c 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/ensureCollabSurfaceRequestParentEntityType.ts
+  s_39f63794c112b9::t_fbc071d5090a64 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/favoriteEntityRefEntityType.ts
+  s_39f63794c112b9::t_9ed741b418c3f7 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/favoriteEntityType.ts
+  s_39f63794c112b9::t_9f0f36eda0aa29 36-37
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_39f63794c112b9::t_bbd56c56689f99 713-714,841-851,2251-2253,2606,3250-3252,3329
+apps/web/src/lib/service-clients/service-storage/generated/schemas/listFavoritesEntityTypeItem.ts
+  s_39f63794c112b9::t_9a6da691bd0166 41
+apps/web/src/lib/service-clients/service-storage/generated/schemas/patchDashboardPaneBody.ts
+  s_39f63794c112b9::t_377876d1e654f8 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/patchDashboardPaneBodyExpectedVersion.ts
+  s_39f63794c112b9::t_4b2d4af2a3593b 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/patchDashboardPaneBodyWidget.ts
+  s_39f63794c112b9::t_323c8bf8258ac6 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/setHomeDashboardBody.ts
+  s_39f63794c112b9::t_d1ef9740c974bf 1-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/shareEntityType.ts
+  s_39f63794c112b9::t_8ac061c393c17b 26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateDashboardBody.ts
+  s_39f63794c112b9::t_213eb1239259e3 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateDashboardBodyExpectedVersion.ts
+  s_39f63794c112b9::t_84b9004e48780f 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateDashboardBodyView.ts
+  s_39f63794c112b9::t_e75a7955655dda 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/version.ts
+  s_39f63794c112b9::t_dba600da5cf0d3 1-12
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_39f63794c112b9::t_ac3101d9cda3ab 7118,7177,7217,16431-16717,16719-16721,16723,16725-16748,16750-16752,16754,16756-16785,39388,39560,39634,39662,39737,39771,39811,41730,41797,41852,41908,41961,42007
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_c6fe7b7c1d36f7::t_c267ffae2cb191 1574-1575
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_8703f73ae8e37d::t_f353ba5336c518 11204-11884,11886-11901,11903-11956,11958-11973,11975-12058,19816-19817,20038-20039,30048-30049,35763-35764,37382-37392,38712-38865,44127-44128,46022-46023,46079-46080,54218-54234,57999-58009,58231-58232,64580-64596,65266-65271
+static_assets/schema.graphql
+  s_fcbfa0c2313f05::t_e73a98ffc182cc 5439-5442
+packages/sdk/src/entities/dashboards/dashboard.ts
+  s_c6fe7b7c1d36f7::t_125f806deb4095 1-86,92-172,174-187,189-204
+packages/sdk/tests/dashboards.test.ts
+  s_c6fe7b7c1d36f7::t_760c951110c38c 1-152
+packages/sdk/generated/notification/types.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 687
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 377,438
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 1887
+packages/sdk/src/macro.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 15,231-233,283
+  s_c6fe7b7c1d36f7::t_a27d704c39bf9a 458-465
+packages/sdk/src/entities/dashboards/namespace.ts
+  s_c6fe7b7c1d36f7::t_125f806deb4095 1-65
+packages/sdk/specs/notification.json
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 2076-2077
+packages/sdk/src/utils/verbs.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 235,248,271,285,294,316
+packages/sdk/AGENTS.md
+  s_c6fe7b7c1d36f7::t_814abd180efc0f 121-126
+packages/sdk/generated/cognition/types.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 654
+packages/sdk/specs/cognition.json
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 4770-4771
+packages/sdk/specs/scheduled-action.json
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 2226-2227,2375-2376
+packages/sdk/specs/storage.json
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 11204-11884,11886-11901,11903-11956,11958-11973,11975-12058,19816-19817,20038-20039,30048-30049,35763-35764,37382-37392,38712-38865,44127-44128,46022-46023,46079-46080,54218-54234,57999-58009,58231-58232,64580-64596,65266-65271
+packages/code-mode-sdk/scripts/catalog.ts
+  s_c6fe7b7c1d36f7::t_29d328c492f524 47
+packages/sdk/generated/storage/index.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 4
+packages/sdk/specs/agent-harness.json
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 6589-6590
+packages/sdk/generated/storage/types.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 289,4202,5246-5258,6318-6451,9492,10706,10728,15882-15898,18121-18130,18208,22348-22363,22810-22814,28268-28531,28533-28534,28536-28561,28563-28564,28566-28584,32126,32195
+packages/sdk/generated/storage/sdk.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 5,2097-2199,2201-2206,2208
+  s_c6fe7b7c1d36f7::t_a5f1f41d0f7351 2209
+packages/sdk/generated/connection/types.gen.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 43
+packages/sdk/specs/connection.json
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 319-320
+packages/sdk/src/entities/me/namespace.ts
+  s_c6fe7b7c1d36f7::t_bff80ae0032c6a 3-4,122-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7a23ec454c9fa7b9fa3f609f8fd7aed18b48d495",
+  "prompts": {},
+  "sessions": {
+    "s_39f63794c112b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "493005d8-5973-4e79-898b-d765f923c354",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
