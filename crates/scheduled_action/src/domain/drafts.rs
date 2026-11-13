@@ -806,7 +806,7 @@ Write it as every writer of routines does:
 {guide}
 </writing-routines>
 
-For this draft:
+For this draft, in place of the Compose Routines skill:
 
 1. Find the items the words name with one `macro.search.names([...])` call: the item is the match marked `exact`. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
 
