@@ -954,6 +954,24 @@ removed. Saving checks every id again. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
 
+With `enable-routine-background-drafts` (PostHog, on in development builds),
+Draft it starts the same draft in the background instead
+(`POST /scheduled-actions/draft-jobs`), answered once its session is admitted.
+The box gives way to the request, three milestones (**Read your request** or
+**Found what it names**, **Writing the steps**, **Check that it runs**, with
+**Fixing a problem the check found** while it fixes one) and **Cancel draft**,
+which puts the request back in the box. **Close this anytime**: the draft
+carries on. While New routine is closed, a **Drafting routine** pill sits at
+the bottom right (above the dock on phones) with the current stage, and opens
+New routine. A finished draft gets a toast: **Routine draft ready** with
+**Review**, or **Couldn’t draft that routine** with the reason and **Edit
+request**, which reopens New routine with the request back in the box and the
+reason under it. A ready draft waits until it is opened or discarded, also
+across reloads and devices: New routine shows **Your draft is ready** with
+**Discard** and **Review**, and closing its toast only closes the toast.
+Reloading mid-draft brings the pill back. Off, the dialog waits on the
+blocking request as before; older clients keep using it.
+
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a

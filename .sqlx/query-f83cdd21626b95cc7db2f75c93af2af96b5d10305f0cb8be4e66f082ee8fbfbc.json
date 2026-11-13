@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT session_id, owner_id, bot_id FROM scheduled_action_draft\n            WHERE created_at < $1 AND state IS NULL ORDER BY created_at LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f83cdd21626b95cc7db2f75c93af2af96b5d10305f0cb8be4e66f082ee8fbfbc"
+}
