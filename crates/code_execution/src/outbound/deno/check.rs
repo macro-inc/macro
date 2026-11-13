@@ -97,6 +97,7 @@ impl DenoChecker {
         let imports = serde_json::json!({
             "imports": BTreeMap::from([
                 ("@macro-inc/sdk".to_owned(), format!("{types_url}src/macro.d.ts")),
+                ("lexical".to_owned(), format!("{types_url}vendor/lexical/index.d.ts")),
                 ("file:///".to_owned(), "file:///unavailable/".to_owned()),
                 (check_url.clone(), check_url.clone()),
                 (types_url.clone(), types_url.clone()),

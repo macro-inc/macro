@@ -42,7 +42,8 @@ const ENABLE_SVG_PREVIEW = true;
  * 'prismjs/components/prism-cpp'
  */
 
-// Additional Languages here.
+// Initialize Prism before loading languages, including with async Lexical modules.
+import 'prismjs/prism.js';
 import 'prismjs/components/prism-json';
 import {
   DEFAULT_LANGUAGE,

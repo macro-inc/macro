@@ -16,6 +16,22 @@ pub const DOCUMENTATION: &str =
 /// label, HTTP method, path and whether it can write, as JSON.
 pub const OPERATIONS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/operations.json"));
 
+/// One file of the code-split Lexical modules, written under the run's root.
+#[derive(Debug, Clone, Copy)]
+pub struct LexicalModule {
+    /// Path relative to the run's root, such as `lexical/Lexical.dev.js`.
+    pub path: &'static str,
+    /// The import specifier it serves (`lexical`, `@lexical/list`,
+    /// `@macro-inc/sdk/lexical`); `None` for a shared chunk.
+    pub specifier: Option<&'static str>,
+    /// The module source.
+    pub source: &'static str,
+}
+
+/// `lexical`, the `@lexical/*` packages documents use and
+/// `@macro-inc/sdk/lexical`, which `sdk.mjs` imports by specifier.
+pub const LEXICAL_MODULES: &[LexicalModule] =
+    include!(concat!(env!("OUT_DIR"), "/lexical_modules.rs"));
 /// The SDK's TypeScript declarations that routine code is type-checked
 /// against, with their fingerprint, as JSON.
 pub const SDK_TYPES: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk-types.json"));

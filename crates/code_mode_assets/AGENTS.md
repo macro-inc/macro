@@ -22,6 +22,10 @@ built from `packages/sdk` when this crate compiles and are never committed.
 
 A failed run or a missing file fails the build; there is no stale fallback.
 
+The Lexical modules are code split, so their chunk names follow their content:
+`build.rs` reads `lexical-modules.tsv` and writes `lexical_modules.rs`, which
+embeds each file as `LEXICAL_MODULES` with the specifier it serves.
+
 ## Scope
 
 - Owns: building and embedding the assets.

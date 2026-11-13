@@ -5,6 +5,7 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
+//! - `GET`/`POST /{document_id}/lexical` — read/commit a markdown document as Lexical state
 //! - `POST /{document_id}/comments/text` — start a comment thread on a quoted passage
 //! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits`, `/ai-edit` —
 //!   read, calculate and edit a native spreadsheet, by operations or instructions
@@ -63,6 +64,8 @@ pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
 pub mod get_text;
+#[cfg(feature = "ai_tools")]
+pub mod lexical;
 #[cfg(feature = "ai_tools")]
 pub mod markdown_body;
 #[cfg(feature = "ai_tools")]
@@ -220,7 +223,7 @@ pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
     crate::outbound::mention_tracker::LexicalCommsMentionTracker,
 >;
 
-/// Editing worker behind the AI edit route.
+/// Editing worker behind the AI edit and Lexical routes.
 #[cfg(feature = "ai_tools")]
 pub type DefaultEditingWorker = crate::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 
@@ -246,7 +249,7 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
     /// The editing worker that places comment marks in markdown documents and
-    /// serves revision-checked markdown body reads and writes.
+    /// serves revision-checked markdown bodies and Lexical state reads and commits.
     #[cfg(feature = "ai_tools")]
     pub editing_worker: Arc<DefaultEditingWorker>,
     /// The shared message service comment threads are posted through.
@@ -450,6 +453,14 @@ where
         .route(
             "/{document_id}/ai-edit",
             axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/lexical",
+            axum::routing::get(lexical::get_lexical_handler::<T, Svc, Auth>).merge(
+                axum::routing::post(lexical::commit_lexical_handler::<T, Svc, Auth>).layer(
+                    axum::extract::DefaultBodyLimit::max(lexical::MAX_LEXICAL_COMMIT_BODY_BYTES),
+                ),
+            ),
         )
         .route(
             "/{document_id}/comments/text",

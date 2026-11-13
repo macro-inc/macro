@@ -907,3 +907,145 @@ async fn the_cpu_limit_stops_a_busy_program() {
     );
     service.shutdown().await;
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn programs_edit_lexical_states_with_one_module_instance() {
+    let (_root, service) = setup(Limits::default()).await;
+    // No hosts: the run has --deny-net, so everything below is local.
+    let source = r#"
+import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
+import { $isListNode } from '@lexical/list';
+import {
+  $convertFromMarkdownString,
+  $convertToMarkdownString,
+  $getId,
+  $isListItemNode,
+  $isTaskListNode,
+  $updateAllNodeIds,
+  ALL_TRANSFORMERS,
+  createDocumentEditor,
+} from '@macro-inc/sdk/lexical';
+export async function main() {
+  const editor = createDocumentEditor();
+  editor.update(() => {
+    $convertFromMarkdownString('# Plan\n\n- [ ] draft\n- [ ] ship\n\n- one', ALL_TRANSFORMERS);
+    $updateAllNodeIds({ idToNodeKeyMap: new Map(), nodeKeyToIdMap: new Map() });
+  }, { discrete: true });
+  const reloaded = createDocumentEditor();
+  reloaded.setEditorState(reloaded.parseEditorState(editor.getEditorState().toJSON()));
+  // The program's `lexical` and `@lexical/list` work inside the SDK entry's
+  // editor only when all three resolve to one module instance each.
+  reloaded.update(() => {
+    for (const block of $getRoot().getChildren()) {
+      if (!$isTaskListNode(block)) continue;
+      for (const item of block.getChildren()) if ($isListItemNode(item)) item.setChecked(true);
+    }
+    $getRoot().append($createParagraphNode().append($createTextNode('added')));
+  }, { discrete: true });
+  // A non-discrete update commits in a microtask, with no timer.
+  reloaded.update(() => { $getRoot().append($createParagraphNode().append($createTextNode('later'))); });
+  await Promise.resolve();
+  return {
+    markdown: reloaded.read(() => $convertToMarkdownString(ALL_TRANSFORMERS)),
+    ids: reloaded.read(() => $getRoot().getChildren().slice(0, 2).map((block) => typeof $getId(block))),
+    lists: reloaded.read(() => $getRoot().getChildren().filter($isListNode).length),
+  };
+}
+"#;
+    let (_, outcome) = run(&service, source, 10_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value["markdown"],
+        "# Plan\n\n- [x] draft\n- [x] ship\n\n- one\n\nadded\n\nlater"
+    );
+    assert_eq!(value["ids"], serde_json::json!(["string", "string"]));
+    assert_eq!(value["lists"], 2);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn document_lexical_loads_through_the_sdk_and_commits_blocks() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let state = r#"{"root":{"type":"root","version":1,"direction":null,"format":"","indent":0,"$":{"id":"root"},"children":[{"type":"paragraph","version":1,"direction":null,"format":"","indent":0,"textFormat":0,"textStyle":"","$":{"id":"p1"},"children":[{"type":"text","version":1,"detail":0,"format":0,"mode":"normal","style":"","text":"Hello","$":{"id":"t1"}}]}]}}"#;
+    let server = tokio::spawn(async move {
+        let (mut read, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut read).await;
+        assert!(
+            request.starts_with("GET /documents/fixture-document/lexical "),
+            "{request}"
+        );
+        respond(
+            &mut read,
+            &format!(r#"{{"state":{state},"revision":"base"}}"#),
+        )
+        .await;
+        let (mut commit, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut commit).await;
+        assert!(
+            request.starts_with("POST /documents/fixture-document/lexical "),
+            "{request}"
+        );
+        let body: Value = serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert_eq!(body["revision"], "base");
+        assert_eq!(body["removed"], serde_json::json!([]));
+        let blocks = body["blocks"].as_array().unwrap();
+        assert_eq!(blocks.len(), 1, "{body}");
+        assert_eq!(blocks[0]["after"], "p1");
+        assert_eq!(blocks[0]["node"]["$"]["id"], blocks[0]["id"]);
+        respond(
+            &mut commit,
+            &format!(r#"{{"state":{state},"revision":"after"}}"#),
+        )
+        .await;
+    });
+    // The SDK's dynamic imports resolve through the run's import map, so the
+    // program's `$getRoot` works on the editor `lexical()` returns.
+    let source = r#"
+import { Macro } from '@macro-inc/sdk';
+import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
+import { $convertToMarkdownString, ALL_TRANSFORMERS } from '@macro-inc/sdk/lexical';
+export async function main({ token, hosts }) {
+  const lexical = await new Macro({ token, hosts }).documents.byId('fixture-document').lexical();
+  lexical.update(() => { $getRoot().append($createParagraphNode().append($createTextNode('added'))); });
+  const edited = lexical.read(() => $convertToMarkdownString(ALL_TRANSFORMERS));
+  const result = await lexical.commit();
+  return { edited, result, revision: lexical.revision };
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                RunEnvironment {
+                    token: "fixture-run-token".into(),
+                    endpoints: SdkEndpoints {
+                        hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+                        ..SdkEndpoints::default()
+                    },
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["edited"], "Hello\n\nadded");
+    assert_eq!(value["result"]["revision"], "after");
+    assert_eq!(value["revision"], "after");
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    service.shutdown().await;
+}

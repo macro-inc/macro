@@ -720,6 +720,24 @@ impl EditingWorkerService for FakeEditingWorker {
         })
     }
 
+    async fn lexical_state(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::lexical::DocumentLexicalState> {
+        panic!("unexpected lexical_state call")
+    }
+
+    async fn lexical_commit(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _commit: &crate::domain::lexical::DocumentLexicalCommitRequest,
+        _editor: Option<EditorName>,
+    ) -> anyhow::Result<crate::domain::lexical::LexicalCommitOutcome> {
+        panic!("unexpected lexical_commit call")
+    }
+
     async fn delete_traces(&self, _document_id: &str) -> anyhow::Result<()> {
         panic!("unexpected delete_traces call")
     }

@@ -130,6 +130,12 @@ enforced by the ordinary backend APIs.
   thread to quoted text (`POST /documents/{id}/comments/text`, the
   `CommentOnText` tool's domain function); a 422 becomes
   `CommentQuoteNotPlacedError` carrying the reason.
+- `src/entities/documents/document-lexical.ts`: `document.lexical()` handle;
+  `lexical-diff.ts` diffs top-level blocks by node id, and
+  `lexical-requests.ts` holds its only generated-client calls.
+- `src/lexical.ts` (`@macro-inc/sdk/lexical`) re-exports `src/vendor/lexical-core/`,
+  copied from `packages/lexical-core/sdk.ts` and its local imports by
+  `bun run vendor`; edit the source and re-vendor, never the copy.
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
@@ -192,6 +198,13 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- `bun test` fails when `src/vendor/lexical-core` is stale (`bun run
+  vendor:check`); run `bun run vendor` after changing `packages/lexical-core`.
+- Core `lexical` is a dependency because the public handle references its types;
+  `@lexical/*` are optional peers pinned to lexical-core's version. The main entry imports them and `@macro-inc/sdk/lexical` only
+  dynamically, by package name, so the build keeps them external and a
+  program shares their module instance; never import them statically from
+  `src/macro.ts`'s graph or by relative path.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode

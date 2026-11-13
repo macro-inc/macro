@@ -119,13 +119,17 @@ impl DenoRunner {
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
             .await
             .map_err(internal)?;
+        tokio::fs::create_dir(root.join("lexical"))
+            .await
+            .map_err(internal)?;
+        for module in code_mode_assets::LEXICAL_MODULES {
+            tokio::fs::write(root.join(module.path), module.source)
+                .await
+                .map_err(internal)?;
+        }
         tokio::fs::write(
             root.join("imports.json"),
-            if job.environment.unattended.is_some() {
-                UNATTENDED_IMPORTS
-            } else {
-                IMPORTS
-            },
+            import_map(job.environment.unattended.is_some()),
         )
         .await
         .map_err(internal)?;
@@ -287,6 +291,29 @@ const BACKGROUND_NICENESS: i32 = 10;
 async fn reap(child: &mut Child) {
     let _ = child.start_kill();
     let _ = child.wait().await;
+}
+
+/// Every bare specifier a program or `sdk.mjs` may import. Timer and worker
+/// modules point at the bootstrap's ban; Lexical specifiers at their one copy.
+fn import_map(unattended: bool) -> String {
+    let mut map: Value = serde_json::from_str(if unattended {
+        UNATTENDED_IMPORTS
+    } else {
+        IMPORTS
+    })
+    .expect("static import map is valid JSON");
+    let imports = map["imports"]
+        .as_object_mut()
+        .expect("static imports is an object");
+    for module in code_mode_assets::LEXICAL_MODULES {
+        if let Some(specifier) = module.specifier {
+            imports.insert(
+                specifier.to_owned(),
+                Value::String(format!("./{}", module.path)),
+            );
+        }
+    }
+    map.to_string()
 }
 
 fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {

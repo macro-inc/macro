@@ -10,6 +10,11 @@ HTML worker belong to `packages/sdk-docs`.
 
 - `scripts/generate.ts`: builds the Deno bundles and backend documentation into
   the directory it is given; `crates/code_mode_assets` runs it at build time.
+  `sdk.mjs` keeps `lexical`, `@lexical/*` and `@macro-inc/sdk/lexical`
+  external; they are one code-split build in `lexical/` (Lexical's development
+  builds, for readable errors), listed with their specifiers in
+  `lexical-modules.tsv`, so a program and `document.lexical()` share each
+  module instance through the import map.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types). A discriminated union over
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
@@ -41,6 +46,8 @@ HTML worker belong to `packages/sdk-docs`.
 Run from this directory after installing the root workspace and the standalone
 `packages/sdk` dependencies with `bun install --frozen-lockfile`, as CI does;
 the generator refuses to run without `packages/sdk/node_modules`.
+Core Lexical declarations are embedded in `sdk-types.json` alongside the SDK types
+so the offline routine checker can resolve `DocumentLexical` without npm.
 
 ## Gotchas
 

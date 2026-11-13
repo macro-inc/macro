@@ -483,6 +483,14 @@ export {
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export {
+  type DocumentEditConflict,
+  DocumentEditConflictError,
+  DocumentEditInvalidError,
+  DocumentLexical,
+  type DocumentLexicalCommitOptions,
+  type DocumentLexicalCommitResult,
+} from './entities/documents/document-lexical';
+export {
   DocumentChangedError,
   type DocumentMarkdown,
   type DocumentMarkdownWritten,

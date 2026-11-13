@@ -233,7 +233,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
-      exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
+      exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentLexical getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -283,7 +283,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      applyCanvasEdits commitDocumentLexical editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `

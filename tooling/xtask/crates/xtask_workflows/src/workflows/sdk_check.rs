@@ -9,6 +9,7 @@ mod test;
 /// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk/**"),
+    xtask_paths::repo_glob!("packages/lexical-core/**"),
     xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
 ];
 

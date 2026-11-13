@@ -524,6 +524,7 @@ jobs:
             - '.github/workflows/check_tauri_lockfiles.yml'
           sdk:
             - 'packages/sdk/**'
+            - 'packages/lexical-core/**'
             - '.github/workflows/sdk-check.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'

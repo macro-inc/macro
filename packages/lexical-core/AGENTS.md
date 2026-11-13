@@ -50,3 +50,5 @@ element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a
 list to its last item. Add it to any new transformer set that has image
 transformers.
+
+Load `prismjs/prism.js` before extra language components so headless SDK imports initialize Prism even when Lexical loads asynchronously.
