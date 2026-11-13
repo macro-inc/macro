@@ -1,0 +1,19 @@
+apps/web/native-commands.json
+  s_9b1603f4fd6889::t_c9b0fa757f3dba 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "21da56b54120e6372653b53d90d7b370837618ae",
+  "prompts": {},
+  "sessions": {
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
