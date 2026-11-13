@@ -1,0 +1,19 @@
+docs/agent-guide/ai-chat.md
+  s_fcbfa0c2313f05::t_193833d638072e 1926-1935
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0b2e48721cb27519f52014c98d1bf5cdb9d2a820",
+  "prompts": {},
+  "sessions": {
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
