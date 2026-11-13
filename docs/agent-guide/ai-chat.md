@@ -2500,7 +2500,8 @@ one `macro.search.names` lookup for every item the request names (asking with
 and `create` or `update`, then a one- or two-sentence reply with the routine's
 link. The routine is saved switched on. A step takes each item the request
 names from a knob holding its name, which it looks up when it runs. Hosts
-without code get the skill in the form they can follow, with `NameSearch`,
+without code get the skill in the form they can follow: each kind's lookup
+tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the like), then
 `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`. Both end with the rules
 the routine drafter also follows (`routine_program::WRITING`).
 GitHub triggers are set on the routine's page, not through these tools.

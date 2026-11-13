@@ -59,6 +59,7 @@ fn compose_routines_carries_the_shared_writing_text() {
         "one `macro.search.names([...])` call",
         "macro.routines.check(routine, { created })",
         "kinds: ['channel']",
+        "# Without code",
     ] {
         assert!(content.contains(rule), "{rule}");
     }
