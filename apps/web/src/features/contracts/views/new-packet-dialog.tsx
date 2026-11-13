@@ -109,6 +109,20 @@ export function NewPacketDialog(props: {
     fileInput.value = '';
   }
 
+  /** A document taken out of the packet is not kept in storage. */
+  function removeDocument(documentId: string) {
+    draft.removeDocument(documentId);
+    fireAndForget(context.discardDocument(documentId), 'contracts.discard');
+  }
+
+  /** Closing without creating the packet forgets what was imported for it. */
+  function cancel() {
+    for (const document of draft.state.documents) {
+      fireAndForget(context.discardDocument(document.id), 'contracts.discard');
+    }
+    props.onClose();
+  }
+
   async function create(event: SubmitEvent) {
     event.preventDefault();
     setAttempted(true);
@@ -141,7 +155,7 @@ export function NewPacketDialog(props: {
   return (
     <Dialog
       open
-      onOpenChange={(open) => !open && props.onClose()}
+      onOpenChange={(open) => !open && cancel()}
       position="center"
       class="w-200 max-w-[calc(100vw-2rem)]"
       visibleScrim
@@ -243,7 +257,7 @@ export function NewPacketDialog(props: {
                             aria-label={t('contracts.removeDocument', {
                               name: document.name,
                             })}
-                            onClick={() => draft.removeDocument(document.id)}
+                            onClick={() => removeDocument(document.id)}
                           >
                             <XIcon class="size-3.5" />
                           </Button>
@@ -557,7 +571,7 @@ export function NewPacketDialog(props: {
                 {(problem) => problemText(problem())}
               </Show>
             </span>
-            <Button variant="ghost" onClick={() => props.onClose()}>
+            <Button variant="ghost" onClick={cancel}>
               {t('contracts.cancel')}
             </Button>
             <Button type="submit" variant="primary" loading={creating()}>

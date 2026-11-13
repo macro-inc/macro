@@ -5,6 +5,7 @@ import MacroLogo from '@icon/macro-logo.svg';
 import NextIcon from '@icon/system/regular/arrow-down.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, confirmDialog, Dialog, Dropdown, Tabs } from '@ui';
 import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import { AdoptSignature } from '../components/adopt-signature';
@@ -86,13 +87,21 @@ function SigningDesk(props: {
     });
   }
 
+  /**
+   * Signing covers every document in the packet, so all of them must have
+   * opened for the signer before they can finish.
+   */
+  const canFinish = () => progress.canFinish() && pdfs.allOpen();
+
   async function finish() {
     const input = progress.input();
-    if (!input || !progress.canFinish()) return;
+    if (!input || !canFinish()) return;
 
     setFinishing(true);
-    await signing.acceptDisclosure();
-    const result = await signing.sign(input);
+    // Consent is recorded first; without it nothing is signed.
+    const result = await signing
+      .acceptDisclosure()
+      .andThen(() => signing.sign(input));
     setFinishing(false);
     if (result.isErr()) {
       toast.failure(t('contracts.signFailed'));
@@ -173,7 +182,7 @@ function SigningDesk(props: {
         <Button
           variant="primary"
           size="md"
-          disabled={!progress.canFinish()}
+          disabled={!canFinish()}
           loading={finishing()}
           onClick={() => fireAndForget(finish(), 'contracts.finish')}
         >
@@ -278,9 +287,20 @@ function SigningDesk(props: {
             <Show
               when={progress.next()}
               fallback={
-                <span class="text-sm font-medium text-success-ink">
-                  {t('contracts.readyToFinish')}
-                </span>
+                <Show
+                  when={pdfs.allOpen()}
+                  fallback={
+                    <span class="text-sm text-ink-muted">
+                      {pdfs.failed().length > 0
+                        ? t('contracts.documentsMissing')
+                        : t('contracts.documentsOpening')}
+                    </span>
+                  }
+                >
+                  <span class="text-sm font-medium text-success-ink">
+                    {t('contracts.readyToFinish')}
+                  </span>
+                </Show>
               }
             >
               <Button variant="accent" size="md" onClick={goToNext}>
@@ -304,20 +324,22 @@ function SigningDesk(props: {
                         total: open().pageCount,
                       })}
                     >
-                      <For each={fieldsOn(page)}>
+                      {/* Keyed on the field's id: a field being typed in keeps
+                          its focus when the packet is stored again. */}
+                      <Key each={fieldsOn(page)} by="id">
                         {(field) => (
                           <Show
-                            when={field.recipientId === props.recipient.id}
+                            when={field().recipientId === props.recipient.id}
                             fallback={
                               <Show
                                 when={findRecipient(
                                   props.packet,
-                                  field.recipientId
+                                  field().recipientId
                                 )}
                               >
                                 {(other) => (
                                   <FilledField
-                                    field={field}
+                                    field={field()}
                                     recipient={other()}
                                   />
                                 )}
@@ -325,31 +347,43 @@ function SigningDesk(props: {
                             }
                           >
                             <SigningField
-                              field={field}
+                              field={field()}
                               recipient={props.recipient}
                               tone={tone()}
                               mark={
-                                isMark(field.kind) ? markFor(field) : undefined
+                                isMark(field().kind)
+                                  ? markFor(field())
+                                  : undefined
                               }
-                              value={progress.value(field.id)}
-                              current={progress.next()?.id === field.id}
+                              value={progress.value(field().id)}
+                              current={progress.next()?.id === field().id}
                               onSign={() => setAdopting(true)}
                               onValue={(value) =>
-                                progress.setValue(field.id, value)
+                                progress.setValue(field().id, value)
                               }
                             />
                           </Show>
                         )}
-                      </For>
+                      </Key>
                     </PdfPage>
                   )}
                 </For>
               )}
             </Match>
             <Match when={pdfs.failed().includes(documentId())}>
-              <p role="alert" class="p-8 text-sm text-ink-muted">
-                {t('contracts.documentUnreadable')}
-              </p>
+              <div
+                role="alert"
+                class="flex flex-col items-center gap-3 p-8 text-sm text-ink-muted"
+              >
+                <p>{t('contracts.documentUnreadable')}</p>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => pdfs.retry(documentId())}
+                >
+                  {t('contracts.tryAgain')}
+                </Button>
+              </div>
             </Match>
             <Match when={true}>
               <p role="status" class="p-8 text-sm text-ink-muted">

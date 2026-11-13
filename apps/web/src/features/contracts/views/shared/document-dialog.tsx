@@ -1,11 +1,11 @@
 import { t } from '@app/lib/i18n';
 import { Dialog, Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { PdfPage } from '../components/pdf-page';
-import { FilledField } from '../components/signing-field';
-import { useContractsContext } from '../context/contracts-context';
-import { findRecipient, type Packet } from '../core/packet';
-import { createPacketPdfs } from '../primitives/packet-pdfs';
+import { PdfPage } from '../../components/pdf-page';
+import { FilledField } from '../../components/signing-field';
+import { useContractsContext } from '../../context/contracts-context';
+import { findRecipient, type Packet } from '../../core/packet';
+import { createPacketPdfs } from '../../primitives/packet-pdfs';
 
 /** A packet's documents as they read now, with signed fields filled in. */
 export function DocumentDialog(props: {

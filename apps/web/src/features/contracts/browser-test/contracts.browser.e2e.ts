@@ -122,6 +122,8 @@ test.describe('contracts', () => {
     await expect(certificate.getByText('Signer 2 of 2')).toBeVisible();
     await expect(certificate.getByText('Final, after Avery Lee')).toBeVisible();
     await expect(certificate.getByText('contract.completed')).toBeVisible();
+    // The stored log is checked against its own hash chain.
+    await expect(page.getByText('Audit log verified')).toBeVisible();
   });
 
   test('a database lists every packet status, and voiding closes a packet', async ({
@@ -180,7 +182,8 @@ test.describe('signing on a phone', () => {
       waitUntil: 'networkidle',
     });
     const token = await page.evaluate(() => {
-      const stored = localStorage.getItem('macro:contracts:local:v1') ?? '{}';
+      const stored =
+        localStorage.getItem('macro:contracts:local:v1:fixture-viewer') ?? '{}';
       const packets: {
         title: string;
         recipients: { id: string; access?: { token: string } }[];

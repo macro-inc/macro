@@ -7,8 +7,9 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SignatureIcon from '@icon/system/regular/signature.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Avatar, Button } from '@ui';
-import { type Component, For, type JSX, Show } from 'solid-js';
+import { type Component, type JSX, Show } from 'solid-js';
 import type { PacketRow } from '../core/packet-row';
 import { formatDay, initialsOf } from './format';
 import { PacketStatusPill } from './packet-status-pill';
@@ -108,17 +109,19 @@ export function PacketTable(props: {
           </HeaderCell>
         </div>
 
-        <For each={props.rows}>
+        {/* Keyed on the packet's id: a row survives its packet being
+            replaced by a newer copy, so focus and hover stay put. */}
+        <Key each={props.rows} by={(row) => row.packet.id}>
           {(row, index) => (
             <div
               role="row"
-              aria-selected={props.selectedId === row.packet.id}
+              aria-selected={props.selectedId === row().packet.id}
               class="grid min-h-[47px] grid-cols-(--packet-columns) border-b border-edge-muted/60"
               classList={{
                 'bg-list-selected shadow-[inset_2px_0_0_var(--color-accent)]':
-                  props.selectedId === row.packet.id,
+                  props.selectedId === row().packet.id,
                 'not-touch:hover:bg-hover/50':
-                  props.selectedId !== row.packet.id,
+                  props.selectedId !== row().packet.id,
               }}
             >
               <div
@@ -129,22 +132,25 @@ export function PacketTable(props: {
               </div>
               <Cell>
                 <PacketBlock
-                  row={row}
-                  selected={props.selectedId === row.packet.id}
-                  onOpen={() => props.onOpen(row.packet.id)}
+                  row={row()}
+                  selected={props.selectedId === row().packet.id}
+                  onOpen={() => props.onOpen(row().packet.id)}
                 />
               </Cell>
               <Cell>
                 <PacketStatusPill
-                  status={row.status}
-                  offline={row.packet.statusOverride?.tag === 'offline'}
+                  status={row().status}
+                  offline={row().packet.statusOverride?.tag === 'offline'}
                 />
               </Cell>
               <Cell>
-                <SignerProgress status={row.status} progress={row.progress} />
+                <SignerProgress
+                  status={row().status}
+                  progress={row().progress}
+                />
               </Cell>
               <Cell>
-                <Show when={row.packet.company}>
+                <Show when={row().packet.company}>
                   {(company) => (
                     <span class="inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full bg-ink/5 px-2.5 text-sm">
                       <BuildingsIcon class="size-3.5 shrink-0 text-ink-muted" />
@@ -157,15 +163,15 @@ export function PacketTable(props: {
                 <span class="flex min-w-0 items-center gap-2 text-sm text-ink-muted">
                   <Avatar size="sm">
                     <Avatar.Fallback>
-                      {initialsOf(row.packet.owner.name)}
+                      {initialsOf(row().packet.owner.name)}
                     </Avatar.Fallback>
                   </Avatar>
-                  <span class="truncate">{row.packet.owner.name}</span>
+                  <span class="truncate">{row().packet.owner.name}</span>
                 </span>
               </Cell>
               <Cell>
                 <Show
-                  when={row.packet.expiresAt}
+                  when={row().packet.expiresAt}
                   fallback={
                     <span class="text-sm text-ink-placeholder">
                       {t('contracts.noExpiry')}
@@ -176,8 +182,8 @@ export function PacketTable(props: {
                     <span
                       class="whitespace-nowrap text-sm"
                       classList={{
-                        'text-orange-ink': row.status === 'expired',
-                        'text-ink-muted': row.status !== 'expired',
+                        'text-orange-ink': row().status === 'expired',
+                        'text-ink-muted': row().status !== 'expired',
                       }}
                     >
                       {formatDay(expiresAt())}
@@ -187,7 +193,7 @@ export function PacketTable(props: {
               </Cell>
             </div>
           )}
-        </For>
+        </Key>
       </div>
 
       <Button

@@ -32,10 +32,10 @@ export function createSigningProgress(
     return typeof value === 'string' && value.trim() !== '';
   };
 
-  /** Fields the signer acts on, as opposed to ones filled for them. */
-  const actionable = () => mine().filter((field) => !isAutoFilled(field.kind));
-  const remaining = () =>
-    actionable().filter((field) => field.required && !isDone(field));
+  /** Fields the signer must complete themselves before they can finish. */
+  const required = () =>
+    mine().filter((field) => field.required && !isAutoFilled(field.kind));
+  const remaining = () => required().filter((field) => !isDone(field));
 
   return {
     fields: mine,
@@ -45,8 +45,9 @@ export function createSigningProgress(
     setValue: (fieldId: string, value: string | boolean) =>
       setValues(fieldId, value),
 
-    doneCount: () => actionable().filter(isDone).length,
-    totalCount: () => actionable().length,
+    /** Progress counts what is required; optional fields never hold it back. */
+    doneCount: () => required().filter(isDone).length,
+    totalCount: () => required().length,
     remaining,
     /** The next required field to complete, in document order. */
     next: () => remaining()[0],

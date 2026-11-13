@@ -11,7 +11,8 @@ import type { DocumentError, PdfDocument } from '../context/contracts-context';
 
 /**
  * The opened PDFs of a set of documents, by document id. A document appears
- * once it has loaded; one that fails to load is listed in `failed`.
+ * once it has loaded; one that fails to load is listed in `failed` until it
+ * is retried.
  */
 export function createPacketPdfs(
   open: (documentId: string) => ResultAsync<PdfDocument, DocumentError>,
@@ -19,14 +20,19 @@ export function createPacketPdfs(
 ) {
   const [pdfs, setPdfs] = createSignal<Record<string, PdfDocument>>({});
   const [failed, setFailed] = createSignal<readonly string[]>([]);
+  const loading: string[] = [];
   let disposed = false;
   onCleanup(() => {
     disposed = true;
   });
 
   async function load(documentId: string) {
+    if (loading.includes(documentId)) return;
+    loading.push(documentId);
     const result = await open(documentId);
+    loading.splice(loading.indexOf(documentId), 1);
     if (disposed) return;
+
     if (result.isErr()) {
       setFailed((ids) => [...ids, documentId]);
       return;
@@ -46,5 +52,12 @@ export function createPacketPdfs(
   return {
     pdf: (documentId: string): PdfDocument | undefined => pdfs()[documentId],
     failed,
+    /** Every document is open: the whole packet can be read. */
+    allOpen: () => documentIds().every((documentId) => pdfs()[documentId]),
+    /** Try a document that failed to load again. */
+    retry(documentId: string) {
+      setFailed((ids) => ids.filter((id) => id !== documentId));
+      fireAndForget(load(documentId), 'contracts.packet-pdfs');
+    },
   };
 }

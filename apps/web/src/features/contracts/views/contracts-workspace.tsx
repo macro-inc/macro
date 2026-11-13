@@ -15,12 +15,12 @@ import { useContractsContext } from '../context/contracts-context';
 import type { Packet } from '../core/packet';
 import { allRows, databaseRows, matchesFilter } from '../core/packet-row';
 import { CertificateDialog } from './certificate-dialog';
-import { DocumentDialog } from './document-dialog';
 import { NewDatabaseDialog } from './new-database-dialog';
 import { NewPacketDialog } from './new-packet-dialog';
 import { PacketPane } from './packet-pane';
 import { PlaceFields } from './place-fields';
 import { ReviewDialog } from './review-dialog';
+import { DocumentDialog } from './shared/document-dialog';
 
 type Overlay =
   | { t: 'new-packet' }
@@ -117,18 +117,22 @@ export function ContractsWorkspace() {
 
         <ViewShell.Main>
           <Switch>
-            <Match when={packet(placingId())}>
-              {(placing) => (
-                <PlaceFields
-                  packet={placing()}
-                  onBack={() => {
-                    setSelectedId(placing().id);
-                    setPlacingId(undefined);
-                  }}
-                  onReview={() =>
-                    setOverlay({ t: 'review', packetId: placing().id })
-                  }
-                />
+            {/* Keyed on the id: each packet gets its own placement, and the
+                view stays mounted while its packet changes underneath it. */}
+            <Match when={packet(placingId())?.id} keyed>
+              {(id) => (
+                <Show when={packet(id)}>
+                  {(placing) => (
+                    <PlaceFields
+                      packet={placing()}
+                      onBack={() => {
+                        setSelectedId(id);
+                        setPlacingId(undefined);
+                      }}
+                      onReview={() => setOverlay({ t: 'review', packetId: id })}
+                    />
+                  )}
+                </Show>
               )}
             </Match>
             <Match when={true}>
@@ -147,6 +151,14 @@ export function ContractsWorkspace() {
                   <p class="shrink-0 rounded-lg bg-ink/5 px-3 py-2 text-xs text-ink-muted">
                     {t('contracts.localBanner')}
                   </p>
+                  <Show when={context.loadFailed()}>
+                    <p
+                      role="alert"
+                      class="shrink-0 rounded-lg bg-failure-bg px-3 py-2 text-sm text-failure-ink"
+                    >
+                      {t('contracts.loadFailed')}
+                    </p>
+                  </Show>
                   <Show
                     when={rows().length > 0}
                     fallback={

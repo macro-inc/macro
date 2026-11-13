@@ -1,5 +1,10 @@
-import { createStore } from 'solid-js/store';
-import { boxAtPoint, clampBox, placementProblems } from '../core/fields';
+import { createStore, unwrap } from 'solid-js/store';
+import {
+  boxAtPoint,
+  clampBox,
+  placementProblems,
+  resizeBox,
+} from '../core/fields';
 import type { FieldBox, FieldKind, Packet, PacketField } from '../core/packet';
 import { signers } from '../core/packet';
 
@@ -32,6 +37,8 @@ export function createPlacement(options: {
 
   return {
     fields: () => state.fields,
+    /** A plain copy of the fields as they are now, to save. */
+    snapshot: (): PacketField[] => structuredClone(unwrap(state.fields)),
     selected: () => state.fields.find((field) => field.id === state.selectedId),
     recipientId: () => state.recipientId,
     problems: () =>
@@ -64,8 +71,12 @@ export function createPlacement(options: {
       setState('selectedId', field.id);
     },
 
-    setBox: (fieldId: string, box: FieldBox) =>
+    /** Move a field, keeping all of it on the page. */
+    move: (fieldId: string, box: FieldBox) =>
       update(fieldId, { box: clampBox(box) }),
+    /** Resize a field from its corner; it stops growing at the page edge. */
+    resize: (fieldId: string, box: FieldBox) =>
+      update(fieldId, { box: resizeBox(box) }),
 
     nudge(fieldId: string, direction: { x: number; y: number }) {
       const field = state.fields.find((each) => each.id === fieldId);

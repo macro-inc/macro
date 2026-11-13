@@ -6,8 +6,9 @@ route and the public signing page at `/sign/<token>`; without it `/contracts`
 redirects to Home. The rail entry starts under **More** and can be moved onto
 the rail from Customize sidebar.
 
-Packets are stored in the browser for now: localStorage holds the packets and
-IndexedDB the PDF bytes, and a banner at the top of the workspace says so. No
+Packets are stored in the browser for now, separately for each signed-in
+account: localStorage holds the packets and IndexedDB the PDF bytes, and a
+banner at the top of the workspace says so. No
 email is sent and a signing link opens only in the browser profile that
 created it. Open tabs stay in step, so a workspace tab updates when a signing
 tab finishes.
@@ -54,8 +55,9 @@ viewer it shows **Sign now**.
 2. **Place fields**: choose who fields are for on the left, then drag a field
    (Signature, Initials, Date Signed, Full Name, Email, Text Input, Checkbox)
    onto a page, or press it to drop it on the current page. Drag a placed
-   field to move it and its corner to resize it; arrow keys nudge and Delete
-   removes. The panel on the right reassigns the selected field, toggles
+   field to move it and its corner to resize it (it stops at the page edge);
+   arrow keys nudge and Delete removes. Placement is saved when the step is
+   left, including by the sidebar. The panel on the right reassigns the selected field, toggles
    Required, and lists what still blocks sending: every signer needs at least
    one signature field. A signer with no signature field in one document is a
    warning, not a block.
@@ -70,7 +72,10 @@ fields left in each, shows progress in the header, and **Next field** scrolls
 to the next required field. **Sign here** opens Adopt your signature (Draw,
 Type in one of three faces, or Upload an image); on a phone it is a bottom
 sheet. Text fields are typed in place; the date, name and email are filled in
-at signing. **Finish** enables once every required field is done. **Other
+at signing. The header counts required fields only. **Finish** enables once
+every required field is done and every document has opened; a document that
+fails to load offers **Try again**. Finishing records consent to sign
+electronically, then the signature. **Other
 actions → Decline to sign** declines and closes every link. A link that was
 used, replaced, voided or expired, or whose turn has not come, shows "This
 signing link isn't active".
@@ -83,7 +88,10 @@ user agent, disclosure and signing times and signature, the SHA-256 state
 digest before signing and after each signature, and the event log
 (`contract.created`, `contract.sent`, `contract.viewed`,
 `contract.signed_by_recipient`, `contract.completed`, and the audit entries).
-IP addresses read "Not recorded" until packets are stored on the server.
+IP addresses read "Not recorded" until packets are stored on the server. A
+line above the page says whether the stored log still matches its hash chain
+("Audit log verified"). After a document is replaced, only the digests from
+the replacement on are listed.
 
 ## Driving it without a backend
 

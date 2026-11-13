@@ -4,6 +4,8 @@ import { createSignal, onMount } from 'solid-js';
 
 const STROKE_WIDTH = 2.5;
 const INK = '#14213d';
+/** A press that moves less than this is a tap, not a stroke. */
+const TAP_SLOP_PX = 3;
 
 /**
  * A canvas the signer draws their signature on. Reports the drawing as a PNG
@@ -14,6 +16,8 @@ export function SignaturePad(props: {
 }) {
   let canvas!: HTMLCanvasElement;
   let drawing = false;
+  let stroked = false;
+  let origin = { x: 0, y: 0 };
   const [empty, setEmpty] = createSignal(true);
 
   // Keep the backing bitmap at the CSS size times the device pixel ratio so
@@ -43,10 +47,11 @@ export function SignaturePad(props: {
     const context = canvas.getContext('2d');
     if (!context) return;
     drawing = true;
+    stroked = false;
     canvas.setPointerCapture(event.pointerId);
-    const { x, y } = point(event);
+    origin = point(event);
     context.beginPath();
-    context.moveTo(x, y);
+    context.moveTo(origin.x, origin.y);
   }
 
   function move(event: PointerEvent) {
@@ -54,6 +59,10 @@ export function SignaturePad(props: {
     const context = canvas.getContext('2d');
     if (!context) return;
     const { x, y } = point(event);
+    if (!stroked && Math.hypot(x - origin.x, y - origin.y) < TAP_SLOP_PX) {
+      return;
+    }
+    stroked = true;
     context.lineTo(x, y);
     context.stroke();
   }
@@ -61,6 +70,8 @@ export function SignaturePad(props: {
   function end() {
     if (!drawing) return;
     drawing = false;
+    // A tap leaves no ink, so it is not a signature.
+    if (!stroked) return;
     setEmpty(false);
     props.onChange(canvas.toDataURL('image/png'));
   }

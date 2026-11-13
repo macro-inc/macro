@@ -95,7 +95,13 @@ export function createPacketActions(context: ContractsContext) {
         imported.value
       );
       if (result.isErr()) {
-        toast.failure(t('contracts.actionFailed'));
+        // The revision was stored for a change that did not happen.
+        await context.discardDocument(imported.value.id);
+        toast.failure(
+          result.error.kind === 'signature_field_lost'
+            ? t('contracts.replaceLosesSignature')
+            : t('contracts.actionFailed')
+        );
         return;
       }
       toast.success(t('contracts.documentReplaced'));

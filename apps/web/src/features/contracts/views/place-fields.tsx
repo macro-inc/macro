@@ -9,7 +9,15 @@ import DotsSixIcon from '@icon/system/regular/dots-six-vertical.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import { Button, Dropdown, RadioGroup, Tabs, ToggleSwitch } from '@ui';
-import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { FieldKindIcon, fieldKindLabel } from '../components/field-kind';
 import { PacketStatusPill } from '../components/packet-status-pill';
 import { PdfPage } from '../components/pdf-page';
@@ -76,7 +84,9 @@ function InspectorRow(props: { label: string; children: JSX.Element }) {
 /**
  * Step two of a new packet: put each signer's fields on the document pages.
  * Fields are dragged from the palette or added with a press, then moved,
- * resized, and assigned. Leaving saves the placement to the draft.
+ * resized, and assigned. Leaving saves the placement to the draft, however
+ * the view is left. Mount it keyed on the packet's id: its placement belongs
+ * to the packet it was created with.
  */
 export function PlaceFields(props: {
   packet: Packet;
@@ -97,6 +107,19 @@ export function PlaceFields(props: {
   const [activePage, setActivePage] = createSignal(0);
   const [saving, setSaving] = createSignal(false);
   let gesture: Gesture | undefined;
+  let palette!: HTMLDivElement;
+
+  const packetId = props.packet.id;
+  const placed = () => JSON.stringify(placement.fields());
+  let saved = placed();
+  // Leaving by any other way, such as the sidebar, still keeps the work.
+  onCleanup(() => {
+    if (placed() === saved) return;
+    fireAndForget(
+      context.saveFields(packetId, placement.snapshot()),
+      'contracts.place-fields'
+    );
+  });
 
   const pdf = () => pdfs.pdf(documentId());
   const pages = () =>
@@ -172,16 +195,19 @@ export function PlaceFields(props: {
     const dy = (event.clientY - gesture.startY) / bounds.height;
     const start = gesture.startBox;
 
-    placement.setBox(
-      gesture.fieldId,
-      gesture.mode === 'move'
-        ? { ...start, xPct: start.xPct + dx, yPct: start.yPct + dy }
-        : {
-            ...start,
-            widthPct: start.widthPct + dx,
-            heightPct: start.heightPct + dy,
-          }
-    );
+    if (gesture.mode === 'move') {
+      placement.move(gesture.fieldId, {
+        ...start,
+        xPct: start.xPct + dx,
+        yPct: start.yPct + dy,
+      });
+      return;
+    }
+    placement.resize(gesture.fieldId, {
+      ...start,
+      widthPct: start.widthPct + dx,
+      heightPct: start.heightPct + dy,
+    });
   }
 
   function endGesture() {
@@ -202,18 +228,30 @@ export function PlaceFields(props: {
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
-      placement.remove(field.id);
+      removeField(field);
     }
+  }
+
+  /**
+   * Delete a field and move focus to the field palette, so the keyboard is
+   * not left on a control that no longer exists.
+   */
+  function removeField(field: PacketField) {
+    placement.remove(field.id);
+    palette.querySelector<HTMLElement>('button')?.focus();
   }
 
   async function save(): Promise<boolean> {
     setSaving(true);
-    const result = await context.saveFields(props.packet.id, [
-      ...placement.fields(),
-    ]);
+    const saving = placed();
+    const result = await context.saveFields(packetId, placement.snapshot());
     setSaving(false);
-    if (result.isErr()) toast.failure(t('contracts.actionFailed'));
-    return result.isOk();
+    if (result.isErr()) {
+      toast.failure(t('contracts.actionFailed'));
+      return false;
+    }
+    saved = saving;
+    return true;
   }
 
   async function back() {
@@ -307,6 +345,7 @@ export function PlaceFields(props: {
           </RadioGroup>
 
           <div
+            ref={palette}
             class="flex flex-col gap-1"
             style={toneVars(toneOf(placement.recipientId()))}
           >
@@ -443,7 +482,7 @@ export function PlaceFields(props: {
                                     variant="ghost"
                                     size="icon-xs"
                                     aria-label={t('contracts.deleteField')}
-                                    onClick={() => placement.remove(field.id)}
+                                    onClick={() => removeField(field)}
                                   >
                                     <TrashIcon class="size-3.5" />
                                   </Button>

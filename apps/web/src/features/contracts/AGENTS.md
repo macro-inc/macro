@@ -11,7 +11,9 @@ page, and the Certificate of Completion. Gated by `enable-contracts`.
 Packets live in the browser for now. `queries/local-contracts.ts` runs the
 lifecycle in `core/` against localStorage (packets) and IndexedDB (PDF bytes)
 and implements the two contracts in `context/`: `ContractsContext` for the
-workspace and `SigningContext` for a signing link. The signing engine will
+workspace and `SigningContext` for a signing link. Each signed-in account has
+its own snapshot key and document store (`browser-contracts.ts`); a signing
+link finds the account that issued it by its token. The signing engine will
 replace that adapter behind the same contracts; nothing above `queries/`
 knows where packets are stored. No email is sent: a sender copies a signing
 link from the packet drawer.
@@ -60,10 +62,22 @@ link from the packet drawer.
 - Another tab can receive a change notice before its copy of localStorage has
   caught up. `queries/change-feed.ts` follows the `storage` event as well;
   keep both.
+- Every write goes through `mutate` in `queries/local-contracts.ts`: it reads
+  storage, changes, and stores inside one cross-tab lock
+  (`queries/exclusive.ts`), reports a write the browser refuses, and never
+  replaces a snapshot it cannot read. Do not write the snapshot any other way.
+- A placement store holds Solid proxies. Save `placement.snapshot()`, never
+  the proxies: they cannot be cloned or compared across writes.
+- Iterate packets and fields with `Key` on their id, not `For`: every store
+  write replaces the objects, and `For` would remount the row or the field
+  being typed in.
 - Replacing a document clears every signature and issues new links
   (`replaceDocument`); a used, voided, or expired link opens nothing.
 - Key mounted views on a packet's id, not the packet object: every store
-  write replaces the objects, and a view keyed on one remounts.
+  write replaces the objects, and a view keyed on one remounts. `PlaceFields`
+  must be keyed that way; its placement belongs to one packet.
+- A signer's consent is its own step (`acceptDisclosure`); `signPacket`
+  refuses without it. Signing also needs every document to have opened.
 
 ## Related
 

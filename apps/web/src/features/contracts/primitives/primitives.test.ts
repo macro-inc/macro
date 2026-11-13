@@ -130,7 +130,7 @@ describe('createPlacement', () => {
   it('keeps a moved field on its page', () => {
     const placement = newPlacement();
     placement.add('signature', 'msa', 0, { xPct: 0.5, yPct: 0.5 });
-    placement.setBox('f-1', {
+    placement.move('f-1', {
       xPct: 2,
       yPct: -1,
       widthPct: 0.3,
@@ -143,6 +143,19 @@ describe('createPlacement', () => {
       widthPct: 0.3,
       heightPct: 0.05,
     });
+  });
+
+  it('stops a resized field at the page edge without moving it', () => {
+    const placement = newPlacement();
+    placement.add('signature', 'msa', 0, { xPct: 0.5, yPct: 0.5 });
+    const { xPct, yPct } = placement.fields()[0].box;
+    placement.resize('f-1', { xPct, yPct, widthPct: 3, heightPct: 3 });
+
+    const box = placement.fields()[0].box;
+    expect(box.xPct).toBe(xPct);
+    expect(box.yPct).toBe(yPct);
+    expect(box.xPct + box.widthPct).toBeCloseTo(1);
+    expect(box.yPct + box.heightPct).toBeCloseTo(1);
   });
 
   it('clears the selection when the selected field is removed', () => {

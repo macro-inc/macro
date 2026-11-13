@@ -164,9 +164,11 @@ export function SigningField(props: {
             size="sm"
             checked={props.value === true}
             onChange={(checked) => props.onValue(checked)}
-            aria-label={fieldKindLabel(props.field.kind)}
           >
             <Checkbox.Control />
+            <Checkbox.Label class="sr-only">
+              {fieldKindLabel(props.field.kind)}
+            </Checkbox.Label>
           </Checkbox>
         </Match>
         <Match when={true}>

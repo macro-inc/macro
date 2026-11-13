@@ -1,7 +1,9 @@
 import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, RadioGroup, Tabs, TextField } from '@ui';
-import { createSignal, For, Match, Switch } from 'solid-js';
-import type { Adoption } from '../core/lifecycle';
+import { ResultAsync } from 'neverthrow';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { type Adoption, MAX_MARK_LENGTH } from '../core/lifecycle';
 import {
   type AdoptedSignature,
   SIGNATURE_STYLES,
@@ -36,6 +38,13 @@ export function AdoptSignature(props: {
   const [style, setStyle] = createSignal<SignatureStyle>('script-1');
   const [drawing, setDrawing] = createSignal<string>();
   const [upload, setUpload] = createSignal<string>();
+  const [uploadProblem, setUploadProblem] = createSignal<string>();
+
+  /** The pad starts blank each time it is shown, so its drawing goes too. */
+  function chooseMode(next: Mode) {
+    setMode(next);
+    setDrawing(undefined);
+  }
 
   const signature = (): AdoptedSignature | undefined => {
     const typed = name().trim();
@@ -65,7 +74,22 @@ export function AdoptSignature(props: {
 
   async function chooseImage(file: File | undefined) {
     if (!file) return;
-    setUpload(await readAsDataUrl(file));
+    setUpload(undefined);
+    setUploadProblem(undefined);
+
+    const read = await ResultAsync.fromPromise(
+      readAsDataUrl(file),
+      () => undefined
+    );
+    if (read.isErr()) {
+      setUploadProblem(t('contracts.uploadUnreadable'));
+      return;
+    }
+    if (read.value.length > MAX_MARK_LENGTH) {
+      setUploadProblem(t('contracts.uploadTooLarge'));
+      return;
+    }
+    setUpload(read.value);
   }
 
   return (
@@ -79,7 +103,7 @@ export function AdoptSignature(props: {
           { value: 'upload', label: t('contracts.methodUpload') },
         ]}
         value={mode()}
-        onChange={setMode}
+        onChange={chooseMode}
       />
 
       <Switch>
@@ -147,9 +171,21 @@ export function AdoptSignature(props: {
               accept="image/png,image/jpeg"
               class="max-w-full text-xs"
               aria-label={t('contracts.uploadSignatureImage')}
-              onChange={(event) => chooseImage(event.currentTarget.files?.[0])}
+              onChange={(event) =>
+                fireAndForget(
+                  chooseImage(event.currentTarget.files?.[0]),
+                  'contracts.upload-signature'
+                )
+              }
             />
           </label>
+          <Show when={uploadProblem()}>
+            {(problem) => (
+              <p role="alert" class="text-sm text-failure-ink">
+                {problem()}
+              </p>
+            )}
+          </Show>
         </Match>
       </Switch>
 

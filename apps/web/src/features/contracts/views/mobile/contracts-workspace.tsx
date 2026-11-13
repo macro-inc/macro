@@ -7,6 +7,7 @@ import { PacketStatusPill } from '../../components/packet-status-pill';
 import { SignerProgress } from '../../components/signer-progress';
 import { useContractsContext } from '../../context/contracts-context';
 import { allRows } from '../../core/packet-row';
+import { DocumentDialog } from '../shared/document-dialog';
 import { createPacketActions } from '../shared/packet-actions';
 import { PacketSummary } from '../shared/packet-summary';
 
@@ -18,6 +19,7 @@ export function MobileContractsWorkspace() {
   const context = useContractsContext();
   const actions = createPacketActions(context);
   const [selectedId, setSelectedId] = createSignal<string>();
+  const [viewingId, setViewingId] = createSignal<string>();
   const rows = createMemo(() => allRows(context.packets(), context.now()));
   const selected = () => rows().find((row) => row.packet.id === selectedId());
 
@@ -75,7 +77,11 @@ export function MobileContractsWorkspace() {
             {(row) => (
               <Dialog
                 open
-                onOpenChange={(open) => !open && setSelectedId(undefined)}
+                onOpenChange={(open) => {
+                  if (open) return;
+                  setViewingId(undefined);
+                  setSelectedId(undefined);
+                }}
                 position="center"
                 class="p-4"
               >
@@ -84,7 +90,7 @@ export function MobileContractsWorkspace() {
                 </Dialog.Title>
                 <PacketSummary
                   row={row()}
-                  onOpenDocument={() => {}}
+                  onOpenDocument={(_, documentId) => setViewingId(documentId)}
                   onSign={actions.openSigning}
                   onCopyLink={(recipient) =>
                     fireAndForget(
@@ -93,6 +99,17 @@ export function MobileContractsWorkspace() {
                     )
                   }
                 />
+                {/* Under the sheet's owner, so closing the document returns
+                    to the packet instead of closing both. */}
+                <Show when={viewingId()} keyed>
+                  {(documentId) => (
+                    <DocumentDialog
+                      packet={row().packet}
+                      documentId={documentId}
+                      onClose={() => setViewingId(undefined)}
+                    />
+                  )}
+                </Show>
               </Dialog>
             )}
           </Show>

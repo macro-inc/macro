@@ -86,6 +86,19 @@ export default {
   voidBody:
     'Every signing link stops working and signatures collected so far no longer count. This cannot be undone.',
   actionFailed: 'That didn’t work. Try again.',
+  loadFailed:
+    'The contracts stored in this browser can’t be read, so nothing is shown and nothing can be changed. They have been left as they are.',
+  replaceLosesSignature:
+    'The revised document has no page for a signer’s signature field. Use a revision with the same pages, or void this packet and send a new one.',
+  logVerified:
+    'Audit log verified: every entry follows from the one before it.',
+  logBroken:
+    'This audit log does not match its record. An entry was changed after it was written.',
+  tryAgain: 'Try again',
+  documentsOpening: 'Opening the documents…',
+  documentsMissing: 'A document didn’t open. Open it and try again to finish.',
+  uploadTooLarge: 'That image is too large. Choose one under 250 KB.',
+  uploadUnreadable: 'That image couldn’t be read. Choose another.',
   linkCopied: 'Signing link for {{name}} copied',
   linkCopyFailed: 'Could not copy the signing link',
 
@@ -329,5 +342,5 @@ export default {
   hashFinal: 'Final, after {{name}}',
   certificateEventLog: 'Event log',
   certificateFooter:
-    'Generated automatically from the packet’s event log. Each entry is chained to the one before it, so a changed or removed entry no longer matches the hashes above.',
+    'Generated automatically from the packet’s event log. Each entry is chained to the one before it, so changing or removing an earlier entry breaks every hash after it.',
 };
