@@ -142,3 +142,23 @@
 .homepage-sidebar-section[data-demo-expanded=true][data-main-only=true] .homepage-sidebar-main { left: 56px; width: calc(var(--workspace-width) - 56px); }
 
 .homepage-sidebar-bottom-anchor { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; }
+
+@media (max-width: 699px) {
+  .homepage-sidebar-window { margin-left: calc(max(52%, 100% - 190px) - 60px); }
+  .homepage-sidebar-callouts [data-callout][data-side] { left: -16px; width: calc(52% - 84px); }
+}
+
+.homepage-sidebar-description-mobile { display: none; }
+@media (max-width: 699px) {
+  .homepage-sidebar-description-full { display: none; }
+  .homepage-sidebar-description-mobile { display: block; }
+}
+
+@media (min-width: 800px) {
+  .homepage-sidebar-callouts [data-callout][data-side=left] { left: 7px; }
+  .homepage-sidebar-callouts [data-callout][data-side=right] { right: 7px; }
+}
+@media (min-width: 1051px) {
+  .homepage-sidebar-callouts [data-callout][data-side=left] { left: max(0px, calc(10% - 79.8px)); }
+  .homepage-sidebar-callouts [data-callout][data-side=right] { right: max(0px, calc(10% - 79.8px)); }
+}

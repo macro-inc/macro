@@ -24,8 +24,8 @@ import {
 } from './HomepageFeatureDetails';
 import { HomepageFeatureHeading } from './HomepageFeatureHeading';
 import { HomepageMention } from './HomepageMention';
-import { HomepageOpenSource } from './HomepageOpenSource';
 import { HomepageSidebar } from './HomepageSidebar';
+import { HomepageSidebarConnection } from './HomepageSidebarConnection';
 import { HomepageTestimonials } from './HomepageTestimonials';
 import './workspace-story.css';
 import './demo-glass.css';
@@ -173,9 +173,9 @@ export function HomepageSections() {
       <style>{definitions}</style>
       <style>{`@scope (.homepage-sections) to (.workspace-demo) { ${scopedStyles} }`}</style>
       <div class="homepage-sections-inner">
-        <HomepageOpenSource>
+        <HomepageSidebarConnection>
           <HomepageSidebar showInteractiveDemo={false} />
-        </HomepageOpenSource>
+        </HomepageSidebarConnection>
         <Feature
           id="email"
           productPages={[
@@ -187,7 +187,15 @@ export function HomepageSections() {
           messages={[
             {
               person: 'eric',
-              text: 'Can you send Austin Barron the demo follow-up?',
+              text: (
+                <>
+                  Can you send{' '}
+                  <DemoMention
+                    item={{ id: 'austin', label: 'Austin', kind: 'person' }}
+                  />{' '}
+                  the demo follow-up?
+                </>
+              ),
             },
             {
               person: 'jacob',
@@ -196,14 +204,21 @@ export function HomepageSections() {
                   <DemoMention
                     item={{ id: 'macro', label: 'Macro', kind: 'person' }}
                   />{' '}
-                  draft Austin Barron’s follow-up from{' '}
+                  draft a followup from{' '}
                   <HomepageMention
                     kind="call"
                     label="Demo call transcript"
-                    description="Transcript of the September 14 demo with Austin Barron · Team rollout, sales materials, and follow-up next steps."
+                    description="Transcript of the September 14 demo with Austin · Team rollout, sales materials, and follow-up next steps."
                     href="#email"
                   />
-                  . Link the sales PDF and rollout plan. Cc Julia.
+                  . Link the{' '}
+                  <HomepageMention
+                    kind="pdf"
+                    label="sales PDF"
+                    description="Sales overview from the demo."
+                    href="#email"
+                  />{' '}
+                  and rollout plan.
                 </>
               ),
             },
@@ -228,6 +243,7 @@ export function HomepageSections() {
           messages={[
             {
               person: 'peter',
+              side: 'self',
               text: (
                 <>
                   Let’s put the plan, owners, and tasks in <LaunchPlan />.
@@ -236,10 +252,6 @@ export function HomepageSections() {
                 </>
               ),
             },
-            {
-              person: 'julia',
-              text: 'On it. I’ve linked the launch checklist so we can track it from the doc.',
-            },
           ]}
           render={() => (
             <figure class="homepage-doc-history" id="tasks">
@@ -247,10 +259,10 @@ export function HomepageSections() {
                 <DeferredDemo
                   preload={loadCollaborativeDoc}
                   fallback={
-                    <DemoPlaceholder label="Collaborative document, tasks, and version history preview" />
+                    <DemoPlaceholder label="Collaborative document and tasks preview" />
                   }
                 >
-                  <HomepageCollaborativeDoc />
+                  <HomepageCollaborativeDoc showHistory={false} />
                 </DeferredDemo>
               </div>
             </figure>
@@ -259,7 +271,7 @@ export function HomepageSections() {
         <Feature
           id="coding-agents"
           productPages={[{ title: 'Agents', path: '/agents' }]}
-          title="Coding agents"
+          title="Agent teammates"
           titleAdornment={<HomepageAgentLogos />}
           description="Use your coding agent subscriptions in channels. Read the diff and follow the task through to a pull request."
           render={() => (
@@ -298,7 +310,7 @@ export function HomepageSections() {
         <Feature
           id="crm"
           productPages={[{ title: 'CRM', path: '/crm' }]}
-          title="CRM"
+          title="Hands-free CRM"
           description="Companies and contacts created from email. Agents update deal stages and draft customer follow-ups."
           messages={[
             {

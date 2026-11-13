@@ -1,0 +1,29 @@
+.homepage-open-source-badges { display: flex; align-items: center; justify-content: center; gap: calc(clamp(24px, 4vw, 56px) + 10px); margin: 44px auto 0; color: var(--color-ink-extra-muted); }
+.homepage-open-source-badges > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.homepage-open-source-badges span { font-size: 11px; line-height: 1.5; }
+.homepage-open-source-backing > svg { width: 120px; height: 36px; color: var(--color-ink-muted); }
+.homepage-open-source-security > div { display: flex; gap: 14px; }
+.homepage-open-source-security svg { width: 36px; height: 36px; }
+@media (max-width: 767px) {
+  .homepage-open-source-badges { gap: 34px; margin-top: 36px; flex-wrap: wrap; }
+  .homepage-open-source-badges span { font-size: 10px; }
+  .homepage-open-source-backing > svg { width: 100px; }
+  .homepage-open-source-security svg { width: 30px; height: 36px; }
+}
+
+/* Center the badges within the homepage CTA-to-sidebar gap. */
+.macro-home-hero .homepage-open-source-badges { margin: 0 auto; min-height: calc((254.5px + clamp(140px, 26svh, 260px)) * .65 - 100px); }
+@media (max-width: 767px) {
+  .macro-home-hero .homepage-open-source-badges { min-height: 176.25px; }
+}
+
+.macro-home-hero .homepage-open-source-badges > div { transition: opacity 600ms ease, transform 600ms ease; }
+.macro-home-hero .homepage-open-source-badges[data-revealed=false] > div { opacity: .4; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .macro-home-hero .homepage-open-source-badges > div { transition: none; transform: none; }
+}
+
+@media (max-width: 699px) {
+  .macro-home-hero .homepage-open-source-badges { min-height: 206.25px; }
+  .macro-home-hero .homepage-open-source-badges span { font-size: 8px; }
+}

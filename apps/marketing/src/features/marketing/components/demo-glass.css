@@ -1,13 +1,24 @@
 /* A mostly opaque reading surface, with just a little of the page color beneath. */
 :is(.feature-page, .macro-homepage)
   :is(.product-page, .feature-page-visual, .homepage-sections)
-  :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .email-desktop-window) {
+  :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .homepage-agent-chip .demo-cursor-card, .email-desktop-window) {
   --glass-rim-background: linear-gradient(135deg, #ffffff16, #ffffff08 35%, #ffffff04 65%, #ffffff09);
   background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 64%);
   backdrop-filter: blur(16px) saturate(115%);
   -webkit-backdrop-filter: blur(16px) saturate(115%);
   box-shadow: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff07, 0 14px 32px -24px #0009;
 }
+
+/* Homepage agent and CRM cards keep a softer edge than the other demo panels. */
+.macro-homepage .homepage-sections .homepage-agent-chip .demo-cursor-card,
+.macro-homepage .homepage-sections .homepage-crm .mds-card {
+  --glass-rim-background: linear-gradient(135deg, #ffffff0d, #ffffff05 35%, #ffffff02 65%, #ffffff05);
+  background: linear-gradient(135deg, #ffffff04, transparent 55%), rgb(16 16 18 / 64%);
+  box-shadow: inset 0 1px 0 #ffffff0b, inset 0 0 0 1px #ffffff04, 0 14px 32px -24px #0000005c;
+}
+.macro-homepage .homepage-sections .homepage-agent-chip .demo-cursor-card::after,
+.macro-homepage .homepage-sections .homepage-crm .mds-card::before,
+.macro-homepage .homepage-sections .homepage-crm .mds-card::after { opacity: .6; }
 
 /* Keep nested full-window canvases from covering the outer glass surface. */
 :is(.feature-page, .macro-homepage)
@@ -20,7 +31,7 @@
 @media (prefers-reduced-transparency: reduce) {
   :is(.feature-page, .macro-homepage)
     :is(.product-page, .feature-page-visual, .homepage-sections)
-    :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .email-desktop-window) {
+    :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .homepage-agent-chip .demo-cursor-card, .email-desktop-window) {
     background: #111113;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -72,7 +83,7 @@
 
 /* A window owns the glass. Its inset canvases must not paint it opaque again. */
 :is(.feature-page, .macro-homepage)
-  :is(.product-demo, .macro-preview-back, .mds-card, .mail-app, .homepage-email-surface, .email-desktop-window)
+  :is(.product-demo, .macro-preview-back, .mds-card, .mail-app, .homepage-email-surface, .homepage-agent-chip .demo-cursor-card, .email-desktop-window)
   :is(.dummy-workspace:not(.product-demo), .workspace-demo-panel, .workspace-demo-panel [data-view-shell-top-bar], .homepage-sheet-editor, .github-changes) {
   background: transparent;
 }

@@ -1,3 +1,9 @@
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Filter from '@icon/system/regular/funnel.svg';
+import Search from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sort from '@icon/system/regular/sort-ascending.svg';
+import Stack from '@icon/system/regular/stack.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -56,11 +62,11 @@ export default function HomepageCrm(props: { paused?: boolean } = {}) {
   const size = createElementSize(viewport);
   const frame = () => crmDemoFrame(time());
   const complete = createMemo(() => time() >= CRM_DEMO_DURATION);
-  const scale = () =>
-    (size.width ?? 864) / ((size.width ?? 864) < 600 ? 390 : 864);
-  // On a phone the camera follows the card, keeping its destination visible.
+  const cameraWidth = () => ((size.width ?? 576) < 600 ? 390 : 576);
+  const scale = () => (size.width ?? 576) / cameraWidth();
+  // Follow the moving card on desktop and phones, keeping its destination visible.
   const camera = () =>
-    (size.width ?? 864) < 600 ? Math.min(474, Math.max(0, frame().x - 170)) : 0;
+    Math.min(864 - cameraWidth(), Math.max(0, frame().x - cameraWidth() / 2));
   const stage = (company: Company) =>
     company.id === 'northwind'
       ? frame().northwindStage
@@ -117,14 +123,38 @@ export default function HomepageCrm(props: { paused?: boolean } = {}) {
     <div class="homepage-crm workspace-demo">
       <DocsGraphicFrame>
         <div class="homepage-crm-header">
-          <span>
-            Customers <span class="text-ink-extra-muted">/ Pipeline</span>
-          </span>
-          <span class="text-xs text-ink-extra-muted">4 companies</span>
+          <span class="homepage-crm-title">Deal pipeline</span>
+          <div
+            class="homepage-crm-controls"
+            role="img"
+            aria-label="Pipeline controls: filter, view, sort, group, visibility, new record, and search"
+          >
+            <span class="homepage-crm-control">
+              <Filter />
+            </span>
+            <span class="homepage-crm-control homepage-crm-control-group">
+              <Stack />
+              <Sort />
+              <Stack />
+            </span>
+            <span class="homepage-crm-control homepage-crm-visible">
+              <Filter />
+              <span>Visible</span>
+            </span>
+            <span class="homepage-crm-control">
+              <Plus />
+              <span>New</span>
+              <CaretDown />
+            </span>
+            <span class="homepage-crm-control">
+              <Search />
+            </span>
+          </div>
         </div>
         <div
           ref={setViewport}
           class="homepage-crm-viewport"
+          style={{ height: `${330 * scale()}px` }}
           role="img"
           aria-label="Claude moves Keystone Mechanical from Qualified to Proposal, then Bookend Retail from Proposal to Closed won."
         >

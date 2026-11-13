@@ -65,9 +65,13 @@ Standalone marketing dev/preview servers hand `/app/*` navigation to
 `VITE_APP_BASE_URL` (`https://macro.com` by default); verify that signup leaves the local website instead of
 showing an empty header. Use an `apps/web` preview for local signup testing.
 
-For the homepage, verify the centered hero copy and signup action sit above the
-Home demo video on desktop and mobile. Play the video and check that native
-controls appear. Below it, check the deployed site's centered slab headings,
+For the homepage, verify one opening section on desktop and mobile: the Macro
+logo surrounded by the 12 decorative app logos from the production welcome
+constellation, the unified-workspace H1 and supporting H2, signup action, and
+backing/security badges. Check visible keyboard focus on signup, sidebar, and
+Learn about links; the decorative constellation is hidden from assistive technology.
+Scroll down and back with regular and reduced motion: there is no separate GitHub
+section, and the hero stays readable. Below it, check the centered slab headings,
 small Inter descriptions, and side rules across all five product chapters.
 The email illustration must reveal its draft and show the completed result
 with reduced motion; it sends no email. Check the page has no horizontal overflow

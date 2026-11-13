@@ -108,36 +108,26 @@ export async function verifyHomepage(directory: string): Promise<void> {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           );
         });
-        if (viewport.width >= 700) {
-          if (!(await heading.evaluate((element) => element.isConnected)))
-            throw new Error(
-              `Homepage replaced its first-painted heading during hydration (${label})`
-            );
-          if ((await heading.textContent()) !== initialText)
-            throw new Error(
-              `Homepage changed heading text during hydration (${label})`
-            );
-          const after = await heading.boundingBox();
-          if (
-            !before ||
-            !after ||
-            (['x', 'y', 'width', 'height'] as const).some(
-              (key) => Math.abs(before[key] - after[key]) > 1
-            )
+        if (!(await heading.evaluate((element) => element.isConnected)))
+          throw new Error(
+            `Homepage replaced its first-painted heading during hydration (${label})`
+          );
+        if ((await heading.textContent()) !== initialText)
+          throw new Error(
+            `Homepage changed heading text during hydration (${label})`
+          );
+        const after = await heading.boundingBox();
+        if (
+          !before ||
+          !after ||
+          (['x', 'y', 'width', 'height'] as const).some(
+            (key) => Math.abs(before[key] - after[key]) > 1
           )
-            throw new Error(
-              `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
-            );
-        } else {
-          // Mobile replaces the desktop SSR fallback with its landing composition.
-          await expect(
-            page.locator('.ob-welcome [data-welcome-heading]')
-          ).toBeVisible();
-          await expect(
-            page.locator('.ob-welcome [data-welcome-heading]')
-          ).toHaveText(/The unified workspace\s*for your company\./);
-          await expect(page.locator('.homepage-hero-cta')).toBeVisible();
-        }
+        )
+          throw new Error(
+            `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
+          );
+        await expect(page.locator('.homepage-hero-cta')).toBeVisible();
         await heading.dispose();
 
         if (viewport.width < 768)
@@ -170,16 +160,13 @@ export async function verifyHomepage(directory: string): Promise<void> {
           .locator('[data-onboarding-scroll]')
           .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
         expect(overflow).toBe(false);
-        if (viewport.width >= 700) {
-          const graphic = await page
-            .locator('.homepage-feature-links .feature-flow')
-            .boundingBox();
-          expect(graphic).not.toBeNull();
-          expect(graphic!.x).toBeGreaterThanOrEqual(0);
-          expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(
-            viewport.width
-          );
-        }
+        const graphic = await page
+          .locator('.homepage-feature-links [data-context-scene]')
+          .boundingBox();
+        if (!graphic)
+          throw new Error(`Homepage has no feature diagram (${label})`);
+        expect(graphic.x).toBeGreaterThanOrEqual(0);
+        expect(graphic.x + graphic.width).toBeLessThanOrEqual(viewport.width);
         await page
           .locator('#email')
           .getByRole('link', { name: 'Learn about email', exact: true })
