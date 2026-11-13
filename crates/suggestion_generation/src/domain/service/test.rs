@@ -196,6 +196,7 @@ impl RoutineSessions for FakeSessions {
         Ok(RoutineActivity {
             tool_calls: 3,
             turns: 1,
+            tools: None,
         })
     }
 
