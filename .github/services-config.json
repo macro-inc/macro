@@ -320,7 +320,6 @@
       ]
     },
     "gitai-service": {
-      "bootstrap_pending": "Doppler project and first deploy pending",
       "source_paths": [
         "services/gitai_service/**",
         "crates/gitai/**"
