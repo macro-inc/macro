@@ -113,6 +113,13 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
     response
 }
 
+/// A channel-mention bot's program never reaches the public MCP: its
+/// `ExecuteCode` would mint a fresh token without the signed mention, and with
+/// it the program's email refusal.
+fn answers_channel_mention(token: &JwtToken) -> bool {
+    matches!(token, JwtToken::MacroApiToken(api) if api.channel_mention_id.is_some())
+}
+
 /// Validates `Authorization: Bearer <token>` and stores the authenticated
 /// [`MacroUserIdStr`], its [`McpAuthMethod`], and its [`ToolCaller`] in the
 /// request extensions. Every authenticated request carries a caller:
@@ -123,13 +130,6 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
 ///   client the broker issued it to;
 /// - any other Macro API token is a pasted key, [`ToolCaller::ApiKey`].
 #[tracing::instrument(skip_all, fields(caller = tracing::field::Empty))]
-/// A channel-mention bot's program never reaches the public MCP: its
-/// `ExecuteCode` would mint a fresh token without the signed mention, and with
-/// it the program's email refusal.
-fn answers_channel_mention(token: &JwtToken) -> bool {
-    matches!(token, JwtToken::MacroApiToken(api) if api.channel_mention_id.is_some())
-}
-
 pub async fn validate_bearer(
     axum::extract::State(auth): axum::extract::State<BearerAuth>,
     mut request: Request<Body>,

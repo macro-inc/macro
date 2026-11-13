@@ -94,9 +94,10 @@ impl MentionCodeMode for HarnessUserExecutions {
             .send();
         let response = tokio::select! {
             response = send => response.map_err(|error| {
-                tracing::warn!(error = ?error.without_url(), "harness user execution unreachable");
                 // Only a refused connection proves the program never started.
-                if error.is_connect() {
+                let never_started = error.is_connect();
+                tracing::warn!(error = ?error.without_url(), "harness user execution unreachable");
+                if never_started {
                     CodeModeError::Unavailable
                 } else {
                     CodeModeError::Unconfirmed

@@ -1,6 +1,6 @@
 use super::*;
 use axum::body::{Body, to_bytes};
-use axum::http::Request;
+use axum::http::{Request, StatusCode};
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, NoBotAuthorizer, NoUserApiKeyAuthorizer, ValidatedIdentity,

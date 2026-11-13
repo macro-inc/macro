@@ -19,7 +19,6 @@ use ai_toolset::ToolCaller;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, FromRef, State, rejection::JsonRejection},
-    http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };

@@ -369,8 +369,8 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         // The channel bot's programs run in Deno; it gets no second sandbox.
         let drops_sandbox = matches!(host, AiHost::ChannelBot);
         toolset.tools.retain(|name, _| {
-            !(drops_sandbox
-                && matches!(
+            (!drops_sandbox
+                || !matches!(
                     name.as_str(),
                     "BashCodeExecution" | "TextEditorCodeExecution"
                 ))
