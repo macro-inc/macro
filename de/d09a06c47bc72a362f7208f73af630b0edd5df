@@ -1,0 +1,21 @@
+docs/runbooks/gitai-service.md
+  s_6074238f41262d::t_3a12422df06e83 5-6,11-17,19-33,35-73,77-80
+services/gitai_service/AGENTS.md
+  s_6074238f41262d::t_05f9dd4bd5eaca 90-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ded09a06c47bc72a362f7208f73af630b0edd5df",
+  "prompts": {},
+  "sessions": {
+    "s_6074238f41262d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "065ecd00-1bb3-4dcb-b08b-07f3a94973dd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
