@@ -31,8 +31,23 @@ deployed migration is caught below.
 
 - **`A`** new files: review every statement.
 - **`M`** or **`D`** on a file that exists on `main`: `block`. A deployed
-  migration is never edited or removed (SQLx checks its checksum); add a new
-  one. Only a migration created on this branch may change.
+  migration is immutable byte for byte: SQLx checksums include comments,
+  whitespace, and line endings. This also forbids retrofitting `lock_timeout`
+  or other safety improvements into historical migrations. Put SQL changes in
+  a new migration and explanatory updates in documentation. Only an unapplied
+  migration created on this branch may change.
+
+Check immutability before applying the safety recommendations below; they do
+not authorize editing historical migrations. Repeat the diff check after review
+fixes and before each push, without whitespace-ignore flags.
+
+For an explicitly requested checksum repair, restore the exact known-applied
+version with `git show <applied-commit>:<path> > <path>` and verify both an empty
+`git diff <applied-commit> -- <path>` and its `sha384sum` against the recorded
+applied checksum. Compare the entire migration directory against the last
+successfully deployed commit to catch other edited or deleted files; report
+additional mismatches before expanding the repair. Do not change the database's
+migration checksum records or reapply migrations to bypass the mismatch.
 
 For each statement, note the table, whether this PR creates that table (a new,
 empty table can't block anyone), and its size from

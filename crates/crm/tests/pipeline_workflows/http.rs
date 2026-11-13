@@ -404,6 +404,26 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(priority["type"], "select");
     assert_eq!(priority["options"], json!(["High", "Low"]));
 
+    // A session that may not share edits the pipeline but not its sharing.
+    let no_send = agent_correlation::context::Attribution {
+        scope: Some(agent_correlation::scope::SessionScope::NoSend),
+        ..Default::default()
+    };
+    let edit = format!("/crm/pipelines/{id}/edit");
+    let (status, refused) = agent_correlation::context::scope_attribution(
+        no_send,
+        call(&app, "POST", &edit, Some(json!({"sharing": "team"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{refused}");
+    let (status, renamed) = agent_correlation::context::scope_attribution(
+        no_send,
+        call(&app, "POST", &edit, Some(json!({"name": "Enterprise"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{renamed}");
+    assert_eq!(renamed["sharing"], "private");
+
     let (status, generic) = call(
         &app,
         "POST",

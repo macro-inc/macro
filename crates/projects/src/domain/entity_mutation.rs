@@ -29,9 +29,9 @@ impl From<ProjectError> for EntityMutationErrorCode {
     fn from(error: ProjectError) -> Self {
         match error {
             error @ ProjectError::NotFound(_) => Self::not_found(rootcause::report!(error)),
-            error @ (ProjectError::Unauthorized | ProjectError::UnauthorizedWithMessage(_)) => {
-                Self::forbidden(rootcause::report!(error))
-            }
+            error @ (ProjectError::Unauthorized
+            | ProjectError::UnauthorizedWithMessage(_)
+            | ProjectError::Forbidden(_)) => Self::forbidden(rootcause::report!(error)),
             error @ (ProjectError::BadRequest(_)
             | ProjectError::NameTooLong { .. }
             | ProjectError::RecursiveNesting) => Self::invalid(rootcause::report!(error)),

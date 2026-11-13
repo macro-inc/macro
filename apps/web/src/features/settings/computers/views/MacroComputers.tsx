@@ -561,6 +561,7 @@ export function MacroComputers(props: {
         {(harnessId) => (
           <ClaudeSignInDialog
             harnessId={harnessId()}
+            entry="computer_row"
             onClose={() => setSigningIn(undefined)}
           />
         )}

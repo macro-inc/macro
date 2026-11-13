@@ -70,4 +70,20 @@ export default {
     'Remove {{name}} from the team? Its computer is released and its account is deleted.',
   removeConfirm: 'Remove',
   removeFailed: "Couldn't remove {{name}}. Try again.",
+  bringAiTitle: 'Bring your AI to {{name}}',
+  bringAiWaiting:
+    "{{name}}'s computer is still starting. The sign-in link comes from the computer, so this step unlocks by itself once it connects. You can also sign in later from {{name}}'s row in Members.",
+  bringAiFailed:
+    "{{name}}'s computer needs attention, so it can't sign in to Claude yet. It runs on Macro credits; you can sign in later from {{name}}'s row in Members.",
+  keepCredits: 'Skip, use Macro credits',
+  claudeSignedIn: '{{name}} now uses your Claude plan',
+  claudeCredits: 'Claude: Macro credits',
+  claudeSignedInState: 'Claude: your plan',
+  claudeExpired: 'Claude sign-in expired',
+  signInToClaude: 'Sign in to Claude',
+  useCredits: 'Use Macro credits',
+  useCreditsTitle: 'Switch {{name}} to Macro credits?',
+  useCreditsBody:
+    "{{name}} signs out of Claude and runs on your team's Macro credits.",
+  useCreditsFailed: "Couldn't switch {{name}} to Macro credits. Try again.",
 };

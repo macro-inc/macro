@@ -310,6 +310,10 @@ pub enum WorkflowError {
     /// what it cannot do; the message says what to change.
     #[error("{0}")]
     Invalid(String),
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("{0}")]
+    Forbidden(String),
     /// The user belongs to no team, so has no CRM.
     #[error("the user is not in a team, so they have no CRM")]
     NoTeam,

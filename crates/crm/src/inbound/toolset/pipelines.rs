@@ -478,7 +478,7 @@ pub(crate) fn entry_name(record: Option<&ToolRecord>, entry_id: Uuid) -> String 
 /// A workflow failure in words the model can act on.
 pub(crate) fn workflow_error(error: WorkflowError) -> ToolCallError {
     let description = match &error {
-        WorkflowError::Invalid(message) => message.clone(),
+        WorkflowError::Invalid(message) | WorkflowError::Forbidden(message) => message.clone(),
         WorkflowError::NoTeam => {
             "The user is not in a team, so they have no CRM pipelines.".to_owned()
         }

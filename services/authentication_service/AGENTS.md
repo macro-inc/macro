@@ -170,7 +170,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   account manager, and an agent cannot be managed (`crates/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
-  outlast its own revocation or lock the account's owner out.
+  outlast its own revocation or lock the account's owner out, and a scoped
+  code-mode run can't leave its scope.
 - `User."isAgent"` is set in the FusionAuth `user.create` webhook, from
   `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
   pending agent `team_invite`. Those agents skip the seeded content, Loops, and
