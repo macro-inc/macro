@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { resetQueryAccountSession } from '@queries/auth/account-scope';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
@@ -185,6 +186,43 @@ describe('startDraftJob', () => {
     expect(listed()).toEqual([]);
   });
 
+  it('still reads the list again when it leaves a draft out', async () => {
+    const read = Promise.withResolvers<unknown>();
+    client.listRoutineDraftJobs.mockReturnValueOnce(read.promise);
+    const reading = queryClient.prefetchQuery(routineDraftJobsQueryOptions());
+    applyDraftUpdate({ draftId: 'gone', state: 'removed', progress: {} });
+    client.startRoutineDraftJob.mockResolvedValue(ok(drafting('gone')));
+    await startDraftJob(REQUEST, context);
+    read.resolve(ok([]));
+    await reading;
+    // The read it stopped would otherwise leave the list unread.
+    expect(queryClient.getQueryState(KEY)?.isInvalidated).toBe(true);
+    expect(listed()).toBeUndefined();
+  });
+
+  it('lists a start whose identity read failed meanwhile', async () => {
+    await confirmLogin('me');
+    queryClient.setQueryData(KEY, []);
+    const answer = Promise.withResolvers<unknown>();
+    client.startRoutineDraftJob.mockReturnValue(answer.promise);
+    const started = startDraftJob(REQUEST, context);
+    // Refused while its token refreshed: the same login all along.
+    await expect(
+      queryClient.fetchQuery({
+        queryKey: authKeys.userInfo.queryKey,
+        queryFn: () => {
+          throw new ThrownResultError([
+            { code: 'UNAUTHORIZED', message: 'expired' },
+          ]);
+        },
+        retry: false,
+      })
+    ).rejects.toThrow('expired');
+    answer.resolve(ok(drafting('new')));
+    await expect(started).resolves.toMatchObject({ id: 'new' });
+    expect(listed()?.map((each) => each.id)).toEqual(['new']);
+  });
+
   it('drops a start that answers after a login replaced the session', async () => {
     await confirmLogin('me');
     queryClient.setQueryData(KEY, []);
@@ -192,18 +230,21 @@ describe('startDraftJob', () => {
     client.startRoutineDraftJob.mockReturnValue(answer.promise);
     const started = startDraftJob(REQUEST, context);
     await resetQueryAccountSession();
-    answer.resolve(ok(drafting('mine')));
-    await expect(started).resolves.toBe(SIGNED_IN_AGAIN);
-    // Nor is one handed on while the new login waits to be confirmed:
-    // listed, it would stand for the new account's drafts once it is.
-    await reportDraftJob(failed('mine'));
-    expect(listed()).toBeUndefined();
-    await confirmLogin('someone-else');
+    try {
+      answer.resolve(ok(drafting('mine')));
+      await expect(started).resolves.toBe(SIGNED_IN_AGAIN);
+      // Nor is one handed on while the new login waits to be confirmed:
+      // listed, it would stand for the new account's drafts once it is.
+      await reportDraftJob(failed('mine'));
+      expect(listed()).toBeUndefined();
+    } finally {
+      // The login session outlives a test: confirm it for the next.
+      await confirmLogin('someone-else');
+    }
   });
 });
 
-const SIGNED_IN_AGAIN =
-  'You signed in again before this draft started. Describe it again.';
+const SIGNED_IN_AGAIN = 'You signed in again while this draft was starting.';
 
 /** A login's identity read, as the app confirms one. */
 async function confirmLogin(id: string) {

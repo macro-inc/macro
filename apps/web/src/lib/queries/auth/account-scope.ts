@@ -46,6 +46,12 @@ export function queryAccountSessionPending(): boolean {
   return session().pending;
 }
 
+/** The login session, for work that has no user id to capture: a new login
+ * changes it, even to the same account, and a failed identity read doesn't. */
+export function queryAccountSession(): number {
+  return session().epoch;
+}
+
 export function currentQueryAccount(): QueryAccount | undefined {
   if (
     thrownResultErrorHasCode(

@@ -4,9 +4,7 @@ import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import {
-  currentQueryAccount,
-  isCurrentQueryAccount,
-  type QueryAccount,
+  queryAccountSession,
   queryAccountSessionPending,
 } from '@queries/auth/account-scope';
 import { queryClient } from '@queries/client';
@@ -34,8 +32,7 @@ import { scheduledActionKeys } from './keys';
 
 const TOO_MANY =
   'Too many routines are drafting. Wait for one to finish, or cancel one.';
-const SIGNED_IN_AGAIN =
-  'You signed in again before this draft started. Describe it again.';
+const SIGNED_IN_AGAIN = 'You signed in again while this draft was starting.';
 
 /**
  * The caller's routine drafts: the background drafts New routine started,
@@ -101,30 +98,26 @@ export function useDraftJobs(enabled: Accessor<boolean>) {
 }
 
 /**
- * Whether the login `account` was captured under is still the one signed
- * in, and confirmed: a draft started under another belongs to that one.
- * Without an identity to capture, there's nothing to tell apart.
- */
-function sameLogin(account: QueryAccount | undefined): boolean {
-  if (queryAccountSessionPending()) return false;
-  return !account || isCurrentQueryAccount(account);
-}
-
-/**
  * Put a job at the top of the list. A read already under way may have
  * missed it and would write over it, so that one is read again. One
- * removed elsewhere meanwhile stays out, and nothing is listed across a
- * login that replaced the session: it would stand for the new one's list.
+ * removed elsewhere meanwhile stays out. Nothing is listed across a login
+ * that replaced the session, nor while it waits to be confirmed: listed,
+ * it would stand for the new login's list, which then isn't read.
  */
 async function listDraftJob(job: DraftJob) {
-  const account = currentQueryAccount();
+  const login = queryAccountSession();
   const queryKey = scheduledActionKeys.draftJobs.queryKey;
   const reading = queryClient.isFetching({ queryKey }) > 0;
   if (reading) await queryClient.cancelQueries({ queryKey });
-  if (!sameLogin(account) || isDiscarded(job.id)) return;
-  queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) =>
-    withDraftJob(current ?? [], job)
-  );
+  const listable =
+    queryAccountSession() === login &&
+    !queryAccountSessionPending() &&
+    !isDiscarded(job.id);
+  if (listable) {
+    queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) =>
+      withDraftJob(current ?? [], job)
+    );
+  }
   if (reading) queryClient.invalidateQueries({ queryKey });
 }
 
@@ -155,7 +148,7 @@ export async function startDraftJob(
   return await Telemetry.span('routine.draft', async (span) => {
     span.setAttr('routine.draft.kind', 'routine');
     span.setAttr('routine.draft.background', true);
-    const account = currentQueryAccount();
+    const login = queryAccountSession();
     const body = {
       clientId: crypto.randomUUID(),
       draft: { type: 'routine' as const, description },
@@ -185,8 +178,8 @@ export async function startDraftJob(
     }
     const job = response.value;
     span.setAttr('routine.draft.id', job.id);
-    // The job is the previous login's, which this one can't open or list.
-    if (!sameLogin(account)) {
+    // The job is the previous login's: this one may be another account's.
+    if (queryAccountSession() !== login) {
       span.setAttr('routine.draft.outcome', 'login_replaced');
       return SIGNED_IN_AGAIN;
     }
