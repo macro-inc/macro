@@ -40,6 +40,16 @@ async fn read_state_travels_both_ways(provider: Provider) -> Result<(), Report> 
         })
         .await?;
 
+    // The other thread is untouched, in Macro and at the provider.
+    let offsite_before = inbox.provider_message(&offsite.id)?;
+    assert!(offsite_before.is_some_and(|message| !message.read));
+    let offsite_now = inbox
+        .wait_for_preview_where("inbox", "the other thread", |preview| {
+            preview["id"] == offsite_preview["id"]
+        })
+        .await?;
+    assert_eq!(offsite_now["isRead"], false);
+
     // The provider to Macro.
     inbox.set_read_at_provider(&offsite.id, true)?;
     inbox
