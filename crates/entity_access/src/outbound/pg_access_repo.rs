@@ -8,6 +8,7 @@ pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 #[cfg(test)]
 mod test;
 
+use crate::domain::telemetry::{record_source_ids, span_count};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
@@ -15,6 +16,7 @@ use crate::domain::{
     },
     ports::AccessRepository,
 };
+use bot_id::BotIdStr;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
@@ -61,16 +63,41 @@ fn team_foreign_entity_source_pairs(
     )
 }
 
+/// The viewer's source ids, counted on the calling check's span: every
+/// statement that follows binds the whole list, so its length predicts the
+/// check's cost.
+async fn user_source_ids(
+    pool: &PgPool,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> Result<SourceIds, AccessError> {
+    let source_ids = queries::get_user_source_ids(pool, user_id)
+        .await
+        .map_err(anyhow_access_error)?;
+    record_source_ids(source_ids.0.len());
+    Ok(source_ids)
+}
+
+/// A team-scoped bot's source ids, counted like [`user_source_ids`].
+async fn team_scope_source_ids(
+    pool: &PgPool,
+    bot_principal: &BotIdStr<'_>,
+    team_id: &Uuid,
+) -> Result<SourceIds, AccessError> {
+    let source_ids = queries::get_team_scope_source_ids(pool, bot_principal, team_id)
+        .await
+        .map_err(anyhow_access_error)?;
+    record_source_ids(source_ids.0.len());
+    Ok(source_ids)
+}
+
 impl AccessRepository for PgAccessRepository {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_document_access(
         &self,
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         let Ok(document_uuid) = document_id.parse::<Uuid>() else {
             return Ok(queries::document_access::get_legacy_document_access(
                 &self.pool,
@@ -89,7 +116,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_chat_access(
         &self,
         chat_id: &str,
@@ -98,13 +125,11 @@ impl AccessRepository for PgAccessRepository {
         let chat_uuid = chat_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid chat ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::chat_access::get_chat_access(&self.pool, &chat_uuid, &source_ids).await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_project_access(
         &self,
         project_id: &str,
@@ -113,16 +138,14 @@ impl AccessRepository for PgAccessRepository {
         let project_uuid = project_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid project ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(
             queries::project_access::get_project_access(&self.pool, &project_uuid, &source_ids)
                 .await?,
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_thread_access(
         &self,
         thread_id: &str,
@@ -131,9 +154,7 @@ impl AccessRepository for PgAccessRepository {
         let thread_uuid = thread_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid thread ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::thread_access::get_thread_access(
             &self.pool,
             &thread_uuid,
@@ -143,7 +164,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_calendar_event_access(
         &self,
         event_id: &str,
@@ -220,7 +241,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_call_access(
         &self,
         call_id: &str,
@@ -229,9 +250,7 @@ impl AccessRepository for PgAccessRepository {
         let call_uuid = call_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
@@ -280,7 +299,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,
@@ -289,9 +308,7 @@ impl AccessRepository for PgAccessRepository {
         let agent_session_uuid = agent_session_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::agent_session_access::get_agent_session_access(
             &self.pool,
             &agent_session_uuid,
@@ -300,7 +317,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_initiative_access(
         &self,
         initiative_id: &str,
@@ -309,9 +326,7 @@ impl AccessRepository for PgAccessRepository {
         let initiative_uuid = initiative_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid initiative ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::initiative_access::get_initiative_access(
             &self.pool,
             &initiative_uuid,
@@ -320,7 +335,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_pipeline_access(
         &self,
         id: &str,
@@ -329,24 +344,20 @@ impl AccessRepository for PgAccessRepository {
         let id = id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid pipeline ID"))?;
-        let sources = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let sources = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn list_pipeline_access(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
+        let sources = user_source_ids(&self.pool, Some(user_id)).await?;
         Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_database_access(
         &self,
         database_id: &str,
@@ -355,38 +366,32 @@ impl AccessRepository for PgAccessRepository {
         let database_uuid = database_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid database ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(
             queries::database_access::get_database_access(&self.pool, &database_uuid, &source_ids)
                 .await?,
         )
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn list_database_access(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
         Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn list_form_access(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
         Ok(queries::form_access::list_form_access(&self.pool, &source_ids).await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_form_access(
         &self,
         form_id: &str,
@@ -395,9 +400,7 @@ impl AccessRepository for PgAccessRepository {
         let form_uuid = form_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid form ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
     }
 
@@ -422,6 +425,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_external_chat_access(
         &self,
         group_id: &str,
@@ -430,9 +434,7 @@ impl AccessRepository for PgAccessRepository {
         let group_uuid = group_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid external chat ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::external_chat_access::get_external_chat_access(
             &self.pool,
             &group_uuid,
@@ -441,7 +443,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_database_row_access(
         &self,
         row_id: &str,
@@ -450,9 +452,7 @@ impl AccessRepository for PgAccessRepository {
         let row_uuid = row_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid database row ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(queries::database_row_access::get_database_row_access(
             &self.pool,
             &row_uuid,
@@ -461,7 +461,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
+    #[tracing::instrument(err, skip_all, fields(source_id_count = tracing::field::Empty, row_count = span_count(row_ids.len())))]
     async fn get_database_rows_access(
         &self,
         row_ids: &[Uuid],
@@ -470,9 +470,7 @@ impl AccessRepository for PgAccessRepository {
         if row_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
         Ok(
             queries::database_row_access::get_database_rows_access(
                 &self.pool,
@@ -483,7 +481,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_scheduled_action_access(
         &self,
         scheduled_action_id: &str,
@@ -492,9 +490,7 @@ impl AccessRepository for PgAccessRepository {
         let Ok(scheduled_action_uuid) = scheduled_action_id.parse::<Uuid>() else {
             return Ok(None);
         };
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, user_id).await?;
         Ok(
             queries::scheduled_action_access::get_scheduled_action_access(
                 &self.pool,
@@ -505,14 +501,12 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn accessible_scheduled_action_ids(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<Uuid>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
         Ok(
             queries::scheduled_action_access::accessible_scheduled_action_ids(
                 &self.pool,
@@ -553,7 +547,7 @@ impl AccessRepository for PgAccessRepository {
         Ok(owns.then_some(AccessLevel::Owner))
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self), fields(source_id_count = tracing::field::Empty))]
     async fn get_team_entity_access(
         &self,
         bot_id: BotId,
@@ -565,9 +559,7 @@ impl AccessRepository for PgAccessRepository {
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
         let bot_principal = bot_id.into_storage_id();
-        let source_ids = queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
-            .await
-            .map_err(anyhow_access_error)?;
+        let source_ids = team_scope_source_ids(&self.pool, &bot_principal, &team_id).await?;
 
         let access = match entity_type {
             EntityType::Document => {
@@ -691,6 +683,7 @@ impl AccessRepository for PgAccessRepository {
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid foreign entity ID format"))?;
         let bot_principal = bot_id.into_storage_id();
+        // Only a membership test: the check below binds the team and the bot.
         let scope_sources =
             queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
                 .await
@@ -747,7 +740,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn has_foreign_entity_access(
         &self,
         foreign_entity_id: &str,
@@ -773,7 +766,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_company_access(
         &self,
         company_id: &str,
@@ -791,7 +784,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_contact_access(
         &self,
         contact_id: &str,
@@ -809,7 +802,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn check_user_channel_membership(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -823,7 +816,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_channel_role(
         &self,
         channel_id: &Uuid,
@@ -922,7 +915,7 @@ impl AccessRepository for PgAccessRepository {
         }))
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_user_team(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,

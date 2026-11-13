@@ -2339,7 +2339,7 @@ async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgre
     Ok(transaction)
 }
 
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
@@ -2416,7 +2416,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 }
 
 /// Execute a flat expanded dynamic query and retain document server facts.
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
@@ -2426,7 +2426,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
 
 /// Execute a flat expanded dynamic query without exposing projection metadata.
 #[cfg(test)]
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
@@ -2845,7 +2845,7 @@ fn build_grouped_query<'a>(
 }
 
 /// Execute a grouped dynamic cursor soup query.
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub async fn expanded_dynamic_cursor_soup_grouped(
     db: &PgPool,
     args: GroupedDynamicCursorArgs<'_>,
