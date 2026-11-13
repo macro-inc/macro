@@ -1,0 +1,21 @@
+crates/call/src/outbound/livekit_rtc_client.rs
+  s_fb3e62830425eb::t_c99ef3508f8de6 546-547,550-552,616-617
+crates/call/src/outbound/livekit_rtc_client/test.rs
+  s_fb3e62830425eb::t_97c5a913839c60 213-220,222,268-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8e0e87aef2762dcd2312a298492428cc29c67f3c",
+  "prompts": {},
+  "sessions": {
+    "s_fb3e62830425eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fcdff70-f5b1-4849-9585-6d4147c7231a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
