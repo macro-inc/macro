@@ -84,6 +84,8 @@ export function ComputerBuyFlow(props: {
   open: boolean;
   /** Resume setup of this computer instead of buying one. */
   computerId?: string;
+  /** Where resuming starts; Configure agent unless a link names a step. */
+  resumeStep?: Exclude<SetupStepId, 'computer'>;
   onClose: () => void;
   onFinished?: (computer: ComputerStatus) => void;
   /** Opened from an agent's Where it runs, which `onFinished` updates. */
@@ -133,12 +135,19 @@ export function ComputerBuyFlow(props: {
     })
   );
 
-  // Opening from Finish setup starts on the agent step.
+  // Resuming starts on the agent step, or where a setup link points; a
+  // link for another computer than the one shown moves there too.
   createEffect(
     on(
-      () => props.open,
-      (open) => {
-        if (open && props.computerId && step() === 'computer') setStep('agent');
+      () => [props.open, props.computerId, props.resumeStep] as const,
+      ([open, computerId, resumeStep], previous) => {
+        if (!open || !computerId) return;
+        if (
+          resumeStep &&
+          (resumeStep !== previous?.[2] || computerId !== previous?.[1])
+        )
+          setStep(resumeStep);
+        else if (step() === 'computer') setStep('agent');
       }
     )
   );
