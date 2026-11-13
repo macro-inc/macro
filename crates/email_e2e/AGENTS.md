@@ -26,9 +26,11 @@ scenarios.
 - `StackOptions { search: true, .. }` adds the real search indexer
   (`search_processing_service`) on top of document storage: it follows the
   mail's Kafka events into OpenSearch, and document storage answers
-  `POST /search` from it. Before the indexer starts, the harness moves its
-  consumer group to the end of every topic, so it indexes only what the
-  scenario does.
+  `POST /search` from it. The indexer's consumer group is one for every
+  scenario: the harness gives it an offset wherever it has none, so an
+  indexer misses nothing published while it joins, and each indexer goes on
+  from where the last one stopped. Events of other scenarios in between
+  name mail that is not in this scenario's database and are passed over.
 - Scenarios run in parallel and share nothing but the servers (Postgres,
   Redis, SQS, Kafka, and OpenSearch for search).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
