@@ -39,6 +39,24 @@ crates/scheduled_action/src/outbound/pg_agent_routines.rs
   s_5c39db1fb3cbbf::t_c2956a00dc1a8a 1-54
 crates/scheduled_action/src/outbound.rs
   s_5c39db1fb3cbbf::t_9c88fdd7dd9aaa 6
+packages/sdk/tests/users.test.ts
+  s_471e2069ef160b::t_29327d5965d743 119-182
+  s_471e2069ef160b::t_309db415c473d5 118
+packages/sdk/src/macro.ts
+  s_471e2069ef160b::t_29327d5965d743 591-593
+packages/sdk/src/entities/users/user.ts
+  s_471e2069ef160b::t_2ef42ea6bacc39 232
+  s_471e2069ef160b::t_29327d5965d743 7-10,16,27-59,233-264
+packages/sdk/generated/scheduled-action/index.ts
+  s_471e2069ef160b::t_29327d5965d743 4
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_471e2069ef160b::t_29327d5965d743 104-136,796-804,1489-1493,1598-1628
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_471e2069ef160b::t_29327d5965d743 5,84-85
+packages/sdk/specs/scheduled-action.json
+  s_471e2069ef160b::t_29327d5965d743 222-280,2063-2119,3366-3383,4597-4601
+packages/sdk/src/utils/verbs.ts
+  s_471e2069ef160b::t_29327d5965d743 94
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -46,6 +64,14 @@ crates/scheduled_action/src/outbound.rs
   "base_commit_sha": "12d961eeb185b5caad0a083fc6d716f84b0824d5",
   "prompts": {},
   "sessions": {
+    "s_471e2069ef160b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae591ca2-a46b-438d-9342-5bfaf81ffb1e",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
     "s_5c39db1fb3cbbf": {
       "agent_id": {
         "tool": "claude",
