@@ -21,6 +21,8 @@ export type PdfDocument = {
     canvas: HTMLCanvasElement,
     cssWidth: number
   ): Promise<void>;
+  /** The words on a page in reading order, for people who cannot see it. */
+  pageText(page: number): Promise<string>;
 };
 
 export type DocumentError =
@@ -41,6 +43,11 @@ export type ContractsContext = {
   viewer: Accessor<Viewer>;
   /** The current time, advancing so statuses such as Expired stay true. */
   now: Accessor<string>;
+  /**
+   * The stored packets could not be read. Nothing is shown and every change
+   * is refused, so whatever is stored is not replaced.
+   */
+  loadFailed: Accessor<boolean>;
   databases: Accessor<readonly ContractDatabase[]>;
   packets: Accessor<readonly Packet[]>;
 
@@ -48,6 +55,8 @@ export type ContractsContext = {
   /** Store a PDF and describe it. Other formats are refused. */
   importDocument(file: File): ResultAsync<PacketDocument, DocumentError>;
   openDocument(documentId: string): ResultAsync<PdfDocument, DocumentError>;
+  /** Forget an imported document that no packet ended up using. */
+  discardDocument(documentId: string): ResultAsync<void, never>;
 
   createDraft(input: DraftInput): ResultAsync<Packet, ContractsError>;
   saveFields(
@@ -66,7 +75,10 @@ export type ContractsContext = {
     documentId: string,
     replacement: PacketDocument
   ): ResultAsync<Packet, ContractsError>;
+  /** Remove a packet that was never sent, and its documents. */
   deleteDraft(packetId: string): ResultAsync<void, ContractsError>;
+  /** Whether every entry of the packet's audit log follows from the last. */
+  verifyLog(packet: Packet): Promise<boolean>;
 
   /** The link a recipient opens to sign. */
   signingUrl(token: string): string;

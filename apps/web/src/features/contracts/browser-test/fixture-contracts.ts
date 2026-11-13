@@ -2,13 +2,16 @@ import { contentHash, toHex } from '@core/util/hash';
 import { v7 as uuidv7 } from 'uuid';
 import { createBrowserChangeFeed } from '../queries/change-feed';
 import { createIndexedDbDocumentBlobs } from '../queries/document-blobs';
+import { createBrowserExclusive } from '../queries/exclusive';
 import {
   createLocalContracts,
-  LOCAL_CONTRACTS_STORAGE_KEY,
+  localContractsStorageKey,
 } from '../queries/local-contracts';
 import { openPdfDocument } from '../queries/pdf-document';
 
 export const FIXTURE_DOCUMENT_STORE = 'macro-contracts-fixture-documents';
+/** The account the fixture is signed in as. */
+export const FIXTURE_STORAGE_KEY = localContractsStorageKey('fixture-viewer');
 
 /**
  * The real browser-local adapter, pointed at the fixture's own signing page
@@ -18,11 +21,13 @@ export function createFixtureContracts() {
   const pinned = new URLSearchParams(location.search).get('now');
   return createLocalContracts({
     storage: window.localStorage,
+    storageKey: FIXTURE_STORAGE_KEY,
     blobs: createIndexedDbDocumentBlobs(FIXTURE_DOCUMENT_STORE),
     changes: createBrowserChangeFeed(
       'macro-contracts-fixture',
-      LOCAL_CONTRACTS_STORAGE_KEY
+      FIXTURE_STORAGE_KEY
     ),
+    exclusive: createBrowserExclusive(FIXTURE_STORAGE_KEY),
     openPdf: openPdfDocument,
     digestText: (text) => contentHash(new TextEncoder().encode(text)),
     digestBytes: contentHash,

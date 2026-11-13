@@ -3,26 +3,32 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ContractsData } from '../context/contracts-context';
 import { findRecipient } from '../core/packet';
 import { packetStatus } from '../core/status';
-import { fakeBrowser, VIEWER } from '../tests/local-store';
+import { fakeBrowser, TEST_STORAGE_KEY, VIEWER } from '../tests/local-store';
 import {
   ACME_DRAFT,
   ACME_FIELDS,
   SARAH,
   TYPED_SIGNATURE,
 } from '../tests/packets';
-import { LOCAL_CONTRACTS_STORAGE_KEY } from './local-contracts';
+import { scopeForSigningToken } from './local-contracts';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
 });
 
-function open(browser: ReturnType<typeof fakeBrowser>) {
+function open(browser: ReturnType<typeof fakeBrowser>, scope?: string) {
   return createRoot((dispose) => {
     disposers.push(dispose);
-    return browser.open();
+    return browser.open(scope);
   });
 }
+
+// jsdom's File has no arrayBuffer(), which browsers provide.
+const pdf = (text: string, name: string) =>
+  Object.assign(new File([text], name), {
+    arrayBuffer: async () => new TextEncoder().encode(text).buffer,
+  });
 
 async function sendAcme(contracts: ContractsData) {
   const draft = (await contracts.createDraft(ACME_DRAFT))._unsafeUnwrap();
@@ -62,10 +68,77 @@ describe('createLocalContracts', () => {
     expect(reopened.packets()).toEqual([sent]);
   });
 
-  it('ignores a stored snapshot it cannot read', () => {
+  it('leaves a stored snapshot it cannot read untouched', async () => {
     const browser = fakeBrowser();
-    browser.items.set(LOCAL_CONTRACTS_STORAGE_KEY, '{"packets":"nope"}');
-    expect(open(browser).context(VIEWER).packets()).toEqual([]);
+    browser.items.set(TEST_STORAGE_KEY, '{"packets":"nope"}');
+    const contracts = open(browser).context(VIEWER);
+
+    expect(contracts.loadFailed()).toBe(true);
+    expect(contracts.packets()).toEqual([]);
+    expect(
+      (await contracts.createDraft(ACME_DRAFT))._unsafeUnwrapErr()
+    ).toEqual({ kind: 'storage_failed' });
+    expect(browser.items.get(TEST_STORAGE_KEY)).toBe('{"packets":"nope"}');
+  });
+
+  it('reports a write the browser refuses and keeps showing what is stored', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const draft = (await contracts.createDraft(ACME_DRAFT))._unsafeUnwrap();
+    const other = open(browser).context(VIEWER);
+
+    browser.setFull(true);
+    const saved = await contracts.saveFields(draft.id, ACME_FIELDS);
+
+    expect(saved._unsafeUnwrapErr()).toEqual({ kind: 'storage_failed' });
+    expect(contracts.packets()[0].fields).toEqual([]);
+    expect(other.packets()[0].fields).toEqual([]);
+  });
+
+  it('starts a change from what another tab stored, not from its own copy', async () => {
+    const browser = fakeBrowser();
+    const first = open(browser).context(VIEWER);
+    const second = open(browser).context(VIEWER);
+
+    // Both tabs write at once; each must build on the other's result.
+    const [one, two] = await Promise.all([
+      first.createDraft({ ...ACME_DRAFT, title: 'From the first tab' }),
+      second.createDraft({ ...ACME_DRAFT, title: 'From the second tab' }),
+    ]);
+
+    expect(one.isOk() && two.isOk()).toBe(true);
+    const titles = (contracts: ContractsData) =>
+      contracts
+        .packets()
+        .map((packet) => packet.title)
+        .sort();
+    expect(titles(first)).toEqual([
+      'From the first tab',
+      'From the second tab',
+    ]);
+    expect(titles(second)).toEqual(titles(first));
+  });
+
+  it('keeps one account from seeing packets of another', async () => {
+    const browser = fakeBrowser();
+    await sendAcme(open(browser, 'owner').context(VIEWER));
+
+    const other = open(browser, 'someone-else').context(VIEWER);
+    expect(other.packets()).toEqual([]);
+  });
+
+  it('keeps a packet in place when it changes', async () => {
+    const contracts = open(fakeBrowser()).context(VIEWER);
+    const first = (
+      await contracts.createDraft({ ...ACME_DRAFT, title: 'First' })
+    )._unsafeUnwrap();
+    await contracts.createDraft({ ...ACME_DRAFT, title: 'Second' });
+    (await contracts.saveFields(first.id, ACME_FIELDS))._unsafeUnwrap();
+
+    expect(contracts.packets().map((packet) => packet.title)).toEqual([
+      'First',
+      'Second',
+    ]);
   });
 
   it('refuses a transition on a packet that does not exist', async () => {
@@ -101,13 +174,58 @@ describe('createLocalContracts', () => {
   });
 });
 
-describe('importDocument', () => {
-  // jsdom's File has no arrayBuffer(), which browsers provide.
-  const pdf = (text: string, name: string) =>
-    Object.assign(new File([text], name), {
-      arrayBuffer: async () => new TextEncoder().encode(text).buffer,
-    });
+describe('deleteDraft', () => {
+  it('removes a draft and the documents only it used', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const document = (
+      await contracts.importDocument(pdf('%PDF-1.7 body', 'Order Form.pdf'))
+    )._unsafeUnwrap();
+    const draft = (
+      await contracts.createDraft({ ...ACME_DRAFT, documents: [document] })
+    )._unsafeUnwrap();
+    expect(browser.documents.has(document.id)).toBe(true);
 
+    (await contracts.deleteDraft(draft.id))._unsafeUnwrap();
+
+    expect(contracts.packets()).toEqual([]);
+    expect(browser.documents.has(document.id)).toBe(false);
+  });
+
+  it('refuses to delete a packet that was sent', async () => {
+    const contracts = open(fakeBrowser()).context(VIEWER);
+    const sent = await sendAcme(contracts);
+
+    expect((await contracts.deleteDraft(sent.id))._unsafeUnwrapErr()).toEqual({
+      kind: 'not_draft',
+    });
+    expect(contracts.packets()).toEqual([sent]);
+  });
+
+  it('reports a packet that is not there', async () => {
+    const contracts = open(fakeBrowser()).context(VIEWER);
+    expect((await contracts.deleteDraft('missing'))._unsafeUnwrapErr()).toEqual(
+      { kind: 'not_found' }
+    );
+  });
+});
+
+describe('verifyLog', () => {
+  it('accepts a log as stored and rejects one with an entry changed', async () => {
+    const contracts = open(fakeBrowser()).context(VIEWER);
+    const sent = await sendAcme(contracts);
+    expect(await contracts.verifyLog(sent)).toBe(true);
+
+    const [created, ...rest] = sent.events;
+    const edited = {
+      ...sent,
+      events: [{ ...created, at: '2020-01-01T00:00:00.000Z' }, ...rest],
+    };
+    expect(await contracts.verifyLog(edited)).toBe(false);
+  });
+});
+
+describe('importDocument', () => {
   it('describes a PDF and stores it for opening', async () => {
     const contracts = open(fakeBrowser()).context(VIEWER);
     const document = (
@@ -131,6 +249,31 @@ describe('importDocument', () => {
     expect(result._unsafeUnwrapErr()).toEqual({ kind: 'not_pdf' });
   });
 
+  it('forgets an imported document no packet used', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const document = (
+      await contracts.importDocument(pdf('%PDF-1.7 body', 'Order Form.pdf'))
+    )._unsafeUnwrap();
+
+    await contracts.discardDocument(document.id);
+
+    expect(browser.documents.has(document.id)).toBe(false);
+  });
+
+  it('keeps a document a packet uses when asked to forget it', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const document = (
+      await contracts.importDocument(pdf('%PDF-1.7 body', 'Order Form.pdf'))
+    )._unsafeUnwrap();
+    await contracts.createDraft({ ...ACME_DRAFT, documents: [document] });
+
+    await contracts.discardDocument(document.id);
+
+    expect(browser.documents.has(document.id)).toBe(true);
+  });
+
   it('reports a document whose bytes are gone', async () => {
     const contracts = open(fakeBrowser()).context(VIEWER);
     expect(
@@ -151,6 +294,7 @@ describe('signing', () => {
     expect(session.t === 'ready' && session.recipient.name).toBe('Sarah Chen');
 
     browser.setNow('2026-11-10T19:26:47.000Z');
+    (await signing.acceptDisclosure())._unsafeUnwrap();
     (
       await signing.sign({
         ...TYPED_SIGNATURE,
@@ -165,6 +309,17 @@ describe('signing', () => {
     );
     // A used link no longer opens the packet.
     expect(signing.session()).toEqual({ t: 'unavailable' });
+  });
+
+  it('finds the account that issued a link, and none for an unknown one', async () => {
+    const browser = fakeBrowser();
+    const sent = await sendAcme(open(browser, 'owner').context(VIEWER));
+    const token = findRecipient(sent, SARAH)?.access?.token ?? '';
+
+    expect(scopeForSigningToken(browser.storage, token)).toBe('owner');
+    expect(
+      scopeForSigningToken(browser.storage, 'not-a-token')
+    ).toBeUndefined();
   });
 
   it('does not open a packet for an unknown token', () => {

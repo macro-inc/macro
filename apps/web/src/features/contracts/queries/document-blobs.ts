@@ -6,6 +6,7 @@ const STORE = 'documents';
 export type DocumentBlobs = {
   put(documentId: string, bytes: ArrayBuffer): Promise<void>;
   get(documentId: string): Promise<ArrayBuffer | undefined>;
+  delete(documentId: string): Promise<void>;
 };
 
 /** Document bytes kept in this browser's IndexedDB. */
@@ -24,6 +25,11 @@ export function createIndexedDbDocumentBlobs(name: string): DocumentBlobs {
       database.run<ArrayBuffer | undefined>(STORE, 'readonly', (tx, finish) => {
         const request = tx.objectStore(STORE).get(documentId);
         request.onsuccess = () => finish(request.result ?? undefined);
+      }),
+    delete: (documentId) =>
+      database.run<void>(STORE, 'readwrite', (tx, finish) => {
+        const request = tx.objectStore(STORE).delete(documentId);
+        request.onsuccess = () => finish(undefined);
       }),
   };
 }

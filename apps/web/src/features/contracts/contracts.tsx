@@ -14,18 +14,16 @@ import {
 import { ContractsWorkspace } from './views/contracts-workspace';
 import { MobileContractsWorkspace } from './views/mobile/contracts-workspace';
 
-function createAppContractsContext(): ContractsContext {
-  const userId = useUserId();
+function createAppContractsContext(userId: string): ContractsContext {
   const viewer = (): Viewer => {
-    const raw = userId() ?? '';
-    const id = tryMacroId(raw);
+    const id = tryMacroId(userId);
     return {
-      id: raw,
-      name: id ? getDisplayName(id) : raw,
-      email: id ? macroIdToEmail(id) : raw,
+      id: userId,
+      name: id ? getDisplayName(id) : userId,
+      email: id ? macroIdToEmail(id) : userId,
     };
   };
-  const data = createBrowserContracts().context(viewer);
+  const data = createBrowserContracts(userId).context(viewer);
 
   return {
     ...data,
@@ -34,18 +32,29 @@ function createAppContractsContext(): ContractsContext {
   };
 }
 
+function AccountContracts(props: { userId: string }) {
+  const context = createAppContractsContext(props.userId);
+
+  return (
+    <ContractsProvider value={context}>
+      <Show when={isTouchDevice()} fallback={<ContractsWorkspace />}>
+        <MobileContractsWorkspace />
+      </Show>
+    </ContractsProvider>
+  );
+}
+
 /** The Contracts module, wired to the app. */
 export function Contracts() {
-  const context = createAppContractsContext();
+  const userId = useUserId();
 
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
-        <ContractsProvider value={context}>
-          <Show when={isTouchDevice()} fallback={<ContractsWorkspace />}>
-            <MobileContractsWorkspace />
-          </Show>
-        </ContractsProvider>
+        {/* Keyed: another account gets its own store, never this one's. */}
+        <Show when={userId()} keyed>
+          {(id) => <AccountContracts userId={id} />}
+        </Show>
       </SplitPanel.Body>
     </SplitPanel.Root>
   );

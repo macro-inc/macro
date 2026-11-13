@@ -1,6 +1,5 @@
-import { makePersistedState } from '@app/lib/persistence';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow';
+import { err, errAsync, ok, Result, ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
   ContractsData,
@@ -11,7 +10,7 @@ import type {
   SigningSession,
   Viewer,
 } from '../context/contracts-context';
-import { type Digest, sealEvents } from '../core/audit';
+import { type Digest, firstBrokenEvent, sealEvents } from '../core/audit';
 import {
   type ContractDatabase,
   nextDatabaseColor,
@@ -46,16 +45,30 @@ import {
   contractsSnapshotSchema,
 } from './packet-schema';
 
-/** Where the browser-local snapshot is kept. */
-export const LOCAL_CONTRACTS_STORAGE_KEY = 'macro:contracts:local:v1';
+/** Every account's snapshot is stored under this prefix plus its scope. */
+const STORAGE_KEY_PREFIX = 'macro:contracts:local:v1:';
 const CLOCK_INTERVAL_MS = 30_000;
 const PDF_MAGIC = '%PDF-';
 const TOKEN_ID_LENGTH = 12;
 
+/** Where one account's snapshot is kept in this browser. */
+export function localContractsStorageKey(scope: string): string {
+  return `${STORAGE_KEY_PREFIX}${scope}`;
+}
+
+type SnapshotStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
 export type LocalContractsDeps = {
-  storage: Pick<Storage, 'getItem' | 'setItem'>;
+  storage: SnapshotStorage;
+  /** The key of this account's snapshot; see `localContractsStorageKey`. */
+  storageKey: string;
   blobs: DocumentBlobs;
   changes: ChangeFeed;
+  /**
+   * Run `work` while no other store, in this tab or another, is inside its
+   * own `exclusive` call. Every write reads, changes, and stores inside one.
+   */
+  exclusive<T>(work: () => Promise<T>): Promise<T>;
   openPdf(bytes: ArrayBuffer): Promise<PdfDocument>;
   digestText: Digest;
   digestBytes(bytes: ArrayBuffer): Promise<string>;
@@ -76,6 +89,16 @@ type Transition = (
   context: LifecycleContext
 ) => Result<Packet, PacketError>;
 
+type Stored =
+  | { t: 'empty' }
+  | { t: 'ok'; snapshot: ContractsSnapshot }
+  /** Something is stored that this version cannot read. It is left alone. */
+  | { t: 'unreadable' };
+
+type Change<T> = (
+  current: ContractsSnapshot
+) => Promise<Result<{ next: ContractsSnapshot; value: T }, ContractsError>>;
+
 function starterSnapshot(): ContractsSnapshot {
   return {
     databases: STARTER_DATABASES.map((database) => ({
@@ -86,36 +109,78 @@ function starterSnapshot(): ContractsSnapshot {
   };
 }
 
-function readSnapshot(
-  storage: LocalContractsDeps['storage']
-): ContractsSnapshot | undefined {
-  const raw = storage.getItem(LOCAL_CONTRACTS_STORAGE_KEY);
-  if (!raw) return undefined;
+const parseJson = Result.fromThrowable(
+  (raw: string): unknown => JSON.parse(raw),
+  () => undefined
+);
 
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    return undefined;
+function readStored(storage: Pick<Storage, 'getItem'>, key: string): Stored {
+  const raw = Result.fromThrowable(
+    () => storage.getItem(key),
+    () => undefined
+  )();
+  if (raw.isErr()) return { t: 'unreadable' };
+  if (raw.value === null) return { t: 'empty' };
+
+  const json = parseJson(raw.value);
+  if (json.isErr()) return { t: 'unreadable' };
+  const parsed = contractsSnapshotSchema.safeParse(json.value);
+  return parsed.success
+    ? { t: 'ok', snapshot: parsed.data }
+    : { t: 'unreadable' };
+}
+
+/** Store the snapshot, reporting a full or blocked storage as a failure. */
+function writeStored(
+  storage: SnapshotStorage,
+  key: string,
+  snapshot: ContractsSnapshot
+): Result<void, ContractsError> {
+  return Result.fromThrowable(
+    () => storage.setItem(key, JSON.stringify(snapshot)),
+    storageFailed
+  )();
+}
+
+/**
+ * The scope of the account whose stored packets hold this signing token, so a
+ * signing link opens without knowing who sent it.
+ */
+export function scopeForSigningToken(
+  storage: Pick<Storage, 'length' | 'key' | 'getItem'>,
+  token: string
+): string | undefined {
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (!key?.startsWith(STORAGE_KEY_PREFIX)) continue;
+
+    const stored = readStored(storage, key);
+    if (stored.t !== 'ok') continue;
+    const held = stored.snapshot.packets.some((packet) =>
+      recipientForToken(packet, token)
+    );
+    if (held) return key.slice(STORAGE_KEY_PREFIX.length);
   }
-  const parsed = contractsSnapshotSchema.safeParse(json);
-  return parsed.success ? parsed.data : undefined;
+  return undefined;
 }
 
 function storageFailed(): ContractsError {
   return { kind: 'storage_failed' };
 }
 
+function unreadable(): DocumentError {
+  return { kind: 'unreadable' };
+}
+
 /** The store has no bytes for a document a packet refers to. */
 class MissingDocument extends Error {}
 
-/** Wait for work to finish either way, so the next write can start. */
-async function settled(work: Promise<unknown>): Promise<void> {
-  try {
-    await work;
-  } catch {
-    // The caller of the failed write reports it.
-  }
+function referencedDocumentIds(snapshot: ContractsSnapshot): Set<string> {
+  return new Set(
+    snapshot.packets.flatMap((packet) =>
+      packet.documents.map((document) => document.id)
+    )
+  );
 }
 
 /**
@@ -127,19 +192,11 @@ async function settled(work: Promise<unknown>): Promise<void> {
  * Create it under a Solid owner; it stops its clock and change feed on cleanup.
  */
 export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
-  const state = createSignal<ContractsSnapshot>(starterSnapshot());
-  const reload = state[1];
-  const [snapshot, persist] = makePersistedState(state, {
-    storages: {
-      restore: () => readSnapshot(deps.storage),
-      write: (value) =>
-        deps.storage.setItem(
-          LOCAL_CONTRACTS_STORAGE_KEY,
-          JSON.stringify(value)
-        ),
-    },
-  });
-
+  const initial = readStored(deps.storage, deps.storageKey);
+  const [snapshot, setSnapshot] = createSignal<ContractsSnapshot>(
+    initial.t === 'ok' ? initial.snapshot : starterSnapshot()
+  );
+  const [loadFailed, setLoadFailed] = createSignal(initial.t === 'unreadable');
   const [now, setNow] = createSignal(deps.clock());
   const pdfs = new Map<string, Promise<PdfDocument>>();
 
@@ -152,60 +209,104 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     }),
   });
 
-  // Writes run one at a time. Each starts from what storage holds, so a
-  // change made by another tab while this one was idle is never overwritten.
-  let queue: Promise<void> = Promise.resolve();
-  function enqueue<T>(work: () => Promise<T>): Promise<T> {
-    const previous = queue;
-    const next = (async () => {
-      await previous;
-      return work();
-    })();
-    queue = settled(next);
-    return next;
+  /** Take what storage holds now as this store's view of it. */
+  function refresh(): Stored {
+    const stored = readStored(deps.storage, deps.storageKey);
+    setLoadFailed(stored.t === 'unreadable');
+    if (stored.t === 'ok') setSnapshot(stored.snapshot);
+    return stored;
   }
 
-  function commit(next: ContractsSnapshot) {
-    persist(next);
-    deps.changes.publish();
-  }
+  /**
+   * Change the stored snapshot. The change starts from what storage holds,
+   * inside the exclusive section, so no store overwrites another's write. A
+   * snapshot that cannot be read is never replaced, and a write the browser
+   * refuses is an error: nothing is shown or announced as saved.
+   */
+  function mutate<T>(change: Change<T>): ResultAsync<T, ContractsError> {
+    const work = deps.exclusive(
+      async (): Promise<Result<T, ContractsError>> => {
+        const stored = refresh();
+        if (stored.t === 'unreadable') return err(storageFailed());
 
-  function latest(): ContractsSnapshot {
-    return readSnapshot(deps.storage) ?? snapshot();
+        const current = stored.t === 'ok' ? stored.snapshot : starterSnapshot();
+        const changed = await change(current);
+        if (changed.isErr()) return err(changed.error);
+        if (changed.value.next === current) return ok(changed.value.value);
+
+        const written = writeStored(
+          deps.storage,
+          deps.storageKey,
+          changed.value.next
+        );
+        if (written.isErr()) return err(written.error);
+
+        setSnapshot(changed.value.next);
+        deps.changes.publish();
+        return ok(changed.value.value);
+      }
+    );
+    return ResultAsync.fromPromise(work, storageFailed).andThen(
+      (result) => result
+    );
   }
 
   /** Apply a change to one packet, seal its new events, and store it. */
-  async function writePacket(
+  function writePacket(
     packetId: string | undefined,
     apply: (
       packet: Packet | undefined,
       context: LifecycleContext
     ) => Result<Packet, ContractsError>
-  ): Promise<Result<Packet, ContractsError>> {
-    const current = latest();
-    const existing = current.packets.find((packet) => packet.id === packetId);
-    const applied = apply(existing, lifecycle());
-    if (applied.isErr()) return err(applied.error);
+  ): ResultAsync<Packet, ContractsError> {
+    return mutate(async (current) => {
+      const existing = current.packets.find((packet) => packet.id === packetId);
+      const applied = apply(existing, lifecycle());
+      if (applied.isErr()) return err(applied.error);
+      if (applied.value === existing) {
+        return ok({ next: current, value: existing });
+      }
 
-    const sealed = await sealEvents(applied.value, deps.digestText);
-    const others = current.packets.filter((packet) => packet.id !== sealed.id);
-    commit({ ...current, packets: [...others, sealed] });
-    return ok(sealed);
+      const sealed = await sealEvents(applied.value, deps.digestText);
+      const packets = existing
+        ? current.packets.map((packet) =>
+            packet.id === sealed.id ? sealed : packet
+          )
+        : [...current.packets, sealed];
+      return ok({ next: { ...current, packets }, value: sealed });
+    });
   }
 
   function transition(
     packetId: string,
     apply: Transition
   ): ResultAsync<Packet, ContractsError> {
-    const work = enqueue(() =>
-      writePacket(packetId, (packet, context) => {
-        if (!packet) return err({ kind: 'not_found' });
-        return apply(packet, context);
-      })
-    );
-    return ResultAsync.fromPromise(work, storageFailed).andThen(
-      (result) => result
-    );
+    return writePacket(packetId, (packet, context) => {
+      if (!packet) return err({ kind: 'not_found' });
+      return apply(packet, context);
+    });
+  }
+
+  /** Delete stored bytes that no stored packet refers to. */
+  async function dropUnreferenced(
+    documentIds: readonly string[]
+  ): Promise<void> {
+    const stored = readStored(deps.storage, deps.storageKey);
+    // Without a readable list of packets, nothing is known to be unused.
+    if (stored.t === 'unreadable') return;
+    const referenced =
+      stored.t === 'ok'
+        ? referencedDocumentIds(stored.snapshot)
+        : new Set<string>();
+    for (const documentId of documentIds) {
+      if (referenced.has(documentId)) continue;
+      pdfs.delete(documentId);
+      // Bytes left behind cost space, nothing else; the packet change stands.
+      await ResultAsync.fromPromise(
+        deps.blobs.delete(documentId),
+        () => undefined
+      );
+    }
   }
 
   /** Record every signing window that closed since the last look. */
@@ -227,10 +328,7 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     setNow(deps.clock());
     recordExpiries();
   }, CLOCK_INTERVAL_MS);
-  const unsubscribe = deps.changes.subscribe(() => {
-    const stored = readSnapshot(deps.storage);
-    if (stored) reload(stored);
-  });
+  const unsubscribe = deps.changes.subscribe(refresh);
   onCleanup(() => {
     clearInterval(clock);
     unsubscribe();
@@ -258,75 +356,77 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     });
   }
 
-  async function importPdf(
-    file: File
-  ): Promise<Result<PacketDocument, DocumentError>> {
-    const bytes = await file.arrayBuffer();
-    const header = new TextDecoder().decode(bytes.slice(0, PDF_MAGIC.length));
-    if (header !== PDF_MAGIC) return err({ kind: 'not_pdf' });
-
-    let pdf: PdfDocument;
-    try {
-      pdf = await deps.openPdf(bytes);
-    } catch {
-      return err({ kind: 'unreadable' });
-    }
-
+  function storePdf(
+    file: File,
+    bytes: ArrayBuffer,
+    pdf: PdfDocument
+  ): ResultAsync<PacketDocument, DocumentError> {
     const id = deps.newId();
-    try {
-      await deps.blobs.put(id, bytes);
-    } catch {
-      return err({ kind: 'storage_failed' });
-    }
-    pdfs.set(id, Promise.resolve(pdf));
+    return ResultAsync.fromPromise(deps.digestBytes(bytes), unreadable)
+      .andThen((sha256) =>
+        ResultAsync.fromPromise(
+          deps.blobs.put(id, bytes),
+          (): DocumentError => ({ kind: 'storage_failed' })
+        ).map(() => sha256)
+      )
+      .map((sha256): PacketDocument => {
+        pdfs.set(id, Promise.resolve(pdf));
+        return {
+          id,
+          name: file.name.replace(/\.pdf$/i, ''),
+          pageCount: pdf.pageCount,
+          source: 'upload',
+          sha256,
+        };
+      });
+  }
 
-    return ok({
-      id,
-      name: file.name.replace(/\.pdf$/i, ''),
-      pageCount: pdf.pageCount,
-      source: 'upload',
-      sha256: await deps.digestBytes(bytes),
-    });
+  function importPdf(file: File): ResultAsync<PacketDocument, DocumentError> {
+    return ResultAsync.fromPromise(file.arrayBuffer(), unreadable).andThen(
+      (bytes) => {
+        const header = new TextDecoder().decode(
+          bytes.slice(0, PDF_MAGIC.length)
+        );
+        if (header !== PDF_MAGIC) {
+          return errAsync<PacketDocument, DocumentError>({ kind: 'not_pdf' });
+        }
+        return ResultAsync.fromPromise(deps.openPdf(bytes), unreadable).andThen(
+          (pdf) => storePdf(file, bytes, pdf)
+        );
+      }
+    );
   }
 
   function context(viewer: Accessor<Viewer>): ContractsData {
     return {
       viewer,
       now,
+      loadFailed,
       databases: () => snapshot().databases,
       packets: () => snapshot().packets,
 
-      createDatabase(name) {
-        const work = enqueue(async () => {
-          const current = latest();
+      createDatabase: (name) =>
+        mutate(async (current) => {
           const database: ContractDatabase = {
             id: deps.newId(),
             name,
             color: nextDatabaseColor(current.databases),
           };
-          commit({ ...current, databases: [...current.databases, database] });
-          return database;
-        });
-        return ResultAsync.fromPromise(work, storageFailed);
-      },
+          return ok({
+            next: { ...current, databases: [...current.databases, database] },
+            value: database,
+          });
+        }),
 
-      importDocument: (file) =>
-        ResultAsync.fromPromise(
-          importPdf(file),
-          (): DocumentError => ({ kind: 'unreadable' })
-        ).andThen((result) => result),
+      importDocument: importPdf,
       openDocument,
+      discardDocument: (documentId) =>
+        ResultAsync.fromSafePromise(dropUnreferenced([documentId])),
 
-      createDraft(input) {
-        const work = enqueue(() =>
-          writePacket(undefined, (_, lifecycleContext) =>
-            createDraft(input, lifecycleContext)
-          )
-        );
-        return ResultAsync.fromPromise(work, storageFailed).andThen(
-          (result) => result
-        );
-      },
+      createDraft: (input) =>
+        writePacket(undefined, (_, lifecycleContext) =>
+          createDraft(input, lifecycleContext)
+        ),
       saveFields: (packetId, fields) =>
         transition(packetId, (packet, lifecycleContext) =>
           setFields(packet, fields, lifecycleContext)
@@ -341,21 +441,36 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
         transition(packetId, (packet, lifecycleContext) =>
           markSignedOffline(packet, viewer().name, lifecycleContext)
         ),
+
       replaceDocument: (packetId, documentId, replacement) =>
         transition(packetId, (packet, lifecycleContext) =>
           replaceDocument(packet, documentId, replacement, lifecycleContext)
+        ).andThen((packet) =>
+          ResultAsync.fromSafePromise(dropUnreferenced([documentId])).map(
+            () => packet
+          )
         ),
 
-      deleteDraft(packetId) {
-        const work = enqueue(async () => {
-          const current = latest();
-          commit({
-            ...current,
-            packets: current.packets.filter((packet) => packet.id !== packetId),
+      deleteDraft: (packetId) =>
+        mutate<PacketDocument[]>(async (current) => {
+          const packet = current.packets.find((each) => each.id === packetId);
+          if (!packet) return err({ kind: 'not_found' });
+          if (packetStatus(packet, deps.clock()) !== 'draft') {
+            return err({ kind: 'not_draft' });
+          }
+          const packets = current.packets.filter((each) => each !== packet);
+          return ok({
+            next: { ...current, packets },
+            value: packet.documents,
           });
-        });
-        return ResultAsync.fromPromise(work, storageFailed);
-      },
+        }).andThen((documents) =>
+          ResultAsync.fromSafePromise(
+            dropUnreferenced(documents.map((document) => document.id))
+          )
+        ),
+
+      verifyLog: async (packet) =>
+        (await firstBrokenEvent(packet.events, deps.digestText)) === undefined,
 
       signingUrl: deps.signingUrl,
     };
