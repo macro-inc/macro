@@ -1,4 +1,5 @@
 import { arrayEquals } from '@core/util/compareUtils';
+import { debouncedDependent } from '@core/util/debounce';
 import type { EntityData } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -11,6 +12,9 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '../filters/filter-store';
+
+/** Featured rows change with every keystroke; read the ones typing settles on. */
+const FEATURED_READ_DEBOUNCE_MS = 150;
 
 export function featuredDocumentsQueryArgs(
   documentIds: readonly string[]
@@ -36,9 +40,10 @@ export function featuredDocumentsQueryArgs(
 export function useFeaturedDocuments(
   documentIds: Accessor<readonly string[]>
 ): Accessor<EntityData[]> {
-  const ids = createMemo(() => [...new Set(documentIds())].sort(), [], {
+  const featured = createMemo(() => [...new Set(documentIds())].sort(), [], {
     equals: arrayEquals,
   });
+  const ids = debouncedDependent(featured, FEATURED_READ_DEBOUNCE_MS);
   const query = useSoupAstItemsQuery(
     () => featuredDocumentsQueryArgs(ids()),
     () => ({
