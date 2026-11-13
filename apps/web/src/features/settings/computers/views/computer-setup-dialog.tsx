@@ -1,9 +1,12 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   type AgentWithHarnessId,
   invalidateAgents,
@@ -11,11 +14,14 @@ import {
 } from '@queries/agents/agents';
 import { useUpdateBotMutation } from '@queries/bots/bots';
 import { useClaudeSignOutMutation } from '@queries/computers/claude';
-import { useCompleteComputerSetupMutation } from '@queries/computers/computers';
+import {
+  useCompleteComputerSetupMutation,
+  useRetryComputerMutation,
+} from '@queries/computers/computers';
 import { invalidateHarnesses } from '@queries/harnesses/harnesses';
 import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus } from '@service-auth/computers';
-import { ActionDialogShell, Button, cn, Input } from '@ui';
+import { ActionDialogShell, Button, cn, Input, Spinner } from '@ui';
 import {
   createEffect,
   createUniqueId,
@@ -25,13 +31,19 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match, P } from 'ts-pattern';
 import { ChoiceRow } from '../../primitives';
+import { SetupProgressList } from '../components/setup-progress-list';
 import {
+  computerFailureMessage,
   isProvisioning,
-  SETUP_PHASES,
-  setupPhaseIndex,
-  setupStepLabel,
 } from '../core/computer-display';
+import {
+  type SignInPlan,
+  setupSettled,
+  setupStages,
+} from '../core/setup-progress';
+import { useSetupElapsed } from '../primitives/setup-elapsed';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
 export type SetupStepId = 'computer' | 'agent' | 'claude' | 'ready';
@@ -58,79 +70,80 @@ const STEP_ORDER: readonly SetupStepId[] = [
   'ready',
 ];
 
+/** Phones get Buy › Agent › Your AI › Ready, so the bar stays on one line. */
 function stepLabel(step: SetupStepId): string {
-  if (step === 'computer') return t('computers.stepComputer');
-  if (step === 'agent') return t('computers.stepAgent');
-  if (step === 'claude') return t('computers.stepClaude');
-  return t('computers.stepReady');
+  return match([step, isMobile()] as const)
+    .with(['computer', true], () => t('computers.stepBuyShort'))
+    .with(['computer', false], () => t('computers.stepBuy'))
+    .with(['agent', true], () => t('computers.stepConfigureAgentShort'))
+    .with(['agent', false], () => t('computers.stepConfigureAgent'))
+    .with(['claude', true], () => t('computers.stepBringAiShort'))
+    .with(['claude', false], () => t('computers.stepBringAi'))
+    .with(['ready', P.boolean], () => t('computers.stepReady'))
+    .exhaustive();
 }
 
-/** Computer · Agent · Claude · Ready, the current one in ink. */
+/**
+ * Buy computer → Configure agent → Bring your AI → Ready: done steps carry a
+ * check, the current one is in ink, and a step the choice skips is struck.
+ */
 export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
   const current = () => STEP_ORDER.indexOf(props.step);
   return (
     <ol
       aria-label={t('computers.setupSteps')}
-      class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+      class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs"
     >
       <For each={STEP_ORDER}>
-        {(step, index) => (
-          <li
-            class={cn(
-              'flex items-center gap-2',
-              index() === current()
-                ? 'font-medium text-ink'
-                : 'text-ink-extra-muted',
-              step === 'claude' && props.skipsClaude && 'line-through'
-            )}
-            aria-current={index() === current() ? 'step' : undefined}
-          >
-            <Show when={index() > 0}>
-              <span aria-hidden="true" class="text-ink-extra-muted">
-                ·
-              </span>
-            </Show>
-            {stepLabel(step)}
-          </li>
-        )}
+        {(step, index) => {
+          const done = () => index() < current();
+          const active = () => index() === current();
+          return (
+            <li
+              class={cn(
+                'flex items-center gap-1.5',
+                active() && 'font-medium text-ink',
+                done() && 'text-ink-muted',
+                !active() && !done() && 'text-ink-extra-muted',
+                step === 'claude' && props.skipsClaude && 'line-through'
+              )}
+              aria-current={active() ? 'step' : undefined}
+            >
+              <Show when={index() > 0}>
+                <CaretRightIcon
+                  aria-hidden="true"
+                  class="size-3 shrink-0 text-ink-extra-muted"
+                />
+              </Show>
+              <Show
+                when={done()}
+                fallback={
+                  <span
+                    aria-hidden="true"
+                    class={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      active() ? 'bg-accent' : 'border border-ink-extra-muted'
+                    )}
+                  />
+                }
+              >
+                <CheckIcon aria-hidden="true" class="size-3 shrink-0" />
+              </Show>
+              {stepLabel(step)}
+            </li>
+          );
+        }}
       </For>
     </ol>
   );
 }
 
-/** A thin bar over Creating → Starting → Connecting, while provisioning. */
-function ProvisioningBar(props: { computer: ComputerStatus }) {
-  const phase = () => setupPhaseIndex(props.computer);
+/** Why the footer's primary action is disabled, beside it. */
+export function DisabledReason(props: { children: JSX.Element }) {
   return (
-    <div class="flex flex-col gap-1.5">
-      <div
-        role="progressbar"
-        aria-label={t('computers.settingUp')}
-        aria-valuemin={0}
-        aria-valuemax={SETUP_PHASES.length}
-        aria-valuenow={phase() + 1}
-        class="h-1 overflow-hidden rounded-full bg-ink/8"
-      >
-        <div
-          class="h-full rounded-full bg-accent transition-[width] duration-500"
-          style={{
-            width: `${((phase() + 1) / (SETUP_PHASES.length + 1)) * 100}%`,
-          }}
-        />
-      </div>
-      <p class="flex flex-wrap gap-x-1.5 text-xs text-ink-extra-muted">
-        <For each={SETUP_PHASES}>
-          {(step, index) => (
-            <span class={cn(index() === phase() && 'font-medium text-ink')}>
-              <Show when={index() > 0}>
-                <span aria-hidden="true">→ </span>
-              </Show>
-              {setupStepLabel(step)}
-            </span>
-          )}
-        </For>
-      </p>
-    </div>
+    <p class="basis-full text-right text-xs text-ink-muted text-pretty">
+      {props.children}
+    </p>
   );
 }
 
@@ -160,6 +173,7 @@ export function ComputerSetupSteps(props: {
   const renameBot = useUpdateBotMutation();
   const signOut = useClaudeSignOutMutation();
   const completeSetup = useCompleteComputerSetupMutation();
+  const retry = useRetryComputerMutation();
   const layout = useSplitLayout();
   const settings = useSettingsState();
 
@@ -232,6 +246,13 @@ export function ComputerSetupSteps(props: {
     props.onStep('ready');
   };
 
+  // A disabled Continue always says what it waits for.
+  const continueBlockedBy = (): string | undefined => {
+    if (!agentName().trim()) return t('computers.nameAgentToContinue');
+    if (!props.choice) return t('computers.chooseClaudeToContinue');
+    return undefined;
+  };
+
   const continueFromAgent = () => {
     props.onStep(props.choice === 'own_account' ? 'claude' : 'ready');
   };
@@ -244,17 +265,53 @@ export function ComputerSetupSteps(props: {
     openAgentsPage(layout, 'new', botId ? { composerAgentId: botId } : {});
   };
 
+  const retrySetup = async () => {
+    try {
+      await retry.mutateAsync(props.computer.id);
+    } catch (error) {
+      toast.failure(computerFailureMessage(error, t('computers.retryFailed')));
+    }
+  };
+
+  // Setup carries on behind every step: the list says where it is, how long
+  // the current stage has taken, and what to do when it is stuck.
+  const showProgress = () =>
+    !setupSettled(props.computer) ||
+    (props.choice === 'own_account' && !done());
+  const signInPlan = (): SignInPlan =>
+    match(props.choice)
+      .returnType<SignInPlan>()
+      .with('own_account', () => 'needed')
+      .with('macro_credits', () => 'skipped')
+      .with(undefined, () => 'undecided')
+      .exhaustive();
   const header = (): JSX.Element => (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-4">
       <StepHeader
         step={props.step}
         skipsClaude={props.choice === 'macro_credits'}
       />
-      <Show when={isProvisioning(props.computer)}>
-        <ProvisioningBar computer={props.computer} />
+      <Show when={showProgress()}>
+        <SetupProgressList
+          computer={props.computer}
+          signIn={signInPlan()}
+          connected={props.connected}
+          signedIn={done()}
+          onRetry={() => fireAndForget(retrySetup(), 'computer-setup')}
+          retrying={retry.isPending}
+        />
       </Show>
     </div>
   );
+
+  // The stage the computer is on, for "Preparing sign-in… starting up · 0:42".
+  const elapsed = useSetupElapsed(() => props.computer);
+  const currentStage = () =>
+    setupStages(props.computer, {
+      signIn: 'needed',
+      connected: props.connected,
+      signedIn: done(),
+    }).find((stage) => stage.state === 'current' || stage.state === 'failed');
 
   return (
     <Switch>
@@ -309,11 +366,14 @@ export function ComputerSetupSteps(props: {
           <Button
             type="button"
             variant="primary"
-            disabled={!props.choice || !agentName().trim()}
+            disabled={!!continueBlockedBy()}
             onClick={continueFromAgent}
           >
             {t('computers.continue')}
           </Button>
+          <Show when={continueBlockedBy()}>
+            {(reason) => <DisabledReason>{reason()}</DisabledReason>}
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
       <Match when={props.step === 'claude' && up() && harnessId()}>
@@ -335,19 +395,35 @@ export function ComputerSetupSteps(props: {
               {t('computers.signInToClaude')}
             </ActionDialogShell.Title>
             <ActionDialogShell.Description>
-              {t('computers.signInLinkWaiting')}
+              {t('computers.signInWaitingBody')}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
+          {/* No greyed button: the step says what it is waiting for. */}
+          <p
+            role="status"
+            class="flex items-center gap-2 text-sm font-medium text-ink"
+          >
+            <Spinner size="sm" decorative />
+            {t('computers.preparingSignInStatus', {
+              stage: (
+                currentStage()?.label ?? t('computers.computerStarting')
+              ).toLowerCase(),
+              elapsed: elapsed() ?? '0:00',
+            })}
+          </p>
+          <p class="text-sm text-ink-muted">
+            {t('computers.setupContinuesInBackground')}
+          </p>
           <p class="text-sm text-ink-muted">
             {t('computers.claudeSharedAccount')}
           </p>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer>
-          <Button type="button" variant="ghost" onClick={useCreditsInstead}>
-            {t('computers.claudeUseCreditsInstead')}
+          <Button type="button" variant="ghost" onClick={props.onClose}>
+            {t('common.close')}
           </Button>
-          <Button type="button" variant="primary" disabled>
-            {t('computers.openClaudeSignIn')}
+          <Button type="button" variant="secondary" onClick={useCreditsInstead}>
+            {t('computers.claudeUseCreditsInstead')}
           </Button>
         </ActionDialogShell.Footer>
       </Match>
@@ -370,6 +446,11 @@ export function ComputerSetupSteps(props: {
                   })}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
+          <Show when={!done()}>
+            <p class="text-sm text-ink-muted">
+              {t('computers.setupContinuesInBackground')}
+            </p>
+          </Show>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer>
           <Button type="button" variant="ghost" onClick={props.onClose}>
@@ -383,6 +464,9 @@ export function ComputerSetupSteps(props: {
           >
             {t('computers.tryIt')}
           </Button>
+          <Show when={!done()}>
+            <DisabledReason>{t('computers.tryItAfterSetup')}</DisabledReason>
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
     </Switch>
