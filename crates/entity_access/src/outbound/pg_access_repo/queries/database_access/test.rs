@@ -140,19 +140,10 @@ async fn core_storage_does_not_gain_database_access_through_a_form(pool: PgPool)
     );
     #[cfg(feature = "explain_binary")]
     assert!(
-        explain_database_access(
-            &pool,
-            &database,
-            &crate::outbound::pg_access_repo::queries::get_user_source_ids(
-                &pool,
-                Some(&user(MEMBER))
-            )
+        explain_database_access(&pool, &database, &user(MEMBER))
             .await
             .unwrap()
-        )
-        .await
-        .unwrap()
-        .is_empty()
+            .is_empty()
     );
 }
 

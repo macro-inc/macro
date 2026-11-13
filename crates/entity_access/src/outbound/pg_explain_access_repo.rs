@@ -56,156 +56,111 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
         match entity_type {
             EntityType::Document => {
                 let document_id = parse_uuid(entity_id, "Invalid document ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::document_access::explain_document_access(
                     &self.pool,
                     &document_id,
-                    &source_ids,
-                    Some(user_id),
+                    user_id,
                 )
                 .await?)
             }
             EntityType::Chat => {
                 let chat_id = parse_uuid(entity_id, "Invalid chat ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(
-                    queries::chat_access::explain_chat_access(&self.pool, &chat_id, &source_ids)
+                    queries::chat_access::explain_chat_access(&self.pool, &chat_id, user_id)
                         .await?,
                 )
             }
             EntityType::Project => {
                 let project_id = parse_uuid(entity_id, "Invalid project ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::project_access::explain_project_access(
                     &self.pool,
                     &project_id,
-                    &source_ids,
+                    user_id,
                 )
                 .await?)
             }
             EntityType::EmailThread => {
                 let thread_id = parse_uuid(entity_id, "Invalid thread ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
-                Ok(queries::thread_access::explain_thread_access(
-                    &self.pool,
-                    &thread_id,
-                    &source_ids,
-                    Some(user_id),
+                Ok(
+                    queries::thread_access::explain_thread_access(&self.pool, &thread_id, user_id)
+                        .await?,
                 )
-                .await?)
             }
             EntityType::Call => {
                 let call_id = parse_uuid(entity_id, "Invalid call ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(
-                    queries::call_access::explain_call_access(&self.pool, &call_id, &source_ids)
+                    queries::call_access::explain_call_access(&self.pool, &call_id, user_id)
                         .await?,
                 )
             }
             EntityType::AgentSession => {
                 let session_id = parse_uuid(entity_id, "Invalid agent session ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::agent_session_access::explain_agent_session_access(
                     &self.pool,
                     &session_id,
-                    &source_ids,
+                    user_id,
                 )
                 .await?)
             }
             EntityType::Database => {
                 let database_id = parse_uuid(entity_id, "Invalid database ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::database_access::explain_database_access(
                     &self.pool,
                     &database_id,
-                    &source_ids,
+                    user_id,
                 )
                 .await?)
             }
             EntityType::CrmPipeline => {
                 let pipeline_id = parse_uuid(entity_id, "Invalid pipeline ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::list_entity_access_grants(
                     &self.pool,
                     &pipeline_id,
                     EntityType::CrmPipeline,
-                    &source_ids,
+                    user_id,
                 )
                 .await?)
             }
             EntityType::Harness => {
                 let id = parse_uuid(entity_id, "Invalid harness ID")?;
-                let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::list_entity_access_grants(
                     &self.pool,
                     &id,
                     EntityType::Harness,
-                    &sources,
+                    user_id,
                 )
                 .await?)
             }
             EntityType::ExternalChat => {
                 let id = parse_uuid(entity_id, "Invalid group ID")?;
-                let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::list_entity_access_grants(
                     &self.pool,
                     &id,
                     EntityType::ExternalChat,
-                    &sources,
+                    user_id,
                 )
                 .await?)
             }
             EntityType::Form => {
                 let form_id = parse_uuid(entity_id, "Invalid form ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(
-                    queries::form_access::explain_form_access(&self.pool, &form_id, &source_ids)
+                    queries::form_access::explain_form_access(&self.pool, &form_id, user_id)
                         .await?,
                 )
             }
             EntityType::DatabaseRow => {
                 let row_id = parse_uuid(entity_id, "Invalid database row ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::database_row_access::explain_database_row_access(
-                    &self.pool,
-                    &row_id,
-                    &source_ids,
+                    &self.pool, &row_id, user_id,
                 )
                 .await?)
             }
             EntityType::Initiative => {
                 let initiative_id = parse_uuid(entity_id, "Invalid initiative ID format")?;
-                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
-                    .await
-                    .map_err(anyhow_access_error)?;
                 Ok(queries::initiative_access::explain_initiative_access(
                     &self.pool,
                     &initiative_id,
-                    &source_ids,
+                    user_id,
                 )
                 .await?)
             }

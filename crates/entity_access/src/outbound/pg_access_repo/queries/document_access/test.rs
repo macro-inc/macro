@@ -604,12 +604,10 @@ async fn explain_lists_public_and_entity_access_and_matches_effective(
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("comment"))
             .await?;
     insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::Edit).await?;
-    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
     let requester = user(REQUESTER);
 
     let access = get_document_access(&pool, &document_id, Viewer::User(REQUESTER)).await?;
-    let grants =
-        explain_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let grants = explain_document_access(&pool, &document_id, &requester).await?;
     let explanation = crate::domain::models::AccessExplanation::from_grants(
         requester,
         crate::domain::models::Entity {
@@ -647,13 +645,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     insert_thread_entity_access(&pool, thread_id, OTHER_USER, AccessLevel::Edit).await;
 
     let owner = user(INBOX_OWNER);
-    let owner_grants = explain_document_access(
-        &pool,
-        &document_id,
-        &SourceIds(vec![INBOX_OWNER.to_string()]),
-        Some(&*owner),
-    )
-    .await?;
+    let owner_grants = explain_document_access(&pool, &document_id, &owner).await?;
     assert!(owner_grants.iter().any(|grant| matches!(
         grant,
         crate::domain::models::AccessGrant::EmailAttachmentThread {
@@ -663,13 +655,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     )));
 
     let delegate = user(DELEGATE);
-    let delegate_grants = explain_document_access(
-        &pool,
-        &document_id,
-        &SourceIds(vec![DELEGATE.to_string()]),
-        Some(&*delegate),
-    )
-    .await?;
+    let delegate_grants = explain_document_access(&pool, &document_id, &delegate).await?;
     assert!(delegate_grants.iter().any(|grant| matches!(
         grant,
         crate::domain::models::AccessGrant::EmailAttachmentThread {
@@ -679,13 +665,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     )));
 
     let other = user(OTHER_USER);
-    let other_grants = explain_document_access(
-        &pool,
-        &document_id,
-        &SourceIds(vec![OTHER_USER.to_string()]),
-        Some(&*other),
-    )
-    .await?;
+    let other_grants = explain_document_access(&pool, &document_id, &other).await?;
     assert!(other_grants.iter().any(|grant| matches!(
         grant,
         crate::domain::models::AccessGrant::EmailAttachmentThread {
@@ -706,11 +686,9 @@ async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<
         insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("comment")).await?;
     add_member_to_team(&pool, TEAMMATE, owner_team_id).await?;
     let requester = user(TEAMMATE);
-    let source_ids = SourceIds(vec![owner_team_id.to_string(), TEAMMATE.to_string()]);
 
     let access = get_document_access(&pool, &document_id, Viewer::User(TEAMMATE)).await?;
-    let grants =
-        explain_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let grants = explain_document_access(&pool, &document_id, &requester).await?;
     let explanation = crate::domain::models::AccessExplanation::from_grants(
         requester,
         crate::domain::models::Entity {

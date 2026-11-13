@@ -1,8 +1,6 @@
 //! Query for database access level.
 
 #[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
-#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
@@ -151,17 +149,14 @@ pub(crate) async fn list_database_access(
 /// then a [`AccessGrant::ViaForm`] for each live form over it the caller
 /// edits, in form id order.
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_database_access(
     pool: &PgPool,
     database_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants =
-        list_entity_access_grants(pool, database_id, EntityType::Database, source_ids).await?;
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
+        list_entity_access_grants(pool, database_id, EntityType::Database, user_id).await?;
     let form_ids = sqlx::query_scalar!(
         r#"
         SELECT DISTINCT f.id
@@ -170,7 +165,7 @@ pub async fn explain_database_access(
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, NULL))
         AND (
             ea.access_level IN ('edit', 'owner')
             OR (ea.access_level = 'view' AND f.responses_visible)
@@ -178,7 +173,7 @@ pub async fn explain_database_access(
         ORDER BY f.id
         "#,
         database_id,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

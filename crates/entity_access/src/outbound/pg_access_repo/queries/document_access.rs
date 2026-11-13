@@ -4,8 +4,6 @@
 mod test;
 
 #[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
-#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
@@ -209,22 +207,16 @@ pub(crate) async fn get_document_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_document_access(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants =
-        list_entity_access_grants(pool, document_id, EntityType::Document, source_ids).await?;
-    grants.extend(explain_document_link_shares(pool, document_id, source_ids).await?);
-
-    if let Some(user_id) = user_id {
-        grants.extend(
-            explain_document_email_attachments(pool, document_id, source_ids, user_id).await?,
-        );
-    }
+        list_entity_access_grants(pool, document_id, EntityType::Document, user_id).await?;
+    grants.extend(explain_document_link_shares(pool, document_id, user_id).await?);
+    grants.extend(explain_document_email_attachments(pool, document_id, user_id).await?);
 
     Ok(grants)
 }
@@ -233,7 +225,7 @@ pub async fn explain_document_access(
 async fn explain_document_link_shares(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let document_id_str = document_id.to_string();
     let mut grants = Vec::new();
@@ -260,10 +252,6 @@ async fn explain_document_link_shares(
             .map(|access_level| AccessGrant::PublicLink { access_level }),
     );
 
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
-
     let team_rows = sqlx::query!(
         r#"
         SELECT
@@ -275,13 +263,13 @@ async fn explain_document_link_shares(
         JOIN "SharePermission" share_permission
           ON share_permission.id = document_permission."sharePermissionId"
         JOIN owner_team(document.owner) owner_team
-          ON owner_team.team_id::text = ANY($2)
+          ON EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, NULL))
         WHERE document.id = $1
           AND share_permission."linkShare" = 'TEAM'
           AND share_permission."linkShareAccessLevel" IS NOT NULL
         "#,
         &document_id_str,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;
@@ -298,7 +286,6 @@ async fn explain_document_link_shares(
 async fn explain_document_email_attachments(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
     user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let user_id_str = user_id.as_ref();
@@ -307,12 +294,12 @@ async fn explain_document_email_attachments(
         SELECT
             t.id AS thread_id,
             CASE
-                WHEN l.macro_id = $3 THEN 'inbox_owner'
+                WHEN l.macro_id = $2 THEN 'inbox_owner'
                 WHEN EXISTS (
                     SELECT 1
                     FROM macro_user_links mul
                     WHERE mul.link_id = l.id
-                      AND mul.primary_macro_id = $3
+                      AND mul.primary_macro_id = $2
                 ) THEN 'inbox_delegate'
                 ELSE 'thread_grant'
             END AS "reason!"
@@ -323,24 +310,23 @@ async fn explain_document_email_attachments(
         JOIN email_links l ON l.id = t.link_id
         WHERE de.document_id = $1
           AND (
-              l.macro_id = $3
+              l.macro_id = $2
               OR EXISTS (
                   SELECT 1
                   FROM macro_user_links mul
                   WHERE mul.link_id = l.id
-                    AND mul.primary_macro_id = $3
+                    AND mul.primary_macro_id = $2
               )
               OR EXISTS (
                   SELECT 1
                   FROM entity_access thread_access
                   WHERE thread_access.entity_id = t.id
                     AND thread_access.entity_type = 'email_thread'
-                    AND thread_access.source_id = ANY($2)
+                    AND EXISTS (SELECT FROM entity_access_source_matches(thread_access.source_id, $2, NULL))
               )
           )
         "#,
         &document_id.to_string(),
-        &source_ids.0,
         user_id_str,
     )
     .fetch_all(pool)

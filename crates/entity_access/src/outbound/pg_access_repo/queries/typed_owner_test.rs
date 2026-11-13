@@ -1,5 +1,5 @@
 //! All typed TEAM-link query implementations must agree, including explanations.
-use super::{SourceIds, Viewer, chat_access, document_access, project_access};
+use super::{Viewer, chat_access, document_access, project_access};
 use crate::domain::models::AccessLevel;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -115,6 +115,7 @@ fn fixture_entity_id(suffix: u8) -> Uuid {
 async fn typed_owner_team_links_allow_only_the_resolved_audience(
     pool: PgPool,
 ) -> anyhow::Result<()> {
+    #[cfg(feature = "explain_binary")]
     let team = Uuid::parse_str("90000000-0000-0000-0000-000000000011")?;
     insert_viewers(&pool).await?;
     for (suffix, has_team) in [
@@ -127,28 +128,12 @@ async fn typed_owner_team_links_allow_only_the_resolved_audience(
         (37, false),
     ] {
         let id = fixture_entity_id(suffix);
-        for (viewer, sources, matches_team) in [
-            (
-                Viewer::User(OWNER_TEAM_MEMBER),
-                vec![OWNER_TEAM_MEMBER.to_string(), team.to_string()],
-                true,
-            ),
-            (
-                Viewer::User(OTHER_TEAM_OWNER),
-                vec![
-                    OTHER_TEAM_OWNER.to_string(),
-                    "90000000-0000-0000-0000-000000000012".to_string(),
-                ],
-                false,
-            ),
-            (
-                Viewer::User(TEAMLESS_VIEWER),
-                vec![TEAMLESS_VIEWER.to_string()],
-                false,
-            ),
-            (Viewer::Anonymous, vec![], false),
+        for (viewer, matches_team) in [
+            (Viewer::User(OWNER_TEAM_MEMBER), true),
+            (Viewer::User(OTHER_TEAM_OWNER), false),
+            (Viewer::User(TEAMLESS_VIEWER), false),
+            (Viewer::Anonymous, false),
         ] {
-            let sources = SourceIds(sources);
             let expected = (has_team && matches_team).then_some(AccessLevel::Comment);
             assert_eq!(
                 document_access::get_document_access(&pool, &id, viewer).await?,
@@ -176,12 +161,20 @@ async fn typed_owner_team_links_allow_only_the_resolved_audience(
                 "chat {suffix}"
             );
 
+            // Explanations are for signed-in users only.
             #[cfg(feature = "explain_binary")]
-            for grants in [
-                document_access::explain_document_access(&pool, &id, &sources, None).await?,
-                project_access::explain_project_access(&pool, &id, &sources).await?,
-                chat_access::explain_chat_access(&pool, &id, &sources).await?,
-            ] {
+            for grants in match viewer.user_id() {
+                Some(user_id) => {
+                    let user_id =
+                        macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_string())?;
+                    vec![
+                        document_access::explain_document_access(&pool, &id, &user_id).await?,
+                        project_access::explain_project_access(&pool, &id, &user_id).await?,
+                        chat_access::explain_chat_access(&pool, &id, &user_id).await?,
+                    ]
+                }
+                None => Vec::new(),
+            } {
                 use crate::domain::models::AccessGrant;
                 let expected = expected.map(|access_level| AccessGrant::TeamLink {
                     access_level,

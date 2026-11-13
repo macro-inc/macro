@@ -2,9 +2,9 @@
 
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::AccessGrant;
-#[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -162,14 +162,14 @@ pub async fn get_database_row_database(
 
 /// List the grants behind a database row's access: those of its database.
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_database_row_access(
     pool: &PgPool,
     row_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let Some(database_id) = get_database_row_database(pool, row_id).await? else {
         return Ok(vec![]);
     };
-    super::database_access::explain_database_access(pool, &database_id, source_ids).await
+    super::database_access::explain_database_access(pool, &database_id, user_id).await
 }

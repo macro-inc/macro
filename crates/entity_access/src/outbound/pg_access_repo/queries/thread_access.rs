@@ -3,8 +3,6 @@
 #[cfg(test)]
 mod test;
 
-#[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
 #[cfg(feature = "explain_binary")]
 use crate::{
@@ -277,26 +275,20 @@ pub(crate) async fn get_thread_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_thread_access(
     pool: &PgPool,
     thread_id: &Uuid,
-    source_ids: &SourceIds,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants = Vec::new();
-    if let Some(user_id) = user_id {
-        grants.extend(explain_thread_inbox(pool, thread_id, user_id).await?);
-        grants.extend(explain_thread_crm(pool, thread_id, user_id).await?);
-    }
-
+    grants.extend(explain_thread_inbox(pool, thread_id, user_id).await?);
+    grants.extend(explain_thread_crm(pool, thread_id, user_id).await?);
     grants.extend(
-        list_entity_access_grants(pool, thread_id, EntityType::EmailThread, source_ids).await?,
+        list_entity_access_grants(pool, thread_id, EntityType::EmailThread, user_id).await?,
     );
-    grants.extend(explain_thread_link_shares(pool, thread_id, source_ids).await?);
-    if !source_ids.0.is_empty() {
-        grants.extend(explain_thread_containing_project(pool, thread_id, source_ids).await?);
-    }
+    grants.extend(explain_thread_link_shares(pool, thread_id, user_id).await?);
+    grants.extend(explain_thread_containing_project(pool, thread_id, user_id).await?);
 
     Ok(grants)
 }
@@ -349,7 +341,7 @@ async fn explain_thread_inbox(
 async fn explain_thread_link_shares(
     pool: &PgPool,
     thread_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let thread_id_str = thread_id.to_string();
     let mut grants = Vec::new();
@@ -375,10 +367,6 @@ async fn explain_thread_link_shares(
             .map(|access_level| AccessGrant::PublicLink { access_level }),
     );
 
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
-
     let team_rows = sqlx::query!(
         r#"
         SELECT
@@ -386,7 +374,7 @@ async fn explain_thread_link_shares(
             owner_tu.team_id AS "owner_team_id!"
         FROM "SharePermission" sp
         JOIN team_user owner_tu
-          ON owner_tu.team_id::text = ANY($2)
+          ON EXISTS (SELECT FROM entity_access_source_matches(owner_tu.team_id::text, $2, NULL))
         WHERE sp."linkShareAccessLevel" IS NOT NULL
           AND sp."linkShare" = 'TEAM'
           AND sp.id IN (
@@ -401,7 +389,7 @@ async fn explain_thread_link_shares(
           )
         "#,
         &thread_id_str,
-        &source_ids.0,
+        user_id.as_ref(),
         thread_id,
     )
     .fetch_all(pool)
@@ -418,7 +406,7 @@ async fn explain_thread_link_shares(
 async fn explain_thread_containing_project(
     pool: &PgPool,
     thread_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let rows = sqlx::query!(
         r#"
@@ -427,11 +415,11 @@ async fn explain_thread_containing_project(
         JOIN entity_access pea
           ON pea.entity_id::text = t.project_id
          AND pea.entity_type = 'project'
-         AND pea.source_id = ANY($2)
+         AND EXISTS (SELECT FROM entity_access_source_matches(pea.source_id, $2, NULL))
         WHERE t.id = $1::uuid
         "#,
         thread_id,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

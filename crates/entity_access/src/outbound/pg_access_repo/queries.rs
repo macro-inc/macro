@@ -296,17 +296,13 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(skip(pool, source_ids), err)]
+#[tracing::instrument(skip(pool, user_id), err)]
 pub async fn list_entity_access_grants(
     pool: &Pool<Postgres>,
     entity_id: &uuid::Uuid,
     entity_type: EntityType,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
-    if source_ids.0.is_empty() {
-        return Ok(vec![]);
-    }
-
     let rows = sqlx::query!(
         r#"
         SELECT
@@ -317,11 +313,11 @@ pub async fn list_entity_access_grants(
         FROM entity_access
         WHERE entity_id = $1
           AND entity_type = $2
-          AND source_id = ANY($3)
+          AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $3, NULL))
         "#,
         entity_id,
         entity_type.as_ref(),
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

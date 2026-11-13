@@ -4,12 +4,12 @@
 mod test;
 
 #[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
-#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -92,13 +92,13 @@ pub(crate) async fn get_call_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_call_access(
     pool: &PgPool,
     call_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
-    let mut grants = list_entity_access_grants(pool, call_id, EntityType::Call, source_ids).await?;
+    let mut grants = list_entity_access_grants(pool, call_id, EntityType::Call, user_id).await?;
 
     let public_levels = sqlx::query_scalar!(
         r#"
@@ -121,10 +121,6 @@ pub async fn explain_call_access(
             .map(|access_level| AccessGrant::PublicLink { access_level }),
     );
 
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
-
     let team_rows = sqlx::query!(
         r#"
         SELECT
@@ -136,12 +132,12 @@ pub async fn explain_call_access(
         ) call_item ON call_item.share_permission_id = share_permission.id
         JOIN team_user owner_team
           ON owner_team.user_id = call_item.created_by
-         AND owner_team.team_id::text = ANY($2)
+         AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, NULL))
         WHERE share_permission."linkShare" = 'TEAM'
           AND share_permission."linkShareAccessLevel" IS NOT NULL
         "#,
         call_id,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

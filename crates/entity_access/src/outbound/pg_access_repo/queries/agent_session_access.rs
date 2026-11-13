@@ -1,8 +1,6 @@
 //! Query for agent session access level.
 
 #[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
-#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
@@ -110,14 +108,14 @@ pub(crate) async fn get_agent_session_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_agent_session_access(
     pool: &PgPool,
     agent_session_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants =
-        list_entity_access_grants(pool, agent_session_id, EntityType::AgentSession, source_ids)
+        list_entity_access_grants(pool, agent_session_id, EntityType::AgentSession, user_id)
             .await?;
     let links = sqlx::query!(
         r#"
@@ -131,11 +129,11 @@ pub async fn explain_agent_session_access(
           AND sp."linkShareAccessLevel" IS NOT NULL
           AND (
               sp."linkShare" = 'PUBLIC'
-              OR (sp."linkShare" = 'TEAM' AND owner_team.team_id::text = ANY($2))
+              OR (sp."linkShare" = 'TEAM' AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, NULL)))
           )
         "#,
         agent_session_id,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

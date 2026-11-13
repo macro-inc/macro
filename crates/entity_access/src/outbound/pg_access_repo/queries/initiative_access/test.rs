@@ -169,16 +169,6 @@ async fn grant(
 }
 
 #[cfg(feature = "explain_binary")]
-fn sources(ids: &[&str]) -> SourceIds {
-    SourceIds(ids.iter().map(ToString::to_string).collect())
-}
-
-#[cfg(feature = "explain_binary")]
-fn anonymous() -> SourceIds {
-    SourceIds(Vec::new())
-}
-
-#[cfg(feature = "explain_binary")]
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }
@@ -380,8 +370,8 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
         insert_initiative(&pool, OWNER, LinkShare::Team(AccessLevel::View)).await?;
     grant(&pool, team_initiative, GRANTEE, "user", AccessLevel::Edit).await?;
 
-    let src = sources(&[GRANTEE, &OWNER_TEAM.to_string()]);
-    let grants = explain_initiative_access(&pool, &team_initiative, &src).await?;
+    user_in_team(&pool, GRANTEE, OWNER_TEAM).await?;
+    let grants = explain_initiative_access(&pool, &team_initiative, &user(GRANTEE)).await?;
     let explained = AccessExplanation::from_grants(
         user(GRANTEE),
         Entity {
@@ -390,7 +380,6 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
         },
         grants.clone(),
     );
-    user_in_team(&pool, GRANTEE, OWNER_TEAM).await?;
     let queried = get_initiative_access(&pool, &team_initiative, Viewer::User(GRANTEE)).await?;
 
     assert!(grants.iter().any(|grant| matches!(
@@ -418,7 +407,8 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
 
     let public_initiative =
         insert_initiative(&pool, OWNER, LinkShare::Public(AccessLevel::Comment)).await?;
-    let public_grants = explain_initiative_access(&pool, &public_initiative, &anonymous()).await?;
+    let public_grants =
+        explain_initiative_access(&pool, &public_initiative, &user(STRANGER)).await?;
     assert_eq!(
         public_grants,
         vec![AccessGrant::PublicLink {

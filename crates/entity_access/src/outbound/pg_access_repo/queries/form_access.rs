@@ -1,8 +1,6 @@
 //! Query for form access level.
 
 #[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
-#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
@@ -88,13 +86,13 @@ pub(crate) async fn list_form_access(
 /// List the grants behind a form's access: its `entity_access` rows, and the
 /// public audience when it applies.
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_form_access(
     pool: &PgPool,
     form_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
-    let mut grants = list_entity_access_grants(pool, form_id, EntityType::Form, source_ids).await?;
+    let mut grants = list_entity_access_grants(pool, form_id, EntityType::Form, user_id).await?;
     let is_public = sqlx::query_scalar!(
         r#"
         SELECT EXISTS (

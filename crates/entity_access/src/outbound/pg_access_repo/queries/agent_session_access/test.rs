@@ -121,7 +121,7 @@ async fn session_links_preserve_stronger_grants_and_revoke_immediately(pool: PgP
     )
 )]
 async fn explanation_includes_public_and_team_links(pool: PgPool) {
-    let grants = explain_agent_session_access(&pool, &PUBLIC_SESSION, &SourceIds(vec![]))
+    let grants = explain_agent_session_access(&pool, &PUBLIC_SESSION, &user(OTHER_TEAM))
         .await
         .unwrap();
     assert!(matches!(
@@ -130,13 +130,9 @@ async fn explanation_includes_public_and_team_links(pool: PgPool) {
             access_level: AccessLevel::View
         }]
     ));
-    let grants = explain_agent_session_access(
-        &pool,
-        &TEAM_SESSION,
-        &SourceIds(vec![OWNER_TEAM.to_string()]),
-    )
-    .await
-    .unwrap();
+    let grants = explain_agent_session_access(&pool, &TEAM_SESSION, &user(SAME_TEAM))
+        .await
+        .unwrap();
     assert!(
         matches!(grants.as_slice(), [AccessGrant::TeamLink { access_level: AccessLevel::Comment, owner_team_id }] if *owner_team_id == uuid::Uuid::parse_str(OWNER_TEAM).unwrap())
     );

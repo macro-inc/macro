@@ -4,12 +4,12 @@
 mod test;
 
 #[cfg(feature = "explain_binary")]
-use crate::outbound::pg_access_repo::queries::SourceIds;
-#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -93,13 +93,13 @@ pub(crate) async fn get_chat_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_chat_access(
     pool: &PgPool,
     chat_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
-    let mut grants = list_entity_access_grants(pool, chat_id, EntityType::Chat, source_ids).await?;
+    let mut grants = list_entity_access_grants(pool, chat_id, EntityType::Chat, user_id).await?;
     let chat_id_str = chat_id.to_string();
 
     let public_levels = sqlx::query_scalar!(
@@ -122,10 +122,6 @@ pub async fn explain_chat_access(
             .map(|access_level| AccessGrant::PublicLink { access_level }),
     );
 
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
-
     let team_rows = sqlx::query!(
         r#"
         SELECT
@@ -135,13 +131,13 @@ pub async fn explain_chat_access(
         JOIN "ChatPermission" cp ON cp."sharePermissionId" = sp.id
         JOIN "Chat" c ON c.id = cp."chatId"
         JOIN owner_team(c."userId") owner_tu
-          ON owner_tu.team_id::text = ANY($2)
+          ON EXISTS (SELECT FROM entity_access_source_matches(owner_tu.team_id::text, $2, NULL))
         WHERE cp."chatId" = $1
           AND sp."linkShare" = 'TEAM'
           AND sp."linkShareAccessLevel" IS NOT NULL
         "#,
         &chat_id_str,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;
