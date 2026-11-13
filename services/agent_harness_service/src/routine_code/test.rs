@@ -817,11 +817,18 @@ fn an_import_line_gives_the_generated_names_it_takes() {
         generated_imports(
             "import type { DecisionRequest, type Choice as Picked } from '../../../generated/cognition/types.gen';"
         ),
-        ["DecisionRequest", "Choice"]
+        ["DecisionRequest"]
     );
     assert_eq!(
         generated_imports("import { a,\tb, } from \"../generated/x\""),
         ["a", "b"]
+    );
+    // An aliased name is one the SDK has its own class for.
+    assert!(
+        generated_imports(
+            "import type { CalendarEvent as CalendarEventRecord } from '../../generated/calendar/types.gen';"
+        )
+        .is_empty()
     );
     // Only the generated clients' types: the SDK's own come with its areas.
     assert!(generated_imports("import type { Macro } from '../../macro';").is_empty());

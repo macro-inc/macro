@@ -714,19 +714,23 @@ fn area_declarations(name: &str, index: &str) -> Vec<(&'static str, &'static str
 
 /// The names an `import` line takes from the SDK's generated clients, such
 /// as `DecisionRequest` from `import type { DecisionRequest } from
-/// '../../../generated/cognition/types.gen';`.
+/// '../../../generated/cognition/types.gen';`. A name imported under an alias
+/// is left out: the SDK renames it because one of its own classes has that
+/// name, so looking the name up would find the class.
 fn generated_imports(line: &str) -> Vec<String> {
     match import_line(line) {
-        Ok((_, (names, from))) if from.contains("/generated/") => {
-            names.into_iter().map(str::to_owned).collect()
-        }
+        Ok((_, (names, from))) if from.contains("/generated/") => names
+            .into_iter()
+            .filter(|(_, alias)| alias.is_none())
+            .map(|(name, _)| name.to_owned())
+            .collect(),
         _ => Vec::new(),
     }
 }
 
 /// `import [type] { A, type B as C } from '<path>'`: the names as their
-/// module declares them (`A`, `B`), and the path.
-fn import_line(line: &str) -> nom::IResult<&str, (Vec<&str>, &str)> {
+/// module declares them, each with its alias (`A`, `B` as `C`), and the path.
+fn import_line(line: &str) -> nom::IResult<&str, (Vec<(&str, Option<&str>)>, &str)> {
     use nom::Parser;
     use nom::branch::alt;
     use nom::bytes::complete::{tag, take_until, take_while1};
@@ -745,7 +749,7 @@ fn import_line(line: &str) -> nom::IResult<&str, (Vec<&str>, &str)> {
             identifier(),
         )),
     )
-        .map(|(_, name, _)| name);
+        .map(|(_, name, alias)| (name, alias));
     let names = delimited(
         (char('{'), multispace0),
         separated_list1((multispace0, char(','), multispace0), name),
