@@ -16,6 +16,10 @@ use ports::*;
 use sha2::{Digest, Sha256};
 
 const UNCERTAIN_WAIT: Duration = Duration::minutes(10);
+/// Submissions repeated because Outlook still held the draft unsent once
+/// `UNCERTAIN_WAIT` ran out. Bounds the copies a send Exchange holds back
+/// longer than that could cause.
+const MAX_RESUBMISSIONS: u8 = 1;
 const UPLOAD_RANGE_BYTES: usize = 10 * 320 * 1024;
 const SMALL_ATTACHMENT_BYTES: u64 = 3_000_000;
 
@@ -125,6 +129,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 completed_files: 0,
                 completed_removals: 0,
                 transfer: None,
+                resubmissions: 0,
             },
         };
         match checkpoint.stage {
@@ -555,18 +560,62 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         lease: &DraftLease,
         checkpoint: &mut DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        let prior = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
+        let prior = checkpoint.draft.clone().ok_or(MailboxError::Persistence)?;
         let found = self.provider.get_draft(lease.mailbox, &prior.id).await?;
-        if let Some(draft) = found
+        if let Some(draft) = &found
             && !draft.is_draft
         {
-            checkpoint.draft = Some(draft);
+            checkpoint.draft = found;
             return self.repo.confirm_sent(lease, checkpoint).await;
         }
-        if Utc::now() - checkpoint.stage_started_at >= UNCERTAIN_WAIT {
+        if Utc::now() - checkpoint.stage_started_at < UNCERTAIN_WAIT {
+            return self.repo.release_draft(lease, 10).await;
+        }
+
+        // Sending moves the draft to Sent Items, which changes it. One that
+        // Outlook still holds as the same unsent draft long after the
+        // submission was never sent, so it is submitted again, a bounded
+        // number of times. Anything else may have been sent and stays unknown.
+        let still_unsent = found.as_ref().is_some_and(|draft| {
+            draft.is_draft && draft.version.is_some() && draft.version == prior.version
+        });
+        let resubmit = still_unsent
+            && !lease.delete_requested
+            && lease.revision == checkpoint.revision
+            && checkpoint.resubmissions < MAX_RESUBMISSIONS;
+        if !resubmit {
+            tracing::warn!(
+                event = "outlook.draft.send_unknown",
+                message_id = %lease.message_id,
+                still_unsent,
+                resubmissions = checkpoint.resubmissions,
+                "draft send outcome unknown after the confirmation wait"
+            );
             return self.repo.fail_draft(lease, DraftFailure::SendUnknown).await;
         }
-        self.repo.release_draft(lease, 10).await
+        checkpoint.resubmissions += 1;
+        tracing::info!(
+            event = "outlook.draft.resubmit",
+            message_id = %lease.message_id,
+            resubmissions = checkpoint.resubmissions,
+            "draft still unsent after the confirmation wait; submitting it again"
+        );
+        checkpoint.advance(DraftStage::Submitting);
+        // Recorded before the call, so a crash cannot repeat it uncounted.
+        self.repo.checkpoint_draft(lease, checkpoint).await?;
+        match self.provider.submit_draft(lease.mailbox, &prior.id).await {
+            Ok(SubmissionOutcome::Accepted | SubmissionOutcome::Unknown) => {
+                checkpoint.advance(DraftStage::Confirming);
+                self.repo.checkpoint_draft(lease, checkpoint).await?;
+                self.repo.release_draft(lease, 5).await
+            }
+            Err(error) if definitively_rejected(&error) => {
+                self.repo
+                    .fail_draft(lease, DraftFailure::SendRejected)
+                    .await
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     async fn delete(

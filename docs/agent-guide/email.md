@@ -1187,7 +1187,9 @@ Switching an existing draft's sending inbox while offline must send from the
 selected inbox after reconnect, even when the intermediate draft save is still
 queued. Uploaded files remain attached. Forwarded and imported provider attachments retain their source-inbox access checks.
 Provider-bound drafts use the explicit inbox-transfer flow. Accepted Outlook
-sends remain owned by its provider coordinator; ambiguity is reconciled there.
+sends remain owned by its provider coordinator; ambiguity is reconciled there:
+a draft Outlook still holds unsent and unchanged after the confirmation wait is
+submitted once more, and any other unresolved outcome is send-unknown.
 
 Verify: queue a new message and a reply offline, close and reopen the app, and
 check their persistent status and read-only content. Cancel one before reconnect
