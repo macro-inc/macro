@@ -1,4 +1,27 @@
-use super::export_endpoint;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+
+use xtask_local_telemetry::{ForwardingError, Paths, Switch};
+
+use super::{Forwarder, export_endpoint, is_instance_network};
+
+const TOKEN: &str = "secret-0123456789abcdef0123456789abcdef";
+
+fn settings(dir: &Path, text: &str) -> Paths {
+    let path = dir.join("local-telemetry.toml");
+    std::fs::write(&path, text).expect("write settings");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+    Paths::at(path, dir.join("buffer"))
+}
+
+fn on(dir: &Path) -> Paths {
+    settings(
+        dir,
+        &format!(
+            "endpoint = \"https://otlp.example.com\"\ntoken = \"{TOKEN}\"\nservices = true\nmachine = \"build-box\"\n"
+        ),
+    )
+}
 
 #[test]
 fn reads_the_lgtm_copy_endpoint_from_inspect_output() {
@@ -15,4 +38,72 @@ fn an_unset_or_empty_copy_endpoint_is_empty() {
         export_endpoint("OTEL_EXPORTER_OTLP_ENDPOINT_TRACES=http://elsewhere\n"),
         ""
     );
+}
+
+#[test]
+fn a_run_without_the_setting_or_a_forwarder_does_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let missing = Paths::at(dir.path().join("absent.toml"), dir.path().join("buffer"));
+    let (forwarder, problem) = Forwarder::from_paths(&missing);
+    assert!(forwarder.is_none() && problem.is_none());
+
+    let plain = settings(
+        dir.path(),
+        &format!("endpoint = \"https://otlp.example.com\"\ntoken = \"{TOKEN}\"\n"),
+    );
+    let (forwarder, problem) = Forwarder::from_paths(&plain);
+    assert!(forwarder.is_none() && problem.is_none());
+
+    // The recorder reports a file it can't read; this stays quiet.
+    let unreadable = settings(dir.path(), "services = \"yes\"\n");
+    let (forwarder, problem) = Forwarder::from_paths(&unreadable);
+    assert!(forwarder.is_none() && problem.is_none());
+}
+
+#[test]
+fn services_turn_the_forwarder_on() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (forwarder, problem) = Forwarder::from_paths(&on(dir.path()));
+    let forwarder = forwarder.expect("on");
+    assert!(problem.is_none());
+    assert_eq!(forwarder.lgtm_endpoint(), super::FORWARDER_URL);
+}
+
+#[test]
+fn a_forwarder_left_on_is_turned_off_by_the_settings_or_the_switch() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut paths = on(dir.path());
+    std::fs::create_dir_all(paths.forwarder_dir()).expect("mkdir");
+
+    paths.switch = Switch::Off;
+    let (forwarder, _) = Forwarder::from_paths(&paths);
+    assert_eq!(forwarder.expect("to turn off").lgtm_endpoint(), "");
+
+    let off = settings(
+        dir.path(),
+        &format!("endpoint = \"https://otlp.example.com\"\ntoken = \"{TOKEN}\"\n"),
+    );
+    let (forwarder, _) = Forwarder::from_paths(&off);
+    assert_eq!(forwarder.expect("to turn off").lgtm_endpoint(), "");
+}
+
+#[test]
+fn services_without_a_token_are_reported_and_count_as_off() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = settings(
+        dir.path(),
+        "endpoint = \"https://otlp.example.com\"\nservices = true\n",
+    );
+    let (forwarder, problem) = Forwarder::from_paths(&paths);
+    assert!(forwarder.is_none());
+    assert!(matches!(problem, Some(ForwardingError::NoToken { .. })));
+}
+
+#[test]
+fn instance_networks_are_the_services_networks_of_macro_projects() {
+    assert!(is_instance_network("macro_services"));
+    assert!(is_instance_network("macro-channels-b_services"));
+    assert!(!is_instance_network("macro-channels-b_auth-internal"));
+    assert!(!is_instance_network("bridge"));
+    assert!(!is_instance_network("other_services"));
 }

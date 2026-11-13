@@ -677,7 +677,7 @@ services:
       # A hash of the config, so a changed config recreates the container.
       macro.forwarder.revision: ${MACRO_GRAFANA_FORWARDER_REVISION:-}
     volumes:
-      - ${MACRO_GRAFANA_FORWARDER_DIR:-./docker/grafana-forwarder}:/etc/macro-forwarder:ro
+      - ${MACRO_GRAFANA_FORWARDER_DIR:-./docker/grafana-forwarder}:/etc/macro-forwarder:ro,Z
     logging:
       driver: json-file
       options:

@@ -37,7 +37,8 @@ otelcol.processor.memory_limiter "forwarder" {
 
 // The lgtm container's own components: its collector scrapes its own metrics
 // every second (most of the metric volume), and its Tempo and Pyroscope trace
-// themselves.
+// themselves. Debug and trace logs stay local too: Loki's ingestion rate is
+// shared with dev.
 otelcol.processor.filter "forwarder" {
   error_mode = "ignore"
   traces {
@@ -47,7 +48,10 @@ otelcol.processor.filter "forwarder" {
     metric = [`IsMatch(resource.attributes["service.name"], "^(otelcol-contrib|opentelemetry-collector|grafana|loki.*|tempo.*|pyroscope.*|prometheus)$")`]
   }
   logs {
-    log_record = [`IsMatch(resource.attributes["service.name"], "^(otelcol-contrib|opentelemetry-collector|grafana|loki.*|tempo.*|pyroscope.*|prometheus)$")`]
+    log_record = [
+      `IsMatch(resource.attributes["service.name"], "^(otelcol-contrib|opentelemetry-collector|grafana|loki.*|tempo.*|pyroscope.*|prometheus)$")`,
+      `severity_number != SEVERITY_NUMBER_UNSPECIFIED and severity_number < SEVERITY_NUMBER_INFO`,
+    ]
   }
   output {
     logs = [otelcol.processor.transform.forwarder.input]
@@ -56,10 +60,11 @@ otelcol.processor.filter "forwarder" {
   }
 }
 
-// Every trace with an error, and a tenth of the rest. The decision hashes the
-// trace id, so spans that arrive late follow their trace.
+// Every trace with an error in its first 30 seconds, and a tenth of the rest.
+// The tenth hashes the trace id, so a trace's spans that arrive after the
+// decision follow it.
 otelcol.processor.tail_sampling "forwarder" {
-  decision_wait = "10s"
+  decision_wait = "30s"
   num_traces = 20000
   policy {
     name = "errors"

@@ -1277,7 +1277,14 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
         .map(|endpoint| (grafana_forwarder::LGTM_FORWARD_VAR, endpoint))
         .into_iter()
         .collect();
-    let started = match collector_action(otlp_port_holder().as_deref(), service) {
+    // `--no-recreate` would start a stopped lgtm with its old Grafana copy.
+    let start = |container: &str| match copy_to
+        .filter(|endpoint| grafana_forwarder::lgtm_differs(container, endpoint))
+    {
+        Some(endpoint) => grafana_forwarder::recreate_lgtm(stage, container, endpoint),
+        None => start_global_compose_service(stage, profile, service, "trace collector", &env),
+    };
+    let (container, started) = match collector_action(otlp_port_holder().as_deref(), service) {
         CollectorAction::Reuse(name) => {
             // Never `up` a running collector: Compose would recreate it
             // whenever its config hash differs (each worktree bind-mounts
@@ -1285,9 +1292,15 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
             // attachments other running instances added to it. Only a change
             // of its Grafana copy recreates it, restoring those.
             match copy_to.filter(|endpoint| grafana_forwarder::lgtm_differs(&name, endpoint)) {
-                Some(endpoint) => grafana_forwarder::recreate_lgtm(stage, &name, endpoint),
+                Some(endpoint) => {
+                    let recreated = grafana_forwarder::recreate_lgtm(stage, &name, endpoint);
+                    (name, recreated)
+                }
                 None => {
                     stage.note(&format!("  reusing running trace collector {name}"));
+                    if let Some(forwarder) = &forwarder {
+                        forwarder.settle(stage, &name);
+                    }
                     return Ok(());
                 }
             }
@@ -1297,12 +1310,21 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
                 "  replacing running trace collector {name} (all collectors share the OTLP ports)"
             ));
             let _ = Command::new("docker").args(["rm", "-f", &name]).output();
-            start_global_compose_service(stage, profile, service, "trace collector", &env)
+            let container = grafana_forwarder::LGTM_CONTAINER.to_owned();
+            let started = start(&container);
+            (container, started)
         }
         CollectorAction::Start => {
-            start_global_compose_service(stage, profile, service, "trace collector", &env)
+            let container = grafana_forwarder::LGTM_CONTAINER.to_owned();
+            let started = start(&container);
+            (container, started)
         }
     };
+    if started.is_ok()
+        && let Some(forwarder) = &forwarder
+    {
+        forwarder.settle(stage, &container);
+    }
     let result = started.and_then(|()| {
         // `up -d` returns once the container starts, not once it's accepting
         // connections; `env_layer::resolve` (which runs right after this, in

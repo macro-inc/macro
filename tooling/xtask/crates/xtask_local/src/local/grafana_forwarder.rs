@@ -6,15 +6,17 @@
 //! `docker/grafana-forwarder/config.alloy`), which samples it, tags it with the
 //! machine's name and sends it with the token. Both containers are global, one
 //! per machine, so every bring-up with the default `--traces lgtm` brings them in
-//! line with the settings and the latest one decides for every stack on the
-//! machine; one with telemetry turned off for that run leaves them as they are.
+//! line with the settings: the latest one decides for every stack on the
+//! machine. The forwarder's directory, which holds the token, marks that an
+//! earlier run turned forwarding on; it goes only once lgtm stopped copying, so
+//! a failed switch-off is retried by the next run.
 
 use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result};
 use xtask_local_telemetry::forwarding::write_private;
-use xtask_local_telemetry::{Forwarding, Paths, Switch, opaque_id};
+use xtask_local_telemetry::{Forwarding, ForwardingError, Paths, opaque_id};
 
 use super::instance::Instance;
 use super::stage::Stage;
@@ -26,6 +28,11 @@ mod test;
 const SERVICE: &str = "grafana-forwarder";
 /// Its container in the global compose project.
 const CONTAINER: &str = "macro-grafana-forwarder-1";
+/// The lgtm collector's container in the global compose project.
+pub(super) const LGTM_CONTAINER: &str = "macro-lgtm-1";
+/// The global compose project's `services` network, which the default instance
+/// shares; other instances' are `macro-<name>_services`.
+const GLOBAL_NETWORK: &str = "macro_services";
 /// Where the lgtm collector sends its copy, on the global `services` network.
 const FORWARDER_URL: &str = "http://grafana-forwarder:4318";
 /// What `docker/docker-compose.yml` passes on as lgtm's copy endpoint.
@@ -49,23 +56,30 @@ pub(super) struct Forwarder {
 
 impl Forwarder {
     /// Read the settings, or `None` when this run has nothing to do: forwarding
-    /// is off and no earlier run left it on, or `MACRO_LOCAL_TELEMETRY`/`CI`
-    /// turn telemetry off for this run only, which leaves the machine's
-    /// forwarder as it is. A setting that can't be used is reported and counts
-    /// as off.
+    /// is off and no earlier run left it on. Off includes `MACRO_LOCAL_TELEMETRY`
+    /// and `CI` turning telemetry off, and a setting that can't be used, which is
+    /// reported.
     pub(super) fn from_settings(stage: &Stage) -> Option<Self> {
-        let paths = Paths::for_user()?;
-        if paths.switch == Switch::Off {
-            return None;
-        }
-        let forwarding = Forwarding::load(&paths).unwrap_or_else(|error| {
+        let (forwarder, problem) = Self::from_paths(&Paths::for_user()?);
+        if let Some(error) = problem {
             stage.note(&format!(
                 "  WARNING: not forwarding telemetry to Grafana: {error}"
             ));
-            None
-        });
+        }
+        forwarder
+    }
+
+    /// [`Self::from_settings`] for `paths`, with the problem to report.
+    fn from_paths(paths: &Paths) -> (Option<Self>, Option<ForwardingError>) {
+        let (forwarding, problem) = match Forwarding::load(paths) {
+            Ok(forwarding) => (forwarding, None),
+            // The recorder already reports a settings file it can't read.
+            Err(ForwardingError::Config(_)) => (None, None),
+            Err(error) => (None, Some(error)),
+        };
         let dir = paths.forwarder_dir();
-        (forwarding.is_some() || dir.exists()).then_some(Self { forwarding, dir })
+        let forwarder = (forwarding.is_some() || dir.exists()).then_some(Self { forwarding, dir });
+        (forwarder, problem)
     }
 
     /// The copy endpoint the lgtm collector should have: empty for none.
@@ -78,16 +92,15 @@ impl Forwarder {
     }
 
     /// Start or update the forwarder with the current config and token, or,
-    /// with forwarding off, remove it and its token.
+    /// with forwarding off, remove it ([`Self::settle`] removes its token).
     pub(super) fn reconcile(&self, stage: &Stage) -> Result<()> {
         let Some(forwarding) = &self.forwarding else {
             if !stage.is_dry_run() {
                 let _ = Command::new("docker")
                     .args(["rm", "-f", CONTAINER])
                     .output();
-                let _ = std::fs::remove_dir_all(&self.dir);
             }
-            stage.note("  stopped forwarding telemetry to Grafana (`services` is off)");
+            stage.note("  stopped forwarding telemetry to Grafana");
             return Ok(());
         };
         let source = super::repo_root().join(CONFIG_SOURCE);
@@ -111,13 +124,19 @@ impl Forwarder {
                 "MACRO_GRAFANA_FORWARDER_REVISION",
                 opaque_id(&String::from_utf8_lossy(&config)),
             );
-        stage.run(
-            &format!(
-                "Forwarding telemetry to Grafana as {}",
-                forwarding.machine().as_str()
-            ),
-            &mut up,
-        )
+        // A fixed label: it is also a step name in the run_local dashboard.
+        stage.run("Forwarding telemetry to Grafana", &mut up)?;
+        stage.note(&format!("  as {}", forwarding.machine().as_str()));
+        Ok(())
+    }
+
+    /// With forwarding off, remove the token once the lgtm collector
+    /// `container` no longer copies to the forwarder; until then the directory
+    /// makes the next run try again.
+    pub(super) fn settle(&self, stage: &Stage, container: &str) {
+        if self.forwarding.is_none() && !stage.is_dry_run() && !lgtm_differs(container, "") {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
     }
 }
 
@@ -138,19 +157,17 @@ pub(super) fn lgtm_differs(container: &str, wanted: &str) -> bool {
 }
 
 /// Recreate the lgtm collector `container` with copy endpoint `endpoint`. Its
-/// data survives in the volume; the `otel-collector` attachments running
-/// instances gave it are restored, since a recreated container loses them.
+/// data survives in the volume. A recreated container loses the
+/// `otel-collector` attachments instances gave it, so it gets back the ones it
+/// had and those of every instance network that exists by then, which covers
+/// an instance attaching while it was being recreated.
 pub(super) fn recreate_lgtm(stage: &Stage, container: &str, endpoint: &str) -> Result<()> {
-    let networks = Command::new("docker")
-        .args([
-            "inspect",
-            "--format",
-            "{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}",
-        ])
-        .arg(container)
-        .output()
-        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
-        .unwrap_or_default();
+    let attached = docker_lines(&[
+        "inspect",
+        "--format",
+        "{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}",
+        container,
+    ]);
     let mut up = super::global_compose("lgtm");
     up.args(["up", "-d", "--force-recreate", "--no-deps", "lgtm"])
         .env(LGTM_FORWARD_VAR, endpoint);
@@ -159,25 +176,63 @@ pub(super) fn recreate_lgtm(stage: &Stage, container: &str, endpoint: &str) -> R
     } else {
         "Restarting the lgtm collector to copy to Grafana"
     };
-    stage.run(label, &mut up)?;
+    let recreated = stage.run(label, &mut up);
     if stage.is_dry_run() {
-        return Ok(());
+        return recreated;
     }
-    // The compose project's own network is attached again by compose; this
-    // fails harmlessly for it.
-    for network in networks.lines().map(str::trim).filter(|n| !n.is_empty()) {
+    // Also after a failed `up`, which may have replaced the container. Compose
+    // attaches its own project's network; connecting one already attached
+    // fails harmlessly.
+    let joined: Vec<String> = docker_lines(&["network", "ls", "--format", "{{.Name}}"])
+        .into_iter()
+        .filter(|name| is_instance_network(name) && !attached.contains(name))
+        .filter(|name| has_running_containers(name))
+        .collect();
+    let networks = attached.into_iter().chain(joined);
+    for network in networks {
         let _ = Command::new("docker")
-            .args([
-                "network",
-                "connect",
-                "--alias",
-                "otel-collector",
-                network,
-                container,
-            ])
+            .args(["network", "connect", "--alias", "otel-collector"])
+            .args([network.as_str(), container])
             .output();
     }
-    Ok(())
+    recreated
+}
+
+/// The non-empty lines `docker args` prints, none when it fails.
+fn docker_lines(args: &[&str]) -> Vec<String> {
+    Command::new("docker")
+        .args(args)
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Whether a container runs on `network`: a stopped instance's network is left
+/// alone.
+fn has_running_containers(network: &str) -> bool {
+    docker_lines(&[
+        "network",
+        "inspect",
+        "--format",
+        "{{len .Containers}}",
+        network,
+    ])
+    .first()
+    .is_some_and(|count| count != "0")
+}
+
+/// Whether `name` is an instance's `services` network (`Instance::network_services`).
+fn is_instance_network(name: &str) -> bool {
+    name == GLOBAL_NETWORK || (name.starts_with("macro-") && name.ends_with("_services"))
 }
 
 /// The value of the lgtm copy switch in `docker inspect`'s environment lines,
