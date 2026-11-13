@@ -690,10 +690,12 @@ Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
-Each desktop sidebar puts its Search icon immediately left of the collapse
-control. Click it to reveal the view's search field between the title and New,
-at the same height as the New button; click again to hide it. The field focuses when opened. Existing list-toolbar
-search remains available and shares its query where the view filters a list.
+A desktop sidebar has a Search icon, immediately left of the collapse control,
+only where the sidebar is itself the list being searched: Home, Chat, and
+Agents. Click it to reveal the search field between the title and New, at the
+same height as the New button; click again to hide it. The field focuses when
+opened. Every other view searches from the expandable Search icon in its list
+header.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including

@@ -98,25 +98,16 @@ function EmailPanes(props: {
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
-  openSidebarSearch: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state } = useEmailView();
+  const { state, closeThread } = useEmailView();
 
   const search = useEmailSearchHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     canSearch: () => canSearchEmailTab(state.tab),
-    openSidebarSearch: () => {
-      if (shell.aside.isCollapsed()) {
-        if (!shell.aside.canCollapse()) return false;
-        shell.aside.expand();
-      }
-
-      props.openSidebarSearch();
-      return true;
-    },
+    showList: closeThread,
   });
 
   const listColumn = (beside?: 'reader') => (
@@ -164,24 +155,6 @@ function EmailDesktopLayout(props: {
   // A new email takes the list's place, so the reading pane folds away.
   const readerBeside = () => readingPane() && !composing();
   const [listWidth, setListWidth] = useReadingPaneListWidth();
-  const [sidebarSearchOpen, setSidebarSearchOpen] = createSignal(false);
-  let sidebarSearchInput: HTMLInputElement | undefined;
-  let sidebarSearchFocusPending = false;
-
-  const focusSidebarSearch = () => {
-    if (!sidebarSearchFocusPending || !sidebarSearchInput?.isConnected) return;
-
-    sidebarSearchFocusPending = false;
-    sidebarSearchInput.focus();
-    sidebarSearchInput.select();
-  };
-
-  // Opening the sidebar can mount a new search field; that one takes the focus.
-  const openSidebarSearch = () => {
-    sidebarSearchFocusPending = true;
-    setSidebarSearchOpen(true);
-    queueMicrotask(focusSidebarSearch);
-  };
 
   return (
     <ViewShell.Root
@@ -208,21 +181,13 @@ function EmailDesktopLayout(props: {
       detailOpen={readerBeside()}
     >
       <ViewShell.Aside>
-        <EmailSidebar
-          searchOpen={sidebarSearchOpen()}
-          onSearchOpenChange={setSidebarSearchOpen}
-          searchRef={(input) => {
-            sidebarSearchInput = input;
-            queueMicrotask(focusSidebarSearch);
-          }}
-        />
+        <EmailSidebar />
       </ViewShell.Aside>
       <EmailPanes
         list={props.list}
         focusList={props.focusList}
         setListPane={props.setListPane}
         onListWidthChange={setListWidth}
-        openSidebarSearch={openSidebarSearch}
       />
     </ViewShell.Root>
   );
