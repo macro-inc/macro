@@ -81,6 +81,10 @@ for (const provider of PROVIDERS) {
       const report = await mailbox.synced('Weekly report');
 
       await mailbox.open();
+      // The phone layout, not a desktop one squeezed by touch emulation.
+      expect(await page.evaluate(() => window.innerWidth)).toBe(
+        phone.viewport.width
+      );
       const list = page.getByRole('grid', { name: 'Email' });
       await expect(list.getByText('Weekly report')).toBeVisible();
       await list.getByText('Lunch?').tap();
