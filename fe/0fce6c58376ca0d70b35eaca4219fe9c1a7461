@@ -1,0 +1,55 @@
+services/agent_harness_service/AGENTS.md
+  s_7061fd1300d03f::t_40723ccee27035 268-270
+crates/hosted_runtimes/src/outbound/docker_fleet.rs
+  s_7061fd1300d03f::t_10ac117465ae7b 16-22,59-61,80-83,313,563,581-582,620-628
+nix/macro-box/AGENTS.md
+  s_7061fd1300d03f::t_03e0b92532d7f5 49-57
+crates/hosted_runtimes/src/outbound/docker_fleet/test/enrollment.rs
+  s_7061fd1300d03f::t_10ac117465ae7b 78,184
+tooling/xtask/crates/xtask_local/src/local/validate.rs
+  s_7061fd1300d03f::t_7aa25248209110 234-237
+services/agent_harness_service/src/config/test.rs
+  s_7061fd1300d03f::t_3d1b10d081d99d 264-267
+  s_7061fd1300d03f::t_01aeff89fa832a 260-263
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_7061fd1300d03f::t_6ecba3b890507f 789-794,1045-1048,1051-1053,1056-1059,1065-1069,1072-1098,1143,1146-1156,1162,1164-1168
+  s_7061fd1300d03f::t_f158813817f9ff 695-698,969
+nix/macro-box/macro-box.nix
+  s_7061fd1300d03f::t_63e06784d88d5c 48-59,62,69,72-75,79-80,95,97,122,128,130-133,135
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_7061fd1300d03f::t_a706cda398e18d 32,38-44,479,481,492,494,496-505,508-531
+tooling/xtask/crates/xtask_local/src/local/build.rs
+  s_7061fd1300d03f::t_f0af2c179ab175 31
+  s_7061fd1300d03f::t_0741c8928e36de 50
+services/agent_harness_service/src/config.rs
+  s_7061fd1300d03f::t_01aeff89fa832a 513-515
+services/agent_harness_service/src/computers.rs
+  s_7061fd1300d03f::t_01aeff89fa832a 121-125
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_7061fd1300d03f::t_4351513f287b5f 5-13,41-48,171-176,240-243,325-326,331-334,347,351-402,639-669,672-689,692-696,699-748,750-754,770,772,775,781
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_7061fd1300d03f::t_f0af2c179ab175 50
+  s_7061fd1300d03f::t_0741c8928e36de 478
+docs/development/running-locally.md
+  s_7061fd1300d03f::t_03e0b92532d7f5 667,673-674,726-743
+crates/hosted_runtimes/src/outbound/docker_fleet/test.rs
+  s_7061fd1300d03f::t_10ac117465ae7b 13
+  s_7061fd1300d03f::t_bc7988bef66527 36,81-109
+  s_7061fd1300d03f::t_1762d6185ec74a 110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fe0fce6c58376ca0d70b35eaca4219fe9c1a7461",
+  "prompts": {},
+  "sessions": {
+    "s_7061fd1300d03f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f55fba6b-6bb8-4dfa-bf08-a130fcf5cbd2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
