@@ -30,7 +30,8 @@ Behind the `enable-slack-linked` flag. Architecture:
   `working`); each answer returns the next step.
 - `queries/desktop.ts`: the desktop commands `slack_desktop_sign_in` and
   `slack_desktop_captcha` (`apps/web/tauri/src-tauri/src/slack_desktop.rs`),
-  and the `macro:///external?slackLogin=<id|browser>` handoff a browser shows.
+  and the `macro:///external?slackLogin=<id|browser>` handoff a computer's
+  browser shows (phones, tablets and the mobile apps get none).
 - `core/`: account states and ended-reason words, sign-in input checks and
   failure words, catalogue grouping and add failures.
 

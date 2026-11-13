@@ -1,4 +1,5 @@
 import '@fontsource-variable/inter';
+import { ProviderSwitcher } from '@app/features/external-view/components/provider-switcher';
 import {
   type DesktopSignIn,
   SlackLinkedProvider,
@@ -12,6 +13,7 @@ import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { UserContextProvider, useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { Route, Router } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { macroDarkTheme } from '@theme/themes/macro-dark';
@@ -19,7 +21,7 @@ import { macroLightTheme } from '@theme/themes/macro-light';
 import { themeCssVars } from '@theme/utils/themeCssVars';
 import { ImperativeDialogHost } from '@ui';
 import { okAsync } from 'neverthrow';
-import { onMount, Suspense } from 'solid-js';
+import { createSignal, onMount, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 // The app's styles, so the page and its screenshots look like the app.
 import '../../../src/index.css';
@@ -52,6 +54,23 @@ const nativeDesktop: DesktopSignIn = {
   captcha: () => okAsync('captcha-solution'),
 };
 
+/** External's touch provider switcher, as External's touch header shows it. */
+function SwitcherHarness() {
+  const [selected, setSelected] =
+    createSignal<ExternalChatProvider>('whatsapp');
+  return (
+    <main class="min-h-screen bg-panel p-4 text-ink">
+      <ProviderSwitcher
+        providers={['whatsapp', 'slack']}
+        selected={selected()}
+        unread={(provider) => (provider === 'slack' ? 2 : 0)}
+        onSelect={setSelected}
+      />
+      <p>Showing {selected()}</p>
+    </main>
+  );
+}
+
 function Page() {
   onMount(() => {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
@@ -63,6 +82,7 @@ function Page() {
     document.documentElement.dataset.themeLight = String(!dark);
   });
   const search = new URLSearchParams(location.search);
+  if (search.get('view') === 'switcher') return <SwitcherHarness />;
   const production = createSlackLinkedCapabilities({
     openChat: (chatId) => window.openedChats.push(chatId),
     sections: createOpenSections(
