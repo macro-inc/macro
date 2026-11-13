@@ -1,0 +1,1233 @@
+.github/workflows/push_local_stack_binaries.yml
+  s_38e9b85856b095::t_80dc0113b10095 5-6,14,64
+.github/workspace-dep-closures.json
+  s_4a88f0d5bec835::t_5a37cad5266fbf 1010,1021-1023,1214,1223-1224,2089,2098-2099,2281,2290-2291,3656,3665-3666,4699,4708-4709,6006,6018-6019,6717,6801,6813,6819-6820,10002,10084,10096,10102-10103,11920,12002,12014,12020-12021,13898,13979,13991,13997-13998,14652-14655,15701-15996
+.sqlx/query-003e14f925bbec02d1633e8f2a7c68b8cbb4c1c29c29dcdfbe44459a3799f12c.json
+  s_38e9b85856b095::t_f6799dda58d720 3,25-29,41-42,45
+.sqlx/query-07a3ff65b0a96ec5a892c569e1522b69e18b147ea0da4afc3c411a39f48c8c10.json
+  s_38e9b85856b095::t_3cb13c1a7fbfc6 1-19
+.sqlx/query-07e11e3690570111be7127e05de071a43aec9fa21281ba4c7902aa3a8c171fab.json
+  s_38e9b85856b095::t_e8fc566094ea03 1-59
+.sqlx/query-0db6b904fecd577d2336b5fc2302c947a64eb842d4cfb384bfcde6277d1b9ece.json
+  s_38e9b85856b095::t_4bfccf27c05288 1-15
+.sqlx/query-0f563478bbbe9952ab32d906411328612fe270a6677a470a44a22041d03a6b55.json
+  s_38e9b85856b095::t_5131c13119e553 1-119
+.sqlx/query-17fa1fdf5b12d93ee6ecc30abbed30924e9333a9aaef32c3fe019c600f0af73d.json
+  s_38e9b85856b095::t_b8dbd7730ef3c6 3,34
+.sqlx/query-219ba1e941bd6f08d4faaefa92ccb0f108afcec88a8cd6acf7eb713953e6fff4.json
+  s_38e9b85856b095::t_123d87c2de9442 1-19
+.sqlx/query-22205e9a75cc5f264d992fbe407219ffac9f77ff795e7501b8bd1e22f257a25d.json
+  s_38e9b85856b095::t_e6a767c3c88991 1-41
+.sqlx/query-2b173d81fff3179d1c17771d6b532d7f8562e6d0d82ebd2be423a9a29b3039cd.json
+  s_38e9b85856b095::t_2e919cdb37ad9d 1-22
+.sqlx/query-2b981b47105e543920b518b04c487e4f4bee0dc37990267d5c121724d2e1d7b6.json
+  s_38e9b85856b095::t_8158a0b56a6622 1-16
+.sqlx/query-309938ad92227fc0f669873e1388eb1bf181b52c35c1b3ed00382aa51da2adf4.json
+  s_38e9b85856b095::t_13908b8e592aa6 1-16
+.sqlx/query-33d8c47223e9821acc4be998c312a5410255e5987d217fe6676af509f37f8282.json
+  s_38e9b85856b095::t_69c8af93686258 1-14
+.sqlx/query-35724a5db464882124e1747fb0deb2e55f664a7bf638c7142283ead7b4289984.json
+  s_38e9b85856b095::t_b0fb01e5afe6dd 1-15
+.sqlx/query-3657d2e96212cc08f581f73732bfc8c4bf091a9ae17744393c904bcd53493554.json
+  s_38e9b85856b095::t_c36492ce1ad682 1-14
+.sqlx/query-3695104edcb1ee81b608f51b2811939844181574134903eb2f5864e78a0eff0d.json
+  s_38e9b85856b095::t_383c9a898c6289 1-19
+.sqlx/query-39c9b614e16ad2d3b98738096b473091b6aff28727dbb023fa6e007192316326.json
+  s_38e9b85856b095::t_4683e846f2582f 1-25
+.sqlx/query-3c03765b1c1d78cac642a1b4063e56c67267f5c2b9b35843a88106d17bb3a711.json
+  s_38e9b85856b095::t_51e465273b2948 1-20
+.sqlx/query-40c2ecf48cd9331bc7ad891dfccca26fca7c3d97fea2d71dfe66c4c4d60966c8.json
+  s_38e9b85856b095::t_679904e1cb4fff 1-23
+.sqlx/query-4a55c4432c5d68d4ed1bdc9f08be9f36a9374dc25a8fb3683c02ffe7a65783a7.json
+  s_38e9b85856b095::t_19df47433161e2 1-15
+.sqlx/query-4a9fae9c247744155e6abe9247eed1a65dd1ab7213ae1a1bb4d4ffeb5c287186.json
+  s_38e9b85856b095::t_1900dee481c1a0 1-23
+.sqlx/query-516c4c6b4c61679956f54bf9667110c77ea03e5e00c86b1d42ba178c98fb16e0.json
+  s_38e9b85856b095::t_7aa618aba515f3 1-49
+.sqlx/query-5c7c441f7adf18642f0000c5348a951777ade8b40aace47a7e3263ac0738f268.json
+  s_38e9b85856b095::t_e271a62a517423 1-17
+.sqlx/query-5f8c0e1c3432c5fe65798a1f44ae184d2be67692154f582a3732ea62ab715df5.json
+  s_38e9b85856b095::t_014c023760b28a 3,43-44,48-52,70-71,75
+.sqlx/query-6086b457bf38f7d27e2edd8be140008452f53dcf22b913d1a2047a08d56fd50a.json
+  s_38e9b85856b095::t_a16270127ed5c8 1-18
+.sqlx/query-67e5d3c2425f1205dfb2afa55350608bcc84016efb6d8e5cae62eb415ea6bd31.json
+  s_38e9b85856b095::t_389cf2b6a6e4f2 1-29
+.sqlx/query-69df2d6ed8535fc2fc832244b459d0e62557350ebfb1acc2365e8933efcdc44a.json
+  s_38e9b85856b095::t_35940593108f7d 1-15
+.sqlx/query-6bf48bf843fe2a09591ae4bfdc95b40c1e4b663d6e22f2e2cb84647fd0edd1c3.json
+  s_38e9b85856b095::t_58651ed11f42f2 1-18
+.sqlx/query-6ee4b2f6563817cdb381a90beff0eb3497ecef00973494908ac93fb4ed9133a8.json
+  s_38e9b85856b095::t_7661fe7f33a01b 1-23
+.sqlx/query-6fda63285354f5fe8efc4d98532a3a90d1d1d14f1411ed618d947ef15c8c7c6a.json
+  s_38e9b85856b095::t_45b9e909901b9c 1-46
+.sqlx/query-7301f31193361efb521f26bed9081117cc9d5f5b59af7fc15e13a0f345624913.json
+  s_38e9b85856b095::t_9b891da6677db0 1-22
+.sqlx/query-7ba719b758d1a3a24c627f2b34a35de8df960cc448f7a61bc9ebbfdb4e361679.json
+  s_38e9b85856b095::t_d207dec3e02d25 1-15
+.sqlx/query-7d381a603814f646b7d9dcfd92f20a59e925b6097b4aae9371a555c4c56c0cbd.json
+  s_38e9b85856b095::t_8618d2377c6396 1-23
+.sqlx/query-7e1b81bd80dbf31f1e8b8f87cb02bbde695f2625f2df202d8bdb3d016f26e81f.json
+  s_38e9b85856b095::t_c6648728206e41 1-22
+.sqlx/query-81b2ff131c20230a40d1397972a501b2c6da603b3eefb73b50021b596bfaf6a5.json
+  s_38e9b85856b095::t_6047114020b949 1-22
+.sqlx/query-858cdafe55d3d3d300d921700f9e80f957666df74fceb6c878ed960a89fa8701.json
+  s_38e9b85856b095::t_c4dbce856a17f3 1-59
+.sqlx/query-85bb8be3fca559c75e84626ac7ab1ccb1fae6da9bcdfdb001ba0430041c27fea.json
+  s_38e9b85856b095::t_947977eb4d4e17 3,16-17,24
+.sqlx/query-88431c440c5a16125837c3d59743b71b7564cf08b2ad7d7898358501d9fcfdd4.json
+  s_38e9b85856b095::t_3e3137afcf51b2 1-59
+.sqlx/query-88804328d63ce0c202e5ca0dc9f6e89b7c68d4d235ffb1adcbb6e77d6bc95baf.json
+  s_38e9b85856b095::t_f1b37367796b7d 1-19
+.sqlx/query-8ab9cc02bf64f9a72693234064db0d67efc3cf048c4e05a484742ef002c49b6d.json
+  s_38e9b85856b095::t_fe9901d1635612 1-22
+.sqlx/query-8d076fb3abf5c36e9a25b96d06ea96cd288286d7e67cb2fddf4a5067be2c940c.json
+  s_38e9b85856b095::t_ed0bab50972291 1-23
+.sqlx/query-8d22eeeda1cf9338aca484d47f81d16b6e169b71509483e9fa37b2a5174dae7f.json
+  s_38e9b85856b095::t_ce971da321b88a 1-19
+.sqlx/query-8d373d8050f2dac3fef072dec222ca4b659e52be2f09610ad60f6fbd5c42c945.json
+  s_38e9b85856b095::t_5c1c5dd7f5c4eb 1-17
+.sqlx/query-8eb7c0229455b52f706308fbdf43e105cdee6591ede17c443fcfba66d97d51f1.json
+  s_38e9b85856b095::t_0572e9101006e9 1-22
+.sqlx/query-91753dd44edfc1520a2309f5b2f5c0b17e8f277eeb9df0c611e08c11172c2435.json
+  s_38e9b85856b095::t_c2d7b442485f27 3,15-19,29-30,33
+.sqlx/query-929b3996e84d66f159dab57dcb5b108383bbb0f3f5ed44e814e714062d49d8a2.json
+  s_38e9b85856b095::t_12aa724399365f 1-119
+.sqlx/query-95c0f3f49422a4430f572f8e262a2baac15ba81d8b8847b0305e58a95eb03886.json
+  s_38e9b85856b095::t_7ff6b4e1a2c0e1 1-58
+.sqlx/query-962c5634d4e378e8e39e51f9497767791a506a86cd02d935c4b5ae6b5d39eee2.json
+  s_38e9b85856b095::t_dd7b29dd1277ea 1-17
+.sqlx/query-9994b91eec183a77320f0747c5ff5b7c9c2f8503a739845a9287a6bdd6c2dac6.json
+  s_38e9b85856b095::t_865215fe74aade 1-30
+.sqlx/query-9b1f31aaea9c12101775cb44475be9a5b0f9dd068e4df5f1fd5c907222423e4c.json
+  s_38e9b85856b095::t_d4f2f03789d3e4 1-30
+.sqlx/query-9e3de8a5839a2e4927b7fe4d0251222256d866ce0714544255ae9c808ba7bec3.json
+  s_38e9b85856b095::t_ee7d54ec274447 1-15
+.sqlx/query-a1469f978e858db1373c85e8b1cbf3f201abd506d439f96ca8b4fe3336c4ca70.json
+  s_38e9b85856b095::t_e18b18d246dce0 1-35
+.sqlx/query-a1563dba23f2e0b66441beeb97f3106dcfa7cae459f5a5185be3d2111c8f84be.json
+  s_38e9b85856b095::t_e4fb238ab60a97 1-35
+.sqlx/query-a65df1afa9e6881c6cd8350cc4d0cc7a1c6150429ef7f2f1f6089c729be87b51.json
+  s_38e9b85856b095::t_88e03cb1977209 1-24
+.sqlx/query-a879247df7efad9b9fcfc8a7d9ffaa22283941f4ecddcbb68a1f375d77b6e8f5.json
+  s_38e9b85856b095::t_bcb9bff2d51d66 1-119
+.sqlx/query-ae02c989e0c7b598b81f947764e70e5ca3049e3e68e155f369da16842d17d03e.json
+  s_38e9b85856b095::t_031ee4ada7f089 1-22
+.sqlx/query-b65db4fbac76094dd724f3747f9e336ef44206dc67d37e34df611467823d2caf.json
+  s_38e9b85856b095::t_1fd2f64660bbfd 1-15
+.sqlx/query-b6be3f34cc45761b9e80a34486852262298ca213b9eb1b8248f81058133ec82c.json
+  s_38e9b85856b095::t_d596017e5ce650 1-36
+.sqlx/query-bb692fa968cda18fa76809aa9b671cea288daf9c4cf5fcbb80607564ad9a3302.json
+  s_38e9b85856b095::t_76fd8a4759a4eb 1-23
+.sqlx/query-c02f5867ff52349cf902e1e9ed52cdb47da612305fd20ddf28117222b46d7fd9.json
+  s_38e9b85856b095::t_5a393a50db4b34 1-15
+.sqlx/query-c14d8a4065b260795a94554b97e7d3af332c7d6498a5937093518970c5e24958.json
+  s_38e9b85856b095::t_8a4a928da90939 1-16
+.sqlx/query-c2d7b2d9839ab9d82746aad0b0a81a120aced842ef31c809e886d87fdd7616bf.json
+  s_38e9b85856b095::t_41d7524e7e56f4 3,13-14,18,23-27,32-34,47-48,51
+.sqlx/query-c4764b0485e99a4857d3fc1795262319d8d828c3a83288acfa7173ee4a285cb2.json
+  s_38e9b85856b095::t_773d6567eed871 1-22
+.sqlx/query-c6254f74c16dd7e2859093f5e5667e2a33d31951acad311d562e044ce9f7fbd9.json
+  s_38e9b85856b095::t_a996806ec664f2 1-40
+.sqlx/query-cf71836888145d7b6ea373cd4572fc402eb34f899e7b5260c4f37d044dba6325.json
+  s_38e9b85856b095::t_ea0721093b9e68 3,21
+.sqlx/query-d1982fcac03b445954d70090fa23f360d27dd709cd795964871844a8ba9a3ce9.json
+  s_38e9b85856b095::t_300db90a3f2c16 1-23
+.sqlx/query-d1a70a96daf8b66bf5460fa4c3d39741738b36296895e96354764af0d1ac1c8f.json
+  s_38e9b85856b095::t_4d1dbb0e7b3d8c 3,142
+.sqlx/query-d2bb8a73c7224fc02861465cf642ac46af43b98d5a4f9d85fea586f10eaf3142.json
+  s_38e9b85856b095::t_11d1fd9d640eff 1-14
+.sqlx/query-d5f6c87d68a0e4b14262ee0c234eb114b1082f9a6cc347c22afef8d4a93a2e16.json
+  s_38e9b85856b095::t_b41006126e04fd 1-15
+.sqlx/query-d66061455086c39e36bdcd573dc9dee916ebe93ceacf48c59598851ef8dcb065.json
+  s_38e9b85856b095::t_5e407709e9f2ba 1-17
+.sqlx/query-d7c90e4d6e03defa5047c88d17586ee006a2fc92701c55cc343b512f4641bf0a.json
+  s_38e9b85856b095::t_8f2178bbfb150e 1-16
+.sqlx/query-da4091e78791813d082b117e9ee384d816455384c8efd4aec19a8a43f2f2579f.json
+  s_38e9b85856b095::t_ed6564bc469bc9 1-14
+.sqlx/query-db2b7cf7c5b2d7070f2580fff2d33ed25593b5e37e7ce0bf230e9aebb29a4ec7.json
+  s_38e9b85856b095::t_b75ce7fb30b604 1-23
+.sqlx/query-df0bea500ad8f386dc768c1d90de56d0aea23cb44af5b51adea76ec709eec3c5.json
+  s_38e9b85856b095::t_57d865812dd512 1-23
+.sqlx/query-e18898d434c89735865fa7a9e41d1c1f58fd54407ef00952c598505d96a6d4e7.json
+  s_38e9b85856b095::t_2ddc08c01bf3e0 1-119
+.sqlx/query-e37fe065d0a495d0c330c1406b70995bdaee5e99f70d96db2da389c3d102b1b0.json
+  s_38e9b85856b095::t_4e3dca16cb8697 1-24
+.sqlx/query-e6d0422f81f5afc80c1cda93a535f770b71ddb8a894254d0b6c70dcbae1f7046.json
+  s_38e9b85856b095::t_89f24ffd489bbf 1-22
+.sqlx/query-ea73eb468122cb6f9c8b605bc59a5bc1135d8b93f4a39afbfe4a1c309cbca311.json
+  s_38e9b85856b095::t_510cb96338c141 1-15
+.sqlx/query-efbb7e3ed44777737542b2cd32276fdcf4cb84a6a2825301154f0a1c5c375d3a.json
+  s_38e9b85856b095::t_2375e9fae815a4 1-22
+.sqlx/query-f5a3b11fa6a764518741e1cff8425d0e9cde4e8d39f09beb18979e08b0d8f064.json
+  s_38e9b85856b095::t_fbf64b6e373c01 1-59
+.sqlx/query-f83cdd21626b95cc7db2f75c93af2af96b5d10305f0cb8be4e66f082ee8fbfbc.json
+  s_38e9b85856b095::t_a50182e578bba4 3,34
+.sqlx/query-f898edd7d7dbabe7edc9fb7279e9995ae4e64c926da61e9438614fa1a6bad7d8.json
+  s_38e9b85856b095::t_6f0575d78d5817 1-14
+.sqlx/query-fed4a50e7ac49806930ee47510360cb08476ef50a3fca96c5f2cd4d1c5271906.json
+  s_38e9b85856b095::t_e4471a693eaa7f 1-49
+Cargo.lock
+  s_38e9b85856b095::t_90c5aaa90d5e18 733-734,747,1406,1408,8139,8187,16282,18076,18079-18080,19019-19026,20196-20289
+Cargo.toml
+  s_38e9b85856b095::t_5692f352e007e4 13-16,564
+apps/web/AGENTS.md
+  s_38e9b85856b095::t_3630e3e7dc6e1a 259-266,958-963,1045-1048,1503-1512,1514-1515
+apps/web/native-commands.json
+  s_38e9b85856b095::t_bd2a917fc8c1d5 12
+apps/web/src/components/app/AppProviders.tsx
+  s_38e9b85856b095::t_2563063487cf79 11,146
+apps/web/src/components/cell-text-editor/CellMentionEditor.tsx
+  s_38e9b85856b095::t_eb26c7cda96bfe 126-135
+apps/web/src/components/cell-text-editor/cell-mention-dom.test.ts
+  s_38e9b85856b095::t_4d1e647bb6b8d9 52-80
+apps/web/src/components/cell-text-editor/cell-mention-dom.ts
+  s_38e9b85856b095::t_6a437635d55a81 15-16,21-35,48-49,64-68,73
+apps/web/src/components/cell-text-editor/types.ts
+  s_38e9b85856b095::t_6a8b993704419d 8-9
+apps/web/src/features/agent-activity/agent-activity.test.tsx
+  s_38e9b85856b095::t_8d247e9a323fd1 25,27-28,30-36
+apps/web/src/features/agent-activity/agent-activity.tsx
+  s_38e9b85856b095::t_19c49e2b6f3d83 1,75,98
+apps/web/src/features/agent-activity/agent-typing.test.tsx
+  s_38e9b85856b095::t_4e78e1b30c674d 53,55-56,59-65
+apps/web/src/features/agent-activity/components/typing-row.tsx
+  s_38e9b85856b095::t_b4204246107189 1,32
+apps/web/src/features/agents-view/views/AgentsView.test.tsx
+  s_38e9b85856b095::t_ed5b805ed1336b 205,209-213,391-412
+apps/web/src/features/agents-view/views/AgentsView.tsx
+  s_38e9b85856b095::t_8137cc0fb76cc3 72-76,110,291-296,298,514
+apps/web/src/features/agents-view/views/NewChatPage.test.tsx
+  s_38e9b85856b095::t_5adc0adf74e26d 27,971-1016
+apps/web/src/features/agents-view/views/NewChatPage.tsx
+  s_38e9b85856b095::t_72fcdd9a42f6b9 75-77,113-118,149,151
+apps/web/src/features/block-agent/browser-test/README.md
+  s_38e9b85856b095::t_c6c87c4e49789d 3-4,16-23
+apps/web/src/features/block-agent/browser-test/activity-turn.ts
+  s_38e9b85856b095::t_4dc3f2755470da 1-575
+apps/web/src/features/block-agent/browser-test/activity.browser.e2e.ts
+  s_38e9b85856b095::t_b037aa5dfde102 1-147
+apps/web/src/features/block-agent/browser-test/activity.html
+  s_38e9b85856b095::t_b2f47419985f48 1-12
+apps/web/src/features/block-agent/browser-test/activity.tsx
+  s_38e9b85856b095::t_7cc98305b6bebb 1-88
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_38e9b85856b095::t_3dfd1cd6ebc5d9 118,120-122,128-133,140-157,161,186-192,195-196,203-212,310,425,432,435,440-492,498-515,561,625,629-630,633,643,652-655,658,664-665,690-695,702,704-708,713-715,718-722,724-744,746,751,758-778,782-801,811,822,895,904-905,910,916,918
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_38e9b85856b095::t_5e04aa6c97d9c4 41,43-48,54,169-170,178-179,197-199,203-204,211-232,258-259,261-264,267,276-279,281-293,296-297,334-335,337-338,440-443,464-465,486,491-498
+apps/web/src/features/block-agent/debug/Gallery.tsx
+  s_38e9b85856b095::t_abdc0394b966a4 52,1313-1326,1342-1343,1350-1351
+apps/web/src/features/block-agent/state/code-execution.test.ts
+  s_38e9b85856b095::t_5fd16a00de31de 1-29
+apps/web/src/features/block-agent/state/code-execution.ts
+  s_38e9b85856b095::t_30ee55f4f91cae 80-94
+apps/web/src/features/block-agent/state/section-steps.test.ts
+  s_38e9b85856b095::t_885fefbb5c6ed6 1-119
+apps/web/src/features/block-agent/state/section-steps.ts
+  s_38e9b85856b095::t_05c49cc89c2c28 1-75
+apps/web/src/features/block-agent/state/tool-groups.test.ts
+  s_38e9b85856b095::t_a5d57831756a62 8,167,170,172,183,185,189,191,315-343
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_38e9b85856b095::t_782dfe8f0075bc 4-6,12-16,87,89,92-94,105-138
+apps/web/src/features/block-agent/ui/ActivityLine.tsx
+  s_38e9b85856b095::t_95e069c4c2512e 2,4-25,33-34,36,42,45,52,55,65-71,83,88
+apps/web/src/features/block-agent/ui/ToolGroup.test.tsx
+  s_38e9b85856b095::t_b1275653b649ab 6,31-42,44-49,53-56,64,68,70,79-125,130-131,133,140,142,144,156,169,191-200
+apps/web/src/features/block-agent/ui/ToolGroup.tsx
+  s_38e9b85856b095::t_0f96a381ba628f 2-6,13-14,18,20-21,23-24,26-28,33,47,55,59-70,72-79,84-90
+apps/web/src/features/block-agent/ui/index.ts
+  s_38e9b85856b095::t_cb61ae019efb77 20-24
+apps/web/src/features/block-agent/views/code-execution-record.ts
+  s_38e9b85856b095::t_d1dd66f9b4a68b 8,15-16,55-65,77
+apps/web/src/features/block-database/browser-test/multiline.browser.e2e.ts
+  s_38e9b85856b095::t_1d8d95bebe7a13 1-129
+apps/web/src/features/block-database/browser-test/rapid.browser.e2e.ts
+  s_38e9b85856b095::t_610b385b7bd60a 30
+apps/web/src/features/block-database/browser-test/records.tsx
+  s_38e9b85856b095::t_45226e7efc790a 2-3,15-54,63-65,95-96,119,122,201-205,216-218,232,306-313
+apps/web/src/features/block-database/database-mentions.tsx
+  s_38e9b85856b095::t_e799e1c1090d5b 136-139,146-150
+apps/web/src/features/channels-view/components/ChannelPins.tsx
+  s_38e9b85856b095::t_ded730cef5f66a 4-5,34-35,52-65,70-72
+apps/web/src/features/channels-view/components/ChannelsMobileView.test.tsx
+  s_38e9b85856b095::t_218bd4bfc3707f 9,32-33,83,85,88-89,123,126-127,159-160,317-345
+apps/web/src/features/channels-view/components/ChannelsMobileView.tsx
+  s_38e9b85856b095::t_5b56a6ce00ae9a 49,313-317,424
+apps/web/src/features/channels-view/components/rail/ChannelCountPill.tsx
+  s_38e9b85856b095::t_76317c8d4caac9 1-49
+apps/web/src/features/channels-view/components/rail/ChannelFavoriteRows.test.tsx
+  s_38e9b85856b095::t_cdfedc109e96ca 41,159-160,167-168,277-278,466-515
+apps/web/src/features/channels-view/components/rail/ChannelFavoriteRows.tsx
+  s_38e9b85856b095::t_c45e5209071611 11-12,80-87
+apps/web/src/features/channels-view/components/rail/ChannelLabelRows.tsx
+  s_38e9b85856b095::t_0f909e760f71fa 29,119
+apps/web/src/features/channels-view/components/rail/ChannelListViews.tsx
+  s_38e9b85856b095::t_3ad04fb3ac187c 62
+apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
+  s_38e9b85856b095::t_760b357a58a35d 12,16,260-271
+apps/web/src/features/channels-view/components/rail/ChannelRailItems.tsx
+  s_38e9b85856b095::t_f01d37cdeca19e 26,256-257,291-292,326,356
+apps/web/src/features/channels-view/components/rail/ConversationCard.test.tsx
+  s_38e9b85856b095::t_e63b4384725e8e 1-65
+apps/web/src/features/channels-view/components/rail/ExpandedChannelsRail.tsx
+  s_38e9b85856b095::t_ca07ba8b3c1ccd 32,486
+apps/web/src/features/channels-view/components/rail/hooks/useChannelRailActivity.test.ts
+  s_38e9b85856b095::t_61d631399f6eeb 249-318
+apps/web/src/features/channels-view/components/rail/hooks/useChannelRailActivity.ts
+  s_38e9b85856b095::t_f85b4675f6d15f 18-19,67,74-78,80-81,87,137,268-271
+apps/web/src/features/channels-view/components/rail/hooks/useChannelRailState.ts
+  s_38e9b85856b095::t_36f6eba157c91b 46,77-80
+apps/web/src/features/crm/browser-test/editor.browser.e2e.ts
+  s_38e9b85856b095::t_32e31a02421833 94-112,114-115,120-180
+apps/web/src/features/crm/browser-test/editor.tsx
+  s_38e9b85856b095::t_2ede46183742d0 147-152
+apps/web/src/features/database/components/grid-cell.tsx
+  s_38e9b85856b095::t_74e7478235eb0b 970-971,981-982,984,987-989,1413-1416,1426-1459
+apps/web/src/features/drive-view/drive-view.tsx
+  s_38e9b85856b095::t_0617b45c5ce85b 21-25,98-112,229-231
+apps/web/src/features/entity/bulk-edit/BulkDeleteView.tsx
+  s_38e9b85856b095::t_3557cddc922a7f 32-34,36-37,41,108
+apps/web/src/features/entity/components/ProjectBreadCrumb.test.ts
+  s_38e9b85856b095::t_4f55be59963d42 1,11-12,15,18-21,26,36,113,160-206
+apps/web/src/features/entity/components/ProjectBreadCrumb.tsx
+  s_38e9b85856b095::t_34fbd21786292f 7-8,10,20-43,47-48,55,76,92,94
+apps/web/src/features/entity/context/known-folders.ts
+  s_38e9b85856b095::t_1b5dddff3741c3 1-17
+apps/web/src/features/entity/extractors-notification/notification-description-helpers.ts
+  s_38e9b85856b095::t_e39309ff0d0a28 141,222-224
+apps/web/src/features/entity/extractors-notification/notification-description.tsx
+  s_38e9b85856b095::t_260d046a99a4a7 40-44
+apps/web/src/features/entity/extractors-notification/notification-icon.tsx
+  s_38e9b85856b095::t_229bc9426d9a72 88
+apps/web/src/features/entity/index.ts
+  s_38e9b85856b095::t_5088ade66273f6 17,68
+apps/web/src/features/entity/types/entity.ts
+  s_38e9b85856b095::t_b806056902e150 148-154
+apps/web/src/features/entity/utils/folder-path.test.ts
+  s_38e9b85856b095::t_9768aa3f31d37e 1-43
+apps/web/src/features/entity/utils/folder-path.ts
+  s_38e9b85856b095::t_7d95f84b26856d 1-47
+apps/web/src/features/entity/utils/notification.ts
+  s_38e9b85856b095::t_8db982f3f05c3d 297-303,394
+apps/web/src/features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx
+  s_38e9b85856b095::t_deba3925ee83f2 62-70,285,551-552,555,598-602,665
+apps/web/src/features/notification-sounds/core/categories.ts
+  s_38e9b85856b095::t_d51da305722340 121
+apps/web/src/features/notifications/computer-setup-toast.ts
+  s_38e9b85856b095::t_e4d3cc74871636 1-22
+apps/web/src/features/notifications/notification-event-catalog.ts
+  s_38e9b85856b095::t_4bc69db66fe0a8 210-216
+apps/web/src/features/notifications/notification-metadata.ts
+  s_38e9b85856b095::t_e3c572ebd46126 125-132,197,303-315,385
+apps/web/src/features/notifications/notification-navigation.ts
+  s_38e9b85856b095::t_df1b56e3228472 4,705-715
+apps/web/src/features/notifications/notification-platform.ts
+  s_38e9b85856b095::t_d30e8e3121b629 70
+apps/web/src/features/notifications/notification-preview.ts
+  s_38e9b85856b095::t_8e0d8fef8eb4d7 40
+apps/web/src/features/notifications/notification-sender.ts
+  s_38e9b85856b095::t_299311984e11f2 36
+apps/web/src/features/notifications/tests/notification-updates.test.ts
+  s_38e9b85856b095::t_bbec308499875f 27-60
+apps/web/src/features/notifications/use-notification-updates.ts
+  s_38e9b85856b095::t_27115b802aa056 5,188-199
+apps/web/src/features/onboarding/queries/routine-suggestions.ts
+  s_38e9b85856b095::t_9c913a6100cfc3 25,29,61-63,66-68,72
+apps/web/src/features/routines/components/routine-describe.tsx
+  s_38e9b85856b095::t_da650df0f6029e 14-15,20,84
+apps/web/src/features/routines/components/routine-draft-progress.tsx
+  s_38e9b85856b095::t_0eea26085cb5cd 1-83
+apps/web/src/features/routines/components/routine-draft-ready.tsx
+  s_38e9b85856b095::t_005bbefce3560f 1-38
+apps/web/src/features/routines/context/drafts-on-screen.ts
+  s_38e9b85856b095::t_318d71bea19605 1-50
+apps/web/src/features/routines/core/draft-progress.test.ts
+  s_38e9b85856b095::t_c5a74929bca4a7 1-87
+apps/web/src/features/routines/core/draft-progress.ts
+  s_38e9b85856b095::t_7b768a7052ec38 1-116
+apps/web/src/features/routines/open-draft-job.ts
+  s_38e9b85856b095::t_1e111146317d49 1-43
+apps/web/src/features/routines/primitives/draft-job-dialog.test.ts
+  s_38e9b85856b095::t_f27a83b2449886 1,3-26,28-36,38-53,55-62,64-70,76-99,101-173,175-225,227-243
+apps/web/src/features/routines/primitives/draft-job-dialog.ts
+  s_38e9b85856b095::t_700508055cfa3f 1-10,12-13,15-44,46-51,53-57,59-64,66-68,71-81,84-92,94-112,114-120,124-127,131-164
+apps/web/src/features/routines/queries/compose-routine.ts
+  s_38e9b85856b095::t_1bf2774839388b 32,40,42,56,67
+apps/web/src/features/routines/queries/draft-jobs-sync.ts
+  s_38e9b85856b095::t_11d65f166d5f28 1-105
+apps/web/src/features/routines/queries/draft-jobs.test.ts
+  s_38e9b85856b095::t_58ab41f77d50ed 1-4,6-12,14-29,31-69,72-75,82-95,97-102,104-113,116-126,129-136,139-145,147,149-172,175-192,194-197,199-217,220-237,239-247,250-253,255-264
+apps/web/src/features/routines/queries/draft-jobs.ts
+  s_38e9b85856b095::t_f9f83944b39d90 1-208
+apps/web/src/features/routines/queries/keys.ts
+  s_38e9b85856b095::t_fa661dcb184547 8-9
+apps/web/src/features/routines/routine-background-drafts.tsx
+  s_38e9b85856b095::t_ca522b9593fba9 1-107
+apps/web/src/features/routines/routine-creator.test.tsx
+  s_38e9b85856b095::t_b9d4c1e8cb43c9 1,4,16,18,21-24,28-29,49-74,1046-1224
+apps/web/src/features/routines/routine-creator.tsx
+  s_38e9b85856b095::t_28e056dcadc443 8,13,16,38-50,57-58,62,66-96
+apps/web/src/features/routines/routine-drafts-host.tsx
+  s_38e9b85856b095::t_4132641d81fa97 1-34
+apps/web/src/features/routines/routine-drafts-watcher.tsx
+  s_38e9b85856b095::t_a1632217cfc372 1-156
+apps/web/src/features/routines/views/routine-creator.tsx
+  s_38e9b85856b095::t_ae9b60a9b14e2e 4,35-36,54,84-95,97-99
+apps/web/src/features/settings/Agents.test.tsx
+  s_38e9b85856b095::t_d914dde5079931 26-30,47-53,1488-1509
+apps/web/src/features/settings/Agents.tsx
+  s_38e9b85856b095::t_9025b992f3d0fc 74,171-180,185,297-306,311,460,697-698,725,935-937,1355-1356
+apps/web/src/features/settings/Harness.test.tsx
+  s_38e9b85856b095::t_cf7ac7852a80e6 29,122-125,260,694-704
+apps/web/src/features/settings/Harness.tsx
+  s_38e9b85856b095::t_ea6789bf552f00 36-40,117-124
+apps/web/src/features/settings/NativeAppInfo.tsx
+  s_38e9b85856b095::t_f7c1a7fc08bace 3-7,20,27
+apps/web/src/features/settings/Settings.tsx
+  s_38e9b85856b095::t_c13347321a0fd0 31,42-46,82,86-91
+apps/web/src/features/settings/agentSettingsState.ts
+  s_38e9b85856b095::t_bc9c30e97e4df5 3-9,18-23
+apps/web/src/features/settings/app-build.test.ts
+  s_38e9b85856b095::t_08d746ca390643 1-25
+apps/web/src/features/settings/app-build.ts
+  s_38e9b85856b095::t_c8396e780a3395 19-30
+apps/web/src/features/settings/computers/browser-test/agent-settings.tsx
+  s_38e9b85856b095::t_58f5988af31427 1-2,4-5,7-12
+apps/web/src/features/settings/computers/browser-test/buy-flow.browser.e2e.ts
+  s_38e9b85856b095::t_c90cd3847475b9 111-117,146-187,189-195,197-203,205-218,220-231,233-282,284-310,312-324,326-335,337-345,347-386
+apps/web/src/features/settings/computers/browser-test/composer.tsx
+  s_38e9b85856b095::t_e5047550305759 1-50
+apps/web/src/features/settings/computers/browser-test/main.tsx
+  s_38e9b85856b095::t_536094afd095a5 1-3,5,11-12,14,17-21,26-52,57-65,67-82,89-97
+apps/web/src/features/settings/computers/browser-test/providers.tsx
+  s_38e9b85856b095::t_037afefdff7748 1-44
+apps/web/src/features/settings/computers/browser-test/setup-notice.browser.e2e.ts
+  s_38e9b85856b095::t_3fa9048b44c3a2 1-272
+apps/web/src/features/settings/computers/browser-test/stubs/access-requests.ts
+  s_38e9b85856b095::t_87d3921203cc91 1-2
+apps/web/src/features/settings/computers/browser-test/stubs/agents.ts
+  s_38e9b85856b095::t_6f30b7291aedf0 1-3
+apps/web/src/features/settings/computers/browser-test/stubs/booking-link-mention.ts
+  s_38e9b85856b095::t_06812df09874b6 1-4
+apps/web/src/features/settings/computers/browser-test/stubs/bots.ts
+  s_38e9b85856b095::t_f20d868d79dccf 1-2
+apps/web/src/features/settings/computers/browser-test/stubs/claude.ts
+  s_38e9b85856b095::t_ce617110e64f7a 1-2
+apps/web/src/features/settings/computers/browser-test/stubs/fixture-state.ts
+  s_38e9b85856b095::t_5729aba821e49f 1,5-10,22-29,36-40,45-53
+apps/web/src/features/settings/computers/browser-test/stubs/harnesses.ts
+  s_38e9b85856b095::t_232c86bc9eaa9a 1-3
+apps/web/src/features/settings/computers/browser-test/stubs/open-page.ts
+  s_38e9b85856b095::t_8da5ce97ab210e 1-9
+apps/web/src/features/settings/computers/browser-test/stubs/posthog.ts
+  s_38e9b85856b095::t_481a82a2f76bfe 1-2
+apps/web/src/features/settings/computers/browser-test/stubs/query-client.ts
+  s_38e9b85856b095::t_8f9b64863ce29d 22-27
+apps/web/src/features/settings/computers/browser-test/stubs/settings.ts
+  s_38e9b85856b095::t_4f44dddcbb4d13 1-3
+apps/web/src/features/settings/computers/browser-test/stubs/split-layout.ts
+  s_38e9b85856b095::t_3fedc77bf2fa51 1-2
+apps/web/src/features/settings/computers/browser-test/stubs/teams.ts
+  s_38e9b85856b095::t_da8ff6868d7c9e 1-2,12-16
+apps/web/src/features/settings/computers/browser-test/stubs/user-context.ts
+  s_38e9b85856b095::t_6348ba79d2fa0b 1-22,24-36
+apps/web/src/features/settings/computers/browser-test/stubs/user.ts
+  s_38e9b85856b095::t_6530d65190ddd4 1-2
+apps/web/src/features/settings/computers/browser-test/vite.config.ts
+  s_38e9b85856b095::t_2f58088020f6b4 3,12-41,52,62-70,72-82,86,90,97-108
+apps/web/src/features/settings/computers/components/computer-size-picker.test.tsx
+  s_38e9b85856b095::t_b12723f29185cb 1-49
+apps/web/src/features/settings/computers/components/computer-size-picker.tsx
+  s_38e9b85856b095::t_d13c91c29c6032 8-11,20-25
+apps/web/src/features/settings/computers/components/setup-progress-list.tsx
+  s_38e9b85856b095::t_87a860e4e39be7 3,63-69,95
+apps/web/src/features/settings/computers/core/setup-progress.test.ts
+  s_38e9b85856b095::t_663eca02e96dc9 87,102,107-120
+apps/web/src/features/settings/computers/core/setup-progress.ts
+  s_38e9b85856b095::t_797f9dce3a32ba 119-130,201-206
+apps/web/src/features/settings/computers/primitives/setup-notice.test.ts
+  s_38e9b85856b095::t_ba4e6b91196210 1-92
+apps/web/src/features/settings/computers/primitives/setup-notice.ts
+  s_38e9b85856b095::t_3c4270fa1db3d4 1-72
+apps/web/src/features/settings/computers/primitives/setup-request.test.ts
+  s_38e9b85856b095::t_6d4c2b22bf788e 1-26
+apps/web/src/features/settings/computers/primitives/setup-request.ts
+  s_38e9b85856b095::t_06ca32bf86b5f5 1-40
+apps/web/src/features/settings/computers/views/MacroComputers.test.tsx
+  s_38e9b85856b095::t_9c6ad89e19d5af 10-13,92-94,563-595
+apps/web/src/features/settings/computers/views/MacroComputers.tsx
+  s_38e9b85856b095::t_8dfad5231ba572 26,49-52,56,425-427,432-442,506-509,553,557
+apps/web/src/features/settings/computers/views/agent-computer-entry.tsx
+  s_38e9b85856b095::t_256baf95eb63cd 152,157-163,172
+apps/web/src/features/settings/computers/views/computer-buy-flow.tsx
+  s_38e9b85856b095::t_f655b69f82e366 22,75,88-89,92-93,139-140,143-151,180-193,275
+apps/web/src/features/settings/computers/views/computer-setup-dialog.test.tsx
+  s_38e9b85856b095::t_a38fe1f095c0c9 5-109,120,126-141,147-208
+apps/web/src/features/settings/computers/views/computer-setup-dialog.tsx
+  s_38e9b85856b095::t_0e214eee21ce0c 2,11,33,37,76,85-86,91,103-105,113,124,126,128,132-145,147-155,193-197,221-237,313-322,362-366,458-460,463-479,488-497,511-519,531-532,536-545
+apps/web/src/features/settings/computers/views/setup-notification.test.ts
+  s_38e9b85856b095::t_38a74a8d38d464 1-84
+apps/web/src/features/suggestions/queries/use-record-suggestions-activity.ts
+  s_38e9b85856b095::t_15136a083b6d1d 1-40
+apps/web/src/lib/core/component/BackgroundWork/BackgroundWorkIndicator.tsx
+  s_38e9b85856b095::t_971058a1a3ad54 1-56
+apps/web/src/lib/core/component/BackgroundWork/backgroundWork.test.ts
+  s_38e9b85856b095::t_1e30de573a97ad 1-42
+apps/web/src/lib/core/component/BackgroundWork/backgroundWork.ts
+  s_38e9b85856b095::t_f138bb29facb64 1-32
+apps/web/src/lib/core/component/Toast/Toast.tsx
+  s_38e9b85856b095::t_2dac18fa9dc237 54
+apps/web/src/lib/core/component/Toast/ToastRegion.tsx
+  s_38e9b85856b095::t_4c145d7307ee63 1,44,79,151
+apps/web/src/lib/core/component/Toast/useKeyedPersistentToasts.test.ts
+  s_38e9b85856b095::t_aa1a8582746d8c 27,63-64,83-84,122-153
+apps/web/src/lib/core/component/Toast/useKeyedPersistentToasts.ts
+  s_38e9b85856b095::t_32ddc762b2de03 3,68-77,148,162
+apps/web/src/lib/core/component/TopBar/shareModal.test.tsx
+  s_38e9b85856b095::t_da15fe6bdabe77 28-30
+apps/web/src/lib/core/component/UserTooltip.test.tsx
+  s_38e9b85856b095::t_18403b141050f1 304
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_38e9b85856b095::t_035a07bfca913d 1028-1045
+apps/web/src/lib/i18n/locales/en.ts
+  s_38e9b85856b095::t_8830ecc44398e5 26,69
+apps/web/src/lib/i18n/locales/en/channel-sections.ts
+  s_38e9b85856b095::t_b89f3f9189fc5b 142-146
+apps/web/src/lib/i18n/locales/en/computers.ts
+  s_38e9b85856b095::t_339cf3f3ff8476 119,123,125,129-137,150,174-183
+apps/web/src/lib/i18n/locales/en/routine-drafts.ts
+  s_38e9b85856b095::t_c6bb2983062e49 1-14
+apps/web/src/lib/queries/channel/by-ids.ts
+  s_38e9b85856b095::t_5bba874bc28f99 38,54-57
+apps/web/src/lib/queries/channel/mention-edge.ts
+  s_38e9b85856b095::t_dc4559d444a331 1-5
+apps/web/src/lib/queries/preview/types.ts
+  s_38e9b85856b095::t_426d0b44a26c16 45-46
+apps/web/src/lib/queries/soup/transform-utils.ts
+  s_38e9b85856b095::t_53286b3f425e42 106,902-903
+apps/web/src/lib/queries/storage/project-preview.test.ts
+  s_38e9b85856b095::t_eb63c7f731eb62 1-67
+apps/web/src/lib/queries/storage/project-preview.ts
+  s_38e9b85856b095::t_8c3d18543b1113 1,7,10-19,24-26,28-31,34-35,38-39,42-48,54,60,65-66,68-72,81,83,105-106
+apps/web/src/lib/queries/sync/use-query-sync.ts
+  s_38e9b85856b095::t_e7f0a8928c01e9 63
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupMetadata.ts
+  s_38e9b85856b095::t_c63d4c227ddfb4 1-23
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupMetadataHarnessId.ts
+  s_38e9b85856b095::t_c1b239cf9acfc0 1-11
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcome.ts
+  s_38e9b85856b095::t_23d5f9cd100296 1-15
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOf.ts
+  s_38e9b85856b095::t_5f1ab8b667c070 1-14
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOfKind.ts
+  s_38e9b85856b095::t_15349f74c7e193 1-14
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOfThree.ts
+  s_38e9b85856b095::t_543f2decdb25be 1-16
+apps/web/src/lib/service-clients/service-notification/generated/schemas/computerSetupOutcomeOneOfThreeKind.ts
+  s_38e9b85856b095::t_25e3583287fa45 1-14
+apps/web/src/lib/service-clients/service-notification/generated/schemas/index.ts
+  s_38e9b85856b095::t_04f9f39f8e4783 82-88,213-214
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEvent.ts
+  s_38e9b85856b095::t_a47c5e1d369e67 27,89-90
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSevenone.ts
+  s_38e9b85856b095::t_c62d138702e7db 7,11-12,15-17
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSevenoneTag.ts
+  s_38e9b85856b095::t_147a80808f6584 13
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSeventhree.ts
+  s_38e9b85856b095::t_40aadcfa2ea32c 1-20
+apps/web/src/lib/service-clients/service-notification/generated/schemas/notifEventOneOfSeventhreeTag.ts
+  s_38e9b85856b095::t_d2784883612c60 1-14
+apps/web/src/lib/service-clients/service-notification/generated/zod.ts
+  s_38e9b85856b095::t_30ab1ab2c8631d 2338-2387,4605-4654,6822-6871,8879-8926
+apps/web/src/lib/service-clients/service-notification/openapi.json
+  s_38e9b85856b095::t_56e303b3a3f531 1840-1895,3280-3294
+apps/web/src/lib/service-clients/service-scheduled-action/client.ts
+  s_38e9b85856b095::t_92a7f123cf0666 32-43,50,60,222-248
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_38e9b85856b095::t_236f267f34938d 9,18,23,27-32,40-46,409-663,882-886,890,895-900,905,910-911,914-918,923-925,927-928,931,933-934,936,941,948,1012-1085,1967-2622
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/acceptSuggestionRequest.ts
+  s_38e9b85856b095::t_aaafd11f8ca444 1-16
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/category.ts
+  s_38e9b85856b095::t_0bee9a569b6f5c 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/checkSummary.ts
+  s_38e9b85856b095::t_745be16002246a 1-34
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftAsked.ts
+  s_38e9b85856b095::t_b052c8f906c7ec 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJob.ts
+  s_38e9b85856b095::t_33292569d575f9 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobAllOf.ts
+  s_38e9b85856b095::t_e5a25cf2fdd1bc 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobProgress.ts
+  s_38e9b85856b095::t_1ceb55f09d4b3d 1-25
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobProgressCheck.ts
+  s_38e9b85856b095::t_6e4caf519016cc 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobProgressFound.ts
+  s_38e9b85856b095::t_fc7004caba6412 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobState.ts
+  s_38e9b85856b095::t_d95a3c5b3a6e39 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobStateOneOf.ts
+  s_38e9b85856b095::t_b6c3d0cc6c18b6 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobStateOneOfFive.ts
+  s_38e9b85856b095::t_cc1bdce242a622 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobStateOneOfFiveState.ts
+  s_38e9b85856b095::t_3d3ddee6a57529 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobStateOneOfState.ts
+  s_38e9b85856b095::t_4eb29f0b0f293a 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobStateOneOfThree.ts
+  s_38e9b85856b095::t_2872cb57287274 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftJobStateOneOfThreeState.ts
+  s_38e9b85856b095::t_0412f84900ce11 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftKind.ts
+  s_38e9b85856b095::t_949f7f414fd453 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftStage.ts
+  s_38e9b85856b095::t_08d43a11bd039b 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftUpdate.ts
+  s_38e9b85856b095::t_7d68735186e295 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftUpdateState.ts
+  s_38e9b85856b095::t_0b1eb897bf3d4e 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityAction.ts
+  s_38e9b85856b095::t_234d8cdce812cb 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/entityType.ts
+  s_38e9b85856b095::t_61feafc6fba776 1-41
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationStarted.ts
+  s_38e9b85856b095::t_7c359da01ca041 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_38e9b85856b095::t_9f573de242904b 9,47,50,69,76-88,106-108,110,114,134,140,144,146-151,160-174,207,223-224,260-261,265,274-279,281-295,301-303,307-308
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/kindName.ts
+  s_38e9b85856b095::t_878772331ecce9 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/listSuggestionsParams.ts
+  s_38e9b85856b095::t_40d84b2aaceba8 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestion.ts
+  s_38e9b85856b095::t_21ceb66b084b52 1-49
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionAction.ts
+  s_38e9b85856b095::t_f9a891c8d8e24b 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionPrompt.ts
+  s_38e9b85856b095::t_38970e83edadb9 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionReason.ts
+  s_38e9b85856b095::t_c00ecfaf52248e 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionRunMode.ts
+  s_38e9b85856b095::t_f02ad39cef094f 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/newSuggestionSends.ts
+  s_38e9b85856b095::t_bc32df3ebbb430 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/recordSuggestionsSeenParams.ts
+  s_38e9b85856b095::t_99b3c4bee32548 9
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/retireSuggestion.ts
+  s_38e9b85856b095::t_91165b157307b5 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/retireSuggestionRequest.ts
+  s_38e9b85856b095::t_1ad56ca3d50a19 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedState.ts
+  s_38e9b85856b095::t_682cad5d52ea03 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedSuggestion.ts
+  s_38e9b85856b095::t_ecae2f6af56cec 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedSuggestionAllOf.ts
+  s_38e9b85856b095::t_07306892373bd0 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedSuggestionAllOfClosedAt.ts
+  s_38e9b85856b095::t_57e7be5c3d13f2 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestion.ts
+  s_38e9b85856b095::t_67b7903139cacc 1-40
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionAbout.ts
+  s_38e9b85856b095::t_0e6ceff3da8dac 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionCategories.ts
+  s_38e9b85856b095::t_0c79b93a24b41e 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionImportance.ts
+  s_38e9b85856b095::t_942b3300aaf82c 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionPrompt.ts
+  s_38e9b85856b095::t_55f77706b2f28d 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionSends.ts
+  s_38e9b85856b095::t_4a7ab3322efde3 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionSummary.ts
+  s_38e9b85856b095::t_d1a3b81b227986 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/rewriteSuggestionTitle.ts
+  s_38e9b85856b095::t_9069e9583ff9b9 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineSuggestionCard.ts
+  s_38e9b85856b095::t_dcc9e1f090b385 1-25
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/runMode.ts
+  s_38e9b85856b095::t_947804d4610ec0 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/runProgress.ts
+  s_38e9b85856b095::t_083166d7e3be9c 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/startDraftJobRequest.ts
+  s_38e9b85856b095::t_279be931856aec 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/startSuggestionGenerationParams.ts
+  s_38e9b85856b095::t_71b98744b9841f 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/stepTitle.ts
+  s_38e9b85856b095::t_0042b3648d03e8 1-17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequest.ts
+  s_38e9b85856b095::t_581e756e8c3550 9,14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOf.ts
+  s_38e9b85856b095::t_1e502c8e33b241 8,17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOfCard.ts
+  s_38e9b85856b095::t_3ba48f8ee1afc5 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOfFive.ts
+  s_38e9b85856b095::t_ef3c633b3e54a3 11-12,18-20,24
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOfFiveKind.ts
+  s_38e9b85856b095::t_3675ca0c4e2ec4 9-10,13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestion.ts
+  s_38e9b85856b095::t_6b454592318431 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOf.ts
+  s_38e9b85856b095::t_b06d4ee9144188 1-47
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOfRun.ts
+  s_38e9b85856b095::t_94e97f967724f5 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionAllOfStateReason.ts
+  s_38e9b85856b095::t_5de1e5b6cbea55 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionChanged.ts
+  s_38e9b85856b095::t_e846d0eb5f6031 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionFeed.ts
+  s_38e9b85856b095::t_8f63e20f052e32 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKind.ts
+  s_38e9b85856b095::t_022f779bfb5c1b 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOf.ts
+  s_38e9b85856b095::t_c683aab1f5eb14 1-28
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFour.ts
+  s_38e9b85856b095::t_ec065e62f2246b 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourDraft.ts
+  s_38e9b85856b095::t_4103bb5cddd289 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfFourKind.ts
+  s_38e9b85856b095::t_df72a426eaa3a2 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfKind.ts
+  s_38e9b85856b095::t_b4b66ad118e006 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSends.ts
+  s_38e9b85856b095::t_f005bc48f9d387 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSeven.ts
+  s_38e9b85856b095::t_182fbae0d040ab 1-17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionKindOneOfSevenKind.ts
+  s_38e9b85856b095::t_32124c3f72edf5 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionReview.ts
+  s_38e9b85856b095::t_8b89639259d24b 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionRun.ts
+  s_38e9b85856b095::t_bca6487e61aad0 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionState.ts
+  s_38e9b85856b095::t_16b1da0ecc1c28 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionWriteOutcome.ts
+  s_38e9b85856b095::t_56fecf999e155a 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionWriteOutcomeSuggestion.ts
+  s_38e9b85856b095::t_32130e22bf6e60 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionsReview.ts
+  s_38e9b85856b095::t_221649c861c7a1 1-33
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/target.ts
+  s_38e9b85856b095::t_0a7cf632ea7c4d 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/targetPartId.ts
+  s_38e9b85856b095::t_cc502052201ba1 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_38e9b85856b095::t_b688349d711cdf 353-590,680-1304,1310,1314-1324,1340,1360-1363,1365-1376,1381,1389,1393,1418-1429,1451,1454,1457-1459,1468,1472-1482,1497-1506,1508-1518,1536-1545,1550-1551,1553,1558,1566-1577,1590,1612,1615,1620,1633,1649,1672,1677,1688,1700,1749,1754,1798-1799,1801,1806,1817,1824,1829,1835-1842,1845,1847,1849,1854,1865,1887-1891,1894-1897,1899,1901-1905,1907,1909,1925,1945-1949,1954,1962,1966,1991-1992,2001-2002,2024,2026-2028,2031-2033,2042,2046,2051,2061-2062,2071-2091,2095,2100,2110-2111,2120-2121,2130-2131,2133,2135,2143-2147,2150-2152,2160-2161,2186-2190,2195,2202-2211,2214,2218-2228,2243-2252,2254,2274-2280,2285,2296,2303-2304,2327,2336-2345,2357-2363,2368,2377,2390,2412,2414-2416,2421,2432,2439-2440,2444,2470,2480,2505-2516,2956-2960,2979-3015,3298-3311,3387-3505,3587-3613,3689-3693,3723-3753,3933-3943,4005-4009,4019-4096,4183-4310,4621-4647,4834-4850,5151-5169,5197-5210,5283-5293,5327,5331-5334,5405-5546,5552-5734,5750-5769,5852-5859
+apps/web/src/lib/service-clients/service-storage/graphql-soup.test.ts
+  s_38e9b85856b095::t_1d6b1be3a65f00 564,590,599
+apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  s_38e9b85856b095::t_888b632fdcda16 1560-1579,2194-2200
+apps/web/src/lib/service-clients/service-storage/graphql/channel-list.graphql
+  s_38e9b85856b095::t_830550863e4bcc 27-37
+apps/web/src/lib/service-clients/service-storage/graphql/channel-list.test.ts
+  s_38e9b85856b095::t_1229e0a0b259e8 1,3,13,15,19,22-65
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_38e9b85856b095::t_751477632ff0b2 1101-1107,3862,3908,3955,4004,4053,4102,4142,4182,4231,4280,4320,4369,4423,4472,4512,4552,4606,4655,4717,4838,4972,5447,5506,5566,5621,5699,5759,5835,5890,6027,6076,6125,6174,6214,6254,6303,6352,6392,6441,6495,6544,6584,6624,6678,6727,6780,6829,6878,6927,6967,7007,7056,7105,7145,7194,7248,7297,7337,7377,7431,7480,7534,7583,7632,7681,7721,7761,7810,7859,7899,7948,8002,8051,8091,8131,8185,8234,8288,8337,8386,8435,8475,8515,8564,8613,8653,8702,8756,8805,8845,8885,8939,8988,9042,9091,9140,9189,9229,9269,9318,9367,9407,9456,9510,9559,9599,9639,9693,9742,9796,9845,9894,9943,9983,10023,10072,10121,10161,10210,10264,10313,10353,10393,10447,10496,10550,10599,10648,10697,10737,10777,10826,10875,10915,10964,11018,11067,11107,11147,11201,11250,11304,11353,11402,11451,11491,11531,11580,11629,11669,11718,11772,11821,11861,11901,11955,12004,12058,12107,12156,12205,12245,12285,12334,12383,12423,12472,12526,12575,12615,12655,12709,12758,12813,12862,12911,12960,13000,13040,13089,13138,13178,13227,13281,13330,13370,13410,13464,13513,14007,14056,14105,14154,14194,14234,14283,14332,14372,14421,14475,14524,14564,14604,14658,14707,15126,15286,15457,15629,15803,15970,16137,16194,16234,16682,16731,16780,16829,16869,16909,16958,17007,17047,17096,17150,17199,17239,17279,17333,17382,17435,17484,17533,17582,17622,17662,17711,17760,17800,17849,17903,17952,17992,18032,18086,18135,18184,18233,18282,18331,18371,18411,18460,18509,18549,18598,18652,18701,18741,18781,18835,18884,18932,18981,19030,19079,19119,19159,19208,19257,19297,19346,19405,19454,19494,19534,19588,19637,19685,19734,19783,19832,19872,19912,19961,20010,20050,20099,20153,20202,20242,20282,20336,20385,20433,20482,20531,20580,20620,20660,20709,20758,20798,20847,20901,20950,20990,21030,21084,21133,21205,21255,21305,21355,21396,21437,21487,21537,21578,21628,21683,21733,21774,21815,21870,21920,21980,22030,22080,22130,22171,22212,22262,22312,22353,22403,22458,22508,22549,22590,22645,22695,22906,22947,22988,23029,23070,23111,23152,23193,23234,23275,23316,23357,23398,23439,23480,23521,23683,23740-23741,23802,23857-23858,23919,23984,24024,24064,24104,24144,24184,24224,24264,24304,24344,24384,24424,24464,24504,24544,24584,24626,24667,24708,24749,24790,24831,24872,24913,24954,24995,25036,25077,25118,25159,25200,25241,25418,25578,25749,25921,26088,26134,26136-26137,26143-26145,26147,26150,26154-26156,26171-26172,26181-26182,26184-26186,26206-26209,26230-26232,26235-26236,26239,26241-26248,26258,26268,26270,26272-26274,26276,26291-26295,26298-26299,26301-26302
+apps/web/src/lib/service-clients/service-storage/graphql/soup.graphql
+  s_38e9b85856b095::t_422e11eee60bed 664-670
+apps/web/src/routes/Root.tsx
+  s_38e9b85856b095::t_7b7cba9c158fc2 5,192
+apps/web/src/vite-env.d.ts
+  s_38e9b85856b095::t_a734133c357c06 30,32
+apps/web/tauri/src-tauri/build.rs
+  s_38e9b85856b095::t_ecc5ad1bc5c483 44-50
+apps/web/tauri/src-tauri/gen/apple/project.yml
+  s_38e9b85856b095::t_86a18c2f1bc912 61-62,148-149,183-184
+apps/web/tauri/src-tauri/src/lib.rs
+  s_38e9b85856b095::t_58af6a401d58ed 96-104,463
+apps/web/tauri/src-tauri/tauri.android.conf.json
+  s_38e9b85856b095::t_065d91760f701c 5
+apps/web/tauri/src-tauri/tauri.ios.conf.json
+  s_38e9b85856b095::t_8259d7c7af4c15 3,6
+crates/agent_code_mode/src/domain/documentation.rs
+  s_38e9b85856b095::t_b534d159e785db 64-101
+crates/agent_code_mode/src/domain/documentation/test.rs
+  s_38e9b85856b095::t_8808d2e14ed92a 416-425
+crates/agent_correlation/AGENTS.md
+  s_38e9b85856b095::t_e832699a10b23b 9-12,17-31,58-60
+crates/agent_correlation/src/context.rs
+  s_38e9b85856b095::t_8f7d189095ec07 6-7,15-18,39-48,82,137
+crates/agent_correlation/src/domain.rs
+  s_38e9b85856b095::t_2bed39fb127177 6-7,15-17,23-30,47-50,82-87,100
+crates/agent_correlation/src/inbound.rs
+  s_38e9b85856b095::t_6689b557068c2d 5,62-69,112,122,138,171-172,175-188,193-194
+crates/agent_correlation/src/inbound/test.rs
+  s_38e9b85856b095::t_5ecc1b6452d923 20-25,30-31,34,203-277
+crates/agent_correlation/src/lib.rs
+  s_38e9b85856b095::t_e1b51d71294e1f 17
+crates/agent_correlation/src/outbound.rs
+  s_38e9b85856b095::t_79d3cf8f18d9fa 3,14-19,22-23,31-32,35-53,70-74,80-81,84-87,89
+crates/agent_correlation/src/scope.rs
+  s_38e9b85856b095::t_60b4637fcc69f5 1-258
+crates/agent_correlation/src/scope/test.rs
+  s_38e9b85856b095::t_e4de1e9b851349 1-100
+crates/agent_trigger/src/domain/broker_events.rs
+  s_8703f73ae8e37d::t_de39bd8b682cf2 124-128,433-451
+crates/coding_agent_worker/src/telemetry.rs
+  s_38e9b85856b095::t_1776888d4fd016 71-77,79
+crates/coding_agent_worker/src/trigger.rs
+  s_38e9b85856b095::t_8f50121a048b10 109
+crates/email/AGENTS.md
+  s_38e9b85856b095::t_2adc25aa3f4048 339-342
+crates/email/src/domain/mailbox.rs
+  s_38e9b85856b095::t_280a6e90979a31 276-277,681-684,705-711,718,724-728
+crates/email/src/domain/mailbox/test.rs
+  s_38e9b85856b095::t_81b101c360dad3 14-67
+crates/email/src/outbound/mailbox_pg/test/retries.rs
+  s_38e9b85856b095::t_ea8a88af69283c 242,246-247,250-297,301-303,305-319,323-324,327
+crates/email_api_client/src/outbound/outlook/contacts.rs
+  s_38e9b85856b095::t_adec4db4c72c45 126-127
+crates/email_api_client/src/outbound/outlook/contacts/test.rs
+  s_38e9b85856b095::t_fc8d0f453c734a 74
+crates/email_api_client/src/outbound/outlook/messages.rs
+  s_38e9b85856b095::t_30b5bc0045ebc1 339-346,348,427-442
+crates/email_api_client/src/outbound/outlook/test.rs
+  s_38e9b85856b095::t_05d36ae5d1963a 861-903
+crates/email_api_client/src/outbound/outlook/wire.rs
+  s_38e9b85856b095::t_0182ea0b833619 36,41-42
+crates/entity_registry/entity_registry_db_utils/AGENTS.md
+  s_38e9b85856b095::t_1a579f55192b67 13-14
+crates/entity_registry/entity_registry_db_utils/src/lib.rs
+  s_38e9b85856b095::t_bb3a0a95969fc0 142-199
+crates/entity_registry/entity_registry_db_utils/src/test.rs
+  s_38e9b85856b095::t_06337f43563b79 8-11,388-507
+crates/event_exposure/src/lib.rs
+  s_8703f73ae8e37d::t_17e5c74e6fbe87 302-310
+crates/event_stream/AGENTS.md
+  s_3c6362fd17dcc4::t_dbdf90cd755890 83-88
+crates/event_stream/Cargo.toml
+  s_8703f73ae8e37d::t_d8533fef1da784 113-114
+crates/event_stream/src/domain/access.rs
+  s_8703f73ae8e37d::t_10e8aac0d4cfd9 361,611,627
+crates/event_stream/src/domain/catalog.rs
+  s_8703f73ae8e37d::t_44c6bedddf826f 64-65,370
+crates/event_stream/src/domain/catalog/test.rs
+  s_8703f73ae8e37d::t_638a2b135e9e83 165
+crates/event_stream/src/domain/fan_out/test.rs
+  s_8703f73ae8e37d::t_1e5e649969eae7 900-1008
+crates/event_stream/src/domain/models.rs
+  s_8703f73ae8e37d::t_efd1a902011025 176-177
+crates/event_stream/src/inbound/stream_router.rs
+  s_8703f73ae8e37d::t_d95c6736243644 12-13,168-178
+crates/graphql_notification/src/notification_event.rs
+  s_38e9b85856b095::t_627ab645c1b5ee 32-39,847-893,1499-1500,1568-1570
+crates/harnesses/src/outbound/pg_harness_repo.rs
+  s_38e9b85856b095::t_9551efe3fa5461 67-83
+crates/hosted_runtimes/AGENTS.md
+  s_38e9b85856b095::t_50f08f3cbbf036 70-74
+crates/hosted_runtimes/src/domain/fakes.rs
+  s_38e9b85856b095::t_702283e42f7319 26,89-90,95,131-134,228-229,397,401-409,736,795-814
+crates/hosted_runtimes/src/domain/lifecycle.rs
+  s_38e9b85856b095::t_cff4a2dd3575d9 24,693-695,699-719
+crates/hosted_runtimes/src/domain/lifecycle/event.rs
+  s_38e9b85856b095::t_efc297abf675f8 248-268,284-285
+crates/hosted_runtimes/src/domain/lifecycle/test.rs
+  s_38e9b85856b095::t_2d4f94abfd7b49 11
+crates/hosted_runtimes/src/domain/lifecycle/test/setup_notice.rs
+  s_38e9b85856b095::t_d6d04febd8ec76 1-234
+crates/hosted_runtimes/src/domain/models.rs
+  s_38e9b85856b095::t_8a13b66e3ea13a 552-564
+crates/hosted_runtimes/src/domain/operator.rs
+  s_38e9b85856b095::t_24ed46298cdd9f 19,56,60,73-74,80,88,96,302-303,421-435,776-778,780,789-790,811-812
+crates/hosted_runtimes/src/domain/operator/test.rs
+  s_38e9b85856b095::t_29a8936c8ffd1d 4,17,228,331,339,348,578-579,619-620,687,810
+crates/hosted_runtimes/src/domain/operator/test/data_disk.rs
+  s_38e9b85856b095::t_cba1b0d24d818a 4,17-19
+crates/hosted_runtimes/src/domain/operator/test/setup_notice.rs
+  s_38e9b85856b095::t_b79ada413f332a 1-91
+crates/hosted_runtimes/src/domain/ports.rs
+  s_38e9b85856b095::t_ed2917fada4e1e 20,100,147-148,151,640-666
+crates/hosted_runtimes/src/domain/service.rs
+  s_38e9b85856b095::t_2a661f2028d929 282-284,293,299-302,309
+crates/hosted_runtimes/src/domain/service/test/capacity.rs
+  s_38e9b85856b095::t_105c71a962f920 34-123
+crates/hosted_runtimes/src/domain/service/test/comped.rs
+  s_38e9b85856b095::t_4c303988783b81 130-133
+crates/hosted_runtimes/src/outbound/pg/reservations.rs
+  s_38e9b85856b095::t_136d75e532cbef 99
+crates/hosted_runtimes/src/outbound/pg/test.rs
+  s_38e9b85856b095::t_db6fafa1957b81 117-126,167,386-400,619
+crates/hosted_runtimes/src/outbound/pg/test/capacity.rs
+  s_38e9b85856b095::t_f00a86e00285e3 7,10,16-17,20-43
+crates/macro_db_client/migrations/20261109204236_create_suggestions.sql
+  s_38e9b85856b095::t_066c066134952d 1-146
+crates/macro_db_client/migrations/20261109212700_unify_suggestion_generation.sql
+  s_38e9b85856b095::t_544c5be1fe9c39 1-73
+crates/macro_db_client/migrations/20261109221120_backfill_routine_cards.sql
+  s_38e9b85856b095::t_53150bde637cb9 1-59
+crates/macro_db_client/migrations/20261109223746_create_suggestion_runs.sql
+  s_38e9b85856b095::t_1a095c38ee880f 1-34
+crates/macro_db_client/migrations/20261110011716_delete_suggestions_with_their_kind_rows.sql
+  s_38e9b85856b095::t_eb53e52d255120 1-29
+crates/macro_db_client/migrations/20261110153528_add_suggestion_prompt_sends.sql
+  s_38e9b85856b095::t_f44718bbb7305b 1-5
+crates/macro_db_client/migrations/20261112222502_scheduled_action_draft_jobs.down.sql
+  s_38e9b85856b095::t_bb4a53314ea727 1-17
+crates/macro_db_client/migrations/20261112222502_scheduled_action_draft_jobs.up.sql
+  s_38e9b85856b095::t_4ad7b9a7ce5a53 1-49
+crates/macro_event_broker/src/domain/models/test.rs
+  s_38e9b85856b095::t_6f095de6842462 358
+crates/macro_tower_layers/src/lib.rs
+  s_38e9b85856b095::t_5fd76d6f6befd6 64-71
+crates/macro_tower_layers/src/test.rs
+  s_38e9b85856b095::t_7cb313bd228861 409-425
+crates/model_notifications/src/lib.rs
+  s_38e9b85856b095::t_e0e57efe03f385 20-30,293-295,371,444
+crates/model_notifications/src/metadata.rs
+  s_38e9b85856b095::t_c582b65c03eeb1 5,13
+crates/model_notifications/src/metadata/computer_setup.rs
+  s_38e9b85856b095::t_f29ad6184746e3 1-78
+crates/model_notifications/src/metadata/test.rs
+  s_38e9b85856b095::t_05044f12e4d56e 1565-1647
+crates/notification/AGENTS.md
+  s_38e9b85856b095::t_e22ea96198d0cf 75-76
+crates/notification/src/outbound/entity_notifications.rs
+  s_38e9b85856b095::t_215893c87673fc 5-8,44-49,102,111,126,133-136,139,174-175
+crates/notification/src/outbound/entity_notifications/test.rs
+  s_38e9b85856b095::t_e77ca2902e38ac 627-754
+crates/notification_inbox/src/domain/rows.rs
+  s_38e9b85856b095::t_c4b41704e6fcb3 479-480
+crates/projects/AGENTS.md
+  s_38e9b85856b095::t_a809d442146045 69-74
+crates/projects/Cargo.toml
+  s_38e9b85856b095::t_a5af1691925f59 15,48
+crates/projects/src/domain/entity_mutation.rs
+  s_38e9b85856b095::t_52407c725ef4d2 3-4,64-65,69-79
+crates/projects/src/domain/service.rs
+  s_38e9b85856b095::t_85998f77639113 56-64,605-615,627-631,667-677,688-692,742-752,764-768
+crates/projects/src/inbound/axum_router/delete_project.rs
+  s_38e9b85856b095::t_0efa9ef337deab 3-4,14,20-34,77-85,127-129
+crates/projects/src/inbound/axum_router/revert_delete_project.rs
+  s_38e9b85856b095::t_5b5d600dedb327 3-4,16,44-46
+crates/projects/src/inbound/axum_router/tests.rs
+  s_38e9b85856b095::t_42bd2f2fb16ef4 49,73-80,97,108,236-248,253-255,1227-1279
+crates/projects/src/outbound/pg_project_repo/delete.rs
+  s_38e9b85856b095::t_a45d767516bf9c 247-250,256-258,266-268
+crates/projects/src/outbound/pg_project_repo/revert_delete.rs
+  s_38e9b85856b095::t_10d511a5553c0c 178-183
+crates/projects/src/outbound/sqs_search_indexer.rs
+  s_38e9b85856b095::t_92352a2a389b45 9,14-19,48-60,65-86
+crates/scheduled_action/AGENTS.md
+  s_38e9b85856b095::t_010d230116aef8 80-123,125-164
+crates/scheduled_action/Cargo.toml
+  s_38e9b85856b095::t_0f765447f6dbbf 57-59
+crates/scheduled_action/src/domain/drafts.rs
+  s_38e9b85856b095::t_f37e62e5cb47fc 14-17,43,46-49,75-76,148,165,184,198,215,293-296,299-329,331,346-351,356,358-372,374-386,388-389,399,408-434,440-453,459-477,485-492,497-501,538,541-542,545,555,584,588,592-595,625-627,633-643,646-668,672-673,684,694-713,746-747,754-755,768-773,783-789,798,801-811
+crates/scheduled_action/src/domain/drafts/jobs.rs
+  s_38e9b85856b095::t_07f7e6ca6e5c03 1-853
+crates/scheduled_action/src/domain/drafts/jobs/test.rs
+  s_38e9b85856b095::t_517bdc092bcb26 1-1088
+crates/scheduled_action/src/domain/drafts/progress.rs
+  s_38e9b85856b095::t_e6dcf9ce3c55a5 1-163
+crates/scheduled_action/src/domain/drafts/progress/test.rs
+  s_38e9b85856b095::t_59c83bec22a3f6 1-94
+crates/scheduled_action/src/domain/drafts/test.rs
+  s_38e9b85856b095::t_a7c0482702c506 17-18,20,24-25,27-49,95-103,109-112,118,124,130-132,142-173,176-177,183-197,199,203,211-212,234,281,336-339,349,359,365,369,374,387,391,807
+crates/scheduled_action/src/domain/ports.rs
+  s_38e9b85856b095::t_f659d4a553962d 429-431,435-562,574-575
+crates/scheduled_action/src/domain/suggestions.rs
+  s_38e9b85856b095::t_7776d3f72f98e5 1-2,4-15,17-20,38-39,42-44,46-48,61,74,76,79-80,83,104-106,111-115,118-119,127,135-136,138,141-144,146-147,149,176-177,181,192-198,201-203,206-215,217-218,220,229-230,236,242,246-247,250-251,263,265-270,275-276,279-280,288,298,318-319,327,329-335,337-354,356-357,359,371-420,422-424,432,435-464,469,475-476,484-488,491,495-500,502-513,515-542,545-551,553-573,575-577,579-593,595-601,604-609,611-621,623-638,641-670,672-679,780
+crates/scheduled_action/src/domain/suggestions/decode.rs
+  s_38e9b85856b095::t_add663d184538e 10-12,18-19,21-23,66,74-75,81,85-98,128
+crates/scheduled_action/src/domain/suggestions/model.rs
+  s_38e9b85856b095::t_312eaa958c36ea 121-123,135-136,140-154,198-207,218-221,225-229,232-294
+crates/scheduled_action/src/domain/suggestions/ports.rs
+  s_38e9b85856b095::t_559cabf98b3254 13-14,16-17,20,22-23,26-27,29-32,36-37,39,41-43,46,48-49,51,53-54,66-67,131-134,137-138,140-174,184,186,194-213
+crates/scheduled_action/src/domain/suggestions/prompt.md
+  s_38e9b85856b095::t_da2b2644f7666c 1,6
+crates/scheduled_action/src/domain/suggestions/prompt.rs
+  s_38e9b85856b095::t_8d89a940965c23 8-9,33-34,60-80
+crates/scheduled_action/src/domain/suggestions/prompt/test.rs
+  s_38e9b85856b095::t_7c48e0c9413c9f 6,52-61
+crates/scheduled_action/src/domain/suggestions/test.rs
+  s_38e9b85856b095::t_11cf7d1ccf4e0a 2,8,14,18,21-24,28,30,34-35,42,45,53-54,57-63,65-89,106,141-145,148-150,152-154,156,158-161,175-177,179,181,184,194-195,201-202,204,206,208,212,220-244,254,270-271,273,275-277,280,283,285-288,291,298,308-315,323,329,347,378,397,442,484-485,513-514,537,559,582-583,678-697,702-942
+crates/scheduled_action/src/inbound.rs
+  s_38e9b85856b095::t_a10f6f862dc020 2
+crates/scheduled_action/src/inbound/axum_router.rs
+  s_38e9b85856b095::t_4156aa52d9f604 7,853-859
+crates/scheduled_action/src/inbound/axum_router/test.rs
+  s_38e9b85856b095::t_2e337097d904ef 350
+crates/scheduled_action/src/inbound/draft_job_router.rs
+  s_38e9b85856b095::t_432a420b0b60bb 1-215
+crates/scheduled_action/src/inbound/draft_job_router/test.rs
+  s_38e9b85856b095::t_52c24654bf9fdf 1-314
+crates/scheduled_action/src/inbound/suggestion_router.rs
+  s_38e9b85856b095::t_27dbcc2922d1be 17-19,21,68-73,186-248
+crates/scheduled_action/src/inbound/suggestion_router/test.rs
+  s_38e9b85856b095::t_494528c1dd6f7e 16-17,56,59-95,196-218
+crates/scheduled_action/src/outbound/conn_gateway_live_updates.rs
+  s_38e9b85856b095::t_bebaf3e2f3427c 6-8,10,49-71
+crates/scheduled_action/src/outbound/pg_draft_hand_backs.rs
+  s_38e9b85856b095::t_f728da9bc34a82 1-3,11-15,17,88-91,110,129,137-467,471-474,479-515
+crates/scheduled_action/src/outbound/pg_draft_hand_backs/test.rs
+  s_38e9b85856b095::t_361c92535077f9 101,174-634
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo.rs
+  s_38e9b85856b095::t_c3ec58266b4a0b 263-273
+crates/scheduled_action/src/outbound/pg_suggestion_repo.rs
+  s_38e9b85856b095::t_a0839cfe22cc40 1,9-10,15-17,46-53,56-80,82-87,91,93,100,103,105,131-145,147-235,241,267-268,285,292,294-301
+crates/scheduled_action/src/outbound/pg_suggestion_repo/test.rs
+  s_38e9b85856b095::t_549fe39fc07ac7 7,27,39-43,47-87,91,93-94,97-108,110-118,120,122,124-125,129-152,159,163-172,187,204-337
+crates/scheduled_action/src/swagger.rs
+  s_38e9b85856b095::t_4162d0b0632b28 17-23,69-72,74-75,99-102,112-123
+crates/shown_text/AGENTS.md
+  s_38e9b85856b095::t_dd9521108ffe67 1-16
+crates/shown_text/CLAUDE.md
+  s_38e9b85856b095::t_044b221295e56d 1
+crates/shown_text/Cargo.toml
+  s_38e9b85856b095::t_a2e3a66f1ccc10 1-9
+crates/shown_text/src/lib.rs
+  s_38e9b85856b095::t_e348c4a531dfcd 1-55
+crates/shown_text/src/test.rs
+  s_38e9b85856b095::t_9372e4138d1c0b 1-29
+crates/suggestion_generation/AGENTS.md
+  s_38e9b85856b095::t_f39306b4a74de2 1-82
+crates/suggestion_generation/CLAUDE.md
+  s_38e9b85856b095::t_39d4b478b918d4 1
+crates/suggestion_generation/Cargo.toml
+  s_38e9b85856b095::t_c891b21a247c1a 1-44
+crates/suggestion_generation/src/domain.rs
+  s_38e9b85856b095::t_d4fa56b3faa357 1-7
+crates/suggestion_generation/src/domain/audience.rs
+  s_38e9b85856b095::t_78aff0d0d386c3 1-49
+crates/suggestion_generation/src/domain/model.rs
+  s_38e9b85856b095::t_2c05f456ce37be 1-159
+crates/suggestion_generation/src/domain/night.rs
+  s_38e9b85856b095::t_96895f1a837e90 1-81
+crates/suggestion_generation/src/domain/night/test.rs
+  s_38e9b85856b095::t_6ec2586b3dc668 1-54
+crates/suggestion_generation/src/domain/ports.rs
+  s_38e9b85856b095::t_ed6c723e73434a 1-139
+crates/suggestion_generation/src/domain/service.rs
+  s_38e9b85856b095::t_5a1ea249dc41ad 1-915
+crates/suggestion_generation/src/domain/service/test.rs
+  s_38e9b85856b095::t_4a857f8066e6a8 1-820
+crates/suggestion_generation/src/inbound.rs
+  s_38e9b85856b095::t_d01b98f254b3fc 1-3
+crates/suggestion_generation/src/inbound/router.rs
+  s_38e9b85856b095::t_c4c96e7ff9f074 1-235
+crates/suggestion_generation/src/inbound/router/test.rs
+  s_38e9b85856b095::t_7d80fd47c9acb1 1-144
+crates/suggestion_generation/src/lib.rs
+  s_38e9b85856b095::t_4f39d02157e91a 1-9
+crates/suggestion_generation/src/outbound.rs
+  s_38e9b85856b095::t_59f698bb1623e8 1-3
+crates/suggestion_generation/src/outbound/pg_generation_repo.rs
+  s_38e9b85856b095::t_f48bdb69441042 1-407
+crates/suggestion_generation/src/outbound/pg_generation_repo/test.rs
+  s_38e9b85856b095::t_821167d02e1c44 1-513
+crates/suggestion_generation/src/swagger.rs
+  s_38e9b85856b095::t_de9c9bc98f490a 1-13
+crates/suggestions/AGENTS.md
+  s_38e9b85856b095::t_371032f7127b55 1-118
+crates/suggestions/CLAUDE.md
+  s_38e9b85856b095::t_ab6fa9aa69d5ac 1
+crates/suggestions/Cargo.toml
+  s_38e9b85856b095::t_e4d64502efed27 1-46
+crates/suggestions/src/domain.rs
+  s_38e9b85856b095::t_50d35ee4d5e9eb 1-9
+crates/suggestions/src/domain/check.rs
+  s_38e9b85856b095::t_2d7d3c57e6b73c 1-190
+crates/suggestions/src/domain/check/test.rs
+  s_38e9b85856b095::t_61572256d53b76 1-81
+crates/suggestions/src/domain/model.rs
+  s_38e9b85856b095::t_3fc6ccb545caf0 1-705
+crates/suggestions/src/domain/ports.rs
+  s_38e9b85856b095::t_5b397a65dccb2a 1-380
+crates/suggestions/src/domain/prompt.md
+  s_38e9b85856b095::t_c3be8ca271cbf6 1-145
+crates/suggestions/src/domain/prompt.rs
+  s_38e9b85856b095::t_02c76352c9d61e 1-131
+crates/suggestions/src/domain/prompt/test.rs
+  s_38e9b85856b095::t_a294f4716174b7 1-39
+crates/suggestions/src/domain/resolution.rs
+  s_38e9b85856b095::t_b774e946280e5b 1-261
+crates/suggestions/src/domain/resolution/test.rs
+  s_38e9b85856b095::t_873cfecb871825 1-503
+crates/suggestions/src/domain/service.rs
+  s_38e9b85856b095::t_274e75c350326f 1-1234
+crates/suggestions/src/domain/service/test.rs
+  s_38e9b85856b095::t_6cb467d8110565 1-1649
+crates/suggestions/src/inbound.rs
+  s_38e9b85856b095::t_57e5a53fadfbe0 1-4
+crates/suggestions/src/inbound/kafka_consumer.rs
+  s_38e9b85856b095::t_1eb54d83398fb3 1-252
+crates/suggestions/src/inbound/kafka_consumer/test.rs
+  s_38e9b85856b095::t_20f34e898058d2 1-236
+crates/suggestions/src/inbound/router.rs
+  s_38e9b85856b095::t_9cd4600a07a552 1-415
+crates/suggestions/src/lib.rs
+  s_38e9b85856b095::t_9b9d583805a137 1-9
+crates/suggestions/src/outbound.rs
+  s_38e9b85856b095::t_7b7eb766bc905f 1-4
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_38e9b85856b095::t_4402cccce892cf 1-931
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_38e9b85856b095::t_db476a6521fadc 1-455
+crates/suggestions/src/outbound/suggestion_access.rs
+  s_38e9b85856b095::t_74ba0d09e01519 1-104
+crates/suggestions/src/outbound/suggestion_access/test.rs
+  s_38e9b85856b095::t_ea6ae7ba0e383a 1-122
+crates/suggestions/src/swagger.rs
+  s_38e9b85856b095::t_5458ac1f8950af 1-38
+crates/suggestions_db_utils/AGENTS.md
+  s_38e9b85856b095::t_777c7378f3eb3f 1-25
+crates/suggestions_db_utils/CLAUDE.md
+  s_38e9b85856b095::t_f9e34c62a3ee0a 1
+crates/suggestions_db_utils/Cargo.toml
+  s_38e9b85856b095::t_f9bf055240b50e 1-15
+crates/suggestions_db_utils/src/lib.rs
+  s_38e9b85856b095::t_3d8e37a1dd4bf0 1-257
+crates/suggestions_db_utils/src/test.rs
+  s_38e9b85856b095::t_043dd62bc07f35 1-143
+crates/webhook/src/domain/ingestion.rs
+  s_8703f73ae8e37d::t_28ba6f71539437 604,702-703
+crates/webhook/src/domain/ingestion/test.rs
+  s_38e9b85856b095::t_8896918619d9e1 1511
+docs/agent-guide/ai-chat.md
+  s_38e9b85856b095::t_b140ecc1cc54c8 957-974,1363-1369,1874-1896,1937-1939,1949-1952,1965-1967,1969
+docs/agent-guide/channels.md
+  s_38e9b85856b095::t_d9ecdf35f22db8 1494-1506
+docs/agent-guide/databases.md
+  s_38e9b85856b095::t_a54edc3d250325 166-168,338-339,341-345
+docs/agent-guide/notifications.md
+  s_38e9b85856b095::t_3b0bd8c0207fed 384-391
+docs/agent-guide/onboarding.md
+  s_38e9b85856b095::t_7ee9667192289c 63-65
+docs/agent-guide/settings.md
+  s_38e9b85856b095::t_9e7bd5f674b701 354-356,890-891,895-896,927-930,938-939,956-963,973-1004
+docs/architecture/macro-computers.md
+  s_38e9b85856b095::t_e2fc4e675248c2 157-164,365-370
+docs/development/cursor-cloud.md
+  s_38e9b85856b095::t_51563b0787545f 80-82
+docs/runbooks/outlook-sync.md
+  s_38e9b85856b095::t_46fee5a47d0415 36-37,42-45
+docs/runbooks/routine-suggestions.md
+  s_38e9b85856b095::t_25d97571b6e9e8 7-15,18,22-23,28-32,41-43,51-57
+infra/stacks/monitoring/monitors/routine-suggestions.ts
+  s_38e9b85856b095::t_1b9e15d4f5c8a8 1-3,11-19,28-30,45-47,52,65,73
+nix/macro-box/AGENTS.md
+  s_38e9b85856b095::t_735f6d1a35ec5b 123-124,127-130
+packages/code-mode-sdk/scripts/catalog.ts
+  s_38e9b85856b095::t_94ee6abe1c3829 15
+packages/graphics/src/loro/solid/ghost.ts
+  s_38e9b85856b095::t_e31a69ecf18d73 1-54
+packages/graphics/src/loro/solid/index.tsx
+  s_38e9b85856b095::t_404c0c00896654 13,15,28,41,55-67
+packages/graphics/tests/presence-ghost.test.ts
+  s_38e9b85856b095::t_42b55ab7a8338c 1-59
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_38e9b85856b095::t_c5abdc3da784f9 76,89,111
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_38e9b85856b095::t_aeba8fab615cd7 692-693,756,833-834
+packages/sdk/generated/notification/index.ts
+  s_38e9b85856b095::t_ee8344384feeb4 4
+packages/sdk/generated/notification/types.gen.ts
+  s_38e9b85856b095::t_e8fd70030fcb0b 508-543,1418-1424
+packages/sdk/generated/scheduled-action/index.ts
+  s_38e9b85856b095::t_13359b809883a0 4
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_38e9b85856b095::t_86844d288ce51f 5,104-126,158-162,169-183,274-367
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_38e9b85856b095::t_68091d66c9a6b3 7-17,263-267,280-307,445-456,502-549,576-594,648-652,661-665,748-757,793-797,810-859,910-993,1203-1222,1312-1321,1482-1496,1519-1529,1578,1588-1591,1625,1627-1682,1685,1687-1696,1699-1700,1702,1704,1706-1710,1714-1875,2032-2154,2247,2250-2251,2254,2257-2261,2267,2269,2271,2273,2276,2310-2342,2717-3015
+packages/sdk/specs/notification.json
+  s_38e9b85856b095::t_eff8147bd8a23f 1840-1895,3280-3294
+packages/sdk/specs/scheduled-action.json
+  s_38e9b85856b095::t_4b16968aaf4a86 353-590,680-1304,1310,1314-1324,1340,1360-1363,1365-1376,1381,1389,1393,1418-1429,1451,1454,1457-1459,1468,1472-1482,1497-1506,1508-1518,1536-1545,1550-1551,1553,1558,1566-1577,1590,1612,1615,1620,1633,1649,1672,1677,1688,1700,1749,1754,1798-1799,1801,1806,1817,1824,1829,1835-1842,1845,1847,1849,1854,1865,1887-1891,1894-1897,1899,1901-1905,1907,1909,1925,1945-1949,1954,1962,1966,1991-1992,2001-2002,2024,2026-2028,2031-2033,2042,2046,2051,2061-2062,2071-2091,2095,2100,2110-2111,2120-2121,2130-2131,2133,2135,2143-2147,2150-2152,2160-2161,2186-2190,2195,2202-2211,2214,2218-2228,2243-2252,2254,2274-2280,2285,2296,2303-2304,2327,2336-2345,2357-2363,2368,2377,2390,2412,2414-2416,2421,2432,2439-2440,2444,2470,2480,2505-2516,2956-2960,2979-3015,3298-3311,3387-3505,3587-3613,3689-3693,3723-3753,3933-3943,4005-4009,4019-4096,4183-4310,4621-4647,4834-4850,5151-5169,5197-5210,5283-5293,5327,5331-5334,5405-5546,5552-5734,5750-5769,5852-5859
+packages/sdk/src/coverage/skipped.ts
+  s_38e9b85856b095::t_a55eaea78b6381 294-297,301-302,307-311
+packages/sdk/src/entities/routines/namespace.ts
+  s_38e9b85856b095::t_390d88327999ef 3,11,198,204-207,239-240,259,264-286
+packages/sdk/src/entities/routines/suggestion.ts
+  s_38e9b85856b095::t_4ee11b5b44829d 1-84
+packages/sdk/src/entities/suggestions/namespace.ts
+  s_38e9b85856b095::t_5eb8cb05a38320 1-123
+packages/sdk/src/entities/suggestions/suggestion.ts
+  s_38e9b85856b095::t_f88b6b0c4440d0 1-224
+packages/sdk/src/macro.ts
+  s_38e9b85856b095::t_4072a0c34cc6b8 39,165-167,294,578,604-613
+packages/sdk/src/utils/verbs.ts
+  s_38e9b85856b095::t_3a16787c0e13bc 95-96,99,104
+services/agent_harness_service/AGENTS.md
+  s_38e9b85856b095::t_576bb031a13f79 121-124,178-182,193-203
+services/agent_harness_service/Cargo.toml
+  s_38e9b85856b095::t_2620669897641b 172-174
+services/agent_harness_service/src/code_mode.rs
+  s_38e9b85856b095::t_5bf03b9a9effe8 5,19-109,121,124-128,172,192-196
+services/agent_harness_service/src/code_mode/test.rs
+  s_38e9b85856b095::t_0b5f0974e09258 88-370
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_38e9b85856b095::t_6634473140a883 122-142,145,170
+services/agent_harness_service/src/cognition/api/structured_completion/test.rs
+  s_38e9b85856b095::t_10d752b9df2bf2 17-20,32,86-161
+services/agent_harness_service/src/cognition/service/structured_completion.rs
+  s_38e9b85856b095::t_ae72110fc6425e 28-30,113-119,128
+services/agent_harness_service/src/cognition/service/structured_completion/test.rs
+  s_38e9b85856b095::t_fcf0222dda0f6c 133
+services/agent_harness_service/src/computers.rs
+  s_38e9b85856b095::t_82e00df858d830 42,58-68,78,154
+services/agent_harness_service/src/computers/setup_notice.rs
+  s_38e9b85856b095::t_b2f50efc7e57dc 1-83
+services/agent_harness_service/src/computers/setup_notice/test.rs
+  s_38e9b85856b095::t_a218dd271e7efb 1-55
+services/agent_harness_service/src/external_session_requests.rs
+  s_38e9b85856b095::t_a6341a22b3de03 16,30,34-41,63-69,79
+services/agent_harness_service/src/main.rs
+  s_38e9b85856b095::t_ebb8940a53cd6a 789-801,816,847-856,921,1399,1833,1844-1848,1868
+services/agent_harness_service/src/routine_sessions.rs
+  s_38e9b85856b095::t_96f5dc7ea2d1c7 24,40
+services/agent_harness_service/src/scheduling.rs
+  s_38e9b85856b095::t_bab1b3e15182a8 25,34,39,45-47,70,72-82,101-106,159-377,410,422,587-588,634-635,652-663,666,676,678,685,688-689,708-717,732-733,735,737,740-795,797-798,800,802-812,814,818-822,831-865,879-882,891-894,908,912-920
+services/agent_harness_service/src/scheduling/test.rs
+  s_38e9b85856b095::t_18e21358c46c01 185-211
+services/agent_harness_service/src/scheduling_openapi.rs
+  s_38e9b85856b095::t_40f163fd226cbe 2,5,7-10
+services/document_storage_service/AGENTS.md
+  s_38e9b85856b095::t_72cd6705c35220 47-51
+services/document_storage_service/src/service/entity_mutation.rs
+  s_38e9b85856b095::t_915375c2c5368d 162-173,624,662,722,791-795,797-843
+services/document_storage_service/src/service/entity_mutation/test.rs
+  s_38e9b85856b095::t_2ea5ebbfe3db16 43-70
+services/notification_service/src/api/user_notification.rs
+  s_38e9b85856b095::t_cdb4a1e80297eb 65
+services/notification_service/src/api/user_notification/test.rs
+  s_38e9b85856b095::t_8bab85cdcafe2d 165-180
+static_assets/schema.graphql
+  s_38e9b85856b095::t_86169d7cc124ab 3923-3962,6786
+tooling/xtask/crates/xtask_workflows/src/workflows/push_local_stack_binaries.rs
+  s_38e9b85856b095::t_1f3a3bda05cd8b 7-8,10-14,17,22-29,38,40-42,45,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e8de7831d0efd06d6b28b1857c013b0c1014f67c",
+  "prompts": {},
+  "sessions": {
+    "s_38e9b85856b095": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f0c898ff-45be-470a-b540-8173b921f336",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_3c6362fd17dcc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02467add-a007-41c9-9280-bad5f33c09fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4a88f0d5bec835": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50b3830b-5833-42b8-bc02-d8e2b6aadd09",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
