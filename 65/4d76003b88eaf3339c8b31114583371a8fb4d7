@@ -1,0 +1,21 @@
+crates/macro_db_client/migrations/20261113071144_drop_ai_usage_user_id_created_at_idx_concurrently.sql
+  s_f8637ee5891fc4::t_314aaa221ea3c2 1-5
+crates/macro_db_client/migrations/20261113071143_ai_usage_user_id_created_at_total_idx_concurrently.sql
+  s_f8637ee5891fc4::t_314aaa221ea3c2 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "654d76003b88eaf3339c8b31114583371a8fb4d7",
+  "prompts": {},
+  "sessions": {
+    "s_f8637ee5891fc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6871d74-299c-48cf-b7e6-17f827d232b1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
