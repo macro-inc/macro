@@ -320,18 +320,32 @@ async fn a_sync_error_badge_logs_when_it_appears_changes_and_clears(pool: PgPool
     let threshold = usize::try_from(CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD).unwrap();
 
     for _ in 0..threshold + 1 {
-        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, "boom")
-            .await
-            .unwrap();
+        repo.record_google_calendar_sync_error(
+            key,
+            lease_token,
+            account_id,
+            calendar_id,
+            CalendarSyncFailure::Transient,
+            "boom",
+        )
+        .await
+        .unwrap();
     }
     assert_eq!(
         ops_after(&pool, link_id, before).await,
         vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
         "only the failure that crosses the threshold shows a badge"
     );
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, "worse")
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        "worse",
+    )
+    .await
+    .unwrap();
     repo.commit_google_calendar_sync(
         key,
         lease_token,

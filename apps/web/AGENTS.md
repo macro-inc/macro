@@ -353,6 +353,14 @@ regression over the production `ThreadList` is
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
+Inviting an agent teammate from Team → Members (People | Agent in Invite to
+Team, behind `enable-agent-teammates`), Bring your AI for its new computer
+(skipped, and signed in), its row's Setting up → Running status, its row's
+Claude sign-in and switch back to credits, and its removal have a backend-free browser regression at desktop 1440 and
+phone 390 over a scripted auth service. It launches Chromium with
+`--disable-web-security` because the scripted services answer for other origins:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
 and the Share drawer over the page, have a backend-free
@@ -375,6 +383,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+A record's Pipelines card (the real card over `GridCell`, with a 21-field
+contact row) has a backend-free desktop/phone regression: one label column with
+every value on one edge, prose under its label on a narrow card, an email cut
+to one line with an ellipsis, the empty-fields row, and editing in place:
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts pipeline-card.browser.e2e.ts`.
 
 Collapsible document sections (the real heading-folds plugin and its gutter
 controls) have a backend-free desktop/tablet/phone regression: placement in
@@ -875,13 +889,24 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   seconds (close 4499, retried). A phone can wake to a socket that reads open but
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
+- The page that owns the cache engine keeps the engine's compiled WebAssembly
+  and hands it to each new engine worker (`worker/compiled-engine.ts`), keyed by
+  the asset it was compiled from: the browser compiles the engine's functions
+  lazily in every new worker, which cost more than reopening the database on
+  each tab return. The exchange has its own port, so a failure only costs the
+  shortcut; never put the module in the activation message.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
+  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   A typed search held across an engine restart reaches the new engine first, and
   one already sent is not refused when the read budget expires; it has no
-  network fallback.
+  network fallback. It still ends after the ordinary read timeout, Quick
+  Access stops reporting it as pending after `UNANSWERED_SEARCH_LIMIT_MS`
+  (while still replaying it if the engine arrives), and a list aborts the
+  search it has superseded.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
 - Snapshot cache generation subscribers before dispatch and skip removed listeners;
@@ -943,8 +968,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Render project collection titles with `ViewSidebar.Title caret={false}`; keep
   individual project names and touch pickers unchanged. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
-- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
+- Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
+  `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
 - PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer. The proxy authenticates by session cookie, so a proxied `<img>` uses `crossorigin="use-credentials"` and a fetch of it `credentials: 'include'` (`isImageProxyUrl`); `anonymous` drops the cookie cross-origin and the proxy answers 401.
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
@@ -1441,6 +1468,9 @@ keep incomplete trailing Macro XML hidden in settled agent prose, preserve
 completed chips and literal tag examples in Markdown code, and leave user prompts
 unchanged.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
+The same suite opens a tool group in the real `Transcript` while a reply streams
+below it (`transcript.browser.e2e.ts`): the press must land and the group must
+stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
@@ -1567,8 +1597,7 @@ away leaves focus where the user put it. The backend-free regression is
 
 Use only the current team roster and available agents for new Assignee selections.
 Keep initially selected outsiders visible and removable, and allow them to be
-re-added during the same editing session without contact discovery. Once the
-editor closes without them, they cannot be added again unless they join the team.
+re-added while the record stays mounted, without contact discovery.
 Reuse the existing selected-first ordering at opening and keep row positions
 stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
 Preserve each picker’s existing placeholder, sizing, and row styling.

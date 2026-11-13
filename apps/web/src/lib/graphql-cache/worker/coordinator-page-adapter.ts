@@ -7,6 +7,7 @@ import {
   classifyCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
+import { offerCompiledEngine } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CacheReadState,
@@ -169,6 +170,7 @@ export class CacheCoordinatorPageAdapter {
   };
   private coordinatorConnection: CoordinatorConnection | undefined;
   private engineWorker: DedicatedWorkerLike | undefined;
+  private compiledEnginePort: MessagePort | undefined;
   private ownerEpoch: number | undefined;
   private registered = false;
   private startPromise: Promise<void> | undefined;
@@ -862,6 +864,7 @@ export class CacheCoordinatorPageAdapter {
       this.closePort(directChannel.port2);
       return;
     }
+    const compiledEngineChannel = new MessageChannel();
     try {
       worker.postMessage(
         withVersion<PageToEngineEnvelope>({
@@ -873,10 +876,14 @@ export class CacheCoordinatorPageAdapter {
           ownerLockName: election.ownerLockName,
           hotCapacity: election.hotCapacity,
         }),
-        [directChannel.port2]
+        [directChannel.port2, compiledEngineChannel.port2]
       );
+      this.compiledEnginePort = compiledEngineChannel.port1;
+      offerCompiledEngine(compiledEngineChannel.port1);
     } catch (error) {
       this.closePort(directChannel.port2);
+      this.closePort(compiledEngineChannel.port1);
+      this.closePort(compiledEngineChannel.port2);
       this.failTerminal(
         error instanceof Error ? error : new Error(String(error))
       );
@@ -908,6 +915,8 @@ export class CacheCoordinatorPageAdapter {
       cleanupError ??=
         error instanceof Error ? error : new Error(String(error));
     }
+    if (this.compiledEnginePort) this.closePort(this.compiledEnginePort);
+    this.compiledEnginePort = undefined;
     this.terminatedOwnerEpochs.add(ownerEpoch);
     this.engineWorker = undefined;
     this.ownerEpoch = undefined;

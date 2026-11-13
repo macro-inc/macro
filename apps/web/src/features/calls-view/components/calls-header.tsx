@@ -51,12 +51,13 @@ export function CallsHeader() {
       <ListHeader
         title={<ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>}
       >
-        <HeaderActionGroup label="Call filters">
+        <HeaderActionGroup label="Call filters" size="md">
           <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
         </HeaderActionGroup>
-        <HeaderActionGroup label="Call view options">
+        <HeaderActionGroup label="Call view options" size="md">
           <ListSortDropdown
             grouped
+            size="icon-md"
             label="Sort calls"
             value={
               DEFAULT_SORT_OPTIONS.find(

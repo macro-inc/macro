@@ -5,6 +5,18 @@ export type ClientOptions = {
 };
 
 /**
+ * Acting on a suggestion, as the caller's copy of it shows it.
+ */
+export type AcceptSuggestionRequest = {
+    /**
+     * The suggestion's `updatedAt` as the caller read it. A background suggestion runs
+     * only if it is unchanged since and no run of it is still settling;
+     * otherwise the answer is 409.
+     */
+    updatedAt: string;
+};
+
+/**
  * Client configuration, the create body. Ownership and execution state are
  * server-owned.
  */
@@ -187,6 +199,23 @@ export type AppearanceIcon = {
 };
 
 /**
+ * A reply draft a session wrote for an open reply suggestion, as the user,
+ * through `macro.email.createDraft`. It replaces the suggestion's draft, if any;
+ * nothing is ever sent.
+ */
+export type AttachDraft = {
+    /**
+     * The email draft: an unsent draft in one of the user's own inboxes, in
+     * the thread the suggestion is about.
+     */
+    emailDraftId: string;
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
  * One of Macro's routines, ready to start a new routine from.
  */
 export type CatalogEntry = {
@@ -248,6 +277,11 @@ export type CatalogEntry = {
      */
     trigger: ActionTrigger;
 };
+
+/**
+ * A filter on the feed. Not kinds: a suggestion may have several.
+ */
+export type Category = 'important' | 'revisit' | 'save_money' | 'make_money';
 
 /**
  * A routine to check, as the create body takes it.
@@ -630,12 +664,22 @@ export type EmptyResponse = {
 };
 
 /**
+ * What an entity suggestion suggests doing about its items.
+ */
+export type EntityAction = 'reply' | 'review' | 'follow_up';
+
+/**
  * An entity's optional icon and tint overrides; absent values retain type defaults.
  */
 export type EntityAppearance = {
     color?: null | AppearanceColor;
     icon?: null | AppearanceIcon;
 };
+
+/**
+ * The type of an entity in Macro
+ */
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * An event name AND an entity ID must match within the same filter. A
@@ -720,9 +764,78 @@ export type ExecutionResult = {
 };
 
 /**
+ * How many of a person's shown suggestions have each status.
+ */
+export type FeedCounts = {
+    /**
+     * Done in the last 24 hours.
+     */
+    done: number;
+    /**
+     * Their last run failed.
+     */
+    failed: number;
+    /**
+     * Open, nothing under way.
+     */
+    open: number;
+    /**
+     * Their run is under way.
+     */
+    running: number;
+};
+
+/**
+ * The person's generations now, for the web app to show and poll.
+ */
+export type GenerationOverview = {
+    /**
+     * When the latest one that ended ended.
+     */
+    lastFinishedAt?: string | null;
+    lastOutcome?: null | SuggestionGenerationStatus;
+    /**
+     * When the person may next ask for fresh suggestions, while they may
+     * not; absent when they may (or must wait only for the running one).
+     */
+    regenerateAvailableAt?: string | null;
+    /**
+     * When the running one started.
+     */
+    startedAt?: string | null;
+    /**
+     * Whether one is running.
+     */
+    state: GenerationState;
+    trigger?: null | GenerationTrigger;
+};
+
+/**
+ * What starting a generation did.
+ */
+export type GenerationStarted = {
+    /**
+     * Whether a run started; false when one ran before or is running.
+     */
+    started: boolean;
+};
+
+/**
+ * Whether one of the person's generations is running.
+ */
+export type GenerationState = 'idle' | 'running';
+
+/**
  * Where a person's suggestions are in being generated.
  */
 export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
+
+/**
+ * What starts a generation: a person finishing onboarding, their night, or
+ * the person asking for fresh suggestions. Shared by everything a
+ * generation's sessions write.
+ */
+export type GenerationTrigger = 'onboarding' | 'nightly' | 'manual';
 
 /**
  * Which GitHub deliveries match.
@@ -755,6 +868,11 @@ export type InProgressExecution = {
 };
 
 /**
+ * A suggestion's kind, without its data.
+ */
+export type KindName = 'prompt' | 'entity' | 'routine';
+
+/**
  * How code reads a knob: a lowercase letter, then up to 31 letters or
  * digits, e.g. `dueWithinDays`.
  */
@@ -765,6 +883,56 @@ export type KnobName = string;
  * matches by name or lets them pick.
  */
 export type NamedItemKind = 'tag' | 'channel' | 'label';
+
+/**
+ * A new suggestion, or a new version of one with the same `dedupKey`, as a
+ * generation session hands it back through `macro.suggestions.suggest`.
+ */
+export type NewSuggestion = {
+    /**
+     * The items it is about.
+     */
+    about?: Array<Target>;
+    action?: null | EntityAction;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * Names the suggestion across nights; the same key updates the same suggestion.
+     */
+    dedupKey: string;
+    /**
+     * 0 to 100.
+     */
+    importance: number;
+    /**
+     * `prompt` or `entity`; routine suggestions come from `macro.routines.suggest`.
+     */
+    kind: KindName;
+    /**
+     * A prompt suggestion's prompt.
+     */
+    prompt?: string | null;
+    /**
+     * Why, for the change log; required to bring back a suggestion the person
+     * dismissed.
+     */
+    reason?: string | null;
+    runMode?: null | RunMode;
+    /**
+     * A background prompt suggestion that posts or sends: what, and where.
+     */
+    sends?: string | null;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+};
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -814,6 +982,114 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * Fresh suggestions weren't started: the person asked within the hour.
+ */
+export type RegenerationCooldown = {
+    /**
+     * When they may ask again.
+     */
+    availableAt: string;
+};
+
+/**
+ * Why fresh suggestions weren't started.
+ */
+export type RegenerationRefusal = 'running';
+
+/**
+ * Fresh suggestions weren't started: a generation is running.
+ */
+export type RegenerationRunning = {
+    /**
+     * Why.
+     */
+    reason: RegenerationRefusal;
+};
+
+/**
+ * Retiring an open suggestion that no longer fits.
+ */
+export type RetireSuggestion = {
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
+ * Retiring an open suggestion that no longer matters.
+ */
+export type RetireSuggestionRequest = {
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
+ * Where one of the person's routine suggestions is.
+ */
+export type ReviewedState = 'open' | 'dismissed' | 'retired' | 'saved';
+
+/**
+ * One suggestion AI made for the person, as a routines session reviews it.
+ */
+export type ReviewedSuggestion = SuggestedPick & {
+    /**
+     * When it was dismissed or retired.
+     */
+    closedAt?: string | null;
+    /**
+     * When it was suggested.
+     */
+    createdAt: string;
+    id: string;
+    keepProbability: number;
+    reason: string;
+    state: ReviewedState;
+    surfaces: Array<Surface>;
+};
+
+/**
+ * Changes to an open suggestion; fields left out stay.
+ */
+export type RewriteSuggestion = {
+    /**
+     * New items it is about.
+     */
+    about?: Array<Target> | null;
+    /**
+     * New categories.
+     */
+    categories?: Array<Category> | null;
+    /**
+     * A new importance.
+     */
+    importance?: number | null;
+    /**
+     * Only on prompt suggestions.
+     */
+    prompt?: string | null;
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+    /**
+     * Only on background prompt suggestions: what the run posts or sends, and
+     * where.
+     */
+    sends?: string | null;
+    /**
+     * A new summary.
+     */
+    summary?: string | null;
+    /**
+     * A new title.
+     */
+    title?: string | null;
 };
 
 /**
@@ -965,6 +1241,20 @@ export type RoutineProgram = {
 };
 
 /**
+ * A part of a routine's sentence.
+ */
+export type RoutineSentencePart = {
+    /**
+     * It is a value AI picked, which the person can change.
+     */
+    picked: boolean;
+    /**
+     * What it says.
+     */
+    text: string;
+};
+
+/**
  * The routine a step is added to or changed in.
  */
 export type RoutineSoFar = {
@@ -1026,6 +1316,26 @@ export type RoutineSuggestion = SuggestedPick & {
 };
 
 /**
+ * How a drafted routine suggestion shows in the person's Suggestions feed:
+ * every routine a session drafts is also one suggestion there, kept and
+ * closed with it.
+ */
+export type RoutineSuggestionCard = {
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * 0 to 100: how much the person would regret missing it this week.
+     */
+    importance: number;
+    /**
+     * What it does for the person, in a few words.
+     */
+    title: string;
+};
+
+/**
  * A person's suggestions, and whether more are on the way.
  */
 export type RoutineSuggestions = {
@@ -1068,6 +1378,21 @@ export type RoutineTemplate = {
     trigger: ActionTrigger;
     updated_at: string;
     variables: Array<TemplateVariable>;
+};
+
+/**
+ * How a routine suggestion's drafted routine reads on its card.
+ */
+export type RoutineText = {
+    /**
+     * What it does: a step's sentence with the values AI picked marked, or
+     * its description (else its name) as one unmarked part.
+     */
+    sentence: Array<RoutineSentencePart>;
+    /**
+     * When it runs, e.g. "Fridays at 9:00 AM" or "New email received".
+     */
+    when: string;
 };
 
 /**
@@ -1115,6 +1440,11 @@ export type RunInfo = {
 };
 
 /**
+ * How a prompt suggestion runs.
+ */
+export type RunMode = 'composer' | 'background';
+
+/**
  * What started a run, for its page.
  */
 export type RunStart = {
@@ -1144,6 +1474,11 @@ export type RunStart = {
     by: string;
     kind: 'manual';
 };
+
+/**
+ * A run's state without its data: how it is stored and served.
+ */
+export type RunStateName = 'starting' | 'running' | 'waiting' | 'stopping' | 'cancelling' | 'finished' | 'failed' | 'cancelled';
 
 /**
  * Whether a routine's runs are listed in Home and the Agents list. Routines
@@ -1370,6 +1705,7 @@ export type SuggestOutcome = {
  * What a suggestion session hands back through `macro.routines.suggest`.
  */
 export type SuggestRequest = {
+    card?: null | RoutineSuggestionCard;
     keepProbability: number;
     key: string;
     kind: 'catalog';
@@ -1379,6 +1715,10 @@ export type SuggestRequest = {
     reason: string;
     surfaces: Array<Surface>;
 } | {
+    /**
+     * How it shows in the person's Suggestions feed.
+     */
+    card: RoutineSuggestionCard;
     /**
      * What the session created for it, as `macro.routines.check` takes.
      */
@@ -1412,14 +1752,282 @@ export type SuggestedPick = {
 };
 
 /**
+ * One proactive suggestion for one person.
+ */
+export type Suggestion = SuggestionKind & {
+    /**
+     * The items it is about.
+     */
+    about: Array<Target>;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories: Array<Category>;
+    /**
+     * When it was first proposed.
+     */
+    createdAt: string;
+    /**
+     * Names the suggestion across nights: proposing the same key again changes
+     * this suggestion instead of adding one.
+     */
+    dedupKey: string;
+    /**
+     * The suggestion's id.
+     */
+    id: string;
+    /**
+     * 0 to 100, for ordering.
+     */
+    importance: number;
+    /**
+     * Proposed since the person last opened their feed. Only the feed sets
+     * it; false everywhere else.
+     */
+    isNew: boolean;
+    /**
+     * What acting on it produced.
+     */
+    produced: Array<Target>;
+    result?: null | Target;
+    run?: null | SuggestionRun;
+    /**
+     * Where it is for the person.
+     */
+    state: SuggestionState;
+    /**
+     * When its state last changed, such as when it was dismissed.
+     */
+    stateChangedAt: string;
+    /**
+     * Why it was resolved; only on resolved suggestions.
+     */
+    stateReason?: string | null;
+    /**
+     * What the card shows: whether it is open, being run, failed or done.
+     */
+    status: SuggestionStatus;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The suggestion changed since the caller read it, or can't run until its
+ * last run settles.
+ */
+export type SuggestionChanged = {
+    /**
+     * What happened.
+     */
+    message: string;
+    /**
+     * The suggestion as it is now, to show before acting on it again.
+     */
+    suggestion: Suggestion;
+};
+
+/**
+ * A reply suggestion's draft.
+ */
+export type SuggestionDraft = Target & {
+    /**
+     * The start of its plain text, as it was when attached.
+     */
+    preview?: string | null;
+};
+
+/**
+ * A person's feed: their open suggestions, best first, and the ones they
+ * finished in the last day, newest first. Both lists are in the order to
+ * show them.
+ */
+export type SuggestionFeed = {
+    /**
+     * How many suggestions the whole feed holds of each status, whatever the
+     * `limit`.
+     */
+    counts: FeedCounts;
+    /**
+     * Suggestions done in the last 24 hours, with what they produced; left
+     * out when the feed was read with a `limit`.
+     */
+    done?: Array<Suggestion> | null;
+    /**
+     * The open suggestions, at most `limit` of them.
+     */
+    suggestions: Array<Suggestion>;
+};
+
+/**
  * Who suggests a routine.
  */
 export type SuggestionFrom = 'for_you' | 'macro';
 
 /**
+ * Where a generation is.
+ */
+export type SuggestionGenerationStatus = 'generating' | 'ready' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
+
+/**
+ * What kind of suggestion it is, with that kind's data. A kind never changes.
+ */
+export type SuggestionKind = {
+    kind: 'prompt';
+    /**
+     * What the agent is asked to do.
+     */
+    prompt: string;
+    /**
+     * How it runs.
+     */
+    runMode: RunMode;
+    /**
+     * For a background run that posts or sends something: what, and
+     * where, in plain words. The card shows it before Run, and running
+     * it approves exactly that. None when the run posts and sends
+     * nothing.
+     */
+    sends?: string | null;
+} | {
+    /**
+     * What to do about the items.
+     */
+    action: EntityAction;
+    draft?: null | SuggestionDraft;
+    /**
+     * A reply suggestion's: that message's sender, by name.
+     */
+    from?: string | null;
+    kind: 'entity';
+    /**
+     * A reply suggestion's: when the message the person hasn't answered
+     * came, as read from its item when the suggestion was last written.
+     */
+    waitingSince?: string | null;
+} | {
+    kind: 'routine';
+    routine?: null | RoutineText;
+    /**
+     * The suggestion it shows.
+     */
+    routineSuggestionId: string;
+};
+
+/**
+ * Every suggestion AI made for the person, for a routines session.
+ */
+export type SuggestionReview = {
+    /**
+     * Suggestions this session may still hand back.
+     */
+    keptLeft: number;
+    suggestions: Array<ReviewedSuggestion>;
+};
+
+/**
+ * A run of a background prompt suggestion: a hidden agent session of the
+ * person's, with the full toolset, that never stops to ask.
+ */
+export type SuggestionRun = {
+    /**
+     * The agent session: open it to see the result.
+     */
+    sessionId: string;
+    /**
+     * When it started.
+     */
+    startedAt: string;
+    /**
+     * Where it is, as stored: reading it never asks the session.
+     */
+    state: RunStateName;
+    /**
+     * When it entered `state`.
+     */
+    stateChangedAt: string;
+};
+
+/**
+ * Where a suggestion is for the person.
+ */
+export type SuggestionState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
+
+/**
+ * What a suggestion's card shows, from its state and its latest run.
+ */
+export type SuggestionStatus = 'open' | 'running' | 'failed' | 'done' | 'closed';
+
+/**
+ * What became of a session's write.
+ */
+export type SuggestionWriteOutcome = {
+    /**
+     * Whether it was applied.
+     */
+    ok: boolean;
+    /**
+     * Why it wasn't, to fix and try again.
+     */
+    problems: Array<string>;
+    suggestion?: null | Suggestion;
+};
+
+/**
+ * What a generation session reads before managing the person's suggestions:
+ * every suggestion they have, open or not, and how many more it may add.
+ */
+export type SuggestionsReview = {
+    /**
+     * Suggestions this generation may still add or bring back.
+     */
+    newLeft: number;
+    /**
+     * Open suggestions the person has, and the most they may have.
+     */
+    open: number;
+    /**
+     * The most open suggestions a person may have.
+     */
+    openLimit: number;
+    /**
+     * Open suggestions first, best first, then closed ones newest first. A
+     * dismissed suggestion's `stateChangedAt` is when the person dismissed it.
+     */
+    suggestions: Array<Suggestion>;
+};
+
+/**
  * The part of the app a routine is about, where it is offered.
  */
 export type Surface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
+
+/**
+ * An item, or a part of one such as a message in a thread.
+ */
+export type Target = {
+    /**
+     * The item's id.
+     */
+    entityId: string;
+    /**
+     * The item's type.
+     */
+    entityType: EntityType;
+    /**
+     * A part of it, such as one message in a channel.
+     */
+    partId?: string | null;
+};
 
 /**
  * A user-specific part of a shared routine.
@@ -1817,37 +2425,36 @@ export type SuggestRoutineResponses = {
 
 export type SuggestRoutineResponse = SuggestRoutineResponses[keyof SuggestRoutineResponses];
 
-export type GenerateRoutineSuggestionsData = {
+export type ReviewRoutineSuggestionsData = {
     body?: never;
     path?: never;
-    query: {
-        /**
-         * IANA time zone, e.g. `America/New_York`.
-         */
-        timezone: string;
-    };
-    url: '/scheduled-actions/suggestions/generate';
+    query?: never;
+    url: '/scheduled-actions/suggestions/review';
 };
 
-export type GenerateRoutineSuggestionsErrors = {
+export type ReviewRoutineSuggestionsErrors = {
     401: string;
     /**
-     * Routine suggestions are off for the caller
+     * Only a routines generation session may review
+     */
+    403: string;
+    /**
+     * Routine suggestions are off for the user
      */
     404: string;
     500: string;
 };
 
-export type GenerateRoutineSuggestionsError = GenerateRoutineSuggestionsErrors[keyof GenerateRoutineSuggestionsErrors];
+export type ReviewRoutineSuggestionsError = ReviewRoutineSuggestionsErrors[keyof ReviewRoutineSuggestionsErrors];
 
-export type GenerateRoutineSuggestionsResponses = {
+export type ReviewRoutineSuggestionsResponses = {
     /**
-     * The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing
+     * Every suggestion AI made for the user, open or not
      */
-    200: RoutineSuggestions;
+    200: SuggestionReview;
 };
 
-export type GenerateRoutineSuggestionsResponse = GenerateRoutineSuggestionsResponses[keyof GenerateRoutineSuggestionsResponses];
+export type ReviewRoutineSuggestionsResponse = ReviewRoutineSuggestionsResponses[keyof ReviewRoutineSuggestionsResponses];
 
 export type DismissRoutineSuggestionData = {
     body?: never;
@@ -1880,6 +2487,39 @@ export type DismissRoutineSuggestionResponses = {
 };
 
 export type DismissRoutineSuggestionResponse = DismissRoutineSuggestionResponses[keyof DismissRoutineSuggestionResponses];
+
+export type RetireRoutineSuggestionData = {
+    body: RetireSuggestion;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/suggestions/{id}/retire';
+};
+
+export type RetireRoutineSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a routines generation session may retire
+     */
+    403: string;
+    500: string;
+};
+
+export type RetireRoutineSuggestionError = RetireRoutineSuggestionErrors[keyof RetireRoutineSuggestionErrors];
+
+export type RetireRoutineSuggestionResponses = {
+    /**
+     * Whether the suggestion was retired, and why not when it wasn't
+     */
+    200: SuggestOutcome;
+};
+
+export type RetireRoutineSuggestionResponse = RetireRoutineSuggestionResponses[keyof RetireRoutineSuggestionResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;
@@ -2255,3 +2895,497 @@ export type ActivateScheduledActionTemplateResponses = {
 };
 
 export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];
+
+export type ListSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * IANA time zone, e.g. `America/New_York`: nightly generations run in
+         * the reader's night.
+         */
+        timezone?: string;
+        /**
+         * Most open suggestions to return, best first; all when unset. With a
+         * limit the feed leaves out `done`; `counts` always counts every one.
+         */
+        limit?: number;
+    };
+    url: '/suggestions';
+};
+
+export type ListSuggestionsErrors = {
+    401: string;
+    /**
+     * A generation session may not read the feed
+     */
+    403: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListSuggestionsError = ListSuggestionsErrors[keyof ListSuggestionsErrors];
+
+export type ListSuggestionsResponses = {
+    /**
+     * The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of
+     */
+    200: SuggestionFeed;
+};
+
+export type ListSuggestionsResponse = ListSuggestionsResponses[keyof ListSuggestionsResponses];
+
+export type AddSuggestionData = {
+    body: NewSuggestion;
+    path?: never;
+    query?: never;
+    url: '/suggestions';
+};
+
+export type AddSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may suggest
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type AddSuggestionError = AddSuggestionErrors[keyof AddSuggestionErrors];
+
+export type AddSuggestionResponses = {
+    /**
+     * Whether the suggestion was added or updated, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type AddSuggestionResponse = AddSuggestionResponses[keyof AddSuggestionResponses];
+
+export type StartSuggestionGenerationData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/generate';
+};
+
+export type StartSuggestionGenerationErrors = {
+    401: string;
+    /**
+     * Neither suggestions nor routine suggestions are on for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type StartSuggestionGenerationError = StartSuggestionGenerationErrors[keyof StartSuggestionGenerationErrors];
+
+export type StartSuggestionGenerationResponses = {
+    /**
+     * The caller's onboarding generation started in the background: their suggestions and routine suggestions, as each is on for them. Later calls start nothing
+     */
+    200: GenerationStarted;
+};
+
+export type StartSuggestionGenerationResponse = StartSuggestionGenerationResponses[keyof StartSuggestionGenerationResponses];
+
+export type GetSuggestionGenerationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/generation';
+};
+
+export type GetSuggestionGenerationErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type GetSuggestionGenerationError = GetSuggestionGenerationErrors[keyof GetSuggestionGenerationErrors];
+
+export type GetSuggestionGenerationResponses = {
+    /**
+     * The caller's generations now: whether one is running (poll while it is), how the last one ended, and when they may next ask for fresh suggestions
+     */
+    200: GenerationOverview;
+};
+
+export type GetSuggestionGenerationResponse = GetSuggestionGenerationResponses[keyof GetSuggestionGenerationResponses];
+
+export type RegenerateSuggestionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/regenerate';
+};
+
+export type RegenerateSuggestionsErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    /**
+     * One of the caller's generations is running
+     */
+    409: RegenerationRunning;
+    /**
+     * The caller asked within the hour; `Retry-After` says in how many seconds they may ask again
+     */
+    429: RegenerationCooldown;
+    500: string;
+};
+
+export type RegenerateSuggestionsError = RegenerateSuggestionsErrors[keyof RegenerateSuggestionsErrors];
+
+export type RegenerateSuggestionsResponses = {
+    /**
+     * Fresh suggestions started in the background: the caller's whole workspace researched again and their feed brought up to date, with routine suggestions when the week's are due. Poll `GET /suggestions/generation` until it is idle
+     */
+    202: GenerationStarted;
+};
+
+export type RegenerateSuggestionsResponse = RegenerateSuggestionsResponses[keyof RegenerateSuggestionsResponses];
+
+export type ReviewSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/review';
+};
+
+export type ReviewSuggestionsErrors = {
+    401: string;
+    /**
+     * Only a suggestions generation session may review
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type ReviewSuggestionsError = ReviewSuggestionsErrors[keyof ReviewSuggestionsErrors];
+
+export type ReviewSuggestionsResponses = {
+    /**
+     * Every suggestion of the user's, open first, and how many more this generation may add
+     */
+    200: SuggestionsReview;
+};
+
+export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
+
+export type RecordSuggestionsSeenData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/seen';
+};
+
+export type RecordSuggestionsSeenErrors = {
+    401: string;
+    500: string;
+};
+
+export type RecordSuggestionsSeenError = RecordSuggestionsSeenErrors[keyof RecordSuggestionsSeenErrors];
+
+export type RecordSuggestionsSeenResponses = {
+    /**
+     * Recorded: with suggestions on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes
+     */
+    204: void;
+};
+
+export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];
+
+export type RecordSuggestionsViewedData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/viewed';
+};
+
+export type RecordSuggestionsViewedErrors = {
+    401: string;
+    /**
+     * A generation session may not record a visit
+     */
+    403: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type RecordSuggestionsViewedError = RecordSuggestionsViewedErrors[keyof RecordSuggestionsViewedErrors];
+
+export type RecordSuggestionsViewedResponses = {
+    /**
+     * Recorded: suggestions proposed until now are no longer new in the feed
+     */
+    204: void;
+};
+
+export type RecordSuggestionsViewedResponse = RecordSuggestionsViewedResponses[keyof RecordSuggestionsViewedResponses];
+
+export type RewriteSuggestionData = {
+    body: RewriteSuggestion;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}';
+};
+
+export type RewriteSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may rewrite
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type RewriteSuggestionError = RewriteSuggestionErrors[keyof RewriteSuggestionErrors];
+
+export type RewriteSuggestionResponses = {
+    /**
+     * Whether the suggestion was rewritten, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type RewriteSuggestionResponse = RewriteSuggestionResponses[keyof RewriteSuggestionResponses];
+
+export type AcceptSuggestionData = {
+    body: AcceptSuggestionRequest;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/accept';
+};
+
+export type AcceptSuggestionErrors = {
+    /**
+     * A routine suggestion: the person saves its routine in the app instead
+     */
+    400: string;
+    401: string;
+    /**
+     * A generation session may not accept
+     */
+    403: string;
+    /**
+     * No open or done suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    /**
+     * The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now
+     */
+    409: SuggestionChanged;
+    500: string;
+};
+
+export type AcceptSuggestionError = AcceptSuggestionErrors[keyof AcceptSuggestionErrors];
+
+export type AcceptSuggestionResponses = {
+    /**
+     * Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing
+     */
+    204: void;
+};
+
+export type AcceptSuggestionResponse = AcceptSuggestionResponses[keyof AcceptSuggestionResponses];
+
+export type DismissSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/dismiss';
+};
+
+export type DismissSuggestionErrors = {
+    401: string;
+    /**
+     * A generation session may not dismiss
+     */
+    403: string;
+    /**
+     * No open suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type DismissSuggestionError = DismissSuggestionErrors[keyof DismissSuggestionErrors];
+
+export type DismissSuggestionResponses = {
+    /**
+     * Dismissed; generation sessions see when
+     */
+    204: void;
+};
+
+export type DismissSuggestionResponse = DismissSuggestionResponses[keyof DismissSuggestionResponses];
+
+export type AttachSuggestionDraftData = {
+    body: AttachDraft;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/draft';
+};
+
+export type AttachSuggestionDraftErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may attach a draft
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type AttachSuggestionDraftError = AttachSuggestionDraftErrors[keyof AttachSuggestionDraftErrors];
+
+export type AttachSuggestionDraftResponses = {
+    /**
+     * Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type AttachSuggestionDraftResponse = AttachSuggestionDraftResponses[keyof AttachSuggestionDraftResponses];
+
+export type RestoreSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/restore';
+};
+
+export type RestoreSuggestionErrors = {
+    401: string;
+    /**
+     * A generation session may not restore
+     */
+    403: string;
+    /**
+     * No suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    /**
+     * Not dismissed in the last five minutes, or a routine suggestion
+     */
+    409: string;
+    500: string;
+};
+
+export type RestoreSuggestionError = RestoreSuggestionErrors[keyof RestoreSuggestionErrors];
+
+export type RestoreSuggestionResponses = {
+    /**
+     * Open again, as proposed; a run the dismissal stopped stays stopped
+     */
+    204: void;
+};
+
+export type RestoreSuggestionResponse = RestoreSuggestionResponses[keyof RestoreSuggestionResponses];
+
+export type RetireSuggestionData = {
+    body: RetireSuggestionRequest;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/retire';
+};
+
+export type RetireSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may retire
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type RetireSuggestionError = RetireSuggestionErrors[keyof RetireSuggestionErrors];
+
+export type RetireSuggestionResponses = {
+    /**
+     * Whether the suggestion was retired, and why not when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type RetireSuggestionResponse = RetireSuggestionResponses[keyof RetireSuggestionResponses];

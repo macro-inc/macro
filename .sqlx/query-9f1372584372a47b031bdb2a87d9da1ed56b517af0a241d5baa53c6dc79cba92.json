@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_generation SET status = 'interrupted', finished_at = $2\n               WHERE id IN (\n                   SELECT id FROM suggestion_generation\n                   WHERE status = 'generating' AND heartbeat_at < $1\n                   ORDER BY heartbeat_at\n                   LIMIT $3\n                   FOR UPDATE SKIP LOCKED)\n                 AND status = 'generating'\n               RETURNING id, user_id, trigger",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "trigger",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9f1372584372a47b031bdb2a87d9da1ed56b517af0a241d5baa53c6dc79cba92"
+}
