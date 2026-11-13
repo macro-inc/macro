@@ -16,16 +16,25 @@ and the web's TypeScript through specta.
 - `src/query.rs`: the list widget's filter, the web's Next Soup `Query`.
 - `src/decode.rs`: `decode_view` and `deserialize_view`. A field the types do
   not name is ignored.
+- `src/lib.rs`: `present_view_schema(Offer)`. The dashboard layouts and panes
+  (`grid`, `tabs`, `stat`, `chart`, `table`, `savedView`) decode in every
+  view, but only `Offer::Dashboards` tells a model about them; hosts choose it
+  per person from `AGENT_DASHBOARDS_FLAG` (`enable-agent-dashboards`, the web
+  flag's key too). A view field that reaches a model without that choice
+  takes `#[schemars(with = "ViewWithoutDashboards")]`.
 
 ## Boundaries
 
 - Depends on: `serde`, `serde_path_to_error`, `schemars`, `specta`, `nutype`.
 - Used by: `agent_code_mode` (`execution.views.present`, ExecuteCode's
-  description), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
+  description; `agent_harness_service`'s internal MCP picks its `Offer`), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
   details and activity cards, built for wasm too).
 
 ## Recipes
 
+- Add a dashboard widget: also list its tag in `DASHBOARD_WIDGETS` and the
+  definitions only it uses in `DASHBOARD_DEFINITIONS`;
+  `only_dashboards_offer_layouts_and_panes` fails while one leaks.
 - Add a widget: add a `Widget` variant with its doc comment, run
   `just gen-dynamic-ui-types` in `apps/web`, and add its arm to `Render` in
   `apps/web/src/features/dynamic-ui/render.tsx`; the exhaustive `match` fails
@@ -37,8 +46,9 @@ and the web's TypeScript through specta.
 
 ## Checks
 
-- `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` snapshots
-  the model-facing schema with insta.
+- `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` and
+  `the_dashboard_schema_is_pinned` snapshot both model-facing schemas with
+  insta.
 - `just gen-dynamic-ui-types` in `apps/web`, then commit
   `src/features/dynamic-ui/generated` and `packages/lexical-core/generated`;
   CI's Check Specta Types step fails when they are stale.

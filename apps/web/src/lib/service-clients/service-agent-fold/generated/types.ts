@@ -298,6 +298,45 @@ export type CardItemType =
   | 'form'
   | 'initiative';
 
+/**
+ *  Which answer columns a chart plots, named as the SELECT returns them:
+ *  the SDK's SavedQueryChart.
+ */
+export type ChartColumns = ChartColumns_Serialize | ChartColumns_Deserialize;
+
+/**
+ *  Which answer columns a chart plots, named as the SELECT returns them:
+ *  the SDK's SavedQueryChart.
+ */
+export type ChartColumns_Deserialize = {
+  /**  The labels: the x axis, or the pie's slices. */
+  x: string;
+  /**  One to five numeric columns. */
+  y: string[];
+  title?: string;
+  /**  A column whose values split the one y series. */
+  color?: string;
+  stack?: boolean;
+};
+
+/**
+ *  Which answer columns a chart plots, named as the SELECT returns them:
+ *  the SDK's SavedQueryChart.
+ */
+export type ChartColumns_Serialize = {
+  /**  The labels: the x axis, or the pie's slices. */
+  x: string;
+  /**  One to five numeric columns. */
+  y: string[];
+  title?: string;
+  /**  A column whose values split the one y series. */
+  color?: string;
+  stack?: boolean;
+};
+
+/**  How a chart plots the answer. */
+export type ChartMode = 'bar' | 'line' | 'area' | 'scatter' | 'pie';
+
 /**  A session control operation shown in the conversation timeline. */
 export type Control =
   /**  The runtime was asked to switch models. */
@@ -2828,6 +2867,29 @@ export type SessionNotification_Serialize = {
   systemTurn: boolean;
 } & NotificationEvent_Serialize;
 
+/**  Where a stat's number comes from. */
+export type StatSource = StatSource_Serialize | StatSource_Deserialize;
+
+/**  Where a stat's number comes from. */
+export type StatSource_Deserialize =
+  /**
+   *  A saved query's answer: its last row's last column. Order a series by
+   *  time so the last row is the latest.
+   */
+  | ({ kind: 'query'; queryId: string } & { query?: never })
+  /**  How many items a filter matches, counted up to 100. */
+  | ({ kind: 'count'; query: Query_Deserialize } & { queryId?: never });
+
+/**  Where a stat's number comes from. */
+export type StatSource_Serialize =
+  /**
+   *  A saved query's answer: its last row's last column. Order a series by
+   *  time so the last row is the latest.
+   */
+  | ({ kind: 'query'; queryId: string } & { query?: never })
+  /**  How many items a filter matches, counted up to 100. */
+  | ({ kind: 'count'; query: Query_Serialize } & { queryId?: never });
+
 /**
  *  Why a turn stopped.
  *
@@ -2910,6 +2972,28 @@ export type SubagentResult = {
   /**  What kinds of tools the subagent called. */
   stats: ToolStats | null;
 };
+
+/**  One page of tabs. */
+export type Tab = Tab_Serialize | Tab_Deserialize;
+
+/**  One page of tabs. */
+export type Tab_Deserialize = {
+  label: string;
+  children: Widget_Deserialize[];
+};
+
+/**  One page of tabs. */
+export type Tab_Serialize = {
+  label: string;
+  children: Widget_Serialize[];
+};
+
+/**  Where a table's rows come from. */
+export type TableSource =
+  /**  A saved query's answer. */
+  | { kind: 'query'; queryId: string }
+  /**  A database view's rows, as its grid shows them. */
+  | { kind: 'view'; databaseId: string; viewId: string };
 
 /**  How selected tags combine: items with any of them, or with all of them. */
 export type TagFilterMode = 'any' | 'all';
@@ -4068,18 +4152,30 @@ export type Widget_Deserialize =
   | ({ type: 'md'; markdown: string } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
       title?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**  A chronological sequence of events. Great for "what happened" answers. */
@@ -4090,17 +4186,29 @@ export type Widget_Deserialize =
     } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4118,15 +4226,27 @@ export type Widget_Deserialize =
     } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       items?: never;
       justify?: never;
+      label?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -4138,18 +4258,30 @@ export type Widget_Deserialize =
       messageId: string;
     } & {
       align?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
       title?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4160,17 +4292,29 @@ export type Widget_Deserialize =
   | ({ type: 'events'; title?: string; events: AgendaEvent_Deserialize[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4183,17 +4327,29 @@ export type Widget_Deserialize =
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4205,17 +4361,29 @@ export type Widget_Deserialize =
   | ({ type: 'tags'; title?: string; tags: TagNode_Deserialize[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4227,18 +4395,30 @@ export type Widget_Deserialize =
   | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
       title?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -4254,14 +4434,233 @@ export type Widget_Deserialize =
       children: Widget_Deserialize[];
     } & {
       channelId?: never;
+      chart?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       events?: never;
       groupBy?: never;
       items?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
+    })
+  /**
+   *  Panes in columns, filled left to right and wrapping: the layout of a
+   *  monitor. On a phone the grid is one column, in the same order.
+   */
+  | ({
+      type: 'grid';
+      title?: string;
+      /**  How many columns, 1-12. */
+      columns: number;
+      /**
+       *  How many columns each child spans, in the children's order; a child
+       *  without one spans one column.
+       */
+      spans?: number[];
+      /**
+       *  Every row's height in pixels, 64-800; rows fit their panes when
+       *  omitted.
+       */
+      rowHeight?: number;
+      /**  Compact panes, with less padding and smaller text, for a monitor. */
+      dense?: boolean;
+      children: Widget_Deserialize[];
+    } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      source?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**  Named pages, one shown at a time: a dashboard's sections. */
+  | ({ type: 'tabs'; tabs: Tab_Deserialize[] } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      source?: never;
+      spans?: never;
+      sparkline?: never;
+      tags?: never;
+      title?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**  One number with its label, read live as the viewer. */
+  | ({
+      type: 'stat';
+      label: string;
+      source: StatSource_Deserialize;
+      /**  Show the change from the answer's previous row (query sources only). */
+      delta?: boolean;
+      /**  Draw the answer's last column across its rows (query sources only). */
+      sparkline?: boolean;
+      dense?: boolean;
+    } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      spans?: never;
+      tabs?: never;
+      tags?: never;
+      title?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**
+   *  A saved query's answer drawn as a chart, as a document's live answer
+   *  draws it.
+   */
+  | ({
+      type: 'chart';
+      /**  The id database.saveQuery returned. */
+      queryId: string;
+      mode: ChartMode;
+      chart: ChartColumns_Deserialize;
+      dense?: boolean;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      rowHeight?: never;
+      source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      title?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**  Rows read live as the viewer, read-only. */
+  | ({ type: 'table'; title?: string; source: TableSource; dense?: boolean } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**
+   *  The items a saved view lists, with its filters and grouping, read live
+   *  as the viewer.
+   */
+  | ({ type: 'savedView'; viewId: string; title?: string; dense?: boolean } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      wrap?: never;
     });
 
 /**
@@ -4276,35 +4675,59 @@ export type Widget_Serialize =
   | ({ type: 'md'; markdown: string } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
       title?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**  A chronological sequence of events. Great for "what happened" answers. */
   | ({ type: 'timeline'; title?: string; events: TimelineEvent_Serialize[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4322,15 +4745,27 @@ export type Widget_Serialize =
     } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       items?: never;
       justify?: never;
+      label?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -4342,18 +4777,30 @@ export type Widget_Serialize =
       messageId: string;
     } & {
       align?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
       title?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4364,17 +4811,29 @@ export type Widget_Serialize =
   | ({ type: 'events'; title?: string; events: AgendaEvent_Serialize[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4387,17 +4846,29 @@ export type Widget_Serialize =
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4409,17 +4880,29 @@ export type Widget_Serialize =
   | ({ type: 'tags'; title?: string; tags: TagNode_Serialize[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**
@@ -4431,18 +4914,30 @@ export type Widget_Serialize =
   | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
       align?: never;
       channelId?: never;
+      chart?: never;
       children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       direction?: never;
       events?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
       title?: never;
+      viewId?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -4458,12 +4953,231 @@ export type Widget_Serialize =
       children: Widget_Serialize[];
     } & {
       channelId?: never;
+      chart?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
       events?: never;
       groupBy?: never;
       items?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
       source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
       tags?: never;
+      viewId?: never;
+    })
+  /**
+   *  Panes in columns, filled left to right and wrapping: the layout of a
+   *  monitor. On a phone the grid is one column, in the same order.
+   */
+  | ({
+      type: 'grid';
+      title?: string;
+      /**  How many columns, 1-12. */
+      columns: number;
+      /**
+       *  How many columns each child spans, in the children's order; a child
+       *  without one spans one column.
+       */
+      spans?: number[];
+      /**
+       *  Every row's height in pixels, 64-800; rows fit their panes when
+       *  omitted.
+       */
+      rowHeight?: number;
+      /**  Compact panes, with less padding and smaller text, for a monitor. */
+      dense?: boolean;
+      children: Widget_Serialize[];
+    } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      source?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**  Named pages, one shown at a time: a dashboard's sections. */
+  | ({ type: 'tabs'; tabs: Tab_Serialize[] } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      dense?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      source?: never;
+      spans?: never;
+      sparkline?: never;
+      tags?: never;
+      title?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**  One number with its label, read live as the viewer. */
+  | ({
+      type: 'stat';
+      label: string;
+      source: StatSource_Serialize;
+      /**  Show the change from the answer's previous row (query sources only). */
+      delta?: boolean;
+      /**  Draw the answer's last column across its rows (query sources only). */
+      sparkline?: boolean;
+      dense?: boolean;
+    } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      spans?: never;
+      tabs?: never;
+      tags?: never;
+      title?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**
+   *  A saved query's answer drawn as a chart, as a document's live answer
+   *  draws it.
+   */
+  | ({
+      type: 'chart';
+      /**  The id database.saveQuery returned. */
+      queryId: string;
+      mode: ChartMode;
+      chart: ChartColumns_Serialize;
+      dense?: boolean;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      rowHeight?: never;
+      source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      title?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**  Rows read live as the viewer, read-only. */
+  | ({ type: 'table'; title?: string; source: TableSource; dense?: boolean } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      viewId?: never;
+      wrap?: never;
+    })
+  /**
+   *  The items a saved view lists, with its filters and grouping, read live
+   *  as the viewer.
+   */
+  | ({ type: 'savedView'; viewId: string; title?: string; dense?: boolean } & {
+      align?: never;
+      channelId?: never;
+      chart?: never;
+      children?: never;
+      columns?: never;
+      delta?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      mode?: never;
+      queryId?: never;
+      rowHeight?: never;
+      source?: never;
+      spans?: never;
+      sparkline?: never;
+      tabs?: never;
+      tags?: never;
+      wrap?: never;
     });

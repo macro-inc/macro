@@ -266,6 +266,45 @@ export type CardItem = {
 /**  The kinds of workspace item a card shows. */
 export type CardItemType = "document" | "email_thread" | "calendar_event" | "project" | "channel" | "routine" | "form" | "initiative";
 
+/**
+ *  Which answer columns a chart plots, named as the SELECT returns them:
+ *  the SDK's SavedQueryChart.
+ */
+export type ChartColumns = ChartColumns_Serialize | ChartColumns_Deserialize;
+
+/**
+ *  Which answer columns a chart plots, named as the SELECT returns them:
+ *  the SDK's SavedQueryChart.
+ */
+export type ChartColumns_Deserialize = {
+	/**  The labels: the x axis, or the pie's slices. */
+	x: string,
+	/**  One to five numeric columns. */
+	y: string[],
+	title?: string,
+	/**  A column whose values split the one y series. */
+	color?: string,
+	stack?: boolean,
+};
+
+/**
+ *  Which answer columns a chart plots, named as the SELECT returns them:
+ *  the SDK's SavedQueryChart.
+ */
+export type ChartColumns_Serialize = {
+	/**  The labels: the x axis, or the pie's slices. */
+	x: string,
+	/**  One to five numeric columns. */
+	y: string[],
+	title?: string,
+	/**  A column whose values split the one y series. */
+	color?: string,
+	stack?: boolean,
+};
+
+/**  How a chart plots the answer. */
+export type ChartMode = "bar" | "line" | "area" | "scatter" | "pie";
+
 /**  A session control operation shown in the conversation timeline. */
 export type Control =
 /**  The runtime was asked to switch models. */
@@ -2111,6 +2150,29 @@ export type SessionNotification_Serialize = {
 	systemTurn: boolean,
 } & NotificationEvent_Serialize;
 
+/**  Where a stat's number comes from. */
+export type StatSource = StatSource_Serialize | StatSource_Deserialize;
+
+/**  Where a stat's number comes from. */
+export type StatSource_Deserialize =
+/**
+ *  A saved query's answer: its last row's last column. Order a series by
+ *  time so the last row is the latest.
+ */
+({ kind: "query"; queryId: string }) & { query?: never } |
+/**  How many items a filter matches, counted up to 100. */
+({ kind: "count"; query: Query_Deserialize }) & { queryId?: never };
+
+/**  Where a stat's number comes from. */
+export type StatSource_Serialize =
+/**
+ *  A saved query's answer: its last row's last column. Order a series by
+ *  time so the last row is the latest.
+ */
+({ kind: "query"; queryId: string }) & { query?: never } |
+/**  How many items a filter matches, counted up to 100. */
+({ kind: "count"; query: Query_Serialize }) & { queryId?: never };
+
 /**
  *  Why a turn stopped.
  *
@@ -2189,6 +2251,28 @@ export type SubagentResult = {
 	/**  What kinds of tools the subagent called. */
 	stats: ToolStats | null,
 };
+
+/**  One page of tabs. */
+export type Tab = Tab_Serialize | Tab_Deserialize;
+
+/**  One page of tabs. */
+export type Tab_Deserialize = {
+	label: string,
+	children: Widget_Deserialize[],
+};
+
+/**  One page of tabs. */
+export type Tab_Serialize = {
+	label: string,
+	children: Widget_Serialize[],
+};
+
+/**  Where a table's rows come from. */
+export type TableSource =
+/**  A saved query's answer. */
+{ kind: "query"; queryId: string } |
+/**  A database view's rows, as its grid shows them. */
+{ kind: "view"; databaseId: string; viewId: string };
 
 /**  How selected tags combine: items with any of them, or with all of them. */
 export type TagFilterMode = "any" | "all";
@@ -2872,9 +2956,9 @@ export type Widget_Deserialize =
  *  Markdown text: the narrative between the other widgets. Its type is
  *  "md", never "markdown".
  */
-({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "md"; markdown: string }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
 /**  A chronological sequence of events. Great for "what happened" answers. */
-({ type: "timeline"; title?: string; events: TimelineEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "timeline"; title?: string; events: TimelineEvent_Deserialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**
  *  A list of workspace items, fetched by a filter query or given as a
  *  fixed set of entity references.
@@ -2883,19 +2967,19 @@ export type Widget_Deserialize =
 /**  Group rows by a facet. */
 groupBy?: GroupBy;
 /**  Cap the number of rows shown. */
-limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; tags?: never; wrap?: never } |
+limit?: number }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; label?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**  A single channel message with surrounding context. */
 ({ type: "channelMessage";
 /**  The channel the message belongs to. */
 channelId: string;
 /**  The message to render. */
-messageId: string }) & { align?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+messageId: string }) & { align?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
 /**
  *  A calendar agenda: the events grouped by day with their times, places
  *  and attendees, loaded live from the user's calendars. Use it whenever
  *  an answer is about calendar events instead of listing them in text.
  */
-({ type: "events"; title?: string; events: AgendaEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "events"; title?: string; events: AgendaEvent_Deserialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**
  *  Rich cards for the one to four specific items the answer is about: a
  *  document or spreadsheet, an email thread, a calendar event, a project,
@@ -2903,25 +2987,66 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  item, and a routine's card can pause it or run it now. Use a list
  *  widget for longer sets.
  */
-({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**
  *  Tags as coloured pills, nested to any depth: the user's tags, a
  *  taxonomy the answer proposes, or any other ontology of tags, each with
  *  what it is for. Use it whenever an answer is about tags, instead of a
  *  table or a list in markdown.
  */
-({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; viewId?: never; wrap?: never } |
 /**
  *  Live cards on which the user answers coding agents' waiting
  *  permission requests and questions, and sees stalled sessions. Pass the
  *  items macro.agentSessions.updates() returned, unchanged, whenever it
  *  returns any: these cards are the only place the user can answer them.
  */
-({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
 ({ type: "container"; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
-gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Deserialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never };
+gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Deserialize[] }) & { channelId?: never; chart?: never; columns?: never; delta?: never; dense?: never; events?: never; groupBy?: never; items?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never } |
+/**
+ *  Panes in columns, filled left to right and wrapping: the layout of a
+ *  monitor. On a phone the grid is one column, in the same order.
+ */
+({ type: "grid"; title?: string;
+/**  How many columns, 1-12. */
+columns: number;
+/**
+ *  How many columns each child spans, in the children's order; a child
+ *  without one spans one column.
+ */
+spans?: number[];
+/**
+ *  Every row's height in pixels, 64-800; rows fit their panes when
+ *  omitted.
+ */
+rowHeight?: number;
+/**  Compact panes, with less padding and smaller text, for a monitor. */
+dense?: boolean; children: Widget_Deserialize[] }) & { align?: never; channelId?: never; chart?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; source?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
+/**  Named pages, one shown at a time: a dashboard's sections. */
+({ type: "tabs"; tabs: Tab_Deserialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
+/**  One number with its label, read live as the viewer. */
+({ type: "stat"; label: string; source: StatSource_Deserialize;
+/**  Show the change from the answer's previous row (query sources only). */
+delta?: boolean;
+/**  Draw the answer's last column across its rows (query sources only). */
+sparkline?: boolean; dense?: boolean }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; spans?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
+/**
+ *  A saved query's answer drawn as a chart, as a document's live answer
+ *  draws it.
+ */
+({ type: "chart";
+/**  The id database.saveQuery returned. */
+queryId: string; mode: ChartMode; chart: ChartColumns_Deserialize; dense?: boolean }) & { align?: never; channelId?: never; children?: never; columns?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
+/**  Rows read live as the viewer, read-only. */
+({ type: "table"; title?: string; source: TableSource; dense?: boolean }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
+/**
+ *  The items a saved view lists, with its filters and grouping, read live
+ *  as the viewer.
+ */
+({ type: "savedView"; viewId: string; title?: string; dense?: boolean }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; wrap?: never };
 
 /**
  *  One block of a view. Layout is order-driven; nesting is achieved with the
@@ -2932,9 +3057,9 @@ export type Widget_Serialize =
  *  Markdown text: the narrative between the other widgets. Its type is
  *  "md", never "markdown".
  */
-({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "md"; markdown: string }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
 /**  A chronological sequence of events. Great for "what happened" answers. */
-({ type: "timeline"; title?: string; events: TimelineEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "timeline"; title?: string; events: TimelineEvent_Serialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**
  *  A list of workspace items, fetched by a filter query or given as a
  *  fixed set of entity references.
@@ -2943,19 +3068,19 @@ export type Widget_Serialize =
 /**  Group rows by a facet. */
 groupBy?: GroupBy;
 /**  Cap the number of rows shown. */
-limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; tags?: never; wrap?: never } |
+limit?: number }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; label?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**  A single channel message with surrounding context. */
 ({ type: "channelMessage";
 /**  The channel the message belongs to. */
 channelId: string;
 /**  The message to render. */
-messageId: string }) & { align?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+messageId: string }) & { align?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
 /**
  *  A calendar agenda: the events grouped by day with their times, places
  *  and attendees, loaded live from the user's calendars. Use it whenever
  *  an answer is about calendar events instead of listing them in text.
  */
-({ type: "events"; title?: string; events: AgendaEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "events"; title?: string; events: AgendaEvent_Serialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**
  *  Rich cards for the one to four specific items the answer is about: a
  *  document or spreadsheet, an email thread, a calendar event, a project,
@@ -2963,22 +3088,63 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  item, and a routine's card can pause it or run it now. Use a list
  *  widget for longer sets.
  */
-({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
 /**
  *  Tags as coloured pills, nested to any depth: the user's tags, a
  *  taxonomy the answer proposes, or any other ontology of tags, each with
  *  what it is for. Use it whenever an answer is about tags, instead of a
  *  table or a list in markdown.
  */
-({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; viewId?: never; wrap?: never } |
 /**
  *  Live cards on which the user answers coding agents' waiting
  *  permission requests and questions, and sees stalled sessions. Pass the
  *  items macro.agentSessions.updates() returned, unchanged, whenever it
  *  returns any: these cards are the only place the user can answer them.
  */
-({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
 ({ type: "container"; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
-gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Serialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never };
+gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Serialize[] }) & { channelId?: never; chart?: never; columns?: never; delta?: never; dense?: never; events?: never; groupBy?: never; items?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never } |
+/**
+ *  Panes in columns, filled left to right and wrapping: the layout of a
+ *  monitor. On a phone the grid is one column, in the same order.
+ */
+({ type: "grid"; title?: string;
+/**  How many columns, 1-12. */
+columns: number;
+/**
+ *  How many columns each child spans, in the children's order; a child
+ *  without one spans one column.
+ */
+spans?: number[];
+/**
+ *  Every row's height in pixels, 64-800; rows fit their panes when
+ *  omitted.
+ */
+rowHeight?: number;
+/**  Compact panes, with less padding and smaller text, for a monitor. */
+dense?: boolean; children: Widget_Serialize[] }) & { align?: never; channelId?: never; chart?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; source?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
+/**  Named pages, one shown at a time: a dashboard's sections. */
+({ type: "tabs"; tabs: Tab_Serialize[] }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; dense?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
+/**  One number with its label, read live as the viewer. */
+({ type: "stat"; label: string; source: StatSource_Serialize;
+/**  Show the change from the answer's previous row (query sources only). */
+delta?: boolean;
+/**  Draw the answer's last column across its rows (query sources only). */
+sparkline?: boolean; dense?: boolean }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; spans?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
+/**
+ *  A saved query's answer drawn as a chart, as a document's live answer
+ *  draws it.
+ */
+({ type: "chart";
+/**  The id database.saveQuery returned. */
+queryId: string; mode: ChartMode; chart: ChartColumns_Serialize; dense?: boolean }) & { align?: never; channelId?: never; children?: never; columns?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; title?: never; viewId?: never; wrap?: never } |
+/**  Rows read live as the viewer, read-only. */
+({ type: "table"; title?: string; source: TableSource; dense?: boolean }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; viewId?: never; wrap?: never } |
+/**
+ *  The items a saved view lists, with its filters and grouping, read live
+ *  as the viewer.
+ */
+({ type: "savedView"; viewId: string; title?: string; dense?: boolean }) & { align?: never; channelId?: never; chart?: never; children?: never; columns?: never; delta?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; mode?: never; queryId?: never; rowHeight?: never; source?: never; spans?: never; sparkline?: never; tabs?: never; tags?: never; wrap?: never };

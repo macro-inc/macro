@@ -115,6 +115,94 @@ pub enum Widget {
         title: Option<String>,
         children: Vec<Widget>,
     },
+    // The variants below are dashboard layouts and panes
+    // (`DASHBOARD_WIDGETS`). They decode everywhere, but
+    // `ViewWithoutDashboards`, the schema most models read, leaves them out:
+    // only people with agent dashboards are offered them.
+    /// Panes in columns, filled left to right and wrapping: the layout of a
+    /// monitor. On a phone the grid is one column, in the same order.
+    #[serde(rename_all = "camelCase")]
+    Grid {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        /// How many columns, 1-12.
+        #[schemars(with = "u8", range(min = 1, max = 12))]
+        #[specta(type = u8)]
+        columns: Columns,
+        /// How many columns each child spans, in the children's order; a child
+        /// without one spans one column.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<Vec<u8>>", inner(range(min = 1, max = 12)))]
+        #[specta(optional, type = Vec<u8>)]
+        spans: Option<Vec<Columns>>,
+        /// Every row's height in pixels, 64-800; rows fit their panes when
+        /// omitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(with = "Option<u16>", range(min = 64, max = 800))]
+        #[specta(optional, type = u16)]
+        row_height: Option<RowHeight>,
+        /// Compact panes, with less padding and smaller text, for a monitor.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+        children: Vec<Widget>,
+    },
+    /// Named pages, one shown at a time: a dashboard's sections.
+    #[serde(rename_all = "camelCase")]
+    Tabs { tabs: Vec<Tab> },
+    /// One number with its label, read live as the viewer.
+    #[serde(rename_all = "camelCase")]
+    Stat {
+        label: String,
+        source: StatSource,
+        /// Show the change from the answer's previous row (query sources only).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        delta: Option<bool>,
+        /// Draw the answer's last column across its rows (query sources only).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        sparkline: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
+    /// A saved query's answer drawn as a chart, as a document's live answer
+    /// draws it.
+    #[serde(rename_all = "camelCase")]
+    Chart {
+        /// The id database.saveQuery returned.
+        query_id: String,
+        mode: ChartMode,
+        chart: ChartColumns,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
+    /// Rows read live as the viewer, read-only.
+    #[serde(rename_all = "camelCase")]
+    Table {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        source: TableSource,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
+    /// The items a saved view lists, with its filters and grouping, read live
+    /// as the viewer.
+    #[serde(rename_all = "camelCase")]
+    SavedView {
+        view_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = bool)]
+        dense: Option<bool>,
+    },
 }
 
 /// The space between a container's children, as a Tailwind-ish step.
@@ -323,4 +411,85 @@ pub enum Justify {
     Center,
     End,
     Between,
+}
+
+/// A count of grid columns, 1-12.
+#[nutype(
+    validate(greater_or_equal = 1, less_or_equal = 12),
+    derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize),
+    derive_unchecked(Type)
+)]
+pub struct Columns(u8);
+
+/// A grid row's height in pixels.
+#[nutype(
+    validate(greater_or_equal = 64, less_or_equal = 800),
+    derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize),
+    derive_unchecked(Type)
+)]
+pub struct RowHeight(u16);
+
+/// One page of tabs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+pub struct Tab {
+    pub label: String,
+    pub children: Vec<Widget>,
+}
+
+/// Where a stat's number comes from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StatSource {
+    /// A saved query's answer: its last row's last column. Order a series by
+    /// time so the last row is the latest.
+    #[serde(rename_all = "camelCase")]
+    Query { query_id: String },
+    /// How many items a filter matches, counted up to 100.
+    Count { query: Box<Query> },
+}
+
+/// How a chart plots the answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ChartMode {
+    Bar,
+    Line,
+    Area,
+    Scatter,
+    Pie,
+}
+
+/// Which answer columns a chart plots, named as the SELECT returns them:
+/// the SDK's SavedQueryChart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+pub struct ChartColumns {
+    /// The labels: the x axis, or the pie's slices.
+    pub x: String,
+    /// One to five numeric columns.
+    pub y: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = String)]
+    pub title: Option<String>,
+    /// A column whose values split the one y series.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = String)]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional, type = bool)]
+    pub stack: Option<bool>,
+}
+
+/// Where a table's rows come from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TableSource {
+    /// A saved query's answer.
+    #[serde(rename_all = "camelCase")]
+    Query { query_id: String },
+    /// A database view's rows, as its grid shows them.
+    #[serde(rename_all = "camelCase")]
+    View {
+        database_id: String,
+        view_id: String,
+    },
 }
