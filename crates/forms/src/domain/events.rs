@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::models::{DatabaseId, FormId, FormResponseId, RowId};
 
+#[cfg(test)]
+mod test;
+
 /// Who performed a change: the principal that mechanically acted and, when a
 /// bot acted for a user, the user whose feed the action belongs on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -143,12 +146,99 @@ pub enum FormTopicEvent {
     },
 }
 
+/// Public payload of most `form.*` events: which form changed and who did
+/// it. Read the form for its new state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicFormChange {
+    /// The form.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub form_id: FormId,
+    /// Who acted, when attributable.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user the actor acted for, when different from the actor.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
+impl PublicFormChange {
+    fn new(form_id: &FormId, attribution: Option<&Attribution>) -> Self {
+        Self {
+            form_id: *form_id,
+            actor: attribution.map(|by| by.actor.clone()),
+            on_behalf_of: attribution.and_then(|by| by.on_behalf_of.clone()),
+        }
+    }
+}
+
+/// Public payload of `form.created`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicFormCreated {
+    /// The created form, with who created it.
+    #[serde(flatten)]
+    pub change: PublicFormChange,
+    /// The database holding its responses.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub database_id: DatabaseId,
+    /// When it was created.
+    pub created_at: DateTime<Utc>,
+}
+
+/// Public payload of `form.response_submitted`: where the response is, not
+/// what it says or who gave it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PublicFormResponseSubmitted {
+    /// The form.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub form_id: FormId,
+    /// The ledger entry.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub response_id: FormResponseId,
+    /// The row holding the answers, when one was written.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub row_id: Option<RowId>,
+    /// When it was submitted.
+    pub submitted_at: DateTime<Utc>,
+}
+
+/// The public projection of [`FormTopicEvent`], delivered under the same
+/// event names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum FormPublicEvent {
+    /// A form was created.
+    #[serde(rename = "form.created")]
+    Created(PublicFormCreated),
+    /// A form was renamed.
+    #[serde(rename = "form.renamed")]
+    Renamed(PublicFormChange),
+    /// A form was moved to the trash.
+    #[serde(rename = "form.trashed")]
+    Trashed(PublicFormChange),
+    /// A trashed form was restored.
+    #[serde(rename = "form.restored")]
+    Restored(PublicFormChange),
+    /// Who the form is shared with changed.
+    #[serde(rename = "form.sharing_changed")]
+    SharingChanged(PublicFormChange),
+    /// Someone responded; delivered to the form's editors only.
+    #[serde(rename = "form.response_submitted")]
+    ResponseSubmitted(PublicFormResponseSubmitted),
+    /// The form's icon or color changed.
+    #[serde(rename = "form.appearance_changed")]
+    AppearanceChanged(PublicFormChange),
+}
+
 impl TopicEvent for FormTopicEvent {
     type Topic = MacroFormsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = FormPublicEvent;
 
     fn exposure(
         &self,
@@ -156,27 +246,111 @@ impl TopicEvent for FormTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, MinAccessLevel, PendingPhase, PublicEvent,
+            Stage,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::Created(_)
-            | Self::Renamed(_)
-            | Self::Trashed(_)
-            | Self::Restored(_)
-            | Self::SharingChanged(_)
-            | Self::AppearanceChanged { .. } => Exposure::pending(
-                PendingPhase::EntityFamilies,
-                "form family: Entity(Form) with a thin projection",
+        let (name, form_id, min_level, payload) = match self {
+            Self::Created(metadata) => (
+                "form.created",
+                &metadata.form_id,
+                None,
+                FormPublicEvent::Created(PublicFormCreated {
+                    change: PublicFormChange::new(&metadata.form_id, Some(&metadata.attribution)),
+                    database_id: metadata.database_id,
+                    created_at: metadata.created_at,
+                }),
             ),
-            Self::ResponseSubmitted(_) => Exposure::pending(
-                PendingPhase::EntityFamilies,
-                "Entity(Form) at Edit level; needs an access-level floor the Audience vocabulary does not have yet",
+            Self::Renamed(metadata) => (
+                "form.renamed",
+                &metadata.form_id,
+                None,
+                FormPublicEvent::Renamed(PublicFormChange::new(
+                    &metadata.form_id,
+                    metadata.attribution.as_ref(),
+                )),
             ),
-            Self::Purged(_) => Exposure::pending(
-                PendingPhase::ProducerChange,
-                "carries only the form id and its grants are gone when consumed; needs Owner plus an audience snapshot",
+            Self::Trashed(metadata) => (
+                "form.trashed",
+                &metadata.form_id,
+                None,
+                FormPublicEvent::Trashed(PublicFormChange::new(
+                    &metadata.form_id,
+                    metadata.attribution.as_ref(),
+                )),
             ),
-        })
+            Self::Restored(metadata) => (
+                "form.restored",
+                &metadata.form_id,
+                None,
+                FormPublicEvent::Restored(PublicFormChange::new(
+                    &metadata.form_id,
+                    metadata.attribution.as_ref(),
+                )),
+            ),
+            Self::SharingChanged(metadata) => (
+                "form.sharing_changed",
+                &metadata.form_id,
+                None,
+                FormPublicEvent::SharingChanged(PublicFormChange::new(
+                    &metadata.form_id,
+                    metadata.attribution.as_ref(),
+                )),
+            ),
+            // Responses are for the people who manage the form, not every
+            // viewer of it.
+            Self::ResponseSubmitted(metadata) => (
+                "form.response_submitted",
+                &metadata.form_id,
+                Some(MinAccessLevel::Edit),
+                FormPublicEvent::ResponseSubmitted(PublicFormResponseSubmitted {
+                    form_id: metadata.form_id,
+                    response_id: metadata.response_id,
+                    row_id: metadata.row_id,
+                    submitted_at: metadata.submitted_at,
+                }),
+            ),
+            Self::AppearanceChanged {
+                form_id,
+                attribution,
+                ..
+            } => (
+                "form.appearance_changed",
+                form_id,
+                None,
+                FormPublicEvent::AppearanceChanged(PublicFormChange::new(
+                    form_id,
+                    attribution.as_ref(),
+                )),
+            ),
+            Self::Purged(_) => {
+                return Ok(Exposure::pending(
+                    PendingPhase::ProducerChange,
+                    "carries only the form id and its grants are gone when consumed; needs Owner plus an audience snapshot",
+                ));
+            }
+        };
+        let form_id = form_id.to_string();
+        let audience = match min_level {
+            Some(min_level) => Audience::EntityAtLeast {
+                entity_type: EntityType::Form,
+                entity_id: form_id.clone(),
+                min_level,
+            },
+            None => Audience::Entity {
+                entity_type: EntityType::Form,
+                entity_id: form_id.clone(),
+            },
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Form, form_id),
+            audience,
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
     }
 }
 
