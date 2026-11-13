@@ -114,6 +114,9 @@ pub(crate) type SubscriptionStatusServiceType =
         StripePlanGatewayType,
     >;
 
+pub(crate) type SubteamServiceType = teams::domain::subteam::service::SubteamServiceImpl<
+    teams::outbound::subteam_repo::PgSubteamRepository,
+>;
 pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
     teams::outbound::colleague_directory::ContactsColleagueDirectory<
         contacts::outbound::repository::DbContactsRepository,
@@ -258,6 +261,7 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
+    pub subteam_service: Arc<SubteamServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
     pub favorites_service: Arc<FavoritesServiceType>,

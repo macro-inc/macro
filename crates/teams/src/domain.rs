@@ -10,6 +10,7 @@ pub mod model;
 pub mod open_seat_release;
 pub mod owned_entity_cleanup;
 pub mod subscription_items;
+pub mod subteam;
 pub mod team_analytics;
 pub mod team_crm_settings_repo;
 pub mod team_repo;

@@ -165,6 +165,16 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                     entity_access_service: state.entity_access_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
+            )
+            .nest(
+                "/subteams",
+                teams::inbound::axum_router::subteams::subteams_router(
+                    teams::inbound::axum_router::subteams::SubteamRouterState {
+                        service: state.subteam_service.clone(),
+                        entity_access_service: state.entity_access_service.clone(),
+                        authorization_state: state.authorization_state.clone(),
+                    },
+                ),
             ),
         )
         .merge(hosted_runtimes::inbound::axum_router::team_router(

@@ -35,6 +35,7 @@ export type SettingsTab =
   | 'Bots'
   | 'Team'
   | 'Team Members'
+  | 'Teams'
   | 'Tags'
   | 'CRM'
   | 'Connected'

@@ -66,12 +66,20 @@ event contract (schema, sanitization, delivery semantics).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
+- `src/domain/subteam.rs` + `subteam/service.rs`: subteams, the named groups
+  inside a team ("Engineering", "Engineering / Platform"), nested one level
+  (`SubteamService`, its own router at `/team/subteams`). Anyone on the team
+  creates one and manages it; managers and team admins change it; members
+  join open subteams and always may leave. `outbound/subteam_repo.rs` checks
+  and writes nesting under a per-team advisory lock, since each check reads
+  rows a concurrent write can change, and `subteam_member` references
+  `team_user`, so leaving the team leaves its subteams.
 - `src/domain/team_repo.rs`: reuse `get_user_teams` for viewer teams and `get_all_team_members` for team membership, including owners.
 
 ## Scope
 
-- Owns: the `"Team"` table's lifecycle, membership, invites, and the
-  `macro.teams` Kafka producer.
+- Owns: the `"Team"` table's lifecycle, membership, invites, subteams
+  (`subteam`, `subteam_member`), and the `macro.teams` Kafka producer.
 - Not here: billing/seat pricing logic → `crates/ai_billing` (consumes this
   crate); CRM company/contact sync → `crates/crm` (this crate only enqueues).
 

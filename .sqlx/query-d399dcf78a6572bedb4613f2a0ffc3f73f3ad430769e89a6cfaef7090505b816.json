@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE subteam\n            SET parent_id = $3\n            WHERE team_id = $1 AND id = $2 AND (\n                $3::uuid IS NULL OR (\n                    $3 <> $2\n                    AND EXISTS (\n                        SELECT 1 FROM subteam parent\n                        WHERE parent.id = $3 AND parent.team_id = $1 AND parent.parent_id IS NULL\n                    )\n                    AND NOT EXISTS (SELECT 1 FROM subteam child WHERE child.parent_id = $2)\n                )\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d399dcf78a6572bedb4613f2a0ffc3f73f3ad430769e89a6cfaef7090505b816"
+}

@@ -10,6 +10,7 @@ export default {
   // Settings nav tabs
   tabTeamGeneral: 'General',
   tabTeamMembers: 'Members',
+  tabTeamTeams: 'Teams',
   tabEmail: 'Email',
   tabCalendar: 'Calendar',
   tabAgents: 'Agents',

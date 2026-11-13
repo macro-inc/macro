@@ -1,4 +1,6 @@
 import type {
+  SubteamColor,
+  SubteamJoinPolicy,
   Team as TeamRecord,
   TeamRole,
   TeamWithMembers,
@@ -8,6 +10,7 @@ import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { User } from '../users/user';
 import { TeamInvite } from './invite';
+import { Subteam } from './subteam';
 
 /** A member of a team: the user and their role. */
 export interface TeamMembership {
@@ -15,6 +18,27 @@ export interface TeamMembership {
   user: User;
   /** Their role on the team. */
   role: TeamRole;
+}
+
+/** A subteam to create with {@link Team.createSubteam}. */
+export interface NewSubteam {
+  /** The subteam's name, 1 to 40 characters. */
+  name: string;
+
+  /** The color of its mark. */
+  color: SubteamColor;
+
+  /** What it does, at most 200 characters. */
+  description?: string;
+
+  /** `open` (the default) lets anyone on the team join; `invite_only` needs a manager. */
+  joinPolicy?: SubteamJoinPolicy;
+
+  /** A top-level subteam to nest it under. The caller must manage it. */
+  parent?: Subteam;
+
+  /** People on the team to add besides the caller, who manages it. */
+  members?: readonly User[];
 }
 
 /**
@@ -150,6 +174,38 @@ export class Team extends MacroEntity<TeamRecord> {
     return unwrap(
       await this.client.auth.getTeamInvites({ query: { team_id: this.id } }),
     ).invites.map((invite) => TeamInvite.from(this.client, invite));
+  }
+
+  /**
+   * The subteams inside this team, with their members. Only the caller's
+   * current team lists subteams (see `Team.current`).
+   */
+  async subteams(): Promise<Subteam[]> {
+    await this.requireCurrent('subteams');
+    return unwrap(await this.client.auth.listSubteams()).subteams.map(
+      (record) => Subteam.from(this.client, record),
+    );
+  }
+
+  /**
+   * Create a subteam inside this team; the caller becomes its manager. Only
+   * the caller's current team takes new subteams (see `Team.current`).
+   */
+  async createSubteam(subteam: NewSubteam): Promise<Subteam> {
+    await this.requireCurrent('subteams');
+    const record = unwrap(
+      await this.client.auth.createSubteam({
+        body: {
+          name: subteam.name,
+          color: subteam.color,
+          description: subteam.description,
+          joinPolicy: subteam.joinPolicy ?? 'open',
+          parentId: subteam.parent?.id,
+          memberIds: subteam.members?.map((member) => member.id),
+        },
+      }),
+    );
+    return Subteam.from(this.client, record);
   }
 
   /** The caller's current team record, rejecting when this is another team. */

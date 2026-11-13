@@ -30,6 +30,7 @@ import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
+import settingsTeams from './en/settings-teams';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
 import tabs from './en/tabs';
@@ -73,6 +74,7 @@ export default {
   settingsLanguage,
   settingsMobileApp,
   settingsNav,
+  settingsTeams,
   splitMenu,
   subRoutines,
   tabs,

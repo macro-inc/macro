@@ -736,6 +736,9 @@ async fn run_server() -> anyhow::Result<()> {
         )
         .with_rollout(computer_rollout),
     );
+    let subteam_service = Arc::new(teams::domain::subteam::service::SubteamServiceImpl::new(
+        teams::outbound::subteam_repo::PgSubteamRepository::new(db.clone()),
+    ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
@@ -873,6 +876,7 @@ async fn run_server() -> anyhow::Result<()> {
             computer_billing_observer: computer_service.clone(),
             computer_service,
             domain_notice_service,
+            subteam_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),

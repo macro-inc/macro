@@ -29,15 +29,17 @@ describe('settings navigation', () => {
     expect(settingsSlugToTab('connections')).toBe('Connected');
   });
 
-  it('puts team settings first, with members on their own page', () => {
+  it('puts team settings first, with members and teams on their own pages', () => {
     expect(SETTINGS_TAB_GROUPS[0].label).toBe('Team');
     expect(SETTINGS_TAB_GROUPS[0].items.map((item) => item.tab)).toEqual([
       'Team',
       'Team Members',
+      'Teams',
     ]);
     // Old team links keep opening the team's general page.
     expect(settingsSlugToTab('team')).toBe('Team');
     expect(settingsSlugToTab('team-members')).toBe('Team Members');
+    expect(settingsSlugToTab('teams')).toBe('Teams');
     // Team connections moved into Integrations.
     expect(settingsSlugToTab('team-connections')).toBe('Connected');
   });

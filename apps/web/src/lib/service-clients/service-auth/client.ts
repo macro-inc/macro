@@ -54,6 +54,7 @@ import type { AgentSetupResponse } from './generated/schemas/agentSetupResponse'
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
+import type { CreateSubteamRequest } from './generated/schemas/createSubteamRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
 import type { CurrentSystemStatus } from './generated/schemas/currentSystemStatus';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
@@ -67,6 +68,7 @@ import type { GtmInviteOffer } from './generated/schemas/gtmInviteOffer';
 import type { GtmInviteOfferStatus } from './generated/schemas/gtmInviteOfferStatus';
 import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
 import type { JoinTeamByInviteLinkResponse } from './generated/schemas/joinTeamByInviteLinkResponse';
+import type { ListSubteamsResponse } from './generated/schemas/listSubteamsResponse';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
 import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
@@ -79,6 +81,8 @@ import type { PutProfilePictureParams } from './generated/schemas/putProfilePict
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
 import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
 import type { StatusUpdate } from './generated/schemas/statusUpdate';
+import type { Subteam } from './generated/schemas/subteam';
+import type { SubteamRole } from './generated/schemas/subteamRole';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
 import type { Team } from './generated/schemas/team';
@@ -88,6 +92,7 @@ import type { TeamInvitesResponse } from './generated/schemas/teamInvitesRespons
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
+import type { UpdateSubteamRequest } from './generated/schemas/updateSubteamRequest';
 import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
@@ -1585,6 +1590,64 @@ export const authServiceClient = {
         method: 'DELETE',
       })
     ).map(() => undefined);
+  },
+
+  /** The teams inside the caller's workspace, with their members. */
+  async listSubteams() {
+    return await fetchWithAuth<ListSubteamsResponse>(
+      `${authHost}/team/subteams`,
+      { method: 'GET' }
+    );
+  },
+
+  /** Creates a team in the caller's workspace; the caller manages it. */
+  async createSubteam(args: CreateSubteamRequest) {
+    return await fetchWithAuth<Subteam>(`${authHost}/team/subteams`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  },
+
+  async updateSubteam(subteamId: string, args: UpdateSubteamRequest) {
+    return await fetchWithAuth<Subteam>(
+      `${authHost}/team/subteams/${subteamId}`,
+      { method: 'PATCH', body: JSON.stringify(args) }
+    );
+  },
+
+  /** Moves a team under a top-level team, or to the top level with null. */
+  async nestSubteam(subteamId: string, parentId: string | null) {
+    return await fetchWithAuth<Subteam>(
+      `${authHost}/team/subteams/${subteamId}/parent`,
+      { method: 'PUT', body: JSON.stringify({ parentId }) }
+    );
+  },
+
+  async deleteSubteam(subteamId: string) {
+    return (
+      await fetchWithAuth<{}>(`${authHost}/team/subteams/${subteamId}`, {
+        method: 'DELETE',
+      })
+    ).map(() => undefined);
+  },
+
+  /** Adds someone to a team, or changes their role. */
+  async saveSubteamMember(
+    subteamId: string,
+    userId: string,
+    role: SubteamRole
+  ) {
+    return await fetchWithAuth<Subteam>(
+      `${authHost}/team/subteams/${subteamId}/members/${encodeURIComponent(userId)}`,
+      { method: 'PUT', body: JSON.stringify({ role }) }
+    );
+  },
+
+  async removeSubteamMember(subteamId: string, userId: string) {
+    return await fetchWithAuth<Subteam>(
+      `${authHost}/team/subteams/${subteamId}/members/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' }
+    );
   },
 
   async deleteTeam() {

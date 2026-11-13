@@ -39,6 +39,8 @@ export function SettingsPage(props: {
   signpost?: JSX.Element;
   /** Brand mark left of the title, for provider detail pages. */
   icon?: JSX.Element;
+  /** Replaces the title line, e.g. with an editable name. `title` still names the page. */
+  heading?: JSX.Element;
   /** Controls beside the title; wrap below the text when the pane narrows. */
   actions?: JSX.Element;
   /** Renders a back affordance above the title for drill-in subpages. */
@@ -77,7 +79,13 @@ export function SettingsPage(props: {
         </Show>
         <header class="flex flex-wrap items-start justify-between gap-4 @max-[480px]/settings-page:flex-col @max-[480px]/settings-page:gap-3">
           <div class="flex min-w-0 grow basis-64 flex-col gap-1.5 @max-[480px]/settings-page:basis-auto">
-            <Show when={!inSheet || props.showTitleInSheet || props.onBack}>
+            <Show when={props.heading}>{props.heading}</Show>
+            <Show
+              when={
+                !props.heading &&
+                (!inSheet || props.showTitleInSheet || props.onBack)
+              }
+            >
               <div class="flex min-w-0 items-center gap-3">
                 <Show when={props.icon}>
                   <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-7 [&_img]:size-7">

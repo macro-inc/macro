@@ -25,6 +25,7 @@ import type {
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateProfilePictureUploadRequest,
+  CreateSubteamRequest,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -64,10 +65,12 @@ import type {
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
+  ListSubteamsResponse,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
+  NestSubteamRequest,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -97,6 +100,7 @@ import type {
   RedeemGtmInviteLinkRequest,
   ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
+  SaveSubteamMemberRequest,
   SendDomainNoticeResponse,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
@@ -111,6 +115,7 @@ import type {
   StatusUpdate,
   StripeSessionResponse,
   SubscriptionStatus,
+  Subteam,
   SystemStatus,
   SystemStatusHistory,
   Team,
@@ -125,6 +130,7 @@ import type {
   TrialEligibility,
   UpdateAutoReloadRequest,
   UpdateOverageRequest,
+  UpdateSubteamRequest,
   UpstreamErrorResponse,
   UsageSnapshot,
   UserLanguage,
@@ -6367,6 +6373,504 @@ export const removeUserFromTeam = async (
     status: res.status,
     headers: res.headers,
   } as removeUserFromTeamResponse;
+};
+
+/**
+ * @summary Lists the teams in the caller's workspace with their members.
+ */
+export type listSubteamsResponse200 = {
+  data: ListSubteamsResponse;
+  status: 200;
+};
+
+export type listSubteamsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listSubteamsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listSubteamsResponseSuccess = listSubteamsResponse200 & {
+  headers: Headers;
+};
+export type listSubteamsResponseError = (
+  | listSubteamsResponse401
+  | listSubteamsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listSubteamsResponse =
+  | listSubteamsResponseSuccess
+  | listSubteamsResponseError;
+
+export const getListSubteamsUrl = () => {
+  return `/team/subteams`;
+};
+
+export const listSubteams = async (
+  options?: RequestInit
+): Promise<listSubteamsResponse> => {
+  const res = await fetch(getListSubteamsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSubteamsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSubteamsResponse;
+};
+
+/**
+ * @summary Creates a team in the caller's workspace. The caller becomes its manager.
+ */
+export type createSubteamResponse201 = {
+  data: Subteam;
+  status: 201;
+};
+
+export type createSubteamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createSubteamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createSubteamResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createSubteamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createSubteamResponseSuccess = createSubteamResponse201 & {
+  headers: Headers;
+};
+export type createSubteamResponseError = (
+  | createSubteamResponse400
+  | createSubteamResponse401
+  | createSubteamResponse403
+  | createSubteamResponse500
+) & {
+  headers: Headers;
+};
+
+export type createSubteamResponse =
+  | createSubteamResponseSuccess
+  | createSubteamResponseError;
+
+export const getCreateSubteamUrl = () => {
+  return `/team/subteams`;
+};
+
+export const createSubteam = async (
+  createSubteamRequest: CreateSubteamRequest,
+  options?: RequestInit
+): Promise<createSubteamResponse> => {
+  const res = await fetch(getCreateSubteamUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createSubteamRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createSubteamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createSubteamResponse;
+};
+
+/**
+ * @summary Deletes a team. Its nested teams move to the top level. Requires managing
+the team or being a workspace admin.
+ */
+export type deleteSubteamResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteSubteamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteSubteamResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteSubteamResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteSubteamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteSubteamResponseSuccess = deleteSubteamResponse204 & {
+  headers: Headers;
+};
+export type deleteSubteamResponseError = (
+  | deleteSubteamResponse401
+  | deleteSubteamResponse403
+  | deleteSubteamResponse404
+  | deleteSubteamResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteSubteamResponse =
+  | deleteSubteamResponseSuccess
+  | deleteSubteamResponseError;
+
+export const getDeleteSubteamUrl = (subteamId: string) => {
+  return `/team/subteams/${subteamId}`;
+};
+
+export const deleteSubteam = async (
+  subteamId: string,
+  options?: RequestInit
+): Promise<deleteSubteamResponse> => {
+  const res = await fetch(getDeleteSubteamUrl(subteamId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteSubteamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteSubteamResponse;
+};
+
+/**
+ * @summary Changes a team's name, description, color, or join policy. Requires
+managing the team or being a workspace admin.
+ */
+export type updateSubteamResponse200 = {
+  data: Subteam;
+  status: 200;
+};
+
+export type updateSubteamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type updateSubteamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type updateSubteamResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type updateSubteamResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type updateSubteamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type updateSubteamResponseSuccess = updateSubteamResponse200 & {
+  headers: Headers;
+};
+export type updateSubteamResponseError = (
+  | updateSubteamResponse400
+  | updateSubteamResponse401
+  | updateSubteamResponse403
+  | updateSubteamResponse404
+  | updateSubteamResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateSubteamResponse =
+  | updateSubteamResponseSuccess
+  | updateSubteamResponseError;
+
+export const getUpdateSubteamUrl = (subteamId: string) => {
+  return `/team/subteams/${subteamId}`;
+};
+
+export const updateSubteam = async (
+  subteamId: string,
+  updateSubteamRequest: UpdateSubteamRequest,
+  options?: RequestInit
+): Promise<updateSubteamResponse> => {
+  const res = await fetch(getUpdateSubteamUrl(subteamId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateSubteamRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateSubteamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateSubteamResponse;
+};
+
+/**
+ * @summary Adds a workspace member to a team or changes their role. Managers may add
+anyone in the workspace; anyone may join an open team as a member.
+ */
+export type saveSubteamMemberResponse200 = {
+  data: Subteam;
+  status: 200;
+};
+
+export type saveSubteamMemberResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type saveSubteamMemberResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type saveSubteamMemberResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type saveSubteamMemberResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type saveSubteamMemberResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type saveSubteamMemberResponseSuccess = saveSubteamMemberResponse200 & {
+  headers: Headers;
+};
+export type saveSubteamMemberResponseError = (
+  | saveSubteamMemberResponse400
+  | saveSubteamMemberResponse401
+  | saveSubteamMemberResponse403
+  | saveSubteamMemberResponse404
+  | saveSubteamMemberResponse500
+) & {
+  headers: Headers;
+};
+
+export type saveSubteamMemberResponse =
+  | saveSubteamMemberResponseSuccess
+  | saveSubteamMemberResponseError;
+
+export const getSaveSubteamMemberUrl = (subteamId: string, userId: string) => {
+  return `/team/subteams/${subteamId}/members/${userId}`;
+};
+
+export const saveSubteamMember = async (
+  subteamId: string,
+  userId: string,
+  saveSubteamMemberRequest: SaveSubteamMemberRequest,
+  options?: RequestInit
+): Promise<saveSubteamMemberResponse> => {
+  const res = await fetch(getSaveSubteamMemberUrl(subteamId, userId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(saveSubteamMemberRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: saveSubteamMemberResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as saveSubteamMemberResponse;
+};
+
+/**
+ * @summary Removes someone from a team. Anyone may leave; managers and workspace
+admins may remove anyone.
+ */
+export type removeSubteamMemberResponse200 = {
+  data: Subteam;
+  status: 200;
+};
+
+export type removeSubteamMemberResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type removeSubteamMemberResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type removeSubteamMemberResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type removeSubteamMemberResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type removeSubteamMemberResponseSuccess =
+  removeSubteamMemberResponse200 & {
+    headers: Headers;
+  };
+export type removeSubteamMemberResponseError = (
+  | removeSubteamMemberResponse401
+  | removeSubteamMemberResponse403
+  | removeSubteamMemberResponse404
+  | removeSubteamMemberResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeSubteamMemberResponse =
+  | removeSubteamMemberResponseSuccess
+  | removeSubteamMemberResponseError;
+
+export const getRemoveSubteamMemberUrl = (
+  subteamId: string,
+  userId: string
+) => {
+  return `/team/subteams/${subteamId}/members/${userId}`;
+};
+
+export const removeSubteamMember = async (
+  subteamId: string,
+  userId: string,
+  options?: RequestInit
+): Promise<removeSubteamMemberResponse> => {
+  const res = await fetch(getRemoveSubteamMemberUrl(subteamId, userId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeSubteamMemberResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeSubteamMemberResponse;
+};
+
+/**
+ * @summary Moves a team under another top-level team, or to the top level. Teams nest
+one level. Requires managing the team and the new parent.
+ */
+export type nestSubteamResponse200 = {
+  data: Subteam;
+  status: 200;
+};
+
+export type nestSubteamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type nestSubteamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type nestSubteamResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type nestSubteamResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type nestSubteamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type nestSubteamResponseSuccess = nestSubteamResponse200 & {
+  headers: Headers;
+};
+export type nestSubteamResponseError = (
+  | nestSubteamResponse400
+  | nestSubteamResponse401
+  | nestSubteamResponse403
+  | nestSubteamResponse404
+  | nestSubteamResponse500
+) & {
+  headers: Headers;
+};
+
+export type nestSubteamResponse =
+  | nestSubteamResponseSuccess
+  | nestSubteamResponseError;
+
+export const getNestSubteamUrl = (subteamId: string) => {
+  return `/team/subteams/${subteamId}/parent`;
+};
+
+export const nestSubteam = async (
+  subteamId: string,
+  nestSubteamRequest: NestSubteamRequest,
+  options?: RequestInit
+): Promise<nestSubteamResponse> => {
+  const res = await fetch(getNestSubteamUrl(subteamId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nestSubteamRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: nestSubteamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as nestSubteamResponse;
 };
 
 /**

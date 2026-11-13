@@ -24,6 +24,7 @@ import { Tags } from './Tags';
 import { TeamPage } from './Team';
 import { TeamGeneral } from './TeamGeneral';
 import { TeamMembers } from './TeamMembers';
+import { TeamSubteams } from './TeamSubteams';
 
 const RoutineSettings = lazyNamed(
   () => import('../routines/routine-settings'),
@@ -78,6 +79,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Team Members')}>
         <TeamPage>{(team) => <TeamMembers team={team} />}</TeamPage>
+      </Show>
+      <Show when={isCurrentTab('Teams')}>
+        <TeamPage>{(team) => <TeamSubteams team={team} />}</TeamPage>
       </Show>
       <Show when={isCurrentTab('Tags')}>
         <Tags />

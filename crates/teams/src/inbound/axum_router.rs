@@ -35,6 +35,8 @@ pub mod premium_user;
 pub mod reject_invitation;
 /// Remove a user from a team.
 pub mod remove_user_from_team;
+/// The teams inside a workspace.
+pub mod subteams;
 /// Toggle automatic domain joining for a team.
 pub mod toggle_auto_join_domain;
 /// Toggle whether non-admin members may invite users to a team.

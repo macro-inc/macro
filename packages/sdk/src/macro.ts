@@ -581,6 +581,12 @@ export {
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export {
+  Subteam,
+  type SubteamChanges,
+  type SubteamMembership,
+} from './entities/teams/subteam';
+export type { NewSubteam } from './entities/teams/team';
+export {
   ExternalProfilePicture,
   type ProfilePicture,
 } from './entities/users/profile-picture';

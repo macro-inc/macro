@@ -31,6 +31,7 @@ describe('team settings group', () => {
     expect(group().items.map((item) => item.label)).toEqual([
       'General',
       'Members',
+      'Teams',
     ]);
   });
 
@@ -45,7 +46,7 @@ describe('team settings group', () => {
     setTeamsQuery({ isSuccess: false, data: undefined });
     const group = teamGroup();
     expect(group().label).toBe('Team');
-    expect(group().items).toHaveLength(2);
+    expect(group().items).toHaveLength(3);
     setTeamsQuery({ isSuccess: true, data: [{ name: 'Acme' }] });
     expect(group().label).toBe('Team · Acme');
   });
