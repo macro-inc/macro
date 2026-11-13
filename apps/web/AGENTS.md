@@ -223,6 +223,12 @@ Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 
+A project's Tasks header keeps search, filters, Add existing tasks and New task on
+screen at 320–430px phone widths, with search closed and open, by collapsing both
+actions to icons and narrowing the open search on phones only; tablet and desktop
+keep the labels. Its backend-free regression over the real row is
+`bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
+
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
