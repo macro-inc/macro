@@ -29,11 +29,14 @@ export type PipelineEntryFields = {
   clamped: boolean;
 };
 
-/** A field with no value. A checkbox always has one: unset reads as unchecked. */
+/**
+ * A field with no value, read as the grid cell shows one: missing or an empty
+ * string. A checkbox always has one: unset reads as unchecked.
+ */
 export function isEmptyCell(cell: PipelineEntryCell): boolean {
   if (cell.column.dataType === 'BOOLEAN') return false;
   return databaseCellValues(cell.value, cell.column).every(
-    (value) => value === null || String(value).trim() === ''
+    (value) => value === null || value === ''
   );
 }
 

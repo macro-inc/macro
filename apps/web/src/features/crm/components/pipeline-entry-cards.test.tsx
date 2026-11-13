@@ -192,6 +192,26 @@ it('keeps a cleared field in its row until the card folds again', () => {
   ).toBeTruthy();
 });
 
+it('moves a folded field into the list once a value arrives for it', () => {
+  const [entries, setEntries] = createSignal([contactPipelineEntry()]);
+  render(() => (
+    <PipelineEntryCards entries={entries()} renderCell={renderCell} />
+  ));
+  const card = screen.getByRole('article', { name: 'Trial outreach' });
+  fireEvent.click(within(card).getByRole('button', { name: 'Show 15 more' }));
+  const filled = contactPipelineEntry();
+  filled.cells = filled.cells.map((cell) =>
+    cell.column.name === 'Notes' ? { ...cell, value: 'Asked for a demo' } : cell
+  );
+  setEntries([filled]);
+  expect(listed(card)).toContain('Notes');
+  expect(
+    within(card).getByRole('button', {
+      name: '3 empty fields: Trial ends, LinkedIn, Last outreach',
+    })
+  ).toBeTruthy();
+});
+
 it('marks a private pipeline and collapses the section from its header', () => {
   render(() => (
     <PipelineEntryCards

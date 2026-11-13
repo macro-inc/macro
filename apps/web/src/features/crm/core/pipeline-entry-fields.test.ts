@@ -36,7 +36,7 @@ describe('isEmptyCell', () => {
 
   it('treats missing, blank and empty multi-select values as empty', () => {
     expect(isEmptyCell(text(null))).toBe(true);
-    expect(isEmptyCell(text('  '))).toBe(true);
+    expect(isEmptyCell(text(''))).toBe(true);
     expect(
       isEmptyCell({
         ...text('[]', 'SELECT_STRING'),

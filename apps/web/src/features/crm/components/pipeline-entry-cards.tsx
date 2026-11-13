@@ -6,7 +6,13 @@ import LockIcon from '@icon/system/regular/lock-simple.svg';
 import TableIcon from '@icon/system/regular/table.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
-import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { PropertyIcon } from '../../database/components/property-icon';
 import type { PipelineEntry, PipelineEntryCell } from '../core/pipeline-entry';
 import {
@@ -89,25 +95,30 @@ function PipelineEntryCard(props: {
   let card: HTMLElement | undefined;
   let list: HTMLDivElement | undefined;
   // Which fields are empty is read when the card opens or folds, so a value
-  // cleared in place keeps its row instead of jumping into the fold.
+  // cleared in place keeps its row instead of jumping into the fold. A value
+  // that arrives later always leaves the fold.
   const readEmpty = () =>
     Object.fromEntries(
       props.entry.cells.map((cell) => [cell.column.id, isEmptyCell(cell)])
     );
   const [settledEmpty, setSettledEmpty] = createSignal(readEmpty());
   const isEmpty = (cell: PipelineEntryCell) =>
-    settledEmpty()[cell.column.id] ?? isEmptyCell(cell);
+    (settledEmpty()[cell.column.id] ?? true) && isEmptyCell(cell);
   const [fold, setFoldState] = createSignal<PipelineEntryFold>('collapsed');
   const setFold = (next: PipelineEntryFold) => {
     setSettledEmpty(readEmpty());
     setFoldState(next);
   };
-  const fields = () => pipelineEntryFields(props.entry.cells, isEmpty, fold());
-  const foldedNames = () =>
-    new Intl.ListFormat(formatLocale(), {
-      style: 'short',
-      type: 'unit',
-    }).format(fields().folded.map((cell) => cell.column.name));
+  // Every row reads it for its fit, so it is worked out once per change.
+  const fields = createMemo(() =>
+    pipelineEntryFields(props.entry.cells, isEmpty, fold())
+  );
+  const listFormat = createMemo(
+    () => new Intl.ListFormat(formatLocale(), { style: 'short', type: 'unit' })
+  );
+  const foldedNames = createMemo(() =>
+    listFormat().format(fields().folded.map((cell) => cell.column.name))
+  );
   const toggle = () => {
     const collapsing = fold() !== 'collapsed';
     setFold(collapsing ? 'collapsed' : 'filled');

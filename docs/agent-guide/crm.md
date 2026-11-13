@@ -345,9 +345,10 @@ footer. Expanded, it lists every filled field in column order with prose in
 full, paragraphs kept, then folds the empty ones into one `N empty fields` row
 naming them; opening that row lists them in place, each saying `Empty`, and
 moves focus to the first. A card with six filled fields or fewer shows them
-all with its empty ones folded below, and has no footer until that row opens. Emails and other single-line values stay on one
-line and end in an ellipsis when cut. A value cleared in place keeps its row
-until the card folds again. The footer's `Show less` stays pinned to the bottom
+all, prose in full, with its empty ones folded below, and has no footer until
+that row opens. Emails and other single-line values stay on one line and end
+in an ellipsis when cut. A value cleared in place keeps its row until the card
+folds again; a folded field that gets a value leaves the fold at once. The footer's `Show less` stays pinned to the bottom
 of the view while the card runs past it, and collapsing scrolls the card back
 into view. Cells edit like the pipeline table's when you can edit that pipeline. Inside Customers, the header's
 `Open <pipeline>` button opens it. The `Pipelines` caret header collapses and expands the cards, like the Discussion
