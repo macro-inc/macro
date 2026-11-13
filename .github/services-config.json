@@ -330,7 +330,8 @@
       "stack_path": "infra/stacks/slack-session-service/**",
       "deploy_binaries": [
         "slack_session_service"
-      ]
+      ],
+      "bootstrap_pending": "the dev and prd Pulumi stacks are not created and the service has never been deployed"
     }
   }
 }
