@@ -46,8 +46,19 @@ async fn sent_mail_connects_the_sender_with_each_recipient(
         .await?;
     inbox.wait_for_preview("sent", "Kickoff").await?;
 
+    // A later mail, so that everything the first one caused has been seen
+    // by the time its own contact arrives.
+    inbox
+        .send(&json!({
+            "subject": "Afterwards",
+            "to": [{ "email": "walt@example.com" }],
+            "body_text": "One more.",
+        }))
+        .await?;
+    inbox.wait_for_preview("sent", "Afterwards").await?;
+
     let mut seen = Vec::new();
-    let expected: BTreeSet<(String, String)> = ["xavier", "yara", "zoe"]
+    let expected: BTreeSet<(String, String)> = ["walt", "xavier", "yara", "zoe"]
         .into_iter()
         .map(|name| {
             (
@@ -90,6 +101,9 @@ async fn outlook_sent_mail_connects_the_sender_with_each_recipient() -> Result<(
 }
 
 /// Received mail connects the inbox's owner with its sender.
+///
+/// When it fails: people who wrote to the user are missing from their
+/// contacts, or the sender is connected with the mail's other recipients.
 async fn received_mail_connects_the_owner_with_the_sender(
     provider: Provider,
 ) -> Result<(), Report> {
@@ -102,11 +116,15 @@ async fn received_mail_connects_the_owner_with_the_sender(
     mail.cc = Some("Alan <alan@example.com>".to_owned());
     inbox.deliver(&mail)?;
     inbox.wait_for_preview("inbox", "Intro").await?;
+    // A later mail, so that everything the first one caused has been seen
+    // by the time its own contact arrives.
+    inbox.deliver(&Mail::new("Walt <walt@example.com>", "Afterwards", "Hi."))?;
+    inbox.wait_for_preview("inbox", "Afterwards").await?;
 
     let mut seen = Vec::new();
     let wanted = (
         ada.macro_id().to_owned(),
-        "macro|grace@example.com".to_owned(),
+        "macro|walt@example.com".to_owned(),
     );
     email_e2e::eventually(
         "the contact of the received mail",
@@ -119,6 +137,13 @@ async fn received_mail_connects_the_owner_with_the_sender(
     )
     .await?;
     let all: BTreeSet<_> = seen.iter().flat_map(connections).collect();
+    assert!(
+        all.contains(&(
+            ada.macro_id().to_owned(),
+            "macro|grace@example.com".to_owned()
+        )),
+        "the owner is connected with the first sender: {all:?}"
+    );
     assert!(
         !all.contains(&(
             "macro|alan@example.com".to_owned(),

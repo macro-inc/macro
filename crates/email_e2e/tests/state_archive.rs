@@ -223,8 +223,7 @@ async fn outlook_archiving_twice_is_one_archive() -> Result<(), Report> {
     archiving_twice_is_one_archive(Provider::Outlook).await
 }
 
-/// A thread whose only mail is in Trash or Spam opens by its id, and can be
-/// archived without an error.
+/// A thread whose only mail is in Trash or Spam opens by its id.
 ///
 /// When it fails: a deleted or junk thread opened from a link or a search
 /// result shows "not found".

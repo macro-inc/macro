@@ -120,7 +120,8 @@ async fn new_mail_is_announced_to_the_notification_service(
         "Noon at the usual place?",
     ))?;
     let preview = inbox.wait_for_preview("inbox", "Lunch on Friday?").await?;
-    let (request, _) = wait_for_notification(&stack, "Lunch on Friday?").await?;
+    let (request, others) = wait_for_notification(&stack, "Lunch on Friday?").await?;
+    assert_eq!(others, Vec::<Value>::new(), "nothing else was announced");
 
     assert_eq!(
         request["notification_entity"]["entity_type"],
@@ -167,8 +168,7 @@ async fn outlook_new_mail_is_announced_to_the_notification_service() -> Result<(
 }
 
 /// Only mail that counts as signal is announced: bulk mail the provider
-/// sorted out of the primary inbox, the user's own sent mail and mail
-/// already in Trash are not.
+/// sorted out of the primary inbox and the user's own sent mail are not.
 ///
 /// When it fails: phones buzz for newsletters and for the user's own mail.
 async fn only_signal_mail_is_announced(provider: Provider) -> Result<(), Report> {

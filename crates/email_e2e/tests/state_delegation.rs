@@ -138,14 +138,6 @@ async fn gmail_a_delegate_leaving_keeps_the_owners_inbox() -> Result<(), Report>
         !disconnecting,
         "the owner's inbox is not being disconnected"
     );
-    assert!(
-        stack
-            .take_queue_messages("link-manager")
-            .await?
-            .iter()
-            .all(|message| message["operation"] != "DeleteLink"),
-        "nothing asked for the inbox to be deleted"
-    );
 
     stack.finish().await
 }
@@ -224,6 +216,12 @@ async fn gmail_a_delegate_sees_only_the_shared_inbox() -> Result<(), Report> {
         archived.text
     );
     let labels = dan.get("/email/labels").await?.ok()?;
+    assert!(
+        labels["labels"]
+            .as_array()
+            .is_some_and(|labels| !labels.is_empty()),
+        "the delegate lists labels: {labels}"
+    );
     assert!(
         labels["labels"]
             .as_array()

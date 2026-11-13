@@ -168,6 +168,9 @@ async fn gmail_a_star_removed_at_gmail_is_removed_in_macro() -> Result<(), Repor
 
 /// A star set in Macro reaches Gmail and the Starred list; unstarring in
 /// Macro removes it from both.
+///
+/// When it fails: a star set in Macro is missing in Gmail, or a thread
+/// unstarred in Macro stays starred there.
 #[tokio::test(flavor = "multi_thread")]
 async fn gmail_a_star_set_in_macro_reaches_gmail() -> Result<(), Report> {
     let stack = Stack::start().await?;
@@ -324,6 +327,7 @@ async fn gmail_a_label_is_not_applied_across_inboxes() -> Result<(), Report> {
         "In the first",
         "A.",
     ))?;
+    second.deliver(&Mail::new("Alan <alan@example.com>", "In the second", "B."))?;
     let thread = first.wait_for_preview("inbox", "In the first").await?;
     let thread_id = id_of(&thread);
     let message_id = first.thread(&thread_id).await?["messages"][0]["db_id"]
@@ -374,7 +378,15 @@ async fn gmail_a_label_is_not_applied_across_inboxes() -> Result<(), Report> {
                     .any(|label| label.starts_with("Label_"))
         })
         .await?;
-    assert!(second.provider_messages()?.is_empty());
+    let others = second.provider_messages()?;
+    assert!(!others.is_empty(), "the second mailbox has mail");
+    assert!(
+        others.iter().all(|message| !message
+            .labels
+            .iter()
+            .any(|label| label.starts_with("Label_"))),
+        "no label reached the second mailbox: {others:?}"
+    );
 
     stack.finish().await
 }
