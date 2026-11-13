@@ -152,6 +152,9 @@ Pulumi stacks; they do not host extra agent processes.
   `SetupNotices` port: sends the buyer `computer_setup` (ready, or failed with
   the status's failure reason; inbox, gateway, push) on the team entity, with
   an id derived from computer and outcome (plus `failed_at` for a failure).
+  An agent teammate's computer goes to the agent's inviter instead, with
+  `agent { userId, name }` read from `team_agents` (`PgTeamAgentsRepo`); a
+  removed agent, or one whose inviter is gone, sends nothing.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only
