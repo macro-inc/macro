@@ -22,7 +22,10 @@ async fn take_new_mail(stack: &Stack) -> Result<Vec<Value>, Report> {
 
 /// Waits for the new-mail notification of the mail with this subject and
 /// returns it with every other one that came before it.
-async fn wait_for_notification(stack: &Stack, subject: &str) -> Result<(Value, Vec<Value>), Report> {
+async fn wait_for_notification(
+    stack: &Stack,
+    subject: &str,
+) -> Result<(Value, Vec<Value>), Report> {
     let mut others = Vec::new();
     let found = email_e2e::eventually(
         &format!("the notification of \"{subject}\""),
@@ -98,29 +101,52 @@ async fn is_signal(stack: &Stack, preview: &Value) -> Result<bool, Report> {
 ///
 /// When it fails: no notification of new mail arrives at all, it arrives
 /// twice, or it opens something other than the thread.
-async fn new_mail_is_announced_to_the_notification_service(provider: Provider) -> Result<(), Report> {
+async fn new_mail_is_announced_to_the_notification_service(
+    provider: Provider,
+) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let inbox = ada.link(provider, ada.email()).await?;
     take_new_mail(&stack).await?;
 
-    inbox.deliver(&Mail::new("Grace <grace@example.com>", "Lunch on Friday?", "Noon at the usual place?"))?;
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Lunch on Friday?",
+        "Noon at the usual place?",
+    ))?;
     let preview = inbox.wait_for_preview("inbox", "Lunch on Friday?").await?;
     let (request, _) = wait_for_notification(&stack, "Lunch on Friday?").await?;
 
-    assert_eq!(request["notification_entity"]["entity_type"], "email_thread");
+    assert_eq!(
+        request["notification_entity"]["entity_type"],
+        "email_thread"
+    );
     assert_eq!(request["notification_entity"]["entity_id"], preview["id"]);
-    assert_eq!(request["recipient_ids"], serde_json::json!([ada.macro_id()]));
+    assert_eq!(
+        request["recipient_ids"],
+        serde_json::json!([ada.macro_id()])
+    );
     let content = &request["notification"]["content"];
     assert_eq!(content["threadId"], preview["id"]);
     assert_eq!(content["toEmail"], ada.email());
     assert_eq!(content["sender"], "Grace");
-    assert_eq!(content["snippet"].as_str().map(str::trim), Some("Noon at the usual place?"));
+    assert_eq!(
+        content["snippet"].as_str().map(str::trim),
+        Some("Noon at the usual place?")
+    );
 
     // A later mail's notification arrives without a second one for the first.
-    inbox.deliver(&Mail::new("Alan <alan@example.com>", "Second mail", "Hello."))?;
+    inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Second mail",
+        "Hello.",
+    ))?;
     let (_, others) = wait_for_notification(&stack, "Second mail").await?;
-    assert_eq!(others, Vec::<Value>::new(), "the first mail was announced once");
+    assert_eq!(
+        others,
+        Vec::<Value>::new(),
+        "the first mail was announced once"
+    );
 
     stack.finish().await
 }
@@ -156,11 +182,18 @@ async fn only_signal_mail_is_announced(provider: Provider) -> Result<(), Report>
         }))
         .await?;
     inbox.wait_for_preview("sent", "My own mail").await?;
-    inbox.deliver(&Mail::new("Grace <grace@example.com>", "Personal note", "Hi Ada."))?;
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Personal note",
+        "Hi Ada.",
+    ))?;
     let personal = inbox.wait_for_preview("inbox", "Personal note").await?;
 
     assert!(!is_signal(&stack, &bulk).await?, "bulk mail is not signal");
-    assert!(is_signal(&stack, &personal).await?, "personal mail is signal");
+    assert!(
+        is_signal(&stack, &personal).await?,
+        "personal mail is signal"
+    );
     let (_, others) = wait_for_notification(&stack, "Personal note").await?;
     assert_eq!(others, Vec::<Value>::new(), "nothing else was announced");
 
@@ -196,13 +229,21 @@ async fn macros_own_notification_mail_is_not_signal(provider: Provider) -> Resul
         "Open Macro to reply.",
     ))?;
     let own = inbox.wait_for_preview("all", "Grace mentioned you").await?;
-    inbox.deliver(&Mail::new("Grace <grace@example.com>", "A real mail", "Hi."))?;
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "A real mail",
+        "Hi.",
+    ))?;
     let real = inbox.wait_for_preview("inbox", "A real mail").await?;
 
     assert!(!is_signal(&stack, &own).await?);
     assert!(is_signal(&stack, &real).await?);
     let (_, others) = wait_for_notification(&stack, "A real mail").await?;
-    assert_eq!(others, Vec::<Value>::new(), "Macro's own mail was not announced");
+    assert_eq!(
+        others,
+        Vec::<Value>::new(),
+        "Macro's own mail was not announced"
+    );
 
     stack.finish().await
 }

@@ -58,7 +58,10 @@ async fn a_sender_marked_noise_leaves_signal(provider: Provider) -> Result<(), R
     set_rule(false).await?;
 
     let after = receive(&inbox, "News <news@example.net>", "Issue 2").await?;
-    assert!(!is_signal(&stack, &after).await?, "new mail from the sender is noise");
+    assert!(
+        !is_signal(&stack, &after).await?,
+        "new mail from the sender is noise"
+    );
     email_e2e::eventually(
         "the sender's earlier mail to leave signal",
         email_e2e::DEFAULT_TIMEOUT,
@@ -71,7 +74,10 @@ async fn a_sender_marked_noise_leaves_signal(provider: Provider) -> Result<(), R
 
     set_rule(true).await?;
     let again = receive(&inbox, "News <news@example.net>", "Issue 3").await?;
-    assert!(is_signal(&stack, &again).await?, "the sender is signal again");
+    assert!(
+        is_signal(&stack, &again).await?,
+        "the sender is signal again"
+    );
 
     stack.finish().await
 }
@@ -109,7 +115,10 @@ async fn a_blocked_sender_goes_to_trash(provider: Provider) -> Result<(), Report
         email_e2e::DEFAULT_TIMEOUT,
         async || {
             let blocked = inbox.get("/email/contacts/blocked").await?.ok()?;
-            Ok(blocked.to_string().contains("mallory@example.net").then_some(blocked))
+            Ok(blocked
+                .to_string()
+                .contains("mallory@example.net")
+                .then_some(blocked))
         },
     )
     .await?;
@@ -171,8 +180,8 @@ async fn deliver_until(inbox: &Inbox, prefix: &str, in_inbox: bool) -> Result<St
             Ok(filed
                 .is_some_and(|message| {
                     // Gmail adds TRASH; Outlook moves the message out of the inbox.
-                    let thrown = !message.in_inbox
-                        || message.labels.iter().any(|label| label == "TRASH");
+                    let thrown =
+                        !message.in_inbox || message.labels.iter().any(|label| label == "TRASH");
                     thrown != in_inbox
                 })
                 .then_some(subject))

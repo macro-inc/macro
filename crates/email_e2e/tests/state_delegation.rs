@@ -21,7 +21,9 @@ async fn share_with(
     let scopes = match provider {
         Provider::Gmail => vec!["https://www.googleapis.com/auth/gmail.modify".to_owned()],
         Provider::Outlook => {
-            stack.outlook().link_mailbox(&attempt.to_string(), address)?;
+            stack
+                .outlook()
+                .link_mailbox(&attempt.to_string(), address)?;
             Vec::new()
         }
     };
@@ -109,7 +111,10 @@ async fn gmail_a_delegate_leaving_keeps_the_owners_inbox() -> Result<(), Report>
         .await?;
     assert_eq!(left.status, 204, "{}", left.text);
 
-    assert!(link_ids(&dan).await?.is_empty(), "the delegate lost the inbox");
+    assert!(
+        link_ids(&dan).await?.is_empty(),
+        "the delegate lost the inbox"
+    );
     assert!(previews(&dan, "inbox").await?.is_empty());
     assert!(link_ids(&olga).await?.contains(&link.to_string()));
 
@@ -124,7 +129,10 @@ async fn gmail_a_delegate_leaving_keeps_the_owners_inbox() -> Result<(), Report>
     .bind(link)
     .fetch_one(stack.db())
     .await?;
-    assert!(!disconnecting, "the owner's inbox is not being disconnected");
+    assert!(
+        !disconnecting,
+        "the owner's inbox is not being disconnected"
+    );
     assert!(
         stack
             .take_queue_messages("link-manager")
@@ -146,9 +154,19 @@ async fn gmail_a_delegate_leaving_keeps_the_owners_inbox() -> Result<(), Report>
 async fn gmail_a_delegate_sees_only_the_shared_inbox() -> Result<(), Report> {
     let stack = Stack::start().await?;
     let (olga, shared, dan) = shared_gmail_inbox(&stack).await?;
-    let private = olga.link(Provider::Gmail, "olga.private@example.com").await?;
-    shared.deliver(&Mail::new("Grace <grace@example.com>", "Shared mail", "For both."))?;
-    private.deliver(&Mail::new("Bank <bank@example.com>", "Private mail", "For Olga."))?;
+    let private = olga
+        .link(Provider::Gmail, "olga.private@example.com")
+        .await?;
+    shared.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Shared mail",
+        "For both.",
+    ))?;
+    private.deliver(&Mail::new(
+        "Bank <bank@example.com>",
+        "Private mail",
+        "For Olga.",
+    ))?;
     let private_thread = private.wait_for_preview("inbox", "Private mail").await?;
     let private_thread = private_thread["id"].as_str().unwrap_or_default();
     wait_for_preview(&dan, "inbox", "Shared mail").await?;
@@ -182,14 +200,24 @@ async fn gmail_a_delegate_sees_only_the_shared_inbox() -> Result<(), Report> {
     let seen = dan
         .post(&format!("/email/threads/{private_thread}/seen"), None)
         .await?;
-    assert!(matches!(seen.status, 403 | 404), "{} {}", seen.status, seen.text);
+    assert!(
+        matches!(seen.status, 403 | 404),
+        "{} {}",
+        seen.status,
+        seen.text
+    );
     let archived = dan
         .patch(
             &format!("/email/threads/{private_thread}/archived"),
             Some(&json!({ "value": true })),
         )
         .await?;
-    assert!(matches!(archived.status, 403 | 404), "{} {}", archived.status, archived.text);
+    assert!(
+        matches!(archived.status, 403 | 404),
+        "{} {}",
+        archived.status,
+        archived.text
+    );
     let labels = dan.get("/email/labels").await?.ok()?;
     assert!(
         labels["labels"]
@@ -217,7 +245,11 @@ async fn gmail_a_delegate_is_told_of_new_mail_and_can_open_it() -> Result<(), Re
     let (olga, inbox, dan) = shared_gmail_inbox(&stack).await?;
     stack.take_queue_messages("notification-ingress").await?;
 
-    inbox.deliver(&Mail::new("Grace <grace@example.com>", "For the team", "Hello both."))?;
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "For the team",
+        "Hello both.",
+    ))?;
     let preview = wait_for_preview(&dan, "inbox", "For the team").await?;
     let thread_id = preview["id"].as_str().unwrap_or_default();
 
@@ -252,7 +284,9 @@ async fn gmail_a_delegate_is_told_of_new_mail_and_can_open_it() -> Result<(), Re
         .await?
         .ok()?;
     assert_eq!(
-        thread["thread"]["messages"][0]["body_text"].as_str().map(str::trim),
+        thread["thread"]["messages"][0]["body_text"]
+            .as_str()
+            .map(str::trim),
         Some("Hello both.")
     );
 
@@ -269,7 +303,11 @@ async fn gmail_a_delegate_is_told_of_new_mail_and_can_open_it() -> Result<(), Re
 async fn gmail_a_delegate_marks_shared_mail_read_and_starred() -> Result<(), Report> {
     let stack = Stack::start().await?;
     let (_olga, inbox, dan) = shared_gmail_inbox(&stack).await?;
-    let delivered = inbox.deliver(&Mail::new("Grace <grace@example.com>", "Read me", "Please."))?;
+    let delivered = inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Read me",
+        "Please.",
+    ))?;
     let preview = wait_for_preview(&dan, "inbox", "Read me").await?;
     let thread_id = preview["id"].as_str().unwrap_or_default();
 
@@ -307,9 +345,15 @@ async fn gmail_a_delegate_marks_shared_mail_read_and_starred() -> Result<(), Rep
 async fn gmail_a_delegate_changes_labels_on_single_messages() -> Result<(), Report> {
     let stack = Stack::start().await?;
     let (_olga, inbox, dan) = shared_gmail_inbox(&stack).await?;
-    let delivered = inbox.deliver(&Mail::new("Grace <grace@example.com>", "One message", "Hi."))?;
+    let delivered = inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "One message",
+        "Hi.",
+    ))?;
     let preview = wait_for_preview(&dan, "inbox", "One message").await?;
-    let thread = inbox.thread(preview["id"].as_str().unwrap_or_default()).await?;
+    let thread = inbox
+        .thread(preview["id"].as_str().unwrap_or_default())
+        .await?;
     let message_id = thread["messages"][0]["db_id"].clone();
     let labels = inbox.get("/email/labels").await?.ok()?;
     let unread = labels["labels"]
@@ -353,7 +397,11 @@ async fn gmail_linking_a_colleagues_mailbox_first_creates_it_as_theirs() -> Resu
     stack.seed_mailbox(
         Provider::Gmail,
         carol.email(),
-        &[Mail::new("Grace <grace@example.com>", "Already here", "Old mail.")],
+        &[Mail::new(
+            "Grace <grace@example.com>",
+            "Already here",
+            "Old mail.",
+        )],
     )?;
 
     let created = share_with(&stack, &dan, Provider::Gmail, carol.email()).await?;
@@ -394,7 +442,11 @@ async fn outlook_a_waiting_change_survives_a_reconnect() -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let inbox = ada.link_outlook().await?;
-    let delivered = inbox.deliver(&Mail::new("Grace <grace@example.com>", "Waiting", "Read me."))?;
+    let delivered = inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Waiting",
+        "Read me.",
+    ))?;
     let preview = inbox.wait_for_preview("inbox", "Waiting").await?;
     let thread_id = preview["id"].as_str().unwrap_or_default();
 
@@ -420,7 +472,9 @@ async fn outlook_a_waiting_change_survives_a_reconnect() -> Result<(), Report> {
                 .outlook()
                 .requests()
                 .iter()
-                .any(|request| request.route == Some(Route::MessagesUpdate) && request.status >= 500)
+                .any(|request| {
+                    request.route == Some(Route::MessagesUpdate) && request.status >= 500
+                })
                 .then_some(()))
         },
     )
@@ -457,7 +511,10 @@ async fn outlook_a_waiting_change_survives_a_reconnect() -> Result<(), Report> {
         },
     )
     .await?;
-    assert!(!operations.to_string().contains("\"failed\""), "{operations}");
+    assert!(
+        !operations.to_string().contains("\"failed\""),
+        "{operations}"
+    );
 
     stack.finish().await
 }

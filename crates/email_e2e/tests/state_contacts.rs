@@ -14,7 +14,11 @@ fn connections(message: &Value) -> BTreeSet<(String, String)> {
         .map(|pair| {
             let first = pair["first"].as_str().unwrap_or_default().to_owned();
             let second = pair["second"].as_str().unwrap_or_default().to_owned();
-            if first <= second { (first, second) } else { (second, first) }
+            if first <= second {
+                (first, second)
+            } else {
+                (second, first)
+            }
         })
         .collect()
 }
@@ -24,7 +28,9 @@ fn connections(message: &Value) -> BTreeSet<(String, String)> {
 ///
 /// When it fails: everyone on a mail becomes a contact of everyone else on
 /// it, so people see strangers from a colleague's mail as their contacts.
-async fn sent_mail_connects_the_sender_with_each_recipient(provider: Provider) -> Result<(), Report> {
+async fn sent_mail_connects_the_sender_with_each_recipient(
+    provider: Provider,
+) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let inbox = ada.link(provider, ada.email()).await?;
@@ -43,7 +49,12 @@ async fn sent_mail_connects_the_sender_with_each_recipient(provider: Provider) -
     let mut seen = Vec::new();
     let expected: BTreeSet<(String, String)> = ["xavier", "yara", "zoe"]
         .into_iter()
-        .map(|name| (ada.macro_id().to_owned(), format!("macro|{name}@example.com")))
+        .map(|name| {
+            (
+                ada.macro_id().to_owned(),
+                format!("macro|{name}@example.com"),
+            )
+        })
         .collect();
     email_e2e::eventually(
         "the contacts of the sent mail",
@@ -56,7 +67,10 @@ async fn sent_mail_connects_the_sender_with_each_recipient(provider: Provider) -
     )
     .await?;
     let all: BTreeSet<_> = seen.iter().flat_map(connections).collect();
-    assert_eq!(all, expected, "only the sender is connected with each recipient");
+    assert_eq!(
+        all, expected,
+        "only the sender is connected with each recipient"
+    );
     assert!(
         seen.iter().all(|message| message.get("users").is_none()),
         "no message asks to connect a whole group: {seen:?}"
@@ -76,7 +90,9 @@ async fn outlook_sent_mail_connects_the_sender_with_each_recipient() -> Result<(
 }
 
 /// Received mail connects the inbox's owner with its sender.
-async fn received_mail_connects_the_owner_with_the_sender(provider: Provider) -> Result<(), Report> {
+async fn received_mail_connects_the_owner_with_the_sender(
+    provider: Provider,
+) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let inbox = ada.link(provider, ada.email()).await?;
@@ -88,7 +104,10 @@ async fn received_mail_connects_the_owner_with_the_sender(provider: Provider) ->
     inbox.wait_for_preview("inbox", "Intro").await?;
 
     let mut seen = Vec::new();
-    let wanted = (ada.macro_id().to_owned(), "macro|grace@example.com".to_owned());
+    let wanted = (
+        ada.macro_id().to_owned(),
+        "macro|grace@example.com".to_owned(),
+    );
     email_e2e::eventually(
         "the contact of the received mail",
         email_e2e::DEFAULT_TIMEOUT,
@@ -131,9 +150,17 @@ async fn each_mail_shows_the_name_it_was_sent_under(provider: Provider) -> Resul
     let ada = stack.user("ada").await?;
     let inbox = ada.link(provider, ada.email()).await?;
 
-    inbox.deliver(&Mail::new("Billing Team <desk@example.net>", "Your invoice", "Attached."))?;
+    inbox.deliver(&Mail::new(
+        "Billing Team <desk@example.net>",
+        "Your invoice",
+        "Attached.",
+    ))?;
     let invoice = inbox.wait_for_preview("inbox", "Your invoice").await?;
-    inbox.deliver(&Mail::new("Sam from Support <desk@example.net>", "Your ticket", "Solved."))?;
+    inbox.deliver(&Mail::new(
+        "Sam from Support <desk@example.net>",
+        "Your ticket",
+        "Solved.",
+    ))?;
     let ticket = inbox.wait_for_preview("inbox", "Your ticket").await?;
     let invoice = inbox
         .wait_for_preview_where("inbox", "the first mail after the second", |preview| {
@@ -145,7 +172,9 @@ async fn each_mail_shows_the_name_it_was_sent_under(provider: Provider) -> Resul
     assert_eq!(ticket["senderName"], "Sam from Support");
     assert_eq!(invoice["senderEmail"], "desk@example.net");
     for (preview, name) in [(&invoice, "Billing Team"), (&ticket, "Sam from Support")] {
-        let thread = inbox.thread(preview["id"].as_str().unwrap_or_default()).await?;
+        let thread = inbox
+            .thread(preview["id"].as_str().unwrap_or_default())
+            .await?;
         assert_eq!(thread["messages"][0]["from"]["name"], name);
         assert_eq!(thread["messages"][0]["from"]["email"], "desk@example.net");
     }
@@ -182,7 +211,10 @@ async fn outlook_a_reply_is_previewed_by_its_new_text() -> Result<(), Report> {
     );
     inbox.deliver(&mail)?;
     let preview = inbox.wait_for_preview("inbox", "Re: Friday").await?;
-    assert_eq!(preview["snippet"].as_str().map(str::trim), Some("See you then!"));
+    assert_eq!(
+        preview["snippet"].as_str().map(str::trim),
+        Some("See you then!")
+    );
 
     stack.finish().await
 }

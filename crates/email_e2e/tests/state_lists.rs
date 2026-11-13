@@ -165,7 +165,9 @@ async fn all_mail_leaves_out_spam_and_trash(provider: Provider) -> Result<(), Re
                 .iter()
                 .any(|preview| preview["name"] == "Re: Mixed thread");
             let done = spam.len() == HIDDEN
-                && spam.iter().any(|preview| preview["name"] == last_junk.as_str())
+                && spam
+                    .iter()
+                    .any(|preview| preview["name"] == last_junk.as_str())
                 && trash
                     .iter()
                     .any(|preview| preview["name"] == last_deleted.as_str())
@@ -294,7 +296,9 @@ async fn other_view_pages_over_its_own_mail(provider: Provider) -> Result<(), Re
     .await?;
 
     let listed = pages(&ada, "other", PAGE).await?;
-    let expected: BTreeSet<String> = (0..OTHER).map(|index| format!("Offer {index:02}")).collect();
+    let expected: BTreeSet<String> = (0..OTHER)
+        .map(|index| format!("Offer {index:02}"))
+        .collect();
     assert_eq!(
         subjects(&listed).into_iter().collect::<BTreeSet<_>>(),
         expected,
@@ -340,7 +344,9 @@ async fn sent_lists_mail_from_every_inbox(provider: Provider) -> Result<(), Repo
             "body_text": "Two.",
         }))
         .await?;
-    first.wait_for_preview("sent", "From the first inbox").await?;
+    first
+        .wait_for_preview("sent", "From the first inbox")
+        .await?;
     second
         .wait_for_preview("sent", "From the second inbox")
         .await?;
@@ -363,7 +369,11 @@ async fn sent_lists_mail_from_every_inbox(provider: Provider) -> Result<(), Repo
         Some(Value::from(second.link_id().to_string())),
         "mail sent from the second inbox is in Sent"
     );
-    assert_eq!(subjects(&listed).len(), 2, "each sent thread is listed once");
+    assert_eq!(
+        subjects(&listed).len(),
+        2,
+        "each sent thread is listed once"
+    );
 
     stack.finish().await
 }

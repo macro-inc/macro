@@ -73,7 +73,9 @@ async fn gmail_a_sync_keeps_an_archive_that_is_still_pending() -> Result<(), Rep
         .modify_labels(inbox.email(), &delivered.id, &["Label_1".to_owned()], &[])?;
     let thread = inbox
         .wait_for_thread(&thread_id, "the label added at Gmail", |thread| {
-            first_message_labels(thread).iter().any(|label| label == "Label_1")
+            first_message_labels(thread)
+                .iter()
+                .any(|label| label == "Label_1")
         })
         .await?;
     assert_eq!(
@@ -81,7 +83,9 @@ async fn gmail_a_sync_keeps_an_archive_that_is_still_pending() -> Result<(), Rep
         "the pending archive survives the sync"
     );
     assert!(
-        !first_message_labels(&thread).iter().any(|label| label == "INBOX"),
+        !first_message_labels(&thread)
+            .iter()
+            .any(|label| label == "INBOX"),
         "the message keeps its pending removal from the inbox"
     );
     assert!(
@@ -141,7 +145,9 @@ async fn gmail_a_star_removed_at_gmail_is_removed_in_macro() -> Result<(), Repor
         .modify_labels(inbox.email(), &delivered.id, &[], &["STARRED".to_owned()])?;
     inbox
         .wait_for_thread(&thread_id, "the star's removal to be synced", |thread| {
-            !first_message_labels(thread).iter().any(|label| label == "STARRED")
+            !first_message_labels(thread)
+                .iter()
+                .any(|label| label == "STARRED")
         })
         .await?;
     sync_barrier(&inbox, "After the unstar").await?;
@@ -167,7 +173,11 @@ async fn gmail_a_star_set_in_macro_reaches_gmail() -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let inbox = ada.link_gmail().await?;
-    let second = inbox.deliver(&Mail::new("Alan <alan@example.com>", "Star in Macro", "Two."))?;
+    let second = inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Star in Macro",
+        "Two.",
+    ))?;
     let second_id = id_of(&inbox.wait_for_preview("inbox", "Star in Macro").await?);
 
     let set_star = async |value: bool| -> Result<(), Report> {
@@ -217,7 +227,9 @@ async fn create_label(inbox: &Inbox, name: &str) -> Result<String, Report> {
         .as_array()
         .into_iter()
         .flatten()
-        .find(|label| label["name"] == name && label["linkId"] == inbox.link_id().to_string().as_str())
+        .find(|label| {
+            label["name"] == name && label["linkId"] == inbox.link_id().to_string().as_str()
+        })
         .and_then(|label| label["id"].as_str())
         .unwrap_or_default()
         .to_owned();
@@ -238,7 +250,11 @@ async fn filing_under_a_label(name: &str) -> Result<(), Report> {
         "To be filed",
         "File me.",
     ))?;
-    inbox.deliver(&Mail::new("Alan <alan@example.com>", "Left alone", "Not me."))?;
+    inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Left alone",
+        "Not me.",
+    ))?;
     let thread_id = id_of(&inbox.wait_for_preview("inbox", "To be filed").await?);
     inbox.wait_for_preview("inbox", "Left alone").await?;
 
@@ -272,7 +288,11 @@ async fn filing_under_a_label(name: &str) -> Result<(), Report> {
     let view = format!("user:{}", urlencoding::encode(name));
     let listed = inbox.wait_for_preview(&view, "To be filed").await?;
     assert_eq!(listed["id"], thread_id.as_str());
-    assert_eq!(inbox.previews(&view).await?.len(), 1, "only the filed thread");
+    assert_eq!(
+        inbox.previews(&view).await?.len(),
+        1,
+        "only the filed thread"
+    );
 
     stack.finish().await
 }
@@ -299,7 +319,11 @@ async fn gmail_a_label_is_not_applied_across_inboxes() -> Result<(), Report> {
     let ada = stack.user("ada").await?;
     let first = ada.link_gmail().await?;
     let second = ada.link(Provider::Gmail, "ada.work@example.com").await?;
-    let delivered = first.deliver(&Mail::new("Grace <grace@example.com>", "In the first", "A."))?;
+    let delivered = first.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "In the first",
+        "A.",
+    ))?;
     let thread = first.wait_for_preview("inbox", "In the first").await?;
     let thread_id = id_of(&thread);
     let message_id = first.thread(&thread_id).await?["messages"][0]["db_id"]
@@ -343,7 +367,11 @@ async fn gmail_a_label_is_not_applied_across_inboxes() -> Result<(), Report> {
         .ok()?;
     first
         .wait_for_provider_message("the label to reach the first mailbox", |message| {
-            message.id == delivered.id && message.labels.iter().any(|label| label.starts_with("Label_"))
+            message.id == delivered.id
+                && message
+                    .labels
+                    .iter()
+                    .any(|label| label.starts_with("Label_"))
         })
         .await?;
     assert!(second.provider_messages()?.is_empty());
@@ -373,7 +401,9 @@ async fn gmail_a_star_set_at_gmail_shows_in_macro() -> Result<(), Report> {
         .modify_labels(inbox.email(), &delivered.id, &["STARRED".to_owned()], &[])?;
     inbox
         .wait_for_thread(&thread_id, "the star to be synced", |thread| {
-            first_message_labels(thread).iter().any(|label| label == "STARRED")
+            first_message_labels(thread)
+                .iter()
+                .any(|label| label == "STARRED")
         })
         .await?;
     sync_barrier(&inbox, "After the star").await?;

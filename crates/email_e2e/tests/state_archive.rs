@@ -4,7 +4,11 @@ use email_e2e::{Inbox, Mail, Provider, Report, Stack};
 use serde_json::{Value, json};
 
 /// Archives or restores one thread and returns the HTTP status and body.
-async fn set_archived(inbox: &Inbox, thread_id: &str, value: bool) -> Result<(u16, String), Report> {
+async fn set_archived(
+    inbox: &Inbox,
+    thread_id: &str,
+    value: bool,
+) -> Result<(u16, String), Report> {
     let response = inbox
         .patch(
             &format!("/email/threads/{thread_id}/archived"),
@@ -84,9 +88,10 @@ async fn an_archived_thread_can_be_restored(provider: Provider) -> Result<(), Re
     assert_eq!(status, 200, "restoring answered: {body}");
     wait_for_inbox_state(&inbox, &thread_id, true).await?;
     inbox
-        .wait_for_provider_message("the message to be back in the provider's inbox", |message| {
-            message.id == delivered.id && message.in_inbox
-        })
+        .wait_for_provider_message(
+            "the message to be back in the provider's inbox",
+            |message| message.id == delivered.id && message.in_inbox,
+        )
         .await?;
 
     stack.finish().await
@@ -193,9 +198,10 @@ async fn archiving_twice_is_one_archive(provider: Provider) -> Result<(), Report
     assert_eq!(set_archived(&inbox, &thread_id, false).await?.0, 200);
     wait_for_inbox_state(&inbox, &thread_id, true).await?;
     inbox
-        .wait_for_provider_message("the message to be back in the provider's inbox", |message| {
-            message.id == delivered.id && message.in_inbox
-        })
+        .wait_for_provider_message(
+            "the message to be back in the provider's inbox",
+            |message| message.id == delivered.id && message.in_inbox,
+        )
         .await?;
     let copies = inbox
         .provider_messages()?
@@ -265,7 +271,10 @@ async fn a_trashed_or_junk_thread_opens_by_id(provider: Provider) -> Result<(), 
         let thread = inbox.thread(thread_id).await?;
         let messages = thread["messages"].as_array().cloned().unwrap_or_default();
         assert_eq!(messages.len(), 1, "{subject} opens with its message");
-        assert_eq!(messages[0]["body_text"].as_str().map(str::trim), Some("Body."));
+        assert_eq!(
+            messages[0]["body_text"].as_str().map(str::trim),
+            Some("Body.")
+        );
         assert_eq!(thread["inbox_visible"], false);
     }
     assert!(inbox.previews("inbox").await?.is_empty());
