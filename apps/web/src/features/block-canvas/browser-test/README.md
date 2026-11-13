@@ -41,7 +41,9 @@ The artifact fixture (`artifact.html`, run by `reference.playwright.config.ts`)
 covers sandboxed artifacts and present mode. `?deck` lays four slides across the
 canvas with notes and an arrow between slides 2 and 3; `artifact.e2e.ts` steps it
 through every slide transition, keys pressed mid-transition, reduced motion, and
-the inspector's Transition section. `?theme=light|dark` applies an app theme.
+the inspector's Transition section; it also checks every kind keeps painting
+with `?dense`, which fills the slides with cards of text like a real deck.
+`?theme=light|dark` applies an app theme.
 With `CANVAS_TRANSITION_EVIDENCE_DIR` set, `transitions-evidence.artifact.e2e.ts`
 writes a mid-transition frame, a five-frame strip and a video per kind, and the
 picker in light and dark at desktop and phone widths, to that folder:

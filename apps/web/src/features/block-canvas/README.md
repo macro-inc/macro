@@ -112,12 +112,17 @@ transition finishes it at once and starts the next; nothing queues. With
 the flight's last frame until the live slide has loaded (at most 400 ms). Each
 transition is one `canvas.artifact.transition` interaction whose join window
 closes at once; `Interaction.hold()` keeps its span open for the animation, with
-its kind, timing, outcome (`completed`, `skipped`, `cancelled`) and frame counts.
-The stage also exposes the last transition's counts as
-`data-canvas-transition-frames` and `data-canvas-transition-dropped-frames`,
-which the browser suite checks for every kind. Most kinds animate only
+its kind, timing (`played_ms` for the animation, `hold_ms` for a canvas kind's
+wait on the live slide after it), outcome (`completed`, `skipped`, `cancelled`)
+and the animation's frame counts. The stage also exposes the last transition's
+counts as `data-canvas-transition-frames` and
+`data-canvas-transition-dropped-frames`; the browser suite checks that every
+kind keeps painting, on plain and on dense slides. Most kinds animate only
 transform and opacity; wipe, split and iris animate `clip-path`, and dissolve
-and cube animate `filter`.
+and cube animate `filter`. Chromium runs the sandboxed slide frames in their own
+process and redraws a frame's page at every new size, so kinds that scale a
+slide or turn it in 3D (zoom, flip, cube) cost the most. Dissolve does not
+scale, and zoom's outgoing slide is gone by halfway.
 
 The inspector's **Transition** section picks a kind from live thumbnails (hover
 or focus plays them; a tap selects and plays once), then duration, easing and,

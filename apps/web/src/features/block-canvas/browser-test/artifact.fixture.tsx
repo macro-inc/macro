@@ -40,6 +40,16 @@ const artifact = (
     presentOrder,
   },
 });
+const params = new URLSearchParams(location.search);
+
+/** `?dense` slides look like a real deck's: dark cards full of small text,
+ * which costs far more to paint than a flat color. */
+const denseHtml = (id: string, color: string) => {
+  const card = (index: number) =>
+    `<div class="card"><h2>${id}.${index + 1} Quarterly review</h2><p>${'Revenue grew across every region while churn held flat; the pipeline for next quarter is the largest on record, led by enterprise renewals and two new partner channels. '.repeat(3)}</p><ul>${'<li>Margin up 4 points on infrastructure savings</li>'.repeat(4)}</ul></div>`;
+  return `<style>html,body{margin:0;height:100%}body{box-sizing:border-box;padding:40px;background:radial-gradient(circle at 20% 0%,${color},#0b0d12 60%);color:#e8eaf0;font:15px/1.45 system-ui}header{display:flex;align-items:baseline;gap:24px;margin-bottom:24px}#target{font:800 72px system-ui}header span{opacity:.7;font-size:22px}main{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px;box-shadow:0 12px 32px rgba(0,0,0,.45)}h2{margin:0 0 8px;font-size:18px}p,ul{margin:0 0 8px}</style><header><span id="target">${id}</span><span>Operating plan, board update</span></header><main>${[0, 1, 2, 3, 4, 5].map(card).join('')}</main>`;
+};
+
 /** A full-bleed slide with a big number, so frames are easy to tell apart. */
 const slide = (
   id: string,
@@ -57,7 +67,9 @@ const slide = (
   geometry: {
     ...size,
     title: id,
-    html: `<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${color};color:white;font:700 160px system-ui}</style><span id="target">${id}</span>`,
+    html: params.has('dense')
+      ? denseHtml(id, color)
+      : `<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${color};color:white;font:700 160px system-ui}</style><span id="target">${id}</span>`,
     designWidth: 1280,
     designHeight: 720,
     presentOrder: sortKey,
@@ -122,7 +134,6 @@ const deck = createScene([
   },
 ]);
 
-const params = new URLSearchParams(location.search);
 const initial = {
   version: 2,
   document: params.has('deck')

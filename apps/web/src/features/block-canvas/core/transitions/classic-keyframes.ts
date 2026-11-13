@@ -12,7 +12,12 @@ export type ClassicKind = Exclude<
 /** A keyframe for one slide layer. Most kinds animate only transform and
  * opacity, which the compositor runs off the main thread. Wipe, split and iris
  * animate `clip-path`, and dissolve (the outgoing slide's blur) and cube (its
- * shading) animate `filter`; browsers may repaint those each frame. */
+ * shading) animate `filter`; browsers may repaint those each frame.
+ *
+ * Translation and opacity are cheap. Scaling a slide, or turning it in 3D, is
+ * not: Chromium runs sandboxed artifact frames in their own process and redraws
+ * a frame's whole page at every new size, each frame. Keep scaled slides few and
+ * their scaling short. */
 export type LayerKeyframe = Readonly<{
   offset?: number;
   opacity?: number;
@@ -96,16 +101,13 @@ function forwardKeyframes(
       incomingOnTop: true,
     }))
     .with('dissolve', () => ({
-      // Only the outgoing slide blurs, and only a little: blurring both
-      // full-screen layers costs a repaint of each every frame.
+      // A cross-fade in which the outgoing slide blurs away. Neither slide
+      // scales: a scaled slide is redrawn every frame (see `LayerKeyframe`).
       outgoing: [
         { opacity: 1, filter: 'blur(0px)' },
         { opacity: 0, filter: 'blur(6px)' },
       ],
-      incoming: [
-        { opacity: 0, transform: 'scale(1.03)' },
-        { opacity: 1, transform: 'scale(1)' },
-      ],
+      incoming: [{ opacity: 0 }, { opacity: 1 }],
       incomingOnTop: true,
     }))
     .with('push', () => ({
@@ -168,8 +170,11 @@ function forwardKeyframes(
       incomingOnTop: true,
     }))
     .with('zoom', () => ({
+      // The outgoing slide is gone by halfway, so only the incoming one is
+      // redrawn at each size for the rest of the run.
       outgoing: [
         { opacity: 1, transform: 'scale(1)' },
+        { opacity: 0, transform: 'scale(1.12)', offset: 0.5 },
         { opacity: 0, transform: 'scale(1.12)' },
       ],
       incoming: [
