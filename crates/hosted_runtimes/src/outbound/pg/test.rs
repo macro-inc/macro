@@ -2,6 +2,7 @@ use std::str::FromStr;
 mod quarantine;
 mod redeploy;
 
+mod agents;
 mod billing_races;
 mod boot;
 
@@ -73,6 +74,7 @@ fn standard(id: u128) -> NewReservation {
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         extra_items: vec![],
         provision_traceparent: None,
+        agent: None,
     }
 }
 

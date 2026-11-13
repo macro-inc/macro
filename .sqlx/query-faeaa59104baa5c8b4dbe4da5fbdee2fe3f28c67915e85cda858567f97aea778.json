@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        VALUES ('0193a1b2-0000-7000-8000-0000000000d0', 'document', $1, 'team', 'edit')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "faeaa59104baa5c8b4dbe4da5fbdee2fe3f28c67915e85cda858567f97aea778"
+}

@@ -204,6 +204,8 @@ function Layout(
     defaultOpen?: boolean;
     persistKey?: string;
     headerToggle?: boolean;
+    /** Desktop height of the header toggle; `md` matches a list header's New. */
+    headerToggleSize?: 'sm' | 'md';
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
     /** Match Root's persistent floating behavior when Layout owns the Root. */
@@ -221,7 +223,7 @@ function Layout(
     return (
       <>
         <Show when={props.headerToggle ?? true}>
-          <SidePanelHeaderToggle />
+          <SidePanelHeaderToggle size={props.headerToggleSize} />
         </Show>
         <Resize.Zone direction="horizontal" gutter={0} resizable={false}>
           <SidePanelLayoutInner
@@ -533,7 +535,7 @@ function HeaderActionsOutlet() {
   );
 }
 
-function SidePanelHeaderToggle() {
+function SidePanelHeaderToggle(props: { size?: 'sm' | 'md' }) {
   const panel = useSplitPanel();
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
@@ -545,7 +547,7 @@ function SidePanelHeaderToggle() {
       <Show when={!isTouchDevice() && !panel?.isInlinePreview}>
         <SplitHeaderRight>
           <div class="order-[1001] flex shrink-0 items-center">
-            <Toggle />
+            <Toggle size={props.size} />
           </div>
         </SplitHeaderRight>
       </Show>

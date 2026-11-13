@@ -24,3 +24,19 @@ test('an agent m-document routine mention is clickable', async ({ page }) => {
   await collapsed.hover();
   await expect(page.getByText('Collapsed review')).toBeVisible();
 });
+
+test('a pasted routine link, saved without a label, shows the routine name', async ({
+  page,
+}) => {
+  await page.goto(
+    '/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/routine-mention.html'
+  );
+  await expect(
+    page.getByRole('link', { name: 'Daily CRM sweep' })
+  ).toBeVisible();
+  await expect(page.getByText('Loading...')).toHaveCount(0);
+  if (process.env.ROUTINE_MENTION_SCREENSHOT)
+    await page
+      .locator('main')
+      .screenshot({ path: process.env.ROUTINE_MENTION_SCREENSHOT });
+});

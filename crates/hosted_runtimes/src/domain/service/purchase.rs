@@ -4,6 +4,7 @@
 //! charge releases the computer.
 
 use chrono::Duration;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::{Clock, ComputerError, ComputerService, computer_name, internal};
@@ -43,6 +44,22 @@ impl<
         self.purchase(request).await
     }
 
+    /// [`Self::purchase_for_team`] for a computer that runs an agent
+    /// teammate: the same rollout, billing policy and per-computer charge,
+    /// with the computer linked to the agent's account. `request.created_by`
+    /// is the admin buying it.
+    #[tracing::instrument(skip(self, request, agent), fields(team_id = %request.team_id), err)]
+    pub async fn purchase_for_agent(
+        &self,
+        mut request: PurchaseRequest,
+        agent: MacroUserIdStr<'static>,
+    ) -> Result<Purchase, ComputerError> {
+        self.require_rollout(&request.created_by).await?;
+        self.require_attached().await?;
+        request.billing = self.purchase_billing(request.team_id).await?;
+        self.purchase_linked(request, Some(agent)).await
+    }
+
     /// Reserve units and convert them into a provisioning computer at once;
     /// a charged one is charged beside its creation (its own item plus
     /// `extra_items`, in one subscription update keyed by the computer id).
@@ -51,12 +68,21 @@ impl<
     /// one charged computer at a time: another while one is unpaid is
     /// [`ComputerError::UnpaidComputer`]. An error always means nothing was
     /// bought; a conversion that failed is [`Purchase::Confirming`].
+    pub async fn purchase(&self, request: PurchaseRequest) -> Result<Purchase, ComputerError> {
+        self.purchase_linked(request, None).await
+    }
+
     #[tracing::instrument(
-        skip(self, request),
-        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, outcome),
+        name = "purchase",
+        skip(self, request, agent),
+        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, outcome, for_agent = agent.is_some()),
         err
     )]
-    pub async fn purchase(&self, request: PurchaseRequest) -> Result<Purchase, ComputerError> {
+    async fn purchase_linked(
+        &self,
+        request: PurchaseRequest,
+        agent: Option<MacroUserIdStr<'static>>,
+    ) -> Result<Purchase, ComputerError> {
         self.require_attached().await?;
         if !self.billing.sales_available() {
             return Err(BillingError::NotAvailable.into());
@@ -103,6 +129,7 @@ impl<
                     created_by: request.created_by,
                     extra_items: request.extra_items,
                     provision_traceparent: crate::domain::telemetry::traceparent(),
+                    agent,
                 },
                 now,
                 now + RESERVATION_TTL,

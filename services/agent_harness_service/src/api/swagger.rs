@@ -69,6 +69,8 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
+        crate::voice_gateway::catalog,
+        crate::voice_gateway::sample,
         universal_input::inbound::axum_router::classify,
         universal_input::inbound::axum_router::extract,
         agent_code_mode::inbound::axum_router::get_code_execution,
@@ -140,6 +142,7 @@ impl Modify for SecurityAddon {
         crate::computers::claude::claude_mode_handler,
     ),
     components(schemas(
+        team_agents::domain::voice::Voice,
         CodingAgent,
         CodingAgentsResponse,
         CreateAgentSessionRequest,
@@ -227,7 +230,8 @@ impl Modify for SecurityAddon {
         (name = "agent-models", description = "Fresh provider model discovery"),
         (name = "agent-repositories", description = "Repositories a coding session can work on"),
         (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent"),
-        (name = "computers", description = "Claude sign-in on Macro computers")
+        (name = "computers", description = "Claude sign-in on Macro computers"),
+        (name = "voices", description = "Voices agent teammates speak with on calls")
     )
 )]
 pub struct ApiDoc;

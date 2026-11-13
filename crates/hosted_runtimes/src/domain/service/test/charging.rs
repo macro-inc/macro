@@ -449,6 +449,7 @@ async fn the_confirm_worker_converts_a_reservation_the_purchase_left_behind() {
                 created_by: admin(),
                 extra_items: vec![],
                 provision_traceparent: None,
+                agent: None,
             },
             now(),
             now() + RESERVATION_TTL,
