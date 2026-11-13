@@ -19,6 +19,7 @@ import {
   computerFailureMessage,
   offersFailure,
 } from '../core/computer-display';
+import { showComputerSetupNotice } from '../primitives/setup-notice';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
   ComputerSetupSteps,
@@ -176,20 +177,20 @@ export function ComputerBuyFlow(props: {
     const current = computer();
     if (!waitingForLink() || visible() || !current || !up()) return;
     setWaitingForLink(false);
-    toast.success(t('computers.signInReadyToast', { name: current.name }), {
-      // Long enough for someone who switched tabs to come back to it.
-      duration: 60_000,
-      actions: [
-        {
-          label: t('computers.signInReadyAction'),
-          variant: 'primary',
-          onClick: () => {
-            setStep('claude');
-            setReopened(true);
-          },
-        },
-      ],
-    });
+    // The same notice the computer's setup notification shows, so the two
+    // never stack; this one reopens this dialog in place.
+    showComputerSetupNotice(
+      {
+        computerId: current.id,
+        harnessId: current.harnessId ?? null,
+        computerName: current.name,
+        outcome: { kind: 'ready' },
+      },
+      () => {
+        setStep('claude');
+        setReopened(true);
+      }
+    );
   });
 
   const buy = async (offer: SizeOffer, computerName: string | undefined) => {

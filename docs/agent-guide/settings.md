@@ -950,8 +950,8 @@ Claude, then setup-complete.
   0:42") instead of a greyed button, lists the sign-in as a later stage that
   unlocks by itself, and offers only **Close** and **Use Macro credits
   instead**. Once connected, **Open claude.ai** appears and the tab title
-  becomes "● Sign in to Claude — Macro". Closed meanwhile, a toast "<computer> is ready — sign in to
-  Claude" reopens the modal on that step. The code is pasted in the same modal.
+  becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
+  (below) reopens the modal on that step. The code is pasted in the same modal.
 - **Macro's Claude** skips **Bring your AI**, shown struck through.
 
 Macro creates that agent once, on the computer's first connection, with the
@@ -979,6 +979,21 @@ first. It offers **Done**, **Create an agent on this computer** and **Try it**:
   the editor selects the new computer when the modal closes.
 
 Closing at any step keeps its place; the row's **Finish setup** reopens it.
+
+**Setup notices.** Buying is asynchronous: the dialog closes at any step and
+nothing is cancelled. When the computer first connects, its buyer gets a
+`computer_setup` notification ("Your computer is ready: connect your AI and
+finish setup", in-app notice, browser and phone push); when first setup fails,
+one titled "<computer> could not be set up" with the failure reason. In the
+app it shows as a one-minute notice whose **Finish setup** / **Retry setup**
+reopens the setup dialog for that computer on **Bring your AI** (a failed
+computer shows **Retry setup** in its progress list there), on desktop and in
+the phone settings sheet. Clicking the notification or tapping the push does
+the same, also on a cold start; the link is
+`/settings/runtimes?computerSetup=<computer id>`
+(`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
+shown when it was closed while waiting for the sign-in link, is the same
+notice, so the two never stack.
 
 **Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
 **Open claude.ai** is a plain new-tab link (the desktop app hands it to the

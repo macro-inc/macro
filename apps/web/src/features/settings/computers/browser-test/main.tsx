@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { render } from 'solid-js/web';
 import '@fontsource-variable/inter';
 import '../../../../index.css';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { Route, Router } from '@solidjs/router';
 import { Layer } from '@ui/components/Layer';
 import { ErrorBoundary, lazy, Match, Switch } from 'solid-js';
@@ -28,6 +29,14 @@ const AgentSettings = lazy(() => import('./agent-settings'));
 // Both are large module graphs; start loading them while the flow runs.
 fireAndForget(Composer.preload(), 'computers-fixture');
 fireAndForget(AgentSettings.preload(), 'computers-fixture');
+
+// A computer setup notification arriving, as the realtime feed delivers it.
+window.computerFixture.notify = async (content) => {
+  const { showComputerSetupToast } = await import(
+    '../../../notifications/computer-setup-toast'
+  );
+  showComputerSetupToast(content);
+};
 
 function Fixture() {
   return (
@@ -58,6 +67,7 @@ function Fixture() {
             </ErrorBoundary>
           </Match>
         </Switch>
+        <ToastRegion />
       </Layer>
     </QueryClientProvider>
   );

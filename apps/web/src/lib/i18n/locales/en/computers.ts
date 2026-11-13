@@ -147,8 +147,6 @@ export default {
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
   signInTabTitle: '● Sign in to Claude — Macro',
-  signInReadyToast: '{{name}} is ready — sign in to Claude',
-  signInReadyAction: 'Sign in',
   claudeHarnessNote:
     'We run the real Claude Code on your computer. The code you paste here goes right into the harness on your computer.',
   almostReady: 'Almost ready',
@@ -168,6 +166,10 @@ export default {
   setupDoneBodyForAgent:
     'It runs on {{computer}}. Try {{agent}} now, or use this computer for the agent you are editing.',
   createAgentHere: 'Create an agent on this computer',
+  setupReadyNotice: 'Your computer is ready: connect your AI and finish setup',
+  setupReadyNoticeBody:
+    '{{computer}} is up. Bring your AI, then create an agent on it.',
+  setupFailedNotice: '{{computer}} could not be set up',
   useForThisAgent: 'Use for this agent',
   tryIt: 'Try it',
   done: 'Done',
