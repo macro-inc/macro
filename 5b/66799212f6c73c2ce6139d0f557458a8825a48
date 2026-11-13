@@ -1,0 +1,1469 @@
+crates/feature_flags/AGENTS.md
+  s_3c6362fd17dcc4::t_8d9719f79d8d90 27-31
+.github/services-config.json
+  s_b12ee129ce3fac::t_bee4a50425ce43 13-16
+.github/workflows/pr-ci.yml
+  s_b12ee129ce3fac::t_84bf3620d13865 526
+.github/workflows/sdk-check.yml
+  s_b12ee129ce3fac::t_371e6650d7189e 10
+.github/workflows/web-app-check-main.yml
+  s_b12ee129ce3fac::t_042f37ecc072f1 53-55,359-361,387-388
+.github/workspace-dep-closures.json
+  s_b12ee129ce3fac::t_c550e96d5cface 529-546,688-784,937,939,1142,1148,2707-2708,2869,16054-16156
+.sqlx/query-013135609e97e530f5bfa0730db45353b5695f6946c5bf0751aed52556d53f58.json
+  s_b12ee129ce3fac::t_dc6c395cc2b8d6 1-136
+.sqlx/query-04e3158033d435d212f208aa0f47a701b139c0376ea38cb27b2c24f385a5e220.json
+  s_b12ee129ce3fac::t_8b3097291f39bf 1-22
+.sqlx/query-063dac649756acf4546a1fa89c40b7717d412a4a84671ae0441f2cb8da17e2e7.json
+  s_b12ee129ce3fac::t_155a1126f8d298 1-16
+.sqlx/query-0648a1ebe91b82102c64798e25c0dc2534964b4fc41e4dad5a98e9b401c35834.json
+  s_b12ee129ce3fac::t_15d457e5ab5126 1-22
+.sqlx/query-0d505c90bc55c2edce40b236b9d6aa068b40a5d8a5953aa03331368e74ca64f1.json
+  s_b12ee129ce3fac::t_1e7fb90f754218 1-16
+.sqlx/query-0ea6b44a6cec6e9847295550358668d06ae80b084fc0f1a1cad533a89fda61b3.json
+  s_b12ee129ce3fac::t_647c28256d5209 1-43
+.sqlx/query-13c4535a85f80ced665121cec2d252fcae8c7150b1574b0a5720cbe9c735b965.json
+  s_b12ee129ce3fac::t_58ff4e3d806f39 1-17
+.sqlx/query-154a7cdea2cba555530eaee8ffcd5d73916d500e67cb3afc048072d1b76a6951.json
+  s_b12ee129ce3fac::t_cf81c55e01387b 1-15
+.sqlx/query-1851e902ea8b5ad42b16d9e5d790ed912b2f9c430fd7cb5f86a58c26c8a21885.json
+  s_b12ee129ce3fac::t_903b5597a07ae4 1-14
+.sqlx/query-191cf561b07f3139d803e3c5c72b85d7dfcd0ab4129f64e625e780eb009a3c75.json
+  s_b12ee129ce3fac::t_8d0764104b84e7 1-14
+.sqlx/query-19457d149a97d9212fce834039e93b98be27d37027562a7d3d06843e492e6d40.json
+  s_b12ee129ce3fac::t_3d1b3554978f9a 1-15
+.sqlx/query-19f5563cc3d6c3820a125c58ebb5fcd2db8c8e1db4c5a1a1fde32f23e7042c8b.json
+  s_b12ee129ce3fac::t_55b5fe65a66e70 1-42
+.sqlx/query-1a7dc4d6de068567eeb8b01c9ac598d0df97763ddbb096f1cede4b4f1083f194.json
+  s_b12ee129ce3fac::t_7a2e480fd830a8 1-22
+.sqlx/query-1b5601db319e0357f24213d8ab4a84dd73d36bf506e8b2fde8f64322f9d39f8c.json
+  s_b12ee129ce3fac::t_577eec49ab0830 1-22
+.sqlx/query-1b98f9b245ff5f3c68c12c6f58ce5f3b45bd4a2c7dcd68a52618eb4aa1f12d89.json
+  s_b12ee129ce3fac::t_8776336b85c0a7 1-135
+.sqlx/query-1c48f830d510216d23476bfe7de075ed1ae4893db0b4b5b477a17c31cfa594b3.json
+  s_b12ee129ce3fac::t_57f95f72636f99 1-14
+.sqlx/query-1d75e5cc7de8c554b277b0929a5c3d4972c32475dee65dfa2a19b1cb83a0525a.json
+  s_b12ee129ce3fac::t_a560a07aaef0f0 1-14
+.sqlx/query-1f8c312c970fb02eb844ea11cf5b1ad536f7133b089f4855479fe3f8997c7efb.json
+  s_b12ee129ce3fac::t_667158f79db117 1-46
+.sqlx/query-21bdea397ce4fb5341f5644493b590444fabc5bd426e7990f97521a96da296f7.json
+  s_b12ee129ce3fac::t_c39885c142b385 1-14
+.sqlx/query-22d5772beb139be447af43f38fabff0a3504d5b1e573effa9855cda14f5f6de0.json
+  s_b12ee129ce3fac::t_3c1386d780862d 1-17
+.sqlx/query-22f1d2d7f155a31ff0493f853038c32a4699e691e4d4738b3382d877a8632c01.json
+  s_b12ee129ce3fac::t_eebe6e35b2f1b2 1-14
+.sqlx/query-26b41b2211fecc0601e81157c91013fb6a03bb94a199241aa8c3d75165a7d4c0.json
+  s_b12ee129ce3fac::t_1ee63dd8e90c90 1-22
+.sqlx/query-28ceb2e3c814a95d506933277f877e20a1efb1470b0dd588a97e83cec7f837ab.json
+  s_b12ee129ce3fac::t_3e26019334efe2 1-22
+.sqlx/query-29098ee291ac1a36f3aab99346e3a6e545b9ef69ff8f09c8aef1944aebefdb7e.json
+  s_b12ee129ce3fac::t_116aba53d2ccfe 1-20
+.sqlx/query-2a20f064b3c94f04ee442ec61202c4839e297ac086d2ed2981fe60f4483d3e37.json
+  s_b12ee129ce3fac::t_cbe08ea1671ea0 1-46
+.sqlx/query-2b2e2c97e858b09859076c567d6d2ef91ae794c18d8193eb44c3f6a6d4b33dd9.json
+  s_b12ee129ce3fac::t_e1027cd0cbf621 1-16
+.sqlx/query-2b537e3acc2d9c2bf306bfd55ec2736b888e9a31c82f2f811f20a1d0f006c499.json
+  s_b12ee129ce3fac::t_30177ce4ebd09a 1-16
+.sqlx/query-2c7432c451c6b48fef57b1c1e8351c2c0c365d8104c0f1f3526b6a2383f951f6.json
+  s_b12ee129ce3fac::t_266bde01fd4ccb 1-14
+.sqlx/query-31ed0496ad3add328514f2e8732b69611987753114d2342c404b3da4c9055d5a.json
+  s_b12ee129ce3fac::t_323b85818b8e20 1-16
+.sqlx/query-37f337de357b0715612bb050985c7e5363563f86fd32e1649559aa2e348d5a7a.json
+  s_b12ee129ce3fac::t_0e3a8f2fed637b 1-22
+.sqlx/query-3b2dbc5b0affbcf53cfe76fe5210b7e4d96dad61a84d4a87dced9d2f66dc6ff1.json
+  s_b12ee129ce3fac::t_86af718286e632 1-15
+.sqlx/query-3de736724f6f2bf1b40e91d71c33482ba17e714329b3ba8081d8c21ffd239110.json
+  s_b12ee129ce3fac::t_ba641b1e172684 1-14
+.sqlx/query-3fd0caa0bb093f665978599c929ed979009ff0f0896abcfb1a10f4f52852de24.json
+  s_b12ee129ce3fac::t_b0d07a66d5f0af 1-18
+.sqlx/query-400724052eb0c3347a8adf73490ed285c04202b465e9fbdd01eb3f2e0ddc8c86.json
+  s_b12ee129ce3fac::t_9aa02297b00f04 1-15
+.sqlx/query-40136efce925b1ee3e660a5f630495d6d7e0f9376ba5e7158f73b4bf2585b905.json
+  s_b12ee129ce3fac::t_30f7fd18fce832 1-14
+.sqlx/query-41e1d1cf74595eaea987e0e8cd10f301e77c7dbd573fa5dfdd455dec1f8739ca.json
+  s_b12ee129ce3fac::t_0738063d736ec9 1-135
+.sqlx/query-43521150b6c23d47e117f97511872b8d076810849b3ba978538dfdaa3186eb85.json
+  s_b12ee129ce3fac::t_344b7cb41139e9 3,40
+.sqlx/query-4555980c2b9992385d982c5e2ce218d2524c5a892c7552ab6cec349d9d34be19.json
+  s_b12ee129ce3fac::t_6ad2ea053834c5 1-15
+.sqlx/query-472eeb0a785fae7b99906f72a7493402d2ab4e1d7522712d4a5d8fc37f4524f4.json
+  s_b12ee129ce3fac::t_82634b48bd85c5 1-16
+.sqlx/query-481144f12fed183bd341029ad1a50386a1e87ad02a144d374b9a4dcc41d2393a.json
+  s_b12ee129ce3fac::t_a7950f08332384 1-14
+.sqlx/query-48204a5524cfb427e07ea9d4cbf2687e67340c1842cc444d56070387024dba0f.json
+  s_b12ee129ce3fac::t_092d1ea58ba3bb 1-20
+.sqlx/query-4dbfdd060697ce250d3fd8b6441ff3c4ecfa7b7366cb8871a84e262f5318aac3.json
+  s_b12ee129ce3fac::t_b4292fdcf0de5e 1-14
+.sqlx/query-53476484d0a2deaed37f45de035100a45f0648763ffa777d7a4bf1d12ff16811.json
+  s_b12ee129ce3fac::t_3d021d596ceb5d 1-14
+.sqlx/query-539bb7d38306403500d491032be39fb9e5dc41cc2e166f7fa4150a0a78223073.json
+  s_b12ee129ce3fac::t_4f2e1c7c47baa4 1-34
+.sqlx/query-573f87d8d4aa8df081a3ce92e501e13810309b106ea9d28519f8754fa5429580.json
+  s_b12ee129ce3fac::t_b3076ea7e94276 1-12
+.sqlx/query-58bf5dcafca4ae277b73c3f2946c4aca9c0841a0057f4256147a1dd39fbb0690.json
+  s_b12ee129ce3fac::t_2ecc981e9f5eed 1-24
+.sqlx/query-58df3e0e86c31f970183ef49489d371774a9617d8e7eb009b3ff7cb9e8b22eed.json
+  s_b12ee129ce3fac::t_88450a387ba517 1-15
+.sqlx/query-5e6b6be448ba2cbcf6344344bd974b34fcc6c8040a041119077456b5490e08f2.json
+  s_b12ee129ce3fac::t_1ad5be264fd546 1-15
+.sqlx/query-60c56455a1e28d7c75184a845af52613fc6361883b292614bd4d4d9b5dd6b2f3.json
+  s_b12ee129ce3fac::t_3ceedcf3673130 1-16
+.sqlx/query-620182bb175c7d8fdea9ebd5e37031e15b57b9a42b6b262c05106454fd76b86c.json
+  s_b12ee129ce3fac::t_f082730aa54f07 1-22
+.sqlx/query-6292f0cb845c1b31665004fd091cee648b9ec4b3ae8155658d6a20d17205a26d.json
+  s_b12ee129ce3fac::t_3b9c71af0d94de 1-15
+.sqlx/query-64370f5d601fdb6d26bac3fec031e4b0248c0d2374871230831051feba6098dc.json
+  s_b12ee129ce3fac::t_4c951a8b125ccc 1-15
+.sqlx/query-64e7370be6e0fcc431806a5cac9786d554a30e36e37f25e97c61e5a6e1437a47.json
+  s_b12ee129ce3fac::t_11a070a04655e6 1-14
+.sqlx/query-6d823e371f16c753434fcf8280cf81b4fdb1391b92f67ff962259cb0c803eae2.json
+  s_b12ee129ce3fac::t_4ef262f1b8c395 1-52
+.sqlx/query-6f06591c7010f704424d40d1749bebe37e23727b6ac57039e02289a0d4d64273.json
+  s_b12ee129ce3fac::t_cf4a9b35cbed3f 1-12
+.sqlx/query-72962c1c5f5f127667650f46140f090f3d37da8f5136f8fbcd425eb809a8c64e.json
+  s_b12ee129ce3fac::t_8af799a5a6b88f 1-16
+.sqlx/query-736afeacfb9ffb362dda069a77d4997fd2818f17283cbbb2db8d45dcb4f4dca1.json
+  s_b12ee129ce3fac::t_329891f75fbf62 1-14
+.sqlx/query-765ba90f44012f4b7b9d80b43807e2e92d0f4f91c5f1eca20f1d00070091abc8.json
+  s_b12ee129ce3fac::t_00067d7a022b62 1-22
+.sqlx/query-786423c126573e9226aa72ab9f7e4d99d4aeabefa5cac6e73a714dfb2a4f0e38.json
+  s_b12ee129ce3fac::t_18f4320780bffd 1-22
+.sqlx/query-78da7ab927e5186259f655943f8c2874667cd93d95cf0335f6baac2bb820b181.json
+  s_b12ee129ce3fac::t_cc03ab3b920667 1-12
+.sqlx/query-790d41e9a3bfc482d623cc1a58c8e313ee023d31b2bec95b88f2e8929480f2b2.json
+  s_b12ee129ce3fac::t_81fdd10097cd06 1-23
+.sqlx/query-7f08d83c7255e9eea3d6a749d736ca2ff3563eb57edc627e1fecaaf8815e2eff.json
+  s_b12ee129ce3fac::t_81ee846f6c5cca 1-20
+.sqlx/query-7fb3fb4d792bb2335c281301739a4f8b5a2bc92db87efa5828bf509d03ae433e.json
+  s_b12ee129ce3fac::t_83ac30f25b4c8a 1-16
+.sqlx/query-8010e4f893f3ed9f1f560ea8ef9221405076f075c8dfe40748034f3068a2010d.json
+  s_b12ee129ce3fac::t_38e0f487df0f9a 1-22
+.sqlx/query-807d1ddcf8a6990014874e4a13e20c9577fcec8c89070b25d73aa578482a4028.json
+  s_b12ee129ce3fac::t_84dd6c83c8fd3f 1-17
+.sqlx/query-82057dc0144ed1a0f8d671140338f7ac8d0f59019edbec02b96c7dd0d6f29199.json
+  s_b12ee129ce3fac::t_1e7cf619601ba4 1-15
+.sqlx/query-831dbd91a9609ec3306925a4a8b6ab08509d9f294db6fef5c824f2e0d177ba7f.json
+  s_b12ee129ce3fac::t_46226e4100d44b 1-12
+.sqlx/query-836f2b4e388baadff186eacc8f7d74881de66b0b281a4a8d8119f70a2805f76e.json
+  s_b12ee129ce3fac::t_c6f4225101909b 1-15
+.sqlx/query-8526480676333b836da43443a917355cd3d79656d4bb3381bf85433f99e0f81d.json
+  s_b12ee129ce3fac::t_0b648936e0e480 1-16
+.sqlx/query-884ba2279aec801e572642a342f901a5f4580b4c9a2666bbdf5e8b1ed79d3f14.json
+  s_b12ee129ce3fac::t_b2c5cf07e0a2bb 1-46
+.sqlx/query-88d599f4114779cfca62759706db26c012bea861d57b14a3b6c1a715d474a369.json
+  s_b12ee129ce3fac::t_abad5e63807fc3 1-15
+.sqlx/query-8a3abd9a6a1a0f9db7c3e16eea8944752c1c86263ab891ba75d6ff19d0b7fa9f.json
+  s_b12ee129ce3fac::t_6740c234ac97e4 1-20
+.sqlx/query-8a9eba70f155de72c682c085ce05f8818c97b0e314a38a8fc81487e8cbef49c5.json
+  s_b12ee129ce3fac::t_9e2be5a872e27e 1-34
+.sqlx/query-8e67d0c6153af7336398c621792b073ca2f05709068028624ca0c07b5a48b423.json
+  s_b12ee129ce3fac::t_640d21273ae84b 1-39
+.sqlx/query-8fc339af79aea03badbdf3b6c929662d07c346b58fe6594bcb96367b804066f0.json
+  s_b12ee129ce3fac::t_ba41aa301fc68d 1-12
+.sqlx/query-90efc5fbcdecc53683038980e096044f451d109f949a14ae606f93409a0d5557.json
+  s_b12ee129ce3fac::t_33b331e8697f1c 1-12
+.sqlx/query-91b5d37f09ef339009ba5a971211f42c4d3670962bdac93c2157e87a7d7ecf9a.json
+  s_b12ee129ce3fac::t_a0dd1708c44700 1-22
+.sqlx/query-92400ccd3e1fa6e1e684cc8b63a3c645487a967b13b49277982f9e6f825b5d98.json
+  s_b12ee129ce3fac::t_d92cd8b175642d 1-15
+.sqlx/query-932581c88c746c4d4bb7bd6339707360b5191ff997a44f6ac8c934f909e595f1.json
+  s_b12ee129ce3fac::t_a5a3708016543c 1-14
+.sqlx/query-93fd66731bf1fe6ae791664821c27cedceeee063fef948dc95e94afa61f40aae.json
+  s_b12ee129ce3fac::t_e0a80829033f5d 1-14
+.sqlx/query-94e95d5ac43446603ce293d74ff67e5e126bd0ff5eddd59eb6e28d3f5f3c03ae.json
+  s_b12ee129ce3fac::t_e0a4edd4fbcad4 1-15
+.sqlx/query-9793b4c788c851ee00e4f798094e249c5ad122e5496cf7c5521f069dbbd13ee7.json
+  s_b12ee129ce3fac::t_241b4afa10db82 1-23
+.sqlx/query-9a225535e72b1daaaecc91fa33b08019f33aa551b4c96e0d4bd74d2aeb64843a.json
+  s_b12ee129ce3fac::t_0d1d9cf4a0b86a 1-14
+.sqlx/query-9b23c111f3d3e4b074f1e9ce43f30d4cfcfd4a95a657b428e897cdeb54d4fa47.json
+  s_b12ee129ce3fac::t_ebb0782fc0da1a 1-12
+.sqlx/query-9b4bab51cfcec28ae336bc4cd7cecc3d817acad4121fa5247dfff62761553c65.json
+  s_b12ee129ce3fac::t_9ac22074994fc5 1-14
+.sqlx/query-a554e3390f30c03c89874b23ba29662d8c93175d456ed34d837ff9bf6045cee6.json
+  s_b12ee129ce3fac::t_d9c8c472a78229 1-22
+.sqlx/query-ac17b832b8ce48630f8b76a6d1e837234ecda48475b6de3d20152f39d64702a7.json
+  s_b12ee129ce3fac::t_b12064968bd304 1-15
+.sqlx/query-ada9b271dfd8213e55bb3a6290c73a80b9f56e9356bc226424950d7b3f1aae55.json
+  s_b12ee129ce3fac::t_22f9e7fbd7b5cd 1-14
+.sqlx/query-adb66f586a701f982d98b2f67a13008902ef99296242307e3ddccb1fda834b77.json
+  s_b12ee129ce3fac::t_8a2772b3fb3d56 1-22
+.sqlx/query-aec90d57c02b4f1f8c28bdbc481f5d2c91773ffc2db540f9fbce89bb2194343b.json
+  s_b12ee129ce3fac::t_fb3024b9698684 1-22
+.sqlx/query-b5c1e234bf93d667fb759dcab9a690ac337ca9a5d064647d2ae5637b65a40cd7.json
+  s_b12ee129ce3fac::t_16936c6ca4a47a 1-23
+.sqlx/query-b5f17315c79e7463aad47bb9f2631893e0c56453f3a317e0196d99bce3527b44.json
+  s_b12ee129ce3fac::t_5ea10dc9edde01 1-16
+.sqlx/query-ba4a086ebfa588d23fc14e1da711b6beed13c8552f8eab53486c8499e619dfd7.json
+  s_b12ee129ce3fac::t_8aa7c9f43106d7 1-15
+.sqlx/query-bb65029afeb7622f835b16950b1641140a303b906dc4a8a1fb1e814f8271e809.json
+  s_b12ee129ce3fac::t_a4784c6c74608f 1-22
+.sqlx/query-bbe1689151d11d0dcce780b9e47bdde8ad35cad2bc82a9f63e3c1da9dc44bf25.json
+  s_b12ee129ce3fac::t_a374e376b5a58e 1-12
+.sqlx/query-bd5b4f2a7dae97dd189404915a6c6bb072323b6e6898f46790d048a304361ed1.json
+  s_b12ee129ce3fac::t_9da674589e3aef 1-14
+.sqlx/query-be6acd044d4ad3dd1e0165756ae84f6a20ad1463670e32e3fb188673efa93f61.json
+  s_b12ee129ce3fac::t_d5b3f33afa2321 1-14
+.sqlx/query-bf308cb5e9c0a65d57feabcd2e918c697825f3bc72396718a900a189f1fd3b93.json
+  s_b12ee129ce3fac::t_7977bd62cc9aa5 1-23
+.sqlx/query-bf6dc4d215d0bd1c82ab4eb9e9be2027b154007cac61050cd21cff01f284ffb8.json
+  s_b12ee129ce3fac::t_b2fe4193de87b4 1-15
+.sqlx/query-c001bc997d0f533b368fe2c7c9ed5733bff2618bc435807059b707ba8d5ce9dc.json
+  s_b12ee129ce3fac::t_540b4eae843d5f 1-15
+.sqlx/query-c0797b89a70a09fece2bc860d77f4d68c1a5af1105f39a82686373e84da3a5cf.json
+  s_b12ee129ce3fac::t_4d766fba1021ec 1-15
+.sqlx/query-cb26d0878080d8e5be8eb22e6e6a16be6f189a48e837ab24a5f32305f2e8cf22.json
+  s_b12ee129ce3fac::t_ce1ddb0ac4a703 1-14
+.sqlx/query-ce207adbaf7cbb334edaf2cbc69f234bac4ef62e6da1948a11c7cbfb71b6dda4.json
+  s_b12ee129ce3fac::t_6687bab9a5dc2b 1-15
+.sqlx/query-d0f10583cc302b4e42b37983e49e9ebd269f7a32a408541abd2105d0b412c8f5.json
+  s_b12ee129ce3fac::t_07e8daae6dace9 1-16
+.sqlx/query-d2813a8640cf4c6773832774dd3a43ba2c5cdf6165f8af9a78768e8a230a3e5a.json
+  s_b12ee129ce3fac::t_6e63e84c85cc00 1-20
+.sqlx/query-d64623c090ffa2eb3cd676c01c73c10aa1da96bb861327d99b35ce74b0eb978f.json
+  s_b12ee129ce3fac::t_d6bdc16289988a 3,8,24-25,28
+.sqlx/query-d8d4646ac3bdefb640c5a11d0cb6b53b1557725c866d7c51fd13bc4ad40e80ba.json
+  s_b12ee129ce3fac::t_afebb257578a9a 1-14
+.sqlx/query-d95a652f9d2a61348c71fb8128f9f6bced32c3cd332514fb08f6f1b1b088ec42.json
+  s_b12ee129ce3fac::t_f8ab6ce711e092 1-14
+.sqlx/query-ddd445486fce0bcae45101fca5a59fc28c41d81082d915565db9344a491a13a2.json
+  s_b12ee129ce3fac::t_6e9f915d1ea8b9 1-14
+.sqlx/query-de6c846bd3db24ef98904be1c580b31fbc56020a0726c1ee430ebd99bc965570.json
+  s_b12ee129ce3fac::t_95e68ef0f81222 1-135
+.sqlx/query-e1372e7003ef11b175d529f65e5675a8faa37b06aecb6d169713e0e70fd414e1.json
+  s_b12ee129ce3fac::t_b32fe1226b0157 1-14
+.sqlx/query-e6de8995b9dda707c6d2c2fa5f538257783db13209413000a3e9000688950581.json
+  s_b12ee129ce3fac::t_02bd0d790c7c61 1-135
+.sqlx/query-e8706c0de871b446d41316c233871110f1166a54987473ed987740d78dc5d31b.json
+  s_b12ee129ce3fac::t_8fd1b617419162 1-14
+.sqlx/query-e87ab69b663d012fcb4f2fc4727d8b6e98d99d93801fb37db769ab5f6fca22d5.json
+  s_b12ee129ce3fac::t_b17606f36d2e80 1-15
+.sqlx/query-e919916a28f66bd03e3e3e37601d1d84e646d633c1197ffe148c1df7d10bc652.json
+  s_b12ee129ce3fac::t_3ad01fc67e44b5 1-23
+.sqlx/query-ea9229d2262beedd59b10431ee8d7c316e86454774a817d486b6a46e96710a5d.json
+  s_b12ee129ce3fac::t_21ef04d72a5736 1-14
+.sqlx/query-ecfdc274c52a83d1a3fdb65149a889727f517bfd9ea94caef4c91e0c9f1e49ad.json
+  s_b12ee129ce3fac::t_694ce16c4d4824 1-16
+.sqlx/query-f13b897743a5908aacba9ec8b2e268c5ca3e2ad2de88ecce5a4cd5260f6ed7d4.json
+  s_b12ee129ce3fac::t_84a7f33ead3745 1-16
+.sqlx/query-f348a9149e64764eb5f6eacff16028876b0ebba13c64a96b9ada041fa9e51492.json
+  s_b12ee129ce3fac::t_5e915388d63c6d 1-16
+.sqlx/query-f45def37c0edf429e974231fe5bee8fb2228b41a879b3421856b12f20d0f118a.json
+  s_b12ee129ce3fac::t_4588eb29d24b09 1-22
+.sqlx/query-f95969e69b38faeb42117c7ec3e2479d13384464751d5e9eb09107f4f7ed1d72.json
+  s_b12ee129ce3fac::t_931330d7ee41d1 1-16
+.sqlx/query-faeaa59104baa5c8b4dbe4da5fbdee2fe3f28c67915e85cda858567f97aea778.json
+  s_b12ee129ce3fac::t_06a822477d21ae 1-14
+.sqlx/query-faed3016092df0e10a2b872d1a26332673fbdb29daa10e69a2befd783d617083.json
+  s_b12ee129ce3fac::t_ad698570df117c 1-14
+.sqlx/query-fc731179bb5c7572d9118193dd72d124359cadfd56e622f3410eceb5049c4ce1.json
+  s_b12ee129ce3fac::t_a6df676e4c7e42 1-12
+CLAUDE.md
+  s_b12ee129ce3fac::t_e57a2a9984b2b0 31
+Cargo.lock
+  s_b12ee129ce3fac::t_efccff0c0def39 402-418,498-535,636,639,665,723,798,805,814,2297,2407,13120,13122,20690-20718
+Cargo.toml
+  s_b12ee129ce3fac::t_2f9b4b5476e64d 11-13,333
+apps/web/AGENTS.md
+  s_b12ee129ce3fac::t_76600917cf99c4 355-361
+apps/web/src/features/block-agent/browser-test/activity-turn.ts
+  s_b12ee129ce3fac::t_7f4466ed4df4b5 109-111,160
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_b12ee129ce3fac::t_870079b63fd0b6 322-347
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_b12ee129ce3fac::t_09750e134f9abe 44,237-238
+apps/web/src/features/block-agent/state/tool-groups.test.ts
+  s_b12ee129ce3fac::t_46b7d769415f0c 195-214
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_b12ee129ce3fac::t_ee2eb4c8259f91 18-21,69-73,78
+apps/web/src/features/settings/Team.tsx
+  s_b12ee129ce3fac::t_41e5d42434c80e 2-4,25,45,51-52,472-473,478-483,512,540-555,579-587,590
+apps/web/src/features/settings/TeamMembers.tsx
+  s_b12ee129ce3fac::t_f1d1d121741414 4,6,8-11,42-45,51,53-62,294-313,356-368,426-439,528,541,586-599,693-704,722-726,730
+apps/web/src/features/settings/browser-test/team-agents/fixture.tsx
+  s_b12ee129ce3fac::t_5d1e4acdc7b261 1-59
+apps/web/src/features/settings/browser-test/team-agents/index.html
+  s_b12ee129ce3fac::t_d5bbd510110405 1
+apps/web/src/features/settings/browser-test/team-agents/playwright.config.ts
+  s_b12ee129ce3fac::t_4c636f567da2d4 1-48
+apps/web/src/features/settings/browser-test/team-agents/team-agents.browser.e2e.ts
+  s_b12ee129ce3fac::t_6f3505c929a5b2 1-308
+apps/web/src/features/settings/browser-test/team-agents/vite.config.ts
+  s_b12ee129ce3fac::t_40fe0cdf7d0ebe 1-35
+apps/web/src/features/settings/components/agent-voice-dialog.tsx
+  s_b12ee129ce3fac::t_fc338e98b4e815 1-160
+apps/web/src/features/settings/components/invite-agent-form.tsx
+  s_b12ee129ce3fac::t_f539d7de886ebd 1-333
+apps/web/src/features/settings/components/team-agent-row.tsx
+  s_b12ee129ce3fac::t_3a23e21c491566 1-75
+apps/web/src/features/settings/components/team-agent-status.tsx
+  s_b12ee129ce3fac::t_5f081be9a7f3af 1-47
+apps/web/src/features/settings/components/voice-picker.tsx
+  s_b12ee129ce3fac::t_974330230585a8 1-240
+apps/web/src/features/settings/connections/integrations-view.test.tsx
+  s_b12ee129ce3fac::t_5a9e58ab7a11e3 43-44
+apps/web/src/features/settings/core/team-agent-draft.test.ts
+  s_b12ee129ce3fac::t_ba77f6a96fbfef 1-88
+apps/web/src/features/settings/core/team-agent-draft.ts
+  s_b12ee129ce3fac::t_004508b4572748 1-82
+apps/web/src/features/settings/core/voices.test.ts
+  s_b12ee129ce3fac::t_05c101c9034ee5 1-43
+apps/web/src/features/settings/core/voices.ts
+  s_b12ee129ce3fac::t_da8bb29d26b58f 1-38
+apps/web/src/features/settings/invite-to-team-dialog.test.tsx
+  s_b12ee129ce3fac::t_a2e302634b96e9 2-3,5-86,103-117,121,173-278
+apps/web/src/features/settings/views/invite-agent-panel.tsx
+  s_b12ee129ce3fac::t_7ee88068250a32 1-84
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_b12ee129ce3fac::t_26477dfa927c8d 227-236
+apps/web/src/lib/core/constant/servers.ts
+  s_b12ee129ce3fac::t_bd6c8054947743 24,57,145,256-257
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.test.ts
+  s_b12ee129ce3fac::t_83609f588cb2ff 1583-1598
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.tsx
+  s_b12ee129ce3fac::t_c30494cfc5f98b 88,1350,1402-1406
+apps/web/src/lib/core/context/quickAccess/person-list.test.tsx
+  s_b12ee129ce3fac::t_415ebf25acd18e 214-216,223
+apps/web/src/lib/core/context/quickAccess/person-list.ts
+  s_b12ee129ce3fac::t_2d06e97210434b 13,82-85,131-135
+apps/web/src/lib/core/context/quickAccess/projected-list.test.ts
+  s_b12ee129ce3fac::t_c2c087685d418b 60-117
+apps/web/src/lib/core/context/quickAccess/projected-list.ts
+  s_b12ee129ce3fac::t_5dcd54bd0d1e82 20,237-240
+apps/web/src/lib/core/context/quickAccess/unchanged-rows.test.ts
+  s_b12ee129ce3fac::t_26c1c2e2f1a98f 1-65
+apps/web/src/lib/core/context/quickAccess/unchanged-rows.ts
+  s_b12ee129ce3fac::t_ea9f362f967428 1-24
+apps/web/src/lib/core/util/safeFetch.ts
+  s_b12ee129ce3fac::t_920cce02fb8d97 340
+apps/web/src/lib/i18n/locales/en.ts
+  s_b12ee129ce3fac::t_99b0694dcddcfc 37,82
+apps/web/src/lib/i18n/locales/en/team-agents.ts
+  s_b12ee129ce3fac::t_346bebb22eea17 1-73
+apps/web/src/lib/queries/team-agents/keys.ts
+  s_b12ee129ce3fac::t_577ada76780de2 1-8
+apps/web/src/lib/queries/team-agents/team-agents.test.tsx
+  s_b12ee129ce3fac::t_26edd52fa1c1f5 1-139
+apps/web/src/lib/queries/team-agents/team-agents.ts
+  s_b12ee129ce3fac::t_fd45d81078450d 1-143
+apps/web/src/lib/queries/team-agents/voices.ts
+  s_b12ee129ce3fac::t_48ad7a2f0c1a03 1-108
+apps/web/src/lib/service-clients/service-agent-harness/client.ts
+  s_b12ee129ce3fac::t_85765f7adc215b 42,85-94
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_b12ee129ce3fac::t_9403c845bac212 53,85,4859-4989
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/errorResponse.ts
+  s_b12ee129ce3fac::t_ec83d2f53acb4c 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_b12ee129ce3fac::t_d1c6c368a9144e 259,505
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/voice.ts
+  s_b12ee129ce3fac::t_e331b7ef83fbba 1-22
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_b12ee129ce3fac::t_9f63aeb1c78880 4070-4196,6719-6729,8872-8904,9005-9008
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_b12ee129ce3fac::t_ed487f69a55f4f 10,29,119-120,6496-6880
+apps/web/src/lib/service-clients/service-auth/generated/schemas/agentVoice.ts
+  s_b12ee129ce3fac::t_c1b565f7dfce86 1-14
+apps/web/src/lib/service-clients/service-auth/generated/schemas/createTeamAgent.ts
+  s_b12ee129ce3fac::t_2695b73d1816db 1-30
+apps/web/src/lib/service-clients/service-auth/generated/schemas/createTeamAgentAvatarUrl.ts
+  s_b12ee129ce3fac::t_22de45d435164f 1-11
+apps/web/src/lib/service-clients/service-auth/generated/schemas/createTeamAgentVoice.ts
+  s_b12ee129ce3fac::t_b9e6bf567f691e 1-12
+apps/web/src/lib/service-clients/service-auth/generated/schemas/index.ts
+  s_b12ee129ce3fac::t_102071e93ec00e 13,66-68,288-292
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgent.ts
+  s_b12ee129ce3fac::t_402664d7fb0785 1-34
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgentComputerId.ts
+  s_b12ee129ce3fac::t_7d1801302024e8 1-11
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgentCreatedBy.ts
+  s_b12ee129ce3fac::t_22f6492ef1984b 1-11
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgentStatus.ts
+  s_b12ee129ce3fac::t_da5adc45ee3f2a 1-21
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamAgents.ts
+  s_b12ee129ce3fac::t_3e58dbf7ada5f1 1-15
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_b12ee129ce3fac::t_f5ce226a160129 5589-5995,7431-7441,8026-8066,10501-10573
+apps/web/src/lib/service-clients/service-auth/team-agents.test.ts
+  s_b12ee129ce3fac::t_27b2130cc892c9 1-144
+apps/web/src/lib/service-clients/service-auth/team-agents.ts
+  s_b12ee129ce3fac::t_1fd217fb26193d 1-110
+bun.lock
+  s_b12ee129ce3fac::t_c18f367bed04b8 407-423,451-479,522-554,778-797,1048-1049,1058,1240-1251,1262,1264,1266,1268,1270,1272,1274,1276,1278,1280,1282,1284,1286,1288,1290,1292,1294,1296,1298,1300,1302,1304,1306,1308-1312,1462-1491,1494-1505,1510-1525,1528-1529,1532-1533,1550-1551,1554-1555,1562-1563,1610,1614-1619,1622-1627,1632,1636-1638,1640,1642,1808-1809,1986-1987,2170-2171,2174-2175,2362-2363,2450-2451,2494-2495,2518-2521,2540-2541,2672-2673,2706-2707,2720-2721,2758-2759,2896-2897,2906-2907,2922-2923,2926-2927,2964-2965,3040-3041,3106-3109,3152-3153,3222-3223,3300-3301,3322-3323,3344-3345,3410-3411,3662-3663,3696-3699,3736-3741,3752,3840-3841,3850-3859,3862-3863,3866,3876-3877,3892-3893,3924-3925,3948-3949,3966-3967,4010-4011,4040-4041,4066,4080-4081,4106,4180-4181,4202-4203,4290-4295,4300-4301,4348-4349,4392-4393,4516,4544,4592-4593,4654-4659,4684-4695,4710-4713,4720-4723,4726-4727,4730-4735,4740-4761,4766-4779,4790-4791,4794-4798,4800-4806,4816-4819,4836-4837,4938-4939,4966-4967,4984-4985,5006-5007,5044-5045,5082-5085,5142-5143,5176-5181,5184-5187,5302-5303,5336-5359,5434-5449,5456-5474,5476,5604-5605,5702-5749,5830-5839,5894-5895,5916-5917
+crates/agent_credentials/AGENTS.md
+  s_b12ee129ce3fac::t_5ca7a30a60de15 1-29
+crates/agent_credentials/CLAUDE.md
+  s_b12ee129ce3fac::t_e27f20cbaea890 1
+crates/agent_credentials/Cargo.toml
+  s_b12ee129ce3fac::t_45df23ac71f62c 1-20
+crates/agent_credentials/src/api_key.rs
+  s_b12ee129ce3fac::t_3ac35e16a4977c 1-69
+crates/agent_credentials/src/api_key/test.rs
+  s_b12ee129ce3fac::t_62c4d9865d8459 1-21
+crates/agent_credentials/src/lib.rs
+  s_b12ee129ce3fac::t_d4b3ee9eef2570 1-25
+crates/agent_credentials/src/repo_token.rs
+  s_b12ee129ce3fac::t_fac2412db97626 1-131
+crates/agent_credentials/src/repo_token/test.rs
+  s_b12ee129ce3fac::t_5f24f22ab66177 1-36
+crates/agent_git/AGENTS.md
+  s_b12ee129ce3fac::t_b136e0350dabfb 1-113
+crates/agent_git/CLAUDE.md
+  s_b12ee129ce3fac::t_5e8a886cada64f 1
+crates/agent_git/Cargo.toml
+  s_b12ee129ce3fac::t_851930ee48cd3f 1-53
+crates/agent_git/build.rs
+  s_b12ee129ce3fac::t_3a2d5c28f2f399 1-84
+crates/agent_git/src/api.rs
+  s_b12ee129ce3fac::t_dfc20d4fe677d0 1-80
+crates/agent_git/src/client.rs
+  s_b12ee129ce3fac::t_602dda022daac8 1-218
+crates/agent_git/src/domain.rs
+  s_b12ee129ce3fac::t_b0b4231e33ce8d 1-7
+crates/agent_git/src/domain/models.rs
+  s_b12ee129ce3fac::t_9cca59cd805859 1-203
+crates/agent_git/src/domain/ports.rs
+  s_b12ee129ce3fac::t_95d5258b36b6b7 1-207
+crates/agent_git/src/domain/service.rs
+  s_b12ee129ce3fac::t_88849b504e2d77 1-438
+crates/agent_git/src/domain/service/test.rs
+  s_b12ee129ce3fac::t_a09dcba6314476 1-1108
+crates/agent_git/src/domain/template.rs
+  s_b12ee129ce3fac::t_d9f8a39065f557 1-170
+crates/agent_git/src/domain/template/test.rs
+  s_b12ee129ce3fac::t_4a2a1e561ffad7 1-75
+crates/agent_git/src/domain/voice.rs
+  s_b12ee129ce3fac::t_8558aeadca1b0d 1-94
+crates/agent_git/src/domain/voice/test.rs
+  s_b12ee129ce3fac::t_474b2d8e6db5e1 1-38
+crates/agent_git/src/inbound.rs
+  s_b12ee129ce3fac::t_dff11e8d964fe5 1-3
+crates/agent_git/src/inbound/http.rs
+  s_b12ee129ce3fac::t_6beb2c0736378f 1-445
+crates/agent_git/src/inbound/http/credential.rs
+  s_b12ee129ce3fac::t_1367a983591335 1-80
+crates/agent_git/src/lib.rs
+  s_b12ee129ce3fac::t_e51c9d74ea938b 1-22
+crates/agent_git/src/outbound.rs
+  s_b12ee129ce3fac::t_1384356f06bf7c 1-8
+crates/agent_git/src/outbound/bare_repo_store.rs
+  s_b12ee129ce3fac::t_d8fd110bcdb420 1-501
+crates/agent_git/src/outbound/git_http_backend.rs
+  s_b12ee129ce3fac::t_dbcfeee6b35e2d 1-301
+crates/agent_git/src/outbound/git_http_backend/test.rs
+  s_b12ee129ce3fac::t_c26e1b22748b07 1-219
+crates/agent_git/src/outbound/pg_repo_repository.rs
+  s_b12ee129ce3fac::t_4753ddbcc353aa 1-205
+crates/agent_git/src/outbound/push_rate_limiter.rs
+  s_b12ee129ce3fac::t_6daec34674da76 1-64
+crates/agent_git/src/outbound/repo_directories.rs
+  s_b12ee129ce3fac::t_840a7f83f72af7 1-52
+crates/agent_git/src/outbound/team_admins.rs
+  s_b12ee129ce3fac::t_f2cfeb11ae91e9 1-34
+crates/agent_git/tests/smart_http.rs
+  s_b12ee129ce3fac::t_3dcdaf6a017576 1-703
+crates/ai_billing/src/outbound/entitlement.rs
+  s_b12ee129ce3fac::t_e0a2737c58068a 144-145,150-162
+crates/coding_agent_worker/AGENTS.md
+  s_b12ee129ce3fac::t_ce95c928b230bd 59-61
+crates/coding_agent_worker/src/enroll.rs
+  s_b12ee129ce3fac::t_c334d1c440778e 16,160,171,186-191,382-432,449-470
+crates/coding_agent_worker/src/enroll/test.rs
+  s_b12ee129ce3fac::t_2e6df6a511cae6 372-428
+crates/crm/AGENTS.md
+  s_b12ee129ce3fac::t_8d4ee635dafddc 89-96,171-176
+crates/crm/src/outbound/call_link.rs
+  s_b12ee129ce3fac::t_5079de8defbb5d 34-40,59-61,83,87-104,112
+crates/crm/src/outbound/call_link/test.rs
+  s_b12ee129ce3fac::t_827099118ad2c8 285-434
+crates/crm/src/outbound/companies_repo/association.rs
+  s_b12ee129ce3fac::t_afeba83c2a71a6 53-72,75-81,83-85,87-98,101-110,117,120-123
+crates/crm/src/outbound/companies_repo/test/resolve_association.rs
+  s_b12ee129ce3fac::t_7f9659e483570e 241-308
+crates/hosted_runtimes/examples/incus_fleet_smoke.rs
+  s_b12ee129ce3fac::t_80028aaf831544 12-13,20-22,30,60-62,106-118,188
+crates/hosted_runtimes/src/domain.rs
+  s_b12ee129ce3fac::t_109b263b31b101 3
+crates/hosted_runtimes/src/domain/agent.rs
+  s_b12ee129ce3fac::t_728a8da5b63238 1-186
+crates/hosted_runtimes/src/domain/agent/test.rs
+  s_b12ee129ce3fac::t_77055cbf3a4cf7 1-79
+crates/hosted_runtimes/src/domain/enrollment.rs
+  s_b12ee129ce3fac::t_4fa9dab4cfd7e2 39-42
+crates/hosted_runtimes/src/domain/fakes.rs
+  s_b12ee129ce3fac::t_82219488bb360a 6,115-153,287,878-899
+crates/hosted_runtimes/src/domain/image.rs
+  s_b12ee129ce3fac::t_869fe89cf7fe93 6,62-95
+crates/hosted_runtimes/src/domain/image/test.rs
+  s_b12ee129ce3fac::t_78fdad0055ebf0 30-51
+crates/hosted_runtimes/src/domain/models.rs
+  s_b12ee129ce3fac::t_9c7b61bd59eee9 321-322,354-355
+crates/hosted_runtimes/src/domain/operator.rs
+  s_b12ee129ce3fac::t_acd1a2d6ec9fd4 63,77,100,109-118,365,705-708,728-747,855,875-884,900
+crates/hosted_runtimes/src/domain/operator/test.rs
+  s_b12ee129ce3fac::t_0b6151a4bb8111 2,379,421,484-509
+crates/hosted_runtimes/src/domain/operator/test/agent.rs
+  s_b12ee129ce3fac::t_e5acc9b44f847f 1-82
+crates/hosted_runtimes/src/domain/service.rs
+  s_b12ee129ce3fac::t_dfe65792762053 204-233
+crates/hosted_runtimes/src/domain/service/purchase.rs
+  s_b12ee129ce3fac::t_5b21d19ce615b2 6,49-64,71-74,76-78,81-85,132
+crates/hosted_runtimes/src/outbound/docker_fleet.rs
+  s_b12ee129ce3fac::t_88e72ad33bade2 28,63-66,293,295,310
+crates/hosted_runtimes/src/outbound/docker_fleet/test.rs
+  s_b12ee129ce3fac::t_112e9ee8b246cc 10-13
+crates/hosted_runtimes/src/outbound/docker_fleet/test/enrollment.rs
+  s_b12ee129ce3fac::t_be1faa53ef8e36 56,76-79,184-187,205-316
+crates/hosted_runtimes/src/outbound/incus_fleet.rs
+  s_b12ee129ce3fac::t_e5df20a1054253 2-3,32,65-67,144-161,174,178,358-360,383,653,660,664,683
+crates/hosted_runtimes/src/outbound/incus_fleet/test.rs
+  s_b12ee129ce3fac::t_9ba7cd1ef7ef80 44-84,102,148,207-217,257
+crates/hosted_runtimes/src/outbound/pg.rs
+  s_b12ee129ce3fac::t_3a373bb3738839 24,218,271-272,292,342,358,377
+crates/hosted_runtimes/src/outbound/pg/agents.rs
+  s_b12ee129ce3fac::t_6c5087301e5773 1-81
+crates/hosted_runtimes/src/outbound/pg/reservations.rs
+  s_b12ee129ce3fac::t_86fc401da7765c 41,124-125,145,167
+crates/hosted_runtimes/src/outbound/pg/row.rs
+  s_b12ee129ce3fac::t_a560bb4477c678 62,170-174
+crates/hosted_runtimes/src/outbound/pg/test.rs
+  s_b12ee129ce3fac::t_5c06f083aac3cd 5,77
+crates/hosted_runtimes/src/outbound/pg/test/agents.rs
+  s_b12ee129ce3fac::t_85935f9bcda7ed 1-112
+crates/macro_db_client/migrations/20261113000000_agent_teammates.sql
+  s_b12ee129ce3fac::t_0f372a6c862920 1-64
+crates/macro_db_client/migrations/20261113000001_agent_repo_push_budget.sql
+  s_b12ee129ce3fac::t_622fabe6adbe29 1-5
+crates/macro_db_client/migrations/20261113000002_livekit_call_pricing.sql
+  s_b12ee129ce3fac::t_e981a5c1ebf0f0 1-10
+crates/macro_service_urls/src/lib.rs
+  s_b12ee129ce3fac::t_47350bb43458be 566-574,654-661
+crates/team_agents/AGENTS.md
+  s_b12ee129ce3fac::t_34fddf291e943d 1-75
+crates/team_agents/CLAUDE.md
+  s_b12ee129ce3fac::t_8e6ac457e85389 1
+crates/team_agents/Cargo.toml
+  s_b12ee129ce3fac::t_5be91d2d9e3ede 1-53
+crates/team_agents/src/domain.rs
+  s_b12ee129ce3fac::t_7eb696ffeb9849 1-7
+crates/team_agents/src/domain/admission.rs
+  s_b12ee129ce3fac::t_5c339c0cb10347 1-205
+crates/team_agents/src/domain/admission/test.rs
+  s_b12ee129ce3fac::t_3eb12c8480a9ac 1-273
+crates/team_agents/src/domain/models.rs
+  s_b12ee129ce3fac::t_b0453a3fa68c75 1-265
+crates/team_agents/src/domain/ports.rs
+  s_b12ee129ce3fac::t_b475432868c495 1-239
+crates/team_agents/src/domain/service.rs
+  s_b12ee129ce3fac::t_7fb6f6135f3261 1-609
+crates/team_agents/src/domain/service/test.rs
+  s_b12ee129ce3fac::t_7e19b3fd29b500 1-666
+crates/team_agents/src/domain/voice.rs
+  s_b12ee129ce3fac::t_f7b0c97977271d 1-110
+crates/team_agents/src/domain/voice/test.rs
+  s_b12ee129ce3fac::t_9d5d5558f19e69 1-110
+crates/team_agents/src/inbound.rs
+  s_b12ee129ce3fac::t_452c8f2b04e291 1-3
+crates/team_agents/src/inbound/axum_router.rs
+  s_b12ee129ce3fac::t_c0501cff14cf91 1-403
+crates/team_agents/src/lib.rs
+  s_b12ee129ce3fac::t_6d004161b68d88 1-21
+crates/team_agents/src/outbound.rs
+  s_b12ee129ce3fac::t_16fc6a2229894c 1-7
+crates/team_agents/src/outbound/agent_api_keys.rs
+  s_b12ee129ce3fac::t_9bbd7729151a52 1-56
+crates/team_agents/src/outbound/agent_git_repos.rs
+  s_b12ee129ce3fac::t_cba3699a95849d 1-154
+crates/team_agents/src/outbound/agent_git_repos/test.rs
+  s_b12ee129ce3fac::t_10a697ef0fd45e 1-32
+crates/team_agents/src/outbound/hosted_runtimes_computers.rs
+  s_b12ee129ce3fac::t_e119a3b2700d88 1-181
+crates/team_agents/src/outbound/hosted_runtimes_computers/test.rs
+  s_b12ee129ce3fac::t_4bd4a1baedad99 1-68
+crates/team_agents/src/outbound/pg_team_agents_repo.rs
+  s_b12ee129ce3fac::t_c083adb94b2f5d 1-271
+crates/team_agents/src/outbound/pg_team_agents_repo/test.rs
+  s_b12ee129ce3fac::t_cdd6189412f32d 1-237
+crates/team_agents/src/outbound/team_membership.rs
+  s_b12ee129ce3fac::t_b5ac1f19144ce2 1-59
+crates/teams/README.md
+  s_b12ee129ce3fac::t_24a9c8481db977 24,60-62,75,82
+crates/teams/src/domain/events.rs
+  s_b12ee129ce3fac::t_51270cd458e82c 149-153
+crates/teams/src/domain/model/error.rs
+  s_b12ee129ce3fac::t_93e9b17dbd65dc 80-83,105-107,178-180,278-280
+crates/teams/src/domain/team_repo.rs
+  s_b12ee129ce3fac::t_da2f77393d890f 24-31,185-186,190,351-352,357,630-657
+crates/teams/src/domain/team_service.rs
+  s_b12ee129ce3fac::t_e206f078fa2f9d 99-107,339,348-365,371,378-379,470,808,839,968-974,1046,1080,1106,1133,1772-1780,1784-1801,2315-2321,2768-2835
+crates/teams/src/domain/team_service/invite_link.rs
+  s_b12ee129ce3fac::t_316b455400d0ca 11,194-199
+crates/teams/src/domain/team_service/test.rs
+  s_b12ee129ce3fac::t_c0a80e16dab553 74,134-139,232-234,287-295,657,660-663,951,954
+crates/teams/src/domain/team_service/test/team_agent.rs
+  s_b12ee129ce3fac::t_70671a21e2fbb1 1-604
+crates/teams/src/inbound/axum_router.rs
+  s_b12ee129ce3fac::t_1f81d52d19909d 415-421,457-462
+crates/teams/src/inbound/axum_router/invite_link.rs
+  s_b12ee129ce3fac::t_7a8f6f7bb5132d 98-104
+crates/teams/src/inbound/axum_router/test.rs
+  s_b12ee129ce3fac::t_4da41f5d2bad84 526-549
+crates/teams/src/outbound/team_repo.rs
+  s_b12ee129ce3fac::t_7cace6f01eac55 223-243,1067,1071,1073-1074,1077-1081,1783,1789-1790,1795
+crates/teams/src/outbound/team_repo/test.rs
+  s_b12ee129ce3fac::t_d946aaa8fbd681 1247,1252,1870,1877,1889-1891,1900-1954
+crates/webhook/src/domain/stream.rs
+  s_b12ee129ce3fac::t_af3101fe530b97 281
+crates/webhook/src/domain/stream/test.rs
+  s_b12ee129ce3fac::t_3091f16e479469 608-659
+docker/Dockerfile
+  s_b12ee129ce3fac::t_d45a4711fbe00b 42-49
+docker/Dockerfile.dev
+  s_b12ee129ce3fac::t_624e5e68c56ac6 49-50,52
+docker/Dockerfile.prebuilt
+  s_b12ee129ce3fac::t_3730e00436a828 18-25
+docker/Dockerfile.runtime
+  s_b12ee129ce3fac::t_72394693cd56dc 14-15,17
+docker/docker-compose.yml
+  s_b12ee129ce3fac::t_5b857b4adcb9b7 339-341,744-745
+docs/agent-guide/ai-chat.md
+  s_b12ee129ce3fac::t_a1586e946139a3 1882-1883
+docs/agent-guide/calls.md
+  s_b12ee129ce3fac::t_334a278370bf80 852-862
+docs/agent-guide/settings.md
+  s_b12ee129ce3fac::t_cf6fb1595b3bbe 208,233-261
+docs/architecture/macro-computers.md
+  s_b12ee129ce3fac::t_74e059c4152499 59,269-270,308,324-330,382-395
+docs/design/agent-teammates.md
+  s_b12ee129ce3fac::t_59036b9941c26f 1-148
+docs/design/crm-contact-creation.md
+  s_b12ee129ce3fac::t_dcf0ad51854fe6 35,37-39,63
+docs/development/running-locally.md
+  s_b12ee129ce3fac::t_89a67ff726c281 665,668-674,758-759,844
+infra/packages/shared/src/gateway_priorities.ts
+  s_b12ee129ce3fac::t_083abc0d38142f 26,59
+infra/stacks/agent-harness-service/agent_harness_service.ts
+  s_b12ee129ce3fac::t_910e4a6a06189d 34-37,40-42,113-148,254,274-312,402,513-525,544-550,596-597,599,743-828
+nix-support/node_modules-hashes.json
+  s_b12ee129ce3fac::t_28f06c50fd41ce 3-4
+nix-support/node_modules.nix
+  s_b12ee129ce3fac::t_cb704de6bf14a6 82-88
+nix/cloud-storage.nix
+  s_b12ee129ce3fac::t_a1e3181c1f8df6 82-93,103,199-204,1162-1170
+nix/macro-box/AGENTS.md
+  s_b12ee129ce3fac::t_e1b43e9d77b7ba 33-43,57-61,65-67,95-155,269-290,294-296
+nix/macro-box/_agent-runtime.nix
+  s_b12ee129ce3fac::t_63fff66c780f17 1-102
+nix/macro-box/_agent.nix
+  s_b12ee129ce3fac::t_75dd76839e1241 1-477
+nix/macro-box/_computer-use-linux.nix
+  s_b12ee129ce3fac::t_e18c330f28ff6e 1-49
+nix/macro-box/_guest.nix
+  s_b12ee129ce3fac::t_1423de2e5ba01d 95-96,459
+nix/macro-box/_vm-test.nix
+  s_b12ee129ce3fac::t_759ae0d5161b1d 2-4,31-61,75,104-126,130-386
+nix/macro-box/files/agent-env-setting
+  s_b12ee129ce3fac::t_094ad6870acf43 1-12
+nix/macro-box/files/agent-stopped
+  s_b12ee129ce3fac::t_ed0a4f4ee10ac9 1-18
+nix/macro-box/files/git-credential-agent
+  s_b12ee129ce3fac::t_4adfaec955fadf 1-17
+nix/macro-box/files/start-agent
+  s_b12ee129ce3fac::t_f785c2910ff4d5 1-131
+nix/macro-box/files/test-agent-probe.ts
+  s_b12ee129ce3fac::t_fa8bb76758ea2a 1-22
+nix/macro-box/files/test-browser-escape.ts
+  s_b12ee129ce3fac::t_9a99d3b690280d 1-27
+nix/macro-box/files/test-computer-use.py
+  s_b12ee129ce3fac::t_f5020657f08a4c 1-70
+nix/macro-box/files/test-git-server.py
+  s_b12ee129ce3fac::t_c37df26216c5aa 1-54
+nix/macro-box/files/test-start-agent.sh
+  s_b12ee129ce3fac::t_5ebab838181914 1-167
+nix/macro-box/macro-box.nix
+  s_b12ee129ce3fac::t_df68a6387bb56a 37-42,45-46,60-64,66-67,69-74,78,87-97,138-153
+package.json
+  s_b12ee129ce3fac::t_4ed45ea687c1a9 92-95
+packages/muppet/AGENTS.md
+  s_b12ee129ce3fac::t_1c9b2ed1a06541 1-77
+packages/muppet/CLAUDE.md
+  s_b12ee129ce3fac::t_ed5ad813c90f7d 1
+packages/muppet/DESIGN.md
+  s_b12ee129ce3fac::t_5eb6df410b6d2c 1-220
+packages/muppet/STYLE.md
+  s_b12ee129ce3fac::t_8fea28c493b4f3 1-7
+packages/muppet/agents/claude-code.ts
+  s_b12ee129ce3fac::t_92db078cb82e95 1-78
+packages/muppet/biome.jsonc
+  s_b12ee129ce3fac::t_578568c2df150e 1-11
+packages/muppet/bunfig.toml
+  s_b12ee129ce3fac::t_8a75411c2e50c5 1-5
+packages/muppet/core/agent.ts
+  s_b12ee129ce3fac::t_5328b317ef9329 1-31
+packages/muppet/core/behavior.ts
+  s_b12ee129ce3fac::t_16489d482c6003 1-367
+packages/muppet/core/capability.ts
+  s_b12ee129ce3fac::t_9080b4fb5d07f0 1-130
+packages/muppet/core/code.ts
+  s_b12ee129ce3fac::t_25c6efdaa0df5f 1-249
+packages/muppet/core/error.ts
+  s_b12ee129ce3fac::t_2b4fbc03e1f0de 1-7
+packages/muppet/core/event.ts
+  s_b12ee129ce3fac::t_a2cd1891b4f4c8 1-130
+packages/muppet/core/hook.ts
+  s_b12ee129ce3fac::t_2fde7f77e8b047 1-86
+packages/muppet/core/prompt.ts
+  s_b12ee129ce3fac::t_aa04cdbb50e1a4 1-34
+packages/muppet/core/runtime.ts
+  s_b12ee129ce3fac::t_a7044a056a2535 1-18
+packages/muppet/core/state.ts
+  s_b12ee129ce3fac::t_a92edc88d554b3 1-18
+packages/muppet/core/test/behavior.test.ts
+  s_b12ee129ce3fac::t_77ca84262c3f5b 1-127
+packages/muppet/core/test/capability.test.ts
+  s_b12ee129ce3fac::t_651967b1100d95 1-91
+packages/muppet/core/test/code.test.ts
+  s_b12ee129ce3fac::t_f7f458f3569623 1-172
+packages/muppet/core/test/event.test.ts
+  s_b12ee129ce3fac::t_e0fe7a164d6528 1-168
+packages/muppet/examples/heartbeat/AGENT.md
+  s_b12ee129ce3fac::t_6c3d970e5e1e4e 1-11
+packages/muppet/examples/heartbeat/agent.ts
+  s_b12ee129ce3fac::t_1413590277022c 1-47
+packages/muppet/examples/heartbeat/behavior.ts
+  s_b12ee129ce3fac::t_9f04d1dc220798 1-68
+packages/muppet/examples/heartbeat/capabilities.ts
+  s_b12ee129ce3fac::t_ce4e71061287a8 1-52
+packages/muppet/examples/heartbeat/context.ts
+  s_b12ee129ce3fac::t_82321bc2b02ce5 1-39
+packages/muppet/examples/heartbeat/index.ts
+  s_b12ee129ce3fac::t_c803fad79e4467 1-35
+packages/muppet/examples/mail-triage/AGENT.md
+  s_b12ee129ce3fac::t_9ab0b45b84b194 1-6
+packages/muppet/examples/mail-triage/agent.ts
+  s_b12ee129ce3fac::t_21e4053ce76747 1-44
+packages/muppet/examples/mail-triage/behavior.ts
+  s_b12ee129ce3fac::t_29b7b3d96383bb 1-18
+packages/muppet/examples/mail-triage/capabilities.ts
+  s_b12ee129ce3fac::t_4f34fba67ef21b 1-70
+packages/muppet/examples/mail-triage/context.ts
+  s_b12ee129ce3fac::t_17201b01b24d1d 1-33
+packages/muppet/examples/mail-triage/handlers.ts
+  s_b12ee129ce3fac::t_6370bdb91ffb0f 1-55
+packages/muppet/examples/mail-triage/index.ts
+  s_b12ee129ce3fac::t_fcff4ab3a21513 1-23
+packages/muppet/examples/mail-triage/sources.ts
+  s_b12ee129ce3fac::t_aec488780fd5a7 1-30
+packages/muppet/examples/scripts.ts
+  s_b12ee129ce3fac::t_7beac27416ff69 1-33
+packages/muppet/package.json
+  s_b12ee129ce3fac::t_8b8200421adfcd 1-30
+packages/muppet/runtimes/parallel.ts
+  s_b12ee129ce3fac::t_f96f114c41075c 1-34
+packages/muppet/runtimes/pieces.ts
+  s_b12ee129ce3fac::t_9d08853444d3ea 1-153
+packages/muppet/runtimes/simple.ts
+  s_b12ee129ce3fac::t_cf23cdc9067c4b 1-45
+packages/muppet/runtimes/test/parallel.test.ts
+  s_b12ee129ce3fac::t_587297cf6b3b5e 1-92
+packages/muppet/runtimes/test/scripts.ts
+  s_b12ee129ce3fac::t_b3131a9840772e 1-14
+packages/muppet/runtimes/test/simple.test.ts
+  s_b12ee129ce3fac::t_5975be6a2b9041 1-223
+packages/muppet/tsconfig.json
+  s_b12ee129ce3fac::t_457f4b3bcbf389 1-21
+packages/muppet/utilities/browser/index.ts
+  s_b12ee129ce3fac::t_7280dbf1b9f35f 1-135
+packages/muppet/utilities/browser/tab.ts
+  s_b12ee129ce3fac::t_8e2b9167287b74 1-98
+packages/muppet/utilities/browser/test/browser.test.ts
+  s_b12ee129ce3fac::t_ecc74e7ded850b 1-50
+packages/muppet/utilities/credentials/env-file.ts
+  s_b12ee129ce3fac::t_fe1afff496b313 1-125
+packages/muppet/utilities/credentials/index.ts
+  s_b12ee129ce3fac::t_98d7b0187ad2db 1-43
+packages/muppet/utilities/credentials/sops.ts
+  s_b12ee129ce3fac::t_fcedb8d431f9b0 1-77
+packages/muppet/utilities/credentials/test/credentials.test.ts
+  s_b12ee129ce3fac::t_116bcc2d8e5f19 1-95
+packages/muppet/utilities/credentials/test/env-file.test.ts
+  s_b12ee129ce3fac::t_1870271ed06888 1-103
+packages/muppet/utilities/failures/index.ts
+  s_b12ee129ce3fac::t_7ce67ca49c9510 1-107
+packages/muppet/utilities/failures/test/failures.test.ts
+  s_b12ee129ce3fac::t_9d58d33a19b72f 1-118
+packages/muppet/utilities/jobs/herdr.ts
+  s_b12ee129ce3fac::t_c6e36503a71cb7 1-311
+packages/muppet/utilities/jobs/index.ts
+  s_b12ee129ce3fac::t_7c5a3dcb97272b 1-238
+packages/muppet/utilities/jobs/test/jobs.test.ts
+  s_b12ee129ce3fac::t_98199e0e91d7f1 1-275
+packages/muppet/utilities/macro/chat/index.ts
+  s_b12ee129ce3fac::t_b57049c38fb3b2 1-528
+packages/muppet/utilities/macro/chat/test/chat.test.ts
+  s_b12ee129ce3fac::t_7513e26ed7b89d 1-219
+packages/muppet/utilities/macro/index.ts
+  s_b12ee129ce3fac::t_81d9a92fb335e0 1-119
+packages/muppet/utilities/macro/test/presence.test.ts
+  s_b12ee129ce3fac::t_c4d9d40143ac30 1-53
+packages/muppet/utilities/schedules/due.ts
+  s_b12ee129ce3fac::t_5bab0b2a3657f8 1-192
+packages/muppet/utilities/schedules/index.ts
+  s_b12ee129ce3fac::t_b0f06361d01886 1-91
+packages/muppet/utilities/schedules/rrule.ts
+  s_b12ee129ce3fac::t_ff14f6cf3a0a2c 1-223
+packages/muppet/utilities/schedules/schedule.ts
+  s_b12ee129ce3fac::t_c2ec2af8cbbcff 1-96
+packages/muppet/utilities/schedules/scheduler.ts
+  s_b12ee129ce3fac::t_63a095758a0d84 1-279
+packages/muppet/utilities/schedules/schedules.ts
+  s_b12ee129ce3fac::t_a2c345985447fd 1-55
+packages/muppet/utilities/schedules/store.ts
+  s_b12ee129ce3fac::t_d818c9b1276896 1-51
+packages/muppet/utilities/schedules/test/due.test.ts
+  s_b12ee129ce3fac::t_1085294c02a95e 1-89
+packages/muppet/utilities/schedules/test/rrule.test.ts
+  s_b12ee129ce3fac::t_8ac878371c41a1 1-65
+packages/muppet/utilities/schedules/test/scheduler.test.ts
+  s_b12ee129ce3fac::t_d0fece3936a132 1-189
+packages/muppet/utilities/scripts/index.ts
+  s_b12ee129ce3fac::t_ee0c4917093fd1 1-271
+packages/muppet/utilities/scripts/test/agent/greeting.ts
+  s_b12ee129ce3fac::t_ea13f39256af62 1-27
+packages/muppet/utilities/scripts/test/scripts.test.ts
+  s_b12ee129ce3fac::t_187c005a052246 1-182
+packages/muppet/utilities/time/index.ts
+  s_b12ee129ce3fac::t_4abf35909f3f2a 1-104
+packages/muppet/utilities/time/test/runtime.test.ts
+  s_b12ee129ce3fac::t_a42496d28b2a16 1-27
+packages/muppet/utilities/time/test/time.test.ts
+  s_b12ee129ce3fac::t_1e9ce67ed95de2 1-36
+packages/observability/package.json
+  s_b12ee129ce3fac::t_ebe9ee90753ffc 11-12
+packages/observability/src/config.ts
+  s_b12ee129ce3fac::t_b5dbce679ada60 45
+packages/observability/src/logging.ts
+  s_b12ee129ce3fac::t_8cdbeb490e3361 24-33,44-47,61
+packages/observability/src/server.test.ts
+  s_b12ee129ce3fac::t_8cfe14a5dc0597 1-76
+packages/observability/src/server.ts
+  s_b12ee129ce3fac::t_ba6dd2dea9dd63 1-79
+packages/sdk/AGENTS.md
+  s_b12ee129ce3fac::t_d150f6bb6ca847 197-198
+packages/sdk/RELEASING.md
+  s_b12ee129ce3fac::t_ee6bbabbffbee6 26-27
+packages/sdk/generated/agent-harness/index.ts
+  s_b12ee129ce3fac::t_6941a9f74bf2bb 4
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_b12ee129ce3fac::t_e32610a7e8b748 5,856-870
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_b12ee129ce3fac::t_fc269bda565772 1889-1899,3192-3217,5169-5219
+packages/sdk/generated/auth/index.ts
+  s_b12ee129ce3fac::t_1ffda54449466d 4
+packages/sdk/generated/auth/sdk.gen.ts
+  s_b12ee129ce3fac::t_6764bc09720420 5,1076-1128
+packages/sdk/generated/auth/types.gen.ts
+  s_b12ee129ce3fac::t_9325b08d2f0f16 41-50,494-529,2341-2398,5117-5248
+packages/sdk/scripts/check-pack.ts
+  s_b12ee129ce3fac::t_03663063129109 80,82,133
+packages/sdk/specs/agent-harness.json
+  s_b12ee129ce3fac::t_07f78884f307ff 4070-4196,6719-6729,8872-8904,9005-9008
+packages/sdk/specs/auth.json
+  s_b12ee129ce3fac::t_96a36753cf3b32 5589-5995,7431-7441,8026-8066,10501-10573
+packages/sdk/src/coverage/skipped.ts
+  s_b12ee129ce3fac::t_144e3880163f17 43-44,158-162
+packages/starter-agent/.gitignore
+  s_b12ee129ce3fac::t_42d2dd2e6a3e22 1-13
+packages/starter-agent/AGENT.md
+  s_b12ee129ce3fac::t_4cbdf57a3203a3 1-184
+packages/starter-agent/AGENTS.md
+  s_b12ee129ce3fac::t_995c92506a4df7 1-41
+packages/starter-agent/ARCHITECTURE.md
+  s_b12ee129ce3fac::t_7bfc24c653af04 1-166
+packages/starter-agent/CLAUDE.md
+  s_b12ee129ce3fac::t_5174f529b5be6e 1
+packages/starter-agent/ENGINEERING.md
+  s_b12ee129ce3fac::t_c5fa980bfa5660 1-54
+packages/starter-agent/README.md
+  s_b12ee129ce3fac::t_eec97e0ea7067f 1-168
+packages/starter-agent/agent.example.json
+  s_b12ee129ce3fac::t_e6a826f446b51e 1-10
+packages/starter-agent/behavior/agent/authority.ts
+  s_b12ee129ce3fac::t_06dae0ed23a059 1-103
+packages/starter-agent/behavior/agent/budget.ts
+  s_b12ee129ce3fac::t_e3fc0be34c6d9d 1-181
+packages/starter-agent/behavior/agent/claude.ts
+  s_b12ee129ce3fac::t_e968265b5ace84 1-268
+packages/starter-agent/behavior/agent/guard.ts
+  s_b12ee129ce3fac::t_d2c4001b5eda58 1-57
+packages/starter-agent/behavior/agent/guards/config.ts
+  s_b12ee129ce3fac::t_76d0374e555934 1-12
+packages/starter-agent/behavior/agent/guards/gh-identity.ts
+  s_b12ee129ce3fac::t_4cb7151bf85d46 1-45
+packages/starter-agent/behavior/agent/guards/git-identity.ts
+  s_b12ee129ce3fac::t_23bfe70ee6ef5a 1-163
+packages/starter-agent/behavior/agent/guards/index.ts
+  s_b12ee129ce3fac::t_b3a0c89081c4c4 1-11
+packages/starter-agent/behavior/agent/guards/no-email.ts
+  s_b12ee129ce3fac::t_f0592b342f30cd 1-37
+packages/starter-agent/behavior/agent/guards/path.ts
+  s_b12ee129ce3fac::t_51a7f7c033dc64 1-60
+packages/starter-agent/behavior/agent/guards/session.ts
+  s_b12ee129ce3fac::t_078878653a07e3 1-73
+packages/starter-agent/behavior/agent/guards/shell.ts
+  s_b12ee129ce3fac::t_f47cc78ad592ff 1-407
+packages/starter-agent/behavior/agent/guards/test/gh-identity.test.ts
+  s_b12ee129ce3fac::t_7ece23dcab031e 1-68
+packages/starter-agent/behavior/agent/guards/test/git-identity.test.ts
+  s_b12ee129ce3fac::t_90116b6dfc6eba 1-150
+packages/starter-agent/behavior/agent/guards/test/path.test.ts
+  s_b12ee129ce3fac::t_44161283c01a78 1-53
+packages/starter-agent/behavior/agent/guards/test/shell.test.ts
+  s_b12ee129ce3fac::t_35709a6fc7ba20 1-206
+packages/starter-agent/behavior/agent/profile.ts
+  s_b12ee129ce3fac::t_a279113bcdac77 1-29
+packages/starter-agent/behavior/agent/test/authority.test.ts
+  s_b12ee129ce3fac::t_6be39c3bb8d273 1-120
+packages/starter-agent/behavior/agent/test/budget.test.ts
+  s_b12ee129ce3fac::t_b54d66b3b7a98f 1-179
+packages/starter-agent/behavior/agent/test/claude.test.ts
+  s_b12ee129ce3fac::t_6aac44a46fc538 1-212
+packages/starter-agent/behavior/agent/test/profile.test.ts
+  s_b12ee129ce3fac::t_b6d151986a7aba 1-20
+packages/starter-agent/behavior/capabilities/browser/DESIGN.md
+  s_b12ee129ce3fac::t_ac2dcbd75c260c 1-24
+packages/starter-agent/behavior/capabilities/browser/browse.ts
+  s_b12ee129ce3fac::t_2d146ce3eb5440 1-95
+packages/starter-agent/behavior/capabilities/browser/config.ts
+  s_b12ee129ce3fac::t_5518d4958bf48a 1-31
+packages/starter-agent/behavior/capabilities/browser/context.ts
+  s_b12ee129ce3fac::t_353cea8f55bbba 1-32
+packages/starter-agent/behavior/capabilities/browser/index.ts
+  s_b12ee129ce3fac::t_f290f853c620e7 1-111
+packages/starter-agent/behavior/capabilities/browser/test/browse.test.ts
+  s_b12ee129ce3fac::t_e13ffcf308a16b 1-119
+packages/starter-agent/behavior/capabilities/browser/test/chromium.test.ts
+  s_b12ee129ce3fac::t_75b6527a2c2d46 1-82
+packages/starter-agent/behavior/capabilities/browser/test/config.test.ts
+  s_b12ee129ce3fac::t_95e712ee1039ac 1-15
+packages/starter-agent/behavior/capabilities/calls/DESIGN.md
+  s_b12ee129ce3fac::t_fc63b9db876673 1-407
+packages/starter-agent/behavior/capabilities/calls/arbiter.ts
+  s_b12ee129ce3fac::t_8724560346a263 1-1144
+packages/starter-agent/behavior/capabilities/calls/asks.ts
+  s_b12ee129ce3fac::t_ba8f6751ed7c2d 1-252
+packages/starter-agent/behavior/capabilities/calls/audio.ts
+  s_b12ee129ce3fac::t_c568f2cd71ff6d 1-113
+packages/starter-agent/behavior/capabilities/calls/brain.ts
+  s_b12ee129ce3fac::t_ffa8f9063dd120 1-795
+packages/starter-agent/behavior/capabilities/calls/capabilities/chat.ts
+  s_b12ee129ce3fac::t_e877aec8679fdb 1-50
+packages/starter-agent/behavior/capabilities/calls/capabilities/filled.ts
+  s_b12ee129ce3fac::t_ed3329ad2edf1f 1-10
+packages/starter-agent/behavior/capabilities/calls/capabilities/ledgers.ts
+  s_b12ee129ce3fac::t_1f349d13e1d7fd 1-203
+packages/starter-agent/behavior/capabilities/calls/capabilities/voice.ts
+  s_b12ee129ce3fac::t_56989c1b9685e8 1-140
+packages/starter-agent/behavior/capabilities/calls/capabilities/watch.ts
+  s_b12ee129ce3fac::t_29df67d104bb51 1-136
+packages/starter-agent/behavior/capabilities/calls/config.ts
+  s_b12ee129ce3fac::t_ada57445ed811f 1-117
+packages/starter-agent/behavior/capabilities/calls/context.ts
+  s_b12ee129ce3fac::t_d54b1d23411314 1-128
+packages/starter-agent/behavior/capabilities/calls/context/desktop.ts
+  s_b12ee129ce3fac::t_0459b7bacc8cfc 1-126
+packages/starter-agent/behavior/capabilities/calls/context/disk-worker.ts
+  s_b12ee129ce3fac::t_6080f34fed1fec 1-57
+packages/starter-agent/behavior/capabilities/calls/context/disk.ts
+  s_b12ee129ce3fac::t_b0a036c7028155 1-129
+packages/starter-agent/behavior/capabilities/calls/context/ledgers.ts
+  s_b12ee129ce3fac::t_dff10e9f3d6c6b 1-294
+packages/starter-agent/behavior/capabilities/calls/context/processes.ts
+  s_b12ee129ce3fac::t_af048c14a7fa73 1-156
+packages/starter-agent/behavior/capabilities/calls/context/rooms.ts
+  s_b12ee129ce3fac::t_2a1dcfc2690f8a 1-24
+packages/starter-agent/behavior/capabilities/calls/context/share-feed.ts
+  s_b12ee129ce3fac::t_cce44ff792ea0d 1-82
+packages/starter-agent/behavior/capabilities/calls/context/share-frames.ts
+  s_b12ee129ce3fac::t_a58f7c9f1e72f1 1-52
+packages/starter-agent/behavior/capabilities/calls/context/share-sound.ts
+  s_b12ee129ce3fac::t_9a6b98ab643232 1-88
+packages/starter-agent/behavior/capabilities/calls/context/share.ts
+  s_b12ee129ce3fac::t_f1aca8bb719e81 1-45
+packages/starter-agent/behavior/capabilities/calls/context/speech.ts
+  s_b12ee129ce3fac::t_1d1cf143ffedd1 1-118
+packages/starter-agent/behavior/capabilities/calls/context/voice.ts
+  s_b12ee129ce3fac::t_e85c8b8e7a3288 1-225
+packages/starter-agent/behavior/capabilities/calls/context/voiceLive.ts
+  s_b12ee129ce3fac::t_c4ef294072ec07 1-475
+packages/starter-agent/behavior/capabilities/calls/events.ts
+  s_b12ee129ce3fac::t_246d54d69b88fc 1-209
+packages/starter-agent/behavior/capabilities/calls/index.ts
+  s_b12ee129ce3fac::t_b6e7a5a13d9e5a 1-64
+packages/starter-agent/behavior/capabilities/calls/join.ts
+  s_b12ee129ce3fac::t_53ae22bc146482 1-654
+packages/starter-agent/behavior/capabilities/calls/judge.ts
+  s_b12ee129ce3fac::t_0e90e99f2b06c1 1-369
+packages/starter-agent/behavior/capabilities/calls/ledger.ts
+  s_b12ee129ce3fac::t_d971214774e273 1-78
+packages/starter-agent/behavior/capabilities/calls/macro.ts
+  s_b12ee129ce3fac::t_942a01cdb29653 1-380
+packages/starter-agent/behavior/capabilities/calls/place.ts
+  s_b12ee129ce3fac::t_0201ee4d2222d6 1-283
+packages/starter-agent/behavior/capabilities/calls/replay.ts
+  s_b12ee129ce3fac::t_26e8d3a90ca3c5 1-91
+packages/starter-agent/behavior/capabilities/calls/report.ts
+  s_b12ee129ce3fac::t_09089c68db088d 1-207
+packages/starter-agent/behavior/capabilities/calls/retry.ts
+  s_b12ee129ce3fac::t_b0f5a6dbf44627 1-97
+packages/starter-agent/behavior/capabilities/calls/room.ts
+  s_b12ee129ce3fac::t_3ce0f227645678 1-244
+packages/starter-agent/behavior/capabilities/calls/session.ts
+  s_b12ee129ce3fac::t_28218b1be2aee5 1-575
+packages/starter-agent/behavior/capabilities/calls/share.ts
+  s_b12ee129ce3fac::t_932377cb2e8d5f 1-254
+packages/starter-agent/behavior/capabilities/calls/test/arbiter.test.ts
+  s_b12ee129ce3fac::t_7239f4f7fc19b6 1-1222
+packages/starter-agent/behavior/capabilities/calls/test/asks.test.ts
+  s_b12ee129ce3fac::t_c074391feeb7cf 1-415
+packages/starter-agent/behavior/capabilities/calls/test/audio.test.ts
+  s_b12ee129ce3fac::t_417abf2adc7c0f 1-32
+packages/starter-agent/behavior/capabilities/calls/test/brain.test.ts
+  s_b12ee129ce3fac::t_6595f7f4203f2a 1-316
+packages/starter-agent/behavior/capabilities/calls/test/chat.test.ts
+  s_b12ee129ce3fac::t_35d6f2a40a6cf7 1-14
+packages/starter-agent/behavior/capabilities/calls/test/events.test.ts
+  s_b12ee129ce3fac::t_4515c8bb7c7b2c 1-276
+packages/starter-agent/behavior/capabilities/calls/test/inputs.test.ts
+  s_b12ee129ce3fac::t_95b177ad318a9d 1-94
+packages/starter-agent/behavior/capabilities/calls/test/join.test.ts
+  s_b12ee129ce3fac::t_10320f2e46dfc6 1-594
+packages/starter-agent/behavior/capabilities/calls/test/judge.test.ts
+  s_b12ee129ce3fac::t_683cd1cd2f5594 1-627
+packages/starter-agent/behavior/capabilities/calls/test/macro.test.ts
+  s_b12ee129ce3fac::t_a3e894943b84dc 1-723
+packages/starter-agent/behavior/capabilities/calls/test/place.test.ts
+  s_b12ee129ce3fac::t_86f1a74eba82fa 1-580
+packages/starter-agent/behavior/capabilities/calls/test/processes.test.ts
+  s_b12ee129ce3fac::t_b89ceb1ef15f9d 1-69
+packages/starter-agent/behavior/capabilities/calls/test/report.test.ts
+  s_b12ee129ce3fac::t_99bfb4ac4609b5 1-128
+packages/starter-agent/behavior/capabilities/calls/test/retry.test.ts
+  s_b12ee129ce3fac::t_a64c4af64ae245 1-159
+packages/starter-agent/behavior/capabilities/calls/test/room.test.ts
+  s_b12ee129ce3fac::t_22f94a48ba3c8a 1-227
+packages/starter-agent/behavior/capabilities/calls/test/session.test.ts
+  s_b12ee129ce3fac::t_605560ed712f82 1-602
+packages/starter-agent/behavior/capabilities/calls/test/share.test.ts
+  s_b12ee129ce3fac::t_386745515d8117 1-338
+packages/starter-agent/behavior/capabilities/calls/test/speech.test.ts
+  s_b12ee129ce3fac::t_793222405cf2de 1-123
+packages/starter-agent/behavior/capabilities/calls/test/watch.test.ts
+  s_b12ee129ce3fac::t_1edace107e2cfe 1-505
+packages/starter-agent/behavior/capabilities/calls/test/working.test.ts
+  s_b12ee129ce3fac::t_a82811645aebea 1-199
+packages/starter-agent/behavior/capabilities/calls/types.ts
+  s_b12ee129ce3fac::t_95d6364aece66b 1-223
+packages/starter-agent/behavior/capabilities/calls/voices.ts
+  s_b12ee129ce3fac::t_e42f776d8beb9a 1-58
+packages/starter-agent/behavior/capabilities/calls/watch.ts
+  s_b12ee129ce3fac::t_574d525837282a 1-701
+packages/starter-agent/behavior/capabilities/calls/working.ts
+  s_b12ee129ce3fac::t_726965289ef48d 1-194
+packages/starter-agent/behavior/capabilities/chat/DESIGN.md
+  s_b12ee129ce3fac::t_f673fb7ee76fb0 1-46
+packages/starter-agent/behavior/capabilities/chat/context.ts
+  s_b12ee129ce3fac::t_34e193ce514245 1-54
+packages/starter-agent/behavior/capabilities/chat/entry.ts
+  s_b12ee129ce3fac::t_e0d1ba8e520316 1-55
+packages/starter-agent/behavior/capabilities/chat/history.ts
+  s_b12ee129ce3fac::t_be0cfad4fe1270 1-70
+packages/starter-agent/behavior/capabilities/chat/index.ts
+  s_b12ee129ce3fac::t_e835f3a717174a 1-233
+packages/starter-agent/behavior/capabilities/chat/listen.ts
+  s_b12ee129ce3fac::t_e3d2b740272062 1-125
+packages/starter-agent/behavior/capabilities/chat/macro.ts
+  s_b12ee129ce3fac::t_ec17d9ff681726 1-265
+packages/starter-agent/behavior/capabilities/chat/presence.ts
+  s_b12ee129ce3fac::t_d975a8f95592ac 1-51
+packages/starter-agent/behavior/capabilities/chat/prompt.ts
+  s_b12ee129ce3fac::t_1c7153e8109c44 1-51
+packages/starter-agent/behavior/capabilities/chat/screen.ts
+  s_b12ee129ce3fac::t_7d3f54faa07aea 1-17
+packages/starter-agent/behavior/capabilities/chat/test/capabilities.test.ts
+  s_b12ee129ce3fac::t_43c4a0ad707e71 1-111
+packages/starter-agent/behavior/capabilities/chat/test/listen.test.ts
+  s_b12ee129ce3fac::t_96ef30e345e9e9 1-145
+packages/starter-agent/behavior/capabilities/chat/test/queue.test.ts
+  s_b12ee129ce3fac::t_40e9510a002c9c 1-88
+packages/starter-agent/behavior/capabilities/chat/typing.ts
+  s_b12ee129ce3fac::t_666c838ad56b5f 1-54
+packages/starter-agent/behavior/capabilities/heartbeat/collect.ts
+  s_b12ee129ce3fac::t_2c296e43b4e9a5 1-63
+packages/starter-agent/behavior/capabilities/heartbeat/commit.ts
+  s_b12ee129ce3fac::t_2974ee5b7a47ec 1-206
+packages/starter-agent/behavior/capabilities/heartbeat/config.ts
+  s_b12ee129ce3fac::t_153a90eb41972e 1-71
+packages/starter-agent/behavior/capabilities/heartbeat/context.ts
+  s_b12ee129ce3fac::t_72e4c3775d3a4c 1-139
+packages/starter-agent/behavior/capabilities/heartbeat/guard.ts
+  s_b12ee129ce3fac::t_033b3470fd5c0d 1-29
+packages/starter-agent/behavior/capabilities/heartbeat/index.ts
+  s_b12ee129ce3fac::t_d343cdb2167d4f 1-410
+packages/starter-agent/behavior/capabilities/heartbeat/land.ts
+  s_b12ee129ce3fac::t_54da2e2a68ae1e 1-451
+packages/starter-agent/behavior/capabilities/heartbeat/live.ts
+  s_b12ee129ce3fac::t_fbfa6815cc29a8 1-350
+packages/starter-agent/behavior/capabilities/heartbeat/prompt.ts
+  s_b12ee129ce3fac::t_8314b3514f3c9a 1-21
+packages/starter-agent/behavior/capabilities/heartbeat/prune.ts
+  s_b12ee129ce3fac::t_75dc62ee996fd5 1-178
+packages/starter-agent/behavior/capabilities/heartbeat/repository.ts
+  s_b12ee129ce3fac::t_d115ac6fa1d1ff 1-73
+packages/starter-agent/behavior/capabilities/heartbeat/restart.ts
+  s_b12ee129ce3fac::t_603fd7c4f48552 1-56
+packages/starter-agent/behavior/capabilities/heartbeat/schedules.ts
+  s_b12ee129ce3fac::t_9c77b625033c30 1-79
+packages/starter-agent/behavior/capabilities/heartbeat/state.ts
+  s_b12ee129ce3fac::t_9de43e2ae81d14 1-44
+packages/starter-agent/behavior/capabilities/heartbeat/test/collect.test.ts
+  s_b12ee129ce3fac::t_a97b3220321012 1-53
+packages/starter-agent/behavior/capabilities/heartbeat/test/commit.test.ts
+  s_b12ee129ce3fac::t_afdc95c66b75c8 1-243
+packages/starter-agent/behavior/capabilities/heartbeat/test/github.test.ts
+  s_b12ee129ce3fac::t_9ca20c4e642148 1-9
+packages/starter-agent/behavior/capabilities/heartbeat/test/handlers.test.ts
+  s_b12ee129ce3fac::t_b324059b8fe8cf 1-356
+packages/starter-agent/behavior/capabilities/heartbeat/test/land.test.ts
+  s_b12ee129ce3fac::t_50f0a116ada40c 1-480
+packages/starter-agent/behavior/capabilities/heartbeat/test/landing.test.ts
+  s_b12ee129ce3fac::t_ee2795ddf5f2bc 1-26
+packages/starter-agent/behavior/capabilities/heartbeat/test/prune.test.ts
+  s_b12ee129ce3fac::t_f00387ce28ca46 1-128
+packages/starter-agent/behavior/capabilities/heartbeat/test/restart.test.ts
+  s_b12ee129ce3fac::t_c88497869fdf2b 1-55
+packages/starter-agent/behavior/capabilities/heartbeat/test/rules.test.ts
+  s_b12ee129ce3fac::t_81c1b8dd9103eb 1-81
+packages/starter-agent/behavior/capabilities/heartbeat/test/sandbox.ts
+  s_b12ee129ce3fac::t_51ad8e0b212123 1-152
+packages/starter-agent/behavior/capabilities/heartbeat/test/schedules.test.ts
+  s_b12ee129ce3fac::t_70674c561c3a10 1-82
+packages/starter-agent/behavior/capabilities/heartbeat/test/state.test.ts
+  s_b12ee129ce3fac::t_f2c3cbfd829705 1-23
+packages/starter-agent/behavior/capabilities/heartbeat/test/tick.test.ts
+  s_b12ee129ce3fac::t_723725f4e0ac9e 1-248
+packages/starter-agent/behavior/capabilities/heartbeat/tick.ts
+  s_b12ee129ce3fac::t_bb77d2c7e146ec 1-214
+packages/starter-agent/behavior/capabilities/identity/index.ts
+  s_b12ee129ce3fac::t_5411878d16a6a0 1-61
+packages/starter-agent/behavior/capabilities/identity/prompt.ts
+  s_b12ee129ce3fac::t_810fa2731277bf 1-28
+packages/starter-agent/behavior/capabilities/identity/test/identity.test.ts
+  s_b12ee129ce3fac::t_906efea6f96ce4 1-80
+packages/starter-agent/behavior/capabilities/later/context.ts
+  s_b12ee129ce3fac::t_e2c63053fb4f42 1-15
+packages/starter-agent/behavior/capabilities/later/index.ts
+  s_b12ee129ce3fac::t_f2e3f8da51ab47 1-101
+packages/starter-agent/behavior/capabilities/later/test/later.test.ts
+  s_b12ee129ce3fac::t_c065420920c9e5 1-65
+packages/starter-agent/behavior/capabilities/people/DESIGN.md
+  s_b12ee129ce3fac::t_3d34fccd4a5f4e 1-83
+packages/starter-agent/behavior/capabilities/people/appraise.ts
+  s_b12ee129ce3fac::t_7e4bcb6c57b57a 1-378
+packages/starter-agent/behavior/capabilities/people/ask.ts
+  s_b12ee129ce3fac::t_8eb0720b72d27c 1-87
+packages/starter-agent/behavior/capabilities/people/card.ts
+  s_b12ee129ce3fac::t_4192d0b7e482bd 1-130
+packages/starter-agent/behavior/capabilities/people/config.ts
+  s_b12ee129ce3fac::t_d3f1e7690513f9 1-16
+packages/starter-agent/behavior/capabilities/people/context.ts
+  s_b12ee129ce3fac::t_05aa6a05486b73 1-51
+packages/starter-agent/behavior/capabilities/people/index.ts
+  s_b12ee129ce3fac::t_5f1be82bd00296 1-177
+packages/starter-agent/behavior/capabilities/people/keep.ts
+  s_b12ee129ce3fac::t_f6fc092ad1fd1e 1-146
+packages/starter-agent/behavior/capabilities/people/macro.ts
+  s_b12ee129ce3fac::t_e8a22bcae82ac2 1-29
+packages/starter-agent/behavior/capabilities/people/memory.ts
+  s_b12ee129ce3fac::t_b41137d70280ad 1-51
+packages/starter-agent/behavior/capabilities/people/rules.ts
+  s_b12ee129ce3fac::t_b04af93458bf43 1-381
+packages/starter-agent/behavior/capabilities/people/store.ts
+  s_b12ee129ce3fac::t_043fe5a65f9df5 1-155
+packages/starter-agent/behavior/capabilities/people/test/ask.test.ts
+  s_b12ee129ce3fac::t_15c079f0e7d638 1-98
+packages/starter-agent/behavior/capabilities/people/test/fakes.ts
+  s_b12ee129ce3fac::t_00851cbd7175e7 1-128
+packages/starter-agent/behavior/capabilities/people/test/people.test.ts
+  s_b12ee129ce3fac::t_5d349c5308598c 1-630
+packages/starter-agent/behavior/capabilities/people/test/wiring.test.ts
+  s_b12ee129ce3fac::t_bcdf5b82f1fff5 1-303
+packages/starter-agent/behavior/capabilities/people/transcript.ts
+  s_b12ee129ce3fac::t_05b6cb61e3614e 1-78
+packages/starter-agent/behavior/capabilities/secrets/access.ts
+  s_b12ee129ce3fac::t_97644205715601 1-165
+packages/starter-agent/behavior/capabilities/secrets/attribution.ts
+  s_b12ee129ce3fac::t_9aa81c6b22cf31 1-59
+packages/starter-agent/behavior/capabilities/secrets/clipboard.ts
+  s_b12ee129ce3fac::t_b181ba7f693ae9 1-73
+packages/starter-agent/behavior/capabilities/secrets/config.ts
+  s_b12ee129ce3fac::t_edb1331cd37814 1-29
+packages/starter-agent/behavior/capabilities/secrets/context.ts
+  s_b12ee129ce3fac::t_56454eb4968868 1-70
+packages/starter-agent/behavior/capabilities/secrets/index.ts
+  s_b12ee129ce3fac::t_a0870ebf9c9fe7 1-565
+packages/starter-agent/behavior/capabilities/secrets/ports.ts
+  s_b12ee129ce3fac::t_e41c02d9fcd5bb 1-38
+packages/starter-agent/behavior/capabilities/secrets/test/access.test.ts
+  s_b12ee129ce3fac::t_a27f98808b8494 1-119
+packages/starter-agent/behavior/capabilities/secrets/test/attribution.test.ts
+  s_b12ee129ce3fac::t_bb8e929d0da85e 1-29
+packages/starter-agent/behavior/capabilities/secrets/test/clipboard.test.ts
+  s_b12ee129ce3fac::t_a8471fc7787e24 1-95
+packages/starter-agent/behavior/capabilities/secrets/test/rig.ts
+  s_b12ee129ce3fac::t_bc3d3c3dc864d5 1-86
+packages/starter-agent/behavior/capabilities/secrets/test/secrets.test.ts
+  s_b12ee129ce3fac::t_7511cb475b752f 1-548
+packages/starter-agent/behavior/capabilities/secrets/test/stub.ts
+  s_b12ee129ce3fac::t_055e79e485d445 1-616
+packages/starter-agent/behavior/capabilities/secrets/test/vault.test.ts
+  s_b12ee129ce3fac::t_ecb888a88fd7d8 1-213
+packages/starter-agent/behavior/capabilities/secrets/test/wiring.test.ts
+  s_b12ee129ce3fac::t_3a734064e3ba7f 1-47
+packages/starter-agent/behavior/capabilities/secrets/vault.ts
+  s_b12ee129ce3fac::t_e52c5a4f8b70d8 1-230
+packages/starter-agent/behavior/capabilities/secrets/wire.ts
+  s_b12ee129ce3fac::t_6562e12c10ce46 1-202
+packages/starter-agent/behavior/capabilities/tools/config.ts
+  s_b12ee129ce3fac::t_ac6f18517a8245 1-21
+packages/starter-agent/behavior/capabilities/tools/context.ts
+  s_b12ee129ce3fac::t_e91bafead0eb4d 1-17
+packages/starter-agent/behavior/capabilities/tools/index.ts
+  s_b12ee129ce3fac::t_4b90fc2f9cc669 1-186
+packages/starter-agent/behavior/capabilities/tools/secrets.ts
+  s_b12ee129ce3fac::t_996573d1efe9b0 1-63
+packages/starter-agent/behavior/capabilities/tools/test/capabilities.test.ts
+  s_b12ee129ce3fac::t_04fd5aa4f2d728 1-145
+packages/starter-agent/behavior/capabilities/tools/test/tools.test.ts
+  s_b12ee129ce3fac::t_1ffe708dfa90b2 1-15
+packages/starter-agent/behavior/capabilities/tools/totp.ts
+  s_b12ee129ce3fac::t_41431595fbcdb4 1-43
+packages/starter-agent/behavior/context/addresses.ts
+  s_b12ee129ce3fac::t_be957caa58bf8d 1-181
+packages/starter-agent/behavior/context/children.ts
+  s_b12ee129ce3fac::t_feb1d367f4ea1f 1-91
+packages/starter-agent/behavior/context/config.ts
+  s_b12ee129ce3fac::t_7de247ebac1401 1-94
+packages/starter-agent/behavior/context/credentials.ts
+  s_b12ee129ce3fac::t_06910a58eeb8f3 1-35
+packages/starter-agent/behavior/context/disk.ts
+  s_b12ee129ce3fac::t_ae7ece2e75c624 1-66
+packages/starter-agent/behavior/context/identity.ts
+  s_b12ee129ce3fac::t_2c6b65fee84360 1-65
+packages/starter-agent/behavior/context/index.ts
+  s_b12ee129ce3fac::t_2fbdf06e3da48a 1-472
+packages/starter-agent/behavior/context/log.ts
+  s_b12ee129ce3fac::t_dc13d60a6c07e4 1-35
+packages/starter-agent/behavior/context/relay.ts
+  s_b12ee129ce3fac::t_f612c67558fb1f 1-370
+packages/starter-agent/behavior/context/settings.ts
+  s_b12ee129ce3fac::t_7dc6add511e173 1-39
+packages/starter-agent/behavior/context/shell.ts
+  s_b12ee129ce3fac::t_3a92dbe2765370 1-53
+packages/starter-agent/behavior/context/sops.ts
+  s_b12ee129ce3fac::t_b2edf6d5c1e58a 1-56
+packages/starter-agent/behavior/context/startup.ts
+  s_b12ee129ce3fac::t_6efe3d9ed412f0 1-272
+packages/starter-agent/behavior/context/state.ts
+  s_b12ee129ce3fac::t_9744e8b7c43912 1-58
+packages/starter-agent/behavior/context/stream.ts
+  s_b12ee129ce3fac::t_c113ad6c85ceba 1-82
+packages/starter-agent/behavior/context/telemetry.ts
+  s_b12ee129ce3fac::t_f68ee6f2e1edbc 1-92
+packages/starter-agent/behavior/context/test/children.test.ts
+  s_b12ee129ce3fac::t_6d03d3b6bf9b13 1-84
+packages/starter-agent/behavior/context/test/fakes.ts
+  s_b12ee129ce3fac::t_1c9dc8043adfcb 1-61
+packages/starter-agent/behavior/context/test/identity.test.ts
+  s_b12ee129ce3fac::t_94d7e90e1db035 1-45
+packages/starter-agent/behavior/context/test/relay.test.ts
+  s_b12ee129ce3fac::t_2074b6ba319f43 1-490
+packages/starter-agent/behavior/context/test/startup.test.ts
+  s_b12ee129ce3fac::t_5a7bc39c3c14b7 1-318
+packages/starter-agent/behavior/context/test/subprocess.test.ts
+  s_b12ee129ce3fac::t_8362809ef4b1dd 1-213
+packages/starter-agent/behavior/context/test/telemetry.test.ts
+  s_b12ee129ce3fac::t_8f48d2fe816fd7 1-38
+packages/starter-agent/behavior/contracts.ts
+  s_b12ee129ce3fac::t_05807e3bb1eef7 1-44
+packages/starter-agent/behavior/events/handlers/calls.ts
+  s_b12ee129ce3fac::t_ddbb6543d324eb 1-19
+packages/starter-agent/behavior/events/handlers/chat.ts
+  s_b12ee129ce3fac::t_f467cc41f91b16 1-114
+packages/starter-agent/behavior/events/handlers/failures.ts
+  s_b12ee129ce3fac::t_f8be6cfc52ffc4 1-31
+packages/starter-agent/behavior/events/handlers/heartbeat.ts
+  s_b12ee129ce3fac::t_d7c81cb247b451 1-143
+packages/starter-agent/behavior/events/handlers/identity.ts
+  s_b12ee129ce3fac::t_25d032e9dbb1db 1-54
+packages/starter-agent/behavior/events/handlers/later.ts
+  s_b12ee129ce3fac::t_9ded0078eda2ac 1-32
+packages/starter-agent/behavior/events/handlers/people.ts
+  s_b12ee129ce3fac::t_b2c4ef7255c028 1-75
+packages/starter-agent/behavior/events/handlers/secrets.ts
+  s_b12ee129ce3fac::t_4d3b83dfd33ee9 1-57
+packages/starter-agent/behavior/events/sources/calls.ts
+  s_b12ee129ce3fac::t_c5ab49a5776406 1-47
+packages/starter-agent/behavior/events/sources/chat.ts
+  s_b12ee129ce3fac::t_4b0986b20658a3 1-35
+packages/starter-agent/behavior/index.ts
+  s_b12ee129ce3fac::t_9a66244efaeb07 1-116
+packages/starter-agent/bin/agent
+  s_b12ee129ce3fac::t_c33ec987a046d3 1-4
+packages/starter-agent/bin/guard-hook
+  s_b12ee129ce3fac::t_704c771a06c0ba 1-34
+packages/starter-agent/biome.jsonc
+  s_b12ee129ce3fac::t_ba4faecd941894 1-11
+packages/starter-agent/bun.lock
+  s_b12ee129ce3fac::t_f391dabae6bd1a 6,8-27,30-35,40-42,44,46,48,50,52,54,56,58-60,66-67,120-166,168,170,172,174,176,178-216,220-222,224,226,228,230,232,234,236,240-252,254-282,286-287,290-294,296,298,300,302,304-306,310-319,322,324,326,328,332-338,340-344,350,352,354,358-364,368-377,380-385,388-394,396-400,404-418,420-434,438,440,442,444,446,448-450,452,454-458,462-466,468,470,472-486,490-506,510-511,514-516,520-526,528,530,532,534,536,538,540,542,546-547,550-552,554,558-560,562,564-566,570-574,576,578,580-582,588-596,600-616,618,622,624,628-632,636,638,642-742,744,746,748
+packages/starter-agent/bunfig.toml
+  s_b12ee129ce3fac::t_c1033c02d7f54b 1-5
+packages/starter-agent/cli.ts
+  s_b12ee129ce3fac::t_80f36018ec0196 1-234
+packages/starter-agent/index.ts
+  s_b12ee129ce3fac::t_f0f7f7f01ec822 1-245
+packages/starter-agent/package.json
+  s_b12ee129ce3fac::t_2e03197eee48b6 1-41
+packages/starter-agent/test/guard-hook.test.ts
+  s_b12ee129ce3fac::t_4c669bf3e5ba5f 1-52
+packages/starter-agent/test/invoke.ts
+  s_b12ee129ce3fac::t_d008efe5770f9e 1-74
+packages/starter-agent/test/no-audio.test.ts
+  s_b12ee129ce3fac::t_d8eeeb70e05fb8 1-15
+packages/starter-agent/test/speech-live.ts
+  s_b12ee129ce3fac::t_ae9e12b14e6617 1-147
+packages/starter-agent/tsconfig.json
+  s_b12ee129ce3fac::t_d5d7f46bd341c5 1-22
+services/agent_harness_service/AGENTS.md
+  s_b12ee129ce3fac::t_ccc95abc9dd2f1 58-85,96-98,257-270,339
+services/agent_harness_service/Cargo.toml
+  s_b12ee129ce3fac::t_d172d5978dde89 42,76,114-115,127,201,207
+services/agent_harness_service/src/agent_git.rs
+  s_b12ee129ce3fac::t_cff27acfe56019 1-135
+services/agent_harness_service/src/agent_git/test.rs
+  s_b12ee129ce3fac::t_f33e72aa761d9c 1-26
+services/agent_harness_service/src/anthropic_gateway.rs
+  s_b12ee129ce3fac::t_333c89765c7d60 36,142-145,175-176,179-190,193-196,211-223,338-370,455-472,631-639,649-657
+services/agent_harness_service/src/anthropic_gateway/brain.rs
+  s_b12ee129ce3fac::t_f54824659fe57d 1-110
+services/agent_harness_service/src/anthropic_gateway/test.rs
+  s_b12ee129ce3fac::t_406a44355d96b9 492-656
+services/agent_harness_service/src/api.rs
+  s_b12ee129ce3fac::t_305a04c4ea4532 79,85,137,143,202-214,379,397,469
+services/agent_harness_service/src/api/swagger.rs
+  s_b12ee129ce3fac::t_a11713a58c69d6 72-73,145,233-234
+services/agent_harness_service/src/computers.rs
+  s_b12ee129ce3fac::t_20f2aaae49e2e0 8,38,108-117,134-138,167-172
+services/agent_harness_service/src/computers/agent_enrollment.rs
+  s_b12ee129ce3fac::t_4b38d597969a61 1-87
+services/agent_harness_service/src/config.rs
+  s_b12ee129ce3fac::t_f30b6350989438 53-57,206-209,266-272,501,525,542,587
+services/agent_harness_service/src/config/test.rs
+  s_b12ee129ce3fac::t_ce468f6adb6906 52-57,135-140,262,280-299,334-349
+services/agent_harness_service/src/main.rs
+  s_b12ee129ce3fac::t_29a2a93a8d8de4 10,35,37,839-842,1414-1424,1427-1432,1434-1445,1928-1935,2107-2119,2140,2170,2637-2639
+services/agent_harness_service/src/openapi.rs
+  s_b12ee129ce3fac::t_0f870b379c1032 5
+services/agent_harness_service/src/public_mcp.rs
+  s_b12ee129ce3fac::t_40e6f859bbf454 2,68,80-88,151-159,161-166
+services/agent_harness_service/src/public_mcp/agent_keys.rs
+  s_b12ee129ce3fac::t_8444da536d8064 1-76
+services/agent_harness_service/src/public_mcp/agent_keys/test.rs
+  s_b12ee129ce3fac::t_c619e80064bb9f 1-56
+services/agent_harness_service/src/speech_gateway.rs
+  s_b12ee129ce3fac::t_c6eab05b17c85b 1-494
+services/agent_harness_service/src/speech_gateway/protocol.rs
+  s_b12ee129ce3fac::t_4bf7fc33838101 1-276
+services/agent_harness_service/src/speech_gateway/test.rs
+  s_b12ee129ce3fac::t_c0c7fb63ec043f 1-544
+services/agent_harness_service/src/speech_gateway/voices.rs
+  s_b12ee129ce3fac::t_80477e15e0e383 1-269
+services/agent_harness_service/src/voice_gateway.rs
+  s_b12ee129ce3fac::t_9f3361ca28de32 1-148
+services/authentication_service/AGENTS.md
+  s_b12ee129ce3fac::t_23f3b29ad8931c 30-32
+services/authentication_service/Cargo.toml
+  s_b12ee129ce3fac::t_dae7587d668bb2 87-88
+services/authentication_service/src/api.rs
+  s_b12ee129ce3fac::t_26ba9b4e734b55 140-148,181-190
+services/authentication_service/src/api/context.rs
+  s_b12ee129ce3fac::t_43a50c4daeaf76 187-207,302-303
+services/authentication_service/src/api/swagger.rs
+  s_b12ee129ce3fac::t_36924206a0c6ad 208-212,387-391
+services/authentication_service/src/api/user/stripe/shared.rs
+  s_b12ee129ce3fac::t_2f90fec7a921e9 125
+services/authentication_service/src/outbound.rs
+  s_b12ee129ce3fac::t_f9f12a7ed2b7f8 3
+services/authentication_service/src/outbound/agent_addresses.rs
+  s_b12ee129ce3fac::t_a380dad7df1eff 1-129
+services/authentication_service/src/outbound/agent_addresses/test.rs
+  s_b12ee129ce3fac::t_9fb22da81216e5 1-27
+services/authentication_service/src/server.rs
+  s_b12ee129ce3fac::t_97f8a07712ca6e 739-762,899
+services/mcp_auth_proxy/AGENTS.md
+  s_b12ee129ce3fac::t_4d8a48d9c80056 128-135
+services/mcp_auth_proxy/Cargo.toml
+  s_b12ee129ce3fac::t_3e3f5def35c9ca 16,44,70
+services/mcp_auth_proxy/README.md
+  s_b12ee129ce3fac::t_72780e133d2bdd 273-285
+services/mcp_auth_proxy/src/domain.rs
+  s_b12ee129ce3fac::t_e4474296d62965 19-22
+services/mcp_auth_proxy/src/domain/user_api_keys.rs
+  s_b12ee129ce3fac::t_187b9e1e9f1416 1-29
+services/mcp_auth_proxy/src/inbound.rs
+  s_b12ee129ce3fac::t_e18f178d3469ee 8
+services/mcp_auth_proxy/src/inbound/axum_router.rs
+  s_b12ee129ce3fac::t_271dab33627f82 931-935,943,962-966,1017
+services/mcp_auth_proxy/src/inbound/axum_router/test.rs
+  s_b12ee129ce3fac::t_97553b7cd73fc8 1608,1628-1789
+services/mcp_auth_proxy/src/inbound/middleware.rs
+  s_b12ee129ce3fac::t_0c3b29fd4a19c0 1,35-36,118,126,133-145
+tooling/scripts/starter-agent-lock.sh
+  s_b12ee129ce3fac::t_f24e2f1102b434 1-29
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_b12ee129ce3fac::t_7f149d445c5277 34-36,40-41,83-85,188-198,226,249,264,290,331,336-341,344-349,587-592,595-612,614,617,622,634,638,655-656,672-673,675
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_b12ee129ce3fac::t_eaef346267d247 33,95-98,114,122,180-183,284,345-351,357,382-387,465
+tooling/xtask/crates/xtask_local/src/local/local_env.rs
+  s_b12ee129ce3fac::t_f7ac286b35832d 372-382,727-729
+tooling/xtask/crates/xtask_local/src/local/local_env/test.rs
+  s_b12ee129ce3fac::t_8fd5db0b9e3f89 161-163,281-284
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
+  s_b12ee129ce3fac::t_936881873efca4 12-13
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+  s_b12ee129ce3fac::t_b47009ffc43b3e 106-112,119-120,180-190,521
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b66799212f6c73c2ce6139d0f557458a8825a48",
+  "prompts": {},
+  "sessions": {
+    "s_3c6362fd17dcc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02467add-a007-41c9-9280-bad5f33c09fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_b12ee129ce3fac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2933dfe4-656a-4f35-b942-c6676e134c3c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
