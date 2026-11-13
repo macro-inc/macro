@@ -1407,7 +1407,10 @@ function DateCell(props: GridCellProps) {
   );
 }
 
-/** Multi-line text keeps its arrows until the caret is on the first or last line. */
+/**
+ * Multi-line text keeps its arrows until the caret is on the first or last
+ * line, whether lines end at a newline or wrap.
+ */
 function caretOnEdgeLine(
   target: EventTarget | null,
   direction: 1 | -1
@@ -1421,5 +1424,12 @@ function caretOnEdgeLine(
   rest.selectNodeContents(target);
   if (direction === 1) rest.setStart(caret.endContainer, caret.endOffset);
   else rest.setEnd(caret.startContainer, caret.startOffset);
-  return !rest.toString().includes('\n');
+  if (rest.toString().includes('\n')) return false;
+  const line = caret.getBoundingClientRect();
+  // Without a caret box (an empty editor) there is no wrapped line to move to.
+  if (!line.height) return true;
+  const middle = line.top + line.height / 2;
+  return Array.from(rest.getClientRects()).every((box) =>
+    direction === 1 ? box.top <= middle : box.bottom >= middle
+  );
 }
