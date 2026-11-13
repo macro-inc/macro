@@ -4,15 +4,18 @@ import { useOptionalChanges } from '@app/features/changes/context/changes-contro
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Permissions } from '@core/component/SharePermissions';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
@@ -43,6 +46,7 @@ import {
   PrTimelineSkeleton,
   PrTitleSkeleton,
 } from '../component/PrSkeletons';
+import { PrSplitHeader } from '../component/PrSplitHeader';
 import {
   PR_PILL_CLASS,
   PrStatusChip,
@@ -280,39 +284,61 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
         pullRequestChangeCounts={detail.changeCounts()}
       >
         <ChangesSplit>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-              <HeaderIsland class="px-1">
-                <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-              </HeaderIsland>
-              <ViewShell.TopBarTitle class="gap-2">
-                <Show when={detail.data()?.pullRequest.status}>
-                  {(status) => <PrStatusIcon status={status()} />}
+          {/* Touch shows the PR's split header, as a hosted PR does. */}
+          <SplitHeaderScope.Root when={isTouchDevice()}>
+            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+              <Show
+                when={isTouchDevice()}
+                fallback={
+                  <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
+                    <HeaderIsland class="px-1">
+                      <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+                    </HeaderIsland>
+                    <ViewShell.TopBarTitle class="gap-2">
+                      <Show when={detail.data()?.pullRequest.status}>
+                        {(status) => <PrStatusIcon status={status()} />}
+                      </Show>
+                      <span class="min-w-0 truncate text-sm font-semibold">
+                        {name()}
+                      </span>
+                      <div class="shrink-0">
+                        <SplitFileMenu
+                          id={props.foreignEntityId}
+                          itemType="foreign"
+                          name={name()}
+                          entityKind="pr"
+                          permissions={Permissions.CAN_VIEW}
+                          ops={operations()}
+                        />
+                      </div>
+                    </ViewShell.TopBarTitle>
+                    <PrDetailActions detail={detail.data()} actions={actions} />
+                  </ViewShell.TopBar>
+                }
+              >
+                <SplitHeaderScope.TopBar
+                  leading={<SplitPanel.CloseButton class="shrink-0" />}
+                />
+                <Show when={detail.data()}>
+                  {(data) => (
+                    <PrSplitHeader detail={data()} actions={actions} />
+                  )}
                 </Show>
-                <span class="min-w-0 truncate text-sm font-semibold">
-                  {name()}
-                </span>
-                <div class="shrink-0">
-                  <SplitFileMenu
-                    id={props.foreignEntityId}
-                    itemType="foreign"
-                    name={name()}
-                    entityKind="pr"
-                    permissions={Permissions.CAN_VIEW}
-                    ops={operations()}
-                  />
-                </div>
-              </ViewShell.TopBarTitle>
-              <PrDetailActions detail={detail.data()} actions={actions} />
-            </ViewShell.TopBar>
-            <PrDetailContent
-              foreignEntityId={props.foreignEntityId}
-              data={detail.data()}
-              status={detail.query.status}
-              discussionSource={detail.discussionSource}
-              onRetry={() => fireAndForget(detail.query.refetch(), 'pr-detail')}
-            />
-          </div>
+                <SplitHeaderRight>
+                  <PrDetailActions detail={detail.data()} actions={actions} />
+                </SplitHeaderRight>
+              </Show>
+              <PrDetailContent
+                foreignEntityId={props.foreignEntityId}
+                data={detail.data()}
+                status={detail.query.status}
+                discussionSource={detail.discussionSource}
+                onRetry={() =>
+                  fireAndForget(detail.query.refetch(), 'pr-detail')
+                }
+              />
+            </div>
+          </SplitHeaderScope.Root>
         </ChangesSplit>
       </PrChangesProvider>
     </SidePanel.Root>
