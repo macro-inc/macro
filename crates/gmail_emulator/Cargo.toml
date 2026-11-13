@@ -5,6 +5,11 @@ publish = false
 version = "0.1.0"
 description = "Test support: a stateful fake of the Google APIs Macro's email, calendar and sign-in code call (Gmail REST, Calendar REST with push channels, People, OAuth, signed Pub/Sub push), in process or as a standalone binary."
 
+[[bin]]
+name = "gmail_emulator"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 askama = { workspace = true }
 axum = { workspace = true }

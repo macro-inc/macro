@@ -89,7 +89,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 - `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
   and `call_record::get::get_accessible_call_ids` (uncached) share one run of
   their queries between concurrent identical callers through `single_flight`.
-  The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
+  The unit tests compile with the cache off; `tests/it/coalesced_access_lookups.rs`
   covers the cached path and needs its own user ids per test.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
