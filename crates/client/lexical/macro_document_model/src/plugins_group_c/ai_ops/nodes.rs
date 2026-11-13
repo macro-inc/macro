@@ -18,7 +18,7 @@ macro_rules! resolve {
 }
 
 /// Source `Doc.anchor`: the node by id, climbed out of inline nodes.
-fn anchor(tx: &Transaction<'_>, id: &str) -> OpResult<NodeKey> {
+pub(super) fn anchor(tx: &Transaction<'_>, id: &str) -> OpResult<NodeKey> {
     let mut key = resolve!(by_id(tx, id));
     let view = tx.view();
     while view.is_inline(key) {
@@ -33,13 +33,13 @@ fn anchor(tx: &Transaction<'_>, id: &str) -> OpResult<NodeKey> {
 /// What removing `key` detaches, as Lexical does it and the native hooks port
 /// it: `subtree` goes whole; each of `nodes` goes without its children, which
 /// a list merge moves elsewhere.
-struct Detached {
+pub(super) struct Detached {
     subtree: NodeKey,
     nodes: Vec<NodeKey>,
 }
 
 impl Detached {
-    fn contains(&self, view: StateRef<'_>, key: NodeKey) -> bool {
+    pub(super) fn contains(&self, view: StateRef<'_>, key: NodeKey) -> bool {
         key == self.subtree || view.has_ancestor(key, self.subtree) || self.nodes.contains(&key)
     }
 }
@@ -48,7 +48,7 @@ impl Detached {
 /// list/item.rs `remove`): every parent left empty that is not a root or
 /// shadow root and cannot be empty goes too; an item removed between two
 /// nested-list wrappers merges their lists and removes the second wrapper.
-fn detached_by_remove(tx: &Transaction<'_>, key: NodeKey) -> Detached {
+pub(super) fn detached_by_remove(tx: &Transaction<'_>, key: NodeKey) -> Detached {
     let view = tx.view();
     let mut subtree = key;
     while let Some(parent) = view.parent(subtree) {

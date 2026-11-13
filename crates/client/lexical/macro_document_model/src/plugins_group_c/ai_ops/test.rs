@@ -969,3 +969,64 @@ fn a_move_position_takes_source_key_order() {
         assert_eq!(order(&native), expected, "{op}");
     }
 }
+
+/// Drift guard: the move planner predicts what a removal detaches with a copy
+/// of `$removeNode`, `ListItemNode.remove` and `merge_lists`. For every corpus
+/// case that removes or moves a node, run the real removal and require the
+/// prediction to name exactly the nodes left unattached.
+#[test]
+fn the_removal_prediction_matches_the_real_removal() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let mut checked = 0;
+    for entry in &corpus {
+        let Some(op) = entry.ops.first() else {
+            continue;
+        };
+        let (Some(kind), Some(Value::String(node))) = (op["kind"].as_str(), op.get("node")) else {
+            continue;
+        };
+        if kind != "removeNode" && kind != "moveNode" {
+            continue;
+        }
+        let mut native = block_editor();
+        load(&mut native, &entry.loaded);
+        let mut outcome = None;
+        native
+            .update(|tx| {
+                let resolved = if kind == "moveNode" {
+                    super::nodes::anchor(tx, node)?
+                } else {
+                    super::by_id(tx, node)?
+                };
+                let Ok(key) = resolved else {
+                    return Ok(());
+                };
+                let view = tx.view();
+                let before: Vec<NodeKey> =
+                    view.descendants(view.root()).map(|(key, _)| key).collect();
+                let detached = super::nodes::detached_by_remove(tx, key);
+                let predicted: Vec<NodeKey> = before
+                    .iter()
+                    .copied()
+                    .filter(|key| detached.contains(tx.view(), *key))
+                    .collect();
+                tx.remove(key, false)?;
+                let after = tx.view();
+                let actual: Vec<NodeKey> = before
+                    .iter()
+                    .copied()
+                    .filter(|key| !after.has_ancestor(*key, NodeKey::ROOT))
+                    .collect();
+                outcome = Some((predicted, actual));
+                Ok(())
+            })
+            .expect("remove");
+        let Some((predicted, actual)) = outcome else {
+            continue;
+        };
+        assert_eq!(predicted, actual, "{}", entry.name);
+        checked += 1;
+    }
+    // Every removeNode/moveNode case whose node resolves.
+    assert!(checked >= 11, "checked {checked}");
+}
