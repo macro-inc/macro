@@ -528,6 +528,7 @@ jobs:
             - '.github/workflows/sdk-check.yml'
           email_e2e:
             - 'services/email_service/**'
+            - 'services/email_scheduled_handler/**'
             - 'crates/email/**'
             - 'crates/email_*/**'
             - 'crates/graphql_email/**'

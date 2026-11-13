@@ -192,6 +192,8 @@ async fn renew(
     lost: Arc<AtomicBool>,
     cancel: CancellationToken,
 ) {
+    // The lease runs from the last renewal the registry confirmed.
+    let mut confirmed = tokio::time::Instant::now();
     loop {
         tokio::select! {
             () = cancel.cancelled() => return,
@@ -208,9 +210,14 @@ async fn renew(
                 lost.store(true, Ordering::Relaxed);
                 return;
             }
-            Ok(_) => {}
+            Ok(_) => confirmed = tokio::time::Instant::now(),
             Err(error) => {
                 tracing::warn!(error = ?error, "could not renew the Redis database lease");
+                // Unrenewed for its whole length, the lease has run out.
+                if confirmed.elapsed() >= LEASE {
+                    lost.store(true, Ordering::Relaxed);
+                    return;
+                }
             }
         }
     }

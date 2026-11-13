@@ -71,6 +71,9 @@ impl ApiClient {
             .text()
             .await
             .context("the GraphQL API answered an unreadable body")?;
+        if !status.is_success() {
+            bail!("the GraphQL API answered {status}: {text}");
+        }
         let mut answer: Value = serde_json::from_str(&text)
             .context(format!("the GraphQL API answered {status}: {text}"))?;
         if let Some(errors) = answer.get("errors").filter(|errors| !errors.is_null()) {
