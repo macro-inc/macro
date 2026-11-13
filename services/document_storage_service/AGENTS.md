@@ -124,12 +124,15 @@ threads, pins, recents, notifications, folders, activity.
 - Sessions carry the application name `document_storage_service`, so
   `pg_stat_activity` and database monitoring can attribute them.
 - Each pool reports `db.client.connection.count` (state `idle`/`used`),
-  `db.client.connection.max` and `db.client.connection.wait_time`, tagged
+  `db.client.connection.max`, `db.client.connection.used` (a histogram of the
+  in-use count sampled every second, for peaks the once-a-minute gauges miss)
+  and `db.client.connection.wait_time`, tagged
   `db.client.connection.pool.name` (`primary`/`readonly`). The wait is a
   once-a-second probe, not a per-query timing: sqlx acquires inside each query.
-  It reports zero while a connection is idle and queues like a query when none
-  is, so it measures the pool's queue only. sqlx's slow-acquire warnings with a
-  zero wait and `used` below `max` mean the task itself is slow.
+  It reports zero while a connection is idle. When none is, it waits like a
+  query: in the queue at the limit, or for a new connection below it. It does
+  not time the health check sqlx runs on an idle connection, so sqlx's
+  slow-acquire warnings can appear while the probe reads zero.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.

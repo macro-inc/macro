@@ -20,6 +20,10 @@ const POOL_NAME: &str = "db.client.connection.pool.name";
 const CONNECTION_STATE: &str = "db.client.connection.state";
 const PROBE_OUTCOME: &str = "outcome";
 
+const USED_CONNECTIONS_BOUNDARIES: [f64; 13] = [
+    0.0, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 75.0, 100.0,
+];
+
 const WAIT_TIME_BOUNDARIES_SECONDS: [f64; 13] = [
     0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0,
 ];
@@ -118,6 +122,7 @@ pub(crate) async fn connection_wait(pool: &PgPool) -> (Duration, ProbeOutcome) {
 struct PoolInstruments {
     connections: Gauge<u64>,
     max_connections: Gauge<u64>,
+    used_connections: Histogram<u64>,
     wait_time: Histogram<f64>,
 }
 
@@ -134,6 +139,13 @@ impl PoolInstruments {
                 .u64_gauge("db.client.connection.max")
                 .with_description("The pool's connection limit")
                 .build(),
+            // The gauges export one reading a minute; this keeps every
+            // second's, so short bursts show in its percentiles and maximum.
+            used_connections: meter
+                .u64_histogram("db.client.connection.used")
+                .with_description("Connections in use, sampled once a second")
+                .with_boundaries(USED_CONNECTIONS_BOUNDARIES.to_vec())
+                .build(),
             wait_time: meter
                 .f64_histogram("db.client.connection.wait_time")
                 .with_description("Time a once-a-second probe queued for a pooled connection")
@@ -149,10 +161,30 @@ impl PoolInstruments {
 ///
 /// sqlx waits for a connection inside each query and exposes no per-query
 /// hook, so the wait is sampled: with every connection in use, the probe
-/// queues behind the same callers a query would.
+/// queues behind the same callers a query would. Occupancy is reported on its
+/// own schedule, so a probe stuck in a full pool's queue does not pause it.
 pub(crate) async fn report_usage(pool_name: &'static str, pool: PgPool, cancel: CancellationToken) {
     let instruments = PoolInstruments::new();
     let pool_attribute = KeyValue::new(POOL_NAME, pool_name);
+
+    tokio::join!(
+        report_occupancy(&instruments, &pool_attribute, &pool, &cancel),
+        report_connection_wait(&instruments, &pool_attribute, &pool, &cancel),
+    );
+}
+
+fn probe_ticker() -> tokio::time::Interval {
+    let mut ticker = tokio::time::interval(PROBE_INTERVAL);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    ticker
+}
+
+async fn report_occupancy(
+    instruments: &PoolInstruments,
+    pool_attribute: &KeyValue,
+    pool: &PgPool,
+    cancel: &CancellationToken,
+) {
     let idle_attributes = [
         pool_attribute.clone(),
         KeyValue::new(CONNECTION_STATE, "idle"),
@@ -161,9 +193,7 @@ pub(crate) async fn report_usage(pool_name: &'static str, pool: PgPool, cancel: 
         pool_attribute.clone(),
         KeyValue::new(CONNECTION_STATE, "used"),
     ];
-
-    let mut ticker = tokio::time::interval(PROBE_INTERVAL);
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut ticker = probe_ticker();
 
     loop {
         tokio::select! {
@@ -172,19 +202,36 @@ pub(crate) async fn report_usage(pool_name: &'static str, pool: PgPool, cancel: 
         }
 
         let idle = u64::try_from(pool.num_idle()).unwrap_or(u64::MAX);
-        let open = u64::from(pool.size());
+        let used = u64::from(pool.size()).saturating_sub(idle);
         instruments.connections.record(idle, &idle_attributes);
+        instruments.connections.record(used, &used_attributes);
         instruments
-            .connections
-            .record(open.saturating_sub(idle), &used_attributes);
+            .used_connections
+            .record(used, std::slice::from_ref(pool_attribute));
         instruments.max_connections.record(
             u64::from(pool.options().get_max_connections()),
-            std::slice::from_ref(&pool_attribute),
+            std::slice::from_ref(pool_attribute),
         );
+    }
+}
+
+async fn report_connection_wait(
+    instruments: &PoolInstruments,
+    pool_attribute: &KeyValue,
+    pool: &PgPool,
+    cancel: &CancellationToken,
+) {
+    let mut ticker = probe_ticker();
+
+    loop {
+        tokio::select! {
+            () = cancel.cancelled() => break,
+            _ = ticker.tick() => {}
+        }
 
         let (waited, outcome) = tokio::select! {
             () = cancel.cancelled() => break,
-            sample = connection_wait(&pool) => sample,
+            sample = connection_wait(pool) => sample,
         };
         instruments.wait_time.record(
             waited.as_secs_f64(),
