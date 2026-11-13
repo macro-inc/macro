@@ -49,6 +49,19 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     assert!(!tools.system_prompt().contains("execution.views.present"));
 }
 
+#[test]
+fn replies_are_told_never_to_show_how_the_bot_works() {
+    // The channel shows only the reply text, so the prompt is what keeps code,
+    // the SDK and tool names out of it.
+    let prompt = ChannelBotTools::new(Arc::new(NeverRuns))
+        .system_prompt()
+        .to_owned();
+    assert!(prompt.contains(
+        "never mention code, programs, scripts, the SDK, requests, `ExecuteCode` or other \
+         tool names, and never show the code you ran"
+    ));
+}
+
 fn code_mode_tools() -> CodeModeTools {
     CodeModeTools {
         direct: ai_tools::tools_for_channel_bot_code_mode().toolset,
