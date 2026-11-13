@@ -1,0 +1,23 @@
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Routines.tsx
+  s_471e2069ef160b::t_9712893b08cb3d 101-103,113
+apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
+  s_471e2069ef160b::t_9712893b08cb3d 105
+apps/web/src/features/dynamic-ui/queries/agent-panes.ts
+  s_471e2069ef160b::t_9712893b08cb3d 12-13,21-22,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0d44d52a1d88694b7080ecc9c21c1371d5ce98c7",
+  "prompts": {},
+  "sessions": {
+    "s_471e2069ef160b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae591ca2-a46b-438d-9342-5bfaf81ffb1e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
