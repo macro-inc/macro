@@ -1,0 +1,30 @@
+crates/gitai/src/outbound/dynamodb/test.rs
+  s_e003e6a508b15c::t_b993b46b77b24a 1-24
+crates/gitai/src/domain/redaction.rs
+  s_e003e6a508b15c::t_9d70c31a9b3b58 165,167
+crates/gitai/src/outbound/dynamodb.rs
+  s_e003e6a508b15c::t_9d70c31a9b3b58 282
+  s_e003e6a508b15c::t_b993b46b77b24a 24-26
+  s_e003e6a508b15c::t_f4bec46d0c1b2a 262-264,271-274,276,281
+crates/gitai/src/domain/models.rs
+  s_e003e6a508b15c::t_f4bec46d0c1b2a 217-218,221
+crates/gitai/src/domain/redaction/test.rs
+  s_e003e6a508b15c::t_a2481613074744 195-197
+  s_e003e6a508b15c::t_da76a34e00dac6 194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "902b98514f3195df69716e91df76a675cedfe240",
+  "prompts": {},
+  "sessions": {
+    "s_e003e6a508b15c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a82c37e1-00f7-4ac9-9bb5-e0f8d2293a0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
