@@ -20,7 +20,7 @@ Answer with JSON only, no prose and no code fence, in the shape the request asks
 Before you, the drafter looked up by name each item the request names, as the owner would see it.
 
 {items}
-- A name listed under "Left for the owner" has no item, or several items have it: don't guess, don't create it and don't search for it in code. Leave it out, with a filter without its `ids` or a knob whose value is `""`, and the owner picks it before saving.
+- A name listed under "Left for the owner" has no item, several items have it, or it couldn't be looked up: don't guess, don't create it and don't search for it in code. Leave it out, with a filter without its `ids` or a knob whose value is `""`, and the owner picks it before saving. The one exception is an item the request asks to make new that no item has the name of: if you may write `setup`, it makes that item.
 - Anything else the code needs (the owner, a person by email address, their labels' or properties' ids), it reads from the SDK when it runs.
 
 ## How to write it

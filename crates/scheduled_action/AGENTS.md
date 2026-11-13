@@ -46,7 +46,8 @@ each run.
   (`RoutineCode::sdk_areas`). The `NameLookups` port (document storage's
   `POST /search/names`, as the person) finds each name, and `settle` keeps
   it only when exactly one item of its likeliest kind has it; a name none
-  or several have is left for the person to pick, never guessed. A name a
+  or several have is left for the person to pick, never guessed (unless no
+  item has it and the request asks to make it, which `setup` may do). A name a
   likelier kind the lookup couldn't search (`NameAnswers::unavailable`)
   might have is left as unknown, and names the lookup would refuse (empty
   past a leading `#`/`@`, over 200 characters) are never asked. One call
@@ -73,11 +74,12 @@ each run.
   Saving's checks (`DraftChecks`, the service's `check_draft`) run on the result; only
   their problems, with the SDK declarations they name, go back to the
   model, at most `DirectTuning::max_fixes` times. A whole routine needs a
-  trigger of its own; only a step drafted for a routine without one is
-  checked on a passing stand-in. Cut off by `DRAFT_TIMEOUT` or shutdown, a
+  trigger of its own; only a step drafted for a routine without one, or
+  whose trigger isn't one yet, is checked on a passing stand-in. Cut off by `DRAFT_TIMEOUT` or shutdown, a
   draft still hands back its last check and what setup made
   (`DirectSoFar`); cut off while setup runs, it fails saying it may have
-  made something. The calls are admitted and billed as the person's
+  made something, as does a draft that ends with no check since its setup
+  failed partway through. The calls are admitted and billed as the person's
   automation usage (`DraftModel`, `AiFeature::Automation`). Progress
   reports the admission (`DraftMilestone::Admitted`, which answers a
   background start before anything is looked up), what was found and

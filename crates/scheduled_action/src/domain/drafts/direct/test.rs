@@ -675,6 +675,7 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
             asked("Design", vec![ItemKind::Channel]),
             asked("Ops", Vec::new()),
             asked("Nobody", vec![ItemKind::Person]),
+            asked("Planning", Vec::new()),
         ],
         NameAnswers {
             answers: vec![
@@ -704,6 +705,13 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
                     name: "Nobody".into(),
                     matches: vec![item(ItemKind::Person, "Nobody Else", "person", false)],
                 },
+                NameAnswer {
+                    name: "Planning".into(),
+                    matches: vec![
+                        item(ItemKind::Channel, "planning", "channel-2", true),
+                        item(ItemKind::Project, "Planning", "folder-2", true),
+                    ],
+                },
             ],
             unavailable: Vec::new(),
         },
@@ -731,6 +739,12 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
                 name: "Nobody".into(),
                 kind: Some(ItemKind::Person),
                 matches: 0,
+            },
+            // With no likeliest kind, a channel and a folder are two.
+            LeftName {
+                name: "Planning".into(),
+                kind: None,
+                matches: 2,
             },
         ]
     );
@@ -789,6 +803,8 @@ struct SetsUp {
     /// Cancels this token and never ends, as setup still running when the
     /// harness shuts down.
     hangs: Option<CancellationToken>,
+    /// Whose background drafts its owner cancels while setup runs.
+    cancels: Option<Arc<Rows>>,
     ran: Mutex<Vec<(String, Uuid)>>,
     /// The areas each reference was asked for.
     areas: Mutex<Vec<Vec<String>>>,
@@ -801,6 +817,7 @@ impl SetsUp {
             returns,
             fails: Mutex::new(VecDeque::new()),
             hangs: None,
+            cancels: None,
             ran: Mutex::new(Vec::new()),
             areas: Mutex::new(Vec::new()),
         }
@@ -840,6 +857,11 @@ impl RoutineCode for SetsUp {
         if let Some(hangs) = &self.hangs {
             hangs.cancel();
             std::future::pending::<()>().await;
+        }
+        if let Some(rows) = &self.cancels {
+            for job in rows.jobs.lock().unwrap().values_mut() {
+                job.phase = jobs::DraftJobPhase::Cancelled;
+            }
         }
         let fails = self.fails.lock().unwrap().pop_front();
         match fails {
@@ -910,12 +932,20 @@ impl RoutineCode for SetsUp {
 const SDK_AREAS: &[&str] = &["ai", "channels", "tasks", "email", "databases"];
 
 fn setting_up(code: &Arc<SetsUp>, model: &Arc<Model>) -> RoutineDrafts<SetsUp, Sessions> {
-    let rows = Arc::new(Rows::default());
-    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    setting_up_in(code, model, &Arc::new(Rows::default()))
+}
+
+/// [`setting_up`], keeping its drafts' rows in `rows`.
+fn setting_up_in(
+    code: &Arc<SetsUp>,
+    model: &Arc<Model>,
+    rows: &Arc<Rows>,
+) -> RoutineDrafts<SetsUp, Sessions> {
+    let sessions = Arc::new(Sessions::new(rows, Box::new(|_| Vec::new())));
     RoutineDrafts::new(
         Arc::clone(code),
         sessions,
-        Arc::clone(&rows) as Arc<dyn crate::domain::ports::DraftHandBacks>,
+        Arc::clone(rows) as Arc<dyn crate::domain::ports::DraftHandBacks>,
         agent(),
     )
     .with_direct(DirectDrafting {
@@ -1097,6 +1127,129 @@ async fn a_draft_failing_after_setup_changed_something_says_so() {
         matches!(&draft, Draft::Failed { message, .. } if message == SETUP_FAILED_PARTWAY),
         "{draft:?}"
     );
+}
+
+#[tokio::test]
+async fn an_item_the_request_asks_to_make_that_no_item_has_the_name_of_is_set_up() {
+    let database = Uuid::now_v7().to_string();
+    let code = Arc::new(SetsUp::returning(
+        json!({ "orders": { "type": "database", "id": database } }),
+    ));
+    let model = Arc::new(Model::new(
+        named(&[("Orders", &["database"])]),
+        vec![with_setup(posted_in(&[]), add_row("good", ORDERS), "first")],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let calls = model.calls();
+    // Looked up in case it exists, it doesn't: the writer may still make it.
+    assert!(
+        calls[1]
+            .asked()
+            .contains("\"Orders\" (database): no database has that name")
+    );
+    assert!(
+        calls[1]
+            .system
+            .contains("an item the request asks to make new that no item has the name of")
+    );
+    assert_eq!(code.sources(), ["first"]);
+    let drafted = drafted_routine(draft);
+    assert_eq!(drafted.steps[0]["knobs"][0]["value"], json!(database));
+}
+
+#[tokio::test]
+async fn setup_changing_something_after_a_failed_check_still_says_so() {
+    let code = Arc::new(SetsUp::returning(json!({})));
+    code.fails.lock().unwrap().push_back(true);
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            written(posted_in(&[]), json!([code_step("Make a task", "bad")])),
+            json!({ "setup": "first", "steps": { "0": add_row("good", ORDERS) } }).to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    // The first check isn't handed back as the draft: it predates what
+    // setup made.
+    assert!(
+        matches!(&draft, Draft::Failed { message, .. } if message == SETUP_FAILED_PARTWAY),
+        "{draft:?}"
+    );
+    assert_eq!(code.sources(), ["first"]);
+}
+
+#[tokio::test]
+async fn a_draft_cancelled_while_setup_runs_stops_when_setup_ends() {
+    let rows = Arc::new(Rows::default());
+    let code = Arc::new(SetsUp {
+        cancels: Some(Arc::clone(&rows)),
+        ..SetsUp::returning(
+            json!({ "orders": { "type": "database", "id": Uuid::now_v7().to_string() } }),
+        )
+    });
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![with_setup(posted_in(&[]), add_row("good", ORDERS), "first")],
+    ));
+    let drafts = setting_up_in(&code, &model, &rows);
+    let id = Uuid::now_v7();
+    rows.drafts
+        .lock()
+        .unwrap()
+        .insert(id, (owner(), agent().bot, Default::default(), Utc::now()));
+    rows.jobs.lock().unwrap().insert(
+        id,
+        JobRow {
+            client_id: Uuid::now_v7(),
+            phase: jobs::DraftJobPhase::Drafting,
+            request: Default::default(),
+            progress: Default::default(),
+            result: None,
+            finished_at: None,
+            traceparent: None,
+        },
+    );
+    let milestones = Milestones::default();
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        id,
+        &milestones,
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(draft, None);
+    assert_eq!(code.sources(), ["first"]);
+    // Nothing checked a routine nobody will read.
+    assert!(!milestones.stages().contains(&"passed"));
+    assert_eq!(*rows.finished.lock().unwrap(), [id]);
 }
 
 #[tokio::test]
@@ -1466,4 +1619,45 @@ fn found_items_go_in_steps_by_name_unless_tuned_to_ids() {
         assert!(by_id.write(code, conditions).contains(ITEMS_BY_ID.trim()));
     }
     assert_eq!(DirectTuning::default().item_knobs, ItemKnobs::Names);
+}
+
+#[test]
+fn code_the_host_may_not_have_still_gives_the_writer_its_sdk_areas() {
+    let code = Some(SetsUp::returning(json!({})));
+
+    assert_eq!(
+        code.area_reference(&["tasks".to_owned()]),
+        "the reference of tasks"
+    );
+    assert!(
+        None::<SetsUp>
+            .area_reference(&["tasks".to_owned()])
+            .is_empty()
+    );
+    let prompts = DirectPrompts::new(&code, "the guide", ItemKnobs::Names);
+    assert!(prompts.write(true, false).contains("the reference of ai"));
+}
+
+#[tokio::test]
+async fn a_step_for_a_routine_whose_trigger_isnt_one_yet_is_checked_alone() {
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![json!({ "step": code_step("Post it", "good") }).to_string()],
+    ));
+    let (drafts, _) = direct_drafts(&model, &Arc::new(Names::default()));
+    let request = DraftRequest::AddStep {
+        description: "post a summary".into(),
+        routine: RoutineSoFar {
+            // The editor's custom schedule, not filled in yet.
+            trigger: Some(json!({ "type": "cron" })),
+            steps: Vec::new(),
+        },
+        kind: None,
+    };
+
+    let draft = draft(&drafts, request, &Milestones::default()).await;
+
+    assert!(matches!(draft, Draft::Step(_)), "{draft:?}");
+    // The step's writer can't change the trigger, so it isn't sent back.
+    assert_eq!(model.purposes(), [CallPurpose::Find, CallPurpose::Write]);
 }

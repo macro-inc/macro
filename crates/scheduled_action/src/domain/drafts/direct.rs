@@ -452,33 +452,38 @@ pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
     let mut lookup = Lookup::default();
     for (asked, answer) in asked.iter().zip(answers) {
         let exact: Vec<NameMatch> = answer.matches.into_iter().filter(|m| m.exact).collect();
-        let kinds: Vec<ItemKind> = if asked.kinds.is_empty() {
-            let mut kinds: Vec<ItemKind> = Vec::new();
-            for item in &exact {
-                if !kinds.contains(&item.kind) {
-                    kinds.push(item.kind);
-                }
-            }
-            kinds
-        } else {
-            asked.kinds.clone()
-        };
         let mut chosen: Option<Vec<NameMatch>> = None;
-        let mut unknown = asked.kinds.is_empty() && exact.is_empty() && !unavailable.is_empty();
-        for kind in &kinds {
-            if unavailable.contains(kind) {
-                unknown = true;
-                break;
-            }
-            let mut of_kind: Vec<NameMatch> = Vec::new();
-            for item in exact.iter().filter(|item| item.kind == *kind) {
-                if !of_kind.iter().any(|seen| seen.id == item.id) {
-                    of_kind.push(item.clone());
+        let mut unknown = false;
+        if asked.kinds.is_empty() {
+            // No likeliest kind: every item with the name competes, whatever
+            // its kind, so a channel and a folder both named it are two.
+            let mut items: Vec<NameMatch> = Vec::new();
+            for item in &exact {
+                if !items
+                    .iter()
+                    .any(|seen| seen.kind == item.kind && seen.id == item.id)
+                {
+                    items.push(item.clone());
                 }
             }
-            if !of_kind.is_empty() {
-                chosen = Some(of_kind);
-                break;
+            unknown = items.is_empty() && !unavailable.is_empty();
+            chosen = (!items.is_empty()).then_some(items);
+        } else {
+            for kind in &asked.kinds {
+                if unavailable.contains(kind) {
+                    unknown = true;
+                    break;
+                }
+                let mut of_kind: Vec<NameMatch> = Vec::new();
+                for item in exact.iter().filter(|item| item.kind == *kind) {
+                    if !of_kind.iter().any(|seen| seen.id == item.id) {
+                        of_kind.push(item.clone());
+                    }
+                }
+                if !of_kind.is_empty() {
+                    chosen = Some(of_kind);
+                    break;
+                }
             }
         }
         match chosen {
@@ -489,7 +494,11 @@ pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
             }
             Some(items) => lookup.left.push(LeftName {
                 name: asked.name.clone(),
-                kind: items.first().map(|item| item.kind),
+                // Only a kind all of them share.
+                kind: items
+                    .first()
+                    .map(|item| item.kind)
+                    .filter(|kind| items.iter().all(|item| item.kind == *kind)),
                 matches: u32::try_from(items.len()).unwrap_or(u32::MAX),
             }),
             None if unknown => lookup.failed.push(asked.name.clone()),
@@ -651,20 +660,21 @@ impl Routine {
     }
 
     /// The routine as saving's check takes it, Ask AI steps on `model`, or
-    /// why it isn't one. A step drafted for a routine with no trigger yet is
-    /// checked on `fallback`, so only the step's own problems count.
+    /// why it isn't one. A step drafted for a routine with no trigger yet, or
+    /// one that isn't a trigger yet, is checked on `fallback`, so only the
+    /// step's own problems count: the step's writer can't change the trigger.
     fn configuration(
         &self,
         model: &str,
         fallback: Option<&Value>,
     ) -> Result<ActionConfiguration, WriterProblem> {
-        let trigger = self
-            .trigger
-            .as_ref()
-            .or(fallback)
-            .ok_or_else(|| WriterProblem::new("the routine has no `trigger`"))?;
-        let trigger: ActionTrigger = serde_json::from_value(trigger.clone())
-            .map_err(|error| WriterProblem::new(format!("`trigger` isn't a trigger: {error}")))?;
+        let read = |trigger: &Value| serde_json::from_value::<ActionTrigger>(trigger.clone());
+        let trigger = match (self.trigger.as_ref(), fallback) {
+            (Some(trigger), Some(fallback)) => read(trigger).or_else(|_| read(fallback)),
+            (Some(trigger), None) | (None, Some(trigger)) => read(trigger),
+            (None, None) => return Err(WriterProblem::new("the routine has no `trigger`")),
+        }
+        .map_err(|error| WriterProblem::new(format!("`trigger` isn't a trigger: {error}")))?;
         let steps: Vec<Value> = self
             .steps
             .iter()
@@ -1098,8 +1108,9 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                 Routine::so_far(routine)
             }
         };
-        // A step drafted for a routine with no trigger yet is checked on one
-        // that passes, so only the step's own problems count.
+        // A step drafted for a routine with no trigger yet, or one that isn't
+        // a trigger yet, is checked on one that passes, so only the step's own
+        // problems count.
         let fallback_trigger = matches!(shape, Shape::Step(_)).then(|| {
             json!({
                 "type": "once",
@@ -1142,6 +1153,9 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                         so_far.setting_up = true;
                         let ran = self.set_up(owner, &run, context, &routine, &source).await;
                         so_far.setting_up = false;
+                        if self.cancelled(&run).await {
+                            return Ok(None);
+                        }
                         match ran {
                             Ok((ids, items)) => {
                                 so_far.created.extend(items);
@@ -1149,6 +1163,12 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                                 None
                             }
                             Err(failed) => {
+                                // An earlier check no longer describes what
+                                // the draft did: ending now says setup made
+                                // something.
+                                if failed.wrote {
+                                    so_far.last = None;
+                                }
                                 let problem = failed.for_writer();
                                 so_far.setup = Setup::Failed {
                                     source,

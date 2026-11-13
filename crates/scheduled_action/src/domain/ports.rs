@@ -1076,6 +1076,16 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
             .unwrap_or_default()
     }
 
+    fn sdk_areas(&self) -> String {
+        self.as_ref().map(Code::sdk_areas).unwrap_or_default()
+    }
+
+    fn area_reference(&self, areas: &[String]) -> String {
+        self.as_ref()
+            .map(|code| code.area_reference(areas))
+            .unwrap_or_default()
+    }
+
     async fn rewrite(
         &self,
         owner: &MacroUserIdStr<'static>,
