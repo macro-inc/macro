@@ -1,0 +1,195 @@
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_3c8bdfdb266f32::t_3e3fb0fd7958d3 107-114
+  s_3c8bdfdb266f32::t_37fbd2193256e3 78,115-126
+  s_3c8bdfdb266f32::t_91249e997fe5ca 127-128
+crates/ai_tools/src/display_results.rs
+  s_3c8bdfdb266f32::t_37fbd2193256e3 29
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_3c8bdfdb266f32::t_3e3fb0fd7958d3 157-177
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_3c8bdfdb266f32::t_3e3fb0fd7958d3 196
+  s_3c8bdfdb266f32::t_1328f940b42682 413-453,456,459-478,480-483,484,492-498,501-505,511
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 454-455,457-458,499-500,506-510
+  s_3c8bdfdb266f32::t_d2a5a16cd75e04 479,485-491
+services/agent_harness_service/src/internal_mcp.rs
+  s_3c8bdfdb266f32::t_3e3fb0fd7958d3 99-124,150,172,179,191-192
+  s_3c8bdfdb266f32::t_91eaaeab89193d 194-201
+  s_3c8bdfdb266f32::t_d2a5a16cd75e04 178,180-190,193
+services/agent_harness_service/Cargo.toml
+  s_3c8bdfdb266f32::t_95fb63f240e0fb 92
+services/agent_harness_service/src/main.rs
+  s_3c8bdfdb266f32::t_3e3fb0fd7958d3 969-973
+Cargo.lock
+  s_a73788223ca988::t_f520e2ca35c5c1 633
+crates/dynamic_ui/src/view.rs
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 153,496-499
+  s_3c8bdfdb266f32::t_79e4e3e97df571 449
+  s_3c8bdfdb266f32::t_a3e816c287dae2 434,443,456,468,489
+crates/dynamic_ui/AGENTS.md
+  s_3c8bdfdb266f32::t_99321a62f21d89 19-24,30,35-37,49-51
+crates/dynamic_ui/src/lib.rs
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 95,101
+  s_3c8bdfdb266f32::t_d181f3c4e1a083 120-121,129
+  s_3c8bdfdb266f32::t_708ec6bfdd24e7 118-119,128,130-157
+  s_3c8bdfdb266f32::t_a3e816c287dae2 93-94,96-100,113-116,126-127
+  s_3c8bdfdb266f32::t_91eaaeab89193d 89-90
+crates/dynamic_ui/src/test.rs
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 264-269
+  s_3c8bdfdb266f32::t_b9cc7f7fe7ebc0 166
+crates/ai_tools/AGENTS.md
+  s_3c8bdfdb266f32::t_99321a62f21d89 91
+crates/agent_code_mode/AGENTS.md
+  s_3c8bdfdb266f32::t_99321a62f21d89 44-46
+services/agent_harness_service/AGENTS.md
+  s_3c8bdfdb266f32::t_77e31ea75240ec 35-36,303-304
+crates/ai_tools/src/lib.rs
+  s_3c8bdfdb266f32::t_1d3c0deca1747d 73-75
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 370-373,406-410
+  s_3c8bdfdb266f32::t_45f2c6ac1584ef 335-336,339,349,352-369,374-405,411-457,541-542,558
+  s_66643718b4370c::t_c14a16444e9328 562-564
+  s_3c8bdfdb266f32::t_01a0ef593e5646 3-5,337-338,340-348,350-351,506-513,543-557,559-561
+apps/web/src/features/dynamic-ui/widgets/Sparkline.tsx
+  s_3c8bdfdb266f32::t_f7931126740ccf 1-47
+apps/web/src/features/dynamic-ui/widgets/Chart.tsx
+  s_3c8bdfdb266f32::t_f55296f2fdcc75 1-24,35-57,64-66
+  s_3c8bdfdb266f32::t_9301c5475a8b11 25-28,30-33
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 29
+  s_3c8bdfdb266f32::t_6248e8f89eb8c5 34
+  s_3c8bdfdb266f32::t_b92a313a367d6d 58-63
+apps/web/src/features/dynamic-ui/widgets/Table.tsx
+  s_3c8bdfdb266f32::t_5cd07e28729f3e 1,3-5,7-16,18-45,51-54,56-107,111-125,127-157
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 2,6,108-110
+  s_3c8bdfdb266f32::t_0b25f1d75b2006 17
+  s_3c8bdfdb266f32::t_6248e8f89eb8c5 55
+  s_3c8bdfdb266f32::t_ed273a17f26b22 126
+  s_3c8bdfdb266f32::t_39fc083d273bd7 46-50
+apps/web/src/features/dynamic-ui/widgets/Stat.tsx
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 130-132
+  s_3c8bdfdb266f32::t_da5acf26f16592 1-44,46-101,107-129,133-138,141-142,144-146,150-151,153-165,169,173-175,177,178-179,188-190,192-193,196-199
+  s_3c8bdfdb266f32::t_6248e8f89eb8c5 45
+  s_3c8bdfdb266f32::t_0dd4c8894a3968 166-168,170-172,176,180,183-185,187,191,194-195
+  s_3c8bdfdb266f32::t_39fc083d273bd7 140,143,147-149,152
+  s_3c8bdfdb266f32::t_e7ae4faa4df2be 102-106,139,181-182
+  s_3c8bdfdb266f32::t_6641db5abf9adc 186
+apps/web/src/features/dynamic-ui/widgets/panes/saved-answer.tsx
+  s_3c8bdfdb266f32::t_f7931126740ccf 1-5,7-8,10,12-30,32-38,40-41,49-54,57,59,75,77-79
+  s_3c8bdfdb266f32::t_0b25f1d75b2006 11
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 6,62-72
+  s_3c8bdfdb266f32::t_9301c5475a8b11 31,39,44-48,55-56,58,60-61,73-74
+  s_3c8bdfdb266f32::t_6248e8f89eb8c5 9,42-43
+  s_39f63794c112b9::t_75955c425a2efc 76
+apps/web/src/features/dynamic-ui/widgets/Grid.tsx
+  s_3c8bdfdb266f32::t_e66ac5b4d2446e 1-67
+apps/web/src/features/dynamic-ui/render.tsx
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 15
+  s_66643718b4370c::t_feb1943795df1a 17,20-23,45-50,54-58,69-72
+apps/web/src/lib/i18n/locales/en.ts
+  s_3c8bdfdb266f32::t_529b9893974607 61
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 17
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_3c8bdfdb266f32::t_9b3fcf9412da40 175-185
+docs/agent-guide/ai-chat.md
+  s_3c8bdfdb266f32::t_99321a62f21d89 1926-1935
+  s_3c8bdfdb266f32::t_01a0ef593e5646 1936-1938
+apps/web/src/features/dynamic-ui/widgets/Tabs.tsx
+  s_3c8bdfdb266f32::t_1c06ee89c91c63 2
+  s_3c8bdfdb266f32::t_e66ac5b4d2446e 1,3-18,22-24,27-53
+  s_3c8bdfdb266f32::t_39fc083d273bd7 19-21,25-26
+apps/web/src/features/dynamic-ui/widgets/panes.test.tsx
+  s_3c8bdfdb266f32::t_d751e7f4e6fcc1 79-88
+  s_3c8bdfdb266f32::t_020b38f9742e31 172,191-192,196-197
+  s_3c8bdfdb266f32::t_0c6e4f2f82b385 1,193-195,209-211
+  s_3c8bdfdb266f32::t_ba8e848328351c 2-6,10-22,26-78,89-90,94-127,132-134,146-147,173-190,198-201,202-208,212-222
+  s_3c8bdfdb266f32::t_0dd4c8894a3968 7-8,25,91-92
+  s_3c8bdfdb266f32::t_0b4c96b3605b99 128-131,135-145
+  s_3c8bdfdb266f32::t_2513c0a5a76dbf 23-24,93,148-170
+  s_3c8bdfdb266f32::t_045c3e28250846 9
+  s_3c8bdfdb266f32::t_88c1537c620250 171
+apps/web/src/features/dynamic-ui/widgets/panes/pane.tsx
+  s_3c8bdfdb266f32::t_0b25f1d75b2006 97-107
+  s_3c8bdfdb266f32::t_777d88db132657 2,4-96,108-109,113-117,123-138,140-200,203-212
+  s_3c8bdfdb266f32::t_62aff3d71ca1bf 1,3,110-112,118-122,139
+  s_3c8bdfdb266f32::t_39fc083d273bd7 201-202
+apps/web/src/features/dynamic-ui/widgets/List.tsx
+  s_3c8bdfdb266f32::t_1bdc699c7a82f9 100
+apps/web/src/features/dynamic-ui/widgets/SavedView.tsx
+  s_3c8bdfdb266f32::t_0b25f1d75b2006 1-14,16-61,67-83,93-112,114-144
+  s_3c8bdfdb266f32::t_4935492fd85afc 15,84-85,87-92
+  s_3c8bdfdb266f32::t_72ccb272ae3277 86
+  s_e003e6a508b15c::t_5f3e02004f9958 113
+  s_3c8bdfdb266f32::t_39fc083d273bd7 62-66
+apps/web/src/lib/i18n/locales/en/dynamic-ui.ts
+  s_3c8bdfdb266f32::t_529b9893974607 1-12,16
+  s_3c8bdfdb266f32::t_39fc083d273bd7 13-14
+  s_3c8bdfdb266f32::t_6641db5abf9adc 15
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_3c8bdfdb266f32::t_3b57ba0f2428ed 105
+crates/ai_tools/src/display_results/test.rs
+  s_3c8bdfdb266f32::t_708ec6bfdd24e7 102
+  s_3c8bdfdb266f32::t_b9cc7f7fe7ebc0 107
+packages/sdk/generated/agent-fold/index.ts
+  s_3c8bdfdb266f32::t_3f1f1077ea0ec1 2163,2173
+apps/web/src/features/dynamic-ui/generated/types.ts
+  s_3c8bdfdb266f32::t_3f1f1077ea0ec1 522,532
+packages/lexical-core/generated/dynamic-ui.ts
+  s_3c8bdfdb266f32::t_3f1f1077ea0ec1 522,532
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_3c8bdfdb266f32::t_55141e2e188ce0 2880,2890
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_3c8bdfdb266f32::t_79e4e3e97df571 1247
+  s_3c8bdfdb266f32::t_b9cc7f7fe7ebc0 1265
+crates/dynamic_ui/src/decode.rs
+  s_3c8bdfdb266f32::t_b9cc7f7fe7ebc0 41,59-75
+  s_3c8bdfdb266f32::t_ff17eb7712aea6 76-77
+crates/dynamic_ui/src/snapshots/dynamic_ui__test__the_dashboard_schema_is_pinned.snap
+  s_3c8bdfdb266f32::t_36609cf2647f8c 125,165,176-276,1789,1824,1849,1858,1887
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b45cbbb2b04df80f49dc75a341dc31969b7a38a8",
+  "prompts": {},
+  "sessions": {
+    "s_39f63794c112b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "493005d8-5973-4e79-898b-d765f923c354",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_3c8bdfdb266f32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "047d61f4-a7d4-4fc1-a6a7-ed748e55fd32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_66643718b4370c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67f234f4-1648-4717-a88a-6377c1ca0e7f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a73788223ca988": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0498b19-2cf7-4b7c-a957-92baef251ba9",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e003e6a508b15c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a82c37e1-00f7-4ac9-9bb5-e0f8d2293a0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
