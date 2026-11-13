@@ -260,6 +260,8 @@ impl TopicEvent for PropertyTopicEvent {
                         property_definition_id: metadata.property_definition_id,
                         actor: acting(metadata.actor.as_ref(), metadata.actor_user_id.as_ref()),
                         on_behalf_of: metadata.on_behalf_of.clone(),
+                        value: metadata.value.clone(),
+                        previous_value: metadata.previous_value.clone(),
                         updated_at: metadata.updated_at,
                     }),
                 )

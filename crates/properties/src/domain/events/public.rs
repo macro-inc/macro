@@ -1,11 +1,13 @@
 //! The public projection of `macro.properties` events: thin payloads that
-//! name what changed and leave values to the API.
+//! name what changed; entity property values travel because whoever can see
+//! the entity can read them.
 
 use activity::Actor;
 use chrono::{DateTime, Utc};
 use macro_event_broker::exposure::EntityType as MacroEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
+use models_properties::service::property_value::PropertyValue;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -41,8 +43,9 @@ pub(crate) fn acting(
 }
 
 /// Public payload of `entity_property.updated`: which property of which
-/// entity changed, by whom. Read the entity for the value.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// entity changed, by whom, from what to what. Property values are small
+/// structured data that whoever can see the entity can read.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct PublicEntityPropertyUpdated {
     /// The entity-property row.
@@ -59,6 +62,12 @@ pub struct PublicEntityPropertyUpdated {
     /// The user the actor acted for, when different from the actor.
     #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
     pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+    /// The value after the change; `None` when cleared without removing the
+    /// row.
+    pub value: Option<PropertyValue>,
+    /// The value before the change; `None` when newly attached or not
+    /// captured.
+    pub previous_value: Option<PropertyValue>,
     /// When the value changed.
     pub updated_at: DateTime<Utc>,
 }
@@ -102,7 +111,7 @@ pub struct PublicEntityPropertiesCleared {
 /// The public projection of
 /// [`PropertyTopicEvent`](super::PropertyTopicEvent), delivered under the
 /// same event names.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum PropertyPublicEvent {

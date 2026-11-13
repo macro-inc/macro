@@ -459,7 +459,7 @@ mod exposure {
     }
 
     #[test]
-    fn updated_payload_names_the_property_without_values() {
+    fn updated_payload_carries_the_value_change() {
         let event = updated(EntityType::Thread);
         let public = public(&event);
         assert_eq!(
@@ -480,6 +480,8 @@ mod exposure {
                     "property_definition_id": PROPERTY_DEFINITION_ID,
                     "actor": "macro|editor@example.com",
                     "on_behalf_of": null,
+                    "value": {"type": "Boolean", "value": true},
+                    "previous_value": {"type": "Boolean", "value": false},
                     "updated_at": UPDATED_AT,
                 },
             })
