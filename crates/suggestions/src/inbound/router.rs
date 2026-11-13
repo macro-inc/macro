@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -18,8 +18,8 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError, SuggestionFeed,
-    SuggestionWriteOutcome, SuggestionsReview,
+    Accept, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError,
+    SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
 
@@ -113,12 +113,53 @@ impl IntoResponse for SuggestionApiError {
             Self::Service(error @ SuggestionError::NotGenerating) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
+            Self::Service(error @ SuggestionError::Changed(_)) => {
+                let message = error.to_string();
+                let SuggestionError::Changed(suggestion) = error else {
+                    unreachable!("matched above")
+                };
+                (
+                    StatusCode::CONFLICT,
+                    Json(SuggestionChanged {
+                        message,
+                        suggestion: *suggestion,
+                    }),
+                )
+                    .into_response()
+            }
             Self::Service(SuggestionError::Internal(report)) => {
                 tracing::error!(error = ?report, "suggestions call failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
             }
         }
     }
+}
+
+/// The suggestion changed since the caller read it.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SuggestionChanged {
+    /// What happened.
+    pub message: String,
+    /// The suggestion as it is now, to show before acting on it again.
+    pub suggestion: crate::domain::model::Suggestion,
+}
+
+/// Acting on a suggestion, as the caller's copy of it shows it.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptSuggestionRequest {
+    /// The suggestion's `updatedAt` as the caller read it. A background suggestion runs
+    /// only if it is unchanged since; otherwise the answer is 409.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Whether a request is the person's own, in the app: their own session's
+/// credential, not a program's (a code-mode invocation, an API token or an
+/// agent's). Anything else counts as acting for them.
+fn by_person(user: &macro_authorization::MacroUserAuthentication, headers: &HeaderMap) -> bool {
+    user.is_human_session()
+        && !headers.contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+        && agent_correlation::context::current().is_none()
 }
 
 /// The reader's time zone.
@@ -169,9 +210,12 @@ where
     tag = "suggestions",
     operation_id = "accept_suggestion",
     params(("id" = String, Path, description = "ID of the suggestion")),
+    request_body = AcceptSuggestionRequest,
     responses(
-        (status = 204, description = "Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing"),
+        (status = 204, description = "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"),
+        (status = 400, body = String),
         (status = 401, body = String),
+        (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it: the body has it as it is now"),
         (status = 404, body = String, description = "No open or done suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
@@ -182,15 +226,22 @@ where
 pub async fn accept_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
+    body: Result<Json<AcceptSuggestionRequest>, JsonRejection>,
 ) -> Result<StatusCode, SuggestionApiError>
 where
     S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let accept = Accept {
+        shown_updated_at: request.updated_at,
+        by_person: by_person(&user.authorization, &headers),
+    };
     state
         .service
-        .accept(&user.authorization.macro_user_id, id)
+        .accept(&user.authorization.macro_user_id, id, accept)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

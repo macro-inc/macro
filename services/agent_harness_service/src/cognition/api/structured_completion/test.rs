@@ -129,17 +129,34 @@ async fn a_generation_sessions_completion_is_its_own_and_never_billed(pool: sqlx
             ai_usage::AiFeature::NonBillableAgentSession
         )]
     );
-    // Tools are refused to a scoped session, before admission.
-    let mut with_tools = body;
+    // Tools are refused to any scoped session, before admission.
+    let mut with_tools = body.clone();
     with_tools["toolset"] = json!({"type": "all"});
+    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+        let response = scope_attribution(
+            scoped(scope),
+            router
+                .clone()
+                .oneshot(authorized_request("/", with_tools.clone())),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{scope:?}");
+    }
+    assert_eq!(admission.calls.lock().unwrap().len(), 1);
+    // A run's tool-free completion is the person's, as before.
     let response = scope_attribution(
-        scoped(SessionScope::Generation),
-        router.oneshot(authorized_request("/", with_tools)),
+        scoped(SessionScope::NoSend),
+        router.oneshot(authorized_request("/", body)),
     )
     .await
     .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(admission.calls.lock().unwrap().len(), 1);
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(one_shot.1.lock().unwrap()[1], None);
+    assert_eq!(
+        admission.calls.lock().unwrap()[1].1,
+        ai_usage::AiFeature::DynamicCompletionsApi
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

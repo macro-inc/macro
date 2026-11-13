@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   AgentRoutines,
@@ -39,6 +40,7 @@ import type {
   ShareRoutineTemplate,
   StartDraftJobRequest,
   StartSuggestionGenerationParams,
+  SuggestionChanged,
   SuggestionFeed,
   SuggestionReview,
   SuggestionsReview,
@@ -2473,6 +2475,11 @@ export type acceptSuggestionResponse204 = {
   status: 204;
 };
 
+export type acceptSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
 export type acceptSuggestionResponse401 = {
   data: string;
   status: 401;
@@ -2481,6 +2488,11 @@ export type acceptSuggestionResponse401 = {
 export type acceptSuggestionResponse404 = {
   data: string;
   status: 404;
+};
+
+export type acceptSuggestionResponse409 = {
+  data: SuggestionChanged;
+  status: 409;
 };
 
 export type acceptSuggestionResponse500 = {
@@ -2492,8 +2504,10 @@ export type acceptSuggestionResponseSuccess = acceptSuggestionResponse204 & {
   headers: Headers;
 };
 export type acceptSuggestionResponseError = (
+  | acceptSuggestionResponse400
   | acceptSuggestionResponse401
   | acceptSuggestionResponse404
+  | acceptSuggestionResponse409
   | acceptSuggestionResponse500
 ) & {
   headers: Headers;
@@ -2509,11 +2523,14 @@ export const getAcceptSuggestionUrl = (id: string) => {
 
 export const acceptSuggestion = async (
   id: string,
+  acceptSuggestionRequest: AcceptSuggestionRequest,
   options?: RequestInit
 ): Promise<acceptSuggestionResponse> => {
   const res = await fetch(getAcceptSuggestionUrl(id), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(acceptSuggestionRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();

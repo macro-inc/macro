@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO suggestion_prompt (suggestion_id, prompt, run_mode) VALUES ($1, $2, $3)",
+  "query": "UPDATE suggestion_prompt SET prompt = $2, sends = $3 WHERE suggestion_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -12,5 +12,5 @@
     },
     "nullable": []
   },
-  "hash": "01eb14cb8c7c1faa4c5d13c97a9d97cbec184e57e5eea2dbb264a69483cadae6"
+  "hash": "309938ad92227fc0f669873e1388eb1bf181b52c35c1b3ed00382aa51da2adf4"
 }

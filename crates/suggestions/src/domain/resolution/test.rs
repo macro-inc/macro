@@ -92,6 +92,7 @@ impl Harness {
                 NewKind::Prompt { .. } => Some("Draft the reply.".to_owned()),
                 NewKind::Entity { .. } => None,
             },
+            sends: None,
         };
         let change = Change {
             session: Uuid::now_v7(),

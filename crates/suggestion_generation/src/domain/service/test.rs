@@ -195,11 +195,20 @@ impl SuggestionApi for FakeSuggestions {
         unreachable!()
     }
 
-    async fn accept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), SuggestionError> {
+    async fn accept(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: suggestions::domain::model::Accept,
+    ) -> Result<(), SuggestionError> {
         unreachable!()
     }
 
     async fn dismiss(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), SuggestionError> {
+        unreachable!()
+    }
+
+    async fn settle_runs(&self) -> Result<usize, SuggestionError> {
         unreachable!()
     }
 

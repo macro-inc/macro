@@ -2348,9 +2348,29 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptSuggestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
-            "description": "Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing"
+            "description": "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -2368,6 +2388,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The suggestion changed since the caller read it: the body has it as it is now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionChanged"
                 }
               }
             }
@@ -2531,6 +2561,18 @@
   },
   "components": {
     "schemas": {
+      "AcceptSuggestionRequest": {
+        "type": "object",
+        "description": "Acting on a suggestion, as the caller's copy of it shows it.",
+        "required": ["updatedAt"],
+        "properties": {
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The suggestion's `updatedAt` as the caller read it. A background suggestion runs\nonly if it is unchanged since; otherwise the answer is 409."
+          }
+        }
+      },
       "ActionConfiguration": {
         "type": "object",
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
@@ -4171,6 +4213,10 @@
               }
             ]
           },
+          "sends": {
+            "type": ["string", "null"],
+            "description": "A background prompt suggestion that posts or sends: what, and where."
+          },
           "summary": {
             "type": "string",
             "description": "Why, in a line or two."
@@ -4380,6 +4426,10 @@
           "reason": {
             "type": "string",
             "description": "Why, for the change log."
+          },
+          "sends": {
+            "type": ["string", "null"],
+            "description": "Only on background prompt suggestions: what the run posts or sends, and\nwhere."
           },
           "summary": {
             "type": ["string", "null"],
@@ -4919,6 +4969,18 @@
         "type": "string",
         "description": "How a prompt suggestion runs.",
         "enum": ["composer", "background"]
+      },
+      "RunProgress": {
+        "type": "string",
+        "description": "How a run is going, as its session says.",
+        "enum": [
+          "running",
+          "needs_approval",
+          "needs_input",
+          "finished",
+          "failed",
+          "unknown"
+        ]
       },
       "RunStart": {
         "oneOf": [
@@ -5538,6 +5600,17 @@
                 },
                 "description": "What acting on it produced."
               },
+              "run": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuggestionRun",
+                    "description": "A background prompt suggestion's latest run."
+                  }
+                ]
+              },
               "state": {
                 "$ref": "#/components/schemas/SuggestionState",
                 "description": "Where it is for the person."
@@ -5568,6 +5641,21 @@
           }
         ],
         "description": "One proactive suggestion for one person."
+      },
+      "SuggestionChanged": {
+        "type": "object",
+        "description": "The suggestion changed since the caller read it.",
+        "required": ["message", "suggestion"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "What happened."
+          },
+          "suggestion": {
+            "$ref": "#/components/schemas/Suggestion",
+            "description": "The suggestion as it is now, to show before acting on it again."
+          }
+        }
       },
       "SuggestionFeed": {
         "type": "object",
@@ -5613,6 +5701,10 @@
               "runMode": {
                 "$ref": "#/components/schemas/RunMode",
                 "description": "How it runs."
+              },
+              "sends": {
+                "type": ["string", "null"],
+                "description": "For a background run that posts or sends something: what, and\nwhere, in plain words. The card shows it before Run, and running\nit approves exactly that. None when the run posts and sends\nnothing."
               }
             }
           },
@@ -5677,6 +5769,27 @@
             "items": {
               "$ref": "#/components/schemas/ReviewedSuggestion"
             }
+          }
+        }
+      },
+      "SuggestionRun": {
+        "type": "object",
+        "description": "A run of a background prompt suggestion: a hidden agent session of the\nperson's, with the full toolset, that never stops to ask.",
+        "required": ["sessionId", "startedAt", "progress"],
+        "properties": {
+          "progress": {
+            "$ref": "#/components/schemas/RunProgress",
+            "description": "How it is going, read from the session."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The agent session: open it to see the result or answer what it\nwaits for."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it started."
           }
         }
       },
