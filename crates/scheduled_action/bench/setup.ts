@@ -141,6 +141,25 @@ export async function setTaskStatus(at: Stack, token: string, taskId: string, st
   });
 }
 
+/** Put back the seeded statuses of tasks something moved, as the owner; returns how many. */
+export async function restoreStatuses(at: Stack, db: SQL, token: string): Promise<number> {
+  const seeded = new Map(Object.entries(tasks()).map(([key, task]) => [seedId(SCENARIO_NAME, 'task', key), task.status]));
+  const rows = (await db`
+    select entity_id::text as id, values from entity_properties
+    where property_definition_id = ${STATUS}::uuid and entity_id in ${db([...seeded.keys()])}`) as {
+    id: string;
+    values: { value?: unknown[] } | null;
+  }[];
+  let restored = 0;
+  for (const row of rows) {
+    const status = seeded.get(row.id);
+    if (!status || row.values?.value?.[0] === STATUS_OPTIONS[status]) continue;
+    await setTaskStatus(at, token, row.id, status);
+    restored++;
+  }
+  return restored;
+}
+
 /** Noon on the day `days` from `now`, in `timezone`, as an instant. */
 function noon(now: Date, days: number, timezone: string): string {
   const day = new Date(now.getTime() + days * 86_400_000).toLocaleDateString('en-CA', { timeZone: timezone });

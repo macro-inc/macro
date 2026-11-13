@@ -5,7 +5,7 @@
 import { SQL } from 'bun';
 
 import type { Case, Context, DraftResult, Effects, Fire } from './cases';
-import { seedId, setTaskStatus } from './setup';
+import { restoreStatuses, seedId, setTaskStatus } from './setup';
 import { type Stack, call, sdk } from './stack';
 import { OWNER, PERSON_KEYS, SCENARIO_NAME, userId } from './workspace';
 
@@ -42,9 +42,11 @@ const personOf = (sender: string) =>
 
 /**
  * Put the owner's workspace back to what `seed` and `setup` made: delete
- * every routine, the databases, documents and tasks nobody seeded, and the
- * messages nobody seeded. Runs before and after each case, so a draft never
- * finds what an earlier draft, run or crashed eval left behind.
+ * every routine, the databases, documents, tasks, channels and messages
+ * nobody seeded, and put back seeded tasks' statuses. Runs before and after
+ * each case, so a draft never finds what an earlier draft, run or crashed
+ * eval left behind. Edits to seeded items' text, due dates or other
+ * properties, and direct messages a draft opened, are left.
  */
 export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string>) {
   const owner = tokens[OWNER];
@@ -64,6 +66,10 @@ export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string
   // A routine the list missed would fire during later drafts' run checks.
   const left = await db`select id from scheduled_action where owner = ${userId(OWNER)}`;
   if (left.length) throw new Error(`reset left ${left.length} routines the list didn't return`);
+  // After the routines, so putting a task back fires nothing. A task a
+  // session moved while testing, or a run check failed to put back, would
+  // make a later run check fire a change that changes nothing.
+  removed += await restoreStatuses(at, db, owner);
   for (const database of await macro.databases.list()) {
     if (keep.has(database.id)) continue;
     await trash(at, owner, 'DATABASE', database.id);
