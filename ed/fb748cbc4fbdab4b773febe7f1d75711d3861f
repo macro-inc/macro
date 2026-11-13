@@ -1,0 +1,23 @@
+crates/event_stream/src/domain/ports.rs
+  s_e479cab98a0cac::t_c35c0b52a715e4 78-79
+crates/event_stream/src/outbound/entity_access.rs
+  s_e479cab98a0cac::t_b3db4bb6ca44d8 12-14,79-81,83,86-88
+crates/event_stream/src/outbound/entity_access/test.rs
+  s_e479cab98a0cac::t_88aa3048d2dc2a 1-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "edfb748cbc4fbdab4b773febe7f1d75711d3861f",
+  "prompts": {},
+  "sessions": {
+    "s_e479cab98a0cac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "901deb5d-d7d3-4170-a22b-69498ba5f35e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
