@@ -580,6 +580,33 @@ describe('Quick Access local projection', () => {
     expect(list.isSearching()).toBe(false);
   });
 
+  it('stops reporting refused rows at the limit when no replacement engine arrives', async () => {
+    vi.useFakeTimers();
+    const refused = Object.assign(new Error('cache reads unavailable'), {
+      errorCode: 'owner-handoff-blocked',
+    });
+    const answer = deferred<SearchCachePage>();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: { search: () => answer.promise },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'fir',
+        materialize: vi.fn(materialize).mockRejectedValueOnce(refused),
+      })
+    );
+    await vi.advanceTimersByTimeAsync(UNANSWERED_SEARCH_LIMIT_MS);
+    expect(list.isSearching()).toBe(false);
+
+    answer.resolve(page(['first']));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(list.error()).toBe(refused);
+    expect(list.isSearching()).toBe(true);
+    await vi.advanceTimersByTimeAsync(UNANSWERED_SEARCH_LIMIT_MS);
+    expect(list.isSearching()).toBe(false);
+  });
+
   it.each(['search', 'materialize'] as const)(
     'publishes a slow %s during continuous revisions and coalesces a follow-up',
     async (stage) => {

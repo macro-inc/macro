@@ -103,8 +103,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   );
   const [error, setError] = createSignal<unknown>();
   // True from a new query or bucket set until the cache first answers it.
-  // Loading the rows that answer names does not count, and neither do replays
-  // of a window already on screen; `loading` covers both.
+  // Loading the rows named by that answer does not count, and neither do
+  // replays of a window already on screen; `loading` covers both.
   const [searching, setSearching] = createSignal(
     untrack(loading) === 'initial'
   );
@@ -251,7 +251,10 @@ export function createProjectedList<T extends { id: string }>(options: {
       request.awaitingEngine = isRefusedFirstAnswer(request, error);
       // The rows were refused after the cache answered, so the replay that
       // loads them is awaited like a first answer.
-      if (request.awaitingEngine && cacheAnswered) setSearching(true);
+      if (request.awaitingEngine && cacheAnswered) {
+        setSearching(true);
+        stopWaitingAtLimit(request);
+      }
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
