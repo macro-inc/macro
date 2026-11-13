@@ -65,7 +65,11 @@ function Turn() {
         <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
           <Message message={turn.message()} inFlight={turn.inFlight()} />
         </div>
-        <div hidden data-turn={turn.done() ? 'done' : 'live'} />
+        <div
+          hidden
+          data-turn={turn.done() ? 'done' : 'live'}
+          data-tail={turn.message().parts.at(-1)?.kind}
+        />
       </section>
     </main>
   );
