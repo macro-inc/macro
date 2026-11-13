@@ -59,6 +59,7 @@ vi.mock(
 );
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'fixture-user',
+  useIsAuthenticated: () => () => true,
 }));
 vi.mock('@core/document-session/load', () => ({
   loadDocumentSession: control.load,
@@ -80,7 +81,7 @@ vi.mock('../context/markdown-document-context', () => ({
     permissions: { canEdit: () => control.canEdit() },
     state: {
       session: { setStatus: control.status },
-      editor: { error: () => false },
+      editor: { error: () => false, setMd() {} },
       generation: {
         isGenerating: () => false,
         generatedAndWaiting: () => false,
@@ -88,7 +89,8 @@ vi.mock('../context/markdown-document-context', () => ({
     },
   }),
 }));
-vi.mock('@macro-inc/observability', () => ({
+vi.mock('@macro-inc/observability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: { error: control.report },
 }));
 // Readiness-shell controls isolate optional overlays; native checklist behavior
@@ -264,6 +266,94 @@ vi.mock(
   })
 );
 
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-host',
+  () => ({
+    createNativeAgentSessionMentionContext: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-views',
+  () => ({
+    createNativeAgentSessionMentionViews: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-database-query-host',
+  () => ({
+    createNativeDatabaseQueryContext: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-database-query-views',
+  () => ({
+    createNativeDatabaseQueryViews: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-date-mention-host',
+  () => ({
+    createNativeDateMentionContext: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-date-mention-views',
+  () => ({
+    createNativeDateMentionViews: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-paste-node-host',
+  () => ({
+    createNativePasteNodeContext: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-paste-node-views',
+  () => ({
+    createNativePasteNodeViews: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
 vi.mock(
   '@core/component/LexicalMarkdown/decorator-host/native-document-mention-views',
   () => ({
@@ -466,7 +556,8 @@ vi.mock('@core/util/fireAndForget', () => ({
     promise.catch(control.detachedError);
   },
 }));
-vi.mock('@core/util/platform', () => ({
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
   isPlatform: (platform: string) => control.nativePlatform === platform,
 }));
 vi.mock('@core/constant/isMac', () => ({
@@ -534,6 +625,7 @@ function session() {
     focus: vi.fn(),
     node: () => (initialized ? {} : undefined),
     isEmpty: () => (initialized ? true : null),
+    registerViewCommand: () => () => {},
     onCommit(listener: (commit: { fullReconcile: boolean }) => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);
