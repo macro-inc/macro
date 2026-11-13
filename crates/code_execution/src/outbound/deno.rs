@@ -21,14 +21,17 @@ use tokio_util::{
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
-/// Node timer and worker modules resolve to timers.mjs, which refuses to
-/// sleep; see bootstrap.mjs.
-const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#;
-/// An unattended program's requests go through the bootstrap's `fetch`, where
-/// a dry run holds back writes, so the Node modules that open their own
-/// connections or threads resolve to a module that doesn't exist. Timers
-/// refuse to sleep, as above.
-const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
+/// Every program's requests go through the bootstrap's `fetch`, which marks
+/// them as the program's (`x-macro-code-execution`) so an API can tell them
+/// from the person's own. Node modules that open their own connections or
+/// processes, or load other built-ins (`node:module`), would send the run's
+/// token unmarked, so they resolve to a module that doesn't exist. Node timer
+/// and worker modules resolve to timers.mjs, which refuses to sleep; see
+/// bootstrap.mjs.
+const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs","node:module":"./unavailable.mjs"}}"#;
+/// As [`IMPORTS`], for an unattended program, whose `fetch` also holds back a
+/// dry run's writes; its worker modules resolve to the missing module too.
+const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs","node:module":"./unavailable.mjs"}}"#;
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 

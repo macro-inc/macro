@@ -394,6 +394,50 @@ async fn denies_ambient_io_and_external_module_imports() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_has_no_way_to_the_network_but_fetch() {
+    // Only fetch marks a request as the program's; anything else would send
+    // the run's token as if the person had.
+    let (_root, service) = setup(Limits::default()).await;
+    let source = r#"
+export async function main() {
+  const modules = {};
+  for (const name of ["net", "tls", "http", "https", "http2", "dgram", "child_process", "module"]) {
+    try { await import("node:" + name); modules[name] = "loaded"; } catch { modules[name] = "unavailable"; }
+  }
+  let worker = "started";
+  try { new Worker("data:text/javascript,1", {type: "module"}); } catch { worker = "refused"; }
+  return {
+    sockets: [Deno.connect, Deno.connectTls, Deno.startTls, Deno.listen, Deno.listenTls, Deno.listenDatagram, Deno.serve].map((value) => typeof value),
+    worker,
+    websocket: typeof WebSocket,
+    builtins: typeof globalThis.process?.getBuiltinModule,
+    modules,
+  };
+}
+"#;
+    let (_, outcome) = run(&service, source, 5000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "sockets": ["undefined", "undefined", "undefined", "undefined", "undefined", "undefined", "undefined"],
+            "worker": "refused",
+            "websocket": "undefined",
+            "builtins": "undefined",
+            "modules": {
+                "net": "unavailable", "tls": "unavailable", "http": "unavailable",
+                "https": "unavailable", "http2": "unavailable", "dgram": "unavailable",
+                "child_process": "unavailable", "module": "unavailable",
+            },
+        })
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn rejects_sleeping_and_points_at_routines() {
     let (_root, service) = setup(Limits::default()).await;
     let sources = [
@@ -755,14 +799,18 @@ async fn unattended_typescript_gets_its_arguments_and_no_credential_or_raw_netwo
     let source = r#"
 type Context = { macro: object; trigger: { subject: string } };
 export async function main(context: Context): Promise<object> {
-  let net = "loaded";
-  try { await import("node:" + "net"); } catch { net = "unavailable"; }
+  const modules: Record<string, string> = {};
+  for (const name of ["net", "tls", "http", "https", "http2", "dgram", "child_process", "module"]) {
+    try { await import("node:" + name); modules[name] = "loaded"; } catch { modules[name] = "unavailable"; }
+  }
   return {
     keys: Object.keys(context).sort(),
     subject: context.trigger.subject,
-    connect: typeof Deno.connect,
+    sockets: [Deno.connect, Deno.connectTls, Deno.startTls, Deno.listen, Deno.listenTls, Deno.listenDatagram, Deno.serve].map((value) => typeof value),
     worker: typeof Worker,
-    net,
+    websocket: typeof WebSocket,
+    builtins: typeof (globalThis as any).process?.getBuiltinModule,
+    modules,
   };
 }
 "#;
@@ -781,9 +829,15 @@ export async function main(context: Context): Promise<object> {
         serde_json::json!({
             "keys": ["macro", "trigger"],
             "subject": "Invoice 7",
-            "connect": "undefined",
+            "sockets": ["undefined", "undefined", "undefined", "undefined", "undefined", "undefined", "undefined"],
             "worker": "undefined",
-            "net": "unavailable",
+            "websocket": "undefined",
+            "builtins": "undefined",
+            "modules": {
+                "net": "unavailable", "tls": "unavailable", "http": "unavailable",
+                "https": "unavailable", "http2": "unavailable", "dgram": "unavailable",
+                "child_process": "unavailable", "module": "unavailable",
+            },
         })
     );
     service.shutdown().await;
