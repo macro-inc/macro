@@ -703,8 +703,6 @@ export default {
     create: 'Erstellen',
     getMobileApp: 'Mobile App herunterladen',
     signedInAs: 'Angemeldet als {{name}}',
-    commandMenu: 'Befehlsmenü',
-    searchEverything: 'Alles durchsuchen',
     customizeSidebar: 'Seitenleiste anpassen',
     customizeSidebarDescription:
       'Auswählen, welche Apps in der Seitenleiste erscheinen, und per Drag & Drop neu anordnen. Start bleibt immer an erster Stelle.',

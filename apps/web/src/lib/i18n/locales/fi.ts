@@ -693,8 +693,6 @@ export default {
     create: 'Luo',
     getMobileApp: 'Hanki mobiilisovellus',
     signedInAs: 'Kirjautuneena: {{name}}',
-    commandMenu: 'Komentovalikko',
-    searchEverything: 'Hae kaikkialta',
     customizeSidebar: 'Mukauta sivupalkkia',
     customizeSidebarDescription:
       'Valitse, mitkä sovellukset näkyvät sivupalkissa, ja muuta järjestystä vetämällä. Etusivu on aina ensimmäisenä.',

@@ -719,8 +719,6 @@ export default {
     create: 'Crea',
     getMobileApp: 'Scarica l’app mobile',
     signedInAs: 'Accesso effettuato come {{name}}',
-    commandMenu: 'Menu comandi',
-    searchEverything: 'Cerca ovunque',
     customizeSidebar: 'Personalizza barra laterale',
     customizeSidebarDescription:
       'Scegli quali app mostrare nella barra laterale e trascinale per riordinarle. Home resta sempre al primo posto.',

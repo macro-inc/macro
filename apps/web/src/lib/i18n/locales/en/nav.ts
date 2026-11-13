@@ -52,8 +52,6 @@ export default {
   helpCall: 'Book a call',
   helpEmail: 'Email {{email}}',
   signedInAs: 'Signed in as {{name}}',
-  commandMenu: 'Command Menu',
-  searchEverything: 'Search everything',
 
   // Customize sidebar
   customizeSidebar: 'Customize sidebar',

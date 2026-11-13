@@ -694,8 +694,6 @@ export default {
     create: 'Maken',
     getMobileApp: 'Download de mobiele app',
     signedInAs: 'Ingelogd als {{name}}',
-    commandMenu: 'Opdrachtmenu',
-    searchEverything: 'Alles doorzoeken',
     customizeSidebar: 'Zijbalk aanpassen',
     customizeSidebarDescription:
       'Kies welke apps in de zijbalk staan en sleep om ze te herschikken. Start staat altijd bovenaan.',

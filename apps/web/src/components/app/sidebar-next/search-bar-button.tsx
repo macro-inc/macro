@@ -4,10 +4,11 @@ import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
-import { SidebarSearchMenu } from '../app-sidebar/sidebar-search-menu';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import { Button } from '@ui';
 import { useSplitLayout } from '../split-layout/layout';
 
-/** Search and command-menu discovery in the compact rail. */
+/** Opens Search from the compact rail; Shift+click opens it in a new split. */
 export const SearchRailButton = () => {
   const analytics = useAnalytics();
   const { openWithSplit } = useSplitLayout();
@@ -44,19 +45,20 @@ export const SearchRailButton = () => {
   };
 
   return (
-    <SidebarSearchMenu
-      onSearch={openSearch}
-      triggerProps={{
-        size: 'icon-md',
-        variant: 'ghost',
-        tooltip: {
-          content: t('nav.search'),
-          placement: 'right',
-          hotkey: TOKENS.sidebar.goTo.search,
-        },
-        'data-sidebar-next-search': '',
-        class: 'size-10 rounded-xl',
+    <Button
+      aria-label={t('nav.search')}
+      size="icon-md"
+      variant="ghost"
+      tooltip={{
+        content: t('nav.search'),
+        placement: 'right',
+        hotkey: TOKENS.sidebar.goTo.search,
       }}
-    />
+      data-sidebar-next-search=""
+      class="size-10 rounded-xl"
+      onClick={(event: MouseEvent) => openSearch(event.shiftKey)}
+    >
+      <MagnifyingGlassIcon class="size-5" />
+    </Button>
   );
 };
