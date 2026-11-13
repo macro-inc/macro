@@ -464,53 +464,9 @@ impl Inbox {
     /// would: Gmail pushes, Outlook calls the subscription.
     pub fn deliver(&self, mail: &Mail) -> Result<ProviderMessage, Report> {
         let id = match &self.provider {
-            ProviderHandle::Gmail(gmail) => {
-                let message = gmail_emulator::NewMessage {
-                    from: Some(mail.from.clone()),
-                    to: mail.to.clone(),
-                    cc: mail.cc.clone(),
-                    subject: Some(mail.subject.clone()),
-                    text: Some(mail.text.clone()),
-                    html: mail.html.clone(),
-                    message_id: mail.message_id.clone(),
-                    in_reply_to: mail.in_reply_to.clone(),
-                    attachments: mail
-                        .attachments
-                        .iter()
-                        .map(|attachment| gmail_emulator::NewAttachment {
-                            filename: attachment.filename.clone(),
-                            mime_type: Some(attachment.mime_type.clone()),
-                            base64: Some(STANDARD.encode(&attachment.bytes)),
-                            ..Default::default()
-                        })
-                        .collect(),
-                    ..Default::default()
-                };
-                gmail.deliver(&self.email, &message)?.id
-            }
+            ProviderHandle::Gmail(gmail) => gmail.deliver(&self.email, &mail.for_gmail())?.id,
             ProviderHandle::Outlook(outlook) => {
-                let message = outlook_emulator::NewMessage {
-                    from: Some(mail.from.clone()),
-                    to: mail.to.clone(),
-                    cc: mail.cc.clone(),
-                    subject: Some(mail.subject.clone()),
-                    text: Some(mail.text.clone()),
-                    html: mail.html.clone(),
-                    message_id: mail.message_id.clone(),
-                    in_reply_to: mail.in_reply_to.clone(),
-                    attachments: mail
-                        .attachments
-                        .iter()
-                        .map(|attachment| outlook_emulator::NewAttachment {
-                            filename: attachment.filename.clone(),
-                            mime_type: Some(attachment.mime_type.clone()),
-                            base64: Some(STANDARD.encode(&attachment.bytes)),
-                            ..Default::default()
-                        })
-                        .collect(),
-                    ..Default::default()
-                };
-                outlook.deliver(&self.email, &message)?.id
+                outlook.deliver(&self.email, &mail.for_outlook())?.id
             }
         };
         self.provider_message(&id)?
@@ -641,4 +597,56 @@ async fn wait_seeing<T>(
     })
     .await;
     waited.map_err(|report| report.attach(format!("last seen: {last_seen}")))
+}
+
+impl Mail {
+    /// The message as the Gmail emulator takes it.
+    pub(crate) fn for_gmail(&self) -> gmail_emulator::NewMessage {
+        gmail_emulator::NewMessage {
+            from: Some(self.from.clone()),
+            to: self.to.clone(),
+            cc: self.cc.clone(),
+            subject: Some(self.subject.clone()),
+            text: Some(self.text.clone()),
+            html: self.html.clone(),
+            message_id: self.message_id.clone(),
+            in_reply_to: self.in_reply_to.clone(),
+            attachments: self
+                .attachments
+                .iter()
+                .map(|attachment| gmail_emulator::NewAttachment {
+                    filename: attachment.filename.clone(),
+                    mime_type: Some(attachment.mime_type.clone()),
+                    base64: Some(STANDARD.encode(&attachment.bytes)),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    /// The message as the Outlook emulator takes it.
+    pub(crate) fn for_outlook(&self) -> outlook_emulator::NewMessage {
+        outlook_emulator::NewMessage {
+            from: Some(self.from.clone()),
+            to: self.to.clone(),
+            cc: self.cc.clone(),
+            subject: Some(self.subject.clone()),
+            text: Some(self.text.clone()),
+            html: self.html.clone(),
+            message_id: self.message_id.clone(),
+            in_reply_to: self.in_reply_to.clone(),
+            attachments: self
+                .attachments
+                .iter()
+                .map(|attachment| outlook_emulator::NewAttachment {
+                    filename: attachment.filename.clone(),
+                    mime_type: Some(attachment.mime_type.clone()),
+                    base64: Some(STANDARD.encode(&attachment.bytes)),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
 }
