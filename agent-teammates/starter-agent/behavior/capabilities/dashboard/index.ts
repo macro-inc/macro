@@ -19,6 +19,15 @@ const createdFile = "home-dashboard";
  */
 const pendingFile = "home-dashboard-pending";
 
+/**
+ * The built-in task Status property and its closed options (Completed,
+ * Canceled), from `system_properties`. "Open" is the task's status, not
+ * `documentDone`, which is the viewer's inbox state.
+ */
+const statusProperty = "00000001-0000-0000-0000-000000000002";
+const completedStatus = "00000001-0000-0000-0002-000000000004";
+const canceledStatus = "00000001-0000-0000-0002-000000000005";
+
 /** The little of the context the dashboard needs, so a test can give it a fake. */
 export type Needs = {
 	readonly state: Pick<Base["state"], "memory">;
@@ -56,9 +65,20 @@ export const defaultDashboard = (agentId: string): DashboardView => ({
 						kind: "query",
 						query: {
 							include: { documentOwnerId: [agentId], subType: ["task"] },
-							documentWhere: [
-								{ op: "not", clause: { include: { documentDone: true } } },
-							],
+							exclude: {
+								properties: [
+									{
+										propertyId: statusProperty,
+										type: "select",
+										value: completedStatus,
+									},
+									{
+										propertyId: statusProperty,
+										type: "select",
+										value: canceledStatus,
+									},
+								],
+							},
 						},
 					},
 					limit: 10,
@@ -102,9 +122,7 @@ const home = async (
 	macro: Awaited<ReturnType<Needs["macro"]>>,
 ): Promise<"none" | "readable" | "unreadable"> => {
 	try {
-		return (await macro.me.homeDashboard()) === undefined
-			? "none"
-			: "readable";
+		return (await macro.me.homeDashboard()) === undefined ? "none" : "readable";
 	} catch (error) {
 		if (status(error) === unreadable) return "unreadable";
 		throw error;
@@ -190,6 +208,5 @@ export const dashboardModule = module({
 	functions: { ensureHomeDashboard },
 });
 
-export const dashboardCapabilities = behavior<Base>().capability(
-	dashboardModule,
-);
+export const dashboardCapabilities =
+	behavior<Base>().capability(dashboardModule);

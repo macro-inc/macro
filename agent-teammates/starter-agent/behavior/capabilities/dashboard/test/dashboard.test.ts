@@ -38,7 +38,10 @@ const context = (macro: Macro) => {
 test("a new agent creates the default dashboard once and makes it its home", async () => {
 	const created: unknown[] = [];
 	const homes: unknown[] = [];
-	const dashboard = { id: "d-1", webUrl: () => "https://macro.com/app/dashboard/d-1" };
+	const dashboard = {
+		id: "d-1",
+		webUrl: () => "https://macro.com/app/dashboard/d-1",
+	};
 	const macro = fakeMacro({
 		dashboards: {
 			create: async (view: unknown) => {
@@ -192,4 +195,32 @@ test("every pane of the default dashboard has an id, so it can be patched", () =
 		'"id":"open-tasks"',
 		'"id":"documents"',
 	]);
+});
+
+test("open tasks are the ones whose status is neither Completed nor Canceled", () => {
+	type Pane = { id?: string; source?: unknown; children?: Pane[] };
+	const view = defaultDashboard(agentId) as unknown as { widgets: Pane[] };
+	const work = view.widgets.find((pane) => pane.id === "work");
+	const openTasks = work?.children?.find((pane) => pane.id === "open-tasks");
+	expect(openTasks?.source).toEqual({
+		kind: "query",
+		query: {
+			include: { documentOwnerId: [agentId], subType: ["task"] },
+			exclude: {
+				properties: [
+					{
+						propertyId: "00000001-0000-0000-0000-000000000002",
+						type: "select",
+						value: "00000001-0000-0000-0002-000000000004",
+					},
+					{
+						propertyId: "00000001-0000-0000-0000-000000000002",
+						type: "select",
+						value: "00000001-0000-0000-0002-000000000005",
+					},
+				],
+			},
+		},
+	});
+	expect(JSON.stringify(openTasks)).not.toContain("documentDone");
 });
