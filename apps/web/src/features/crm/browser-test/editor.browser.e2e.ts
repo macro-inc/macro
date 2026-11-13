@@ -91,19 +91,28 @@ test('a wrapping cell opens and closes in place over opaque rows', async ({
   await expect
     .poll(async () => (await heights())[0])
     .toBeGreaterThan(closed[0]);
-  const layout = await rows.evaluateAll((elements) =>
-    elements.map((row) => {
-      const box = row.getBoundingClientRect();
-      // The row lines beneath the rows are drawn at a fixed pitch; only
-      // an opaque row hides them once it grows past it.
-      const canvas = document.createElement('canvas').getContext('2d')!;
-      canvas.fillStyle = getComputedStyle(row).backgroundColor;
-      canvas.fillRect(0, 0, 1, 1);
-      const alpha = canvas.getImageData(0, 0, 1, 1).data[3];
-      return { top: box.top, bottom: box.bottom, alpha };
+  const measure = () =>
+    rows.evaluateAll((elements) =>
+      elements.map((row) => {
+        const box = row.getBoundingClientRect();
+        // The row lines beneath the rows are drawn at a fixed pitch; only
+        // an opaque row hides them once it grows past it.
+        const canvas = document.createElement('canvas').getContext('2d')!;
+        canvas.fillStyle = getComputedStyle(row).backgroundColor;
+        canvas.fillRect(0, 0, 1, 1);
+        const alpha = canvas.getImageData(0, 0, 1, 1).data[3];
+        return { top: box.top, bottom: box.bottom, alpha };
+      })
+    );
+  // The grid moves the rows below once its resize observer measures the
+  // grown row, which a read straight after the growth can come before.
+  await expect
+    .poll(async () => {
+      const [first, second] = await measure();
+      return second.top - first.bottom;
     })
-  );
-  expect(layout[1].top).toBeCloseTo(layout[0].bottom, 0);
+    .toBeCloseTo(0, 0);
+  const layout = await measure();
   expect(layout.map(({ alpha }) => alpha)).toEqual(layout.map(() => 255));
   await page.keyboard.press('Escape');
   await expect.poll(heights).toEqual(closed);
