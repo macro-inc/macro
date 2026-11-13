@@ -12,7 +12,8 @@ import {
 /**
  * The spreadsheet block's header on touch: the title with its menu (and the
  * Beta badge on tablets), and who else is viewing. While it owns the header,
- * the editor's Ask Macro and Comments buttons don't reach it.
+ * the editor's Ask Macro and Comments buttons don't reach it; Ask Macro
+ * is in the title menu.
  */
 export function MobileSpreadsheetHeader(props: SpreadsheetHeaderProps) {
   const title = useBlockDocumentName();
@@ -29,7 +30,7 @@ export function MobileSpreadsheetHeader(props: SpreadsheetHeaderProps) {
           <BetaBadge />
         </Show>
       }
-      menuTools={[actions.share]}
+      menuTools={[actions.askMacro, actions.share]}
       ops={ops}
       trailing={<BlockLiveIndicators />}
     />
