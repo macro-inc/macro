@@ -1,0 +1,29 @@
+crates/macro_event_broker/Cargo.toml
+  s_800cdee5095ae4::t_d56e4a77f484fe 25
+crates/macro_event_broker/src/domain/models.rs
+  s_800cdee5095ae4::t_81cadf98d135dc 5,23-37
+crates/macro_event_broker/examples/example_event.rs
+  s_800cdee5095ae4::t_6bbe6c69297a49 55-67
+crates/macro_event_broker/src/domain/models/test.rs
+  s_800cdee5095ae4::t_6bbe6c69297a49 26-38,145-157
+crates/macro_event_broker/src/lib.rs
+  s_800cdee5095ae4::t_81cadf98d135dc 21-23
+crates/macro_event_broker/src/domain/service/test.rs
+  s_800cdee5095ae4::t_6bbe6c69297a49 138-150,274-286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aad472be3c73f026f900bf7302244c92ecd97809",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
