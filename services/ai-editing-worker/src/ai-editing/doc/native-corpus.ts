@@ -504,6 +504,45 @@ export const BLOCK_CASES: readonly BlockCase[] = [
       { kind: 'removeNode', node: block(0) },
     ],
   },
+  // List items override remove() (merging nested lists either side) and
+  // insertAfter() (splitting the list); moves and removals go through them.
+  // Nested items sit in their own list item after their parent: [0,1] and
+  // [0,3] hold the a1 and b1 lists.
+  {
+    name: 'removeNode a list item between two nested lists',
+    markdown: '- a\n  - a1\n- b\n  - b1\n- c',
+    ops: [{ kind: 'removeNode', node: [0, 2] }],
+  },
+  {
+    name: 'removeNode the only item of a list',
+    markdown: '- only\n\nTail',
+    ops: [{ kind: 'removeNode', node: [0, 0] }],
+  },
+  {
+    name: 'moveNode a paragraph after a middle list item',
+    markdown: 'Para\n\n- one\n- two\n- three',
+    ops: [{ kind: 'moveNode', node: block(0), at: { after: [1, 1] } }],
+  },
+  {
+    name: 'moveNode a list item after a root paragraph',
+    markdown: 'Para\n\n- one\n- two',
+    ops: [{ kind: 'moveNode', node: [1, 0], at: { after: block(0) } }],
+  },
+  {
+    name: 'moveNode a list item to the end of the root',
+    markdown: 'Para\n\n- one\n- two',
+    ops: [{ kind: 'moveNode', node: [1, 0], at: { appendToRoot: true } }],
+  },
+  {
+    name: 'moveNode a list item beside the nested list its removal merges away',
+    markdown: '- a\n  - a1\n- b\n  - b1\n- c',
+    ops: [{ kind: 'moveNode', node: [0, 2], at: { after: [0, 3] } }],
+  },
+  {
+    name: 'moveNode a list item after an item of the merged nested list',
+    markdown: '- a\n  - a1\n- b\n  - b1\n- c',
+    ops: [{ kind: 'moveNode', node: [0, 2], at: { after: [0, 3, 0, 0] } }],
+  },
 ];
 
 /** Durable id of a seed node by top-level index or child path. */
