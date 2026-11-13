@@ -64,8 +64,9 @@ export type RoutineRowOperations = {
   /** Make a sub-routine the owner's own: it stops following its parent. */
   keepAsOwn(id: string): void;
   /**
-   * How many routines its runs created, finished one-time ones included:
-   * deleting it deletes them all. Undefined when they couldn't be read.
+   * How many routines its runs created, as its page lists them (finished
+   * one-time ones too, up to the server's cap): deleting it deletes them.
+   * Undefined when they couldn't be read.
    */
   createdCount(id: string): Promise<number | undefined>;
 };
