@@ -29,6 +29,7 @@ ignores:
   - apps/web/src/features/block-code/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-fig/fig-block.tsx
+  - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-image/component/Block.tsx
   - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/block-pdf/component/Block.tsx
@@ -63,7 +64,6 @@ ignores:
   - apps/web/src/features/block-company/component/CompanyBlockAdapter.tsx
   - apps/web/src/features/block-contact/component/ContactBlockAdapter.tsx
   - apps/web/src/features/block-database/component/TopBar.tsx
-  - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-form/views/builder-view.tsx
   - apps/web/src/features/block-image/component/ImageContent.tsx
   - apps/web/src/features/block-md/comments/CommentMargin.tsx
