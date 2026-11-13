@@ -149,7 +149,10 @@ async function mount(page: Page, state: SlackServer, query = '') {
       if (key === 'POST external-chats') {
         state.conversations = state.conversations.map((conversation) =>
           conversation.remoteId === body.remoteId
-            ? { ...conversation, added: { id: 'chat-shared-launch' } }
+            ? {
+                ...conversation,
+                added: { id: 'chat-shared-launch', name: conversation.name },
+              }
             : conversation
         );
         return route.fulfill({ json: { chatId: 'chat-shared-launch' } });
