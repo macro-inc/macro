@@ -49530,10 +49530,11 @@ export const getItemsSoupQueryParams = zod.object({
       'touched_by_me',
       'notified_at',
       'property',
+      'name',
     ])
     .optional()
     .describe(
-      'Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.'
+      "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
     ),
   sort_property_definition_id: zod
     .uuid()
@@ -54684,6 +54685,7 @@ export const postItemsSoupBody = zod
                 'touched_by_me',
                 'notified_at',
                 'property',
+                'name',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -59284,6 +59286,7 @@ export const postItemsSoupAstBody = zod
                 'touched_by_me',
                 'notified_at',
                 'property',
+                'name',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -63996,6 +63999,7 @@ export const postItemsSoupAstGroupedBody = zod
                     'updated_at',
                     'viewed_updated',
                     'property',
+                    'name',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'
@@ -64292,6 +64296,7 @@ export const postItemsSoupAstGroupedBody = zod
                     'updated_at',
                     'viewed_updated',
                     'property',
+                    'name',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'

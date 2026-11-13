@@ -1,8 +1,9 @@
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
+import { t } from '@app/lib/i18n';
 
 export type DriveTab = 'owned' | 'recent' | 'shared';
 export type DriveScope = 'default' | 'all' | 'attachments';
-export type DriveSort = 'updated_at' | 'created_at' | 'viewed_at';
+export type DriveSort = 'updated_at' | 'created_at' | 'viewed_at' | 'name';
 
 export type DriveLocation =
   | { kind: 'tab'; tab: DriveTab }
@@ -38,6 +39,12 @@ export const DRIVE_SORT_OPTIONS = [
   { id: 'updated_at', label: 'Last modified' },
   { id: 'created_at', label: 'Created' },
   { id: 'viewed_at', label: 'Last viewed' },
+  {
+    id: 'name',
+    get label() {
+      return t('viewMenus.sortName');
+    },
+  },
 ] satisfies { id: DriveSort; label: string }[];
 
 /** The touch header's pills: the tabs plus the folder overview. */

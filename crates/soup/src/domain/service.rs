@@ -1891,7 +1891,11 @@ where
                     .map(SoupCandidate::from_projection_hydration)
                     .paginate(limit.into(), |item: &SoupCandidate| CursorVal {
                         sort_type: sort,
-                        last_val: sort.position(item.sort_key, item.item.updated_at()),
+                        last_val: sort.position(
+                            item.sort_key,
+                            item.item.name(),
+                            item.item.updated_at(),
+                        ),
                     })
                     .filter_on(entity_filter)
                     .into_page();

@@ -2133,6 +2133,12 @@ export type GraphqlSimpleSortMethod =
   /** Sort by creation timestamp. */
   | 'CREATED_AT'
   /**
+   * Sort by the item's own name, case-insensitively in ICU root collation
+   * order, unnamed last, then newest update and ID. Database rows have no
+   * name here and sort last. Omits the same sources `PROPERTY` does.
+   */
+  | 'NAME'
+  /**
    * Only entities the caller holds a live notification for, most recently
    * notified first. Descending `soup` only; not supported by `groupSoup`.
    */

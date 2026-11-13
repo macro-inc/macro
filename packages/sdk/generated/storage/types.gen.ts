@@ -12417,7 +12417,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property' | 'name';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -18594,7 +18594,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property' | 'name';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -33165,7 +33165,8 @@ export type GetItemsSoupData = {
         /**
          * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
          * Missing definitions, unsupported types, and mismatched values sort as missing.
-         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
+         * Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
          * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
