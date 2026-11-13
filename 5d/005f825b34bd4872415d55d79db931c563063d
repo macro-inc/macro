@@ -1,0 +1,21 @@
+apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  s_699e95788b47ad::t_1d369ca263b738 11,218-220
+apps/web/src/features/agent-dashboards/agent-dashboard-button.tsx
+  s_699e95788b47ad::t_b90c879dde30da 1-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5d005f825b34bd4872415d55d79db931c563063d",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
