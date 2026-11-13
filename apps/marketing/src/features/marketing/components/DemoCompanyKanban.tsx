@@ -26,7 +26,7 @@ export function CompanyKanbanColumn(
         local.class
       )}
     >
-      <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
+      <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-ink-muted">
         {local.icon}
         <span class="truncate">{local.label}</span>
       </div>
@@ -70,7 +70,7 @@ export function CompanyKanbanCardSurface(
       >
         <div class="flex items-center gap-2 min-w-0">
           <div class="size-4 shrink-0">{local.icon}</div>
-          <span class="ph-no-capture truncate font-semibold min-w-0">
+          <span class="ph-no-capture truncate font-medium min-w-0">
             {local.title}
           </span>
           {local.owner}

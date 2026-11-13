@@ -365,8 +365,9 @@ async fn foreign_recipients_follow_exact_source_and_current_team_membership(
     Ok(())
 }
 
-/// Source files of the access statements, without the tests and the
-/// test-only copy of the old statements.
+/// Source files of the access statements (Rust, and SQL files that
+/// `query_file!` reads), without the tests and the test-only copy of the old
+/// statements.
 fn statement_sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
     for entry in std::fs::read_dir(dir).expect("read the source directory") {
         let path = entry.expect("read a directory entry").path();
@@ -375,16 +376,22 @@ fn statement_sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>)
             .and_then(|name| name.to_str())
             .unwrap_or("");
         if path.is_dir() {
-            statement_sources(&path, files);
-        } else if name.ends_with(".rs")
-            && name != "test.rs"
-            && !name.ends_with("_test.rs")
-            && !matches!(name, "test_viewers.rs" | "source_list_oracle.rs")
+            if name != ORACLE {
+                statement_sources(&path, files);
+            }
+        } else if name.ends_with(".sql")
+            || (name.ends_with(".rs")
+                && name != "test.rs"
+                && !name.ends_with("_test.rs")
+                && !matches!(name, "test_viewers.rs" | "source_list_oracle.rs"))
         {
             files.push(path);
         }
     }
 }
+
+/// The module, and the directory of SQL files, that keep the old statements.
+const ORACLE: &str = "source_list_oracle";
 
 /// What in `sql` would bind a viewer's source list instead of checking
 /// membership: a source column compared with a bound array, the old
@@ -443,6 +450,10 @@ fn no_statement_binds_a_source_list() {
         &mut files,
     );
     assert!(files.len() > 20, "found only {} source files", files.len());
+    assert!(
+        files.iter().any(|path| path.ends_with("documents_access.sql")),
+        "the batched document statement is not scanned"
+    );
     let found: Vec<String> = files
         .iter()
         .flat_map(|path| {
@@ -471,6 +482,7 @@ fn source_list_uses_finds_each_old_form() {
         "and team_id::text = any($1)",
         "SELECT external_chat_access_level($1, $2)",
         "AND NOT EXISTS (SELECT FROM entity_access_source_matches(x, $1, $2))",
+        include_str!("source_list_oracle/documents_access.sql"),
     ] {
         assert!(!source_list_uses(sql).is_empty(), "{sql}");
     }

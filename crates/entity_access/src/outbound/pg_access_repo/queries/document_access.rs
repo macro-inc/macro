@@ -7,13 +7,16 @@ mod test;
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+use crate::{
+    domain::{models::AccessLevel, telemetry::span_count},
+    outbound::pg_access_repo::queries::Viewer,
+};
 #[cfg(feature = "explain_binary")]
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 /// Get the highest access level a viewer has for a document.
 #[tracing::instrument(err, skip(pool, viewer))]
@@ -204,6 +207,41 @@ pub(crate) async fn get_document_access(
         .max();
 
     Ok(highest_level)
+}
+
+/// The highest access level a signed-in user has on each of many documents,
+/// in one statement.
+///
+/// Gives each document the answer [`get_document_access`] gives it, from the
+/// same four sources; documents the user cannot reach are left out. A project
+/// read checks every task it holds, and one statement per task at two round
+/// trips each was most of its time. Users only: the anonymous
+/// public-link-only check and bots stay in [`get_document_access`].
+#[tracing::instrument(err, skip_all, fields(document_count = span_count(document_ids.len())))]
+pub(crate) async fn get_documents_access(
+    pool: &PgPool,
+    document_ids: &[uuid::Uuid],
+    user_id: &str,
+) -> Result<HashMap<uuid::Uuid, AccessLevel>, sqlx::Error> {
+    let mut highest: HashMap<uuid::Uuid, AccessLevel> = HashMap::new();
+    if document_ids.is_empty() {
+        return Ok(highest);
+    }
+    let rows = sqlx::query_file!(
+        "src/outbound/pg_access_repo/queries/document_access/documents_access.sql",
+        document_ids,
+        user_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    for row in rows {
+        highest
+            .entry(row.document_id)
+            .and_modify(|level| *level = (*level).max(row.access_level))
+            .or_insert(row.access_level);
+    }
+    Ok(highest)
 }
 
 #[cfg(feature = "explain_binary")]

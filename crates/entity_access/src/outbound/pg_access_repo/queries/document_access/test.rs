@@ -765,3 +765,48 @@ async fn document_access_matches_the_source_list_form(pool: PgPool) -> anyhow::R
     })
     .await
 }
+
+/// The batched check answers every user as main's batched statement did. Bots
+/// and anonymous callers never reach it: they take the one-document check.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_document")
+    )
+)]
+async fn documents_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let users: Vec<_> = matrix_viewers(&pool)
+        .await?
+        .into_iter()
+        .filter(|viewer| viewer.viewer().user_id().is_some())
+        .collect();
+    let documents: Vec<Uuid> = sqlx::query_scalar!(r#"SELECT id FROM "Document" ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?
+        .iter()
+        .filter_map(|id| id.parse().ok())
+        .collect();
+
+    assert_matrix_agrees(&users, &["every document"], async |viewer, _| {
+        let user_id = viewer
+            .user_id()
+            .ok_or_else(|| anyhow::anyhow!("{} is not a user", viewer.label))?;
+        let old: std::collections::BTreeMap<_, _> = source_list_oracle::get_documents_access(
+            &pool,
+            &documents,
+            &viewer.sources,
+            &user_id,
+        )
+        .await?
+        .into_iter()
+        .collect();
+        let new: std::collections::BTreeMap<_, _> =
+            get_documents_access(&pool, &documents, user_id.as_ref())
+                .await?
+                .into_iter()
+                .collect();
+        Ok((old, new))
+    })
+    .await
+}

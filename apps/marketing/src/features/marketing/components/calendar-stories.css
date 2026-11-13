@@ -41,7 +41,7 @@
 .calendar-story .calendar-app-check svg { width: 11px; height: 11px; }
 .calendar-app-main { flex: 1; min-width: 0; padding: 14px 16px 0 8px; }
 .calendar-app-bar { display: flex; align-items: center; gap: 10px; padding: 0 0 12px 8px; color: var(--color-ink-muted); }
-.calendar-app-bar strong { margin-right: auto; color: var(--color-ink); font-size: 14px; font-weight: 600; }
+.calendar-app-bar strong { margin-right: auto; color: var(--color-ink); font-size: 14px; font-weight: 500; }
 .calendar-story .calendar-app-bar svg { width: 13px; height: 13px; }
 .calendar-app-button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 8px; background: #ffffff0c; color: var(--color-ink); font-size: 12px; white-space: nowrap; }
 
@@ -50,9 +50,9 @@
 .calendar-grid-day { display: grid; justify-items: center; gap: 2px; color: var(--color-ink-muted); font-size: 12px; }
 .calendar-grid-day b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--color-ink); font-size: 18px; font-weight: 400; }
 .calendar-grid-day[data-today] { color: var(--color-accent); }
-.calendar-grid-day[data-today] b { background: var(--color-accent); color: var(--calendar-event-ink); font-weight: 600; }
+.calendar-grid-day[data-today] b { background: var(--color-accent); color: var(--calendar-event-ink); font-weight: 500; }
 .calendar-grid-person { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
-.calendar-grid-person i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #ffffff1c; font-size: 11px; font-style: normal; font-weight: 600; }
+.calendar-grid-person i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #ffffff1c; font-size: 11px; font-style: normal; font-weight: 500; }
 .calendar-grid-hours { display: grid; grid-auto-rows: var(--hour); color: var(--color-ink-muted); font-size: 11px; text-align: right; }
 .calendar-grid-hours span { padding-right: 9px; transform: translateY(-8px); }
 .calendar-grid-hours span:first-child { visibility: hidden; }
@@ -111,7 +111,7 @@
 .calendar-event-card { width: min(420px, 100%); justify-self: center; padding: 18px 20px; }
 .calendar-event-title { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .calendar-event-title i { flex: none; width: 11px; height: 11px; border-radius: 3px; background: var(--tone); }
-.calendar-event-title strong { margin-right: auto; font-size: 18px; font-weight: 600; }
+.calendar-event-title strong { margin-right: auto; font-size: 18px; font-weight: 500; }
 .calendar-event-badge { padding: 3px 9px; border-radius: 999px; background: #ffffff0f; color: var(--color-ink-muted); font-size: 11px; white-space: nowrap; }
 .calendar-event-row { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--calendar-line); font-size: 13px; }
 .calendar-event-row > svg { margin-top: 2px; color: var(--color-ink-muted); }

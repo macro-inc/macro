@@ -297,6 +297,43 @@ pub(super) async fn get_document_access(
     Ok(highest_level)
 }
 
+/// The batched document check as main had it at 58b8bd7846, with its
+/// statement copied to `source_list_oracle/documents_access.sql`.
+pub(super) async fn get_documents_access(
+    pool: &PgPool,
+    document_ids: &[uuid::Uuid],
+    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<HashMap<uuid::Uuid, AccessLevel>, sqlx::Error> {
+    let mut highest: HashMap<uuid::Uuid, AccessLevel> = HashMap::new();
+    if document_ids.is_empty() {
+        return Ok(highest);
+    }
+    // Its cost follows the caller's source ids (one per channel and team), which
+    // no caller bounds, so bound the statement. The services' pools set no timeout.
+    let mut transaction = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *transaction)
+        .await?;
+    let rows = sqlx::query_file!(
+        "src/outbound/pg_access_repo/queries/source_list_oracle/documents_access.sql",
+        document_ids,
+        &source_ids.0,
+        user_id.as_ref(),
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
+
+    for row in rows {
+        highest
+            .entry(row.document_id)
+            .and_modify(|level| *level = (*level).max(row.access_level))
+            .or_insert(row.access_level);
+    }
+    Ok(highest)
+}
+
 /// Historical document ids are not UUIDs and cannot occur in `entity_access`
 /// rows. Their ownership, link grants, channel grants, and project grants still
 /// live in the ordinary document and share tables.
