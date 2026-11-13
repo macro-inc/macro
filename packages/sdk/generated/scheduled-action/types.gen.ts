@@ -10,7 +10,8 @@ export type ClientOptions = {
 export type AcceptSuggestionRequest = {
     /**
      * The suggestion's `updatedAt` as the caller read it. A background suggestion runs
-     * only if it is unchanged since; otherwise the answer is 409.
+     * only if it is unchanged since and no run of it is still settling;
+     * otherwise the answer is 409.
      */
     updatedAt: string;
 };
@@ -1793,7 +1794,8 @@ export type Suggestion = SuggestionKind & {
 };
 
 /**
- * The suggestion changed since the caller read it.
+ * The suggestion changed since the caller read it, or can't run until its
+ * last run settles.
  */
 export type SuggestionChanged = {
     /**
@@ -3184,7 +3186,7 @@ export type AcceptSuggestionErrors = {
      */
     404: string;
     /**
-     * The suggestion changed since the caller read it: the body has it as it is now
+     * The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now
      */
     409: SuggestionChanged;
     500: string;
