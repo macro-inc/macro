@@ -22,10 +22,11 @@ use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
 use sha2::{Digest, Sha256};
 
-use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
+use super::build::{BinariesDir, runtime_image_tag};
+use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
-use super::inventory::{RustService, services_for_mode};
-use super::{Mode, repo_root};
+use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
+use super::{Mode, google_emulator, microsoft_emulator, repo_root};
 
 #[cfg(test)]
 mod test;
@@ -69,6 +70,34 @@ pub fn tls_certs_dir() -> PathBuf {
     repo_root().join("infra/local/certs")
 }
 
+/// The sidecars a stack's resolved env turns on. They are not Rust services
+/// of ours, so they have no modes in the inventory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Sidecars {
+    /// Forwards real Gmail watch notifications to the email service. On when
+    /// the env carries the forwarder's service-account key.
+    pub gmail_forwarder: bool,
+    /// The Gmail emulator, in place of Google. On when the stack runs its own
+    /// FusionAuth and the env names no real Google client.
+    pub gmail_emulator: bool,
+    /// The Outlook emulator, in place of Microsoft. On when the stack runs
+    /// its own FusionAuth and the env names no real Microsoft client.
+    pub outlook_emulator: bool,
+}
+
+impl Sidecars {
+    pub fn from_env(mode: Mode, env: &std::collections::BTreeMap<String, String>) -> Self {
+        Sidecars {
+            gmail_forwarder: mode.spec().runs_local_infra
+                && env
+                    .get("GMAIL_FORWARDER_SA_KEY")
+                    .is_some_and(|key| !key.trim().is_empty()),
+            gmail_emulator: google_emulator::stands_in(mode, env),
+            outlook_emulator: microsoft_emulator::stands_in(mode, env),
+        }
+    }
+}
+
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
@@ -77,18 +106,26 @@ pub fn generate(
     instance: &Instance,
     binaries: &BinariesDir,
     static_frontend: bool,
-    gmail_forwarder: bool,
+    sidecars: Sidecars,
+    computers: &Computers,
 ) -> Result<PathBuf> {
     super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
+    let runtime_image = runtime_image_tag(super::arch::detect()?)?;
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
+        let mut environment = vec![("PORT", "8080")];
+        if sidecars.outlook_emulator
+            && svc.compose_name == microsoft_emulator::AUTHENTICATION_SERVICE
+        {
+            environment.extend(microsoft_emulator::authentication_service_env());
+        }
         let mut s = dct::Service {
-            image: Some(RUNTIME_IMAGE_TAG.to_string()),
+            image: Some(runtime_image.clone()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
-            environment: kv(&[("PORT", "8080")]),
+            environment: kv(&environment),
             ..Default::default()
         };
         let ports = published_ports(mode, instance, svc);
@@ -97,6 +134,7 @@ pub fn generate(
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }
+    add_computers(&mut services, computers)?;
 
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
@@ -120,11 +158,52 @@ pub fn generate(
     // stacks sync independently — a subscription is a queue, not a broadcast,
     // so sharing one would make instances steal each other's notifications.
     // Gated on the SA key being present in the resolved env.
-    if gmail_forwarder && mode.spec().runs_local_infra {
+    if sidecars.gmail_emulator {
+        let mut volumes = mounts.clone();
+        volumes.push(google_emulator::seed_volume());
+        services.insert(
+            google_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: volumes.into_iter().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(google_emulator::command())),
+                ports: dct::Ports::Short(vec![google_emulator::published_port(instance)]),
+                // The services call it on their network; FusionAuth, which
+                // exchanges sign-in codes with it, only joins `auth`.
+                networks: net_aliases(&[
+                    ("services", &[google_emulator::network_alias()]),
+                    ("auth", &[google_emulator::network_alias()]),
+                ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.outlook_emulator {
+        let mut volumes = mounts.clone();
+        volumes.push(microsoft_emulator::seed_volume());
+        services.insert(
+            microsoft_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: volumes.into_iter().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(microsoft_emulator::command(instance))),
+                ports: dct::Ports::Short(vec![microsoft_emulator::published_port(instance)]),
+                // The services call it on their network; FusionAuth, which
+                // discovers its endpoints and exchanges sign-in codes with
+                // it, only joins `auth`.
+                networks: net_aliases(&[
+                    ("services", &[microsoft_emulator::network_alias()]),
+                    ("auth", &[microsoft_emulator::network_alias()]),
+                ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.gmail_forwarder {
         services.insert(
             "gmail_forwarder".to_string(),
             Some(dct::Service {
-                image: Some(RUNTIME_IMAGE_TAG.to_string()),
+                image: Some(runtime_image.clone()),
                 volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
                 command: Some(dct::Command::Args(
                     [
@@ -159,9 +238,7 @@ pub fn generate(
     // external network/volume definitions, which the schema can't represent.
     let mut value = serde_yaml::to_value(&compose).context("serializing compose override")?;
     apply_tags(&mut value, mode, instance);
-    if mode.spec().runs_local_infra && !instance.is_default() {
-        set_external_networks_and_volumes(&mut value, instance);
-    }
+    set_networks_and_volumes(&mut value, mode, instance);
     if !instance.is_default() {
         set_external_project_networks(&mut value, instance);
     }
@@ -201,6 +278,44 @@ fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Ve
         ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
     }
     ports
+}
+
+/// Wire the harness's computer control plane to its fleet (see
+/// [`computers`]).
+fn add_computers(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    computers: &Computers,
+) -> Result<()> {
+    match computers.fleet() {
+        Fleet::Off => {
+            let harness = services
+                .get_mut(EGRESS_SERVICE)
+                .and_then(Option::as_mut)
+                .context("the computer control plane runs in agent_harness_service")?;
+            let dct::Environment::KvPair(env) = &mut harness.environment else {
+                anyhow::bail!("harness environment must be a key-value map");
+            };
+            env.insert(
+                "COMPUTERS_FLEET".into(),
+                Some(dct::SingleValue::String("disabled".into())),
+            );
+        }
+        Fleet::Docker => {
+            // Same path on both sides: the harness writes enrollments here and
+            // hands the daemon bind sources below it.
+            let dir = computers.enrollment_dir();
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let harness = services
+                .get_mut(EGRESS_SERVICE)
+                .and_then(Option::as_mut)
+                .context("the computer control plane runs in agent_harness_service")?;
+            harness
+                .volumes
+                .push(dct::Volumes::Simple(format!("{0}:{0}", dir.display())));
+        }
+        Fleet::Incus => {}
+    }
+    Ok(())
 }
 
 fn add_sdk_webhook_relay(
@@ -320,6 +435,12 @@ fn add_proxy_service(
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    // Incus reverse tunnels dial the host loopback; Docker computers use the
+    // proxy's services-network name and need no host DNS or guest CA changes.
+    let computer_gateway_port = instance.port(Port::ComputerGateway);
+    ports.push(format!(
+        "127.0.0.1:{computer_gateway_port}:{computer_gateway_port}"
+    ));
     if previews {
         ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
         volumes.push(dct::Volumes::Simple(format!(
@@ -333,6 +454,7 @@ fn add_proxy_service(
             image: Some(CADDY_IMAGE.to_string()),
             environment: kv(&[
                 ("PROXY_PORT", &proxy_port.to_string()),
+                ("COMPUTER_GATEWAY_PORT", &computer_gateway_port.to_string()),
                 ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
             ]),
             extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
@@ -352,6 +474,50 @@ fn add_local_infra(
     instance: &Instance,
     static_frontend: bool,
 ) -> Result<()> {
+    services.insert(
+        "openbao".to_string(),
+        Some(dct::Service {
+            image: Some(OPENBAO_IMAGE.to_string()),
+            entrypoint: Some(dct::Entrypoint::List(vec![
+                "/usr/bin/dumb-init".to_string(),
+                "--".to_string(),
+                "/bin/sh".to_string(),
+                "/openbao/config/start.sh".to_string(),
+            ])),
+            command: Some(dct::Command::Args(vec![])),
+            volumes: vec![
+                dct::Volumes::Simple(format!(
+                    "{}:/openbao/config/macro-local.hcl:ro,z",
+                    repo_root().join("infra/local/openbao/local.hcl").display()
+                )),
+                dct::Volumes::Simple(format!(
+                    "{}:/openbao/config/start.sh:ro,z",
+                    repo_root().join("infra/local/openbao/start.sh").display()
+                )),
+                dct::Volumes::Simple("openbao_data:/openbao/file".to_string()),
+            ],
+            environment: kv(&[("BAO_ADDR", "http://127.0.0.1:8200")]),
+            restart: Some("unless-stopped".to_string()),
+            ports: dct::Ports::Short(vec![format!(
+                "127.0.0.1:{}:8200",
+                instance.port(Port::OpenBao)
+            )]),
+            healthcheck: Some(dct::Healthcheck {
+                test: Some(dct::HealthcheckTest::Multiple(vec![
+                    "CMD".to_string(),
+                    "bao".to_string(),
+                    "status".to_string(),
+                ])),
+                interval: Some("5s".to_string()),
+                timeout: Some("3s".to_string()),
+                retries: 10,
+                ..Default::default()
+            }),
+            networks: net_aliases(&[("services", &["openbao"])]),
+            ..Default::default()
+        }),
+    );
+
     // This per-instance directory belongs only to FusionAuth. Private SELinux
     // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
@@ -525,6 +691,31 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
             .expect("logging configuration is serializable"),
         );
     }
+}
+
+/// Define local storage and isolate named instances' networks and volumes.
+fn set_networks_and_volumes(value: &mut Value, mode: Mode, instance: &Instance) {
+    if !mode.spec().runs_local_infra {
+        return;
+    }
+
+    if !instance.is_default() {
+        set_external_networks_and_volumes(value, instance);
+    }
+
+    let map = value.as_mapping_mut().expect("compose root is a mapping");
+    let volumes = map
+        .entry(Value::from("volumes"))
+        .or_insert_with(|| Value::Mapping(serde_yaml::Mapping::new()))
+        .as_mapping_mut()
+        .expect("compose volumes is a mapping");
+    volumes.insert(
+        "openbao_data".into(),
+        serde_yaml::to_value(serde_json::json!({
+            "name": format!("{}_openbao_data", instance.project_name())
+        }))
+        .expect("volume configuration is serializable"),
+    );
 }
 
 /// Define the per-instance external networks and volumes (named-instance only).
@@ -810,5 +1001,8 @@ pub fn docker_compose(
     cmd.arg("--env-file").arg(generated_env);
     cmd.env("COMPOSE_PROJECT_NAME", instance.project_name());
     cmd.env("MACRO_ENV_FILE", generated_env);
+    // Compose gives the shell precedence over --env-file. This key is owned
+    // by the resolved run policy, so inherit it only from that generated file.
+    cmd.env_remove("SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT");
     cmd
 }

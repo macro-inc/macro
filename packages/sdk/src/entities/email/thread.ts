@@ -11,6 +11,8 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
@@ -20,6 +22,7 @@ import {
   sharePermissionBody,
 } from '../sharing/permissions';
 import { EmailAttachment } from './attachment';
+import { EmailDraft } from './draft';
 import type { Label } from './label';
 import { Link } from './link';
 import { EmailMessage } from './message';
@@ -190,6 +193,18 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** Favorites identify email threads as `email_thread`. */
   readonly entityType = 'email_thread';
 
+  /**
+   * Share this email thread with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * email thread; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'thread', this.id);
+  }
+
   /** The properties service identifies email threads as `THREAD`. */
   protected readonly propertyEntityType = 'THREAD';
 
@@ -309,6 +324,18 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   }
 
   /**
+   * The unsent drafts among this thread's first 100 messages, from the thread detail.
+   *
+   * @readonly
+   */
+  async drafts(): Promise<EmailDraft[]> {
+    const { messages } = await this.detail.get();
+    return messages
+      .filter((m) => m.is_draft && !m.is_sent)
+      .map((m) => EmailDraft.byId(this.client, m.db_id));
+  }
+
+  /**
    * The attachments across this thread's first 100 messages, pre-seeded from the thread detail.
    *
    * @readonly
@@ -326,7 +353,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * `replyingTo` instead. Returns a handle when the API reports the created
    * message's id.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async reply(opts: ReplyEmailOptions): Promise<EmailMessage | undefined> {

@@ -23,7 +23,9 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
   merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
-  entry methods call them.
+  entry methods call them, and `GET /crm/pipelines/details` (every pipeline
+  with its fields and version, as `ListPipelines` sees them) backs
+  `crm.pipelines.listWithFields()`.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
@@ -84,14 +86,33 @@ tools/HTTP/GraphQL surfaces over them.
   teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+- An archived call links to the companies whose domain a participant's address
+  is at, and separately to every visible contact of the team holding the
+  address as any of its addresses, with or without a company, together with
+  that contact's company (`src/outbound/call_link.rs`). A contact under a
+  hidden company links neither, and a team's own members never match its CRM. Calendar events and
+  bookings have no link by attendee address: they reach a record only through
+  a Companies or Contacts property someone set, a reference, or the call held
+  for them.
 
 - Manual companies require a name and accept an optional domain; explicit
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
-- Contact setters add email only when absent or link/switch company for a known
-  personal-provider email; validate under the contact lock and reject same-team
-  duplicates without disclosing restricted matches. Preserve ID, archive and sources.
+- Contact setters add or remove an address, choose the primary, link/switch
+  company for a personal-provider primary, or unlink a company; the rules live
+  in `src/domain/contact_update.rs`. Validate under the contact lock and reject
+  same-team duplicates without disclosing restricted matches. A new address
+  must be free across the team; a link, switch or unlink re-checks every
+  address the contact holds. Preserve ID, archive and sources.
+- A company-domain contact has a company and an address on one of that
+  company's `crm_domains` (`CrmContact::company_domain_emails`; there is no
+  stored marker). It cannot be unlinked or moved, and its last such address
+  cannot be removed. Read queries and the edit path compute it with the same
+  SQL expression; keep them identical.
+- Removing an address deletes only its `crm_contact_emails` row. Mailbox sources
+  stay, removed addresses are not remembered, and later mail from one may file a
+  fresh contact. Removing the primary promotes the oldest address left.
 - Personal sync and cleanup resolve one same-team/email contact across all companies,
   including hidden rows; skip ambiguous identities and preserve manual company choices.
 - Serialize single and bulk source teardown company-before-source/contact, and
@@ -143,9 +164,29 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+- Every address a contact is known by is a row in `crm_contact_emails`, stored
+  trimmed and lowercased. `crm_contacts.email` is the primary address, and a
+  trigger records it in that table. Find a contact by address through
+  `crm_contact_emails` (sync, teardown, email scope, thread access, call
+  linking, the activity scope); read `crm_contacts.email` only to display the
+  primary. Contact search and listing still match the primary only.
+  The table has no team column, so a read by address starts from the address
+  index and a read by team probes it once per contact: keep both behind their
+  `OFFSET 0` fences, or the planner joins against every team's addresses.
+  Company-domain population still
+  upserts on company and primary, but first looks for a contact that holds the
+  address as a further one and refreshes it instead: under the domain's
+  company, or anywhere in the team when nobody is filed under the domain with
+  it. A mailbox source is recorded per contact and mailbox, not per address:
+  `depopulate_contact` keeps it while that mailbox still has mail with another
+  of the contact's addresses (`other_address_mail.sql`), checked before the
+  domain lock like population's mailbox scan.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
+- The pipeline `edit` route refuses `sharing` from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check.
 
 ## Related
 

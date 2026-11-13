@@ -559,6 +559,9 @@ pub struct DeliverAction {
     /// prompts driven from the session itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// The app tab a person typed the prompt in, when they typed it in one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<agent_session::domain::model::UiClientId>,
 }
 
 /// How long a session on an external runtime goes without activity before it
@@ -715,6 +718,7 @@ impl DeliverAction {
             actor,
             announce,
             context: None,
+            client: None,
         }
     }
 
@@ -731,6 +735,7 @@ impl DeliverAction {
             actor: event.actor,
             announce: None,
             context: event.context,
+            client: event.client,
         }
     }
 }

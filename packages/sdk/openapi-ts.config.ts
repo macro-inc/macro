@@ -23,6 +23,18 @@ export default defineConfig(
     input: `./specs/${service}.json`,
     output: {
       path: `./generated/${service}`,
+      // Keep regeneration consistent with diff checks without reformatting the SDK.
+      postProcess: [
+        {
+          command: 'bun',
+          args: [
+            '-e',
+            String.raw`const file = Bun.file(process.argv[1] + '/sdk.gen.ts');
+await Bun.write(file, (await file.text()).replace(/[ \t]+(?=\r?$)/gm, ''));`,
+            '{{path}}',
+          ],
+        },
+      ],
     },
     plugins: [
       '@hey-api/client-fetch',

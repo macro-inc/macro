@@ -29,6 +29,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -49,6 +50,9 @@ jobs:
             - 'services/ai-editing-worker/**'
             - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
+            - 'packages/muppet/**'
+            - 'packages/starter-agent/**'
+            - 'tooling/scripts/starter-agent-lock.sh'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
           web_artifact_changed:
@@ -56,6 +60,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -84,6 +89,7 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+            - 'apps/web/src/components/gantt/**'
           calendar_details_changed:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
@@ -333,6 +339,8 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -347,6 +355,9 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
+      working-directory: packages/sdk
+    - name: Build SDK
+      run: bun run build
       working-directory: packages/sdk
     - name: Run checks
       run: |
@@ -365,6 +376,7 @@ jobs:
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
         check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
         check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Observability Package' 'packages/observability' 'bun run type-check && bun run test'
         check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
         check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
@@ -372,6 +384,8 @@ jobs:
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
         check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
         check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
+        check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
+        check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
         failed=0
         for index in "${!names[@]}"; do
           status=0
@@ -536,17 +550,6 @@ jobs:
           git diff -- packages/sdk | head -200
           exit 1
         fi
-    - name: Regenerate MCP tool pages
-      run: bun run generate:tools
-      working-directory: apps/docs
-    - name: Verify docs tool reference is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
-          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
-          git status --porcelain -- apps/docs
-          git diff -- apps/docs | head -200
-          exit 1
-        fi
     - name: Check Specta Types
       run: |
         just gen-agent-fold-types
@@ -673,12 +676,14 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Build natural-time WASM for tests
       run: just build-natural-time-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Test
@@ -762,6 +767,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       working-directory: apps/web
     - name: Functional Browser Tests
       run: bun run test:functional
@@ -840,6 +846,7 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Sign-up Browser Tests
@@ -967,6 +974,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web

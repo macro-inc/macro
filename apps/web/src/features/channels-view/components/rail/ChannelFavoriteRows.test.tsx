@@ -38,6 +38,7 @@ import {
 import { useSectionReorder } from './next/useSectionReorder';
 
 const measurements = vi.hoisted(() => ({ contentHeight: (): number => 400 }));
+const rowActivity = vi.hoisted(() => ({ unread: false, mentions: 0 }));
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
   activateRow: vi.fn(),
@@ -155,12 +156,16 @@ vi.mock('./hooks/useChannelRailState', () => ({
     selected: false,
     focused: false,
     muted: false,
+    unread: rowActivity.unread,
+    mentions: rowActivity.mentions,
   }),
   useChannelRailFavoriteItemState: () => () => ({
     domId: 'rail-favorite-row',
     selected: false,
     focused: false,
     muted: false,
+    unread: rowActivity.unread,
+    mentions: rowActivity.mentions,
   }),
   useChannelRailFavoritesState: () => () => ({
     items: [],
@@ -269,6 +274,8 @@ const channel = {
 let setChannel: Setter<ChannelEntity | undefined>;
 beforeEach(() => {
   vi.clearAllMocks();
+  rowActivity.unread = false;
+  rowActivity.mentions = 0;
   drag.starts.length = 0;
   drag.ends.length = 0;
   drag.draggables.clear();
@@ -453,6 +460,56 @@ describe('favorite rows in the chat rail', () => {
       'favorite:channel:design',
       expect.anything()
     );
+  });
+});
+
+describe('unread mention counts on rail rows', () => {
+  it('shows the count in place of the unread dot on a channel row', () => {
+    rowActivity.unread = true;
+    rowActivity.mentions = 3;
+    render(() => <ChannelOption channel={channel} />);
+
+    const count = screen.getByRole('img', { name: '3 unread mentions' });
+    expect(count.textContent).toBe('3');
+    expect(screen.queryByLabelText('Unread')).toBeNull();
+  });
+
+  it('keeps the unread dot when nothing mentions the viewer', () => {
+    rowActivity.unread = true;
+    render(() => <ChannelOption channel={channel} />);
+
+    expect(screen.getByLabelText('Unread')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /mention/ })).toBeNull();
+  });
+
+  it('shows a mention in a thread even without a top-level unread', () => {
+    rowActivity.mentions = 1;
+    render(() => <ChannelOption channel={channel} />);
+
+    expect(
+      screen.getByRole('img', { name: '1 unread mention' }).textContent
+    ).toBe('1');
+  });
+
+  it('caps the count at the edge limit', () => {
+    rowActivity.mentions = 10;
+    render(() => <ChannelOption channel={channel} />);
+
+    expect(
+      screen.getByRole('img', { name: 'More than 9 unread mentions' })
+        .textContent
+    ).toBe('9+');
+  });
+
+  it('counts mentions on a favorited channel', () => {
+    setChannel(channel);
+    rowActivity.unread = true;
+    rowActivity.mentions = 2;
+    render(() => <ChannelFavoriteRow favorite={favorite} />);
+
+    expect(
+      screen.getByRole('img', { name: '2 unread mentions' }).textContent
+    ).toBe('2');
   });
 });
 
@@ -669,6 +726,64 @@ describe('section reordering', () => {
 });
 
 describe('resizable chat sections', () => {
+  it('ignores saved heights while resizing is disabled and cancels in-progress writes', () => {
+    const [enabled, setEnabled] = createSignal(false);
+    rail.sectionPreferences = () => ({ sort: 'manual', height: 180 });
+    let viewport!: HTMLDivElement;
+    render(() => (
+      <ResizableRailSection
+        section="favorites"
+        label="Favorites"
+        open
+        resizingEnabled={enabled()}
+        maxHeight={400}
+        itemCount={12}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          viewport = element;
+          Object.defineProperty(element, 'offsetHeight', { value: 180 });
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+
+    expect(screen.getByText('Conversations')).toBeTruthy();
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(viewport.style.height).toBe('');
+
+    setEnabled(true);
+    expect(viewport.style.height).toBe('180px');
+    const handle = screen.getByRole('separator');
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+    const start = new MouseEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientY: 100,
+    });
+    Object.defineProperty(start, 'pointerId', { value: 1 });
+    handle.dispatchEvent(start);
+
+    setEnabled(false);
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(viewport.style.height).toBe('');
+    const finish = new MouseEvent('pointerup', { bubbles: true, clientY: 300 });
+    Object.defineProperty(finish, 'pointerId', { value: 1 });
+    handle.dispatchEvent(finish);
+    expect(rail.setSectionPreferences).not.toHaveBeenCalled();
+
+    setEnabled(true);
+    expect(screen.getByRole('separator').getAttribute('aria-valuenow')).toBe(
+      '180'
+    );
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
+    expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+      'favorites',
+      { height: 200 }
+    );
+  });
+
   it('grows the last All channels list to its content while preserving manual heights', () => {
     const [maximum, setMaximum] = createSignal(Number.POSITIVE_INFINITY);
     const [savedHeight, setSavedHeight] = createSignal<number>();
@@ -677,6 +792,7 @@ describe('resizable chat sections', () => {
     let viewport!: HTMLDivElement;
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="channels"
         label="All channels"
         open
@@ -716,6 +832,7 @@ describe('resizable chat sections', () => {
     const [open, setOpen] = createSignal(true);
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="favorites"
         label="Favorites"
         open={open()}
@@ -785,6 +902,7 @@ describe('resizable chat sections', () => {
     let top = 100;
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="favorites"
         label="Favorites"
         open
@@ -847,6 +965,7 @@ describe('resizable chat sections', () => {
       let viewport!: HTMLDivElement;
       const view = render(() => (
         <ResizableRailSection
+          resizingEnabled
           section="favorites"
           label="Favorites"
           open
@@ -914,6 +1033,7 @@ describe('resizable chat sections', () => {
     (cancelEvent) => {
       render(() => (
         <ResizableRailSection
+          resizingEnabled
           section="favorites"
           label="Favorites"
           open
@@ -966,6 +1086,7 @@ describe('resizable chat sections', () => {
   it('clamps keyboard resizing and resets only the section height', () => {
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="favorites"
         label="Favorites"
         open
@@ -1000,6 +1121,7 @@ describe('resizable chat sections', () => {
     let scrollElement: HTMLDivElement | undefined;
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="team_channels"
         label="Team channels"
         open
@@ -1047,6 +1169,7 @@ describe('resizable chat sections', () => {
     (section) => {
       render(() => (
         <ResizableRailSection
+          resizingEnabled
           section={section}
           label={section}
           open

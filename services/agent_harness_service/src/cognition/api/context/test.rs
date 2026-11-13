@@ -513,7 +513,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
-        activity_tool_context: ai_tools::build_activity_tool_context(
+        activity_service: ai_tools::build_activity_read_service(
             pool.clone(),
             properties_service.clone(),
             entity_access_service.clone(),
@@ -635,6 +635,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
             Arc::new(mcp_select::McpToolSelector::new(
                 Arc::new(mcp_repo.clone()),
+                local_mcp_http(),
                 pipedream_connections.clone(),
                 Arc::new(None),
             ));
@@ -851,6 +852,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_repo.clone(),
                 mcp_state_store,
                 client_metadata.clone(),
+                local_mcp_http(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
             mcp_client::inbound::McpRouterState::new(
@@ -865,4 +867,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         macro_event_broker,
     };
     Arc::new(api_context)
+}
+
+fn local_mcp_http() -> mcp_client::outbound::guarded_http::McpHttp {
+    mcp_client::outbound::guarded_http::McpHttp::new(
+        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+    )
+    .unwrap()
 }

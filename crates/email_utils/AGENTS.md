@@ -14,7 +14,8 @@ sender/generic-address checks.
 - `src/body_replyless.rs` + `src/body_replyless/`: strips quoted reply chains
   from HTML and plaintext bodies; `reply_snippet` is the Outlook snippet that
   ingest and `backfill_outlook_snippets` both derive from them.
-- `src/body_parsed.rs`: the parsed-body representation used across callers.
+- `src/body_parsed.rs`: the parsed-body representation used across callers,
+  and `html_to_undecorated_text` for one-line previews (no emphasis marks).
 
 ## Scope
 

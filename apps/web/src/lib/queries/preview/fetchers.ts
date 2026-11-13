@@ -3,6 +3,7 @@ import {
   fetchCrmContactPreviews,
   fetchCrmPipelinePreviews,
 } from '@app/features/crm/preview-adapter';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
@@ -136,6 +137,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           rawName: doc.document_name,
           name: doc.document_name,
+          appearance: readEntityAppearance(doc.appearance),
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
@@ -288,6 +290,7 @@ async function fetchInitiativePreviews(
             loading: false,
             rawName: item.data.name,
             name: item.data.name,
+            appearance: readEntityAppearance(item.data.appearance),
             owner: item.data.ownerId,
             updatedAt: item.data.updatedAt,
           },
@@ -441,6 +444,7 @@ async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: database.name,
         name: database.name,
+        appearance: readEntityAppearance(database.appearance),
         owner: database.owner_id,
       };
     })
@@ -464,6 +468,7 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: form.name,
         name: form.name,
+        appearance: readEntityAppearance(form.appearance),
         owner: form.ownerId,
       };
     })
@@ -483,6 +488,7 @@ async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: routine.value.name,
         name: routine.value.name,
+        appearance: readEntityAppearance(routine.value.appearance),
         owner: routine.value.owner,
         updatedAt: routine.value.updated_at,
       };

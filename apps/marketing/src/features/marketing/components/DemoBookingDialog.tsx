@@ -1,5 +1,5 @@
+import X from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import X from '@phosphor/x.svg';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { handleDemoBooked } from '../../../app/utils/utilCta';
 import { DEMO_BOOKING_URL } from '../core/navigation';

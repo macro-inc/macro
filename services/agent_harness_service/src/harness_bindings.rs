@@ -15,7 +15,7 @@ use std::time::Duration;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_harness::domain::model::{DORMANT_AFTER, ListedSessions, RuntimeAccessFacts};
 use agent_harness::domain::ports::{HarnessBindings, HarnessPresence, RuntimeConnectionId};
-use agent_session::domain::model::{AgentSessionId, ReplicaId};
+use agent_session::domain::model::ReplicaId;
 use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -48,19 +48,15 @@ impl PgHarnessBindings {
 
 impl HarnessBindings for PgHarnessBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<HarnessId>> {
-        let harness_id = sqlx::query_scalar!(
-            r#"
-            SELECT ac.harness_id
-            FROM agent_configs ac
-            JOIN harnesses h ON h.id = ac.harness_id
-            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
-            "#,
-            bot.as_uuid(),
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        use bots::domain::ports::HarnessAssignments;
+        use harnesses::domain::ports::HarnessRepo;
 
-        Ok(harness_id.flatten().map(HarnessId::new_from_uuid))
+        let assignment = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.pool.clone());
+        let Some(harness) = assignment.harness_for(bot).await? else {
+            return Ok(None);
+        };
+        let repo = harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.pool.clone());
+        Ok(repo.get_harness(harness).await?.map(|harness| harness.id))
     }
 
     async fn access_facts(
@@ -99,68 +95,28 @@ impl HarnessBindings for PgHarnessBindings {
         harness: HarnessId,
         acp_sessions: &[SessionId],
     ) -> anyhow::Result<ListedSessions> {
-        let acp_sessions: Vec<String> = acp_sessions
-            .iter()
-            .map(|session| session.to_string())
-            .collect();
-        let dormant_before = chrono::Utc::now() - DORMANT_AFTER;
-        // Activity is the later of `modified_at`, which moves with turn starts,
-        // blocks and metadata changes, and the newest log entry, which moves
-        // with everything a turn does. A turn not yet ended or anything still
-        // queued for the session keeps it out of dormancy however old.
-        let rows = sqlx::query!(
-            r#"
-            SELECT s.id,
-                (
-                    GREATEST(s.modified_at, latest.created_at) < $3
-                    AND s.turn_state IS DISTINCT FROM 'starting'
-                    AND s.turn_state IS DISTINCT FROM 'running'
-                    AND s.turn_state IS DISTINCT FROM 'blocked'
-                    AND s.turn_state IS DISTINCT FROM 'stopping'
-                    AND NOT s.turn_interrupted
-                    AND NOT EXISTS (
-                        SELECT 1 FROM agent_session_queue queue
-                        WHERE queue.agent_session_id = s.id
-                          AND jsonb_array_length(queue.entries) > 0
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1 FROM agent_session_tool_approval approval
-                        WHERE approval.agent_session_id = s.id AND approval.status = 'pending'
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1 FROM agent_session_notification notification
-                        WHERE notification.session_id = s.id AND notification.delivered_at IS NULL
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1 FROM agent_conversation_sessions conversation
-                        WHERE conversation.session_id = s.id AND conversation.is_current
-                    )
-                ) AS "dormant!"
-            FROM agent_session s
-            JOIN agent_configs ac ON ac.bot_id = s.bot_id
-            JOIN harnesses h ON h.id = ac.harness_id
-            LEFT JOIN LATERAL (
-                SELECT created_at FROM agent_session_log
-                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1
-            ) latest ON true
-            WHERE ac.harness_id = $1
-              AND h.deleted_at IS NULL
-              AND s.acp_session_id = ANY($2)
-              AND s.archived_by IS NULL
-            "#,
-            harness.as_uuid(),
-            &acp_sessions,
-            dormant_before,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        use agent_session::domain::ports::RuntimeSessionLookup;
+        use bots::domain::ports::HarnessAssignments;
+        use harnesses::domain::ports::HarnessRepo;
 
+        let repo = harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.pool.clone());
+        if repo.get_harness(harness).await?.is_none() {
+            return Ok(ListedSessions::default());
+        }
+        let assignments = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.pool.clone());
+        let bots = assignments.bots_on_harness(harness).await?;
+        let sessions =
+            agent_session::outbound::runtime_sessions::PgRuntimeSessions(self.pool.clone());
+        let dormant_before = chrono::Utc::now() - DORMANT_AFTER;
         let mut listed = ListedSessions::default();
-        for row in rows {
-            if row.dormant {
+        for session in sessions
+            .sessions_for_bots(&bots, acp_sessions, dormant_before)
+            .await?
+        {
+            if session.dormant {
                 listed.dormant += 1;
             } else {
-                listed.live.push(AgentSessionId::new_from_uuid(row.id));
+                listed.live.push(session.id);
             }
         }
         Ok(listed)

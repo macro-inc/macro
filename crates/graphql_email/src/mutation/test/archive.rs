@@ -15,7 +15,7 @@ async fn missing_post_write_thread_does_not_block_the_mutation_queue_with_retrie
         ),
     ];
     for mutation in mutations {
-        // All Mail omits a trashed thread even though its state write succeeded.
+        // The reload no longer finds the thread even though its state write succeeded.
         let service = Arc::new(CapturingEmailMutationService {
             thread_load_missing: true,
             ..Default::default()

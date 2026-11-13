@@ -2154,6 +2154,12 @@
 		flex-shrink: 0;
 	}
 
+	@container agent-session (min-width: 900px) {
+		:where(.agents-view, .agents-view-portal) .pane .dock {
+			padding-right: max(16px, var(--details-clearance, 0px));
+		}
+	}
+
 	:where(.agents-view, .agents-view-portal) .pane .dock .composer-anchor {
 		width: min(100%, 896px);
 		margin: 0 auto;

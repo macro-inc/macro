@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subscription_item_change SET outcome = $2 WHERE idempotency_key = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "subscription_item_change_outcome",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "payment_failed",
+                "abandoned"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03a91801da655685854ef54276cd4546ff4318f50ac04276cd6ca32be19e6a66"
+}

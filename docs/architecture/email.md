@@ -1,5 +1,9 @@
 # Email feature architecture
 
+This page covers the frontend and the service contracts it uses. The
+[email backend architecture](email-backend.md) describes service composition,
+worker ownership and persistence boundaries.
+
 Email applies the stronger composition and capability
 boundaries in [Frontend feature architecture](frontend-features.md).
 Its reusable packages live under `apps/web/src/features/`. The application still
@@ -66,10 +70,14 @@ may import a block package, `@core/block`, or block-related signal modules.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
 - `block-email/EmailBlockAdapter.tsx` translates block focus, keyboard scope,
-  location parameters, and block methods into `EmailThreadHost` callbacks.
+  location parameters, and block methods into `EmailThreadHost` callbacks, then
+  picks `views/email-thread.tsx` or, on touch, where every thread opens as
+  this block, `views/mobile/email-thread.tsx`.
   `block-email/EmailThreadHostView.tsx` composes the shared thread body without
   reading block state, so the Email view can mount it directly and compose its
-  own top bar. The thread does not read a block ID or register a block method
+  own top bar. The body adds nothing to a host's header: each host passes its
+  top bar and header actions, and the mobile view passes only a title and Info.
+  The thread does not read a block ID or register a block method
   itself. The adapter captures block signal accessors during setup; event
   callbacks use those captured functions instead of resolving a provider after
   setup.
@@ -307,8 +315,15 @@ The working copy and the mutation queue are separate stores, so a discard is
 first recorded beside its copy (`deleteAttemptId`), which stays listed and
 editable. The copy becomes `deleting`, hidden and closed to edits, only when the
 queue admits the delete, and the queue admits it only for the revision it was
-requested on: an edit or a newer save drops the request, and a request that
-never reached the queue is inert. A discard on its way to the server is never
+requested on: only an edit, which makes a new revision, withdraws the request.
+A save and a discard of one draft share a queue key, so the one queued last
+replaces the other. A save that finds a discard on record for its revision is
+therefore not queued, and logs `email_draft.save_yielded_to_discard`: a composer
+that closes flushes its last edit behind any save still on the wire, and that
+flush can run after the draft was reopened and discarded. The check is not
+atomic with the enqueue, so a save already past it can still land after the
+delete. A request whose delete never reached the queue keeps saves of that
+revision out until the next edit. A discard on its way to the server is never
 shown as a failure. **Retry discard** follows a server rejection or a delete the
 queue lost (`delete-failed`); every copy that starts needing a retry logs
 `email_draft.sync_failed` with its status, cause and error code.
@@ -316,6 +331,30 @@ queue lost (`delete-failed`); every copy that starts needing a retry logs
 A save can still be on the wire when its draft is sent, and the server refuses
 it once the send is admitted. That send carries the draft's content, so the
 refusal is ignored: the working copy is not marked failed and nothing is shown.
+
+Failure UI is for a write the user has to act on. A server fault (`INTERNAL`)
+on a draft save or discard may pass, and both writes are safe to send again (a
+full-state upsert, an idempotent delete), so the queue retries it twice in a row
+before the copy is marked failed (`shouldRetryGraphqlMutation`). The budget is
+small because the queue's head blocks every write behind it, and it is counted
+per queued write, apart from the larger budget for an unavailable server. While
+the local cache restarts, which it retries by itself, the composer shows
+nothing; unsynced edits still waiting after 15 seconds get the quiet waiting
+notice, and only storage that needs a reload shows the alert.
+
+`DraftSyncStatus` reads its props directly rather than through a `<Show>`
+accessor: the accessor threw when a child re-evaluated as the state cleared,
+which left the banner on screen after a successful retry.
+
+`lib/queries/email/tests/draft-sync-world.ts` runs this whole client against a
+simulated server, cache queue and clock: the composer's session, persistence,
+autosave and status primitives, the draft queue, the working-copy store, the
+cache exchange with its queue runner, and the send journal, dispatcher and
+recovery. `draft-sync.scenarios.test.ts` holds one scenario per way a draft has
+gone wrong, and `draft-sync.fuzz.test.ts` runs random sessions of typing,
+discarding, sending, undoing and reloading under faults that pass by
+themselves, checking that nothing is reported to the user and that the server
+ends with exactly what they did. Add a scenario with every draft sync fix.
 
 The send notice follows each queued send through `EmailDelivery.watchSend`,
 which reads the device outbox. Undo stays on offer until the deadline the server
@@ -581,7 +620,9 @@ format to migrate. Unsupported journal records retain their contents and
 recognizable draft reservations for recovery.
 
 `email-send-dispatcher.ts` submits immediately online through the fetch-only
-GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
+GraphQL client in `service-storage/email-send.ts`. It keeps polling whatever
+`navigator.onLine` says, which native webviews can report as offline while the
+API is reachable; offline attempts back off. Per-attempt database leases
 coordinate tabs, with bounded concurrency across unrelated messages. A lost
 response triggers a status read before resubmitting the identical attempt.
 A thread shows an approved send as sent before the provider confirms it, while
@@ -653,7 +694,12 @@ attachment handles retain the generation captured at reservation.
 
 The status panel combines device intents with actor/inbox-authorized, cursor-paged
 `pendingEmailSends`, with batched message hydration. Server listing grants observation and cancellation authority,
-never automatic resubmission. Delivery state distinguishes local queueing,
+never automatic resubmission. `queries/email/server-sends.ts` reads that list
+at sign-in, when the tab is shown or comes online, when this browser's send
+journal gains or loses a send, and on a timer only while the tab is visible:
+every 10 seconds while a send is in motion, once a minute otherwise. No realtime
+event announces a send attempt, so the minute is how soon an idle tab learns of
+another device's send. Delivery state distinguishes local queueing,
 server acceptance, provider processing, sent, failed, and unconfirmed outcomes,
 but the panel stays silent for routine delivery: it lists a send only while it
 waits on this device, needs attention, or is scheduled. Thread surfaces project

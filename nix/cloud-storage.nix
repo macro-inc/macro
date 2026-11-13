@@ -79,6 +79,18 @@
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
+      # agent_git embeds the starter agent across the crate boundary, every
+      # file but its installed packages, which are not Cargo sources or
+      # generic assets.
+      starterAgentRoot = toString ../packages/starter-agent;
+      starterAgentFilter =
+        path: _type:
+        pkgs.lib.hasPrefix (starterAgentRoot + "/") (toString path)
+        && !(pkgs.lib.hasPrefix (starterAgentRoot + "/node_modules") (toString path));
+      starterAgentSrc = pkgs.lib.cleanSourceWith {
+        src = ../packages/starter-agent;
+        filter = path: type: starterAgentFilter path type;
+      };
       srcFilter =
         path: type:
         (sqlxFilter path type)
@@ -88,6 +100,7 @@
         || (routineCatalogFilter path type)
         || (templateCssFilter path type)
         || (binFilter path type)
+        || (starterAgentFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
         src = ../.;
@@ -183,6 +196,12 @@
           chmod -R +w $out
           cp -rfT ${rootDepsSrc} $out
           chmod -R +w $out
+          ${pkgs.lib.optionalString (builtins.elem "crates/agent_git" dirs) ''
+            mkdir -p $out/packages
+            rm -rf $out/packages/starter-agent
+            cp -rT ${starterAgentSrc} $out/packages/starter-agent
+            chmod -R +w $out/packages/starter-agent
+          ''}
           ${overlays}
         '';
 
@@ -1140,6 +1159,15 @@
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
           touch $out
         '';
+        pruned-deploy-src-starter-agent =
+          pkgs.runCommand "cloud-storage-pruned-starter-agent"
+            { nativeBuildInputs = [ pkgs.diffutils ]; }
+            ''
+              diff -r ${starterAgentSrc} ${src}/packages/starter-agent
+              diff -r ${starterAgentSrc} \
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/packages/starter-agent
+              touch $out
+            '';
         fmt = craneLib.cargoFmt {
           inherit src;
           pname = "cloud-storage";
@@ -1254,7 +1282,6 @@
               # setup-nix-dev-shell, so these attributes reach its build steps.
               # The shellHook switches local shells to incremental builds.
               CARGO_INCREMENTAL = "0";
-              SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
               # configure state behind; CMake then drops its command-line cache
@@ -1262,6 +1289,11 @@
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
               shellHook = ''
+                # Default the sccache size in the hook, not as an attribute: an
+                # attribute replaces the caller's value, while a machine with a
+                # dedicated cache disk (SCCACHE_DIR) sets its own size. CI gets
+                # the default too, since print-dev-env output evaluates this hook.
+                export SCCACHE_CACHE_SIZE="''${SCCACHE_CACHE_SIZE:-30G}"
                 # Local rebuilds after an edit are mostly workspace crates, which
                 # incremental compilation reuses and sccache misses across
                 # worktrees anyway. Third-party crates still go through sccache.

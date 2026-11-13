@@ -1,6 +1,5 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
-  ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -98,7 +97,6 @@ import CaretLeft from '@icon/system/regular/caret-left.svg';
 import PictureIcon from '@icon/system/regular/image.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';
@@ -115,6 +113,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { ActiveCallHeader } from '../../channel/Call/views/ActiveCallHeader';
 import { ChannelTopLeft } from './Top';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
@@ -155,7 +154,6 @@ function NewTop(props: { channelId: string }) {
   const renameAction = makeRenameAction({ userId });
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
-  const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const isActivePhoneCall = () =>
     isMobile() && activeTab() === 'call' && call.isInThisChannel();
   const participants = () =>
@@ -208,8 +206,16 @@ function NewTop(props: { channelId: string }) {
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label: tab.value === 'call' ? <CallTabLabel /> : tab.label,
-      icon: CHANNEL_TAB_ICONS[tab.value],
+      label:
+        tab.value === 'call' ? (
+          <CallTabLabel channelId={props.channelId} />
+        ) : (
+          tab.label
+        ),
+      icon:
+        tab.value === 'call' && tab.icon
+          ? tab.icon
+          : CHANNEL_TAB_ICONS[tab.value],
     })),
     value: activeTab(),
     onSelect: (value: string) => setActiveTab(value as ChannelTabId),
@@ -252,19 +258,18 @@ function NewTop(props: { channelId: string }) {
           mobileViews={isMobile() ? mobileViews() : undefined}
           tools={[
             {
-              label: 'Ask Macro',
+              label: () => t('entityActions.askMacro'),
               icon: ChatWithAgentIcon,
               action: () => {
                 const entity = askMacroEntity();
                 if (!entity) return;
                 fireAndForget(openChatWithAgent(entity), 'channel-header');
               },
-              // Desktop gets a header button instead (see below).
-              condition: () => isMobile() && !!askMacroEntity(),
+              condition: () => !!askMacroEntity(),
             },
             {
               group: 'file',
-              label: 'Rename',
+              label: () => t('entityActions.rename'),
               icon: RenameIcon,
               hotkeyToken: TOKENS.entity.action.rename,
               action: () => {
@@ -279,14 +284,14 @@ function NewTop(props: { channelId: string }) {
             },
             {
               group: 'file',
-              label: 'Set channel picture',
+              label: () => t('entityActions.setChannelPicture'),
               icon: PictureIcon,
               action: picture.pickFile,
               condition: picture.isAvailable,
             },
             {
               group: 'file',
-              label: 'Remove channel picture',
+              label: () => t('entityActions.removeChannelPicture'),
               icon: TrashIcon,
               action: picture.remove,
               condition: () => picture.isAvailable() && picture.hasPicture(),
@@ -307,33 +312,25 @@ function NewTop(props: { channelId: string }) {
           </HeaderIsland>
         </SplitHeaderRight>
       </Show>
-      {/* Desktop only: on mobile the action lives in the title drawer above. */}
-      <Show when={!isMobile() && askMacroEntity()}>
-        {(entity) => (
-          <SplitHeaderRight>
-            <HeaderIsland>
-              <ChatWithAgentButton entity={entity()} label="Ask Macro" />
-            </HeaderIsland>
-          </SplitHeaderRight>
-        )}
-      </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
       <Show
         when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
       >
         <SplitHeaderRight>
-          <HeaderIsland
-            class={cn(
-              'px-1',
-              // Call in progress: tint the whole island, matching the call
-              // button's `success` variant.
-              !!activeCallQuery.data &&
-                'bg-success ring-success [&_button]:text-surface'
-            )}
-          >
+          <HeaderIsland class="px-1">
             <div class="flex items-center gap-1.5">
               <ChannelCallButton channelId={props.channelId} />
             </div>
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={call.isInThisChannel() && !isActivePhoneCall()}>
+        <SplitHeaderRight>
+          <HeaderIsland>
+            <ActiveCallHeader
+              channelId={props.channelId}
+              link={activeTab() === 'call'}
+            />
           </HeaderIsland>
         </SplitHeaderRight>
       </Show>

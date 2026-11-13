@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -56,18 +57,21 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, DueInviteReminder, JoinTeamDirectlyError,
-        PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError, RemoveUserFromAllTeamsError,
-        RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
-        TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        AcceptedTeamInvite, CustomerError, DueInviteReminder, ItemQuantityChange,
+        JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError,
+        RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
+        Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
+        TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,
+    subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
     team_repo::TeamRepository,
 };
 
 mod delete_team;
 mod invite_link;
+mod team_agent;
 
 use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};
 
@@ -127,6 +131,12 @@ struct MockTeamRepository {
     seat_count: i32,
     add_user_to_team_result: Option<TeamMember<'static>>,
     add_user_to_team_calls: Arc<Mutex<usize>>,
+    /// The `seat_included` flag of each `add_user_to_team` call.
+    added_seat_included: Arc<Mutex<Vec<bool>>>,
+    /// What `is_seat_included` answers for every member.
+    seat_included: bool,
+    /// The `seat_included` flag of each `rollback_remove_user_from_team` call.
+    rolled_back_seat_included: Arc<Mutex<Vec<bool>>>,
     remove_user_calls: Arc<Mutex<usize>>,
     auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
     created_auto_join_domains: Arc<Mutex<Vec<Option<String>>>>,
@@ -219,6 +229,9 @@ impl MockTeamRepository {
             seat_count: 0,
             add_user_to_team_result: None,
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
+            added_seat_included: Arc::new(Mutex::new(Vec::new())),
+            seat_included: false,
+            rolled_back_seat_included: Arc::new(Mutex::new(Vec::new())),
             remove_user_calls: Arc::new(Mutex::new(0)),
             auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
             created_auto_join_domains: Arc::new(Mutex::new(Vec::new())),
@@ -271,6 +284,15 @@ impl MockTeamRepository {
 }
 
 impl TeamRepository for MockTeamRepository {
+    fn is_seat_included(
+        &self,
+        _: &uuid::Uuid,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        let seat_included = self.seat_included;
+        async move { Ok(seat_included) }
+    }
+
     fn get_stripe_customer_id(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -632,8 +654,13 @@ impl TeamRepository for MockTeamRepository {
     fn rollback_remove_user_from_team(
         &self,
         _: &TeamMember<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         *self.rollback_remove_calls.lock().unwrap() += 1;
+        self.rolled_back_seat_included
+            .lock()
+            .unwrap()
+            .push(seat_included);
         let fail = self.fail_rollback_remove;
         async move {
             if fail {
@@ -921,8 +948,10 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send {
         *self.add_user_to_team_calls.lock().unwrap() += 1;
+        self.added_seat_included.lock().unwrap().push(seat_included);
         let member = self.add_user_to_team_result.clone();
         async move { Ok(member) }
     }
@@ -1034,6 +1063,7 @@ struct MockCustomerRepository {
     fail_decrement: bool,
     no_active_subscription: bool,
     fail_subscription_lookup: bool,
+    item_change_calls: Arc<Mutex<Vec<(String, Vec<ItemQuantityChange>, String)>>>,
     journal: Journal,
 }
 
@@ -1062,6 +1092,7 @@ impl Default for MockCustomerRepository {
             fail_decrement: false,
             no_active_subscription: false,
             fail_subscription_lookup: false,
+            item_change_calls: Arc::new(Mutex::new(Vec::new())),
             journal: Journal::default(),
         }
     }
@@ -1271,6 +1302,91 @@ impl CustomerRepository for MockCustomerRepository {
                 Ok(())
             }
         }
+    }
+
+    async fn replay_item_change(&self, _idempotency_key: &str) -> Result<bool, CustomerError> {
+        Ok(false)
+    }
+
+    async fn change_item_quantities(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        changes: Vec<ItemQuantityChange>,
+        _proration: crate::domain::model::ItemProration,
+        idempotency_key: &str,
+    ) -> Result<(), CustomerError> {
+        self.item_change_calls.lock().unwrap().push((
+            subscription_id.to_string(),
+            changes,
+            idempotency_key.to_string(),
+        ));
+        Ok(())
+    }
+
+    async fn create_computer_price(
+        &self,
+        _: &stripe::PriceId,
+        _: &str,
+        _: &str,
+    ) -> Result<stripe::PriceId, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn add_computer_item(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &stripe::PriceId,
+        _: &str,
+        _: Vec<ItemQuantityChange>,
+        _: crate::domain::model::ItemProration,
+        _: &str,
+    ) -> Result<(), CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn remove_subscription_item(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &stripe::SubscriptionItemId,
+        _: &str,
+    ) -> Result<crate::domain::model::ItemRemoval, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn subscription_items(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<Vec<crate::domain::model::SubscriptionItemView>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn settle_item_change(
+        &self,
+        _: &str,
+        _: Option<&stripe::SubscriptionId>,
+    ) -> Result<crate::domain::model::ItemChangeSettlement, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn item_change_status(
+        &self,
+        _: &str,
+    ) -> Result<Option<crate::domain::model::ItemChangeStatus>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn subscription_terms(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<crate::domain::model::SubscriptionTerms, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn price(
+        &self,
+        _: &stripe::PriceId,
+    ) -> Result<crate::domain::model::PriceInfo, CustomerError> {
+        unimplemented!("not exercised by team service tests")
     }
 
     fn cancel_subscription(
@@ -9179,4 +9295,76 @@ async fn invite_reminders_promise_what_joining_grants() {
 
     let expected: Vec<_> = cases.iter().map(|case| serde_json::json!(case.3)).collect();
     assert_eq!(invitee_plans_sent(&notification_ingress), expected);
+}
+
+#[tokio::test]
+async fn subscription_item_changes_go_to_the_team_subscription() {
+    let mut team_repo = MockTeamRepository::new(vec![], "Team", Arc::new(Mutex::new(Vec::new())));
+    team_repo.team_subscription_id = Some("sub_team".parse().unwrap());
+    let customer_repo = MockCustomerRepository::default();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo.clone(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+    let change = ItemQuantityChange {
+        price_id: stripe::PriceId::from_str("price_computer").unwrap(),
+        delta: 1,
+    };
+
+    service
+        .change_team_subscription_items(
+            &uuid::Uuid::nil(),
+            vec![change.clone()],
+            crate::domain::model::ItemProration::InvoiceNow,
+            "purchase-1",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *customer_repo.item_change_calls.lock().unwrap(),
+        vec![(
+            "sub_team".to_string(),
+            vec![change],
+            "purchase-1".to_string()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn subscription_item_changes_need_a_team_subscription() {
+    let team_repo = MockTeamRepository::new(vec![], "Team", Arc::new(Mutex::new(Vec::new())));
+    let customer_repo = MockCustomerRepository::default();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo.clone(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let result = service
+        .change_team_subscription_items(
+            &uuid::Uuid::nil(),
+            vec![ItemQuantityChange {
+                price_id: stripe::PriceId::from_str("price_computer").unwrap(),
+                delta: 1,
+            }],
+            crate::domain::model::ItemProration::InvoiceNow,
+            "purchase-1",
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(TeamSubscriptionItemsError::NoSubscription)
+    ));
+    assert!(customer_repo.item_change_calls.lock().unwrap().is_empty());
 }

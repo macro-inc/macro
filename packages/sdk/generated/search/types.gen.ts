@@ -24,7 +24,7 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by session owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
      * owner.
      */
@@ -684,9 +684,9 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by chat owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -931,9 +931,9 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by document owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -1564,9 +1564,9 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by project owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -2498,6 +2498,11 @@ export type TaskFilters = {
     include_cbm_atm_nc?: boolean | null;
 };
 
+/**
+ * How a query of several terms matches document content.
+ */
+export type TermMatching = 'all' | 'dynamic';
+
 export type UnifiedSearchRequest = {
     /**
      * Which calendar events to search. Defaults to `own`: events on the
@@ -2530,6 +2535,12 @@ export type UnifiedSearchRequest = {
      * Fields to search on (Name, Content, NameContent). Defaults to Content
      */
     search_on?: SearchOn;
+    /**
+     * How a query of several terms matches document content. Defaults to
+     * `all`, the strict AND that AI tools and the SDK rely on; the web
+     * app's Search view asks for `dynamic`.
+     */
+    term_matching?: TermMatching;
 };
 
 export type UnifiedSearchResponse = {

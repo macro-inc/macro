@@ -975,11 +975,13 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         sqlx::query!(
-            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4 WHERE id = $1",
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4, turn_prompter_client = $5 WHERE id = $1",
             id.as_uuid(),
             prompter.action_id.as_uuid(),
             prompter.user.as_ref().filter(|_| prompter.kind != crate::domain::model::PrompterKind::System).map(|user| user.as_ref()),
             prompter.kind.as_ref(),
+            // A tab only stands beside a person who prompted from it.
+            prompter.client.filter(|_| prompter.acting_user().is_some()).map(crate::domain::model::UiClientId::as_uuid),
         )
         .execute(&self.pool)
         .await
@@ -1006,7 +1008,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         let row = sqlx::query!(
             r#"
-            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>"
+            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>", turn_prompter_client
             FROM agent_session
             WHERE id = $1
             "#,
@@ -1026,6 +1028,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                     action_id,
                 ),
                 user: row.turn_prompter,
+                client: row
+                    .turn_prompter_client
+                    .map(crate::domain::model::UiClientId::from_uuid),
             })
         }))
     }
@@ -1918,18 +1923,10 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                   SELECT COALESCE(boundary.created_at, '-infinity'::timestamptz),
                          COALESCE(boundary.id, '00000000-0000-0000-0000-000000000000'::uuid)
                   FROM agent_session AS session
-                  LEFT JOIN LATERAL (
-                    SELECT id, created_at FROM agent_session_log
-                    WHERE id = session.history_start_log_id
-                      AND agent_session_id = $1
-                      AND NOT EXISTS (
-                          SELECT 1 FROM agent_session_log AS trusted
-                          WHERE trusted.agent_session_id = $1
-                            AND trusted.direction IN ('notification', 'to_runtime')
-                            AND trusted.content->'params'->'_meta' ? 'macro.dev/notifications'
-                      )
-                    LIMIT 1
-                  ) AS boundary ON true
+                  LEFT JOIN agent_session_log AS boundary
+                    ON boundary.id = session.history_start_log_id
+                   AND boundary.agent_session_id = session.id
+                   AND NOT session.has_trusted_notifications
                   WHERE session.id = $1
               )
             ORDER BY log.created_at ASC, log.id ASC

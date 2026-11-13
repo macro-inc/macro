@@ -25,11 +25,11 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
-import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
+import { ChannelCountPill } from './ChannelCountPill';
 import { ChannelFavoritesSection } from './ChannelFavoriteRows';
 import { ChannelLabelRow, ChannelsCreateMenu } from './ChannelLabelRows';
 import {
@@ -483,11 +483,7 @@ function ExpandedGroupSection(props: {
               !section().open && '-rotate-90 opacity-100'
             )}
           />
-          <Show when={section().unreadCount > 0}>
-            <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
-              {section().unreadCount}
-            </span>
-          </Show>
+          <ChannelCountPill count={section().unreadCount} />
         </button>
         <div
           ref={(element) => {
@@ -662,7 +658,6 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
-      <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={(element) => {

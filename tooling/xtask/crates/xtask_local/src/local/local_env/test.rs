@@ -158,6 +158,9 @@ fn emits_required_keys() {
         "LOCAL_CONTAINER_NETWORK",
         "DAYTONA_API_KEY",
         "HARNESS_BOT_ID",
+        "REPO_STORAGE_ROOT",
+        "MAX_REPO_SIZE_BYTES",
+        "PUSHES_PER_MINUTE",
     ] {
         assert!(
             env.contains_key(key),
@@ -268,6 +271,18 @@ fn emits_in_network_service_url_overrides() {
             "http://connection-gateway:8080",
         ),
         (
+            "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+            "ws://connection-gateway:8080",
+        ),
+        (
+            "OVERRIDE_MCP_SERVICE_URL",
+            "http://agent-harness-service:8080",
+        ),
+        (
+            "OVERRIDE_AGENT_GIT_SERVICE_URL",
+            "http://agent-harness-service:8080/agent-git",
+        ),
+        (
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
             "http://document-storage-service:8080",
         ),
@@ -313,18 +328,18 @@ fn emits_in_network_service_url_overrides() {
     }
 }
 
-/// Permalinks the static file service mints must be loadable by a browser on
-/// the host: the instance proxy's `/static-file/*` block, not the
-/// single-instance CDN port.
+/// Permalinks must remain loadable when the browser is on another machine,
+/// including when a headless stack serves the frontend on localhost.
 #[test]
 fn static_file_permalinks_go_through_the_instance_proxy() {
     let env = local_env();
     let permalink_base = env
         .get("OVERRIDE_STATIC_FILE_PUBLIC_URL")
         .expect("static file permalink base");
-    assert!(
-        permalink_base.starts_with("https://localhost:"),
-        "{permalink_base}"
+    let instance = Instance::derive(None, None).unwrap();
+    assert_eq!(
+        permalink_base,
+        &format!("{}/static-file", frontend::https_origin(&instance).unwrap())
     );
     assert!(permalink_base.ends_with("/static-file"), "{permalink_base}");
     assert!(!permalink_base.contains(":8100"), "{permalink_base}");
@@ -537,7 +552,7 @@ fn frontend_origin_tracks_how_the_app_is_served() {
             );
             assert_eq!(
                 env["OVERRIDE_STATIC_FILE_PUBLIC_URL"],
-                format!("{origin}/static-file")
+                format!("{}/static-file", frontend::https_origin(&instance).unwrap())
             );
         }
     }
