@@ -1,0 +1,36 @@
+apps/web/src/features/dynamic-ui/widgets/SavedView.tsx
+  s_3c8bdfdb266f32::t_39fc083d273bd7 62-66
+apps/web/src/features/dynamic-ui/widgets/panes/pane.tsx
+  s_3c8bdfdb266f32::t_39fc083d273bd7 201-202
+apps/web/src/features/dynamic-ui/widgets/panes.test.tsx
+  s_3c8bdfdb266f32::t_2513c0a5a76dbf 23-24,93,148-170
+  s_3c8bdfdb266f32::t_045c3e28250846 9
+  s_3c8bdfdb266f32::t_88c1537c620250 171
+apps/web/src/features/dynamic-ui/widgets/Stat.tsx
+  s_3c8bdfdb266f32::t_39fc083d273bd7 140,143,147-149,152
+  s_3c8bdfdb266f32::t_e7ae4faa4df2be 102-106,139,181-182
+  s_3c8bdfdb266f32::t_6641db5abf9adc 186
+apps/web/src/lib/i18n/locales/en/dynamic-ui.ts
+  s_3c8bdfdb266f32::t_39fc083d273bd7 13-14
+  s_3c8bdfdb266f32::t_6641db5abf9adc 15
+apps/web/src/features/dynamic-ui/widgets/Tabs.tsx
+  s_3c8bdfdb266f32::t_39fc083d273bd7 19-21,25-26
+apps/web/src/features/dynamic-ui/widgets/Table.tsx
+  s_3c8bdfdb266f32::t_39fc083d273bd7 46-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "79d76ea978316ccc3981a22b0ff48461507e56f4",
+  "prompts": {},
+  "sessions": {
+    "s_3c8bdfdb266f32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "047d61f4-a7d4-4fc1-a6a7-ed748e55fd32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
