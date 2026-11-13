@@ -1,0 +1,39 @@
+crates/code_execution/src/outbound/deno.rs
+  s_50f3c41e81974a::t_a910aa5af89fc9 304,363
+crates/code_execution/src/outbound/deno/test.rs
+  s_50f3c41e81974a::t_1f2bb25f0a307f 910-924,929-978
+  s_50f3c41e81974a::t_ee18e5814d9697 925-928
+crates/code_execution/src/domain/models.rs
+  s_50f3c41e81974a::t_a910aa5af89fc9 90-94,114,135
+crates/code_execution/README.md
+  s_50f3c41e81974a::t_ea7641041baa21 89
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_50f3c41e81974a::t_a910aa5af89fc9 77,86-89,92-98,101-104
+  s_566949b96aabd0::t_47cb48e756ecdc 90-91,99-100,163-166
+crates/agent_code_mode/src/inbound/toolset/shared/entities.md
+  s_50f3c41e81974a::t_ea7641041baa21 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4e7aa9c9e8c1eb87ad850f019c9c72a9133460f7",
+  "prompts": {},
+  "sessions": {
+    "s_50f3c41e81974a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90791b98-09b8-4945-ae15-d1ad6f0abb8d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_566949b96aabd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cf7ecf1-c75e-4236-a82c-0eb762650a3d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
