@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT effect FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "effect",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aec90d57c02b4f1f8c28bdbc481f5d2c91773ffc2db540f9fbce89bb2194343b"
+}

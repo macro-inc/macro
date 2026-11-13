@@ -529,3 +529,235 @@ mod authenticated_join_routes {
         assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 }
+
+#[cfg(test)]
+mod scoped_edits {
+    use std::sync::{Arc, Mutex};
+
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use entity_access::domain::models::{
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+    };
+    use entity_access::domain::ports::EntityAccessService;
+    use macro_authorization::{
+        InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+        MacroAuthorizationState, ValidatedCredential,
+    };
+    use macro_user_id::{
+        lowercased::Lowercase,
+        user_id::{MacroUserId, MacroUserIdStr},
+    };
+    use model_user::UserContext;
+    use rootcause::Report;
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    use crate::domain::ports::MockCallService;
+    use crate::inbound::axum_router::{CallRouterState, call_router};
+
+    const OWNER: &str = "macro|owner@example.com";
+
+    #[derive(Clone)]
+    struct Auth;
+
+    impl MacroAuthorizationService for Auth {
+        async fn authorize(
+            &self,
+            _jwt: &str,
+        ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+            Ok(UserContext {
+                user_id: OWNER.to_string(),
+                fusion_user_id: "00000000-0000-0000-0000-000000000001".to_string(),
+                permissions: None,
+                organization_id: None,
+            })
+        }
+
+        async fn authorize_identity(
+            &self,
+            jwt: &str,
+        ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+            self.authorize(jwt).await.map(ValidatedCredential::session)
+        }
+
+        async fn authorize_internal(
+            &self,
+            _key: &str,
+            _claims: InternalIdentityClaims,
+        ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+            Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+        }
+    }
+
+    /// Every call exists and is owned by the caller.
+    #[derive(Clone)]
+    struct OwnedCalls;
+
+    fn unused() -> AccessError {
+        AccessError::internal("not used by these tests")
+    }
+
+    impl EntityAccessService for OwnedCalls {
+        async fn generate_entity_access_receipt<T: RequiredPermission>(
+            &self,
+            _user_id: &MacroUserId<Lowercase<'_>>,
+            _user_org_id: Option<i64>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<EntityAccessReceipt<T>, AccessError> {
+            Err(unused())
+        }
+
+        async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+            &self,
+            _bot_id: BotId,
+            _scope: BotAccessScope,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<EntityAccessReceipt<T>, AccessError> {
+            Err(unused())
+        }
+
+        async fn get_access_level(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<Option<AccessLevel>, AccessError> {
+            Err(unused())
+        }
+
+        async fn check_access(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _required_level: AccessLevel,
+        ) -> Result<AccessLevel, AccessError> {
+            Err(unused())
+        }
+
+        async fn check_public_access(
+            &self,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _required_level: AccessLevel,
+        ) -> Result<AccessLevel, AccessError> {
+            Err(unused())
+        }
+
+        async fn get_entity_permission(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            entity_type: EntityType,
+            _user_org_id: Option<i64>,
+        ) -> Result<EntityPermission, AccessError> {
+            assert_eq!(entity_type, EntityType::Call);
+            Ok(EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            })
+        }
+
+        async fn get_crm_entity_permission_with_team(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+            Err(unused())
+        }
+
+        async fn get_users_by_entity(
+            &self,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+            Err(unused())
+        }
+
+        async fn get_call_channel(
+            &self,
+            _call_id: &Uuid,
+        ) -> Result<Option<CallChannelInfo>, AccessError> {
+            Ok(Some(CallChannelInfo {
+                channel_id: None,
+                share_permission_id: "share-permission".to_string(),
+            }))
+        }
+
+        async fn get_call_channel_by_channel_id(
+            &self,
+            _channel_id: &Uuid,
+        ) -> Result<Option<CallChannelInfo>, AccessError> {
+            Err(unused())
+        }
+
+        async fn get_user_team(
+            &self,
+            _user_id: &MacroUserId<Lowercase<'_>>,
+        ) -> Result<Option<UserTeamInfo>, AccessError> {
+            Err(unused())
+        }
+    }
+
+    /// A scoped session renames a call but never changes who it's shared
+    /// with, through either sharing field.
+    #[tokio::test]
+    async fn a_scoped_session_edits_a_call_but_not_its_sharing() {
+        let call_id = Uuid::now_v7();
+        let shares = Arc::new(Mutex::new(Vec::new()));
+        let mut service = MockCallService::new();
+        let seen = shares.clone();
+        service
+            .expect_edit_call_record()
+            .times(2)
+            .returning(move |_, request| {
+                seen.lock()
+                    .unwrap()
+                    .push(request.share_permission.is_some() || request.share_with_team.is_some());
+                Box::pin(async { Ok(()) })
+            });
+        let router = call_router(CallRouterState::new(
+            Arc::new(service),
+            Arc::new(OwnedCalls),
+            MacroAuthorizationState::new(Arc::new(Auth)),
+        ));
+        let edit = |body: &str| {
+            Request::patch(format!("/record/{call_id}"))
+                .header("authorization", "Bearer owner")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_owned()))
+                .unwrap()
+        };
+        let no_send = Attribution {
+            scope: Some(SessionScope::NoSend),
+            ..Attribution::default()
+        };
+        for (body, status) in [
+            (r#"{"shareWithTeam":true}"#, StatusCode::FORBIDDEN),
+            (
+                r#"{"sharePermission":{"teamShareAccessLevel":"view"}}"#,
+                StatusCode::FORBIDDEN,
+            ),
+            (r#"{"customName":"Renamed"}"#, StatusCode::NO_CONTENT),
+        ] {
+            let response = scope_attribution(no_send, router.clone().oneshot(edit(body)))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), status, "{body}");
+        }
+        let response = router
+            .oneshot(edit(r#"{"shareWithTeam":true}"#))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(*shares.lock().unwrap(), [false, true]);
+    }
+}

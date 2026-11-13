@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use super::*;
 
 #[test]
@@ -109,4 +111,80 @@ fn drop_wordless_terms_leaves_a_query_of_only_punctuation_unchanged() {
         drop_wordless_terms(input.clone(), MatchType::Partial),
         input
     );
+}
+
+struct Rollout {
+    enabled: bool,
+    reads: AtomicUsize,
+}
+
+impl Rollout {
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            reads: AtomicUsize::new(0),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TermMatchingRollout for Rollout {
+    async fn dynamic_enabled_for(&self, _caller: MacroUserIdStr<'_>) -> bool {
+        self.reads.fetch_add(1, Ordering::SeqCst);
+        self.enabled
+    }
+}
+
+const CALLER: &str = "macro|person@example.com";
+
+#[tokio::test]
+async fn a_request_that_does_not_ask_stays_strict_without_reading_the_rollout() {
+    let rollout = Rollout::new(true);
+
+    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::All, 7).await;
+
+    assert_eq!(matching, DocumentTermMatching::All);
+    assert_eq!(rollout.reads.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_dynamic_request_is_strict_while_the_rollout_is_off() {
+    let rollout = Rollout::new(false);
+
+    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 7).await;
+
+    assert_eq!(matching, DocumentTermMatching::All);
+    assert_eq!(rollout.reads.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_dynamic_request_is_dynamic_once_the_rollout_is_on() {
+    let rollout = Rollout::new(true);
+
+    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 3).await;
+
+    assert_eq!(matching, DocumentTermMatching::Dynamic);
+}
+
+#[tokio::test]
+async fn a_short_query_stays_strict_without_reading_the_rollout() {
+    let rollout = Rollout::new(true);
+
+    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 2).await;
+
+    assert_eq!(matching, DocumentTermMatching::All);
+    assert_eq!(rollout.reads.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn a_request_without_the_field_asks_for_strict_matching() -> Result<(), serde_json::Error> {
+    // The SDK and AI tools send no `term_matching`.
+    let request: models_search::unified::UnifiedSearchRequest =
+        serde_json::from_value(serde_json::json!({
+            "query": "quarterly revenue forecast",
+            "match_type": "partial",
+        }))?;
+
+    assert_eq!(request.term_matching, TermMatching::All);
+    Ok(())
 }
