@@ -521,6 +521,7 @@ where
         suggestions.open = tracing::field::Empty,
         suggestions.done = tracing::field::Empty,
         suggestions.hidden = tracing::field::Empty,
+        suggestions.new = tracing::field::Empty,
     ), err)]
     async fn feed(
         &self,
@@ -542,11 +543,11 @@ where
                 });
         }
         let done_since = Utc::now() - DONE_WITHIN;
-        let shown: Vec<Suggestion> = self
-            .repo
-            .shown(user, done_since)
-            .await
-            .map_err(SuggestionError::internal)?;
+        let (shown, viewed_at) = futures::try_join!(
+            self.repo.shown(user, done_since),
+            self.repo.feed_viewed_at(user),
+        )
+        .map_err(SuggestionError::internal)?;
         let before = shown.len();
         // Up to 30 suggestions of up to 5 items each: check a few at a time.
         let viewable: Vec<Suggestion> = futures::stream::iter(shown)
@@ -568,6 +569,10 @@ where
         let (mut suggestions, mut done): (Vec<Suggestion>, Vec<Suggestion>) = viewable
             .into_iter()
             .partition(|suggestion| suggestion.state.is_open());
+        for suggestion in &mut suggestions {
+            suggestion.is_new = suggestion.proposed_since(viewed_at);
+        }
+        let new = suggestions.iter().filter(|suggestion| suggestion.is_new).count();
         suggestions.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
@@ -578,7 +583,24 @@ where
         span.record("suggestions.open", suggestions.len());
         span.record("suggestions.done", done.len());
         span.record("suggestions.hidden", hidden);
+        span.record("suggestions.new", new);
         Ok(SuggestionFeed { suggestions, done })
+    }
+
+    #[tracing::instrument(name = "suggestions.viewed", skip_all, fields(
+        suggestions.caller = tracing::field::Empty,
+    ), err)]
+    async fn viewed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+    ) -> Result<(), SuggestionError> {
+        self.require_flag(user).await?;
+        self.admit(caller).await?;
+        self.repo
+            .feed_viewed(user, Utc::now())
+            .await
+            .map_err(SuggestionError::internal)
     }
 
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {

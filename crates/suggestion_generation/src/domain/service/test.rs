@@ -297,6 +297,14 @@ impl SuggestionApi for FakeSuggestions {
         unused()
     }
 
+    async fn viewed(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
+    ) -> Result<(), SuggestionError> {
+        unused()
+    }
+
     async fn accept(
         &self,
         _: &MacroUserIdStr<'static>,

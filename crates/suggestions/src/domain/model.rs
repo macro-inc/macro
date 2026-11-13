@@ -39,11 +39,24 @@ pub struct Suggestion {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
+    /// Proposed since the person last opened their feed. Only the feed sets
+    /// it; false everywhere else.
+    pub is_new: bool,
     /// A background prompt suggestion's latest run.
     pub run: Option<SuggestionRun>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: SuggestionKind,
+}
+
+impl Suggestion {
+    /// Whether it became proposed after `viewed`, when the person last opened
+    /// their feed; with no visit, every proposed one is. Accepted and closed
+    /// suggestions never are.
+    pub fn proposed_since(&self, viewed: Option<DateTime<Utc>>) -> bool {
+        self.state == SuggestionState::Proposed
+            && viewed.is_none_or(|viewed| self.state_changed_at > viewed)
+    }
 }
 
 /// A run of a background prompt suggestion: a hidden agent session of the

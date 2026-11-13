@@ -250,6 +250,15 @@ pub(crate) fn entity_suggestion(key: &str) -> NewSuggestion {
     }
 }
 
+/// `suggestion` as the feed shows it to a person who hasn't opened it since
+/// it was proposed.
+fn as_new(suggestion: &Suggestion) -> Suggestion {
+    Suggestion {
+        is_new: true,
+        ..suggestion.clone()
+    }
+}
+
 /// Accepting `suggestion` as it was read.
 fn shown(suggestion: &Suggestion) -> Accept {
     Accept {
@@ -411,7 +420,7 @@ async fn an_suggestions_session_adds_an_suggestion_the_person_sees(pool: PgPool)
         )
         .await
         .unwrap();
-    assert_eq!(feed.suggestions, vec![suggestion]);
+    assert_eq!(feed.suggestions, vec![as_new(&suggestion)]);
     assert_eq!(
         *h.audience.0.lock().unwrap(),
         vec![(OWNER.to_owned(), "Europe/Paris".to_owned())]
@@ -484,6 +493,12 @@ async fn suggestions_are_off_without_the_flag(pool: PgPool) {
     assert!(matches!(
         h.service
             .feed(&user(OWNER), SuggestionCaller::User, None)
+            .await,
+        Err(SuggestionError::NotFound)
+    ));
+    assert!(matches!(
+        h.service
+            .viewed(&user(OWNER), SuggestionCaller::User)
             .await,
         Err(SuggestionError::NotFound)
     ));
@@ -894,7 +909,7 @@ async fn the_persons_own_agent_reads_accepts_and_dismisses_their_suggestions(poo
         .feed(&user(OWNER), chat_agent(), None)
         .await
         .unwrap();
-    assert_eq!(feed.suggestions, vec![entity.clone(), prompt.clone()]);
+    assert_eq!(feed.suggestions, vec![as_new(&entity), as_new(&prompt)]);
     // A composer prompt suggestion becomes done; the agent acts on the prompt
     // itself.
     h.service
@@ -1001,9 +1016,22 @@ async fn generation_sessions_never_read_accept_or_dismiss_for_the_person(pool: P
             matches!(dismiss, Err(SuggestionError::Generating)),
             "{dismiss:?}"
         );
+        let viewed = h.service.viewed(&user(OWNER), caller).await;
+        assert!(
+            matches!(viewed, Err(SuggestionError::Generating)),
+            "{viewed:?}"
+        );
     }
-    // Its read counted no one in, and the suggestion is untouched.
+    // Its read counted no one in, it recorded no visit, and the suggestion
+    // is untouched.
     assert!(h.audience.0.lock().unwrap().is_empty());
+    assert_eq!(
+        PgSuggestionRepo::new(h.pool.clone())
+            .feed_viewed_at(&user(OWNER))
+            .await
+            .unwrap(),
+        None
+    );
     let feed = h
         .service
         .feed(&user(OWNER), SuggestionCaller::User, None)
@@ -2219,4 +2247,86 @@ async fn a_run_cut_off_by_a_restart_is_given_up_and_runs_again(pool: PgPool) {
     assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
+}
+
+/// The ids of the feed's suggestions shown as new.
+async fn new_in_feed(h: &Harness) -> HashSet<Uuid> {
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
+    assert!(feed.done.iter().all(|suggestion| !suggestion.is_new));
+    feed.suggestions
+        .iter()
+        .filter(|suggestion| suggestion.is_new)
+        .map(|suggestion| suggestion.id)
+        .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_suggestion_is_new_until_the_person_opens_the_feed_after_it_was_proposed(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let night = h.session(OWNER, "suggestions").await;
+    let mut ids = Vec::new();
+    for key in ["a:kept", "b:dismissed", "c:accepted"] {
+        ids.push(
+            h.suggest(night, entity_suggestion(key))
+                .await
+                .suggestion
+                .unwrap()
+                .id,
+        );
+    }
+    // Before any visit, every proposed suggestion is new.
+    assert_eq!(new_in_feed(&h).await, HashSet::from([ids[0], ids[1], ids[2]]));
+    h.accept(&user(OWNER), ids[2]).await.unwrap();
+    assert_eq!(new_in_feed(&h).await, HashSet::from([ids[0], ids[1]]));
+
+    h.service
+        .viewed(&user(OWNER), SuggestionCaller::User)
+        .await
+        .unwrap();
+    assert!(new_in_feed(&h).await.is_empty());
+
+    // The next night rewrites one (still not new), brings a dismissed one
+    // back and adds another: those two are new.
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, ids[1])
+        .await
+        .unwrap();
+    h.close(night).await;
+    let next = h.session(OWNER, "suggestions").await;
+    let mut rewritten = entity_suggestion("a:kept");
+    rewritten.summary = "The venue asked again for the headcount".to_owned();
+    assert!(h.suggest(next, rewritten).await.ok);
+    let mut back = entity_suggestion("b:dismissed");
+    back.reason = Some("The venue wrote again with a new deadline".to_owned());
+    assert!(h.suggest(next, back).await.ok);
+    let added = h
+        .suggest(next, entity_suggestion("d:added"))
+        .await
+        .suggestion
+        .unwrap()
+        .id;
+    assert_eq!(new_in_feed(&h).await, HashSet::from([ids[1], added]));
+
+    // The person's other visits, or anyone's for someone else, change
+    // nothing for them; a visit's time never goes back.
+    h.service
+        .viewed(&user(OTHER), SuggestionCaller::User)
+        .await
+        .unwrap();
+    assert_eq!(new_in_feed(&h).await, HashSet::from([ids[1], added]));
+    let repo = PgSuggestionRepo::new(h.pool.clone());
+    let viewed = repo.feed_viewed_at(&user(OTHER)).await.unwrap().unwrap();
+    repo.feed_viewed(&user(OTHER), viewed - chrono::Duration::hours(1))
+        .await
+        .unwrap();
+    assert_eq!(repo.feed_viewed_at(&user(OTHER)).await.unwrap(), Some(viewed));
+    h.service
+        .viewed(&user(OWNER), SuggestionCaller::User)
+        .await
+        .unwrap();
+    assert!(new_in_feed(&h).await.is_empty());
 }

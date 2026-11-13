@@ -53,6 +53,20 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         done_since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<Suggestion>, Self::Err>> + Send;
 
+    /// When the person last opened their feed, if ever.
+    fn feed_viewed_at(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// The person opened their feed at `at`; an earlier time than the one
+    /// stored changes nothing.
+    fn feed_viewed(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// The person's open suggestions, and the `closed` most recently closed.
     fn for_review(
         &self,
@@ -326,8 +340,9 @@ pub trait RunSessions: Send + Sync + 'static {
 /// manage it with.
 pub trait SuggestionApi: Send + Sync + 'static {
     /// The person's open suggestions they can still open every item of, best
-    /// first. With their `timezone`, it also counts them in for nightly
-    /// generations. `caller` is the person or their own agent; a
+    /// first, each marked new when proposed since they last opened the feed
+    /// ([`Self::viewed`]). With their `timezone`, it also counts them in for
+    /// nightly generations. `caller` is the person or their own agent; a
     /// generation session is refused.
     fn feed(
         &self,
@@ -335,6 +350,14 @@ pub trait SuggestionApi: Send + Sync + 'static {
         caller: SuggestionCaller,
         timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<SuggestionFeed, SuggestionError>> + Send;
+
+    /// The person opened their feed now: suggestions proposed until now are
+    /// no longer new. `caller` is refused as for [`Self::feed`].
+    fn viewed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
     /// The person, or someone acting for them, acts on a suggestion. A
     /// background prompt suggestion starts a run (one whose last run failed runs
