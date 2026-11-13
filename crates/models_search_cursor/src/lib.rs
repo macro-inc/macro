@@ -150,6 +150,9 @@ impl SearchCursorOption {
 }
 
 /// How the search that minted a cursor matched multi-term document content.
+///
+/// A wire type of its own: the cursor's JSON must not change when the request
+/// or query-builder enums do, and this crate depends on neither.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CursorTermMatching {
@@ -178,10 +181,22 @@ pub struct SearchCursor {
     pub channel_name_cursor: SearchCursorOption,
     /// The matching mode the first page ran with, so every later page runs
     /// the same one. Absent on cursors minted before it existed and on
-    /// searches that never asked for dynamic matching; the page then decides
-    /// for itself.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// searches dynamic matching could not apply to; the page then decides
+    /// for itself. A mode this build does not know reads as absent, so a
+    /// cursor from a newer build still pages.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "known_term_matching"
+    )]
     pub document_term_matching: Option<CursorTermMatching>,
+}
+
+fn known_term_matching<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<CursorTermMatching>, D::Error> {
+    let value: Option<serde_json::Value> = serde::Deserialize::deserialize(deserializer)?;
+    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
 }
 
 impl SearchCursor {
@@ -257,6 +272,20 @@ mod test {
 
         assert_eq!(cursor.document_term_matching, None);
         assert_eq!(cursor.encode(), Some(BASE64.encode(legacy)));
+    }
+
+    /// A mode from a newer build must not make the whole cursor undecodable:
+    /// the handler treats an undecodable cursor as no cursor and would serve
+    /// page one again.
+    #[test]
+    fn unknown_term_matching_reads_as_absent_and_keeps_the_position() {
+        let newer = r#"{"chat_name_cursor":"Done","content_cursor":{"NotDone":null},"project_name_cursor":"Done","crm_company_cursor":"Done","channel_name_cursor":"Done","document_term_matching":"semantic"}"#;
+
+        let cursor = SearchCursor::decode(&BASE64.encode(newer)).expect("cursor decodes");
+
+        assert_eq!(cursor.document_term_matching, None);
+        assert!(cursor.chat_name_cursor.is_done());
+        assert!(cursor.content_cursor.has_more());
     }
 
     #[test]

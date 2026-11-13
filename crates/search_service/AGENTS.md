@@ -75,7 +75,9 @@ per-entity-type search plus a unified search across them — mounted into
   carried in the unified cursor (`document_term_matching`) and every later
   page runs it without reading the flag, because processes learn the flag
   independently and a page must not switch mode; a cursor without it decides
-  per page. The SDK and AI tools
+  per page. So the flag switches first pages: a search already under way,
+  or a hand-made cursor on a request that asks for dynamic matching, keeps
+  the cursor's mode. It is a rollout switch, not an access check. The SDK and AI tools
   never send it, so their documented AND holds. Names, emails, channels,
   chats and call records are always a strict AND.
 - Calendar events have two scopes (`calendar_event_scope` on the unified

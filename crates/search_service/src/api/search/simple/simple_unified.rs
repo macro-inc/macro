@@ -220,6 +220,7 @@ fn unified_search_span(
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
+        search.term_matching_from_cursor = tracing::field::Empty,
     )
 }
 
@@ -410,6 +411,14 @@ async fn search_unified_sources(
         TermMatching::All
     };
 
+    let first_page_term_matching = cursor
+        .as_ref()
+        .and_then(|cursor| cursor.document_term_matching);
+    tracing::Span::current().record(
+        "search.term_matching_from_cursor",
+        first_page_term_matching.is_some(),
+    );
+
     // Await all tasks in parallel
     let (filter_responses, document_term_matching) = tokio::join!(
         async {
@@ -463,9 +472,7 @@ async fn search_unified_sources(
             &user_context.user_id,
             requested_term_matching,
             search_terms.len(),
-            cursor
-                .as_ref()
-                .and_then(|cursor| cursor.document_term_matching),
+            first_page_term_matching,
         ),
     );
     tracing::Span::current().record(
@@ -878,6 +885,7 @@ async fn search_unified_sources(
                 channel_name_cursor: new_channel_cursor,
                 document_term_matching: term_matching_for_cursor(
                     requested_term_matching,
+                    search_terms.len(),
                     document_term_matching,
                 ),
             };

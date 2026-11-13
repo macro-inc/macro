@@ -246,18 +246,38 @@ async fn a_cursor_from_before_the_mode_was_carried_decides_per_page() {
     assert_eq!(rollout.reads.load(Ordering::SeqCst), 1);
 }
 
+#[tokio::test]
+async fn a_cursor_does_not_make_a_short_query_dynamic() {
+    let rollout = Rollout::new(true);
+
+    let matching = resolve_document_term_matching(
+        &rollout,
+        CALLER,
+        TermMatching::Dynamic,
+        2,
+        Some(CursorTermMatching::Dynamic),
+    )
+    .await;
+
+    assert_eq!(matching, DocumentTermMatching::All);
+}
+
 #[test]
-fn the_next_cursor_carries_the_mode_only_for_requests_that_asked() {
+fn the_next_cursor_carries_the_mode_only_where_dynamic_matching_could_apply() {
     assert_eq!(
-        term_matching_for_cursor(TermMatching::Dynamic, DocumentTermMatching::Dynamic),
+        term_matching_for_cursor(TermMatching::Dynamic, 3, DocumentTermMatching::Dynamic),
         Some(CursorTermMatching::Dynamic)
     );
     assert_eq!(
-        term_matching_for_cursor(TermMatching::Dynamic, DocumentTermMatching::All),
+        term_matching_for_cursor(TermMatching::Dynamic, 3, DocumentTermMatching::All),
         Some(CursorTermMatching::All)
     );
     assert_eq!(
-        term_matching_for_cursor(TermMatching::All, DocumentTermMatching::All),
+        term_matching_for_cursor(TermMatching::All, 3, DocumentTermMatching::All),
+        None
+    );
+    assert_eq!(
+        term_matching_for_cursor(TermMatching::Dynamic, 2, DocumentTermMatching::All),
         None
     );
 }

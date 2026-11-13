@@ -84,8 +84,11 @@ pub(in crate::api::search) fn record_term_counts(
 /// A later page runs the mode its first page ran (`first_page_mode`, carried
 /// in the cursor) instead of reading the rollout again. Each process learns a
 /// caller's rollout answer on its own, so asking again could switch the mode
-/// between two pages of one search. The request still has to ask: a cursor
-/// cannot turn dynamic matching on by itself.
+/// between two pages of one search. The request still has to ask, so a cursor
+/// changes nothing for the SDK or AI tools. For a request that does ask, the
+/// cursor decides: the flag is a rollout switch for first pages, not an
+/// access check, and a search already under way keeps its mode after the
+/// flag changes.
 pub(in crate::api::search) async fn resolve_document_term_matching(
     rollout: &dyn TermMatchingRollout,
     caller: &str,
@@ -112,13 +115,14 @@ pub(in crate::api::search) async fn resolve_document_term_matching(
 }
 
 /// The mode to carry in the next page's cursor: the one this page ran, for a
-/// request that asked for dynamic matching. Other requests always run strict,
+/// search dynamic matching could apply to. Other searches always run strict,
 /// so their cursors carry nothing and stay as they were.
 pub(in crate::api::search) fn term_matching_for_cursor(
     requested: TermMatching,
+    term_count: usize,
     resolved: DocumentTermMatching,
 ) -> Option<CursorTermMatching> {
-    if requested != TermMatching::Dynamic {
+    if requested != TermMatching::Dynamic || term_count < MIN_TERMS_FOR_DYNAMIC_MATCHING {
         return None;
     }
     Some(match resolved {
