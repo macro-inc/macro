@@ -1,0 +1,21 @@
+apps/web/src/features/agent-dashboards/core/dashboard.test.ts
+  s_699e95788b47ad::t_bd08ade64f37a9 3
+apps/web/src/features/agent-dashboards/core/dashboard.ts
+  s_699e95788b47ad::t_bd08ade64f37a9 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f33f810d9314cecc8133484baab8d9eabecbf8c9",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
