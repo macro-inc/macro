@@ -239,16 +239,17 @@ impl Default for DirectTuning {
     }
 }
 
-/// What a code step's knob, or an Ask AI step's instructions, hold for an
-/// item the request named and the drafter found. A trigger filter takes its
-/// id either way.
+/// What a code step's knob holds for an item the request named and the
+/// drafter found. A trigger filter takes its id either way.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ItemKnobs {
     /// Its exact name, which the step resolves when it runs: the owner reads
-    /// a text knob's value as written, and an id means nothing to them.
+    /// a text knob's value as written, and an id means nothing to them. Ask
+    /// AI instructions and trigger conditions name it and give its id, so a
+    /// run acts on that item and not on another with a similar name.
     #[default]
     Names,
-    /// Its id, which the step uses as it is.
+    /// Its id, which the step uses as it is, in knobs and instructions alike.
     Ids,
 }
 

@@ -60,10 +60,11 @@ each run.
   turn carries the request, the found items (name and id) and the
   reference of the areas named, or of the commonest ones when the SDK has
   none of them (`RoutineCode::area_reference`). A found item goes in a
-  trigger filter by id, and in a knob or Ask AI instructions by its exact
-  name, which the step resolves when it runs, since the owner reads a text
-  knob as written (`ItemKnobs::Names`; `ItemKnobs::Ids` and
-  `direct/items_by_id.md` switch to ids). A `setup` module creating
+  trigger filter by id, in a code step's knob by its exact name, which the
+  step resolves when it runs, since the owner reads a text knob as written,
+  and in Ask AI instructions or a trigger condition by name and id
+  (`ItemKnobs::Names`, `direct/items_by_name.md`; `ItemKnobs::Ids` and
+  `direct/items_by_id.md` put ids in knobs too). A `setup` module creating
   what the routine uses runs once, as the person, and its ids replace each
   `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
   writer changed it and only if it changed nothing, and a placeholder left
