@@ -31,8 +31,8 @@ export function AgentClaudeDialog(props: {
       computers.isSuccess ? computers.data : undefined
     );
   const retry = useRetryTeamAgentSetup();
-  // Open by default: the list is what says how far setup got.
-  const [progressExpanded, setProgressExpanded] = createSignal(true);
+  // Collapsed by default, as in computer setup: the line says where it is.
+  const [progressExpanded, setProgressExpanded] = createSignal(false);
 
   return (
     <ClaudeSignInDialog

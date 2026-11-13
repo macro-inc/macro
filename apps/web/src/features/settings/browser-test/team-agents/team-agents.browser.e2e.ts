@@ -586,10 +586,12 @@ test('the inviter hears when the agent is ready: Message Ada, and Bring your AI 
   await expect(
     signIn.getByRole('link', { name: 'Open claude.ai' })
   ).toBeVisible();
-  await expect(
-    signIn.getByRole('list', { name: 'Setup progress' })
-  ).toBeVisible();
+  // The setup progress line is collapsed, as in computer setup; it opens.
+  const progressList = signIn.getByRole('list', { name: 'Setup progress' });
+  await expect(progressList).toHaveCount(0);
   await screenshot(page, testInfo, 'bring-your-ai-from-notification');
+  await signIn.locator('button[aria-expanded="false"]').first().click();
+  await expect(progressList).toBeVisible();
   expect(backend.claudeCalls).toContain('harness-ada claude-sign-in');
   await signIn.getByRole('button', { name: 'Close' }).click();
   await expect(signIn).toBeHidden();
