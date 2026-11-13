@@ -728,9 +728,12 @@ fn generated_imports(line: &str) -> Vec<String> {
     }
 }
 
+/// A name an `import` line takes, as its module declares it, with its alias.
+type ImportedName<'a> = (&'a str, Option<&'a str>);
+
 /// `import [type] { A, type B as C } from '<path>'`: the names as their
 /// module declares them, each with its alias (`A`, `B` as `C`), and the path.
-fn import_line(line: &str) -> nom::IResult<&str, (Vec<(&str, Option<&str>)>, &str)> {
+fn import_line(line: &str) -> nom::IResult<&str, (Vec<ImportedName<'_>>, &str)> {
     use nom::Parser;
     use nom::branch::alt;
     use nom::bytes::complete::{tag, take_until, take_while1};
