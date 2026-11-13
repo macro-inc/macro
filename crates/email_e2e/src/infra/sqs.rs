@@ -127,12 +127,37 @@ impl Queues {
         let config = macro_aws_config::local_aws_config(server_url).await;
         let client = aws_sdk_sqs::Client::new(&config);
 
-        let mut queues = Vec::with_capacity(QUEUES.len());
+        let mut created = Self {
+            client,
+            queues: Vec::with_capacity(QUEUES.len()),
+        };
         for spec in QUEUES {
-            queues.push(create_queue(&client, prefix, spec).await?);
+            match create_queue(&created.client, prefix, spec).await {
+                Ok(queue) => created.queues.push(queue),
+                Err(error) => {
+                    created.delete().await;
+                    // The queue that failed may have left its dead-letter queue.
+                    let leftovers = created
+                        .client
+                        .list_queues()
+                        .queue_name_prefix(prefix)
+                        .send()
+                        .await;
+                    for url in leftovers.iter().flat_map(|listed| listed.queue_urls()) {
+                        created
+                            .client
+                            .delete_queue()
+                            .queue_url(url)
+                            .send()
+                            .await
+                            .ok();
+                    }
+                    return Err(error);
+                }
+            }
         }
 
-        Ok(Self { client, queues })
+        Ok(created)
     }
 
     /// Adds the calendar backfill queue, named like the others.
@@ -227,7 +252,7 @@ impl Queues {
     }
 
     /// Deletes the scenario's queues.
-    pub(crate) async fn delete(self) {
+    pub(crate) async fn delete(&self) {
         for queue in &self.queues {
             for url in [&queue.url, &queue.dead_letter_url] {
                 if let Err(error) = self.client.delete_queue().queue_url(url).send().await {
