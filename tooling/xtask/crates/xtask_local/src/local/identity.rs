@@ -74,6 +74,15 @@ pub const RECONCILE_LAMBDA_ID: &str = "66666666-6666-4666-8666-666666666666";
 /// named `github` and has this id, or the two halves address different things.
 pub const GITHUB_IDP_ID: &str = "99999999-9999-4999-8999-999999999999";
 
+/// Fixed id for the `microsoft` OIDC identity provider. Only created when
+/// the stack's Outlook emulator stands in for Microsoft (see
+/// `kickstart::MicrosoftIdp`). `authentication_service` resolves it by name.
+pub const MICROSOFT_IDP_ID: &str = "77777777-7777-4777-8777-777777777777";
+
+/// Fixed id for the reconcile lambda attached to `microsoft` (refuses a
+/// sign-in whose email domain Microsoft has not verified).
+pub const MICROSOFT_RECONCILE_LAMBDA_ID: &str = "88888888-8888-4888-8888-888888888888";
+
 /// Local from-address for FusionAuth-sent mail (lands in Mailpit).
 pub const MAIL_FROM: &str = "noreply@macro.local";
 
