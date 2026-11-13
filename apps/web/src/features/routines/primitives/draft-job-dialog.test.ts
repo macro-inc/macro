@@ -201,6 +201,7 @@ describe('createDraftJobDialog', () => {
         start: async () => 'unused',
         open: () => undefined,
         discard,
+        report: () => {},
       }),
       dispose,
     }));
