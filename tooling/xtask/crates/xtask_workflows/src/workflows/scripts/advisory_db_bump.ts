@@ -5,8 +5,9 @@
 //   prepare  check out the open PR's branch, or a new one from the base, and
 //            write the latest commit into the pin file; output `changed`, and
 //            the base's pin, the new pin and the open PR when it changed
-//   publish  commit, push, then open the PR or rewrite its description with
-//            cargo-deny's result on the new pin (`DENY_OUTCOME`)
+//   publish  commit, push, set the `cla` status, then open the PR or rewrite
+//            its description with cargo-deny's result on the new pin
+//            (`DENY_OUTCOME`)
 //
 // A run adds a commit to the open PR's branch instead of rebuilding it, so a
 // fix or ignore pushed there survives the next day's bump.
@@ -137,6 +138,16 @@ async function publish() {
     git('push', 'origin', '--delete', branch());
   }
   git('push', 'origin', `HEAD:refs/heads/${branch()}`);
+
+  // Pushes made with the Actions token start no workflow, so the required
+  // `cla` status never arrives from the CLA workflow (`cla.rs`). Set it as that
+  // workflow would for this PR's bot author. A person's push to the branch runs
+  // the CLA workflow itself.
+  await github('POST', `/repos/${repo()}/statuses/${git('rev-parse', 'HEAD')}`, {
+    state: 'success',
+    context: 'cla',
+    description: 'bot account — CLA not required',
+  });
 
   const body = description(from, to, env('DENY_OUTCOME'), env('RUN_URL'));
   if (pr) {

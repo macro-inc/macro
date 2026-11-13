@@ -9,7 +9,9 @@
 //! Its owner pushes the fix or ignore to the branch and merges.
 //!
 //! The PR is opened with the Actions token, whose events start no workflow:
-//! CI waits for someone to add the `run-ci` label, like on any PR.
+//! CI waits for someone to add the `run-ci` label, like on any PR. The CLA
+//! workflow doesn't run on its pushes either, so the run sets the required
+//! `cla` status itself, as [`super::cla`] does for a bot's PR.
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Workflow,
@@ -46,7 +48,8 @@ fn bump_job() -> Job {
         .permissions(
             Permissions::default()
                 .contents(Level::Write)
-                .pull_requests(Level::Write),
+                .pull_requests(Level::Write)
+                .statuses(Level::Write),
         )
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("BUMP_BRANCH", BRANCH))

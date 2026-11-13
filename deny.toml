@@ -64,7 +64,8 @@ feature-depth = 1
 # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
 [advisories]
 # The path where the advisory databases are cloned/fetched into, relative to
-# the repository root. CI clones the advisory-db commit in
+# the directory cargo-deny runs in (the repository root in CI). CI clones the
+# advisory-db commit in
 # `.github/advisory-db-rev` here and runs `cargo deny check --disable-fetch`,
 # so a newly published advisory fails only the daily bump PR
 # (`advisory_db_bump.yml`), not every PR. A local `cargo deny check` fetches

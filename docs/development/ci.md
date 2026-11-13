@@ -31,8 +31,8 @@ fails, push the fix (update the crate, or ignore the advisory in `deny.toml`
 with a reason) to that branch, add `run-ci`, and merge. Its later runs add
 commits on top of yours.
 
-To check the pinned database locally from the repository root, clone the
-commit into `target/advisory-dbs/advisory-db-3157b0e258782691`, as the
-workflow does, and run `cargo deny check --disable-fetch`. A plain
-`cargo deny check` fetches the latest database, which is what the next bump
-will see.
+To check the pinned database locally from the repository root, run the
+commands of the `Fetch the pinned advisory database` step in
+`.github/workflows/cargo_deny.yml`, then `cargo deny check --disable-fetch`.
+A plain `cargo deny check` moves that clone to the latest database, which is
+what the next bump will see.
