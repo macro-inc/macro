@@ -83,11 +83,11 @@ live events that keep them current.
   channel (`write_queued`) and tries again on its next run.
 - A timeline already loaded is never replaced from the cache: a refetch reads
   the server.
-- The open waits on the cache alone (for 2 s) only for a channel it is known
-  to hold a page for, learned from this session's reads and writes
-  (`noteCachedPage`). Any other channel is most likely a miss or the cache is
-  still starting, so the open asks the server at once and shows whichever
-  answers first. A cached page that wins
+- The open never waits on the cache alone: it asks the cache and the server
+  at once and shows whichever answers first. In the seconds after a page load
+  the engine can take 2 to 5 s to answer a read (measured with warming off),
+  so a wait for it made an open that much slower than today's.
+  A cached page that wins
   stops waiting for the server read; one that arrives after the server could
   not be reached is shown too, so a channel opens offline. A refusal from the
   server (not a member, not found) is its answer and is never covered by the

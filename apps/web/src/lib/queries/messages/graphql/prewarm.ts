@@ -14,7 +14,7 @@ import { queryClient } from '../../client';
 import { messageKeys } from '../keys';
 import { getMessageTimelineQueryKeyPrefix } from '../timeline';
 import { applyChangesToLatestPage, trimLatestPage } from './apply';
-import { CURSOR_PAGE_LIMIT, noteCachedPage } from './channel-sync';
+import { CURSOR_PAGE_LIMIT } from './channel-sync';
 import { activityFromGraphql, entryFromGraphql } from './convert';
 import {
   queueHoldsChannelWrite,
@@ -338,7 +338,6 @@ async function readWarmPage(
       );
       return { outcome: 'fetched', latest };
     }
-    noteCachedPage(host, channelId, true);
     const caughtUp = await catchUpCachedPage(channelId, cached, span);
     if (caughtUp) {
       return caughtUp.seq === cached.seq
@@ -380,7 +379,6 @@ async function warm(
     return 'failed';
   }
   // The open then waits on the cache instead of racing the server.
-  noteCachedPage(current.host, channelId, read.latest.page.entries.length > 0);
   return read.outcome;
 }
 
@@ -488,7 +486,6 @@ async function evictStaleChannelPages(
           if (isChannelTimelineLoaded(channelId)) continue;
           channels += 1;
           keys.push(...pageKeys);
-          noteCachedPage(current.host, channelId, false);
         }
         if (keys.length > 0) await current.host.deleteRecords(keys);
         records += keys.length;
