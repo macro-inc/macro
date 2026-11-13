@@ -125,6 +125,15 @@ keep no log.
   fact; `channel_changes` reloads the root the fact names. A new fact that
   changes how a message reads needs the same.
 - `ChannelChangeLogRetention` prunes hourly from `document_storage_service`.
+- `src/domain/service/writes.rs` holds the writes that report their number
+  (`patch_sequenced`, `delete_sequenced`, `react_sequenced`, which `patch`,
+  `delete` and `react` wrap; posts report theirs from `post_validated` in
+  `service.rs`), and the replay-safe channel forms a client queue sends through `graphql_channel`:
+  `post_once` returns the stored message when the same sender already posted
+  that id in the same channel and thread, checked before the id's clock
+  window so a late replay still succeeds; `delete_once` returns the tombstone
+  of a deleted message the caller may delete. A replay returns no number and
+  publishes nothing.
 
 ## Thread reply pages
 

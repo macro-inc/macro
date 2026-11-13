@@ -529,6 +529,22 @@ type CompleteMutationRoot {
 	revisions are unchanged. Returns the views in their new order.
 	"""
 	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
+	"""
+	Post a message in a channel, at most once per client-minted `id`.
+	"""
+	postChannelMessage(input: GraphqlChannelPostMessageInput!): GraphqlChannelMessageWrite!
+	"""
+	Edit a channel message.
+	"""
+	editChannelMessage(input: GraphqlChannelEditMessageInput!): GraphqlChannelMessageWrite!
+	"""
+	Delete a channel message, leaving its tombstone.
+	"""
+	deleteChannelMessage(input: GraphqlChannelDeleteMessageInput!): GraphqlChannelMessageWrite!
+	"""
+	Add or remove the caller's reaction to a channel message.
+	"""
+	reactToChannelMessage(input: GraphqlChannelReactInput!): GraphqlChannelMessageWrite!
 }
 
 """
@@ -3396,6 +3412,56 @@ type GraphqlChannelActivity {
 }
 
 """
+How an edit changes a message's attachments.
+"""
+input GraphqlChannelAttachmentChangeInput @oneOf {
+	"""
+	Replace every attachment with these.
+	"""
+	replace: [GraphqlChannelAttachmentInput!]
+	"""
+	Remove some attachments and append others.
+	"""
+	delta: GraphqlChannelAttachmentDeltaInput
+}
+
+"""
+Attachments to remove from a message and attachments to add to it.
+"""
+input GraphqlChannelAttachmentDeltaInput {
+	"""
+	`attachmentId`s of the attachments to remove.
+	"""
+	remove: [ID!]!
+	"""
+	Attachments to append.
+	"""
+	add: [GraphqlChannelAttachmentInput!]!
+}
+
+"""
+An entity to attach to a message.
+"""
+input GraphqlChannelAttachmentInput {
+	"""
+	Kind of the attached entity.
+	"""
+	entityType: String!
+	"""
+	Identifier of the attached entity.
+	"""
+	entityId: String!
+	"""
+	Pixel width, for media.
+	"""
+	width: Int
+	"""
+	Pixel height, for media.
+	"""
+	height: Int
+}
+
+"""
 The two operands of a recursive `ChannelFilterExpr` binary expression.
 """
 input GraphqlChannelBinaryExpr {
@@ -3492,6 +3558,55 @@ type GraphqlChannelChanges {
 	Messages that no longer exist for a reader.
 	"""
 	removed: [ID!]!
+}
+
+"""
+A channel message to delete.
+"""
+input GraphqlChannelDeleteMessageInput {
+	"""
+	The message's channel.
+	"""
+	channelId: ID!
+	"""
+	The message to delete. A message already deleted returns its
+	tombstone with a null `seq`.
+	"""
+	messageId: ID!
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
+}
+
+"""
+An edit of a channel message. An absent field keeps its current value.
+"""
+input GraphqlChannelEditMessageInput {
+	"""
+	The message's channel.
+	"""
+	channelId: ID!
+	"""
+	The message to edit.
+	"""
+	messageId: ID!
+	"""
+	Replacement body.
+	"""
+	content: String
+	"""
+	Replacement mentions.
+	"""
+	mentions: [GraphqlChannelMentionInput!]
+	"""
+	How the attachments change.
+	"""
+	attachments: GraphqlChannelAttachmentChangeInput
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
 }
 
 """
@@ -3594,6 +3709,20 @@ input GraphqlChannelLiteral @oneOf {
 	Exact notification state for the requester.
 	"""
 	notificationState: NotificationState
+}
+
+"""
+An entity a message mentions.
+"""
+input GraphqlChannelMentionInput {
+	"""
+	Kind of the mentioned entity.
+	"""
+	entityType: String!
+	"""
+	Identifier of the mentioned entity.
+	"""
+	entityId: String!
 }
 
 """
@@ -3867,6 +3996,26 @@ type GraphqlChannelMessageSendMetadata {
 }
 
 """
+A channel message write: the message after it, and the sequence number
+it took in the channel's change log.
+"""
+type GraphqlChannelMessageWrite {
+	"""
+	The message as the write left it, as the REST write routes return it.
+	It is not read again, so `thread` and `call` are always null here,
+	even on a root: read them from the timeline and thread pages, and do
+	not select them in a write, or a normalized cache stores the nulls
+	over the record's values.
+	"""
+	message: GraphqlChannelMessage!
+	"""
+	The channel change sequence number the write took; null when this
+	call wrote nothing, as when it repeated a write that already happened.
+	"""
+	seq: Int
+}
+
+"""
 The messages of one channel.
 """
 type GraphqlChannelMessages {
@@ -3926,6 +4075,71 @@ enum GraphqlChannelParticipantRole {
 	Channel member.
 	"""
 	MEMBER
+}
+
+"""
+A message to post in a channel: a root, or a reply to one.
+"""
+input GraphqlChannelPostMessageInput {
+	"""
+	The channel to post in.
+	"""
+	channelId: ID!
+	"""
+	Client-minted UUIDv7 for the message, stamped within a day of the
+	server clock. Posting an id the caller already posted in this channel
+	and thread returns that message with a null `seq`; another holder's id
+	is a `CONFLICT`. The server mints one when absent, and then a resent
+	post posts again.
+	"""
+	id: ID
+	"""
+	Macro Markdown body.
+	"""
+	content: String!
+	"""
+	The root to reply to; absent posts a root.
+	"""
+	threadId: ID
+	"""
+	Mentions tracked by the editor.
+	"""
+	mentions: [GraphqlChannelMentionInput!]! = []
+	"""
+	Attachments.
+	"""
+	attachments: [GraphqlChannelAttachmentInput!]! = []
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
+}
+
+"""
+The caller's reaction to add to or remove from a channel message.
+"""
+input GraphqlChannelReactInput {
+	"""
+	The message's channel.
+	"""
+	channelId: ID!
+	"""
+	The message to react to.
+	"""
+	messageId: ID!
+	"""
+	The emoji.
+	"""
+	emoji: String!
+	"""
+	Add when true, remove when false. A reaction already as asked returns
+	the message with a null `seq`.
+	"""
+	add: Boolean!
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
 }
 
 """

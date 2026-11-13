@@ -1,4 +1,5 @@
-//! The channel message reads the GraphQL fields resolve through.
+//! The channel message reads the GraphQL fields resolve through, and the
+//! request context that carries them and the writes.
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -6,6 +7,7 @@ use entity_access::domain::{
     models::{AccessError, EntityAccessReceipt, EntityType},
     ports::EntityAccessService,
 };
+use macro_authorization::MacroAuthorization;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     ports::{
@@ -15,6 +17,8 @@ use messages::domain::{
     service::{MessageService, MessageView, changes::ChannelChanges},
 };
 use uuid::Uuid;
+
+use super::writes::{ChannelMessageWrites, ServiceWrites};
 
 /// A boxed read, so the port stays object-safe.
 pub(crate) type ReadFuture<'a, T> =
@@ -82,13 +86,18 @@ pub(crate) trait ChannelMessageReads: Send + Sync {
     ) -> ReadFuture<'_, ChannelChanges>;
 }
 
-/// Type-erased channel message reads stored in GraphQL request data.
+/// Type-erased channel message reads and writes stored in GraphQL request
+/// data.
 #[derive(Clone)]
 pub struct ChannelMessagesGraphqlContext {
     /// The reads.
     pub(crate) reads: Arc<dyn ChannelMessageReads>,
+    /// The writes.
+    pub(crate) writes: Arc<dyn ChannelMessageWrites>,
     /// The organization of the request's user.
     pub(crate) organization_id: Option<i64>,
+    /// The request's caller, whom writes authorize as the REST routes do.
+    pub(crate) caller: Option<MacroAuthorization>,
 }
 
 impl ChannelMessagesGraphqlContext {
@@ -101,8 +110,13 @@ impl ChannelMessagesGraphqlContext {
         A: EntityAccessService + 'static,
     {
         Self {
-            reads: Arc::new(ServiceReads { service, access }),
+            reads: Arc::new(ServiceReads {
+                service: service.clone(),
+                access: access.clone(),
+            }),
+            writes: Arc::new(ServiceWrites { service, access }),
             organization_id: None,
+            caller: None,
         }
     }
 
@@ -110,17 +124,31 @@ impl ChannelMessagesGraphqlContext {
     #[must_use]
     pub fn for_organization(&self, organization_id: Option<i64>) -> Self {
         Self {
-            reads: self.reads.clone(),
             organization_id,
+            ..self.clone()
         }
     }
 
-    /// Reads backed by a hand-written port, for resolver tests.
+    /// The same context for a request from `caller`, who the writes act for.
+    #[must_use]
+    pub fn with_caller(&self, caller: MacroAuthorization) -> Self {
+        Self {
+            caller: Some(caller),
+            ..self.clone()
+        }
+    }
+
+    /// Reads and writes backed by hand-written ports, for resolver tests.
     #[cfg(test)]
-    pub(crate) fn from_reads(reads: Arc<dyn ChannelMessageReads>) -> Self {
+    pub(crate) fn from_ports(
+        reads: Arc<dyn ChannelMessageReads>,
+        writes: Arc<dyn ChannelMessageWrites>,
+    ) -> Self {
         Self {
             reads,
+            writes,
             organization_id: None,
+            caller: None,
         }
     }
 }

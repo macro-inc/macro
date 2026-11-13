@@ -12,6 +12,7 @@ pub mod changes;
 mod test;
 mod thread_replies;
 mod timeline;
+mod writes;
 
 /// Call-scoped guest conversation use cases.
 pub mod guest_chat;
@@ -292,10 +293,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
         let parent = parent_from_receipt(&access)?;
         if !matches!(parent, MessageParent::Call(_)) {
-            return self.post_validated(access, input).await;
+            return self
+                .post_validated(access, input)
+                .await
+                .map(|written| written.value);
         }
         let Some(client_message_id) = input.id else {
-            return self.post_validated(access, input).await;
+            return self
+                .post_validated(access, input)
+                .await
+                .map(|written| written.value);
         };
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -314,7 +321,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .get_by_client_message_id(&parent, &actor, client_message_id)
                 .await?
                 .ok_or(MessageError::Conflict),
-            result => result,
+            result => result.map(|written| written.value),
         }
     }
 
@@ -346,7 +353,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .ok_or(MessageError::Conflict)?;
                 validate_event_message(message, &parent, &actor, thread_id)
             }
-            result => result,
+            result => result.map(|written| written.value),
         }
     }
 
@@ -354,7 +361,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         mut input: PostMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<Sequenced<Message>, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -448,7 +455,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             },
         })
         .await;
-        Ok(message)
+        Ok(Sequenced {
+            value: message,
+            seq,
+        })
     }
 
     /// Create a channel call's thread root once, however often it is asked for.
@@ -522,159 +532,30 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Apply partial updates without requiring callers to reconstruct a message.
-    #[tracing::instrument(err, skip(self, access, patch))]
     pub async fn patch(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         patch: MessagePatch,
     ) -> Result<Message, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
-        reject_call_root(&current)?;
-        if current.sender_id != actor
-            && !(matches!(parent, MessageParent::Channel(_))
-                && can_moderate(access.entity_permission()))
-        {
-            return Err(MessageError::Forbidden);
-        }
-        let attachments = match patch.attachments {
-            AttachmentChange::Preserve => None,
-            AttachmentChange::Replace(attachments) => Some(attachments),
-            AttachmentChange::Delta { remove, add } => {
-                let mut retained: Vec<_> = current
-                    .attachments
-                    .iter()
-                    .filter(|attachment| !remove.contains(&attachment.id))
-                    .map(|attachment| NewAttachment {
-                        entity_type: attachment.entity_type.clone(),
-                        entity_id: attachment.entity_id.clone(),
-                        width: attachment.width,
-                        height: attachment.height,
-                    })
-                    .collect();
-                retained.extend(add);
-                Some(retained)
-            }
-        };
-        let mentions = patch.mentions.unwrap_or_else(|| {
-            if patch.content.is_some() && actor.as_bot().is_some() {
-                Vec::new()
-            } else {
-                current.mentions.clone()
-            }
-        });
-        let mut input = EditMessage {
-            content: patch.content.unwrap_or_else(|| current.content.clone()),
-            mentions,
-            attachments,
-            nonce: patch.nonce,
-            notification_policy: patch.notification_policy,
-        };
-        if actor.as_bot().is_some() && input.mentions.is_empty() {
-            input.mentions = self.mentions.extract(&input.content).await?;
-        }
-        let has_attachments = input
-            .attachments
-            .as_ref()
-            .map_or(!current.attachments.is_empty(), |a| !a.is_empty());
-        if input.content.trim().is_empty() && !has_attachments {
-            return Err(MessageError::Invalid(
-                "a message needs content or an attachment",
-            ));
-        }
-        input.mentions = self
-            .validate_references(
-                &access,
-                input.mentions,
-                input.attachments.as_deref().unwrap_or_default(),
-            )
-            .await?;
-        // Reconciliation may repeat a bot's final reply after a process died
-        // between patching it and recording success. Identical content must
-        // not produce another edit event or completion notification.
-        if actor.as_bot().is_some()
-            && input.content == current.content
-            && input.mentions == current.mentions
-            && input.attachments.is_none()
-        {
-            return Ok(current);
-        }
-        let notification_policy = input.notification_policy;
-        let nonce = input.nonce.clone();
-        let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
-        let Sequenced {
-            value: message,
-            seq,
-        } = self.repo.edit_sequenced(&parent, id, input).await?;
-        self.publish(MessageEvent {
-            parent,
-            actor: actor.as_ref().to_owned(),
-            nonce,
-            seq,
-            change: MessageChange::Edited {
-                notification_policy,
-                message: message.clone(),
-                mentions,
-                previous_attachments: current.attachments,
-            },
-        })
-        .await;
-        Ok(message)
+        self.patch_sequenced(access, id, patch)
+            .await
+            .map(|written| written.value)
     }
 
     /// Delete one message. On a discussion, deleting the root deletes the discussion.
-    #[tracing::instrument(err, skip(self, access))]
     pub async fn delete(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         nonce: Option<String>,
     ) -> Result<Message, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
-        reject_call_root(&current)?;
-        // A comment's replies and its place in the document belong to the comment,
-        // not to its first message, so the root carries the whole discussion with
-        // it. Channel roots are one message in a conversation that continues
-        // without them, and keep the tombstone the channel timeline renders.
-        if parent.is_discussion() && current.thread_id.is_none() {
-            self.delete_discussion(&access, &parent, &actor, id, nonce)
-                .await?;
-            return self
-                .repo
-                .get(&parent, id)
-                .await?
-                .ok_or(MessageError::NotFound);
-        }
-        let channel_bot =
-            matches!(parent, MessageParent::Channel(_)) && current.sender_id.as_bot().is_some();
-        if current.sender_id != actor && !can_moderate(access.entity_permission()) && !channel_bot {
-            return Err(MessageError::Forbidden);
-        }
-        let Sequenced {
-            value: message,
-            seq,
-        } = self.repo.delete_sequenced(&parent, id).await?;
-        self.publish_message(
-            actor,
-            nonce,
-            seq,
-            &message,
-            MessageChange::MessageDeleted {
-                message: message.clone(),
-            },
-        )
-        .await;
-        Ok(message)
+        self.delete_sequenced(access, id, nonce)
+            .await
+            .map(|written| written.value)
     }
 
     /// Add or remove a reaction owned by the authenticated caller.
-    #[tracing::instrument(err, skip(self, access))]
     pub async fn react(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -683,40 +564,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         add: bool,
         nonce: Option<String>,
     ) -> Result<Message, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        let actor = actor_from_receipt(&access, &parent)?;
-        self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
-        reject_call_root(&current)?;
-        if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
-            return Err(MessageError::Invalid("invalid reaction"));
-        }
-        let ReactionResult {
-            message,
-            changed,
-            seq,
-        } = self
-            .repo
-            .react(&parent, id, actor.as_ref(), &emoji, add)
-            .await?;
-        // Idempotent retries still return the current message to the caller,
-        // but must not publish another change or notify the author again.
-        if !changed {
-            return Ok(message);
-        }
-        self.publish_message(
-            actor,
-            nonce,
-            seq,
-            &message,
-            MessageChange::ReactionChanged {
-                message: message.clone(),
-                emoji,
-                added: add,
-            },
-        )
-        .await;
-        Ok(message)
+        self.react_sequenced(access, id, emoji, add, nonce)
+            .await
+            .map(|written| written.value)
     }
 
     /// Update a discussion; detaching document text requires edit access.

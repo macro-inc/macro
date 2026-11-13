@@ -71,9 +71,11 @@ saved_views = { path = "../saved_views" }
 contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 databases = { path = "../databases", default-features = false, features = ["ports"] }
 databases_sql = { path = "../databases_sql" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+messages = { path = "../messages", default-features = false, features = ["outbound"] }
 models_databases = { path = "../models_databases" }
 attention_feed = { path = "../attention_feed", features = ["inbound"] }
 notification_inbox = { path = "../notification_inbox" }
