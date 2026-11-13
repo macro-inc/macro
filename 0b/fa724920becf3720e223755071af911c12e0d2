@@ -1,0 +1,23 @@
+docs/runbooks/gitai-service.md
+  s_6074238f41262d::t_728f4dcd71e6da 26-28,39-44
+infra/stacks/gitai-service/Pulumi.dev.yaml
+  s_6074238f41262d::t_84e4ec0dbf88ed 4-5
+infra/stacks/gitai-service/Pulumi.prod.yaml
+  s_6074238f41262d::t_0362f8c5ca364d 4-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0bfa724920becf3720e223755071af911c12e0d2",
+  "prompts": {},
+  "sessions": {
+    "s_6074238f41262d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "065ecd00-1bb3-4dcb-b08b-07f3a94973dd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
