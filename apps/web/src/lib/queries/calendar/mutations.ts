@@ -25,6 +25,7 @@ import { useMutation } from '@tanstack/solid-query';
 import {
   beginCalendarUpdate,
   type CalendarUpdate,
+  finishCalendarUpdateOperation,
   installCalendarUpdate,
   isCalendarEventUpdating,
   prepareCalendarUpdate,
@@ -49,6 +50,7 @@ import { invalidateCalendarEventPreviews } from './mention-preview';
 import {
   type CalendarOccurrencesData,
   invalidateCalendarOccurrences,
+  refreshCalendarEventOccurrences,
 } from './occurrences';
 
 export type {
@@ -91,15 +93,25 @@ async function patchOccurrenceCaches(
   };
 }
 
-/** Refreshes settled writes without holding the mutation open during a delta sync. */
-function refreshAfterWrite(eventId: string) {
+/** A save's interaction lock outlives acceptance, but not its refresh requests. */
+function refreshAfterWrite(eventId: string, update?: CalendarUpdate) {
   fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
   invalidateCalendarEventPreviews(eventId);
   const revision = occurrenceWriteRevision;
-  const refresh = invalidateCalendarOccurrences(
-    () => revision === occurrenceWriteRevision
-  );
-  fireAndForget(refresh, 'calendar-mutations');
+  const refresh = async () => {
+    if (!update) {
+      await invalidateCalendarOccurrences(
+        () => revision === occurrenceWriteRevision
+      );
+      return;
+    }
+    try {
+      await refreshCalendarEventOccurrences(update);
+    } finally {
+      finishCalendarUpdateOperation(update.client, update);
+    }
+  };
+  fireAndForget(refresh(), 'calendar-mutations');
 }
 
 function patchEventItems(
@@ -802,12 +814,17 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
         },
         onSettled: (_data, error, args, context) => {
           if (context) settleCalendarUpdate(context.client, context, !error);
+          if (!context) return;
           if (
-            !context ||
-            (context.client === queryClient && context.state.isCurrent())
+            error ||
+            context.client !== queryClient ||
+            !context.state.isCurrent()
           ) {
-            refreshAfterWrite(args.eventId);
+            finishCalendarUpdateOperation(context.client, context);
+            if (context.state.isCurrent()) refreshAfterWrite(args.eventId);
+            return;
           }
+          refreshAfterWrite(args.eventId, context);
         },
       },
       callbacks

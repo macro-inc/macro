@@ -1,6 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { storageServiceClient } from '@service-storage/client';
@@ -9,12 +9,14 @@ import type { CalendarOccurrenceResponse } from '@service-storage/generated/sche
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import {
   hashKey,
+  type Query,
   queryOptions,
   useQuery,
   useQueryClient,
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
+  type CalendarUpdate,
   calendarUpdateReadRevision,
   reconcileCalendarUpdateRead,
 } from './event-updates';
@@ -319,6 +321,74 @@ export async function invalidateCalendarOccurrences(
   return queryClient.invalidateQueries({
     queryKey: calendarKeys.occurrences._def,
   });
+}
+
+/** Drain older reads, then fetch once after the write and delta have settled. */
+export async function refreshCalendarEventOccurrences(update: CalendarUpdate) {
+  const { client } = update;
+  const isCurrent = () => !update.state.retired && update.state.isCurrent();
+  const operation = async (span: Span) => {
+    span.setAttr('calendar.event_id', update.args.eventId);
+    if (update.args.calendarId)
+      span.setAttr('calendar.calendar_id', update.args.calendarId);
+    const controller = activeCalendarSyncController();
+    if (controller?.answering()) {
+      await span.span('calendar.occurrences_delta_sync', async (deltaSpan) => {
+        try {
+          await controller.runDelta();
+        } catch {
+          deltaSpan.error('Calendar delta sync failed');
+        }
+      });
+    }
+    if (!isCurrent()) return;
+    await client.invalidateQueries({
+      queryKey: calendarKeys.occurrences._def,
+      refetchType: 'none',
+    });
+    const refreshed = new Set<Query>();
+    let failure: PromiseRejectedResult | undefined;
+    // Navigation can mount another range while the first refresh is running.
+    // Keep the same lock until all currently mounted ranges finish their reads.
+    while (isCurrent()) {
+      const queries = client
+        .getQueryCache()
+        .findAll({
+          queryKey: calendarKeys.occurrences._def,
+          type: 'active',
+        })
+        .filter(
+          (query) => !refreshed.has(query) || query.state.fetchStatus !== 'idle'
+        );
+      if (queries.length === 0) break;
+      const results = await Promise.allSettled(
+        queries.map(async (query) => {
+          // TanStack reuses an uncached in-flight fetch even with cancelRefetch.
+          // Drain it first so only a newly started read can end this operation.
+          if (query.state.fetchStatus !== 'idle') {
+            await query
+              .fetch(undefined, { cancelRefetch: false })
+              .catch(() => {});
+          }
+          if (
+            !isCurrent() ||
+            !query.isActive() ||
+            refreshed.has(query) ||
+            client.getQueryCache().get(query.queryHash) !== query
+          )
+            return;
+          refreshed.add(query);
+          return query.fetch(undefined, { cancelRefetch: false });
+        })
+      );
+      failure ??= results.find((result) => result.status === 'rejected');
+    }
+    span.setAttr('calendar.refresh.outcome', failure ? 'error' : 'finished');
+    if (failure) throw failure.reason;
+  };
+  return update.args.parentSpan
+    ? update.args.parentSpan.span('calendar.event_update_refresh', operation)
+    : Telemetry.span('calendar.event_update_refresh', operation);
 }
 
 /**

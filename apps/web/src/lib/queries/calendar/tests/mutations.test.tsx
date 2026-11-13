@@ -256,7 +256,8 @@ afterEach(() => {
   testQueryClient.clear();
 });
 
-it('keeps only the updating event locked until a complete confirming read', async () => {
+it('keeps only the updating event locked through its post-save refresh', async () => {
+  const watcher = watchViewportA();
   const response = deferredResult();
   updateCalendarEventMock.mockReturnValueOnce(response.promise);
   const { update, busy } = renderHook(() => ({
@@ -271,37 +272,170 @@ it('keeps only the updating event locked until a complete confirming read', asyn
   await vi.waitFor(() =>
     expect(updateCalendarEventMock).toHaveBeenCalledOnce()
   );
-  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  expect(busy()).toBe(true);
   expect(isCalendarEventUpdating(testQueryClient, 'event-1')).toBe(false);
   response.resolve(ok({ id: 'event-2' }));
   await save;
+  await vi.waitFor(() => expect(watcher.refetch).toHaveBeenCalledOnce());
   expect(busy()).toBe(true);
+  watcher.answer({ items: [recurringItem()], syncStatus: 'ready' });
+  await vi.waitFor(() => expect(busy()).toBe(false));
+  watcher.unsubscribe();
+});
 
-  const key = calendarKeys.occurrences('user', viewportA).queryKey;
-  const revision = calendarUpdateReadRevision(testQueryClient);
+it('waits for every refresh even when one range fails', async () => {
+  const first = watchViewportA();
+  const secondRead = Promise.withResolvers<CalendarOccurrencesData>();
+  const second = new QueryObserver(testQueryClient, {
+    queryKey: calendarKeys.occurrences('user', viewportB).queryKey,
+    queryFn: () => secondRead.promise,
+    staleTime: Number.POSITIVE_INFINITY,
+  }).subscribe(() => {});
+  updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+  const update = renderHook(() => useUpdateCalendarEventMutation());
+  try {
+    await update.mutateAsync({
+      eventId: 'event-2',
+      patch: { title: 'Updated' },
+    });
+    await vi.waitFor(() => expect(first.refetch).toHaveBeenCalledOnce());
+    secondRead.reject(new Error('Refresh failed'));
+    await vi.waitFor(() =>
+      expect(
+        testQueryClient.getQueryState(
+          calendarKeys.occurrences('user', viewportB).queryKey
+        )?.status
+      ).toBe('error')
+    );
+    expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+    first.answer({ items: [recurringItem()], syncStatus: 'ready' });
+    await vi.waitFor(() =>
+      expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(false)
+    );
+  } finally {
+    first.unsubscribe();
+    second();
+  }
+});
+
+it('drains an uncached read and forces a new read before unlocking', async () => {
+  const response = deferredResult();
+  updateCalendarEventMock.mockReturnValueOnce(response.promise);
+  const update = renderHook(() => useUpdateCalendarEventMutation());
+  const save = update.mutateAsync({
+    eventId: 'event-2',
+    patch: { title: 'Updated' },
+  });
+  await vi.waitFor(() =>
+    expect(updateCalendarEventMock).toHaveBeenCalledOnce()
+  );
+  const range = {
+    start: '2026-11-01T00:00:00Z',
+    end: '2026-12-01T00:00:00Z',
+    startDate: '2026-11-01',
+    endDate: '2026-12-01',
+  };
+  const firstRead = Promise.withResolvers<CalendarOccurrencesData>();
+  const freshRead = Promise.withResolvers<CalendarOccurrencesData>();
+  const fetch = vi
+    .fn()
+    .mockReturnValueOnce(firstRead.promise)
+    .mockReturnValueOnce(freshRead.promise);
+  const unsubscribe = new QueryObserver(testQueryClient, {
+    queryKey: calendarKeys.occurrences('user', range).queryKey,
+    queryFn: fetch,
+  }).subscribe(() => {});
+  try {
+    response.resolve(ok({ id: 'event-2' }));
+    await save;
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+    const stale = { items: [], syncStatus: 'ready' as const };
+    firstRead.resolve(stale);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+    freshRead.resolve(stale);
+    await vi.waitFor(() =>
+      expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(false)
+    );
+    // Refresh completion is not semantic confirmation of the projected fields.
+    expect(viewportData(viewportA)?.items[1].event.title).toBe('Updated');
+  } finally {
+    unsubscribe();
+  }
+});
+
+it('retains its refresh lock across unmount and remount', async () => {
+  const watcher = watchViewportA();
+  updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+  const update = renderHook(() => useUpdateCalendarEventMutation());
+  await update.mutateAsync({ eventId: 'event-2', patch: { title: 'Updated' } });
+  await vi.waitFor(() => expect(watcher.refetch).toHaveBeenCalledOnce());
+  watcher.unsubscribe();
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  const unsubscribe = new QueryObserver(testQueryClient, {
+    queryKey: calendarKeys.occurrences('user', viewportA).queryKey,
+    queryFn: watcher.refetch,
+    staleTime: Number.POSITIVE_INFINITY,
+  }).subscribe(() => {});
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  watcher.answer({ items: [recurringItem()], syncStatus: 'ready' });
+  await vi.waitFor(() =>
+    expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(false)
+  );
+  unsubscribe();
+});
+
+it('includes a newly mounted range before ending the refresh lock', async () => {
+  const first = watchViewportA();
+  updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+  const update = renderHook(() => useUpdateCalendarEventMutation());
+  await update.mutateAsync({ eventId: 'event-2', patch: { title: 'Updated' } });
+  await vi.waitFor(() => expect(first.refetch).toHaveBeenCalledOnce());
+  const initialRead = Promise.withResolvers<CalendarOccurrencesData>();
+  const freshRead = Promise.withResolvers<CalendarOccurrencesData>();
+  const fetch = vi
+    .fn()
+    .mockReturnValueOnce(initialRead.promise)
+    .mockReturnValueOnce(freshRead.promise);
+  const unsubscribe = new QueryObserver(testQueryClient, {
+    queryKey: calendarKeys.occurrences('user', viewportB).queryKey,
+    queryFn: fetch,
+  }).subscribe(() => {});
+  first.unsubscribe();
   const data = { items: [recurringItem()], syncStatus: 'ready' as const };
-  reconcileCalendarUpdateRead(testQueryClient, key, data, revision, viewportA);
+  first.answer(data);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
-  data.items[0].event.title = 'Updated';
-  reconcileCalendarUpdateRead(
-    testQueryClient,
-    key,
-    { ...data, partial: true },
-    revision,
-    viewportA
+  initialRead.resolve(data);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  freshRead.resolve(data);
+  await vi.waitFor(() =>
+    expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(false)
   );
-  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
-  reconcileCalendarUpdateRead(
-    testQueryClient,
-    key,
-    data,
-    revision - 1,
-    viewportA
+  unsubscribe();
+});
+
+it('keeps an in-flight event locked when all cached ranges are evicted', async () => {
+  const response = deferredResult();
+  updateCalendarEventMock.mockReturnValueOnce(response.promise);
+  const update = renderHook(() => useUpdateCalendarEventMutation());
+  const save = update.mutateAsync({
+    eventId: 'event-2',
+    patch: { title: 'Updated' },
+  });
+  const settled = Promise.allSettled([save]);
+  await vi.waitFor(() =>
+    expect(updateCalendarEventMock).toHaveBeenCalledOnce()
   );
+  testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
   expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
-  reconcileCalendarUpdateRead(testQueryClient, key, data, revision, viewportA);
-  // Inactive cached ranges must not keep the event locked forever.
-  expect(busy()).toBe(false);
+  seedViewports();
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  response.resolve(failure());
+  await settled;
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(false);
 });
 
 it('unlocks and rolls back an event after its save fails', async () => {
@@ -1281,9 +1415,16 @@ describe('useUpdateCalendarEventMutation', () => {
     } as unknown as CalendarSyncController);
     let serverTitle = 'First';
     const read = vi.fn(async (): Promise<CalendarOccurrencesData> => {
+      const revision = calendarUpdateReadRevision(testQueryClient);
       const item = standaloneItem();
       item.event.title = serverTitle;
-      return { items: [item, recurringItem()], syncStatus: 'ready' };
+      return reconcileCalendarUpdateRead(
+        testQueryClient,
+        calendarKeys.occurrences('user', viewportA).queryKey,
+        { items: [item, recurringItem()], syncStatus: 'ready' },
+        revision,
+        viewportA
+      );
     });
     const unsubscribe = new QueryObserver(testQueryClient, {
       queryKey: calendarKeys.occurrences('user', viewportA).queryKey,
@@ -1307,7 +1448,7 @@ describe('useUpdateCalendarEventMutation', () => {
     await vi.waitFor(() => expect(titleOfEvent1()).toBe('Second'));
 
     deltas[0]();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(testQueryClient.isFetching()).toBe(0));
     expect(titleOfEvent1()).toBe('Second');
 
@@ -1316,7 +1457,7 @@ describe('useUpdateCalendarEventMutation', () => {
     await saving;
     await vi.waitFor(() => expect(deltas).toHaveLength(2));
     deltas[1]();
-    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(testQueryClient.isFetching()).toBe(0));
     expect(titleOfEvent1()).toBe('Second');
     unsubscribe();

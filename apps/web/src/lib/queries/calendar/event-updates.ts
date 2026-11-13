@@ -24,7 +24,6 @@ interface EventUpdates {
   confirmedTime?: EventTime;
   timeBasis?: UpdateCalendarEventArgs['timeBasis'];
   revision: number;
-  awaitingRefresh: boolean;
   tail: Promise<void>;
   isCurrent: () => boolean;
   retired?: boolean;
@@ -37,6 +36,7 @@ export interface CalendarUpdate {
   ready: Promise<void>;
   release: () => void;
   status: 'pending' | 'saved' | 'failed';
+  operationPending: boolean;
 }
 
 interface UpdateRegistry {
@@ -50,6 +50,10 @@ interface UpdateRegistry {
 // into a replacement client's cache. Snapshots also retain the exact query.
 const REGISTRIES = new WeakMap<QueryClient, UpdateRegistry>();
 const SUBMISSIONS = new WeakMap<UpdateCalendarEventArgs, CalendarUpdate[]>();
+
+function hasPendingOperation(state: EventUpdates) {
+  return state.entries.some((entry) => entry.operationPending);
+}
 
 function registry(client: QueryClient): UpdateRegistry {
   let value = REGISTRIES.get(client);
@@ -66,15 +70,15 @@ function registry(client: QueryClient): UpdateRegistry {
     client.getQueryCache().subscribe((event) => {
       if (event.type !== 'removed') return;
       for (const [id, state] of created.events) {
-        if (state.viewports.get(event.query.queryHash)?.query !== event.query)
-          continue;
-        state.viewports.delete(event.query.queryHash);
-        if (state.viewports.size === 0) {
-          state.retired = true;
+        if (state.viewports.get(event.query.queryHash)?.query === event.query)
+          state.viewports.delete(event.query.queryHash);
+        // Cache eviction is not account retirement. In-flight writes keep
+        // their shared lock even when navigation removes every snapshot.
+        if (state.viewports.size === 0 && !hasPendingOperation(state)) {
           created.events.delete(id);
         }
-        created.notify();
       }
+      created.notify();
     });
   }
   return value;
@@ -86,10 +90,7 @@ export function isCalendarEventUpdating(client: QueryClient, eventId: string) {
   owner.changed();
   const state = owner.events.get(eventId);
   return Boolean(
-    state?.isCurrent() &&
-      !state.retired &&
-      (state.awaitingRefresh ||
-        state.entries.some((entry) => entry.status === 'pending'))
+    state?.isCurrent() && !state.retired && hasPendingOperation(state)
   );
 }
 
@@ -375,7 +376,6 @@ export function beginCalendarUpdate(
       viewports: new Map(),
       revision: 0,
       tail: Promise.resolve(),
-      awaitingRefresh: false,
     };
     owner.events.set(args.eventId, state);
   }
@@ -420,6 +420,7 @@ export function beginCalendarUpdate(
     ready,
     release,
     status: 'pending',
+    operationPending: true,
   };
   state.entries.push(entry);
   state.revision = ++owner.revision;
@@ -504,12 +505,29 @@ export function settleCalendarUpdate(
   if (saved && entry.args.scope !== 'this_event' && entry.args.patch.time) {
     entry.state.confirmedTime = entry.args.patch.time;
   }
-  if (saved) entry.state.awaitingRefresh = entry.state.viewports.size > 0;
   entry.state.revision = ++registry(client).revision;
   if (!entry.state.retired && entry.state.isCurrent())
     publish(client, entry.state);
   registry(client).notify();
   entry.release();
+}
+
+/** Release only this save's interaction lock, independently of its projection. */
+export function finishCalendarUpdateOperation(
+  client: QueryClient,
+  entry: CalendarUpdate
+) {
+  entry.operationPending = false;
+  const owner = registry(client);
+  const { state } = entry;
+  if (
+    state.viewports.size === 0 &&
+    !hasPendingOperation(state) &&
+    owner.events.get(entry.args.eventId) === state
+  ) {
+    owner.events.delete(entry.args.eventId);
+  }
+  owner.notify();
 }
 
 export function calendarUpdateReadRevision(client: QueryClient): number {
@@ -675,10 +693,9 @@ export function reconcileCalendarUpdateRead(
       revision >= state.revision &&
       readConfirmsUpdates(data, state, snapshot, range)
     ) {
-      state.awaitingRefresh = false;
-      owner.notify();
       state.viewports.delete(key);
-      if (state.viewports.size === 0) owner.events.delete(eventId);
+      if (state.viewports.size === 0 && !hasPendingOperation(state))
+        owner.events.delete(eventId);
       continue;
     }
     items = applySnapshot(items, state, snapshot);
