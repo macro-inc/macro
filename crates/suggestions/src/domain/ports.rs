@@ -11,9 +11,9 @@ use model_owner::CreationPrincipal;
 use super::model::{
     Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion,
     OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RunSettled,
-    RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionContent,
-    SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
-    Target,
+    RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller,
+    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome,
+    SuggestionsReview, Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 
@@ -315,32 +315,38 @@ pub trait RunSessions: Send + Sync + 'static {
     async fn discard(&self, run: &StoredRun) -> Result<(), rootcause::Report>;
 }
 
-/// Suggestions as the API serves them: the person's feed, and the tools hidden
-/// generation sessions manage it with.
+/// Suggestions as the API serves them: the person's feed, which they and their
+/// own agent read and act on, and the tools hidden generation sessions
+/// manage it with.
 pub trait SuggestionApi: Send + Sync + 'static {
     /// The person's open suggestions they can still open every item of, best
     /// first. With their `timezone`, it also counts them in for nightly
-    /// generations.
+    /// generations. `caller` is the person or their own agent; a
+    /// generation session is refused.
     fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
         timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<SuggestionFeed, SuggestionError>> + Send;
 
-    /// The person acts on a suggestion. A background prompt suggestion starts a run
-    /// (one whose last run failed runs again) when the person themself
-    /// accepts it as they saw it; any other is done.
+    /// The person, or someone acting for them, acts on a suggestion. A
+    /// background prompt suggestion starts a run (one whose last run failed runs
+    /// again) only when the person themself accepts it in the app as they
+    /// saw it; anyone acting for them only takes it on. Any other is done.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
         id: Uuid,
         accept: Accept,
     ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
-    /// The person isn't interested in an open suggestion.
+    /// The person, or their own agent, isn't interested in an open suggestion.
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
         id: Uuid,
     ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 

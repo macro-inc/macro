@@ -18,6 +18,17 @@ scheduler's spec.
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
+- The feed, `accept` and `dismiss` (`UserOnly`) serve the person and anyone
+  acting for them: a code-mode credential is a Macro API token for the
+  person, so it passes. The router labels the caller (`SuggestionCaller`, span
+  field `suggestions.caller`): only the person's own session with no program's
+  marks (no code-mode invocation, no code-execution header) is `user`; any
+  other credential is `agent`. An agent whose signed invocation names an open
+  generation session, of either kind, gets 403 (`Generating`), since hidden
+  sessions only manage the feed through their own tools. The harness refuses
+  to start without validating requests' attribution. An agent accepting a
+  background prompt suggestion only takes it on (the person runs it from the app);
+  any other suggestion becomes done either way.
 - A generation session ends by having each suggestion it wrote checked against its
   cited items: its last programs call `macro.ai.structuredCompletion` (tool
   free) on the model `SuggestionService::with_checker_model` names, which sees only

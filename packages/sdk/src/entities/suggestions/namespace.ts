@@ -61,13 +61,23 @@ export type SuggestionInput =
 /**
  * The user's suggestions: proactive suggestions in their feed.
  *
- * @routing Use when a suggestions generation session manages the user's Suggestions feed of proactive suggestions; not for requests from the user, since any other session gets a 403.
+ * @routing Use when the user asks about their Suggestions feed of proactive suggestions or wants to take one up or dismiss one, or when a suggestions generation session manages that feed; not for routines, tasks or reminders the user asks to create.
  *
  * @agent
  * ## Suggestions
  *
- * - Only a suggestions generation session may call these; any other session gets a 403.
- * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest`, change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters.
+ * Each suggestion is a prompt to run, a note about specific items, or a routine suggestion.
+ *
+ * ### For the user
+ *
+ * - Read their feed with `macro.suggestions.list()`: their open suggestions, best first.
+ * - When they take one up, call `suggestion.accept()`. A background prompt suggestion is then only taken on: the user starts its run from the app, so tell them it is ready to run there; never try to run it another way. Any other suggestion becomes done, so do it yourself: run a composer prompt suggestion's `prompt`, or do an entity suggestion's `action` on the items in `about`, using its `draft` when it has one.
+ * - When they don't want one, call `suggestion.dismiss()`.
+ * - Never suggest, rewrite or retire suggestions for the user: only a suggestions generation session may, and any other session gets a 403.
+ *
+ * ### In a suggestions generation session
+ *
+ * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest`, change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters. Never `list`, `accept` or `dismiss`: those are the user's, and a generation session gets a 403.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
  * - A reply suggestion may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `suggestion.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
@@ -77,7 +87,22 @@ export type SuggestionInput =
 export class SuggestionNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Every suggestion of the user's, open or not, and how many more may be added. */
+  /**
+   * The user's feed: their open suggestions about items they can still open, best
+   * first. For the user's own agent; a generation session gets a 403.
+   *
+   * @example
+   * const suggestions = await macro.suggestions.list();
+   * return suggestions.map((suggestion) => ({ title: suggestion.title, kind: suggestion.kind }));
+   */
+  async list(): Promise<Suggestion[]> {
+    const feed = unwrap(await this.client.scheduledAction.listSuggestions());
+    return feed.suggestions.map((suggestion) =>
+      Suggestion.from(this.client, suggestion),
+    );
+  }
+
+  /** Every suggestion of the user's, open or not, and how many more may be added. Only a suggestions generation session may. */
   async review(): Promise<SuggestionsReview> {
     const review = unwrap(
       await this.client.scheduledAction.reviewSuggestions(),

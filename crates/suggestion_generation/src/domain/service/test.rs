@@ -12,8 +12,8 @@ use scheduled_action::domain::suggestions::model::{
     RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
 use suggestions::domain::model::{
-    AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError,
-    SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
+    AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionCaller,
+    SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 
 use super::*;
@@ -190,6 +190,7 @@ impl SuggestionApi for FakeSuggestions {
     async fn feed(
         &self,
         _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
         _: Option<Tz>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         unreachable!()
@@ -198,13 +199,19 @@ impl SuggestionApi for FakeSuggestions {
     async fn accept(
         &self,
         _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
         _: Uuid,
         _: suggestions::domain::model::Accept,
     ) -> Result<(), SuggestionError> {
         unreachable!()
     }
 
-    async fn dismiss(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), SuggestionError> {
+    async fn dismiss(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
         unreachable!()
     }
 

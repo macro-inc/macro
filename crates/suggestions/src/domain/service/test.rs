@@ -238,6 +238,14 @@ pub(crate) fn entity_suggestion(key: &str) -> NewSuggestion {
     }
 }
 
+/// Accepting `suggestion` as it was read.
+fn shown(suggestion: &Suggestion) -> Accept {
+    Accept {
+        shown_updated_at: suggestion.updated_at,
+        by_person: false,
+    }
+}
+
 impl Harness {
     /// The person accepts suggestion `id` in the app, as it is now.
     async fn accept(
@@ -253,6 +261,7 @@ impl Harness {
         self.service
             .accept(
                 user,
+                SuggestionCaller::User,
                 id,
                 Accept {
                     shown_updated_at: shown,
@@ -265,7 +274,7 @@ impl Harness {
     /// The latest run of the person's first suggestion in the feed.
     async fn first_run(&self) -> crate::domain::model::SuggestionRun {
         self.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions[0]
@@ -381,7 +390,11 @@ async fn an_suggestions_session_adds_an_suggestion_the_person_sees(pool: PgPool)
     );
     let feed = h
         .service
-        .feed(&user(OWNER), Some(chrono_tz::Europe::Paris))
+        .feed(
+            &user(OWNER),
+            SuggestionCaller::User,
+            Some(chrono_tz::Europe::Paris),
+        )
         .await
         .unwrap();
     assert_eq!(feed.suggestions, vec![suggestion]);
@@ -391,7 +404,7 @@ async fn an_suggestions_session_adds_an_suggestion_the_person_sees(pool: PgPool)
     );
     assert!(
         h.service
-            .feed(&user(OTHER), None)
+            .feed(&user(OTHER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions
@@ -455,7 +468,9 @@ async fn suggestions_are_off_without_the_flag(pool: PgPool) {
         Err(SuggestionError::NotFound)
     ));
     assert!(matches!(
-        h.service.feed(&user(OWNER), None).await,
+        h.service
+            .feed(&user(OWNER), SuggestionCaller::User, None)
+            .await,
         Err(SuggestionError::NotFound)
     ));
 }
@@ -484,7 +499,7 @@ async fn the_same_dedup_key_updates_the_suggestion_and_its_kind_never_changes(po
     assert_eq!(second.title, "Pick the cheapest supplier");
     assert_eq!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions
@@ -522,12 +537,12 @@ async fn a_dismissed_suggestion_comes_back_only_with_a_reason(pool: PgPool) {
         .suggestion
         .unwrap();
     h.service
-        .dismiss(&user(OWNER), suggestion.id)
+        .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
         .await
         .unwrap();
     assert!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions
@@ -610,7 +625,7 @@ async fn a_session_rewrites_and_retires_open_suggestions_and_a_retired_one_comes
     assert_eq!(retired.suggestion.unwrap().state, SuggestionState::Retired);
     assert!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions
@@ -763,7 +778,11 @@ async fn an_suggestion_names_a_part_only_with_its_own_item(pool: PgPool) {
         .suggest(session, with_part("quotes:own", "thread-1:message"))
         .await;
     assert!(own.ok, "{:?}", own.problems);
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.suggestions.len(), 1);
     assert_eq!(
         feed.suggestions[0].about[0].part_id.as_deref(),
@@ -782,9 +801,11 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
     .await;
     h.suggest(session, entity_suggestion("venue:headcount"))
         .await;
-    h.suggest(session, entity_suggestion("venue:headcount"))
-        .await;
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     // Best first.
     assert_eq!(feed.suggestions[0].dedup_key, "venue:headcount");
     h.access
@@ -792,7 +813,11 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
         .lock()
         .unwrap()
         .insert("thread-2".to_owned());
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.suggestions.len(), 1);
     assert_eq!(feed.suggestions[0].dedup_key, "quotes:compare");
 }
@@ -813,16 +838,164 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
     // Acting on a suggestion that isn't a background run finishes it: it shows
     // in the feed's done list, and accepting it again changes nothing.
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert!(feed.suggestions.is_empty());
     assert_eq!(feed.done[0].id, suggestion.id);
     assert_eq!(feed.done[0].state, SuggestionState::Done);
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     assert!(matches!(
-        h.service.dismiss(&user(OWNER), suggestion.id).await,
+        h.service
+            .dismiss(&user(OWNER), SuggestionCaller::User, suggestion.id)
+            .await,
         Err(SuggestionError::NotFound)
     ));
     // A background prompt is taken on and runs: see the run tests.
+}
+
+/// The person's own agent, in a chat session of theirs.
+fn chat_agent() -> SuggestionCaller {
+    SuggestionCaller::Agent {
+        correlation: Some(Uuid::now_v7()),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_persons_own_agent_reads_accepts_and_dismisses_their_suggestions(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let mut request = prompt_suggestion("quotes:compare", "Compare the supplier quotes");
+    request.run_mode = Some(RunMode::Composer);
+    let prompt = h.suggest(session, request).await.suggestion.unwrap();
+    let entity = h
+        .suggest(session, entity_suggestion("venue:headcount"))
+        .await
+        .suggestion
+        .unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), chat_agent(), None)
+        .await
+        .unwrap();
+    assert_eq!(feed.suggestions, vec![entity.clone(), prompt.clone()]);
+    // A composer prompt suggestion becomes done; the agent acts on the prompt
+    // itself.
+    h.service
+        .accept(&user(OWNER), chat_agent(), prompt.id, shown(&prompt))
+        .await
+        .unwrap();
+    // An agent with no code-mode invocation is the person's too.
+    h.service
+        .dismiss(
+            &user(OWNER),
+            SuggestionCaller::Agent { correlation: None },
+            entity.id,
+        )
+        .await
+        .unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), chat_agent(), None)
+        .await
+        .unwrap();
+    assert!(feed.suggestions.is_empty());
+    assert_eq!(feed.done[0].id, prompt.id);
+    assert_eq!(feed.done[0].state, SuggestionState::Done);
+    assert_eq!(feed.done[0].kind, prompt.kind);
+    assert_eq!(
+        h.changes(prompt.id).await.len(),
+        1,
+        "accepting logs no change"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_persons_agent_never_reaches_the_persons_suggestions(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let suggestion = h
+        .suggest(session, entity_suggestion("venue:headcount"))
+        .await
+        .suggestion
+        .unwrap();
+    assert!(
+        h.service
+            .feed(&user(OTHER), chat_agent(), None)
+            .await
+            .unwrap()
+            .suggestions
+            .is_empty()
+    );
+    assert!(matches!(
+        h.service
+            .accept(
+                &user(OTHER),
+                chat_agent(),
+                suggestion.id,
+                shown(&suggestion)
+            )
+            .await,
+        Err(SuggestionError::NotFound)
+    ));
+    assert!(matches!(
+        h.service
+            .dismiss(&user(OTHER), chat_agent(), suggestion.id)
+            .await,
+        Err(SuggestionError::NotFound)
+    ));
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
+    assert_eq!(feed.suggestions[0].state, SuggestionState::Proposed);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generation_sessions_never_read_accept_or_dismiss_for_the_person(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let suggestions = h.session(OWNER, "suggestions").await;
+    let routines = h.session(OWNER, "routines").await;
+    let others = h.session(OTHER, "suggestions").await;
+    let suggestion = h
+        .suggest(suggestions, entity_suggestion("venue:headcount"))
+        .await
+        .suggestion
+        .unwrap();
+    for session in [suggestions, routines, others] {
+        let caller = SuggestionCaller::Agent {
+            correlation: Some(session),
+        };
+        let feed = h
+            .service
+            .feed(&user(OWNER), caller, Some(chrono_tz::Europe::Paris))
+            .await;
+        assert!(matches!(feed, Err(SuggestionError::Generating)), "{feed:?}");
+        let accept = h
+            .service
+            .accept(&user(OWNER), caller, suggestion.id, shown(&suggestion))
+            .await;
+        assert!(
+            matches!(accept, Err(SuggestionError::Generating)),
+            "{accept:?}"
+        );
+        let dismiss = h.service.dismiss(&user(OWNER), caller, suggestion.id).await;
+        assert!(
+            matches!(dismiss, Err(SuggestionError::Generating)),
+            "{dismiss:?}"
+        );
+    }
+    // Its read counted no one in, and the suggestion is untouched.
+    assert!(h.audience.0.lock().unwrap().is_empty());
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
+    assert_eq!(feed.suggestions[0].state, SuggestionState::Proposed);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -869,7 +1042,11 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
     .unwrap();
     tx.commit().await.unwrap();
 
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     let card = feed.suggestions[0].clone();
     assert_eq!(
         card.kind,
@@ -907,7 +1084,10 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
         .unwrap();
     assert!(!retire.ok);
     // The person dismissing it dismisses its suggestion, which closes both.
-    h.service.dismiss(&user(OWNER), card.id).await.unwrap();
+    h.service
+        .dismiss(&user(OWNER), SuggestionCaller::User, card.id)
+        .await
+        .unwrap();
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
 }
 
@@ -1037,7 +1217,7 @@ async fn accepting_a_background_prompt_suggestion_runs_it_and_its_session_finish
     );
     assert_eq!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions[0]
@@ -1103,7 +1283,11 @@ async fn a_failed_run_is_retried_by_accepting_again(pool: PgPool) {
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.set(run_session, SessionState::Failed);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.suggestions[0].state, SuggestionState::Accepted);
     assert_eq!(
         feed.suggestions[0].run.as_ref().unwrap().progress,
@@ -1132,7 +1316,7 @@ async fn accepting_any_other_suggestion_starts_no_run(pool: PgPool) {
     assert!(runs.started.lock().unwrap().is_empty());
     assert!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), SuggestionCaller::User, None)
             .await
             .unwrap()
             .suggestions
@@ -1157,22 +1341,34 @@ async fn only_the_person_starts_a_background_run(pool: PgPool) {
         .await
         .suggestion
         .unwrap();
+    // An agent of the person's: even one claiming to be the person.
+    let agent = || SuggestionCaller::Agent { correlation: None };
     let as_agent = |shown_updated_at| Accept {
         shown_updated_at,
-        by_person: false,
+        by_person: true,
     };
     h.service
-        .accept(&user(OWNER), suggestion.id, as_agent(suggestion.updated_at))
+        .accept(
+            &user(OWNER),
+            agent(),
+            suggestion.id,
+            as_agent(suggestion.updated_at),
+        )
         .await
         .unwrap();
     assert!(runs.started.lock().unwrap().is_empty());
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.suggestions[0].state, SuggestionState::Accepted);
     assert!(feed.suggestions[0].run.is_none());
     // Again, still nothing runs.
     h.service
         .accept(
             &user(OWNER),
+            agent(),
             suggestion.id,
             as_agent(feed.suggestions[0].updated_at),
         )
@@ -1222,6 +1418,7 @@ async fn a_background_suggestion_runs_only_as_the_person_saw_it(pool: PgPool) {
         .service
         .accept(
             &user(OWNER),
+            SuggestionCaller::User,
             suggestion.id,
             as_person(suggestion.updated_at),
         )
@@ -1238,6 +1435,7 @@ async fn a_background_suggestion_runs_only_as_the_person_saw_it(pool: PgPool) {
     h.service
         .accept(
             &user(OWNER),
+            SuggestionCaller::User,
             suggestion.id,
             as_person(rewritten.suggestion.unwrap().updated_at),
         )
@@ -1281,8 +1479,10 @@ async fn any_suggestion_is_acted_on_only_as_the_person_saw_it(pool: PgPool) {
             shown_updated_at: shown.updated_at,
             by_person: true,
         };
-        let Err(SuggestionError::Changed(now)) =
-            h.service.accept(&user(OWNER), shown.id, stale).await
+        let Err(SuggestionError::Changed(now)) = h
+            .service
+            .accept(&user(OWNER), SuggestionCaller::User, shown.id, stale)
+            .await
         else {
             panic!("a stale card is refused");
         };
@@ -1291,6 +1491,7 @@ async fn any_suggestion_is_acted_on_only_as_the_person_saw_it(pool: PgPool) {
         h.service
             .accept(
                 &user(OWNER),
+                SuggestionCaller::User,
                 shown.id,
                 Accept {
                     shown_updated_at: now.updated_at,
@@ -1300,7 +1501,11 @@ async fn any_suggestion_is_acted_on_only_as_the_person_saw_it(pool: PgPool) {
             .await
             .unwrap();
     }
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert!(feed.suggestions.is_empty());
     assert_eq!(feed.done.len(), 2);
 }
@@ -1334,7 +1539,11 @@ async fn a_run_left_waiting_is_given_up_and_runs_again(pool: PgPool) {
     age_runs(&h.pool, chrono::Duration::minutes(11)).await;
     assert_eq!(h.service.settle_runs().await.unwrap(), 2);
     assert_eq!(runs.discarded.lock().unwrap().len(), 2);
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert!(
         feed.suggestions
             .iter()
@@ -1611,7 +1820,11 @@ async fn a_draft_is_attached_only_to_an_open_reply_suggestion_in_its_thread(pool
         draft: Some(draft_target(thread, mine)),
     };
     assert_eq!(attached.suggestion.unwrap().kind, expected);
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     let shown = feed
         .suggestions
         .iter()
@@ -1850,7 +2063,11 @@ async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     .execute(&h.pool)
     .await
     .unwrap();
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), SuggestionCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(
         feed.suggestions
             .iter()

@@ -92,3 +92,26 @@ describe('Suggestion drafts', () => {
     expect(drafts[0]).toBeInstanceOf(EmailDraft);
   });
 });
+
+describe('Suggestion accept', () => {
+  test('accept sends the suggestion as it was read', async () => {
+    const requests: unknown[] = [];
+    const client = {
+      scheduledAction: {
+        acceptSuggestion: async (request: unknown) => {
+          requests.push(request);
+          return { data: undefined };
+        },
+      },
+    } as unknown as MacroClient;
+
+    await Suggestion.from(client, REPLY_SUGGESTION).accept();
+
+    expect(requests).toEqual([
+      {
+        path: { id: 'suggestion' },
+        body: { updatedAt: '2026-11-09T00:00:00Z' },
+      },
+    ]);
+  });
+});
