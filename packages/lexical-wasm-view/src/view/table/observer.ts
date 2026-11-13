@@ -265,8 +265,6 @@ export class TableObserver {
   private unpaint(cell: DOMCell): void {
     if (getTableElement(cell.element) !== this.table) return;
     cell.element.classList.remove(...this.selectedCellClasses);
-    cell.element.removeAttribute('data-lexical-table-selected');
-    cell.element.setAttribute('aria-selected', 'false');
   }
   private paint(changed?: ReadonlySet<number>): void {
     if (changed) {
@@ -357,9 +355,8 @@ export class TableObserver {
       if (this.selected.has(key) && !changed?.has(key)) continue;
       const cell = this.cells.get(key);
       if (!cell) continue;
+      // Source $addHighlightToDOM: theme.tableCellSelected only, no attributes.
       cell.element.classList.add(...this.selectedCellClasses);
-      cell.element.setAttribute('data-lexical-table-selected', '');
-      cell.element.setAttribute('aria-selected', 'true');
     }
     this.selected = selected;
     this.paintIncluded(changed);

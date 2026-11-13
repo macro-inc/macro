@@ -117,6 +117,7 @@ view = EditorView.mount(
       text: { bold: 'theme-bold', underline: 'theme-underline' },
       heading: { h2: 'theme-h2' },
       codeHighlight: { keyword: 'theme-keyword' },
+      tableCellSelected: 'theme-cell-selected',
     },
     editable: true,
     preset: 'rich',

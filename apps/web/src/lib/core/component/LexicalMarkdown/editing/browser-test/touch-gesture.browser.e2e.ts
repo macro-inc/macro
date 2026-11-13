@@ -37,7 +37,7 @@ test('installed touch gesture admits real single-cell then expanded table select
       type: 'touchMove',
       touchPoints: [await point(1)],
     });
-    await expect(cells.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(cells.nth(1)).toHaveClass(/md-table-cell-selected/);
   } finally {
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchEnd',

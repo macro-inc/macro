@@ -114,7 +114,7 @@ function mount(id: string) {
   });
   view = EditorView.mount(root, port, registry, {
     namespace: id,
-    theme: {},
+    theme: { tableCellSelected: 'fixture-cell-selected' },
     preset: 'rich',
     editable: true,
     onError(error) {

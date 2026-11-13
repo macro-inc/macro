@@ -453,9 +453,7 @@ test('native touch table selection leaves scrolling alone and extends only after
     queries: 0,
     nodeQueries: 0,
   });
-  await expect(
-    page.locator('#first [data-lexical-table-selected]')
-  ).toHaveCount(0);
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(0);
   await page.evaluate(() => {
     const cell = document.querySelector('#first td');
     if (!cell) throw new Error('Missing cell');
@@ -495,9 +493,7 @@ test('native touch table selection leaves scrolling alone and extends only after
     );
   });
   await page.clock.runFor(151);
-  await expect(
-    page.locator('#first [data-lexical-table-selected]')
-  ).toHaveCount(1);
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(1);
   await page.evaluate(() => {
     const cell = [...document.querySelectorAll('#first td')].at(-1);
     if (!cell) throw new Error('Missing last cell');
@@ -521,9 +517,7 @@ test('native touch table selection leaves scrolling alone and extends only after
       })
     );
   });
-  await expect(
-    page.locator('#first [data-lexical-table-selected]')
-  ).toHaveCount(4);
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(4);
   expect(await page.evaluate(() => window.groupB.first.counters())).toEqual({
     admissions: 2,
     queries: 0,
@@ -577,9 +571,7 @@ test('cancelled, foreign-pointer and readonly cell drags submit no table selecti
     queries: 0,
     nodeQueries: 0,
   });
-  await expect(
-    page.locator('#first [data-lexical-table-selected]')
-  ).toHaveCount(0);
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(0);
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 

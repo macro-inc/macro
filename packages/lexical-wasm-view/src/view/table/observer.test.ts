@@ -63,9 +63,7 @@ test.each([8, 256])(
       const grid = observer.getGrid();
       expect(grid[0][0]).toBe(grid[1][0]);
       observer.select(grid[0][0].key, grid[1][1].key);
-      expect(
-        table.querySelectorAll('[data-lexical-table-selected]')
-      ).toHaveLength(3);
+      expect(table.querySelectorAll('.selected-cell')).toHaveLength(3);
       expect(table.classList.contains('selected-table')).toBe(true);
       expect(
         table.querySelectorAll('.selected-cell.selected-cell-overlay')
@@ -111,7 +109,9 @@ test.each([8, 256])(
         observer.select(grid[0][0].key, grid[1][1].key);
         expect(attributes.mock.calls).toHaveLength(0);
         observer.clear();
-        expect(attributes.mock.calls).toHaveLength(3);
+        // Source $removeHighlightFromDOM only removes the class: no attribute writes.
+        expect(attributes.mock.calls).toHaveLength(0);
+        expect(table.querySelectorAll('.selected-cell')).toHaveLength(0);
         expect(
           classAdds.mock.calls.length + classRemoves.mock.calls.length
         ).toBeLessThan(20);
@@ -186,7 +186,9 @@ test('a new rowspan carry in a sparse column cannot stop row propagation', () =>
 });
 
 test('native table DOM replacement restores cached selection without a selection change', () => {
-  const fixture = nativeSurface();
+  const fixture = nativeSurface(Access.Edit, {
+    tableCellSelected: 'selected-cell',
+  });
   try {
     fixture.port.setState(
       JSON.stringify({
@@ -239,9 +241,7 @@ test('native table DOM replacement restores cached selection without a selection
       anchorCell: grid[0][0].key,
       focusCell: grid[0][1].key,
     });
-    expect(
-      previous.querySelectorAll('[data-lexical-table-selected]')
-    ).toHaveLength(2);
+    expect(previous.querySelectorAll('.selected-cell')).toHaveLength(2);
     const tableChildren = fixture.view.node(tableKey)?.children;
     const renderer = fixture.view.registry.get('table');
     fixture.view.registry.replace('table', {
@@ -269,10 +269,7 @@ test('native table DOM replacement restores cached selection without a selection
     expect(next).not.toBe(previous);
     if (!next) throw new Error('Missing replacement table');
     expect(getTableObserverFromTableElement(previous)).toBeNull();
-    expect(next.querySelectorAll('[data-lexical-table-selected]')).toHaveLength(
-      2
-    );
-    expect(next.querySelectorAll('[aria-selected="true"]')).toHaveLength(2);
+    expect(next.querySelectorAll('.selected-cell')).toHaveLength(2);
     expect(
       getTableObserverFromTableElement(next)?.getGrid()[0][0].element
     ).toBe(grid[0][0].element);

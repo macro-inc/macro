@@ -190,7 +190,7 @@ export async function commitWork(
       Element.prototype.setAttribute = setAttribute;
     }
     const selectionIntact =
-      table.querySelectorAll('[data-lexical-table-selected]').length === 2;
+      table.querySelectorAll('.theme-cell-selected').length === 2;
     rangeInputs = 0;
     pending.clear();
     pending.add(codes[0]);
