@@ -521,7 +521,7 @@ export function SplitHeaderLeft(props: ParentProps) {
     throw new Error('<SplitHeaderLeft> must be used within a <SplitLayout>');
 
   return (
-    <Show when={ctx.layoutRefs.headerLeft}>
+    <Show when={!ctx.mobileHeaderOwner[0]() && ctx.layoutRefs.headerLeft}>
       <Portal
         mount={ctx.layoutRefs.headerLeft}
         ref={(div) => (div.style.display = 'contents')}
@@ -538,7 +538,7 @@ export function SplitHeaderRight(props: ParentProps) {
     throw new Error('<SplitHeaderRight> must be used within a <SplitLayout>');
 
   return (
-    <Show when={ctx.layoutRefs.headerRight}>
+    <Show when={!ctx.mobileHeaderOwner[0]() && ctx.layoutRefs.headerRight}>
       <Portal
         mount={ctx.layoutRefs.headerRight}
         ref={(div) => (div.style.display = 'contents')}

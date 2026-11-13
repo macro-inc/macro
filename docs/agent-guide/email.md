@@ -480,6 +480,14 @@ show their latest message in that folder, and folder membership is checked befor
 pagination. These views load server pages; full-text search and offline predicate
 filtering are not available for them yet.
 
+Opening a row loads the thread by id. A thread whose every message is in Spam or
+Trash renders as its folder row does, while All Mail lists and previews still leave
+it out, so it opens whether it is read or unread. Mark read and unread, Not spam,
+Restore, Report spam and Delete then return the thread's new state instead of a
+"not found" error that rolls the action back. Check an unread and a read row in each
+folder: the thread opens, the row turns read and stays in its folder, and it never
+appears in All Mail.
+
 Spam and Trash order threads by their latest message in that folder. Reading a thread or receiving a newer message outside the folder does not change that folder cursor. Pending provider moves affect folder membership immediately.
 
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
@@ -684,8 +692,11 @@ right after the subject's last word, in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate
 groups contain **Previous item** / **Next item**, icon-only **Ask Macro** / **Create
-task**, and the **Share** icon and label / copy-link icon. Mobile keeps its existing
-controls. The arrows
+task**, and the **Share** icon and label / copy-link icon. On touch (phones and
+tablets) the thread header has only Back, the subject, and the Info button:
+tapping the subject opens the title menu as a sheet, which holds every thread
+action including **Ask Macro**, **Create task**, and **Remind me**, and Info
+opens the details sheet. The arrows
 follow the current filtered list and disable at its ends. When the open thread
 leaves the list while it stays open (a reply in Signal marks it done, or another
 device archives it), they step from its former neighbours. Mark done advances in

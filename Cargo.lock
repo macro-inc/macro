@@ -69,7 +69,6 @@ name = "activity"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
- "ai_toolset",
  "async-trait",
  "axum",
  "bot_id",
@@ -3909,6 +3908,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "model_notifications",
@@ -7472,6 +7472,7 @@ dependencies = [
  "httpdate",
  "macro_db_migrator",
  "macro_event_broker",
+ "macro_service_urls",
  "mail-builder",
  "mailparse",
  "models_email",
@@ -7900,6 +7901,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -8637,6 +8639,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "jsonwebtoken 10.3.0",
+ "macro_service_urls",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
@@ -9179,6 +9182,7 @@ dependencies = [
  "base64 0.22.1",
  "httpdate",
  "jsonwebtoken 10.3.0",
+ "macro_service_urls",
  "models_email",
  "regex",
  "reqwest 0.13.4",
@@ -9187,6 +9191,45 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "gmail_emulator"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "email_api_client",
+ "fusionauth",
+ "gmail_client",
+ "jsonwebtoken 10.3.0",
+ "macro_entrypoint",
+ "macro_env",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "rrule",
+ "rsa",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -12659,6 +12702,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
@@ -13251,6 +13295,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "mockall",
  "model",
  "model-entity",
@@ -13904,6 +13949,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -15047,6 +15093,44 @@ checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "outlook_emulator"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "email_api_client",
+ "fusionauth",
+ "jsonwebtoken 10.3.0",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "rsa",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -17455,6 +17539,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rrule"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "log",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "rs-libreoffice-bindings"
 version = "0.0.7"
 source = "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc"
@@ -18135,6 +18232,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -18978,6 +19076,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "single_flight"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19214,6 +19323,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "bot_id",
  "call",
  "channels",
  "chrono",
@@ -21746,8 +21856,6 @@ dependencies = [
  "sqs_client",
  "tempfile",
  "tokio",
- "tokio-stream",
- "tokio-util",
  "tracing",
  "walkdir",
  "workspace-hack",

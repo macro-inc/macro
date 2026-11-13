@@ -21,7 +21,8 @@ vi.mock('@queries/team/teams', () => ({
 }));
 vi.mock('@service-auth/computers', () => ({
   computersClient: { list: mocks.listComputers },
-  TEAM_ON_TRIAL: 'team_on_trial',
+  COMPUTERS_UNAVAILABLE: 'COMPUTERS_UNAVAILABLE',
+  BILLING_PROVIDER_FAILED: 'BILLING_PROVIDER_FAILED',
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getHarnesses: mocks.getHarnesses },

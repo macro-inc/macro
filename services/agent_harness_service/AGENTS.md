@@ -176,6 +176,11 @@ Pulumi stacks; they do not host extra agent processes.
   `scheduled_action_draft` store, the check's code-mode invocation lookup
   (`CorrelationSessions`), what a session created from its agent activity
   (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  Background drafts (`/scheduled-actions/draft-jobs`, `DraftJobs`) run on
+  the scheduling `workers` tracker under `stop_workers`, so shutdown fails
+  the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they
+  share the draft store, push `routine_draft_update` through the connection
+  gateway, and the same minute's sweep fails drafts whose replica died.
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

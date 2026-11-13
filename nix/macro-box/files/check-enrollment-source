@@ -5,11 +5,21 @@ enrolled() {
   [ -s "$MACRO_ENROLLED_MARKER" ]
 }
 
+# incus-agent creates the socket a few seconds after it starts.
+wait_for_incus_socket() {
+  waited=0
+  while [ ! -S /dev/incus/sock ] && [ "$waited" -lt "${MACRO_INCUS_SOCKET_WAIT:-60}" ]; do
+    sleep 1
+    waited=$((waited + 1))
+  done
+}
+
 case "${MACRO_ENROLL_FROM:-}" in
   incus)
+    wait_for_incus_socket
     if [ ! -S /dev/incus/sock ]; then
       if enrolled; then exit 0; fi
-      echo "macrod-enroll: /dev/incus/sock is missing; is incus-agent running and security.guestapi on?" >&2
+      echo "macrod-enroll: /dev/incus/sock is missing after ${MACRO_INCUS_SOCKET_WAIT:-60} s; is incus-agent running and security.guestapi on?" >&2
       exit 1
     fi
     status=$(curl --silent --show-error --max-time 2 --unix-socket /dev/incus/sock \
