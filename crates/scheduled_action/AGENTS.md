@@ -64,7 +64,8 @@ each run.
   step resolves when it runs, since the owner reads a text knob as written,
   and in Ask AI instructions or a trigger condition by name and id
   (`ItemKnobs::Names`, `direct/items_by_name.md`; `ItemKnobs::Ids` and
-  `direct/items_by_id.md` put ids in knobs too). A `setup` module creating
+  `direct/items_by_id.md` put the id alone in knobs and Ask AI
+  instructions). A `setup` module creating
   what the routine uses runs once, as the person, and its ids replace each
   `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
   writer changed it and only if it changed nothing, and a placeholder left

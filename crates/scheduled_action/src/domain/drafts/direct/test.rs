@@ -1701,7 +1701,7 @@ async fn areas_the_sdk_doesnt_have_give_the_writer_the_commonest_ones() {
 }
 
 #[test]
-fn found_items_go_in_steps_by_name_unless_tuned_to_ids() {
+fn found_items_go_in_knobs_by_name_unless_tuned_to_ids() {
     let code = Checker::default();
     let by_name = DirectPrompts::new(&code, "the guide", ItemKnobs::Names);
     let by_id = DirectPrompts::new(&code, "the guide", ItemKnobs::Ids);
