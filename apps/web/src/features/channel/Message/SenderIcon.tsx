@@ -41,8 +41,10 @@ export function SenderIcon(props: SenderIconProps) {
 
   // Imported authors without a sender and opaque call participants have no profile.
   const externalAuthor = () => {
-    const name = message().imported_author?.name?.trim();
-    if (!message().sender_id && name) return { name, avatar_url: null };
+    const author = message().imported_author;
+    const name = author?.name?.trim();
+    if (!message().sender_id && name)
+      return { name, avatar_url: author?.avatar_url ?? null };
     if (
       sender().type !== 'bot' &&
       message().sender_id.startsWith('participant:')

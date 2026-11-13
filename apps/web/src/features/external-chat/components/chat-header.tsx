@@ -12,18 +12,21 @@ import { Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { ChatProvider } from '../providers';
+import { ProviderPicture } from './provider-picture';
 
 /** Conversation chrome: floating split islands on touch, an in-flow desktop bar. */
 export function ExternalChatHeader(props: {
   title: string;
   provider?: Pick<ChatProvider, 'label' | 'icon' | 'badgeClass'>;
+  /** The group's or person's picture; the provider badge shows without one. */
+  pictureUrl?: string;
   leading?: JSX.Element;
   share: JSX.Element;
   details: JSX.Element;
   disappearing?: string;
   importing?: string;
 }) {
-  const icon = () => (
+  const badge = () => (
     <Show when={props.provider}>
       {(provider) => (
         <span
@@ -32,6 +35,19 @@ export function ExternalChatHeader(props: {
         >
           <Dynamic component={provider().icon} class="size-3" />
         </span>
+      )}
+    </Show>
+  );
+  const icon = () => (
+    <Show when={props.pictureUrl} fallback={badge()}>
+      {(url) => (
+        <ProviderPicture
+          url={url()}
+          size="md"
+          class="size-5 shrink-0 touch:size-4"
+        >
+          {badge()}
+        </ProviderPicture>
       )}
     </Show>
   );

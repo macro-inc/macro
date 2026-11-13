@@ -44406,6 +44406,11 @@
           "name": {
             "type": "string",
             "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           }
         }
       },
@@ -44417,6 +44422,11 @@
           "name": {
             "type": "string",
             "description": "Display name, never authentication evidence."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           },
           "userId": {
             "type": ["string", "null"],
@@ -44783,6 +44793,11 @@
             "format": "uuid",
             "description": "External person identity."
           },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          },
           "userId": {
             "type": ["string", "null"],
             "description": "Verified Macro user association, if present."
@@ -44845,6 +44860,11 @@
           "name": {
             "type": "string",
             "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
           },
           "provider": {
             "$ref": "#/components/schemas/ExternalChatProvider",
