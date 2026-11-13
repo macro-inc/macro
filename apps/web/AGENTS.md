@@ -1486,6 +1486,14 @@ claude.ai control stays a plain `target="_blank"` link; never open it after an
 await. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
+Guided purchase (the Buy computer → Configure agent → Bring your AI → Ready
+dialog) has a backend-free browser regression that mounts the real section over
+the real computers client and answers `/auth/team/computers/*` from Playwright,
+covering the size skeleton, every step, and each offers failure (422, 403, 502,
+503, dropped connection, timeout) on desktop and phone:
+`bunx playwright test --config src/features/settings/computers/browser-test/playwright.config.ts`.
+Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there.
+
 Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
 computer, total and next-invoice amounts; never calculate a bill from catalog
 quotes. Format provider minor units using currency precision and Stripe's
