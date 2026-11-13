@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "gitai"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+axum = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tower = { workspace = true }

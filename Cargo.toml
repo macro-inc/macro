@@ -196,6 +196,8 @@ members = [
   "services/email_service",
   "services/email_sfs_delete_handler",
   "services/email_suppression_handler",
+  "crates/gitai",
+  "services/gitai_service",
   "services/image_optimizer",
   "services/image_proxy_service",
   "services/mcp_auth_proxy",
