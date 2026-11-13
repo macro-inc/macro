@@ -78,6 +78,7 @@ async fn undo_restores_the_draft_as_written(provider: Provider) -> Result<(), Re
             "SENT_UNDO_DELAY_SECS".to_owned(),
             UNDO_WINDOW_SECS.to_owned(),
         )],
+        ..StackOptions::default()
     })
     .await?;
     let ada = stack.user("ada").await?;

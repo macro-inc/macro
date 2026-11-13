@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import type { ComputerStatus } from '@service-auth/computers';
 import { Button, cn, Spinner } from '@ui';
@@ -59,6 +60,13 @@ export function SetupProgressList(props: {
       <Match when={stage.state === 'current'}>
         <Spinner size="sm" decorative class="size-3.5 text-ink" />
       </Match>
+      {/* Skipped, not cancelled: a dash, not a strike. */}
+      <Match when={stage.state === 'skipped'}>
+        <MinusIcon
+          aria-hidden="true"
+          class="size-3.5 shrink-0 text-ink-extra-muted"
+        />
+      </Match>
     </Switch>
   );
 
@@ -84,14 +92,7 @@ export function SetupProgressList(props: {
               <span class="flex size-3.5 shrink-0 items-center justify-center">
                 {marker(stage)}
               </span>
-              <span
-                class={cn(
-                  'min-w-0 flex-1',
-                  stage.state === 'skipped' && 'line-through'
-                )}
-              >
-                {stage.label}
-              </span>
+              <span class="min-w-0 flex-1">{stage.label}</span>
               <Show when={stage.state === 'current' && elapsed()}>
                 {(time) => (
                   <span class="shrink-0 text-xs tabular-nums text-ink-muted">

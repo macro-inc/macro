@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                   SELECT 1 FROM suggestion_generation_session\n                   WHERE user_id = $1 AND kind = 'routines' AND opened_at > $2) AS \"recent!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7d381a603814f646b7d9dcfd92f20a59e925b6097b4aae9371a555c4c56c0cbd"
+}

@@ -168,6 +168,13 @@ impl Stack {
         } = booted;
         gmail.set_push(Some(PushConfig::new(format!("{api_url}/gmail/webhook"))));
 
+        // The services take the key from their environment, which a
+        // scenario may have replaced.
+        let internal_api_key = env
+            .get("INTERNAL_API_KEY")
+            .cloned()
+            .unwrap_or_else(|| environment::INTERNAL_API_KEY.to_owned());
+
         let mut stack = Self {
             gmail,
             outlook,
@@ -185,7 +192,7 @@ impl Stack {
             graphql_url: None,
             worker_env: env,
             api_url,
-            internal_api_key: environment::INTERNAL_API_KEY.to_owned(),
+            internal_api_key,
             http,
             log_dir,
             finished: false,

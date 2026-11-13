@@ -256,6 +256,14 @@ Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
+Wrapped and multi-line text cells have backend-free regressions in a plain
+database and a CRM pipeline: Shift+Enter and Alt+Enter add lines without leaving
+the row, a trailing new line takes the caret, arrows move through wrapped lines
+before leaving the cell, the closed cell shows every line, and the editor keeps
+the value's weight and line height:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts multiline.browser.e2e.ts`
+and `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts editor.browser.e2e.ts`.
+
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
 It uses the real records view with a local source and picker to exercise opening,
@@ -1034,9 +1042,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
   bump its checkpoint version when changing the hydration input contract.
-- Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device. Include
-  off-page favorites in unread presence without adding them to section counts.
+- Refresh the channel list's bounded unread and mention edges when opening a
+  conversation, including an empty unread result after a read on another
+  device. Include off-page favorites in unread presence without adding them to
+  section counts; mention counts include thread replies, the unread dot does not.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
@@ -1491,13 +1500,19 @@ claude.ai control stays a plain `target="_blank"` link; never open it after an
 await. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
-Guided purchase (the Buy computer → Configure agent → Bring your AI → Ready
-dialog) has a backend-free browser regression that mounts the real section over
-the real computers client and answers `/auth/team/computers/*` from Playwright,
-covering the size skeleton, every step, and each offers failure (422, 403, 502,
-503, dropped connection, timeout) on desktop and phone:
+Guided purchase (the Buy computer → Configure agent → Bring your AI → Create
+agent dialog) has a backend-free browser regression that mounts the real section
+over the real computers client and answers `/auth/team/computers/*` from
+Playwright, covering the size skeleton, every step, each offers failure (422,
+403, 502, 503, dropped connection, timeout), and the two endings (Try it into
+the real composer with the agent selected, Create an agent on this computer into
+the real create form with the computer chosen), and the setup notices (close
+after Buy, the "ready" notice reopens the dialog on Bring your AI through to
+Create agent; the failure notice reopens it on Retry setup) on desktop and
+phone:
 `bunx playwright test --config src/features/settings/computers/browser-test/playwright.config.ts`.
-Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there.
+Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there; the setup
+notice test then also records a video of its path (`test-results/*/video.webm`).
 
 Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
 computer, total and next-invoice amounts; never calculate a bill from catalog
