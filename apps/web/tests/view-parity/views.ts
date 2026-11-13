@@ -58,7 +58,7 @@ const openTitleMenu = (name: string) => async (page: Page) => {
 };
 
 /**
- * A file block from the `view-parity-files` seed scenario, opened at the
+ * A block from the `view-parity-files` seed scenario, opened at the
  * preview route that mounts the block on every device. Sign in as
  * pat@seed.macro.local; the ids are the ones that scenario derives.
  */
@@ -150,4 +150,10 @@ export const PARITY_VIEWS: ParityView[] = [
   ),
   fileBlock('pdf', '5eeda0ac-c036-8d4d-a3f2-2e6bcc40f19f', 'Parity PDF'),
   fileBlock('canvas', '5eeda0ac-f380-8a34-b50f-cadebb2e0bc3', 'Parity canvas'),
+  fileBlock('fig', '5eeda0ac-0e5e-8167-9b59-395e345c92aa', 'Parity design'),
+  fileBlock('psd', '5eeda0ac-04a0-8421-9f7a-5b518722773e', 'Parity layers'),
+  fileBlock('ai', '5eeda0ac-906f-8388-936e-0367c52b297a', 'Parity vector'),
+  fileBlock('pptx', '5eeda0ac-edb0-8a25-8b6a-c3305e335dce', 'Parity slides'),
+  fileBlock('write', '5eeda0ac-e5d7-8f83-b114-9c2860c37259', 'Parity words'),
+  fileBlock('chat', '5eeda0ac-4d06-8b88-a612-9ce488531aba', 'Parity chat'),
 ];

@@ -55,6 +55,16 @@
       "owner": "pat",
       "name": "Parity vector",
       "file": "parity-vector.ai"
+    },
+    "pptx": {
+      "owner": "pat",
+      "name": "Parity slides",
+      "file": "parity-slides.pptx"
+    },
+    "docx": {
+      "owner": "pat",
+      "name": "Parity words",
+      "file": "parity-words.docx"
     }
   },
   "chats": {
