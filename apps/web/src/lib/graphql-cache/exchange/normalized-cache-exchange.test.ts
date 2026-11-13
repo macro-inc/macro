@@ -2323,6 +2323,40 @@ describe('normalizedCacheExchange', () => {
     ]);
   });
 
+  it('rereads a background reader at ordinary rank, behind mounted views', async () => {
+    host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
+    const { ops, client } = harness(host);
+    const background = (
+      key: number,
+      requestPolicy: 'cache-first' | 'cache-and-network'
+    ) => {
+      const op = makeOp(key, requestPolicy);
+      return makeOperation('query', op, {
+        ...op.context,
+        backgroundReader: true,
+      });
+    };
+    ops.next(background(11, 'cache-first'));
+    await tick();
+    vi.mocked(client.reexecuteOperation).mockImplementation((reissued) => {
+      ops.next(reissued);
+    });
+    host.pushAffected([11]);
+    await tick();
+    expect(host.reads).toHaveLength(2);
+    expect(host.reads[1]?.priority).toBeUndefined();
+
+    host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
+    ops.next(background(12, 'cache-and-network'));
+    await tick();
+    const readsBefore = host.reads.length;
+    host.scriptRead({ kind: 'hit', data: { from: 'newer' } });
+    host.pushAffected([12]);
+    await tick();
+    expect(host.reads.length).toBeGreaterThan(readsBefore);
+    expect(host.reads.at(-1)?.priority).toBeUndefined();
+  });
+
   it('emits an affected cache result while an authoritative query remains in flight', async () => {
     host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
     const { ops, results, forwarded, client } = controlledQueryHarness(host);

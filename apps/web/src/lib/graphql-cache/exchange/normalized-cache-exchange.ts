@@ -72,6 +72,7 @@ import {
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import type { CacheHost } from '../host/types';
 import {
+  type CacheReadPriority,
   type CacheRevision,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
@@ -160,7 +161,17 @@ declare module '@urql/core' {
     persistResult?: false;
     /** Types that can change this query's membership, even in an empty response. */
     externalCacheWriteTypes?: readonly string[];
+    /**
+     * The query feeds app state rather than a list on screen, so its cache
+     * rereads rank as ordinary reads, behind those of mounted views.
+     */
+    backgroundReader?: true;
   }
+}
+
+/** Rereads of mounted queries overtake ordinary reads unless nothing shows them. */
+function rereadPriority(operation: Operation): CacheReadPriority | undefined {
+  return operation.context.backgroundReader ? undefined : 'user-visible';
 }
 
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
@@ -730,7 +741,7 @@ export function normalizedCacheExchange(
           query: queryText(operation),
           operationName: operationName(operation),
           variables: operation.variables as Record<string, unknown> | undefined,
-          priority: 'user-visible',
+          priority: rereadPriority(operation),
           entityResolvers,
         })
         .then((read) => {
@@ -769,7 +780,7 @@ export function normalizedCacheExchange(
           query: queryText(operation),
           operationName: operationName(operation),
           variables: operation.variables as Record<string, unknown> | undefined,
-          priority: 'user-visible',
+          priority: rereadPriority(operation),
           entityResolvers,
         });
       } catch (error) {
@@ -1077,7 +1088,7 @@ export function normalizedCacheExchange(
             entityResolvers,
             priority:
               op.context[AFFECTED_READ_CONTEXT_KEY] === true
-                ? 'user-visible'
+                ? rereadPriority(op)
                 : undefined,
           });
           // Admit the cache read first, but never wait for the worker's queue
