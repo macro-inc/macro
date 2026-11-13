@@ -1,0 +1,24 @@
+apps/web/src/lib/analytics/posthog.tsx
+  s_395ce1e1803595::t_6e53d9b5c4a17c 4,16,65-91
+  s_395ce1e1803595::t_24532ff5a58363 92
+apps/web/src/features/agent-dashboards/agent-profile.ts
+  s_395ce1e1803595::t_6e53d9b5c4a17c 1,37-40,44-46,52
+apps/web/src/features/agent-dashboards/agent-profile.test.tsx
+  s_395ce1e1803595::t_af7b0fde7450dd 1-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4d86e8f17267fa87867b70e2d65e266349e0ccb7",
+  "prompts": {},
+  "sessions": {
+    "s_395ce1e1803595": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd67b15d-a0f0-45c2-9a11-632923825196",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
