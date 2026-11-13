@@ -133,6 +133,8 @@ a local stack, without Google accounts.
 - Responses are Google's shapes, not ours: absent fields are omitted, not
   null, and carry fields `models_email` does not read. Don't build them from
   `models_email` types.
+- A `message/rfc822` part that is not an attachment (the original a bounce
+  returns) carries the wrapped message as its one child part, as at Gmail.
 - Push tokens are dated by the real clock, because the verifier reads the
   real clock; everything else follows the emulator's clock.
 - Scopes add to the grant a mailbox already holds, as at Google, and a
