@@ -1,0 +1,23 @@
+crates/properties/src/domain/events/public.rs
+  s_800cdee5095ae4::t_16bbe2d9d523ae 2-3,10,46-48,65-70,94
+crates/properties/src/domain/events/test.rs
+  s_800cdee5095ae4::t_16bbe2d9d523ae 453,474-475
+crates/properties/src/domain/events.rs
+  s_800cdee5095ae4::t_16bbe2d9d523ae 277-278
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "43b413608d68b959fc21050f98bc72ce0b94d4c4",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
