@@ -79,7 +79,21 @@ test.describe('contracts', () => {
     );
     await page.getByRole('button', { name: 'Next field' }).click();
     await page.getByRole('button', { name: 'Sign here' }).first().click();
-    await page.getByRole('button', { name: 'Adopt and sign' }).click();
+
+    // An image larger than a packet keeps is refused before it is adopted.
+    const adopt = page.getByRole('button', { name: 'Adopt and sign' });
+    const method = page.getByRole('radiogroup', { name: 'How to sign' });
+    await method.getByText('Upload', { exact: true }).click();
+    await page.getByLabel('Signature image').setInputFiles({
+      name: 'signature.png',
+      mimeType: 'image/png',
+      buffer: Buffer.alloc(400_000, 1),
+    });
+    await expect(page.getByText('That image is too large')).toBeVisible();
+    await expect(adopt).toBeDisabled();
+
+    await method.getByText('Type', { exact: true }).click();
+    await adopt.click();
     await page.getByRole('button', { name: 'Next field' }).click();
     await page.getByRole('textbox', { name: 'Text Input' }).fill('Ops Lead');
     await expect(page.getByText('All fields done')).toBeVisible();
@@ -154,6 +168,35 @@ test.describe('contracts', () => {
       page.getByText('Avery Lee has a signature field in every document.')
     ).toBeVisible();
 
+    // Leaving by the sidebar keeps the placement; if it cannot be stored the
+    // editor stays open with the work in it.
+    await page.evaluate(() => {
+      const setItem = Storage.prototype.setItem;
+      Object.assign(window, {
+        restoreStorage: () => {
+          Storage.prototype.setItem = setItem;
+        },
+      });
+      Storage.prototype.setItem = () => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      };
+    });
+    await page.getByRole('button', { name: 'All packets' }).click();
+    await expect(page.getByText('That didn’t work. Try again.')).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Place fields for Acme MSA' })
+    ).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { restoreStorage: () => void }).restoreStorage();
+    });
+    await page.getByRole('button', { name: 'All packets' }).click();
+    await page.getByRole('button', { name: /Acme MSA/ }).click();
+    await page
+      .getByRole('region', { name: 'Packet: Acme MSA' })
+      .getByRole('button', { name: 'Place fields' })
+      .click();
+    await expect(page.getByText('Signs #1 · 4 fields')).toBeVisible();
+
     // Review, then send.
     await page.getByRole('button', { name: 'Review and send' }).click();
     const review = page.getByRole('article', { name: 'Send for signature' });
@@ -224,6 +267,21 @@ test.describe('contracts', () => {
       ).toBeVisible();
     }
     await expect(table.getByText('Offline', { exact: true })).toBeVisible();
+
+    // A packet marked signed by hand has a completion time on its certificate.
+    await table.getByRole('button', { name: /Tailspin DPA/ }).click();
+    const offline = page.getByRole('region', { name: 'Packet: Tailspin DPA' });
+    await expect(
+      offline.getByText('Signed outside Macro').first()
+    ).toBeVisible();
+    await offline.getByRole('button', { name: 'Audit certificate' }).click();
+    const offlineCertificate = page.getByRole('article', {
+      name: 'Certificate of Completion',
+    });
+    await expect(
+      offlineCertificate.getByText('2026-10-20 17:00:00 UTC').first()
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // The same packet lives in more than one database.
     await page.getByRole('button', { name: 'Sales Deals' }).click();

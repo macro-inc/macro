@@ -2,6 +2,7 @@ import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { ListHeader } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SignatureIcon from '@icon/system/regular/signature.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
@@ -90,12 +91,21 @@ export function ContractsWorkspace() {
   const homeDatabaseId = () =>
     database()?.id ?? context.databases()[0]?.id ?? '';
 
-  /** Another list: leave placement (it saves itself) and close the drawer. */
-  function changeScope(next: ContractsScope) {
+  /** Set by the open placement view: saves it, and says whether it did. */
+  let savePlacement: (() => Promise<boolean>) | undefined;
+
+  /**
+   * Another list: close the drawer and leave placement, once its fields are
+   * saved. If they cannot be saved the editor stays open with the work in it.
+   */
+  async function changeScope(next: ContractsScope) {
+    if (savePlacement && !(await savePlacement())) return;
     setScope(next);
     setPlacingId(undefined);
     setSelectedId(undefined);
   }
+  const goTo = (next: ContractsScope) =>
+    fireAndForget(changeScope(next), 'contracts.scope');
 
   return (
     <>
@@ -111,7 +121,7 @@ export function ContractsWorkspace() {
           <ContractsSidebar
             scope={scope()}
             databases={context.databases()}
-            onScope={changeScope}
+            onScope={goTo}
             onNewPacket={() => setOverlay({ t: 'new-packet' })}
             onNewDatabase={() => setOverlay({ t: 'new-database' })}
           />
@@ -132,6 +142,9 @@ export function ContractsWorkspace() {
                         setPlacingId(undefined);
                       }}
                       onReview={() => setOverlay({ t: 'review', packetId: id })}
+                      onSaver={(save) => {
+                        savePlacement = save;
+                      }}
                     />
                   )}
                 </Show>
@@ -239,7 +252,7 @@ export function ContractsWorkspace() {
             onClose={() => setOverlay(undefined)}
             onCreated={(created) => {
               setOverlay(undefined);
-              changeScope({ t: 'database', databaseId: created.id });
+              goTo({ t: 'database', databaseId: created.id });
             }}
           />
         </Match>

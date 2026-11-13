@@ -50,6 +50,8 @@ const STORAGE_KEY_PREFIX = 'macro:contracts:local:v1:';
 const CLOCK_INTERVAL_MS = 30_000;
 const PDF_MAGIC = '%PDF-';
 const TOKEN_ID_LENGTH = 12;
+/** How often a change is redone when storage moved underneath it. */
+const MAX_WRITE_ATTEMPTS = 5;
 
 /** Where one account's snapshot is kept in this browser. */
 export function localContractsStorageKey(scope: string): string {
@@ -131,6 +133,17 @@ function readStored(storage: Pick<Storage, 'getItem'>, key: string): Stored {
 }
 
 /** Store the snapshot, reporting a full or blocked storage as a failure. */
+/** What storage holds under the key right now, unparsed. */
+function rawStored(
+  storage: Pick<Storage, 'getItem'>,
+  key: string
+): string | null | undefined {
+  return Result.fromThrowable(
+    () => storage.getItem(key),
+    () => undefined
+  )().unwrapOr(undefined);
+}
+
 function writeStored(
   storage: SnapshotStorage,
   key: string,
@@ -219,36 +232,54 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     return stored;
   }
 
+  /** One attempt at a change; `undefined` when storage moved underneath it. */
+  async function attempt<T>(
+    change: Change<T>
+  ): Promise<Result<T, ContractsError> | undefined> {
+    const before = rawStored(deps.storage, deps.storageKey);
+    const stored = refresh();
+    if (stored.t === 'unreadable') return err(storageFailed());
+
+    const current = stored.t === 'ok' ? stored.snapshot : starterSnapshot();
+    const changed = await change(current);
+    if (changed.isErr()) return err(changed.error);
+    if (changed.value.next === current) return ok(changed.value.value);
+
+    // Where there are no Web Locks, another tab can have stored something
+    // while this change was being prepared. Its write is never replaced.
+    if (rawStored(deps.storage, deps.storageKey) !== before) return undefined;
+
+    const written = writeStored(
+      deps.storage,
+      deps.storageKey,
+      changed.value.next
+    );
+    if (written.isErr()) return err(written.error);
+
+    setSnapshot(changed.value.next);
+    deps.changes.publish();
+    return ok(changed.value.value);
+  }
+
   /**
    * Change the stored snapshot. The change starts from what storage holds,
-   * inside the exclusive section, so no store overwrites another's write. A
-   * snapshot that cannot be read is never replaced, and a write the browser
-   * refuses is an error: nothing is shown or announced as saved.
+   * inside the exclusive section, and is redone from the newer snapshot if
+   * storage changed before it could be stored, so no store overwrites
+   * another's write with or without a cross-tab lock. A snapshot that cannot
+   * be read is never replaced, and a write the browser refuses is an error:
+   * nothing is shown or announced as saved.
    */
   function mutate<T>(change: Change<T>): ResultAsync<T, ContractsError> {
     const work = deps.exclusive(
       async (): Promise<Result<T, ContractsError>> => {
-        // A write still waiting when its store closed belongs to a session
-        // that has ended; it is dropped rather than applied behind it.
-        if (closed) return err(storageFailed());
-        const stored = refresh();
-        if (stored.t === 'unreadable') return err(storageFailed());
-
-        const current = stored.t === 'ok' ? stored.snapshot : starterSnapshot();
-        const changed = await change(current);
-        if (changed.isErr()) return err(changed.error);
-        if (changed.value.next === current) return ok(changed.value.value);
-
-        const written = writeStored(
-          deps.storage,
-          deps.storageKey,
-          changed.value.next
-        );
-        if (written.isErr()) return err(written.error);
-
-        setSnapshot(changed.value.next);
-        deps.changes.publish();
-        return ok(changed.value.value);
+        for (let tries = 0; tries < MAX_WRITE_ATTEMPTS; tries++) {
+          // A write still waiting when its store closed belongs to a session
+          // that has ended; it is dropped rather than applied behind it.
+          if (closed) return err(storageFailed());
+          const result = await attempt(change);
+          if (result) return result;
+        }
+        return err(storageFailed());
       }
     );
     return ResultAsync.fromPromise(work, storageFailed).andThen(
@@ -426,8 +457,13 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
 
       importDocument: importPdf,
       openDocument,
+      // Inside the lock, so it runs after a packet that is being stored with
+      // this document: bytes a packet is about to use are never dropped.
       discardDocument: (documentId) =>
-        ResultAsync.fromSafePromise(dropUnreferenced([documentId])),
+        ResultAsync.fromPromise(
+          deps.exclusive(() => dropUnreferenced([documentId])),
+          () => undefined
+        ).orElse(() => ok(undefined)),
 
       createDraft: (input) =>
         writePacket(undefined, (_, lifecycleContext) =>

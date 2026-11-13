@@ -90,6 +90,8 @@ export default {
   voidBody:
     'Every signing link stops working and signatures collected so far no longer count. This cannot be undone.',
   actionFailed: 'That didn’t work. Try again.',
+  placementNotSaved:
+    'Your field placement couldn’t be saved. Open the draft and place the fields again.',
   loadFailed:
     'The contracts stored in this browser can’t be read, so nothing is shown and nothing can be changed. They have been left as they are.',
   replaceLosesSignature:

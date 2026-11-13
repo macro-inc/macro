@@ -119,6 +119,28 @@ describe('createLocalContracts', () => {
     expect(titles(second)).toEqual(titles(first));
   });
 
+  it('loses no write between tabs in a browser without Web Locks', async () => {
+    const browser = fakeBrowser({ locks: false });
+    const first = open(browser).context(VIEWER);
+    const second = open(browser).context(VIEWER);
+
+    // Each tab only queues its own writes here, so both start from the same
+    // snapshot; the slower one must notice and redo its change.
+    const [one, two] = await Promise.all([
+      first.createDraft({ ...ACME_DRAFT, title: 'From the first tab' }),
+      second.createDraft({ ...ACME_DRAFT, title: 'From the second tab' }),
+    ]);
+
+    expect(one.isOk() && two.isOk()).toBe(true);
+    const stored = open(browser).context(VIEWER);
+    expect(
+      stored
+        .packets()
+        .map((packet) => packet.title)
+        .sort()
+    ).toEqual(['From the first tab', 'From the second tab']);
+  });
+
   it('keeps one account from seeing packets of another', async () => {
     const browser = fakeBrowser();
     await sendAcme(open(browser, 'owner').context(VIEWER));
@@ -274,6 +296,24 @@ describe('importDocument', () => {
     await contracts.discardDocument(document.id);
 
     expect(browser.documents.has(document.id)).toBe(false);
+  });
+
+  it('keeps a document whose packet is still being stored', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const document = (
+      await contracts.importDocument(pdf('%PDF-1.7 body', 'Order Form.pdf'))
+    )._unsafeUnwrap();
+
+    // The dialog is cancelled while Create is still in flight.
+    const creating = contracts.createDraft({
+      ...ACME_DRAFT,
+      documents: [document],
+    });
+    await contracts.discardDocument(document.id);
+    (await creating)._unsafeUnwrap();
+
+    expect(browser.documents.has(document.id)).toBe(true);
   });
 
   it('keeps a document a packet uses when asked to forget it', async () => {

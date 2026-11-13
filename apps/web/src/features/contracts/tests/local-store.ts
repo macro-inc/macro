@@ -11,8 +11,11 @@ import { sha256 } from './packets';
 const TEST_SCOPE = 'owner';
 export const TEST_STORAGE_KEY = localContractsStorageKey(TEST_SCOPE);
 
-/** A browser's storage shared by every store opened on it. */
-export function fakeBrowser() {
+/**
+ * A browser's storage shared by every store opened on it. `locks: false` is a
+ * browser without Web Locks: each store then only queues its own writes.
+ */
+export function fakeBrowser(options: { locks: boolean } = { locks: true }) {
   const items = new Map<string, string>();
   const documents = new Map<string, ArrayBuffer>();
   const listeners = new Set<() => void>();
@@ -72,7 +75,7 @@ export function fakeBrowser() {
         storage,
         storageKey: localContractsStorageKey(scope),
         blobs,
-        exclusive,
+        exclusive: options.locks ? exclusive : createQueue(),
         changes: {
           publish: () => {
             for (const listener of listeners) {

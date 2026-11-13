@@ -15,7 +15,7 @@ import {
   TextField,
   ToggleSwitch,
 } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { toneVars } from '../components/tone';
 import { useContractsContext } from '../context/contracts-context';
@@ -89,12 +89,22 @@ export function NewPacketDialog(props: {
   const [creating, setCreating] = createSignal(false);
   const [attempted, setAttempted] = createSignal(false);
   let fileInput!: HTMLInputElement;
+  let closed = false;
+  onCleanup(() => {
+    closed = true;
+  });
 
   async function addFiles(files: FileList | null) {
     if (!files) return;
     setImporting(true);
     for (const file of Array.from(files)) {
       const imported = await context.importDocument(file);
+      if (imported.isOk() && closed) {
+        // The dialog closed while this file was being stored: nothing will
+        // use it, so it is not kept.
+        await context.discardDocument(imported.value.id);
+        continue;
+      }
       if (imported.isOk()) {
         draft.addDocument(imported.value);
         continue;
@@ -117,6 +127,8 @@ export function NewPacketDialog(props: {
 
   /** Closing without creating the packet forgets what was imported for it. */
   function cancel() {
+    // The packet is being created from these documents; it keeps them.
+    if (creating()) return;
     for (const document of draft.state.documents) {
       fireAndForget(context.discardDocument(document.id), 'contracts.discard');
     }

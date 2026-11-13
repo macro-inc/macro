@@ -92,6 +92,11 @@ export function PlaceFields(props: {
   packet: Packet;
   onBack: () => void;
   onReview: () => void;
+  /**
+   * Hands the host a way to save the placement before it navigates away, and
+   * takes it back when this view goes. The host stays put if a save fails.
+   */
+  onSaver: (save: (() => Promise<boolean>) | undefined) => void;
 }) {
   const context = useContractsContext();
   const placement = createPlacement({
@@ -112,13 +117,15 @@ export function PlaceFields(props: {
   const packetId = props.packet.id;
   const placed = () => JSON.stringify(placement.fields());
   let saved = placed();
-  // Leaving by any other way, such as the sidebar, still keeps the work.
+  // A last resort for an exit the host did not route through `save`: the
+  // work is still stored, and the sender is told if it could not be.
+  async function saveOnExit(fields: PacketField[]) {
+    const result = await context.saveFields(packetId, fields);
+    if (result.isErr()) toast.failure(t('contracts.placementNotSaved'));
+  }
   onCleanup(() => {
     if (placed() === saved) return;
-    fireAndForget(
-      context.saveFields(packetId, placement.snapshot()),
-      'contracts.place-fields'
-    );
+    fireAndForget(saveOnExit(placement.snapshot()), 'contracts.place-fields');
   });
 
   const pdf = () => pdfs.pdf(documentId());
@@ -255,6 +262,9 @@ export function PlaceFields(props: {
     saved = saving;
     return true;
   }
+
+  props.onSaver(save);
+  onCleanup(() => props.onSaver(undefined));
 
   async function back() {
     if (await save()) props.onBack();

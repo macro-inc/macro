@@ -15,11 +15,16 @@ export type PdfDocument = {
   pageCount: number;
   /** Width divided by height of a page, for laying it out before it paints. */
   pageAspectRatio(page: number): Promise<number>;
-  /** Paint a page into a canvas at this CSS width. */
+  /**
+   * Paint a page into a canvas at this CSS width. Paints of one document run
+   * one at a time, and one that is no longer `wanted` when its turn comes is
+   * skipped without touching the canvas.
+   */
   renderPage(
     page: number,
     canvas: HTMLCanvasElement,
-    cssWidth: number
+    cssWidth: number,
+    wanted: () => boolean
   ): Promise<void>;
   /** The words on a page in reading order, for people who cannot see it. */
   pageText(page: number): Promise<string>;

@@ -88,10 +88,12 @@ export async function sealEvents(
 
 /**
  * The index of the first event whose hash does not follow from the chain,
- * or `undefined` when every entry present verifies. A chain shows that no
- * entry was edited, inserted, or removed from the middle. It cannot show that
- * entries were cut from the end: that needs the last hash kept somewhere the
- * log's holder cannot change, which the signing engine will provide.
+ * or `undefined` when every entry present is consistent with the one before.
+ * That catches an entry edited, inserted, or removed while the later hashes
+ * were left as they were. It is not proof of authenticity or completeness:
+ * whoever holds the log can rewrite entries and recompute every later hash,
+ * or cut entries from the end. Both need the last hash kept somewhere the
+ * holder cannot change, which the signing engine will provide.
  */
 export async function firstBrokenEvent(
   events: PacketEvent[],

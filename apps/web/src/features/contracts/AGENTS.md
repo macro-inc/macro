@@ -66,8 +66,16 @@ link from the packet drawer.
   keep both.
 - Every write goes through `mutate` in `queries/local-contracts.ts`: it reads
   storage, changes, and stores inside one cross-tab lock
-  (`queries/exclusive.ts`), reports a write the browser refuses, and never
-  replaces a snapshot it cannot read. Do not write the snapshot any other way.
+  (`queries/exclusive.ts`), redoes the change if storage moved before it
+  could be stored (the only protection in a browser without Web Locks),
+  reports a write the browser refuses, and never replaces a snapshot it cannot
+  read. Do not write the snapshot any other way.
+- Paints of one PDF run one at a time (`queries/pdf-document.ts`), and a
+  paint whose page scrolled away is skipped. Pass `renderPage` a real
+  `wanted` check; `PdfPage` releases its bitmap when a paint fails.
+- The audit chain shows consistency of the entries present, nothing more:
+  the browser holds the log and could rewrite it. Do not word UI or docs as
+  if it proved authenticity or completeness.
 - A placement store holds Solid proxies. Save `placement.snapshot()`, never
   the proxies: they cannot be cloned or compared across writes.
 - Iterate packets and fields with `Key` on their id, not `For`: every store

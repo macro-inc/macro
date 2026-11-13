@@ -73,10 +73,15 @@ export function PdfPage(props: {
     page: number,
     cssWidth: number
   ) {
-    if (disposed || token !== wanted) return;
-    await pdf.renderPage(page, canvas, cssWidth);
-    // The page scrolled away while it painted: give the bitmap back.
-    if (token !== wanted) release();
+    const stillWanted = () => !disposed && token === wanted;
+    if (!stillWanted()) return;
+    const painted = await ResultAsync.fromPromise(
+      pdf.renderPage(page, canvas, cssWidth, stillWanted),
+      () => undefined
+    );
+    // The page scrolled away while it painted, or the paint failed part way:
+    // either way the bitmap is given back.
+    if (painted.isErr() || !stillWanted()) release();
   }
 
   function release() {
