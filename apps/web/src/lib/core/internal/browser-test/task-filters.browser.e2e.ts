@@ -216,3 +216,33 @@ test('Task list drawer offers Sort only while not searching', async ({
   await expect(drawer.getByRole('radiogroup', { name: 'Sort' })).toHaveCount(0);
   await expect(drawer.getByText(/search order/i)).toHaveCount(0);
 });
+
+test('Task list header offers no column sort while searching', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name === 'phone', 'Phones have no column header');
+  await page.goto('/?task-filters');
+  const header = page.getByRole('grid', { name: 'Tasks' }).getByRole('row');
+  const sort = page.getByTestId('task-sort');
+  await header.getByRole('button', { name: 'Due date' }).click();
+  await expect(sort).toHaveText(
+    '[{"id":"due_date_earliest","reversed":false}]'
+  );
+
+  await page.getByRole('button', { name: 'Search tasks' }).click();
+  await expect(header.getByRole('button')).toHaveCount(0);
+  await expect(
+    header.getByRole('columnheader', { name: 'Updated' })
+  ).toBeVisible();
+  await header.getByText('Due date').click();
+  await header.getByText('Updated').click();
+  await expect(sort).toHaveText(
+    '[{"id":"due_date_earliest","reversed":false}]'
+  );
+
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(header.getByRole('button')).toHaveText(['Due date', 'Updated']);
+  await expect(sort).toHaveText(
+    '[{"id":"due_date_earliest","reversed":false}]'
+  );
+});

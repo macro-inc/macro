@@ -88,6 +88,8 @@ export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
 
 export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
+  /** Whether text-search results follow the list's sort; service search keeps its own order. */
+  sortsSearchResults: boolean;
   /** Uncollapsed rows for alternative layouts; the query owner is shared. */
   boardRows?: Accessor<TasksDataSourceItem[]>;
   boardSearching?: Accessor<boolean>;
@@ -516,5 +518,6 @@ export function useTasksDataSource(
     loadMoreGroup: continuations.loadMore,
     loadMore,
     refresh,
+    sortsSearchResults: Boolean(options.crm),
   } satisfies TasksDataSource;
 }
