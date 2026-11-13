@@ -78,7 +78,12 @@
           in
           # Packaging helpers are separate derivation inputs, not frontend or
           # WASM sources. Avoid recompiling both for AppImage-only changes.
-          rel != "nix"
+          rel != "infra/k8s"
+          && !(lib.hasPrefix "infra/k8s/" rel)
+          && !(lib.hasPrefix "tooling/xtask/crates/xtask_local/src/local/kubernetes" rel)
+          && !(lib.hasPrefix ".agents/skills/kube-local" rel)
+          && rel != "docs/development/local-kubernetes.md"
+          && rel != "nix"
           && !(lib.hasPrefix "nix/" rel)
           && !(lib.hasPrefix "nix-support/appimage-" rel)
           && !(lib.hasPrefix "node_modules/" rel)
@@ -441,6 +446,8 @@
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
+          # cache-turso embeds its SQL with `include_str!`.
+          (lib.fileset.fileFilter (file: file.hasExt "sql") ../crates/client/cache-turso/src)
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
         ];
         inherit frontend;
@@ -1026,6 +1033,12 @@
         root = ../.;
         fileset = lib.fileset.unions [
           cefCargoSources
+          # Crates `include_str!` their SQL, JSON and Markdown (cache-turso's
+          # contact_search.sql); commonCargoSources keeps only Rust and Cargo
+          # files, so the build died on the first one it could not read. A
+          # flake source holds tracked files only, so these are not build output.
+          ../crates
+          ../apps/web/tauri
           ../static_assets/schema.graphql
           ../apps/web/tauri/desktop-cef/tauri.conf.json
           ../apps/web/tauri/desktop-cef/entitlements.plist

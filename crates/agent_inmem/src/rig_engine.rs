@@ -27,7 +27,7 @@ use agent::{
     AgentError, AgentLoop, PromptSection, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
 };
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
-use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
+use ai_tools::{DeferredToolSet, ToolServiceContext};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
@@ -46,7 +46,6 @@ use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnReques
 use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
 use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
-use crate::domain::tool_mode::{CodeModeOnlyPolicy, DirectFallback, ToolMode};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -72,23 +71,15 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-const CODE_MODE_MCP_TOOLS: &[&str] = &[
-    "mcp__macro_internal__ExecuteCode",
-    "mcp__macro_internal__DescribeCodeTools",
-    "mcp__macro_internal__ReadCodeDocs",
-];
-
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::tools_for`].
+/// [`ai_tools::tools_for_agent_code_mode`].
 pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
-    code_mode_tools: Arc<NativeTools>,
     auto_model: Arc<dyn AutoModelSelector>,
     skill_routing: Arc<dyn SkillRoutingPolicy>,
     session_skills: Arc<SessionSkills>,
     entity_routing: Arc<dyn EntityRoutingPolicy>,
-    code_mode_only: Arc<dyn CodeModeOnlyPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -105,10 +96,6 @@ impl RigTurnEngine {
                 tool_context.clone(),
             )),
             native_tools: Arc::new(NativeTools::new()),
-            code_mode_tools: Arc::new(NativeTools::from_factory(
-                ai_tools::tools_for_agent_code_mode,
-                true,
-            )),
             auto_model: match &tool_context.cognition_tool_context.service {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
@@ -116,7 +103,6 @@ impl RigTurnEngine {
             skill_routing: Arc::new(NoSkillRouting),
             session_skills: Arc::new(SessionSkills::default()),
             entity_routing: Arc::new(NoEntityRouting),
-            code_mode_only: Arc::new(DirectFallback),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -140,14 +126,6 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_entity_routing(mut self, policy: Arc<dyn EntityRoutingPolicy>) -> Self {
         self.entity_routing = policy;
-        self
-    }
-
-    /// Decide per turn whether the owner's turns may fall back to the direct
-    /// tools.
-    #[must_use]
-    pub fn with_code_mode_only(mut self, policy: Arc<dyn CodeModeOnlyPolicy>) -> Self {
-        self.code_mode_only = policy;
         self
     }
 }
@@ -340,7 +318,6 @@ struct NativeTools {
     /// [`Self::prompt`] without area guidance, for turns that route SDK
     /// entities.
     routed_prompt: String,
-    code_mode: bool,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
     /// direction a reply will take.
@@ -348,16 +325,13 @@ struct NativeTools {
 }
 
 impl NativeTools {
+    /// The code-mode toolset: the SDK in place of every direct tool it covers.
     fn new() -> Self {
-        Self::from_factory(|| tools_for(AiHost::AgentSession), false)
-    }
-
-    fn from_factory(build: impl Fn() -> ai_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
-        let tools = build();
+        let tools = ai_tools::tools_for_agent_code_mode();
         let base_tools = Arc::into_inner(tools.toolset)
-            .expect("tools_for should return a fresh, uniquely owned collection");
-        let other_tools = Arc::into_inner(build().toolset)
-            .expect("tools_for should return a fresh, uniquely owned collection");
+            .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
+        let other_tools = Arc::into_inner(ai_tools::tools_for_agent_code_mode().toolset)
+            .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
         let with_user_input = tools_for_turn(base_tools, true);
         let tool_names = with_user_input
             .tools
@@ -369,7 +343,6 @@ impl NativeTools {
         Self {
             with_user_input: Arc::new(with_user_input),
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
-            code_mode,
             prompt: tools.prompt.to_string(),
             routed_prompt: tools.routed_prompt.to_string(),
             deferred: tools.deferred,
@@ -395,12 +368,10 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let memory = Arc::clone(&self.memory);
         let native_tools = Arc::clone(&self.native_tools);
-        let code_mode_tools = Arc::clone(&self.code_mode_tools);
         let auto_model = Arc::clone(&self.auto_model);
         let skill_routing = Arc::clone(&self.skill_routing);
         let session_skills = Arc::clone(&self.session_skills);
         let entity_routing = Arc::clone(&self.entity_routing);
-        let code_mode_only = Arc::clone(&self.code_mode_only);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
@@ -411,23 +382,14 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let (routes, entities_routed, only_code) = tokio::join!(
+                let (routes, entities_routed) = tokio::join!(
                     routes_skills(skill_routing.as_ref(), &request),
                     routes_entities(entity_routing.as_ref(), &request),
-                    requires_code_mode(code_mode_only.as_ref(), &request),
                 );
-                let selected = match tool_mode(&request, only_code) {
-                    Ok(selected) => selected,
-                    Err(error) => {
-                        let _ = parts.send(Err(error)).await;
-                        return;
-                    }
-                };
-                let native_tools = match selected {
-                    ToolMode::Standard => native_tools,
-                    ToolMode::Code => code_mode_tools,
-                };
-                tracing::debug!(?selected, "selected agent tool presentation");
+                if let Err(error) = code_tools_listed(&request) {
+                    let _ = parts.send(Err(error)).await;
+                    return;
+                }
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
@@ -543,43 +505,22 @@ fn select_skills<'a>(
     ))
 }
 
-// Only a user's conversation turns read the flag: other owners' turns are
-// refused anyway, and summaries advertise no tools in either mode.
-async fn requires_code_mode(policy: &dyn CodeModeOnlyPolicy, request: &TurnRequest) -> bool {
-    let Owner::User(owner) = &request.owner else {
-        return false;
+// A user's conversation turn needs the code-mode tools: every one runs code
+// mode, and there is no direct-tools fallback. Summaries advertise no tools,
+// and turns of other owners are refused when they run.
+fn code_tools_listed(request: &TurnRequest) -> Result<(), AgentError> {
+    let (crate::domain::engine::TurnPurpose::Conversation, Owner::User(_)) =
+        (request.purpose, &request.owner)
+    else {
+        return Ok(());
     };
-    request.purpose == crate::domain::engine::TurnPurpose::Conversation
-        && policy.requires(owner).await
-}
-
-// Every conversation turn of a user's session runs code mode, and summaries
-// advertise no tools. Unless `only_code`, a turn that cannot run code falls
-// back to the direct tools; with it, a turn whose code runner is missing fails
-// instead.
-fn tool_mode(request: &TurnRequest, only_code: bool) -> Result<ToolMode, AgentError> {
-    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return Ok(ToolMode::Standard);
-    }
-    let Owner::User(_) = &request.owner else {
-        return Ok(ToolMode::Standard);
-    };
-    let listed = request.mcp_tools.as_ref().is_some_and(|mcp| {
-        let catalog = mcp.searchable_catalog();
-        CODE_MODE_MCP_TOOLS
-            .iter()
-            .all(|name| catalog.iter().any(|tool| tool.name == *name))
-    });
-    if listed {
-        Ok(ToolMode::Code)
-    } else if only_code {
+    if crate::domain::mcp::has_code_mode_tools(request.mcp_tools.as_ref()) {
+        Ok(())
+    } else {
         tracing::error!("code-mode tools unavailable; refusing the turn");
         Err(AgentError::Other(anyhow::anyhow!(
             "The code runner is unavailable, so this turn could not run."
         )))
-    } else {
-        tracing::warn!("code-mode tools unavailable; running the turn with direct tools");
-        Ok(ToolMode::Standard)
     }
 }
 
@@ -711,25 +652,18 @@ async fn drive_turn(
         };
         // Routed turns leave area guidance out of the prompt; the entities the
         // request needs bring theirs, with their indexes, in the turn's part.
-        let routed = native_tools.code_mode && skills.entities;
-        let docs = async {
-            if native_tools.code_mode {
-                agent_code_mode::domain::select_documentation(
-                    &owner,
-                    request,
-                    base_context.cognition_tool_context.service.as_ref(),
-                    if routed {
-                        agent_code_mode::domain::Guidance::Selected
-                    } else {
-                        agent_code_mode::domain::Guidance::Inline
-                    },
-                    &cancel,
-                )
-                .await
+        let routed = skills.entities;
+        let docs = agent_code_mode::domain::select_documentation(
+            &owner,
+            request,
+            base_context.cognition_tool_context.service.as_ref(),
+            if routed {
+                agent_code_mode::domain::Guidance::Selected
             } else {
-                String::new()
-            }
-        };
+                agent_code_mode::domain::Guidance::Inline
+            },
+            &cancel,
+        );
         let loaded_skills = async {
             if !skills.routes {
                 return Vec::new();

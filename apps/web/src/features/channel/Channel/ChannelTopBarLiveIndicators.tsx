@@ -15,7 +15,12 @@ export function ChannelLiveIndicators(props: { channelId: string }) {
 
   return (
     <Show when={ENABLE_LIVE_INDICATORS}>
-      <LiveIndicators userIds={indicators() ?? []} currentUserId={userId()} />
+      {/* Match the left inset so the avatars don't crowd the next action. */}
+      <LiveIndicators
+        userIds={indicators() ?? []}
+        currentUserId={userId()}
+        class="pr-2"
+      />
     </Show>
   );
 }
