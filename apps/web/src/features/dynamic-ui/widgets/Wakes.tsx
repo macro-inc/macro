@@ -1,8 +1,18 @@
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { useAgentWakesQuery } from '@queries/agent-wakes/wakes';
 import type { AgentWake } from '@service-agent-harness/agent-wakes';
 import { cn } from '@ui';
-import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { TEXT } from '../tokens';
 import type { WidgetOf } from '../view';
 import {
@@ -21,11 +31,29 @@ export type WakesProps = Omit<WidgetOf<'wakes'>, 'type'>;
 
 const STATE_DOT: Record<WakeState, string> = {
   running: 'bg-accent animate-pulse',
+  lost: 'bg-ink-muted',
   ok: 'bg-success',
   failed: 'bg-failure',
   timeout: 'bg-warning',
   cancelled: 'bg-edge',
 };
+
+function stateLabel(state: WakeState): string {
+  switch (state) {
+    case 'running':
+      return t('dynamicUi.wakeRunning');
+    case 'lost':
+      return t('dynamicUi.wakeLost');
+    case 'ok':
+      return t('dynamicUi.wakeOk');
+    case 'failed':
+      return t('dynamicUi.wakeFailed');
+    case 'timeout':
+      return t('dynamicUi.wakeTimeout');
+    case 'cancelled':
+      return t('dynamicUi.wakeCancelled');
+  }
+}
 
 /**
  * An agent account's wakes, newest first: one row each with what woke it,
@@ -50,31 +78,41 @@ function WakeList(props: WakesProps) {
   );
   usePending('pane.wakes', () => wakes.isPending);
 
-  // Running wakes show a duration that grows.
+  // Running wakes show a duration that grows; nothing ticks once none runs.
   const [now, setNow] = createSignal(Date.now());
-  const tick = setInterval(() => setNow(Date.now()), 1000);
-  onCleanup(() => clearInterval(tick));
+  const running = createMemo(
+    () =>
+      wakes.data?.wakes.some((wake) => wakeState(wake, now()) === 'running') ??
+      false
+  );
+  createEffect(() => {
+    if (!running()) return;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    onCleanup(() => clearInterval(tick));
+  });
 
   return (
     <section
       class="flex w-full min-w-0 flex-col gap-2"
-      aria-label={props.title ?? 'Wakes'}
+      aria-label={props.title ?? t('dynamicUi.wakesTitle')}
     >
       <Show when={props.title}>
         {(title) => <h3 class="text-ink text-sm font-semibold">{title()}</h3>}
       </Show>
       <Switch>
         <Match when={wakes.isPending}>
-          <div class={cn('text-xs', TEXT.secondary)}>Loading wakes…</div>
+          <div class={cn('text-xs', TEXT.secondary)}>
+            {t('dynamicUi.wakesLoading')}
+          </div>
         </Match>
         <Match when={wakes.isError}>
-          <Notice>The wakes couldn't be loaded.</Notice>
+          <Notice>{t('dynamicUi.wakesFailed')}</Notice>
         </Match>
         <Match when={wakes.isSuccess && wakes.data === null}>
-          <Notice>You don't have access to this agent's wakes.</Notice>
+          <Notice>{t('dynamicUi.wakesNoAccess')}</Notice>
         </Match>
         <Match when={wakes.data?.wakes.length === 0}>
-          <Notice>No wakes yet.</Notice>
+          <Notice>{t('dynamicUi.wakesEmpty')}</Notice>
         </Match>
         <Match when={wakes.data}>
           {(page) => (
@@ -94,7 +132,7 @@ function WakeList(props: WakesProps) {
 
 function WakeRow(props: { wake: AgentWake; agentId: string; now: number }) {
   const [open, setOpen] = createSignal(false);
-  const state = () => wakeState(props.wake);
+  const state = () => wakeState(props.wake, props.now);
   const record = () => props.wake.record;
   const cost = () => record().usage?.costUsd ?? undefined;
   const outcome = () => record().outcome ?? undefined;
@@ -109,8 +147,8 @@ function WakeRow(props: { wake: AgentWake; agentId: string; now: number }) {
       >
         <span
           class={cn('size-2 shrink-0 rounded-full', STATE_DOT[state()])}
-          title={state()}
-          aria-label={state()}
+          title={stateLabel(state())}
+          aria-label={stateLabel(state())}
         />
         <span class="flex min-w-0 flex-1 flex-col">
           <span class="text-ink truncate font-medium">
@@ -167,7 +205,7 @@ function WakeRow(props: { wake: AgentWake; agentId: string; now: number }) {
         <div class="px-2 pb-2">
           <Show
             when={props.wake.traceUpdatedAt}
-            fallback={<Notice>No trace was uploaded for this wake.</Notice>}
+            fallback={<Notice>{t('dynamicUi.wakeNoTrace')}</Notice>}
           >
             <TraceWaterfall agentId={props.agentId} wakeId={record().wake} />
           </Show>

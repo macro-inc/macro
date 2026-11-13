@@ -1,12 +1,21 @@
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { useAgentWakeTraceQuery } from '@queries/agent-wakes/wakes';
 import type { WakeTraceSpan } from '@service-agent-harness/agent-wakes';
 import { cn } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { TEXT } from '../../tokens';
 import {
   formatCost,
   formatDuration,
+  traceIsLive,
   type WaterfallRow,
   waterfall,
 } from './format';
@@ -23,23 +32,28 @@ export function TraceWaterfall(props: { agentId: string; wakeId: string }) {
     () => props.wakeId
   );
   usePending('pane.trace', () => trace.isPending);
+  // A live trace that stopped growing long ago stops looking live; re-read
+  // the time each minute so it does without a refetch.
+  const [now, setNow] = createSignal(Date.now());
+  const tick = setInterval(() => setNow(Date.now()), 60_000);
+  onCleanup(() => clearInterval(tick));
 
   return (
     <Switch>
       <Match when={trace.isPending}>
         <div class={cn('px-1 py-2 text-xs', TEXT.secondary)}>
-          Loading trace…
+          {t('dynamicUi.traceLoading')}
         </div>
       </Match>
       <Match when={trace.isError}>
-        <Notice>The trace couldn't be loaded.</Notice>
+        <Notice>{t('dynamicUi.traceFailed')}</Notice>
       </Match>
       <Match when={trace.isSuccess && trace.data === null}>
-        <Notice>No trace for this wake, or you don't have access to it.</Notice>
+        <Notice>{t('dynamicUi.traceNone')}</Notice>
       </Match>
       <Match when={trace.data}>
         {(loaded) => {
-          const laid = () => waterfall(loaded());
+          const laid = () => waterfall(loaded(), now());
           return (
             <div class="flex min-w-0 flex-col gap-2">
               <div
@@ -58,11 +72,14 @@ export function TraceWaterfall(props: { agentId: string; wakeId: string }) {
                 <Show when={loaded().costUsd ?? undefined}>
                   {(cost) => <span>{formatCost(cost())}</span>}
                 </Show>
-                <Show when={loaded().live}>
-                  <span class="text-accent">live</span>
+                <Show when={traceIsLive(loaded(), now())}>
+                  <span class="text-accent">{t('dynamicUi.traceLive')}</span>
                 </Show>
               </div>
-              <ol class="flex min-w-0 flex-col" aria-label="Trace">
+              <ol
+                class="flex min-w-0 flex-col"
+                aria-label={t('dynamicUi.traceTitle')}
+              >
                 <For each={laid().rows}>
                   {(row) => <SpanRow row={row} total={laid().total} />}
                 </For>
@@ -153,23 +170,36 @@ function SpanDetail(props: { span: WakeTraceSpan }) {
       {(() => {
         const span = props.span;
         if (span.kind === 'user')
-          return <Block label="Said" text={span.text} />;
+          return <Block label={t('dynamicUi.traceSaid')} text={span.text} />;
         if (span.kind === 'turn')
           return (
             <>
-              <Block label="Thinking" text={span.thinking} />
-              <Block label="Said" text={span.text} />
+              <Block
+                label={t('dynamicUi.traceThinking')}
+                text={span.thinking}
+              />
+              <Block label={t('dynamicUi.traceSaid')} text={span.text} />
               <span class={cn('text-xs', TEXT.tertiary)}>
-                {span.tokens.input} in · {span.tokens.output} out ·{' '}
-                {span.tokens.cacheRead} cached
+                {t('dynamicUi.traceTokens', {
+                  input: span.tokens.input,
+                  output: span.tokens.output,
+                  cached: span.tokens.cacheRead,
+                })}
               </span>
             </>
           );
         return (
           <>
-            <Block label="Input" text={JSON.stringify(span.input, null, 2)} />
             <Block
-              label={span.error ? 'Error' : 'Result'}
+              label={t('dynamicUi.traceInput')}
+              text={JSON.stringify(span.input, null, 2)}
+            />
+            <Block
+              label={
+                span.error
+                  ? t('dynamicUi.traceError')
+                  : t('dynamicUi.traceResult')
+              }
               text={span.result ?? ''}
             />
           </>

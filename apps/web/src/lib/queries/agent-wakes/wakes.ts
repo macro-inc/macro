@@ -3,6 +3,10 @@ import {
   getAgentWakeTrace,
   listAgentWakes,
 } from '@service-agent-harness/agent-wakes';
+import {
+  traceIsLive,
+  wakeState,
+} from '@app/features/dynamic-ui/widgets/wakes/format';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentWakeKeys } from './keys';
@@ -23,7 +27,9 @@ function agentWakesQueryOptions(agentId: string, filter: AgentWakesFilter) {
       return result.value;
     },
     refetchInterval: (query) =>
-      query.state.data?.wakes.some((wake) => wake.record.phase !== 'end')
+      query.state.data?.wakes.some(
+        (wake) => wakeState(wake, Date.now()) === 'running'
+      )
         ? LIVE_REFRESH_MS
         : false,
   });
@@ -41,14 +47,17 @@ function agentWakeTraceQueryOptions(agentId: string, wakeId: string) {
       return result.value;
     },
     refetchInterval: (query) =>
-      query.state.data?.live ? LIVE_REFRESH_MS : false,
+      query.state.data && traceIsLive(query.state.data, Date.now())
+        ? LIVE_REFRESH_MS
+        : false,
   });
 }
 
 /**
  * The newest page of an agent account's wakes, or `null` when the viewer may
  * not read them. Refreshes while any listed wake is still running, so
- * liveness follows the wakes' `end` records.
+ * liveness follows the wakes' `end` records; a wake that stopped reporting
+ * (`wakeState` `lost`) no longer keeps it refreshing.
  */
 export function useAgentWakesQuery(
   agentId: Accessor<string>,

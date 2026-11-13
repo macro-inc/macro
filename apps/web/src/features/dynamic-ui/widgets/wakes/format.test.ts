@@ -1,6 +1,13 @@
 import type { AgentWake, WakeTrace } from '@service-agent-harness/agent-wakes';
 import { describe, expect, it } from 'vitest';
-import { formatDuration, wakeDuration, wakeState, waterfall } from './format';
+import {
+  formatDuration,
+  LOST_AFTER_MS,
+  traceIsLive,
+  wakeDuration,
+  wakeState,
+  waterfall,
+} from './format';
 
 const wake = (record: Partial<AgentWake['record']>): AgentWake => ({
   receivedAt: '2026-11-11T09:00:00.000Z',
@@ -18,11 +25,35 @@ const wake = (record: Partial<AgentWake['record']>): AgentWake => ({
 });
 
 describe('a wake', () => {
+  const received = Date.parse('2026-11-11T09:00:00.000Z');
+
   it('runs until its end record, then is how it ended', () => {
-    expect(wakeState(wake({ phase: 'session' }))).toBe('running');
-    expect(wakeState(wake({ phase: 'end', status: 'timeout' }))).toBe(
+    expect(wakeState(wake({ phase: 'session' }), received)).toBe('running');
+    expect(wakeState(wake({ phase: 'end', status: 'timeout' }), received)).toBe(
       'timeout'
     );
+  });
+
+  it('is lost once unheard from too long with no end record', () => {
+    const late = received + LOST_AFTER_MS + 1;
+    expect(wakeState(wake({ phase: 'session' }), received + LOST_AFTER_MS)).toBe(
+      'running'
+    );
+    expect(wakeState(wake({ phase: 'session' }), late)).toBe('lost');
+    // A recent trace upload is hearing from it too.
+    expect(
+      wakeState(
+        {
+          ...wake({ phase: 'session' }),
+          traceUpdatedAt: new Date(late - 60_000).toISOString(),
+        },
+        late
+      )
+    ).toBe('running');
+    // An ended wake is never lost.
+    expect(wakeState(wake({ phase: 'end', status: 'ok' }), late)).toBe('ok');
+    // Its duration stops where it was last heard from.
+    expect(wakeDuration(wake({ phase: 'session' }), late)).toBe(0);
   });
 
   it('grows while running and keeps its recorded duration once ended', () => {
@@ -71,7 +102,8 @@ describe('a trace waterfall', () => {
         },
       ],
     };
-    const { rows, total } = waterfall(trace);
+    const now = Date.parse(trace.endedAt);
+    const { rows, total } = waterfall(trace, now);
     expect(total).toBe(10_000);
     expect(rows.map((row) => [row.label, row.offset, row.duration])).toEqual([
       ['Prompt', 0, 0],
@@ -79,6 +111,13 @@ describe('a trace waterfall', () => {
       ['Bash', 4000, 6000],
     ]);
     expect(rows[2]?.running).toBe(true);
-    expect(waterfall({ ...trace, live: false }).rows[2]?.running).toBe(false);
+    expect(waterfall({ ...trace, live: false }, now).rows[2]?.running).toBe(
+      false
+    );
+    // A live trace that stopped growing long ago is no longer live.
+    const stale = now + LOST_AFTER_MS + 1;
+    expect(traceIsLive(trace, now)).toBe(true);
+    expect(traceIsLive(trace, stale)).toBe(false);
+    expect(waterfall(trace, stale).rows[2]?.running).toBe(false);
   });
 });

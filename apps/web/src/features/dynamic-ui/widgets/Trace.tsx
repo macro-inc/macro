@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { cn, Dialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { TEXT } from '../tokens';
@@ -14,7 +15,7 @@ export type TraceProps = Omit<WidgetOf<'trace'>, 'type'>;
  */
 export function Trace(props: TraceProps) {
   const [open, setOpen] = createSignal(false);
-  const title = () => props.title ?? 'Trace';
+  const title = () => props.title ?? t('dynamicUi.traceTitle');
 
   return (
     <AgentDashboardsGate>
@@ -31,7 +32,9 @@ export function Trace(props: TraceProps) {
           onClick={() => setOpen(true)}
         >
           <span class="text-ink font-medium">{title()}</span>
-          <span class={cn('text-xs', TEXT.secondary)}>Open</span>
+          <span class={cn('text-xs', TEXT.secondary)}>
+            {t('dynamicUi.traceOpen')}
+          </span>
         </button>
         <Dialog open={open()} onOpenChange={setOpen} fullscreen>
           <div class="bg-dialog flex h-full min-h-0 flex-col">
@@ -44,7 +47,7 @@ export function Trace(props: TraceProps) {
                 class={cn('text-sm', TEXT.secondary)}
                 onClick={() => setOpen(false)}
               >
-                Close
+                {t('dynamicUi.traceClose')}
               </button>
             </div>
             <div class="min-h-0 flex-1 overflow-auto px-3 py-2">

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableAgentDashboards } from '@core/constant/featureFlags';
 import { type JSX, Match, Switch } from 'solid-js';
@@ -13,7 +14,7 @@ export function AgentDashboardsGate(props: { children: JSX.Element }) {
     <Switch>
       <Match when={flag().loading}>{null}</Match>
       <Match when={!flag().enabled}>
-        <Notice>Agent wakes aren't available yet.</Notice>
+        <Notice>{t('dynamicUi.wakesUnavailable')}</Notice>
       </Match>
       <Match when={flag().enabled}>{props.children}</Match>
     </Switch>

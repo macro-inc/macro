@@ -14,6 +14,7 @@ import common from './en/common';
 import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
+import dynamicUi from './en/dynamic-ui';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
@@ -57,6 +58,7 @@ export default {
   computers,
   create,
   crm,
+  dynamicUi,
   emailViews,
   entityActions,
   entityIcons,

@@ -1,15 +1,49 @@
+import { t } from '@app/lib/i18n';
 import type {
   AgentWake,
   WakeTrace,
   WakeTraceSpan,
 } from '@service-agent-harness/agent-wakes';
 
-/** Where a wake stands: running until its `end` record, then how it ended. */
-export type WakeState = 'running' | 'ok' | 'failed' | 'timeout' | 'cancelled';
+/**
+ * How long a wake may go unheard from (no record and no trace upload) before
+ * a missing `end` record means it stopped reporting, e.g. its process was
+ * killed, rather than that it still runs.
+ */
+export const LOST_AFTER_MS = 30 * 60_000;
 
-export function wakeState(wake: AgentWake): WakeState {
+/**
+ * Where a wake stands: running until its `end` record, then how it ended;
+ * `lost` once it has gone unheard from for `LOST_AFTER_MS` with no end.
+ */
+export type WakeState =
+  | 'running'
+  | 'lost'
+  | 'ok'
+  | 'failed'
+  | 'timeout'
+  | 'cancelled';
+
+/** When Macro last heard from a wake: its latest record or trace upload. */
+export function lastHeard(wake: AgentWake): number {
+  const received = Date.parse(wake.receivedAt);
+  const traced = wake.traceUpdatedAt ? Date.parse(wake.traceUpdatedAt) : 0;
+  return Math.max(received, traced);
+}
+
+export function wakeState(wake: AgentWake, now: number): WakeState {
   const { record } = wake;
-  return record.phase === 'end' && record.status ? record.status : 'running';
+  if (record.phase === 'end' && record.status) return record.status;
+  return now - lastHeard(wake) > LOST_AFTER_MS ? 'lost' : 'running';
+}
+
+/**
+ * Whether a trace is still being added to: uploaded live, and with something
+ * in it newer than `LOST_AFTER_MS`, so a wake that died mid-upload stops
+ * looking live.
+ */
+export function traceIsLive(trace: WakeTrace, now: number): boolean {
+  return trace.live && now - Date.parse(trace.endedAt) <= LOST_AFTER_MS;
 }
 
 /** `1.2s`, `14s`, `3m 05s`, `1h 02m`. */
@@ -28,12 +62,16 @@ export function formatCost(usd: number): string {
   return usd > 0 && usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`;
 }
 
-/** How long a wake has run: its recorded duration, or since it started. */
+/**
+ * How long a wake has run: its recorded duration, since it started, or, for
+ * one that stopped reporting, until it was last heard from.
+ */
 export function wakeDuration(wake: AgentWake, now: number): number {
   const { record } = wake;
   if (record.phase === 'end' && typeof record.durationMs === 'number')
     return record.durationMs;
-  return Math.max(0, now - Date.parse(record.startedAt));
+  const until = wakeState(wake, now) === 'lost' ? lastHeard(wake) : now;
+  return Math.max(0, until - Date.parse(record.startedAt));
 }
 
 /** `event · ciFailures · nightly`. */
@@ -58,10 +96,14 @@ export type WaterfallRow = {
  * Lays a trace's spans out on one time axis. A user span is an instant; a
  * running tool reaches to the trace's end.
  */
-export function waterfall(trace: WakeTrace): {
+export function waterfall(
+  trace: WakeTrace,
+  now: number
+): {
   rows: WaterfallRow[];
   total: number;
 } {
+  const live = traceIsLive(trace, now);
   const start = Date.parse(trace.startedAt);
   const end = Date.parse(trace.endedAt);
   const total = Math.max(1, end - start);
@@ -70,7 +112,7 @@ export function waterfall(trace: WakeTrace): {
     if (span.kind === 'user')
       return {
         span,
-        label: 'Prompt',
+        label: t('dynamicUi.tracePrompt'),
         offset: at(span.at),
         duration: 0,
         running: false,
@@ -79,7 +121,7 @@ export function waterfall(trace: WakeTrace): {
     if (span.kind === 'turn')
       return {
         span,
-        label: `Turn ${span.index + 1}`,
+        label: t('dynamicUi.traceTurn', { number: span.index + 1 }),
         offset: at(span.at),
         duration: Math.max(0, at(span.end) - at(span.at)),
         running: false,
@@ -95,7 +137,7 @@ export function waterfall(trace: WakeTrace): {
         (finished === null ? total : at(finished)) - at(span.at)
       ),
       // A call with no result in a finished trace never returned.
-      running: finished === null && trace.live,
+      running: finished === null && live,
       error: span.error,
     };
   });
