@@ -20,8 +20,13 @@ use bot_id::BotIdStr;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Most documents one batched access statement checks. A project's tasks are
+/// checked together; this bounds the work and the id arrays of each statement.
+const DOCUMENTS_PER_ACCESS_STATEMENT: usize = 1_000;
 
 /// PostgreSQL-backed implementation of [`AccessRepository`].
 ///
@@ -114,6 +119,62 @@ impl AccessRepository for PgAccessRepository {
             user_id,
         )
         .await?)
+    }
+
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(document_count = document_ids.len(), source_id_count = tracing::field::Empty)
+    )]
+    async fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<String, AccessLevel>, AccessError> {
+        let mut levels = HashMap::with_capacity(document_ids.len());
+        if document_ids.is_empty() {
+            return Ok(levels);
+        }
+        let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
+        // The ids `get_document_access` would parse as UUIDs share one
+        // statement per batch; the rest take its legacy path, one at a time.
+        let mut by_uuid: HashMap<Uuid, Vec<&String>> = HashMap::new();
+        let mut legacy = Vec::new();
+        for document_id in document_ids {
+            match document_id.parse::<Uuid>() {
+                Ok(id) => by_uuid.entry(id).or_default().push(document_id),
+                Err(_) => legacy.push(document_id),
+            }
+        }
+        let mut uuids: Vec<Uuid> = by_uuid.keys().copied().collect();
+        uuids.sort_unstable();
+        for batch in uuids.chunks(DOCUMENTS_PER_ACCESS_STATEMENT) {
+            let found = queries::document_access::get_documents_access(
+                &self.pool,
+                batch,
+                &source_ids,
+                user_id,
+            )
+            .await?;
+            for (id, level) in found {
+                for document_id in by_uuid.get(&id).into_iter().flatten() {
+                    levels.insert((*document_id).clone(), level);
+                }
+            }
+        }
+        for document_id in legacy {
+            if let Some(level) = queries::document_access::get_legacy_document_access(
+                &self.pool,
+                document_id,
+                &source_ids,
+                Some(user_id),
+            )
+            .await?
+            {
+                levels.insert(document_id.clone(), level);
+            }
+        }
+        Ok(levels)
     }
 
     #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]

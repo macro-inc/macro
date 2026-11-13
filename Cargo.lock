@@ -10381,6 +10381,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -11316,6 +11317,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "http-body-util",
+ "log",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",

@@ -2,6 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
+- `bun run test` keeps a module cache in `.cache/vitest-modules` that keeps resolved import paths across a rename: delete that directory when tests fail with `Cannot find module` naming a file's old path.
 - `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
@@ -216,6 +217,8 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Give browser fixtures the app's viewport metadata and assert the CSS viewport width when verifying phone layouts; mobile device emulation can otherwise retain a desktop layout viewport.
+
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
@@ -239,6 +242,13 @@ scroll anchoring; see `keepScrollAnchorOnResize`):
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
+
+Directional split focus (`Shift+H/J/K/L`, `Shift+Arrow`) has a backend-free
+browser regression over the real split manager, `SplitLayout`, and hotkey
+engine, with stand-in panes: moving through two stacked splits beside three,
+returning to the split you came from, a list keeping `Shift+Up/Down` for its
+selection, and a grid marked `data-owns-arrow-keys` keeping `Shift+Arrow`:
+`bunx playwright test --config src/components/app/split-layout/focus-browser-test/playwright.config.ts`.
 
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
@@ -662,6 +672,13 @@ The backend-free desktop/phone/tablet regression is
 
 ## Development Patterns
 
+CRM pipeline schema adapters supply `currencyColumnId`, `fixedOptions` and
+`defaultValue` to the shared database editor. Pass the complete row to cell
+formatting and group monetary calculations by currency; CSV keeps amounts and
+currency codes in separate columns. See the [outcome/currency design](../../docs/design/crm-outcome-currency.md).
+Keep locale-aware money input separate from strict first-entry inference, and
+exclude non-nullable fields from bulk clearing.
+
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.
 
@@ -683,6 +700,11 @@ Keep cold row metadata reads non-suspending so virtual scrolling never detaches
 its list; permission revalidation remains independent of row mounts. Project
 reads retain client-scoped denial state across remounts and immediately reauthorize
 previous-viewer cache hits; older requests never clear newer denial decisions.
+A project view mounts one full project read (`createProjectSource`): breadcrumbs
+and labels use the identity read, and embedded lists take the view's source.
+Project reads refresh only through the activity registry (pushes, websocket
+connects, the app's own project writes; `registerProjectRevalidation`); never
+add a timer or focus refetch to them.
 
 Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
 in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
@@ -1026,6 +1048,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
+- Bind channel Join, recovery, and retry to one call ID; only explicit Start or Call again may use get-or-create. Preserve that intent and ID through channel navigation.
 - Keep active phone calls viewport-filling with visible header islands and idle
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.

@@ -1,8 +1,8 @@
 import { routePhoneToMobileSignup } from '../../core/navigation';
 import './macro-hero.css';
 
-export const homepageDescription =
-  'Macro replaces 27+ apps with one connected system designed for humans and agents to work together.';
+const homepageDescription =
+  'Macro replaces 27+ apps with one connected system designed for humans and agents.';
 
 /** Centered homepage introduction. */
 export function MacroHero() {

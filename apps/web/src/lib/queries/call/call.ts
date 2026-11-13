@@ -29,14 +29,19 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   return useQuery(() => activeCallQueryOptions(channelId()));
 }
 
-/** Fresh lookups keep recovery from re-creating a call that already ended. */
+/** Fresh lookups resolve channel-only joins and verify recovery targets. */
 export function fetchActiveCall(channelId: string) {
   return throwOnErr(() => callServiceClient.checkActiveCall(channelId));
 }
 
-/** Each join attempt owns its request, including retries after a timeout. */
-export function requestCallToken(channelId: string) {
+/** Only explicit Start actions may create a call. */
+export function requestStartCallToken(channelId: string) {
   return throwOnErr(() => callServiceClient.getOrCreateCall(channelId));
+}
+
+/** Each join attempt is bound to one session, including retries. */
+export function requestCallToken(callId: string) {
+  return throwOnErr(() => callServiceClient.joinCall(callId));
 }
 
 /**

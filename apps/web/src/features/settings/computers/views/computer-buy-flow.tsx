@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -50,7 +51,7 @@ function ResumingStep(props: { step: SetupStepId; onClose: () => void }) {
   return (
     <>
       <ActionDialogShell.Body>
-        <StepHeader step={props.step} skipsClaude={false} />
+        <StepHeader step={props.step} claude="step" />
         <ActionDialogShell.Header>
           <ActionDialogShell.Title>
             {t('computers.setupAgentTitle')}
@@ -108,6 +109,12 @@ export function ComputerBuyFlow(props: {
   const [choice, setChoice] = createSignal<ClaudeMode>();
   const [reopened, setReopened] = createSignal(false);
   const [waitingForLink, setWaitingForLink] = createSignal(false);
+  // Choosing credits after opening the sign-in completes Bring your AI
+  // rather than skipping it.
+  const [signInVisited, setSignInVisited] = createSignal(false);
+  createEffect(() => {
+    if (step() === 'claude') setSignInVisited(true);
+  });
 
   const computerId = () => props.computerId ?? boughtId();
   const computer = () => computers().find((item) => item.id === computerId());
@@ -203,6 +210,9 @@ export function ComputerBuyFlow(props: {
       });
       setBoughtId(result.computerId);
       setStep('agent');
+      // A phone's toast sits over the sheet's footer, and the progress list
+      // the next step opens with already says the charge is being confirmed.
+      if (isMobile()) return;
       // Confirming is a success too: the computer shows as purchasing
       // until its charge is confirmed.
       toast.success(
@@ -239,7 +249,7 @@ export function ComputerBuyFlow(props: {
                 }
               >
                 <ComputerPurchaseStep
-                  header={<StepHeader step="computer" skipsClaude={false} />}
+                  header={<StepHeader step="computer" claude="step" />}
                   offers={offers.isSuccess ? offers.data : undefined}
                   failure={
                     offers.isError ? offersFailure(offers.error) : undefined
@@ -273,6 +283,7 @@ export function ComputerBuyFlow(props: {
                 onStep={setStep}
                 onClose={close}
                 selectsForAgent={props.selectsForAgent}
+                signInVisited={signInVisited()}
               />
             )}
           </Show>
