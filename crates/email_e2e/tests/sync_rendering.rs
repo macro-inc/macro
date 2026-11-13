@@ -8,10 +8,9 @@ use rootcause::prelude::*;
 use serde_json::Value;
 
 /// Who the test mail is from.
-const GRACE: &str = "Grace Hopper <grace@example.com>";
+const GRACE: &str = "Grace <grace@example.com>";
 /// The attribution line a mail client puts above the thread it quotes.
-const ATTRIBUTION: &str =
-    "On Mon, Oct 26, 2026 at 10:15 AM Grace Hopper &lt;grace@example.com&gt; wrote:";
+const ATTRIBUTION: &str = "On Mon, Oct 26, 2026 at 10:15 AM Grace &lt;grace@example.com&gt; wrote:";
 /// A one-pixel PNG.
 const PNG: &[u8] = &[
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -117,7 +116,7 @@ async fn reply_from_outlook_mobile_is_cut_at_its_rule(provider: Provider) -> Res
 
     let html = "<div>New text from my phone</div><div>Sent from Outlook for iOS</div>\
         <div style=\"text-align:center\"><hr></div>\
-        <div id=\"divRplyFwdMsg\" dir=\"ltr\"><b>From:</b> Grace Hopper &lt;grace@example.com&gt;<br>\
+        <div id=\"divRplyFwdMsg\" dir=\"ltr\"><b>From:</b> Grace &lt;grace@example.com&gt;<br>\
         <b>Sent:</b> Monday, October 26, 2026 10:15 AM<br><b>To:</b> Ada &lt;ada@example.com&gt;<br>\
         <b>Subject:</b> Re: Roadmap</div>\
         <div>First quoted message\
@@ -140,7 +139,7 @@ async fn reply_from_outlook_mobile_is_cut_at_its_rule(provider: Provider) -> Res
     assert!(text(&message, "body_html_sanitized").contains("Oldest words"));
 
     let plain = "New text from my phone\n\n________________________________\n\
-        From: Grace Hopper <grace@example.com>\nSent: Monday, October 26, 2026 10:15 AM\n\
+        From: Grace <grace@example.com>\nSent: Monday, October 26, 2026 10:15 AM\n\
         To: Ada <ada@example.com>\nSubject: Re: Roadmap\n\nFirst quoted message\n";
     let message = received(&inbox, &Mail::new(GRACE, "Roadmap as text", plain)).await?;
     assert_eq!(message["body_html_sanitized"], Value::Null);
@@ -203,7 +202,7 @@ async fn quoted_thread_is_cut_from_the_reply(provider: Provider) -> Result<(), R
     );
     assert!(text(&message, "body_html_sanitized").contains("Older words"));
 
-    let plain = "Agreed.\n\nOn Mon, Oct 26, 2026 at 10:15 AM Grace Hopper <grace@example.com> wrote:\n\
+    let plain = "Agreed.\n\nOn Mon, Oct 26, 2026 at 10:15 AM Grace <grace@example.com> wrote:\n\
                  > Older words\n> and more\n";
     let message = received(&inbox, &Mail::new(GRACE, "Re: In plain text", plain)).await?;
     assert_eq!(text(&message, "body_replyless"), "Agreed.");

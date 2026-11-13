@@ -487,8 +487,8 @@ async fn a_gmail_and_an_outlook_inbox_keep_their_mail_apart() -> Result<(), Repo
     two_inboxes_keep_their_mail_apart(Provider::Gmail, Provider::Outlook).await
 }
 
-/// Unlinking removes that inbox from the list at once and its threads from
-/// the views, tells the provider to stop announcing its changes (Gmail
+/// Unlinking stops that inbox syncing at once, removes it from the list and
+/// its threads from the views once it is purged, tells the provider to stop announcing its changes (Gmail
 /// `users.stop`, the Graph subscription deleted), and leaves the user's other
 /// inbox listed, watched and receiving mail. When this fails, a removed inbox
 /// keeps showing or keeps syncing, or removing one inbox breaks the other.
@@ -622,8 +622,8 @@ async fn outlook_relinking_an_unlinked_mailbox_imports_its_mail_once() -> Result
 /// than one purge batch (500 messages), so the purge pauses between batches.
 const LARGE_MAILBOX: usize = 520;
 
-/// Removing an inbox with more mail than one purge batch: the API stops
-/// listing it at once, the delete job delivered again (during the purge and
+/// Removing an inbox with more mail than one purge batch: the inbox stops
+/// syncing at once and is gone from the list once purged, the delete job delivered again (during the purge and
 /// after it) is a no-op that is handled and deleted, mail that arrives during
 /// the purge does not bring the inbox back, every thread and message of the
 /// link is gone, and the user's other inbox is untouched. When this fails,
@@ -1033,8 +1033,9 @@ async fn init_with_a_spent_sign_in_is_a_client_error(provider: Provider) -> Resu
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "known bug: link-callback-failure-strands-attempt"]
 async fn gmail_init_with_a_spent_sign_in_is_a_client_error() -> Result<(), Report> {
-    // crates/email/src/domain/mailbox/connection/gmail.rs:22-26 maps "no such
-    // attempt" to a database error, which the API answers with 500.
+    // The Gmail connection's init looks the sign-in up with `links.attempt`
+    // and maps "no such attempt" to a database error, which the API answers
+    // with 500.
     init_with_a_spent_sign_in_is_a_client_error(Provider::Gmail).await
 }
 

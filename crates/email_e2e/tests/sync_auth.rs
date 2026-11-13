@@ -3,9 +3,12 @@
 
 use email_e2e::{DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, User, eventually};
 use serde_json::{Value, json};
+use std::time::{Duration, Instant};
 
 /// The queue the link jobs (refresh, delete) travel on.
 const LINK_MANAGER: &str = "link-manager";
+/// How long a queue keeps a job that failed before delivering it again.
+const VISIBILITY_TIMEOUT: Duration = Duration::from_secs(60);
 /// The queues whose jobs call the provider for an inbox.
 const PROVIDER_QUEUES: [&str; 5] = [
     "gmail-inbox-sync",
@@ -203,8 +206,13 @@ async fn wait_until_handled(stack: &Stack, queue: &str) -> Result<(), Report> {
     .await
 }
 
-/// No job that calls the provider was given up on.
+/// Every job that calls the provider was handled and deleted, and none was
+/// given up on. Waits for the queues to empty first: a job that is still
+/// being retried has not been given up on yet.
 async fn assert_nothing_dead_lettered(stack: &Stack) -> Result<(), Report> {
+    for queue in PROVIDER_QUEUES {
+        wait_until_handled(stack, queue).await?;
+    }
     for queue in PROVIDER_QUEUES {
         assert_eq!(
             stack.dead_letters(queue).await?,
@@ -325,9 +333,11 @@ async fn outlook_revoked_grant_asks_for_a_reconnect_that_restores_sync() -> Resu
 
 /// The periodic refresh of an inbox whose grant was revoked, with no mail
 /// arriving to reveal it: the refresh job marks the inbox `NEEDS_REAUTH` and
-/// is done; it is not retried, and running it again on the marked inbox is
-/// done at once too. When this fails, a revoked inbox stays "healthy" until
-/// mail arrives, while its refresh job is retried until it dead-letters.
+/// leaves its queue sooner than a failed job could have come back (the 60 s
+/// visibility timeout); a refresh of the marked inbox leaves the queue too,
+/// without asking Gmail for a watch, and nothing dead-letters. When this
+/// fails, a revoked inbox stays "healthy" until mail arrives, or its refresh
+/// job fails and is retried.
 #[tokio::test(flavor = "multi_thread")]
 async fn refresh_job_marks_a_revoked_gmail_grant_and_is_not_retried() -> Result<(), Report> {
     let stack = Stack::start().await?;
@@ -348,6 +358,7 @@ async fn refresh_job_marks_a_revoked_gmail_grant_and_is_not_retried() -> Result<
     assert_eq!(inbox.link().await?["needs_reauth"], false);
 
     inbox.revoke_grant()?;
+    let sent = Instant::now();
     stack.send_to_queue(LINK_MANAGER, &refresh).await?;
     let link = inbox
         .wait_for_link("the refresh to ask for a reconnect", |link| {
@@ -356,6 +367,12 @@ async fn refresh_job_marks_a_revoked_gmail_grant_and_is_not_retried() -> Result<
         .await?;
     assert_eq!(link["sync_status"], "NEEDS_REAUTH", "{link}");
     wait_until_handled(&stack, LINK_MANAGER).await?;
+    // A job that failed stays in its queue until it is delivered again.
+    let handled_in = sent.elapsed();
+    assert!(
+        handled_in < VISIBILITY_TIMEOUT,
+        "the refresh left its queue after {handled_in:?}: it was retried"
+    );
 
     stack.send_to_queue(LINK_MANAGER, &refresh).await?;
     side.deliver(&mail("Side still syncs"))?;

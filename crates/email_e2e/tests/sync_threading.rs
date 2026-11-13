@@ -72,7 +72,7 @@ async fn reply_joins_its_thread(provider: Provider) -> Result<(), Report> {
     let inbox = ada.link(provider, ada.email()).await?;
 
     let first = inbox.deliver(&mail(
-        "Grace Hopper <grace@example.com>",
+        "Grace <grace@example.com>",
         "Q3 plan",
         "Here is the plan.",
         "plan-1@example.com",
@@ -85,7 +85,7 @@ async fn reply_joins_its_thread(provider: Provider) -> Result<(), Report> {
     tick(&stack, 2);
     let second = inbox.deliver(
         &mail(
-            "Alan Turing <alan@example.com>",
+            "Alan <alan@example.com>",
             "Re: Q3 plan",
             "Looks right to me.",
             "plan-2@example.com",
@@ -95,7 +95,7 @@ async fn reply_joins_its_thread(provider: Provider) -> Result<(), Report> {
     tick(&stack, 2);
     let third = inbox.deliver(
         &mail(
-            "Barbara Liskov <barbara@example.com>",
+            "Barbara <barbara@example.com>",
             "Re: Q3 plan",
             "One change on page two.",
             "plan-3@example.com",
@@ -123,13 +123,9 @@ async fn reply_joins_its_thread(provider: Provider) -> Result<(), Report> {
     assert_eq!(
         listed,
         [
-            (
-                "barbara@example.com",
-                "Barbara Liskov",
-                "One change on page two."
-            ),
-            ("alan@example.com", "Alan Turing", "Looks right to me."),
-            ("grace@example.com", "Grace Hopper", "Here is the plan."),
+            ("barbara@example.com", "Barbara", "One change on page two."),
+            ("alan@example.com", "Alan", "Looks right to me."),
+            ("grace@example.com", "Grace", "Here is the plan."),
         ],
         "a thread lists its messages newest first, each with its own sender"
     );
@@ -146,7 +142,7 @@ async fn reply_joins_its_thread(provider: Provider) -> Result<(), Report> {
         .await?;
     assert_eq!(row["name"], "Re: Q3 plan");
     assert_eq!(row["snippet"], "One change on page two.");
-    assert_eq!(row["senderName"], "Barbara Liskov");
+    assert_eq!(row["senderName"], "Barbara");
     assert_eq!(row["isRead"], false);
     assert_eq!(inbox.previews("inbox").await?.len(), 1);
 
@@ -358,6 +354,8 @@ async fn long_thread_pages_through_every_message(provider: Provider) -> Result<(
         },
     )
     .await?;
+    // The row as it is now that every message is in.
+    let row = inbox.wait_for_preview("inbox", "Long thread").await?;
 
     let mut bodies = Vec::new();
     let mut ids = HashSet::new();

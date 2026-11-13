@@ -84,12 +84,9 @@ async fn received_message_fields_come_through(provider: Provider) -> Result<(), 
     let inbox = ada.link(provider, ada.email()).await?;
 
     let subject = "Señor café – 日本語 ✓";
-    let mut first = Mail::new("Grace Hopper <grace@example.com>", subject, "Plain first.");
-    first.to = Some(format!(
-        "Ada Lovelace <{}>, Alan Turing <alan@example.com>",
-        ada.email()
-    ));
-    first.cc = Some("Edsger Dijkstra <edsger@example.com>".to_owned());
+    let mut first = Mail::new("Grace <grace@example.com>", subject, "Plain first.");
+    first.to = Some(format!("Ada <{}>, Alan <alan@example.com>", ada.email()));
+    first.cc = Some("Edsger <edsger@example.com>".to_owned());
     first.html = Some("<div><p>Hello <b>wörld</b> – 日本語</p></div>".to_owned());
     first.message_id = Some("first-fields@example.com".to_owned());
     inbox.deliver(&first)?;
@@ -99,7 +96,7 @@ async fn received_message_fields_come_through(provider: Provider) -> Result<(), 
     let message = &thread["messages"][0];
     assert_eq!(message["subject"], subject);
     assert_eq!(message["from"]["email"], "grace@example.com");
-    assert_eq!(message["from"]["name"], "Grace Hopper");
+    assert_eq!(message["from"]["name"], "Grace");
     assert_eq!(
         addresses(&message["to"]),
         ["ada@example.com", "alan@example.com"]
@@ -107,12 +104,9 @@ async fn received_message_fields_come_through(provider: Provider) -> Result<(), 
     let alan = message["to"]
         .as_array()
         .and_then(|to| to.iter().find(|c| c["email"] == "alan@example.com"));
-    assert_eq!(
-        alan.map(|alan| &alan["name"]),
-        Some(&Value::from("Alan Turing"))
-    );
+    assert_eq!(alan.map(|alan| &alan["name"]), Some(&Value::from("Alan")));
     assert_eq!(addresses(&message["cc"]), ["edsger@example.com"]);
-    assert_eq!(message["cc"][0]["name"], "Edsger Dijkstra");
+    assert_eq!(message["cc"][0]["name"], "Edsger");
     assert_eq!(addresses(&message["bcc"]), Vec::<String>::new());
     let html = message["body_html_sanitized"].as_str().unwrap_or_default();
     assert!(
@@ -134,7 +128,7 @@ async fn received_message_fields_come_through(provider: Provider) -> Result<(), 
     // The preview shows the same sender and subject.
     let preview = inbox.wait_for_preview("inbox", subject).await?;
     assert_eq!(preview["senderEmail"], "grace@example.com");
-    assert_eq!(preview["senderName"], "Grace Hopper");
+    assert_eq!(preview["senderName"], "Grace");
 
     // A later reply is listed after the first message, by date.
     let a_minute = Duration::from_secs(60);
@@ -143,7 +137,7 @@ async fn received_message_fields_come_through(provider: Provider) -> Result<(), 
         Provider::Outlook => stack.outlook().advance_clock(a_minute),
     }
     let reply = Mail::new(
-        "Alan Turing <alan@example.com>",
+        "Alan <alan@example.com>",
         &format!("Re: {subject}"),
         "Plain second.",
     )
@@ -739,14 +733,14 @@ async fn gmail_mail_from_an_odd_address_is_still_announced() -> Result<(), Repor
     let inbox = ada.link_gmail().await?;
 
     inbox.deliver(&Mail::new(
-        &format!("José Núñez <{ODD_ADDRESS}>"),
+        &format!("José <{ODD_ADDRESS}>"),
         "From an odd address",
         "Hola.",
     ))?;
     let thread = wait_for_thread_named(&inbox, "inbox", "From an odd address").await?;
     let thread_id = thread["db_id"].as_str().unwrap_or_default().to_owned();
     assert_eq!(thread["messages"][0]["from"]["email"], ODD_ADDRESS);
-    assert_eq!(thread["messages"][0]["from"]["name"], "José Núñez");
+    assert_eq!(thread["messages"][0]["from"]["name"], "José");
 
     // The steps after contact sync still ran.
     wait_for_queue_message(
@@ -885,8 +879,13 @@ async fn gmail_attachment_keeps_its_properties_next_to_an_odd_address() -> Resul
         "document storage was asked: {asked:?}"
     );
 
+    let wanted = [
+        thread_id.as_str(),
+        "macro|grace@example.com",
+        "macro|alan@example.com",
+    ];
     let properties = eventually(
-        "the attachment's document to get its properties",
+        "the attachment's document to name its thread, sender and ordinary recipient",
         DEFAULT_TIMEOUT,
         async || {
             let values: Vec<String> = sqlx::query_scalar(
@@ -895,19 +894,12 @@ async fn gmail_attachment_keeps_its_properties_next_to_an_odd_address() -> Resul
             .bind(&document_id)
             .fetch_all(stack.db())
             .await?;
-            Ok((!values.is_empty()).then(|| values.join("\n")))
+            let properties = values.join("\n");
+            let complete = wanted.iter().all(|value| properties.contains(value));
+            Ok(complete.then_some(properties))
         },
     )
     .await?;
-    assert!(properties.contains(&thread_id), "properties: {properties}");
-    assert!(
-        properties.contains("macro|grace@example.com"),
-        "properties: {properties}"
-    );
-    assert!(
-        properties.contains("macro|alan@example.com"),
-        "properties: {properties}"
-    );
     assert!(!properties.contains("josé"), "properties: {properties}");
 
     stack.finish().await
@@ -924,7 +916,7 @@ async fn outlook_odd_addresses_do_not_cost_the_message_or_other_contacts() -> Re
     let inbox = ada.link_outlook().await?;
 
     inbox.deliver(&Mail::new(
-        &format!("José Núñez <{ODD_ADDRESS}>"),
+        &format!("José <{ODD_ADDRESS}>"),
         "From an odd address",
         "Hola.",
     ))?;
@@ -1379,7 +1371,7 @@ async fn gmail_bulk_delete_does_not_queue_behind_one_deletion() -> Result<(), Re
 
     eventually(
         "every other deletion to finish while the first one waits",
-        Duration::from_secs(45),
+        DEFAULT_TIMEOUT,
         async || {
             let left = inbox.previews("inbox").await?;
             Ok(left
