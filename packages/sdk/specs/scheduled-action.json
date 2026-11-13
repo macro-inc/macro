@@ -2723,6 +2723,17 @@
             "description": "How many items the words name were found; absent before they were\nlooked up.",
             "minimum": 0
           },
+          "names": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FoundNames",
+                "description": "Which items the words name were found, and which are left for the\nperson to pick; absent before they were looked up."
+              }
+            ]
+          },
           "stage": {
             "$ref": "#/components/schemas/DraftStage"
           }
@@ -3182,6 +3193,41 @@
           }
         }
       },
+      "FoundName": {
+        "type": "object",
+        "description": "An item found by the name the words use.",
+        "required": ["name", "kind"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name as stored."
+          }
+        }
+      },
+      "FoundNames": {
+        "type": "object",
+        "description": "The items a draft's words name, as the drafter looked them up by name.\nNames only, as the person wrote them or the items are called: never\nids.",
+        "required": ["found", "left"],
+        "properties": {
+          "found": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoundName"
+            },
+            "description": "Each the only item of its kinds with the name the words use."
+          },
+          "left": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeftName"
+            },
+            "description": "Names no item has, or several do: the draft leaves them out for the\nperson to pick."
+          }
+        }
+      },
       "GenerationStatus": {
         "type": "string",
         "description": "Where a person's suggestions are in being generated.",
@@ -3243,9 +3289,54 @@
           }
         }
       },
+      "ItemKind": {
+        "type": "string",
+        "description": "A kind of item a request can name, as the name lookup knows them.",
+        "enum": [
+          "channel",
+          "person",
+          "project",
+          "initiative",
+          "document",
+          "task",
+          "database",
+          "agent",
+          "label",
+          "tag",
+          "channel_label"
+        ]
+      },
       "KnobName": {
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
+      },
+      "LeftName": {
+        "type": "object",
+        "description": "A name the words use that the drafter couldn't settle on one item for.",
+        "required": ["name", "matches"],
+        "properties": {
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ItemKind",
+                "description": "The kind it most likely names."
+              }
+            ]
+          },
+          "matches": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many items have it: none, or several.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "The name as the words use it."
+          }
+        }
       },
       "NamedItemKind": {
         "type": "string",
