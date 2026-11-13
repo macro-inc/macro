@@ -457,8 +457,9 @@ export interface NormalizedCacheExchangeOptions {
   onCacheError?: (error: unknown, op: Operation) => void;
   /**
    * Called once a query's cache read showed nothing (a miss, a failed read,
-   * or one a newer generation fenced) and its network read was forwarded.
-   * `network-only` reads skip the cache and are not reported.
+   * or one still fenced by a newer generation after its retry) and its
+   * network read was forwarded. `network-only` reads skip the cache and are
+   * not reported.
    */
   onCacheMiss?: (op: Operation) => void;
   /**

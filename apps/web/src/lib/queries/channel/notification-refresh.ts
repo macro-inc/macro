@@ -186,9 +186,9 @@ export class ChannelNotificationRefresh {
   /**
    * The first connection's subscriptions are live, and `sent` holds the keys
    * of the reads that waited for them and went out just now, or that went
-   * out early and are read again now. A job whose
-   * readers all follow them, or whose own read is one of those, reads after
-   * this; any other may show an older read.
+   * out early and are read again now. A job whose readers all follow them,
+   * or whose own read is one of those, reads after this; any other may show
+   * an older read.
    */
   live(sent: ReadonlySet<number> = new Set()) {
     for (const [key, job] of this.jobs) {
