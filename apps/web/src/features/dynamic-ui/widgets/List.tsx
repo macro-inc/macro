@@ -93,7 +93,8 @@ const ID_FIELD_BY_TYPE: Partial<Record<EntityRef['type'], IdFieldName>> = {
   foreign_entity: 'foreignEntityRecordId',
   crm_company: 'crmCompanyId',
   calendar_event: 'calendarEventId',
-  // user / team / crm_contact / static_file have no soup item filter — skipped.
+  // user / team / crm_contact / static_file have no soup item filter; an
+  // items list still shows them, as rows loaded by id.
 };
 
 /** The card kind a ref the soup query did not return loads as, by id. */
@@ -202,21 +203,26 @@ function PlainRow(props: {
       </span>
     </>
   );
-  const rowClass = 'mx-1 flex min-w-0 items-start gap-2 rounded-xl px-2 py-2';
   return (
     <div data-card-row class="min-w-0">
       <Show
         when={props.onOpen}
         fallback={
-          <div class={cn(rowClass, props.muted && 'opacity-60')}>{body()}</div>
+          <div
+            class={cn(
+              'mx-1 flex min-w-0 items-start gap-2 rounded-xl px-2 py-2',
+              props.muted && 'opacity-60'
+            )}
+          >
+            {body()}
+          </div>
         }
       >
         {(onOpen) => (
           <button
             type="button"
             class={cn(
-              rowClass,
-              'w-full text-left touch:min-h-[44px] not-touch:hover:bg-list-hover focus-visible:bg-list-hover'
+              'mx-1 flex w-full min-w-0 items-start gap-2 rounded-xl px-2 py-2 text-left touch:min-h-[44px] not-touch:hover:bg-list-hover focus-visible:bg-list-hover'
             )}
             aria-label={`Open ${props.title}`}
             onClick={(event) => onOpen()(event)}
@@ -273,9 +279,9 @@ function ReferenceRow(props: { entity: EntityRef }) {
 }
 
 /** The icon a collection's header takes: the rows' own kind, or a mix. */
-function collectionIcon(entities: readonly EntityData[]): EntityIconSelector {
-  const kind = entities[0]?.type;
-  if (!kind || entities.some((entity) => entity.type !== kind)) return 'files';
+function collectionIcon(kinds: readonly string[]): EntityIconSelector {
+  const kind = kinds[0];
+  if (!kind || kinds.some((other) => other !== kind)) return 'files';
   return kind as EntityIconSelector;
 }
 
@@ -312,8 +318,8 @@ function Rows(props: ListProps) {
     return src.kind === 'items' ? refsToQuery(src.entities) : src.query;
   });
 
-  // `items` mode with zero resolvable refs would otherwise NIL-fill everything
-  // and return nothing — which is the correct "No items." outcome anyway.
+  // `items` mode with no soup-filterable refs NIL-fills everything and returns
+  // nothing; those refs then show as rows loaded by id (`unresolved` below).
   // `groupBy` orders the returned entities by the requested facet (the grouped
   // select flattens groups into `data.entities` in group order).
   const notificationSource = useGlobalNotificationSource();
@@ -368,7 +374,10 @@ function Rows(props: ListProps) {
     <CollectionCard
       title={props.title ?? counted()}
       subtitle={props.title ? counted() : undefined}
-      icon={collectionIcon(entities())}
+      icon={collectionIcon([
+        ...entities().map((entity) => entity.type),
+        ...unresolved().map((ref) => ref.type),
+      ])}
       count={count()}
       live={props.source.kind === 'query'}
       state="ready"
