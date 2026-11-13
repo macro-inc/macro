@@ -289,4 +289,15 @@ describe('the row above the routines list', () => {
     ).toBeTruthy();
     expect(shown()).toEqual(['pick-1']);
   });
+
+  it('counts no columns from a grid that is not laid out', async () => {
+    layOutRow('repeat(auto-fill, minmax(0px, 400px)) 128px');
+    const shown = renderRow();
+    // Past the measurement, which runs as a microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      screen.getByRole('button', { name: '4 more in Discover' })
+    ).toBeTruthy();
+    expect(shown()).toEqual(['pick-1']);
+  });
 });

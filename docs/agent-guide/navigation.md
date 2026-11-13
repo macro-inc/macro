@@ -1213,8 +1213,9 @@ replaces the list with every suggestion (AI's first, then Macro's) followed by
 the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
 **picked for you, then Macro's templates**. Every suggestion card, in the row,
-on Discover and in the sidebar dialog, is the dialog's card: 25rem wide and as
-tall as its content. The list's search narrows Discover
+on Discover and in the sidebar dialog, is the dialog's card: 25rem wide
+(narrower only in a pane too small for one) and as tall as the tallest card in
+its row. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser
 hasn't shown there; opening or leaving it marks them seen. The cards behave as
 in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.

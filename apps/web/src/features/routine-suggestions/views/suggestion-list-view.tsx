@@ -251,15 +251,16 @@ export function SuggestionRow(props: {
 }): JSX.Element {
   const [cardColumns, setCardColumns] = createSignal(ROW_CARD_COLUMNS);
   let grid: HTMLUListElement | undefined;
-  // The grid's breakpoints decide how many card columns fit; its last
-  // column is always the more cell's.
+  // The grid fits as many card columns as it has room for; its last column
+  // is always the more cell's. A grid that isn't laid out (a hidden
+  // ancestor) reports its template unexpanded, which counts nothing.
   createResizeObserver(
     () => grid,
     () => {
       if (!grid) return;
-      const count = getComputedStyle(grid)
-        .gridTemplateColumns.split(' ')
-        .filter(Boolean).length;
+      const columns = getComputedStyle(grid).gridTemplateColumns;
+      if (columns.includes('repeat(')) return;
+      const count = columns.split(' ').filter(Boolean).length;
       if (count > 1) setCardColumns(count - 1);
     }
   );
