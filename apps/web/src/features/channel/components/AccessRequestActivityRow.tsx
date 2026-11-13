@@ -106,20 +106,32 @@ export function AccessRequestActivityRow(props: {
               }
             >
               {(outcome) => (
-                <span class="truncate">
-                  Approved by{' '}
-                  <span class="font-medium text-ink">{outcome().by}</span>
-                </span>
+                <Tooltip
+                  label={`Approved by ${outcome().by}`}
+                  class="min-w-0 max-w-max truncate"
+                  as="span"
+                >
+                  <span class="truncate">
+                    Approved by{' '}
+                    <span class="font-medium text-ink">{outcome().by}</span>
+                  </span>
+                </Tooltip>
               )}
             </Match>
             <Match
               when={props.outcome.kind === 'denied' ? props.outcome : undefined}
             >
               {(outcome) => (
-                <span class="truncate">
-                  Denied by{' '}
-                  <span class="font-medium text-ink">{outcome().by}</span>
-                </span>
+                <Tooltip
+                  label={`Denied by ${outcome().by}`}
+                  class="min-w-0 max-w-max truncate"
+                  as="span"
+                >
+                  <span class="truncate">
+                    Denied by{' '}
+                    <span class="font-medium text-ink">{outcome().by}</span>
+                  </span>
+                </Tooltip>
               )}
             </Match>
             <Match when={props.outcome.kind === 'withdrawn'}>

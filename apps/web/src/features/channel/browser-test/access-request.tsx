@@ -27,6 +27,9 @@ declare global {
   }
 }
 
+// `?pane=` narrows the row to a channel pane beside other splits.
+const PANE_WIDTH = new URLSearchParams(location.search).get('pane') ?? 'none';
+
 function Fixture() {
   const [row, setRow] = createStore<RowState>({
     requesterName: 'Someone',
@@ -36,7 +39,10 @@ function Fixture() {
   window.update = (next) => setRow(next);
 
   return (
-    <div class="[--message-padding-x:12px] [--user-icon-width:32px]">
+    <div
+      class="[--message-padding-x:12px] [--user-icon-width:32px]"
+      style={{ 'max-width': PANE_WIDTH }}
+    >
       <AccessRequestActivityRow
         eventId="request-1"
         occurredAt="2026-11-12T15:04:00Z"

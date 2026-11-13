@@ -11,28 +11,33 @@ async function rowBox(page: Page) {
 }
 
 // The channel list measures a row once when it mounts, so nothing the row
-// learns afterwards may change its height.
-test('a request to join keeps its first height through every later state', async ({
-  page,
-}) => {
-  await page.goto('/access-request.html');
-  const { height } = await rowBox(page);
+// learns afterwards may change its height, in a full or a narrow pane.
+for (const pane of ['none', '320px']) {
+  test(`a request to join keeps its first height through every later state (pane ${pane})`, async ({
+    page,
+  }) => {
+    await page.goto(`/access-request.html?pane=${pane}`);
+    const { height } = await rowBox(page);
+    // Without fonts every text measures 0×0 and no line could ever wrap.
+    const name = await page.getByText('Someone', { exact: true }).boundingBox();
+    expect(name?.width).toBeGreaterThan(0);
 
-  const states: Partial<RowState>[] = [
-    { requesterName: LONG_NAME },
-    { outcome: { kind: 'pending', canAnswer: false } },
-    { outcome: { kind: 'pending', canAnswer: true } },
-    { busy: true },
-    { busy: false, outcome: { kind: 'approved', by: LONG_NAME } },
-    { outcome: { kind: 'denied', by: LONG_NAME } },
-    { outcome: { kind: 'withdrawn' } },
-    { outcome: { kind: 'unavailable' } },
-  ];
-  for (const state of states) {
-    await page.evaluate((next) => window.update(next), state);
-    expect((await rowBox(page)).height, JSON.stringify(state)).toBe(height);
-  }
-});
+    const states: Partial<RowState>[] = [
+      { requesterName: LONG_NAME },
+      { outcome: { kind: 'pending', canAnswer: false } },
+      { outcome: { kind: 'pending', canAnswer: true } },
+      { busy: true },
+      { busy: false, outcome: { kind: 'approved', by: LONG_NAME } },
+      { outcome: { kind: 'denied', by: LONG_NAME } },
+      { outcome: { kind: 'withdrawn' } },
+      { outcome: { kind: 'unavailable' } },
+    ];
+    for (const state of states) {
+      await page.evaluate((next) => window.update(next), state);
+      expect((await rowBox(page)).height, JSON.stringify(state)).toBe(height);
+    }
+  });
+}
 
 // Buttons grow to 36px on touch; the answer line grows with them.
 test('the answer buttons fit inside their line', async ({ page, isMobile }) => {
