@@ -1,0 +1,19 @@
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  s_0b87507c60cc5d::t_09e5f40d16e2c1 226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a4305cb354e6e6e8d4a848af7a0f33f0adac070b",
+  "prompts": {},
+  "sessions": {
+    "s_0b87507c60cc5d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0f05760-a1c8-411f-a252-3d7896dfbea7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
