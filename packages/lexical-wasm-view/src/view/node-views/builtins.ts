@@ -157,9 +157,11 @@ function elementProps(
   if (node.type === 'tablerow' && typeof props.height === 'number')
     dom.style.height = `${props.height}px`;
   if (node.type === 'tablecell') {
+    // Source TableCellNode.createDOM sets a span only above 1.
     for (const name of ['colSpan', 'rowSpan']) {
-      if (typeof props[name] === 'number')
-        dom.setAttribute(name.toLowerCase(), String(props[name]));
+      const span = props[name];
+      if (typeof span === 'number' && span > 1)
+        dom.setAttribute(name.toLowerCase(), String(span));
       else dom.removeAttribute(name.toLowerCase());
     }
     if (typeof props.width === 'number') dom.style.width = `${props.width}px`;
