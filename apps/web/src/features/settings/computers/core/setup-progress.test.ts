@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   forgetSetupTiming,
   formatElapsed,
+  setupFailure,
+  setupProgressLine,
   setupStages,
   setupStepStartedAt,
 } from './setup-progress';
@@ -177,6 +179,93 @@ describe('setupStages', () => {
       state: 'current',
       detail: 'Turn off or release another computer on this host to make room',
     });
+  });
+});
+
+describe('setupProgressLine', () => {
+  const stagesOf = (current: ComputerStatus, signIn: 'needed' | 'skipped') =>
+    setupStages(current, { signIn, connected: false, signedIn: false });
+
+  it('names the current stage and how long it has taken', () => {
+    expect(
+      setupProgressLine(computer, stagesOf(computer, 'needed'), '0:24')
+    ).toBe('Starting up · 0:24');
+    const billing = { ...computer, status: 'purchasing' as const };
+    expect(
+      setupProgressLine(billing, stagesOf(billing, 'needed'), '1:05')
+    ).toBe('Updating billing… · 1:05');
+  });
+
+  it('says a capacity wait is a wait for space, not a stage at work', () => {
+    const waiting = {
+      ...computer,
+      status: 'waiting_for_capacity' as const,
+      setup: undefined,
+    };
+    expect(
+      setupProgressLine(waiting, stagesOf(waiting, 'needed'), '3:10')
+    ).toBe('Waiting for space on the host · 3:10');
+  });
+
+  it('names the sign-in, without a timer, once the computer is up', () => {
+    const up = { ...computer, status: 'ready' as const, setup: undefined };
+    expect(setupProgressLine(up, stagesOf(up, 'needed'), undefined)).toBe(
+      'Sign in to Claude'
+    );
+    expect(
+      setupProgressLine(up, stagesOf(up, 'skipped'), undefined)
+    ).toBeUndefined();
+  });
+});
+
+describe('setupFailure', () => {
+  const failureOf = (current: ComputerStatus) =>
+    setupFailure(
+      current,
+      setupStages(current, {
+        signIn: 'undecided',
+        connected: false,
+        signedIn: false,
+      })
+    );
+
+  it('says which stage failed and why, in one line, with Retry', () => {
+    const failed = {
+      ...computer,
+      status: 'failed' as const,
+      setup: { step: 'creating' as const, position: 1, total: 4 },
+    };
+    Reflect.set(failed, 'failureReason', 'The host ran out of disk.');
+    expect(failureOf(failed)).toEqual({
+      message: "Couldn't create the computer: the host ran out of disk",
+      details:
+        'Retry sets it up again at no extra charge. Contact support if it fails again.',
+      retryable: true,
+    });
+  });
+
+  it('keeps an acronym the server leads with, and falls back to the stage alone', () => {
+    const failed = { ...computer, status: 'failed' as const };
+    Reflect.set(failed, 'failureReason', 'AWS refused the volume');
+    expect(failureOf(failed)?.message).toBe(
+      "Couldn't start the computer: AWS refused the volume"
+    );
+    Reflect.set(failed, 'failureReason', null);
+    expect(failureOf(failed)?.message).toBe("Couldn't start the computer");
+  });
+
+  it('sends a computer needing attention to support, without Retry', () => {
+    expect(failureOf({ ...computer, status: 'needs_attention' })).toEqual({
+      message: 'Needs attention — contact support',
+      retryable: false,
+    });
+  });
+
+  it('is nothing while setup is under way', () => {
+    expect(failureOf(computer)).toBeUndefined();
+    expect(
+      failureOf({ ...computer, status: 'waiting_for_capacity' })
+    ).toBeUndefined();
   });
 });
 

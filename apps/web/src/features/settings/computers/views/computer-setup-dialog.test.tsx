@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
   closeSettings: vi.fn(),
   invalidateAgents: vi.fn(async () => {}),
+  retry: vi.fn(async () => {}),
   mobile: false,
 }));
 
@@ -47,7 +48,10 @@ vi.mock('@queries/computers/claude', () => ({
 }));
 vi.mock('@queries/computers/computers', () => ({
   useCompleteComputerSetupMutation: () => ({ mutateAsync: vi.fn() }),
-  useRetryComputerMutation: () => ({ mutateAsync: vi.fn() }),
+  useRetryComputerMutation: () => ({
+    mutateAsync: mocks.retry,
+    isPending: false,
+  }),
 }));
 vi.mock('@queries/harnesses/harnesses', () => ({
   invalidateHarnesses: vi.fn(async () => {}),
@@ -269,4 +273,121 @@ it('drops the shared sign-in note from Bring your AI once setup has failed', () 
   expect(
     screen.queryByRole('button', { name: 'Use Macro credits instead' })
   ).toBeNull();
+});
+
+function agentStep(
+  computer: ComputerStatus,
+  options: { choice?: 'own_account' | 'macro_credits' } = {}
+) {
+  const onChoice = vi.fn();
+  render(() => (
+    <Dialog open onOpenChange={() => {}}>
+      <ActionDialogShell>
+        <ComputerSetupSteps
+          computer={computer}
+          connected={false}
+          firstName="Maya"
+          step="agent"
+          name={undefined}
+          choice={options.choice}
+          onName={vi.fn()}
+          onChoice={onChoice}
+          onStep={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </ActionDialogShell>
+    </Dialog>
+  ));
+  return onChoice;
+}
+
+const booting: ComputerStatus = {
+  ...ready,
+  status: 'setting_up',
+  setup: { step: 'booting', position: 2, total: 4 },
+  setupCompletedAt: null,
+};
+
+it('shows setup as one line beside the steps, expanding to every stage', () => {
+  agentStep(booting);
+
+  const line = screen.getByRole('button', { name: /^Starting up · \d+:\d\d$/ });
+  expect(line.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByRole('list', { name: 'Setup progress' })).toBeNull();
+
+  fireEvent.click(line);
+
+  expect(line.getAttribute('aria-expanded')).toBe('true');
+  const stages = screen
+    .getByRole('list', { name: 'Setup progress' })
+    .querySelectorAll('li');
+  expect([...stages].map((stage) => stage.textContent)).toEqual([
+    'Billing updated',
+    'Computer created',
+    expect.stringMatching(/^Starting up\d+:\d\d$/),
+    'Connecting to Macro',
+    'Sign in to Claude',
+  ]);
+});
+
+it('asks for Claude with two one-line options, and no hint under Continue', () => {
+  const onChoice = agentStep(booting);
+
+  expect(
+    screen.queryByText('Agents on this computer run Claude Code.')
+  ).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')
+  ).toBe(true);
+  expect(screen.queryByText(/to continue\.$/)).toBeNull();
+  const choice = screen.getByRole('radiogroup', {
+    name: 'Which Claude should it use?',
+  });
+  const options = choice.querySelectorAll('input[type="radio"]');
+  expect(options).toHaveLength(2);
+  fireEvent.click(screen.getByRole('radio', { name: 'Macro credits' }));
+  expect(onChoice).toHaveBeenCalledWith('macro_credits');
+});
+
+it('replaces the progress line with one banner when setup fails', () => {
+  const failed = {
+    ...booting,
+    status: 'failed' as const,
+    setup: { step: 'creating' as const, position: 1, total: 4 },
+  };
+  Reflect.set(failed, 'failureReason', 'The host ran out of disk.');
+  agentStep(failed);
+
+  expect(screen.getByRole('alert').textContent).toBe(
+    "Couldn't create the computer: the host ran out of disk"
+  );
+  expect(
+    screen.queryByRole('button', { name: /Creating the computer/ })
+  ).toBeNull();
+  expect(screen.queryByRole('list', { name: 'Setup progress' })).toBeNull();
+  expect(screen.queryByText(/no extra charge/)).toBeNull();
+
+  const details = screen.getByRole('button', { name: 'Details' });
+  fireEvent.click(details);
+  expect(details.getAttribute('aria-expanded')).toBe('true');
+  expect(
+    screen.getByText(
+      'Retry sets it up again at no extra charge. Contact support if it fails again.'
+    )
+  ).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry setup' }));
+  expect(mocks.retry).toHaveBeenCalledWith('computer-1');
+  // The agent form stays usable below the banner.
+  expect(screen.getByLabelText('Agent name')).toBeTruthy();
+});
+
+it('offers no Retry to a computer waiting on support', () => {
+  agentStep({ ...booting, status: 'needs_attention' });
+
+  expect(screen.getByRole('alert').textContent).toBe(
+    'Needs attention — contact support'
+  );
+  expect(screen.queryByRole('button', { name: 'Retry setup' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Details' })).toBeNull();
 });
