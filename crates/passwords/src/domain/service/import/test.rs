@@ -242,8 +242,25 @@ async fn invalid_batch_structure_and_limits_create_nothing() {
     cases[1]
         .folders
         .push(serde_json::from_value(serde_json::json!({"key":"a","name":"Duplicate"})).unwrap());
-    cases[2].items = (0..26).map(|_| batch().items.remove(0)).collect();
-    cases[3].folders = (0..201).map(|_| batch().folders.remove(0)).collect();
+    // Distinct keys, so only the count limits can refuse these two.
+    cases[2].items = (0..26)
+        .map(|index| {
+            let mut item = batch().items.remove(0);
+            item.source_key = format!("item-{index}").try_into().unwrap();
+            item.folder_key = None;
+            item
+        })
+        .collect();
+    cases[2].folders = vec![];
+    cases[3].folders = (0..201)
+        .map(|index| {
+            serde_json::from_value(
+                serde_json::json!({"key": format!("folder-{index}"), "name": "Synthetic"}),
+            )
+            .unwrap()
+        })
+        .collect();
+    cases[3].items[0].folder_key = None;
     for case in cases {
         assert!(matches!(
             service
@@ -447,8 +464,21 @@ async fn match_names_finds_visible_items_by_name_and_bounds_the_request() {
     ));
     assert!(matches!(
         service
-            .match_names(&actor, team, vec!["x".repeat(vault::MAX_NAME_BYTES + 1)])
+            .match_names(
+                &actor,
+                team,
+                vec!["x".repeat(vault::MAX_NAME_BYTES * MAX_LOWERCASE_GROWTH + 1)]
+            )
             .await,
         Err(Error::Invalid)
     ));
+}
+
+#[tokio::test]
+async fn match_names_accepts_a_lowercased_name_longer_than_the_original() {
+    let (service, _, _, actor, team) = fixture();
+    // 100 'İ' (2 bytes each) is a valid name; lower-cased it is 300 bytes.
+    let name = "İ".repeat(100).to_lowercase();
+    assert!(name.len() > vault::MAX_NAME_BYTES);
+    assert!(service.match_names(&actor, team, vec![name]).await.is_ok());
 }

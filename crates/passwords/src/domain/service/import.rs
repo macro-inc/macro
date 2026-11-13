@@ -17,6 +17,10 @@ fn derive_v7(import_id: Uuid, namespace: &str, key: &str) -> Uuid {
     Uuid::from_bytes(bytes)
 }
 
+/// How much longer, in UTF-8 bytes, lower case can make a name ('İ', two
+/// bytes, lower-cases to three): match names arrive lower-cased by the client.
+const MAX_LOWERCASE_GROWTH: usize = 3;
+
 impl PasswordService {
     /// Visible items named like the given names, for an import's duplicate check.
     #[tracing::instrument(skip_all, err, name = "passwords.import.match", fields(
@@ -30,7 +34,9 @@ impl PasswordService {
     ) -> Result<Vec<ItemView>, Error> {
         self.membership(actor, team).await?;
         if names.len() > vault::MAX_IMPORT_MATCH_NAMES
-            || names.iter().any(|name| name.len() > vault::MAX_NAME_BYTES)
+            || names
+                .iter()
+                .any(|name| name.len() > vault::MAX_NAME_BYTES * MAX_LOWERCASE_GROWTH)
         {
             return Err(Error::Invalid);
         }
