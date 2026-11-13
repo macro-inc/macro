@@ -1,0 +1,24 @@
+apps/web/src/observability/flow.test.tsx
+  s_39eee246ac6b4a::t_f66b323324dd65 290-293,297-308
+  s_39eee246ac6b4a::t_51c6ca335e6d6e 294-296
+apps/web/src/observability/flow.tsx
+  s_39eee246ac6b4a::t_f66b323324dd65 201-206,256
+.agents/skills/instrumentation/SKILL.md
+  s_39eee246ac6b4a::t_7df4bd1b12b32d 101-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9c3b96f6bbe80673800c7d3930ad04fb6e29fb58",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
