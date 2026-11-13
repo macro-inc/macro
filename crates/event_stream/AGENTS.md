@@ -23,6 +23,8 @@ event (`lagged`, `revoked`, `reset`).
 
 - `src/domain/catalog.rs`: `public_event_registry!` — the one registration
   that makes a family public (catalog, wildcards, OpenAPI `WebhookEvent`).
+  `catalog/test.rs` checks it against every producer's `exposure()` using
+  `catalog/exposure_samples.json`.
 - `src/domain/access.rs`: audience rules per class and the caches.
 - `src/domain/stream.rs`: open, replay, live, close.
 - `src/topics.rs`: public topics (`DeclaredMacroEvent`), the log's topics
@@ -47,8 +49,12 @@ event (`lagged`, `revoked`, `reset`).
 - Make a family public: its producer's `exposure()` returns `Public` →
   add its block to `public_event_registry!` → move its topic from
   `INTERNAL_TOPICS` into both `declare_topics!` lists → add its arm in
-  `crates/webhook/src/inbound/kafka_consumer.rs` (`ingest_public_event`).
-  New families ship `Preview` (flag `public-event-stream`) first.
+  `crates/webhook/src/inbound/kafka_consumer.rs` (`ingest_public_event`) →
+  enable the producer's schema feature in this crate's `schema` feature →
+  add samples of every event type to
+  `src/domain/catalog/exposure_samples.json` (or list an always-internal
+  type in `ALWAYS_INTERNAL` in `catalog/test.rs`). New families ship
+  `Preview` (flag `public-event-stream`) first.
 - New access-changing event: return its `Invalidation` in
   `domain/invalidations.rs`; if its topic is internal, add it to
   `ACCESS_CHANGE_TOPICS` and `LogMacroEvent`.

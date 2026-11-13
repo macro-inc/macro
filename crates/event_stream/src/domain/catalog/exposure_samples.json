@@ -1,0 +1,1224 @@
+{
+  "Document": [
+    {
+      "event_type": "document.created",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "document_name": "notes",
+        "file_type": null,
+        "project_id": null,
+        "sub_type": null,
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "document.updated",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "document_name": "renamed",
+        "previous_project_id": null,
+        "project_id": null,
+        "file_type": null,
+        "share_permission_updated": false
+      }
+    },
+    {
+      "event_type": "document.deleted",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "actor_user_id": "macro|owner@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "document.copied",
+      "metadata": {
+        "document_id": "22222222-2222-2222-2222-222222222222",
+        "source_document_id": "11111111-1111-1111-1111-111111111111",
+        "source_version_id": null,
+        "owner": "macro|owner@example.com",
+        "document_name": "notes (copy)",
+        "file_type": null,
+        "project_id": null,
+        "sub_type": null
+      }
+    },
+    {
+      "event_type": "document.interaction",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "reason": "edited"
+      }
+    },
+    {
+      "event_type": "document.updated",
+      "metadata": {
+        "appearance_change": [
+          {},
+          {}
+        ],
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "document_name": null,
+        "previous_project_id": null,
+        "project_id": null,
+        "file_type": null,
+        "share_permission_updated": false
+      }
+    },
+    {
+      "event_type": "document.content_uploaded",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "owner": "macro|owner@example.com",
+        "file_type": "pdf",
+        "document_version_id": "v1"
+      }
+    },
+    {
+      "event_type": "document.sync_content_updated",
+      "metadata": {
+        "document_id": "11111111-1111-1111-1111-111111111111",
+        "file_type": "md",
+        "document_version_id": null,
+        "actor": "macro|editor@example.com"
+      }
+    }
+  ],
+  "Channel": [
+    {
+      "event_type": "channel.created",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com",
+        "channel_type": "team",
+        "channel_name": "general",
+        "participant_user_ids": [
+          "macro|owner@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "channel.updated",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com",
+        "previous_name": "general",
+        "channel_name": "announcements"
+      }
+    },
+    {
+      "event_type": "channel.deleted",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com"
+      }
+    },
+    {
+      "event_type": "channel.participant_added",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "channel_type": "team",
+        "added_by": "macro|owner@example.com",
+        "added_user_ids": [
+          "macro|member@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "channel.participant_removed",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "channel_type": "team",
+        "removed_by": "macro|owner@example.com",
+        "removed_user_ids": [
+          "macro|member@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "channel.picture_changed",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com"
+      }
+    },
+    {
+      "event_type": "channel.access_requested",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "request_id": "11111111-1111-1111-1111-111111111111",
+        "requester_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "channel.deleted",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com"
+      }
+    },
+    {
+      "event_type": "channel.deleted",
+      "metadata": {
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor": "macro|owner@example.com",
+        "participant_user_ids": [
+          "macro|owner@example.com",
+          "macro|editor@example.com"
+        ]
+      }
+    }
+  ],
+  "Call": [
+    {
+      "event_type": "call.started",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.ended",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.participant_joined",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.participant_left",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.recording_ready",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.summarized",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444"
+      }
+    },
+    {
+      "event_type": "call.ringing",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.answered",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.declined",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.invited",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "recipient_user_id": "macro|editor@example.com"
+      }
+    }
+  ],
+  "Message": [
+    {
+      "event_type": "message.posted",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "sender": "macro|member@example.com",
+        "triggered_by": null,
+        "content": "hello",
+        "mentions": [],
+        "attachments": [],
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.posted",
+      "metadata": {
+        "parent": {
+          "type": "document",
+          "id": "11111111-1111-1111-1111-111111111111"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "sender": "macro|member@example.com",
+        "triggered_by": null,
+        "content": "hello",
+        "mentions": [],
+        "attachments": [],
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.patched",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "content": "hello (edited)",
+        "edited_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.deleted",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "deleted_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "message.attachment_created",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "attachments": []
+      }
+    },
+    {
+      "event_type": "message.attachment_removed",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "actor": "macro|member@example.com",
+        "attachments": []
+      }
+    },
+    {
+      "event_type": "message.mentioned",
+      "metadata": {
+        "parent": {
+          "type": "channel",
+          "id": "44444444-4444-4444-4444-444444444444"
+        },
+        "message_id": "55555555-5555-5555-5555-555555555555",
+        "thread_id": null,
+        "root_id": "55555555-5555-5555-5555-555555555555",
+        "sender": "macro|member@example.com",
+        "content": "hello bot",
+        "mentioned": {
+          "entity_type": "bot",
+          "entity_id": "bot|66666666-6666-6666-6666-666666666666"
+        },
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    }
+  ],
+  "AgentSession": [
+    {
+      "event_type": "agent_session.opened",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "model": "claude",
+        "harness": "claude_code"
+      }
+    },
+    {
+      "event_type": "agent_session.turn_started",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "turn": 0,
+        "action_id": "01a1d41c-c724-70a4-94af-f2094e5e7b3b",
+        "actor": "macro|owner@macro.com",
+        "announcement_message_id": "00000000-0000-0000-0000-000000000004"
+      }
+    },
+    {
+      "event_type": "agent_session.turn_ended",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "turn": 0,
+        "action_id": "01a1d41c-c725-7a6c-851d-77fbedce560a",
+        "actor": "macro|owner@macro.com",
+        "announcement_message_id": "00000000-0000-0000-0000-000000000004",
+        "stop_reason": "end_turn",
+        "queued_remaining": 0
+      }
+    },
+    {
+      "event_type": "agent_session.command_rejected",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "action_id": "01a1d41c-c725-7aba-9dba-4015ff8e6cb2",
+        "actor": "macro|owner@macro.com",
+        "announcement_message_id": "00000000-0000-0000-0000-000000000004",
+        "failure": {
+          "code": "ai_billing_unavailable",
+          "message": "AI usage validation is temporarily unavailable. Please try again.",
+          "retryable": true
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.settled",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "last_turn": {
+          "turn": 0,
+          "action_id": "01a1d41c-c725-7608-8abd-07bbebd0ded0",
+          "actor": "macro|owner@macro.com",
+          "announcement_message_id": "00000000-0000-0000-0000-000000000004",
+          "stop_reason": "end_turn",
+          "excerpt": "Done."
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.waiting_for_input",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "turn": 1,
+        "action_id": "01a1d41c-c725-7f4a-aa60-fe973dd87179",
+        "announcement_message_id": null,
+        "question": "Which approach?"
+      }
+    },
+    {
+      "event_type": "agent_session.input_received",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "turn": 1,
+        "action_id": "01a1d41c-c725-719e-9d08-23f7b2c1e136"
+      }
+    },
+    {
+      "event_type": "agent_session.mentioned",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "action_id": "01a1d41c-c725-7a27-bfc6-57852e8b79f6",
+        "mentioned_by": "macro|owner@macro.com",
+        "mentioned": [
+          "macro|reviewer@macro.com"
+        ],
+        "origin_message_id": null
+      }
+    },
+    {
+      "event_type": "agent_session.stopped",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        },
+        "reason": "transport closed",
+        "turn_in_flight": null
+      }
+    },
+    {
+      "event_type": "agent_session.renamed",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.deleted",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": {
+            "parent": {
+              "type": "channel",
+              "id": "00000000-0000-0000-0000-000000000001"
+            },
+            "channel_id": "00000000-0000-0000-0000-000000000001",
+            "thread_id": "00000000-0000-0000-0000-000000000002",
+            "originating_message_id": "00000000-0000-0000-0000-000000000003"
+          },
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        }
+      }
+    },
+    {
+      "event_type": "agent_session.deleted",
+      "metadata": {
+        "identity": {
+          "session_id": "00000000-0000-0000-0000-00000000000a",
+          "session_name": "Fix the flaky test",
+          "bot_id": "00000000-0000-0000-0000-00000000b07a",
+          "bot_name": "Macro Coder",
+          "owner_id": "macro|owner@macro.com",
+          "origin": null,
+          "audience": [
+            "macro|owner@macro.com"
+          ],
+          "source": "user"
+        }
+      }
+    }
+  ],
+  "User": [
+    {
+      "event_type": "user.picture_changed",
+      "metadata": {
+        "user_id": "macro|owner@example.com",
+        "file_id": "f1",
+        "url": null
+      }
+    }
+  ],
+  "Project": [
+    {
+      "event_type": "project.created",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "name": "Plans",
+        "parent_project_id": null,
+        "created_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "project.updated",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "name": "Renamed",
+        "previous_parent_id": null,
+        "parent_id": null,
+        "share_permission_updated": true
+      }
+    },
+    {
+      "event_type": "project.deleted",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "deleted_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ],
+        "deleted_document_ids": [],
+        "deleted_chat_ids": []
+      }
+    },
+    {
+      "event_type": "project.restored",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "restored_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    },
+    {
+      "event_type": "project.permanently_deleted",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "purged_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ],
+        "purged_document_ids": [],
+        "purged_chat_ids": []
+      }
+    },
+    {
+      "event_type": "project.permanently_deleted",
+      "metadata": {
+        "project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "33333333-3333-3333-3333-333333333333",
+        "actor_user_id": "macro|editor@example.com",
+        "parent_project_id": null,
+        "purged_project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ],
+        "purged_document_ids": [],
+        "purged_chat_ids": []
+      }
+    },
+    {
+      "event_type": "project.uploaded",
+      "metadata": {
+        "root_project_id": "22222222-2222-2222-2222-222222222222",
+        "owner": "macro|owner@example.com",
+        "name": "Upload",
+        "parent_project_id": null,
+        "project_ids": [
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    }
+  ],
+  "Chat": [
+    {
+      "event_type": "chat.created",
+      "metadata": {
+        "chat_id": "chat-1",
+        "owner": "macro|owner@example.com",
+        "name": "Chat",
+        "project_id": "22222222-2222-2222-2222-222222222222"
+      }
+    },
+    {
+      "event_type": "chat.updated",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "name": "New",
+        "previous_project_id": null,
+        "project_id": null,
+        "share_permission_updated": false
+      }
+    },
+    {
+      "event_type": "chat.deleted",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "chat.permanently_deleted",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "chat.restored",
+      "metadata": {
+        "chat_id": "chat-1",
+        "actor_user_id": "macro|editor@example.com",
+        "project_id": null
+      }
+    },
+    {
+      "event_type": "chat.copied",
+      "metadata": {
+        "chat_id": "chat-2",
+        "source_chat_id": "chat-1",
+        "owner": "macro|owner@example.com",
+        "name": "Copy"
+      }
+    },
+    {
+      "event_type": "chat.message_sent",
+      "metadata": {
+        "chat_id": "chat-1",
+        "message_id": "m1",
+        "role": "user",
+        "model": "m",
+        "actor_user_id": "macro|editor@example.com",
+        "attachment_count": 0
+      }
+    },
+    {
+      "event_type": "chat.message_deleted",
+      "metadata": {
+        "chat_id": "chat-1",
+        "message_id": "m1"
+      }
+    }
+  ],
+  "Database": [
+    {
+      "event_type": "database.created",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "owner": "macro|owner@example.com",
+        "name": "Leads",
+        "created_at": "2026-01-02T03:04:05Z",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "database.renamed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "name": "New"
+      }
+    },
+    {
+      "event_type": "database.trashed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "event_type": "database.restored",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "database.purged",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "event_type": "database.tables_changed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "tables": [
+          {
+            "table_id": "11111111-1111-1111-1111-111111111111",
+            "version": 7
+          }
+        ]
+      }
+    },
+    {
+      "event_type": "database.sharing_changed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "database.appearance_changed",
+      "metadata": {
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "change": {
+          "from": null,
+          "to": {}
+        }
+      }
+    }
+  ],
+  "Form": [
+    {
+      "event_type": "form.created",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "database_id": "00000000-0000-0000-0000-000000000001",
+        "owner": "macro|owner@example.com",
+        "name": "Survey",
+        "created_at": "2026-01-02T03:04:05Z",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "form.renamed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        },
+        "name": "New"
+      }
+    },
+    {
+      "event_type": "form.trashed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002"
+      }
+    },
+    {
+      "event_type": "form.restored",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "form.purged",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002"
+      }
+    },
+    {
+      "event_type": "form.sharing_changed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": {
+          "actor": "macro|editor@example.com"
+        }
+      }
+    },
+    {
+      "event_type": "form.response_submitted",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "response_id": "11111111-1111-1111-1111-111111111111",
+        "submitted_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "form.appearance_changed",
+      "metadata": {
+        "form_id": "00000000-0000-0000-0000-000000000002",
+        "attribution": null,
+        "change": {
+          "from": {},
+          "to": null
+        }
+      }
+    }
+  ],
+  "Initiative": [
+    {
+      "event_type": "initiative.created",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003",
+        "attribution": {
+          "actor": "macro|editor@example.com",
+          "on_behalf_of": null
+        },
+        "occurred_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "initiative.updated",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003",
+        "attribution": null,
+        "occurred_at": "2026-01-02T03:04:05Z"
+      }
+    },
+    {
+      "event_type": "initiative.appearance_changed",
+      "metadata": {
+        "change": {
+          "initiative_id": "00000000-0000-0000-0000-000000000003",
+          "attribution": {
+            "actor": "macro|editor@example.com",
+            "on_behalf_of": null
+          },
+          "occurred_at": "2026-01-02T03:04:05Z"
+        },
+        "appearance": {
+          "from": null,
+          "to": {}
+        }
+      }
+    },
+    {
+      "event_type": "initiative.purged",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003",
+        "audience_user_ids": [
+          "macro|owner@example.com",
+          "macro|editor@example.com"
+        ]
+      }
+    },
+    {
+      "event_type": "initiative.purged",
+      "metadata": {
+        "initiative_id": "00000000-0000-0000-0000-000000000003"
+      }
+    }
+  ],
+  "Property": [
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "DOCUMENT",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": {
+          "type": "String",
+          "value": "new"
+        },
+        "previous_value": null
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "CALL_RECORD",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": null,
+        "previous_value": {
+          "type": "Number",
+          "value": 1.0
+        }
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "DOCUMENT",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": {
+          "type": "SelectOption",
+          "value": [
+            "11111111-1111-1111-1111-111111111111"
+          ]
+        },
+        "previous_value": null
+      }
+    },
+    {
+      "event_type": "entity_property.updated",
+      "metadata": {
+        "entity_property_id": "11111111-1111-1111-1111-111111111111",
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "USER",
+        "property_definition_id": "22222222-2222-2222-2222-222222222222",
+        "actor_user_id": "macro|editor@example.com",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "value": {
+          "type": "Boolean",
+          "value": true
+        }
+      }
+    },
+    {
+      "event_type": "entity_properties.cleared",
+      "metadata": {
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "PROJECT",
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "entity_properties.cleared",
+      "metadata": {
+        "entity_id": "11111111-1111-1111-1111-111111111111",
+        "entity_type": "CALENDAR_EVENT",
+        "actor_user_id": null
+      }
+    }
+  ],
+  "CallRecord": [
+    {
+      "event_type": "call.record_updated",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": null,
+        "actor_user_id": "macro|editor@example.com",
+        "custom_name": "Standup",
+        "share_with_team": null
+      }
+    },
+    {
+      "event_type": "call.record_deleted",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": "44444444-4444-4444-4444-444444444444",
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.record_deleted",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "channel_id": null,
+        "actor_user_id": "macro|editor@example.com"
+      }
+    },
+    {
+      "event_type": "call.record_imported",
+      "metadata": {
+        "call_id": "55555555-5555-5555-5555-555555555555",
+        "owner": "macro|owner@example.com"
+      }
+    }
+  ],
+  "GithubPullRequest": [
+    {
+      "event_type": "github_pull_request.updated",
+      "metadata": {
+        "github_key": "Macro-Inc/Macro/pull/1",
+        "foreign_entity_ids": [
+          "11111111-1111-1111-1111-111111111111",
+          "22222222-2222-2222-2222-222222222222"
+        ]
+      }
+    },
+    {
+      "event_type": "github_pull_request.updated",
+      "metadata": {
+        "github_key": "macro-inc/macro/pull/2",
+        "foreign_entity_ids": []
+      }
+    }
+  ]
+}

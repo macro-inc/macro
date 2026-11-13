@@ -138,6 +138,21 @@ macro_rules! public_event_registry {
             $( is_public_payload::<$topic, $payload>(); )+
         };
 
+        /// Each union family's name and the events registered under it.
+        #[cfg(test)]
+        const UNION_FAMILIES: &[(&str, &[&str])] = &[
+            $( (stringify!($variant), &[$($name),+]), )+
+        ];
+
+        /// Runs `visitor` with the topic enum of the union family named
+        /// `family`, so tests can decode that family's broker events.
+        #[cfg(test)]
+        fn visit_union_family<V: test::TopicVisitor>(family: &str, visitor: V) -> Option<V::Output> {
+            match family {
+                $( stringify!($variant) => Some(visitor.visit::<$topic>()), )+
+                _ => None,
+            }
+        }
     };
 }
 
