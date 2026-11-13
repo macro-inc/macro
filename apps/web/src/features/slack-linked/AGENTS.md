@@ -14,9 +14,14 @@ Behind the `enable-slack-linked` flag. Architecture:
 - `slack-linked.tsx`: production wiring (shared queries + split navigation).
 - `context/slack-linked-context.tsx`: the capability contract tests fake
   (`tests/fake-capabilities.ts`).
-- `views/slack-page.tsx`: accounts (Connect card, session-ended cards, one
-  workspace strip per signed-in workspace), the catalogue grouped by workspace,
-  disconnect, and the sign-in dialog.
+- `slack-linked-page.tsx`: the page's entry. It holds the state
+  (`primitives/slack-page.ts`) and is the one device switch (FE-70): desktop
+  `views/slack-page.tsx` (sticky search, each row's kind and last activity),
+  touch `views/mobile/slack-page.tsx` (rows keep to the name and status;
+  phones show the add buttons as icons). Both render
+  `views/shared/slack-page-parts.tsx`: accounts (Connect card, session-ended
+  cards, one workspace strip per signed-in workspace), the catalogue grouped
+  by workspace, disconnect, and the sign-in dialog.
 - `primitives/sign-in-flow.ts` + `components/sign-in-dialog.tsx`: sign-in.
   Email and Slack's emailed code first (web, desktop, phones); Slack's own page
   in a Macro desktop window for SSO workspaces (`finish_on_desktop`) and

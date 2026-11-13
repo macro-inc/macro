@@ -4,16 +4,18 @@ import type { ExternalChatProvider } from '@service-storage/generated/schemas/ex
 import { useSearchParams } from '@solidjs/router';
 import type { Component, JSX } from 'solid-js';
 import { z } from 'zod';
+import type { SlackHandoff } from '../slack-linked/primitives/slack-page';
 import { SlackLinked } from '../slack-linked/slack-linked';
-import type { SlackHandoff } from '../slack-linked/views/slack-page';
 import { WhatsAppLinked } from '../whatsapp-linked/whatsapp-linked';
 
 export type ProviderPageProps = {
+  /** The page's large title, on touch where the top bar floats; else nothing. */
+  heading: JSX.Element;
   /** The chats in Macro, on touch where there is no sidebar; else nothing. */
   inMacro: JSX.Element;
 };
 
-function ProviderHeading(props: { label: string }) {
+function ProviderHeading(props: { label: string; heading: JSX.Element }) {
   return (
     <>
       <ViewShell.TopBar>
@@ -21,9 +23,7 @@ function ProviderHeading(props: { label: string }) {
           {props.label}
         </h1>
       </ViewShell.TopBar>
-      <ViewShell.Header class="hidden touch:block touch:pb-2">
-        <h1 class="text-lg font-semibold text-ink">{props.label}</h1>
-      </ViewShell.Header>
+      {props.heading}
     </>
   );
 }
@@ -36,7 +36,7 @@ function WhatsAppPage(props: ProviderPageProps) {
     setSearch({ whatsappPairing: undefined }, { replace: true });
   return (
     <>
-      <ProviderHeading label="WhatsApp" />
+      <ProviderHeading label="WhatsApp" heading={props.heading} />
       <ViewShell.Content
         class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
         style={{ '--mobile-content-inset-top': '0px' }}
@@ -69,7 +69,7 @@ function SlackPage(props: ProviderPageProps) {
     setSearch({ slackLogin: undefined }, { replace: true });
   return (
     <>
-      <ProviderHeading label="Slack" />
+      <ProviderHeading label="Slack" heading={props.heading} />
       <ViewShell.Content
         class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
         style={{ '--mobile-content-inset-top': '0px' }}

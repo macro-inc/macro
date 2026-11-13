@@ -22,6 +22,8 @@ function ConversationRow(props: {
   status?: JSX.Element;
   error?: string;
   pinActions?: boolean;
+  /** Show the kind and last activity. */
+  details: boolean;
 }) {
   return (
     <div
@@ -50,9 +52,11 @@ function ConversationRow(props: {
           )}
         </For>
       </span>
-      <span class="min-w-0 shrink-[2] truncate text-xs text-ink-extra-muted touch:hidden">
-        {conversationMetadata(props.conversation)}
-      </span>
+      <Show when={props.details}>
+        <span class="min-w-0 shrink-[2] truncate text-xs text-ink-extra-muted">
+          {conversationMetadata(props.conversation)}
+        </span>
+      </Show>
       <span class="ml-auto flex min-w-0 shrink-0 items-center gap-2">
         <Show when={props.error}>
           <span role="alert" class="truncate text-xs text-failure-ink">
@@ -74,11 +78,11 @@ function ConversationRow(props: {
             {props.actions}
           </span>
         </Show>
-        <Show when={props.conversation.lastActivityAt}>
+        <Show when={props.details && props.conversation.lastActivityAt}>
           {(at) => (
             <time
               dateTime={at()}
-              class="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-ink-extra-muted touch:hidden"
+              class="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-ink-extra-muted"
             >
               {formatActivityDate(at())}
             </time>
@@ -101,6 +105,10 @@ export function ConversationList(props: {
   errors: Readonly<Record<string, string>>;
   onAdd: (conversation: SlackConversation) => void;
   onOpenChat: (chatId: string) => void;
+  /** Show each conversation's kind and last activity. */
+  details: boolean;
+  /** Spell out "Add to Macro" next to its icon. */
+  addLabel: boolean;
 }) {
   return (
     <ul class="flex flex-col" aria-label={props.label}>
@@ -121,6 +129,7 @@ export function ConversationList(props: {
                 conversation={conversation}
                 error={props.errors[conversation.remoteId]}
                 pinActions={adding()}
+                details={props.details}
                 status={
                   <Switch>
                     <Match when={own()}>
@@ -144,9 +153,9 @@ export function ConversationList(props: {
                         onClick={() => props.onAdd(conversation)}
                       >
                         <PlusIcon class="size-3.5" />
-                        <span class="mobile:hidden">
+                        <Show when={props.addLabel}>
                           {adding() ? 'Adding…' : 'Add to Macro'}
-                        </span>
+                        </Show>
                       </Button>
                     }
                   >
@@ -177,6 +186,8 @@ export function ConversationList(props: {
 /** Conversations Macro can't hold, with the reason for each. */
 export function UnsupportedConversationList(props: {
   conversations: SlackConversation[];
+  /** Show each conversation's kind and last activity. */
+  details: boolean;
 }) {
   return (
     <ul class="flex flex-col" aria-label="Can't be added">
@@ -185,6 +196,7 @@ export function UnsupportedConversationList(props: {
           <li>
             <ConversationRow
               conversation={conversation}
+              details={props.details}
               status={
                 conversation.cannotAddReason
                   ? cannotAddLabel(conversation.cannotAddReason)

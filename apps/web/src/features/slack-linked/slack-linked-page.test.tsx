@@ -8,14 +8,19 @@ import {
 } from '@solidjs/testing-library';
 import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SlackLinkedProvider } from '../context/slack-linked-context';
-import type { SlackAccount } from '../core/account';
-import type { SlackConversation } from '../core/conversation';
-import type { SlackLoginWorkspace } from '../core/login';
-import { createFakeSlack } from '../tests/fake-capabilities';
-import { type SlackHandoff, SlackPage } from './slack-page';
+import { SlackLinkedProvider } from './context/slack-linked-context';
+import type { SlackAccount } from './core/account';
+import type { SlackConversation } from './core/conversation';
+import type { SlackLoginWorkspace } from './core/login';
+import type { SlackHandoff } from './primitives/slack-page';
+import { SlackLinkedPage } from './slack-linked-page';
+import { createFakeSlack } from './tests/fake-capabilities';
 
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+const device = vi.hoisted(() => ({ touch: false, phone: false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.phone }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 const toast = vi.hoisted(() => ({ success: vi.fn(), failure: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 
@@ -32,6 +37,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  device.touch = false;
+  device.phone = false;
   cleanup();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
@@ -43,7 +50,7 @@ function mount(
 ) {
   render(() => (
     <SlackLinkedProvider value={fake.capabilities}>
-      <SlackPage handoff={handoff} />
+      <SlackLinkedPage handoff={handoff} />
     </SlackLinkedProvider>
   ));
 }
@@ -381,6 +388,30 @@ describe('SlackPage catalogue', () => {
       expect(fake.capabilities.add).toHaveBeenCalledWith(SHARED_LAUNCH)
     );
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
+  });
+
+  it('shows details on desktop and keeps touch rows to the name', () => {
+    const catalogue = { refreshing: false, conversations: [SHARED_LAUNCH] };
+    mount(createFakeSlack({ accounts: [ACME], catalogue }));
+    expect(screen.getByText('acme.slack.com')).toBeTruthy();
+    expect(document.querySelector('time')).toBeTruthy();
+    expect(screen.getByText('Add workspace')).toBeTruthy();
+    cleanup();
+
+    device.touch = true;
+    mount(createFakeSlack({ accounts: [ACME], catalogue }));
+    expect(screen.queryByText('acme.slack.com')).toBeNull();
+    expect(document.querySelector('time')).toBeNull();
+    expect(screen.getByText('Add to Macro')).toBeTruthy();
+    expect(screen.getByText('Add workspace')).toBeTruthy();
+    cleanup();
+
+    device.phone = true;
+    mount(createFakeSlack({ accounts: [ACME], catalogue }));
+    expect(screen.queryByText('Add to Macro')).toBeNull();
+    expect(screen.queryByText('Add workspace')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add to Macro' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add workspace' })).toBeTruthy();
   });
 
   it('words a refused add on its row', async () => {

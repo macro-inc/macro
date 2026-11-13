@@ -3,8 +3,9 @@ import { externalChatRoute } from '@app/routes/routes';
 import { useUserId } from '@core/context/user';
 import { createOpenSections } from '../whatsapp-linked/primitives/open-sections';
 import { SlackLinkedProvider } from './context/slack-linked-context';
+import type { SlackHandoff } from './primitives/slack-page';
 import { createSlackLinkedCapabilities } from './queries/production-capabilities';
-import { type SlackHandoff, SlackPage } from './views/slack-page';
+import { SlackLinkedPage } from './slack-linked-page';
 
 /** The Slack page wired to the app: shared queries and split navigation. */
 export function SlackLinked(props: { handoff?: SlackHandoff }) {
@@ -19,7 +20,7 @@ export function SlackLinked(props: { handoff?: SlackHandoff }) {
   });
   return (
     <SlackLinkedProvider value={capabilities}>
-      <SlackPage handoff={props.handoff} />
+      <SlackLinkedPage handoff={props.handoff} />
     </SlackLinkedProvider>
   );
 }
