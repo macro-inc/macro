@@ -117,6 +117,7 @@ it('turns provider pictures into static file URLs and leaves hidden ones absent'
       mutations: ['reaction', 'edit', 'delete'],
       mutationWindowSeconds: 900,
       attachmentTypes: ['image/png'],
+      threads: false,
     },
   } satisfies ExternalChatDetail;
   client.detail.mockResolvedValue(ok(detail));
