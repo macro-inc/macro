@@ -28,6 +28,7 @@ export const session = {
   messages,
   turn: () => metadata().turn,
   quoteSelection: () => undefined,
+  runtimeRefusal: () => undefined,
 };
 export const useOptionalAgentSession = () => session;
 export const useAgentSession = () => session;

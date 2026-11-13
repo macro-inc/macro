@@ -7,7 +7,7 @@ test('a tool group opens under the pointer while the reply streams below it', as
   isMobile,
 }) => {
   await page.goto('/transcript.html');
-  const group = page.getByRole('button', { name: 'Called 2 tools' });
+  const group = page.getByRole('button', { name: /^Use[ds] 2 tools/ });
   await expect(group).toBeVisible({ timeout: 30_000 });
   // The transcript follows the streaming answer, carrying the group upward.
   const following = (await group.boundingBox())!;
@@ -30,6 +30,9 @@ test('a tool group opens under the pointer while the reply streams below it', as
 
   await expect(group).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('region', { name: 'Tool calls' })).toBeVisible();
+  // The press can land a streamed line after `pressed` was read, so the
+  // position to hold is where the group opened.
+  const opened = (await group.boundingBox())!;
   // Keep streaming well past the press before checking the group stayed put.
   const sentences = () =>
     page.evaluate(
@@ -38,6 +41,6 @@ test('a tool group opens under the pointer while the reply streams below it', as
   const streamed = await sentences();
   await expect.poll(sentences).toBeGreaterThan(streamed + 10);
   await expect(group).toHaveAttribute('aria-expanded', 'true');
-  expect((await group.boundingBox())!.y).toBeCloseTo(pressed.y, 0);
+  expect((await group.boundingBox())!.y).toBeCloseTo(opened.y, 0);
   await page.screenshot({ path: test.info().outputPath('opened.png') });
 });
