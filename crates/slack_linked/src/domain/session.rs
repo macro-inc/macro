@@ -110,6 +110,11 @@ impl SessionService {
         self.repository.replace_catalogue(scope, catalogue).await
     }
 
+    /// The account's lifecycle state and consent generation.
+    pub async fn consent(&self, scope: SessionScope) -> ExternalChatResult<(AccountState, i64)> {
+        self.repository.consent(scope).await
+    }
+
     /// The added chats the account observes.
     pub async fn observed_chats(
         &self,

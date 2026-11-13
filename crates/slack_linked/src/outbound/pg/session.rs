@@ -264,6 +264,13 @@ impl SessionRepository for PgSlackRepository {
         tx.commit().await.map_err(failure)
     }
 
+    async fn consent(&self, scope: SessionScope) -> ExternalChatResult<(AccountState, i64)> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope, false).await?;
+        tx.commit().await.map_err(failure)?;
+        Ok((account.state, account.generation))
+    }
+
     async fn observed_chats(&self, scope: SessionScope) -> ExternalChatResult<Vec<ObservedChat>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope, false).await?;

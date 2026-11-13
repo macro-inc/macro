@@ -519,6 +519,60 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .await
     .expect("the delete arrives");
 
+    // The owner disconnects without signing out of Slack, then signs in
+    // again: the running session closes and the account reconnects.
+    let account = service.accounts(&alice).await.unwrap().accounts[0].clone();
+    service
+        .disconnect(
+            &alice,
+            account.id,
+            account.authorization_generation,
+            false,
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let sockets = slack.socket_connections();
+    let again = service
+        .submit_session(
+            &alice,
+            &SessionSubmission {
+                source: SessionSource::Manual,
+                cookie: COOKIE.to_owned(),
+                cookie_ds: None,
+                tokens: vec![SessionTokenInput {
+                    token: TOKEN.to_owned(),
+                    team_id: Some(OWN_TEAM.to_owned()),
+                }],
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    wait_for_rows(&pool, WAIT, || async {
+        let login = service
+            .login(&alice, again.id, SendAuthority::Human)
+            .await
+            .unwrap();
+        matches!(login.step, LoginStep::Done { .. }).then_some(())
+    })
+    .await
+    .expect("signing in again finishes");
+    assert!(
+        slack.wait_for_socket_connections(sockets + 1, WAIT).await,
+        "the account reconnects with the new session"
+    );
+    wait_for_rows(&pool, WAIT, || async {
+        sqlx::query_scalar!("SELECT state FROM slack_account WHERE user_id = $1", ALICE)
+            .fetch_one(&pool)
+            .await
+            .ok()
+            .filter(|state| state == "connected")
+    })
+    .await
+    .expect("the account is connected again");
+    assert!(slack.calls_of("auth.signout").is_empty());
+
     // Slack revokes the session: logged out, credentials wiped, chat kept.
     slack.end_session(TOKEN, "token_revoked");
     let state = wait_for_rows(&pool, WAIT, || async {

@@ -127,8 +127,11 @@ impl<Connector: SlackConnector, Keys: Secrets> AccountRunner for SlackAccounts<C
             }
         };
         let scope = lease.scope;
+        // The Slack session lives exactly as long as this run.
+        let session_stop = control.stop.child_token();
+        let _session_guard = session_stop.clone().drop_guard();
         let outcome = self
-            .open(&lease, control.stop.clone())
+            .open(&lease, session_stop)
             .instrument(span.clone())
             .await;
         let connected = match outcome {
@@ -146,6 +149,7 @@ impl<Connector: SlackConnector, Keys: Secrets> AccountRunner for SlackAccounts<C
         let mut running = Running {
             accounts: self,
             scope,
+            generation: lease.generation,
             session: connected.session,
         };
         let result = running.serve(connected.events, control).await;
@@ -197,7 +201,7 @@ impl<Connector: SlackConnector, Keys: Secrets> SlackAccounts<Connector, Keys> {
         }
         let connected = self
             .connector
-            .connect(credentials, stop.child_token())
+            .connect(credentials, stop)
             .await
             .map_err(from_slack)?;
         self.sessions
@@ -224,6 +228,8 @@ impl<Connector: SlackConnector, Keys: Secrets> SlackAccounts<Connector, Keys> {
 struct Running<'a, Connector: SlackConnector, Keys> {
     accounts: &'a SlackAccounts<Connector, Keys>,
     scope: SessionScope,
+    /// The consent generation this session was opened for.
+    generation: i64,
     session: Connector::Session,
 }
 
@@ -269,13 +275,17 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             AccountSignal::Read => self.read_marks().await,
             AccountSignal::History => self.history().await,
             AccountSignal::Changed | AccountSignal::Resync => {
-                let lease_state = self
+                // Disconnected, signed out or signed in again: the next run
+                // opens what the account is now.
+                let (state, generation) = self
                     .accounts
                     .sessions
-                    .observed_chats(self.scope)
+                    .consent(self.scope)
                     .await
                     .map_err(from_domain)?;
-                drop(lease_state);
+                if !state.is_active() || generation != self.generation {
+                    return Err(Stop::Exit(AccountExit::Released));
+                }
                 self.refresh_catalogue().await?;
                 self.work().await
             }

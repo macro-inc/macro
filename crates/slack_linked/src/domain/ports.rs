@@ -357,6 +357,11 @@ pub trait SessionRepository: Send + Sync {
         scope: super::events::SessionScope,
         catalogue: &super::events::Catalogue,
     ) -> ExternalChatResult<()>;
+    /// The account's lifecycle state and consent generation.
+    async fn consent(
+        &self,
+        scope: super::events::SessionScope,
+    ) -> ExternalChatResult<(super::models::AccountState, i64)>;
     /// The added chats the account observes, with their sync cursors.
     async fn observed_chats(
         &self,
