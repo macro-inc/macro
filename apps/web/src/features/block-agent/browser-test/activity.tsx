@@ -8,7 +8,7 @@ import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { UserMessageBubble } from '@ui';
 import { err, ok } from 'neverthrow';
-import { onMount } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Message } from '../component/AgentMessage';
 import { PROMPT, playTurn, savedExecution, turn } from './activity-turn';
@@ -38,30 +38,36 @@ const queryClient = new QueryClient({
 });
 
 function Turn() {
+  let scroller: HTMLElement | undefined;
   let section: HTMLElement | undefined;
   onMount(() => {
     // Follow the turn's tail while it runs, as the transcript does.
     const observer = new ResizeObserver(() => {
-      if (turn.inFlight()) window.scrollTo(0, document.body.scrollHeight);
+      if (turn.inFlight() && scroller) {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
     });
     if (section) observer.observe(section);
+    onCleanup(() => observer.disconnect());
   });
   return (
-    <section ref={section} aria-label="Agent session" class="min-w-0 py-6">
-      <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
-        {/* The prompt as the transcript's bubble shows it, without the
-            app's user and layout contexts a prompt message reads. */}
-        <div class="flex w-full flex-col items-end">
-          <UserMessageBubble>
-            <p class="whitespace-pre-wrap">{PROMPT}</p>
-          </UserMessageBubble>
+    <main ref={scroller} class="h-dvh overflow-y-auto">
+      <section ref={section} aria-label="Agent session" class="min-w-0 py-6">
+        <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+          {/* The prompt as the transcript's bubble shows it, without the
+              app's user and layout contexts a prompt message reads. */}
+          <div class="flex w-full flex-col items-end">
+            <UserMessageBubble>
+              <p class="whitespace-pre-wrap">{PROMPT}</p>
+            </UserMessageBubble>
+          </div>
         </div>
-      </div>
-      <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
-        <Message message={turn.message()} inFlight={turn.inFlight()} />
-      </div>
-      <div hidden data-turn={turn.done() ? 'done' : 'live'} />
-    </section>
+        <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+          <Message message={turn.message()} inFlight={turn.inFlight()} />
+        </div>
+        <div hidden data-turn={turn.done() ? 'done' : 'live'} />
+      </section>
+    </main>
   );
 }
 

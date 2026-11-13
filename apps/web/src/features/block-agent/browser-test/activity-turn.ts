@@ -21,10 +21,9 @@ import { createStore, reconcile } from 'solid-js/store';
 
 export const SESSION_ID = '019a0000-0000-7000-8000-0000000000a1';
 
-/** One SDK operation a program runs: its running and finished wording. */
+/** One SDK operation a program runs, named as the harness's catalog names it. */
 type Operation = {
-  running: string;
-  done: string;
+  label: string;
   ms: number;
   /** Runs alongside the operations next to it that also set this. */
   parallel?: boolean;
@@ -54,15 +53,12 @@ type Beat =
     };
 
 const op = (
-  running: string,
-  done: string,
+  label: string,
   ms = 450,
   extra?: Pick<Operation, 'parallel' | 'fails'>
-): Operation => ({ running, done, ms, ...extra });
-const together = (count: number, running: string, done: string, ms: number) =>
-  Array.from({ length: count }, () =>
-    op(running, done, ms, { parallel: true })
-  );
+): Operation => ({ label, ms, ...extra });
+const together = (count: number, label: string, ms: number) =>
+  Array.from({ length: count }, () => op(label, ms, { parallel: true }));
 
 export const PROMPT =
   "Please forward the overdue invoice from our hosting vendor to Sam. Also draft me an email to our CI provider asking for a call to renegotiate our plan, since we're running far more CI than we used to.";
@@ -71,7 +67,7 @@ const BEATS: Beat[] = [
   { kind: 'text', text: "I'll take care of that." },
   {
     kind: 'program',
-    operations: [op('Searching emails', 'Searched emails', 700)],
+    operations: [op('Search email', 700)],
   },
   { kind: 'text', text: 'Let me gather the invoice and contacts first.' },
   { kind: 'lookup' },
@@ -79,14 +75,14 @@ const BEATS: Beat[] = [
     kind: 'program',
     line: 'Looking for the overdue invoice…',
     operations: [
-      op('Searching emails', 'Searched emails', 500),
-      ...together(3, 'Reading an email thread', 'Read an email thread', 1800),
-      op('Listing attachments', 'Listed attachments', 400),
-      op('Reading an attachment', 'Read an attachment', 700),
-      op('Searching emails', 'Searched emails'),
-      op('Reading an email thread', 'Read an email thread'),
-      op('Searching documents', 'Searched documents'),
-      op('Reading a document', 'Read a document'),
+      op('Search email', 500),
+      ...together(3, 'Read email thread', 1800),
+      op('List attachments', 400),
+      op('Read attachment', 700),
+      op('Search email'),
+      op('Read email thread'),
+      op('Search documents'),
+      op('Read document'),
     ],
   },
   {
@@ -101,12 +97,12 @@ const BEATS: Beat[] = [
     kind: 'program',
     line: "Finding Sam's contact details…",
     operations: [
-      op('Searching people', 'Searched people'),
-      ...together(2, 'Reading a profile', 'Read a profile', 1200),
-      op('Searching contacts', 'Searched contacts', 400),
-      op('Reading a contact', 'Read a contact', 400),
-      op('Searching channels', 'Searched channels', 400),
-      ...together(2, 'Reading a channel thread', 'Read a channel thread', 1200),
+      op('Search people'),
+      ...together(2, 'Read profile', 1200),
+      op('Search contacts', 400),
+      op('Read contact', 400),
+      op('Search channels', 400),
+      ...together(2, 'Read channel thread', 1200),
     ],
   },
   {
@@ -127,16 +123,16 @@ const BEATS: Beat[] = [
     kind: 'program',
     line: 'Reading CI usage reports…',
     operations: [
-      op('Searching documents', 'Searched documents', 400),
-      ...together(4, 'Reading a document', 'Read a document', 2400),
-      op('Searching emails', 'Searched emails', 400),
-      ...together(3, 'Reading an email thread', 'Read an email thread', 1800),
-      ...together(2, 'Opening a link', 'Opened a link', 1400),
-      op('Searching channels', 'Searched channels', 400),
-      op('Reading a channel thread', 'Read a channel thread', 350),
-      op('Reading a channel thread', 'Read a channel thread', 350),
-      op('Reading a channel thread', 'Read a channel thread', 350),
-      op('Reading a spreadsheet', 'Read a spreadsheet', 600),
+      op('Search documents', 400),
+      ...together(4, 'Read document', 2400),
+      op('Search email', 400),
+      ...together(3, 'Read email thread', 1800),
+      ...together(2, 'Open link', 1400),
+      op('Search channels', 400),
+      op('Read channel thread', 350),
+      op('Read channel thread', 350),
+      op('Read channel thread', 350),
+      op('Read spreadsheet', 600),
     ],
   },
   {
@@ -172,32 +168,32 @@ const BEATS: Beat[] = [
     kind: 'program',
     line: 'Checking the CI plan and account contacts…',
     operations: [
-      op('Searching contacts', 'Searched contacts', 400),
-      ...together(2, 'Reading a contact', 'Read a contact', 1200),
-      op('Searching emails', 'Searched emails', 400),
-      op('Reading an email thread', 'Read an email thread', 350),
-      op('Reading an email thread', 'Read an email thread', 350),
-      op('Reading an email thread', 'Read an email thread', 350),
-      op('Reading an email thread', 'Read an email thread', 350),
-      op('Searching documents', 'Searched documents', 400),
-      ...together(2, 'Reading a document', 'Read a document', 1200),
-      op('Reading a calendar', 'Read a calendar', 400),
-      op('Listing events', 'Listed events', 400),
-      op('Reading an event', 'Read an event', 400),
+      op('Search contacts', 400),
+      ...together(2, 'Read contact', 1200),
+      op('Search email', 400),
+      op('Read email thread', 350),
+      op('Read email thread', 350),
+      op('Read email thread', 350),
+      op('Read email thread', 350),
+      op('Search documents', 400),
+      ...together(2, 'Read document', 1200),
+      op('Read calendar', 400),
+      op('List events', 400),
+      op('Read event', 400),
     ],
   },
   {
     kind: 'program',
     line: 'Drafting the forward to Sam…',
     operations: [
-      op('Reading an email thread', 'Read an email thread', 400),
-      op('Creating a draft', 'Created a draft', 600),
-      op('Attaching a file', 'Attached a file', 600),
-      op('Reading a draft', 'Read a draft', 400),
-      op('Updating a draft', 'Update a draft failed', 700, { fails: true }),
-      op('Reading an email thread', 'Read an email thread', 400),
-      op('Searching emails', 'Searched emails', 400),
-      op('Reading a draft', 'Read a draft', 400),
+      op('Read email thread', 400),
+      op('Create draft', 600),
+      op('Attach file', 600),
+      op('Read draft', 400),
+      op('Update draft', 700, { fails: true }),
+      op('Read email thread', 400),
+      op('Search email', 400),
+      op('Read draft', 400),
     ],
   },
   {
@@ -208,27 +204,27 @@ const BEATS: Beat[] = [
     kind: 'program',
     line: 'Drafting both emails…',
     operations: [
-      op('Creating a draft', 'Created a draft', 600),
-      op('Attaching a file', 'Attached a file', 600),
-      op('Reading a draft', 'Read a draft', 400),
-      op('Creating a draft', 'Created a draft', 600),
-      op('Reading a draft', 'Read a draft', 400),
-      op('Searching contacts', 'Searched contacts', 400),
-      op('Reading a contact', 'Read a contact', 400),
+      op('Create draft', 600),
+      op('Attach file', 600),
+      op('Read draft', 400),
+      op('Create draft', 600),
+      op('Read draft', 400),
+      op('Search contacts', 400),
+      op('Read contact', 400),
     ],
   },
   {
     kind: 'program',
-    operations: [op('Reading a draft', 'Read a draft', 500)],
+    operations: [op('Read draft', 500)],
   },
   {
     kind: 'program',
     line: 'Checking the drafts…',
     operations: [
-      ...together(2, 'Reading a draft', 'Read a draft', 900),
-      op('Searching emails', 'Searched emails', 400),
-      op('Reading an email thread', 'Read an email thread', 400),
-      op('Listing drafts', 'Listed drafts', 400),
+      ...together(2, 'Read draft', 900),
+      op('Search email', 400),
+      op('Read email thread', 400),
+      op('List drafts', 400),
     ],
   },
   {
@@ -533,7 +529,7 @@ export async function playTurn(options: { speed: number; summarize: boolean }) {
           operation,
           entry: {
             id: next + offset,
-            label: operation.running,
+            label: operation.label,
             status: 'running' as const,
           },
         }));
@@ -544,10 +540,7 @@ export async function playTurn(options: { speed: number; summarize: boolean }) {
       for (const [position, { operation, entry }] of batch.entries()) {
         await sleep(position === 0 ? longest - (batch.length - 1) * 150 : 150);
         const saved = activity.find((item) => item.id === entry.id);
-        if (saved) {
-          saved.label = operation.done;
-          saved.status = operation.fails ? 'failed' : 'completed';
-        }
+        if (saved) saved.status = operation.fails ? 'failed' : 'completed';
         save({});
       }
       next = end;

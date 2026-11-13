@@ -79,7 +79,8 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   const calls = session.getByRole('region', { name: 'Tool calls' });
   await expect(calls).toBeVisible();
   await expect(calls.getByText('Timed out')).toBeVisible();
-  await expect(calls.getByLabel('Update a draft failed')).toBeVisible();
+  await expect(calls.getByLabel('Update draft', { exact: true })).toBeVisible();
+  await expect(calls.getByText('Failed', { exact: true })).toHaveCount(1);
   // Once it has opened, nothing is cut off behind a scroll.
   await expect
     .poll(() =>
