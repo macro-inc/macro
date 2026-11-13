@@ -483,31 +483,7 @@ export class CacheWorkerCore {
       }
     }
 
-    // A typed search registers nothing and writes nothing, so the generation
-    // checks and operation teardowns that fence other reads do not order it.
-    // After an engine restart those fences sit between it and the head of the
-    // replayed backlog. It can then run before a write queued ahead of it:
-    // its rows are only older, and that write's cache change refreshes them.
-    let searchEnd = this.queue.findIndex((queued) =>
-      stopsTypedSearch(queued.request)
-    );
-    if (searchEnd === -1) searchEnd = this.queue.length;
-    // The rows that search named cross the same fences, but they are kept by
-    // the list, so they never run before a write sent ahead of them.
-    let writeAhead = this.queue
-      .slice(0, segmentEnd)
-      .some((queued) => queued.priority === CACHE_WRITE_PRIORITY);
-    for (let i = segmentEnd; i < searchEnd; i += 1) {
-      const candidate = this.queue[i];
-      const selected = this.queue[index];
-      if (!candidate || !selected) continue;
-
-      const crossesFences =
-        isTypedSearch(candidate.request) ||
-        (!writeAhead && isTypedSearchRowRead(candidate.request));
-      if (crossesFences && candidate.priority > selected.priority) index = i;
-      writeAhead ||= candidate.priority === CACHE_WRITE_PRIORITY;
-    }
+    index = this.pickPastFences(index, segmentEnd);
 
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
@@ -530,6 +506,38 @@ export class CacheWorkerCore {
         this.collectArrivalsThenDrain();
         this.resolveDrainWaitersIfIdle();
       });
+  }
+
+  /**
+   * A typed search registers nothing and writes nothing, so the generation
+   * checks and operation teardowns that fence other reads do not order it.
+   * After an engine restart those fences sit between it and the head of the
+   * replayed backlog. It can then run before a write queued ahead of it:
+   * its rows are only older, and that write's cache change refreshes them.
+   * The rows that search named cross the same fences, but they are kept by
+   * the list, so they never run before a write sent ahead of them.
+   */
+  private pickPastFences(selectedIndex: number, segmentEnd: number): number {
+    let index = selectedIndex;
+    let searchEnd = this.queue.findIndex((queued) =>
+      stopsTypedSearch(queued.request)
+    );
+    if (searchEnd === -1) searchEnd = this.queue.length;
+    let writeAhead = this.queue
+      .slice(0, segmentEnd)
+      .some((queued) => queued.priority === CACHE_WRITE_PRIORITY);
+    for (let i = segmentEnd; i < searchEnd; i += 1) {
+      const candidate = this.queue[i];
+      const selected = this.queue[index];
+      if (!candidate || !selected) continue;
+
+      const crossesFences =
+        isTypedSearch(candidate.request) ||
+        (!writeAhead && isTypedSearchRowRead(candidate.request));
+      if (crossesFences && candidate.priority > selected.priority) index = i;
+      writeAhead ||= candidate.priority === CACHE_WRITE_PRIORITY;
+    }
+    return index;
   }
 
   /**
