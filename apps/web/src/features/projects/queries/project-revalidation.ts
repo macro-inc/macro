@@ -34,10 +34,11 @@ export async function refreshProjectQueries(
 }
 
 /**
- * Reads a mounted project again when an activity push or a Soup websocket
- * reconnect revalidates it. Nothing reads it on a timer or on focus, so a
- * share, unshare or membership change reaches an open project only with a
- * later push or a reopen.
+ * Reads a mounted project again whenever the activity registry revalidates:
+ * an activity push, the Soup websocket connecting or reconnecting, or one of
+ * the app's own project writes (`refreshProjectQueries`). Nothing reads it on
+ * a timer or on focus, so a share, unshare or membership change reaches an
+ * open project only with one of those or a reopen.
  */
 export function registerProjectRevalidation(
   client: () => Client,
