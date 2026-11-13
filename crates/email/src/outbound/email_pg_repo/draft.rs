@@ -151,9 +151,12 @@ pub(super) async fn insert_message_in_transaction(
     .map_err(anyhow::Error::from)?;
     let was_missing = existing.is_none();
     if was_missing {
+        // A handle is retired once a send attempt carried it, or once the
+        // owner discarded its draft; a late save must not mint it again.
         let retired = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM email_send_attempts WHERE (link_id=$1 OR $1=ANY(draft_link_ids))
-               AND ($2=ANY(draft_handles) OR $3=ANY(draft_handles))) AS "retired!""#,
+            r#"SELECT (EXISTS(SELECT 1 FROM email_send_attempts WHERE (link_id=$1 OR $1=ANY(draft_link_ids))
+               AND ($2=ANY(draft_handles) OR $3=ANY(draft_handles)))
+               OR EXISTS(SELECT 1 FROM email_draft_client_discards WHERE link_id=$1 AND client_id=$3)) AS "retired!""#,
             link_id, message_db_id, input.draft_client_id,
         ).fetch_one(&mut **tx).await.map_err(anyhow::Error::from)?;
         if retired {

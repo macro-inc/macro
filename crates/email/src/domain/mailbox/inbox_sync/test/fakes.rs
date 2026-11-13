@@ -26,6 +26,7 @@ pub(super) enum Call {
     Add(Vec<String>),
     Remove(Vec<String>),
     SetRead(bool),
+    SetStarred(bool),
     ThreadUpdate,
     Commit,
     Rollback,
@@ -342,6 +343,10 @@ impl InboxSyncLabelTransaction for Fake {
     async fn set_read(&mut self, link: Uuid, id: Uuid, read: bool) -> Result<(), Failure> {
         assert_eq!((link, id), (LINK, MESSAGE));
         self.step("set_read", Call::SetRead(read))
+    }
+    async fn set_starred(&mut self, link: Uuid, id: Uuid, starred: bool) -> Result<(), Failure> {
+        assert_eq!((link, id), (LINK, MESSAGE));
+        self.step("set_starred", Call::SetStarred(starred))
     }
     async fn update_thread(&mut self, link: Uuid, thread: Uuid) -> Result<(), Failure> {
         assert_eq!((link, thread), (LINK, THREAD));

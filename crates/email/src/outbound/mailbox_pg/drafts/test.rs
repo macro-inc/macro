@@ -370,7 +370,7 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
         },files:Vec::new(),removals:Vec::new()},
         draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),app_revision:Some(lease.revision as u64)}),
         submission_started:matches!(stage,DraftStage::Submitting | DraftStage::Confirming),
-        completed_files:0,completed_removals:0,transfer:None,
+        completed_files:0,completed_removals:0,transfer:None,resubmissions:0,
     }
 }
 
@@ -603,10 +603,17 @@ async fn cancellation_that_wins_before_submission_prevents_delivery(db: PgPool) 
 async fn deletion_retains_a_fenced_remote_cleanup_intent(db: PgPool) {
     let (sync, repo, input, link) = setup(&db, true).await;
     assert!(
-        repo.delete_draft_message(input.db_id, input.thread_db_id, &[link], Some(ACTOR), 0)
-            .await
-            .unwrap()
-            .is_some()
+        repo.delete_draft_message(
+            input.db_id,
+            input.thread_db_id,
+            &[link],
+            Some(ACTOR),
+            0,
+            true
+        )
+        .await
+        .unwrap()
+        .is_some()
     );
     let row=sqlx::query!("SELECT d.delete_requested,m.provider_id,f.is_present FROM email_mailbox_drafts d JOIN email_messages m ON m.id = d.message_id JOIN email_message_mailbox_facts f ON f.id = m.id WHERE m.id = $1",input.db_id).fetch_one(&db).await.unwrap();
     assert!(row.delete_requested);
@@ -665,7 +672,8 @@ async fn a_discard_while_the_worker_writes_a_save_runs_after_that_write(db: PgPo
                 input.thread_db_id,
                 &[link],
                 Some(ACTOR),
-                0
+                0,
+                true
             )
             .await
             .unwrap()

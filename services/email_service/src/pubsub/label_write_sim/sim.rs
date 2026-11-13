@@ -11,9 +11,9 @@ mod model;
 mod test;
 
 use super::fake_gmail::{Kind, Logged, PauseAt, Reply};
-use super::fake_sqs::Ack;
 use super::wiring::{self, LabelOp};
 use super::world::{self, MESSAGES, THREADS, TRACKED, WORK, World};
+use crate::pubsub::test_support::fake_sqs::Ack;
 use aws_sdk_sqs::types::{Message, MessageSystemAttributeName};
 use email::domain::models::mailbox_action::MailboxAction;
 use email::domain::ports::EmailService;

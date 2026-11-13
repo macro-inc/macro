@@ -18,11 +18,14 @@ pub async fn fetch_history_id_for_link(
     let normalized_email = email_address.to_lowercase();
     let db_provider = DbUserProvider::mirror(provider);
 
-    let result = sqlx::query!(
+    // An inner join: a link whose backfill hasn't stored a cursor yet has no
+    // history row, and reads as no cursor rather than a NULL the column type
+    // can't hold.
+    let history_id = sqlx::query_scalar!(
         r#"
         SELECT gh.history_id
         FROM email_links l
-        LEFT JOIN email_gmail_histories gh ON l.id = gh.link_id
+        JOIN email_gmail_histories gh ON l.id = gh.link_id
         WHERE l.email_address = $1 AND l.provider = $2
         "#,
         normalized_email,
@@ -31,8 +34,7 @@ pub async fn fetch_history_id_for_link(
     .fetch_optional(pool)
     .await?;
 
-    // Extract the history_id field from the result
-    Ok(result.map(|r| r.history_id))
+    Ok(history_id)
 }
 
 #[tracing::instrument(skip(executor), err)]

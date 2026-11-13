@@ -30,7 +30,10 @@ pub async fn handle_operation_error<Q: InboxSyncQueue>(
     operation: InboxSyncOperation,
     error: EmailApiError,
 ) -> ProcessingError {
-    if !matches!(error, EmailApiError::RateLimited { .. }) {
+    // A Gmail outage can outlast the primary queue's three receives, after
+    // which the work would be dead-lettered with the cursor already past it,
+    // so transient failures wait in the retry queue like rate limits.
+    if !error.is_transient() {
         return processing_error(error);
     }
 
@@ -68,13 +71,14 @@ fn detail(error: EmailApiError) -> DetailedError {
     // here rather than silently falling into a catch-all.
     let reason = match error {
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
+        EmailApiError::Transient { .. } | EmailApiError::CredentialsUnavailable { .. } => {
+            FailureReason::GmailApiUnavailable
+        }
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
         EmailApiError::Forbidden
         | EmailApiError::NotFound
         | EmailApiError::Conflict
-        | EmailApiError::Transient { .. }
-        | EmailApiError::CredentialsUnavailable { .. }
         | EmailApiError::SendRejected { .. }
         | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };

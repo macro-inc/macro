@@ -13,7 +13,7 @@ use email::domain::scheduled_delivery::state::{self as delivery, DeliveryClaim};
 use email::domain::scheduled_delivery::{
     ClaimedDelivery, DELIVERY_LEASE_SECONDS, DeliveryMode, DeliveryPause,
     PREPARATION_RETRY_SECONDS, PreparationError, RECONCILIATION_DELAY_SECONDS,
-    ScheduledDeliveryRepo, ScheduledMessageSender, SubmissionError,
+    ScheduledDeliveryRepo, ScheduledMessageSender, SentLookup, SubmissionError,
     attachments::{ApprovedAttachments, AttachmentSnapshotMismatch},
 };
 use email::domain::send_attempt::{PreparedSendContentUnavailable, SendSnapshot};
@@ -113,6 +113,7 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                         send_lateness_ms = (Utc::now() - delivery.schedule.send_time).num_milliseconds().max(0),
                         "email delivery claim acquired");
                     ClaimedDelivery {
+                        lookups: delivery.lookups,
                         mode: if delivery.requires_reconciliation {
                             DeliveryMode::Reconcile
                         } else {
@@ -130,6 +131,15 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
 
     async fn release(&self, claim: &ScheduledClaim) -> anyhow::Result<()> {
         delivery::release_preparation(&self.db, &claim.delivery, PREPARATION_RETRY_SECONDS).await
+    }
+
+    async fn record_absent_lookup(&self, claim: &ScheduledClaim) -> anyhow::Result<()> {
+        delivery::record_absent_lookup(&self.db, &claim.delivery, RECONCILIATION_DELAY_SECONDS)
+            .await
+    }
+
+    async fn release_for_resend(&self, claim: &ScheduledClaim) -> anyhow::Result<bool> {
+        delivery::release_for_resend(&self.db, &claim.delivery).await
     }
 
     async fn pause(&self, claim: &ScheduledClaim, reason: DeliveryPause) -> anyhow::Result<()> {
@@ -301,16 +311,16 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
         Ok(prepared.delivery)
     }
 
-    async fn reconcile(&self, claim: &ScheduledClaim) -> anyhow::Result<Option<SentDelivery>> {
+    async fn reconcile(&self, claim: &ScheduledClaim) -> anyhow::Result<SentLookup<SentDelivery>> {
         let Some(header) = claim.delivery.message_id_header.as_deref() else {
-            return Ok(None);
+            return Ok(SentLookup::Unsearchable);
         };
         let Some(ids) = self
             .email_api
             .find_sent_message(claim.link.id, header)
             .await?
         else {
-            return Ok(None);
+            return Ok(SentLookup::Absent);
         };
         let (mut message, _) = email_db_client::messages::get::get_message_to_send(
             &self.db,
@@ -326,7 +336,7 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
             claim.delivery.schedule.message_id,
         )
         .await?;
-        Ok(Some(SentDelivery {
+        Ok(SentLookup::Found(SentDelivery {
             message,
             attachments: Some(attachments),
         }))

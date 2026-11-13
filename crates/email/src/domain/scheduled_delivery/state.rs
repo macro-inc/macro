@@ -1,4 +1,5 @@
 //! Durable claim decisions over storage facts; SQL retains relational guards.
+use super::LookupHistory;
 use models_email::service::message::ScheduledMessage;
 use uuid::Uuid;
 
@@ -16,6 +17,8 @@ pub struct DeliveryClaim {
     pub message_id_header: Option<String>,
     /// Whether a provider submission may already have happened.
     pub requires_reconciliation: bool,
+    /// What lookups found since the last submission, and earlier resends.
+    pub lookups: LookupHistory,
     /// Immutable approved content, when admitted through GraphQL.
     /// Attachment identities retained for every scheduled send.
     pub approved_attachments: serde_json::Value,
@@ -42,6 +45,10 @@ pub struct ScheduleFacts {
     pub delivery_message_id: Option<String>,
     /// Stored recovery state.
     pub delivery_status: String,
+    /// Lookups that found no sent copy since the last submission.
+    pub delivery_absent_lookups: i16,
+    /// Submissions repeated after lookups found no sent copy.
+    pub delivery_resends: i16,
     /// Approved attachment identities.
     pub approved_attachments: serde_json::Value,
     /// Atomic storage availability result.
@@ -109,6 +116,19 @@ pub trait DeliveryTransitions: Sync {
         claim: &DeliveryClaim,
         retry: i32,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Count a lookup that found no sent copy, keeping the outcome
+    /// unconfirmed until `retry` seconds pass.
+    fn record_absent_lookup(
+        &self,
+        claim: &DeliveryClaim,
+        retry: i32,
+    ) -> impl Future<Output = anyhow::Result<u64>> + Send;
+    /// Return the delivery to sending, keeping its Message-ID, while the claim
+    /// is still live.
+    fn release_for_resend(
+        &self,
+        claim: &DeliveryClaim,
+    ) -> impl Future<Output = anyhow::Result<u64>> + Send;
     /// Persist the selected paused state.
     fn pause_delivery(
         &self,
@@ -192,6 +212,10 @@ pub async fn claim_delivery(
         token,
         message_id_header: header,
         requires_reconciliation: reconcile,
+        lookups: LookupHistory {
+            absent_lookups: u16::try_from(schedule.delivery_absent_lookups).unwrap_or(0),
+            resends: u16::try_from(schedule.delivery_resends).unwrap_or(0),
+        },
         approved_attachments: schedule.approved_attachments,
         approved_snapshot: attempt.as_ref().and_then(|attempt| attempt.request.clone()),
         prepared_content: attempt.and_then(|attempt| attempt.prepared_content),
@@ -239,6 +263,35 @@ pub async fn pause_delivery(
     retry_seconds: i32,
 ) -> anyhow::Result<()> {
     pool.pause_delivery(claim, unconfirmed, retry_seconds).await
+}
+
+/// Count a lookup that found no sent copy.
+#[tracing::instrument(
+    target = "email_db_client::messages::scheduled::delivery",
+    skip(pool, claim),
+    err
+)]
+pub async fn record_absent_lookup(
+    pool: &impl DeliveryTransitions,
+    claim: &DeliveryClaim,
+    retry_seconds: i32,
+) -> anyhow::Result<()> {
+    pool.record_absent_lookup(claim, retry_seconds).await?;
+    Ok(())
+}
+
+/// Return a delivery whose lookups found no sent copy to sending; whether this
+/// claim still owned it.
+#[tracing::instrument(
+    target = "email_db_client::messages::scheduled::delivery",
+    skip(pool, claim),
+    err
+)]
+pub async fn release_for_resend(
+    pool: &impl DeliveryTransitions,
+    claim: &DeliveryClaim,
+) -> anyhow::Result<bool> {
+    Ok(pool.release_for_resend(claim).await? == 1)
 }
 
 /// Fence completion before changing the message, preserving its caller's lock scope.

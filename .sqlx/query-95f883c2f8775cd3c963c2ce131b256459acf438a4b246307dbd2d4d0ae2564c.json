@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET processing = true,\n           delivery_status = 'ready', delivery_started_at = NULL,\n           delivery_absent_lookups = 0, delivery_resends = delivery_resends + 1,\n           delivery_lease_expires_at = NOW(), updated_at = NOW()\n           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3 AND processing\n             AND NOT sent AND delivery_status <> 'failed' AND delivery_message_id IS NOT NULL\n             AND delivery_lease_expires_at > NOW()\n             AND delivery_absent_lookups >= 1 AND delivery_resends < 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95f883c2f8775cd3c963c2ce131b256459acf438a4b246307dbd2d4d0ae2564c"
+}

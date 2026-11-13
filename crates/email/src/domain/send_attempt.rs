@@ -59,7 +59,8 @@ pub enum SendAttemptStatus {
     Sending,
     /// Preparation or provider rejection needs attention; cancellation is safe.
     Failed,
-    /// Provider acceptance is uncertain; automatic resubmission is forbidden.
+    /// Provider acceptance is uncertain. The message is submitted again only
+    /// once the provider shows it never went out, a bounded number of times.
     DeliveryUnconfirmed,
     /// Provider delivery was recorded successfully.
     Sent,

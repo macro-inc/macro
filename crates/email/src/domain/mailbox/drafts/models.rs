@@ -70,6 +70,10 @@ pub struct DraftCheckpoint {
     pub completed_files: usize,
     pub completed_removals: usize,
     pub transfer: Option<Transfer>,
+    /// Times the draft was submitted again because Outlook still held it
+    /// unsent after the confirmation wait. Recorded before each submission.
+    #[serde(default)]
+    pub resubmissions: u8,
 }
 
 impl DraftCheckpoint {

@@ -7723,6 +7723,7 @@ dependencies = [
  "futures",
  "generic_email_domains",
  "gmail_client",
+ "gmail_emulator",
  "google_token",
  "html-escape",
  "http-body-util",

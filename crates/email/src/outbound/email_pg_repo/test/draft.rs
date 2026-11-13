@@ -182,7 +182,7 @@ async fn test_delete_draft_message_keeps_nonempty_thread(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let deletion = repo
-        .delete_draft_message(draft_id, thread_id, &[link_id], None, 0)
+        .delete_draft_message(draft_id, thread_id, &[link_id], None, 0, true)
         .await?
         .expect("the draft should be deleted");
     assert!(
@@ -218,7 +218,7 @@ async fn test_delete_draft_message_removes_empty_thread(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let deletion = repo
-        .delete_draft_message(draft_id, thread_id, &[link_id], None, 0)
+        .delete_draft_message(draft_id, thread_id, &[link_id], None, 0, true)
         .await?
         .expect("the draft should be deleted");
     assert!(
@@ -249,7 +249,7 @@ async fn test_delete_draft_message_rejects_sent_message(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     assert!(
-        repo.delete_draft_message(sent_id, thread_id, &[link_id], None, 0)
+        repo.delete_draft_message(sent_id, thread_id, &[link_id], None, 0, true)
             .await?
             .is_none(),
         "deleting a non-draft should match nothing and leave it intact"
@@ -286,7 +286,7 @@ async fn test_delete_draft_message_rejects_foreign_link_scope(
     let foreign_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
 
     assert!(
-        repo.delete_draft_message(draft_id, thread_id, &[foreign_link], None, 0)
+        repo.delete_draft_message(draft_id, thread_id, &[foreign_link], None, 0, true)
             .await?
             .is_none(),
         "a delete outside the caller's inboxes must match nothing"
@@ -1042,7 +1042,7 @@ async fn test_client_handle_bindings_resolve_scoped_and_cascade(
     );
 
     // Deleting the draft cascades its binding away.
-    repo.delete_draft_message(draft_id, thread_id, &[link], None, 0)
+    repo.delete_draft_message(draft_id, thread_id, &[link], None, 0, true)
         .await?
         .expect("the draft should be deleted");
     assert_eq!(

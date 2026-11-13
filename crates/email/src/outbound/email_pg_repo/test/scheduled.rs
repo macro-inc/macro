@@ -119,7 +119,8 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
             Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
             &[link],
             None,
-            0
+            0,
+            true
         )
         .await?
         .is_none()
@@ -604,6 +605,7 @@ impl crate::domain::scheduled_delivery::ScheduledDeliveryRepo for ClaimRepo {
                 .map(|_| crate::domain::scheduled_delivery::ClaimedDelivery {
                     claim: (link, message),
                     mode: crate::domain::scheduled_delivery::DeliveryMode::Send,
+                    lookups: Default::default(),
                 }),
         )
     }
@@ -619,6 +621,12 @@ impl crate::domain::scheduled_delivery::ScheduledDeliveryRepo for ClaimRepo {
         _: crate::domain::scheduled_delivery::DeliveryPause,
     ) -> anyhow::Result<()> {
         panic!("unexpected pause")
+    }
+    async fn record_absent_lookup(&self, _: &Self::Claim) -> anyhow::Result<()> {
+        panic!("unexpected lookup")
+    }
+    async fn release_for_resend(&self, _: &Self::Claim) -> anyhow::Result<bool> {
+        panic!("unexpected resend")
     }
     async fn release(&self, claim: &Self::Claim) -> anyhow::Result<()> {
         email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
@@ -645,7 +653,10 @@ impl crate::domain::scheduled_delivery::ScheduledMessageSender<(Uuid, Uuid), ()>
     ) -> Result<(), crate::domain::scheduled_delivery::PreparationError> {
         Ok(())
     }
-    async fn reconcile(&self, _: &(Uuid, Uuid)) -> anyhow::Result<Option<()>> {
+    async fn reconcile(
+        &self,
+        _: &(Uuid, Uuid),
+    ) -> anyhow::Result<crate::domain::scheduled_delivery::SentLookup<()>> {
         panic!("unexpected reconciliation")
     }
     async fn send_prepared(

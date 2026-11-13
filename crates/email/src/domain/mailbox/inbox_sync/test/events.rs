@@ -259,7 +259,7 @@ async fn retry_and_deferred_debug_logs_include_the_original_display_error_and_pa
                     .in_scope(|| log.record(&data, &error));
             });
             (
-                "Rate-limited inbox sync message deferred. The message will be deleted.",
+                "Deferred inbox sync message moved to the retry queue. The message will be deleted.",
                 "handle_non_retryable_error",
                 fields,
             )

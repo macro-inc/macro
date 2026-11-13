@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_draft_client_discards (link_id, client_id)\n            SELECT link_id, client_id FROM email_draft_client_ids WHERE message_id = $1\n            ON CONFLICT (link_id, client_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b474a74b4d56df62919182f1989aa17144e99ae639e71792255f7343adc0fd4a"
+}

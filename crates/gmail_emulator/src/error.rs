@@ -19,7 +19,12 @@ pub(crate) struct ApiError {
 }
 
 impl ApiError {
-    fn new(status: u16, reason: &'static str, status_name: &'static str, message: &str) -> Self {
+    pub(crate) fn new(
+        status: u16,
+        reason: &'static str,
+        status_name: &'static str,
+        message: &str,
+    ) -> Self {
         Self {
             status,
             message: message.to_string(),

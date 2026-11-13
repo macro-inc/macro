@@ -60,7 +60,8 @@ async fn cancelled_send_fences_old_saves_deletes_attachments_and_schedules(
             stale.message.thread_db_id,
             &[link()],
             Some(actor().as_ref()),
-            0
+            0,
+            true
         )
         .await?
         .is_none()

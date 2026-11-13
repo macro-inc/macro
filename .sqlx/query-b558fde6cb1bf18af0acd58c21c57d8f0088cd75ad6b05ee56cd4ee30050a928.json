@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (EXISTS(SELECT 1 FROM email_send_attempts WHERE (link_id=$1 OR $1=ANY(draft_link_ids))\n               AND ($2=ANY(draft_handles) OR $3=ANY(draft_handles)))\n               OR EXISTS(SELECT 1 FROM email_draft_client_discards WHERE link_id=$1 AND client_id=$3)) AS \"retired!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "retired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b558fde6cb1bf18af0acd58c21c57d8f0088cd75ad6b05ee56cd4ee30050a928"
+}

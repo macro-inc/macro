@@ -117,6 +117,22 @@ pub(crate) async fn mailbox_request<T: IntoResponse>(
             return (Some(email), None, Err(denied));
         }
 
+        let lacks_scope = route.gmail_scopes().is_some_and(|accepted| {
+            state
+                .mailboxes
+                .get(&email)
+                .is_some_and(|mailbox| !accepted.iter().any(|scope| mailbox.has_scope(scope)))
+        });
+        if lacks_scope {
+            let refused = ApiError::new(
+                403,
+                "insufficientPermissions",
+                "PERMISSION_DENIED",
+                "Request had insufficient authentication scopes.",
+            );
+            return (Some(email), None, Err(refused));
+        }
+
         let (error, delay) = fault(state, Some(&email), route);
         if let Some(error) = error {
             return (Some(email), delay, Err(error));

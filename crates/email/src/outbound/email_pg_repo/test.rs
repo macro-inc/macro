@@ -2,6 +2,7 @@ mod all_mail;
 mod attachment_filter;
 mod crm_scope_dynamic_query;
 mod draft;
+mod draft_discard;
 mod dynamic_query;
 mod folders;
 mod importance_pagination;

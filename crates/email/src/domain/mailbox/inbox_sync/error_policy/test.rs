@@ -70,7 +70,7 @@ fn processing_error_policy_covers_every_variant() {
                 message: "blip".to_string(),
             },
             true,
-            FailureReason::GmailApiFailed,
+            FailureReason::GmailApiUnavailable,
         ),
         (
             EmailApiError::Permanent {

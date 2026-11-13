@@ -359,14 +359,18 @@ pub trait EmailRepo: Send + Sync + 'static {
     /// so a raced validation read can never delete someone else's row.
     /// Returns `None` when no row matched (already deleted, sent, or not
     /// owned): deletes are idempotent, classification is the caller's job.
+    ///
+    /// `discard` retires the draft's client handles with the delete, so a
+    /// save sent before the discard can't recreate it; a sender switch that
+    /// recreates the draft under the same handle passes `false`.
     fn delete_draft_message(
         &self,
         message_id: Uuid,
         thread_db_id: Uuid,
         link_ids: &[Uuid],
         actor: Option<&str>,
-
         expected_generation: i32,
+        discard: bool,
     ) -> impl Future<Output = Result<Option<DraftDeletion>, Self::Err>> + Send;
 
     /// Upsert contacts from the parsed addresses. Must be called outside a transaction

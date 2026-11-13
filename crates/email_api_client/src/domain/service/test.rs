@@ -161,7 +161,7 @@ async fn a_revoked_grant_found_by_the_fresh_fetch_stops_the_read() {
 }
 
 #[tokio::test]
-async fn a_rejected_fresh_token_is_not_retried_again() {
+async fn a_rejected_fresh_token_is_reported_and_not_retried_again() {
     let (result, calls, seen) =
         list_labels_with(vec!["cached", "fresh"], Ok(AccessToken::new("fresh"))).await;
 
@@ -175,6 +175,7 @@ async fn a_rejected_fresh_token_is_not_retried_again() {
             Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
             Call::Token(Uuid::nil(), TokenFreshness::Fresh),
             Call::Finish(Uuid::nil(), Some(EmailApiError::AuthRequired)),
+            Call::RejectedGrant(Uuid::nil()),
         ]
     );
     assert_eq!(seen, ["cached", "fresh"]);

@@ -116,8 +116,8 @@ a local stack, without Google accounts.
   Provider failure: `POST /_emulator/faults` (`inject_fault`) with a `route`
   such as `messages.get` and an `error` such as `rate_limit`. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`.
-- Add a Gmail endpoint: a `Route` variant with its quota units in
-  `src/fault.rs` → a handler through `gate::mailbox_request` in
+- Add a Gmail endpoint: a `Route` variant with its quota units and its
+  `gmail_scopes` in `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real
   client. A Calendar endpoint goes the same way through
   `src/calendar_routes.rs` and `src/test/calendar/`.
@@ -128,6 +128,11 @@ a local stack, without Google accounts.
 
 ## Gotchas
 
+- Gmail routes answer 403 `insufficientPermissions` unless the mailbox's
+  grant holds `gmail.modify` (settings routes: `gmail.settings.basic`) or
+  `mail.google.com`. The check reads the mailbox's combined grant, not the
+  scopes of the one token, so a token from a narrower consent still passes
+  once the mailbox was granted Gmail.
 - It only listens where it is told to, `127.0.0.1` by default. Never give it
   real mail or real tokens.
 - Responses are Google's shapes, not ours: absent fields are omitted, not

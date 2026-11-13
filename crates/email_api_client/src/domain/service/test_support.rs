@@ -18,6 +18,7 @@ use super::super::ports::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Call {
     Token(Uuid, TokenFreshness),
+    RejectedGrant(Uuid),
     HealthNeutralToken(Uuid, TokenFreshness),
     Acquire(Uuid, ApiOperationKind),
     Finish(Uuid, Option<EmailApiError>),
@@ -92,6 +93,13 @@ impl ProviderTokenSource for FakeTokenSource {
             .unwrap()
             .push(Call::HealthNeutralToken(link.id, freshness));
         self.result.clone()
+    }
+
+    async fn report_rejected_grant(&self, link_id: Uuid) {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::RejectedGrant(link_id));
     }
 }
 

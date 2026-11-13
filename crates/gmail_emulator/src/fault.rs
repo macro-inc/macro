@@ -186,7 +186,71 @@ impl From<Route> for String {
     }
 }
 
+/// Gmail's full-access scope, which every Gmail method accepts.
+const MAIL_SCOPE: &str = "https://mail.google.com/";
+const GMAIL_MODIFY_SCOPE: &str = "https://www.googleapis.com/auth/gmail.modify";
+const GMAIL_SETTINGS_SCOPE: &str = "https://www.googleapis.com/auth/gmail.settings.basic";
+
 impl Route {
+    /// For a Gmail method, the scopes any one of which lets a token call it.
+    /// Gmail answers 403 `insufficientPermissions` to a token without one.
+    pub(crate) fn gmail_scopes(self) -> Option<&'static [&'static str]> {
+        match self {
+            Self::FiltersList
+            | Self::FiltersGet
+            | Self::FiltersCreate
+            | Self::FiltersDelete
+            | Self::SendAsList => Some(&[GMAIL_SETTINGS_SCOPE, MAIL_SCOPE]),
+            Self::GetProfile
+            | Self::MessagesList
+            | Self::MessagesGet
+            | Self::MessagesSend
+            | Self::MessagesImport
+            | Self::MessagesModify
+            | Self::MessagesBatchModify
+            | Self::MessagesTrash
+            | Self::MessagesUntrash
+            | Self::MessagesDelete
+            | Self::MessagesBatchDelete
+            | Self::AttachmentsGet
+            | Self::ThreadsList
+            | Self::ThreadsGet
+            | Self::LabelsList
+            | Self::LabelsGet
+            | Self::LabelsCreate
+            | Self::LabelsUpdate
+            | Self::LabelsDelete
+            | Self::DraftsList
+            | Self::DraftsGet
+            | Self::DraftsCreate
+            | Self::DraftsUpdate
+            | Self::DraftsDelete
+            | Self::DraftsSend
+            | Self::HistoryList
+            | Self::Watch
+            | Self::Stop => Some(&[GMAIL_MODIFY_SCOPE, MAIL_SCOPE]),
+            // People and Calendar check their own scopes in their handlers;
+            // OAuth routes take no access token.
+            Self::PeopleGet
+            | Self::ConnectionsList
+            | Self::OtherContactsList
+            | Self::CalendarListList
+            | Self::EventsList
+            | Self::EventsGet
+            | Self::EventsInstances
+            | Self::EventsInsert
+            | Self::EventsImport
+            | Self::EventsPatch
+            | Self::EventsDelete
+            | Self::EventsWatch
+            | Self::ChannelsStop
+            | Self::OauthToken
+            | Self::OauthTokenInfo
+            | Self::OauthAuthorize
+            | Self::OauthUserInfo => None,
+        }
+    }
+
     /// The quota units Google charges for the method. A Calendar request
     /// costs one.
     pub(crate) fn quota_units(self) -> u32 {

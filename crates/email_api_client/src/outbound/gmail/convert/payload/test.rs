@@ -96,7 +96,7 @@ fn prefers_valid_utf8_over_a_misdeclared_single_byte_charset() {
 }
 
 #[test]
-fn unknown_charsets_fall_back_to_lossy_utf8() {
+fn unknown_charsets_read_valid_utf8_as_is() {
     let encoded = URL_SAFE.encode("Hello");
     let mut part = payload("text/plain", &encoded);
     part.headers.push(Header {

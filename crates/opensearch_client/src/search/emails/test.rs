@@ -318,168 +318,66 @@ fn test_build_bool_query() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_importance_true_excludes_depriority_unless_priority() -> anyhow::Result<()> {
+fn importance_filter(importance: Option<bool>) -> Option<serde_json::Value> {
     let builder = EmailQueryBuilder::new(vec!["test".to_string()])
         .match_type("partial")
         .page_size(10)
         .page(0)
         .user_id("user123")
         .collapse(false)
-        .importance(Some(true));
-
-    let bool_query = builder.build_bool_query()?;
-    let json = bool_query.build().to_json();
-
-    let must_not = json["bool"]["must_not"].as_array().unwrap();
-    assert_eq!(must_not.len(), 2);
-
-    let nested_bool = &must_not[0]["bool"];
-    let filter = nested_bool["filter"].as_array().unwrap();
-    assert_eq!(filter.len(), 1);
-    let depriority = filter[0]["terms"]["labels"].as_array().unwrap();
-    assert_eq!(depriority.len(), 4);
-
-    let inner_must_not = nested_bool["must_not"].as_array().unwrap();
-    assert_eq!(inner_must_not.len(), 1);
-    let priority = inner_must_not[0]["terms"]["labels"].as_array().unwrap();
-    assert_eq!(priority.len(), 3);
-
-    // Macro's own notification sender is excluded from signal outright.
-    assert_eq!(
-        must_not[1],
-        json!({
-            "wildcard": {
-                "sender": { "value": "*@notification.macro.com", "case_insensitive": true }
-            }
-        })
-    );
-
-    Ok(())
-}
-
-#[test]
-fn test_importance_false_filters_to_depriority_only() -> anyhow::Result<()> {
-    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
-        .match_type("partial")
-        .page_size(10)
-        .page(0)
-        .user_id("user123")
-        .collapse(false)
-        .importance(Some(false));
-
-    let bool_query = builder.build_bool_query()?;
-    let json = bool_query.build().to_json();
-
-    let filters = json["bool"]["filter"].as_array().unwrap();
-    let noise_bool = filters
-        .iter()
-        .find(|f| f["bool"]["should"].is_array())
-        .expect("should have nested importance filter");
-    assert_eq!(noise_bool["bool"]["minimum_should_match"], 1);
-
-    let should = noise_bool["bool"]["should"].as_array().unwrap();
-    assert_eq!(should.len(), 2);
-
-    // Depriority-labeled without a priority label...
-    let depriority_bool = &should[0]["bool"];
-    let depriority = depriority_bool["filter"][0]["terms"]["labels"]
-        .as_array()
-        .unwrap();
-    assert_eq!(depriority.len(), 4);
-    let priority = depriority_bool["must_not"][0]["terms"]["labels"]
-        .as_array()
-        .unwrap();
-    assert_eq!(priority.len(), 3);
-
-    // ...or from Macro's own notification sender.
-    assert_eq!(
-        should[1],
-        json!({
-            "wildcard": {
-                "sender": { "value": "*@notification.macro.com", "case_insensitive": true }
-            }
-        })
-    );
-
-    Ok(())
-}
-
-#[test]
-fn test_importance_none_no_importance_filter() -> anyhow::Result<()> {
-    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
-        .match_type("partial")
-        .page_size(10)
-        .page(0)
-        .user_id("user123")
-        .collapse(false)
-        .importance(None);
-
-    let bool_query = builder.build_bool_query()?;
-    let json = bool_query.build().to_json();
-
-    assert!(json["bool"]["must_not"].is_null());
-
-    Ok(())
-}
-
-#[test]
-fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
-    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
-        .match_type("partial")
-        .page_size(10)
-        .page(0)
-        .user_id("user123")
-        .collapse(false)
-        .importance(Some(true))
-        .exclude_labels(vec!["INBOX".to_string()]);
-
-    let bool_query = builder.build_bool_query()?;
-    let json = bool_query.build().to_json();
-
-    let must_not = json["bool"]["must_not"].as_array().unwrap();
-    // Should have all three: the explicit exclude_label, the importance
-    // nested bool, and the Macro notification sender exclusion.
-    assert_eq!(must_not.len(), 3);
-
-    // One should be the INBOX term exclusion
-    let has_inbox_exclusion = must_not.iter().any(|q| q["term"]["labels"] == "INBOX");
-    assert!(has_inbox_exclusion);
-
-    // One should be the nested importance bool
-    let has_importance = must_not.iter().any(|q| q["bool"]["filter"].is_array());
-    assert!(has_importance);
-
-    Ok(())
-}
-
-#[test]
-fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> {
-    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
-        .match_type("partial")
-        .page_size(10)
-        .page(0)
-        .user_id("user123")
-        .collapse(false)
-        .importance(Some(false))
+        .importance(importance)
         .exclude_labels(vec!["CATEGORY_SOCIAL".to_string()]);
+    let json = builder.build_bool_query().unwrap().build().to_json();
 
-    let bool_query = builder.build_bool_query()?;
-    let json = bool_query.build().to_json();
-
+    // The explicit label exclusion applies alongside importance.
     let must_not = json["bool"]["must_not"].as_array().unwrap();
-    // Should have the explicit CATEGORY_SOCIAL exclusion
-    let has_social_exclusion = must_not
+    assert!(
+        must_not
+            .iter()
+            .any(|q| q["term"]["labels"] == "CATEGORY_SOCIAL")
+    );
+
+    json["bool"]["filter"]
+        .as_array()
+        .unwrap()
         .iter()
-        .any(|q| q["term"]["labels"] == "CATEGORY_SOCIAL");
-    assert!(has_social_exclusion);
+        .find(|filter| filter.to_string().contains("is_signal"))
+        .cloned()
+}
 
-    // Should have the importance filter in filter array
-    let filters = json["bool"]["filter"].as_array().unwrap();
-    let has_importance_filter = filters.iter().any(|f| f["bool"]["should"].is_array());
-    assert!(has_importance_filter);
+#[test]
+fn importance_filters_on_the_indexed_inbox_verdict() {
+    for signal in [true, false] {
+        let filter = importance_filter(Some(signal)).expect("an importance filter");
+        let should = filter["bool"]["should"].as_array().unwrap();
+        assert_eq!(filter["bool"]["minimum_should_match"], 1);
 
-    Ok(())
+        assert_eq!(
+            should[0].to_string(),
+            json!({ "term": { "is_signal": signal } }).to_string()
+        );
+        // A doc indexed before the verdict existed falls back to the labels.
+        let unverdicted = &should[1]["bool"];
+        assert_eq!(
+            unverdicted["must_not"][0],
+            json!({ "exists": { "field": "is_signal" } })
+        );
+        assert!(
+            unverdicted["filter"][0]
+                .to_string()
+                .contains("CATEGORY_PROMOTIONS")
+        );
+        assert!(
+            unverdicted["filter"][0]
+                .to_string()
+                .contains("notification.macro.com")
+        );
+    }
+}
+
+#[test]
+fn no_importance_adds_no_importance_filter() {
+    assert!(importance_filter(None).is_none());
 }
 
 #[test]

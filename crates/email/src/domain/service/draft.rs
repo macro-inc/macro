@@ -311,6 +311,7 @@ where
                 &accessible_link_ids,
                 Some(macro_id.as_ref()),
                 expected_generation,
+                true,
             )
             .await
             .map_err(anyhow::Error::from)?;
@@ -671,6 +672,7 @@ where
                     &accessible_link_ids,
                     input.actor.as_ref().map(|actor| actor.as_ref()),
                     input.draft_generation,
+                    false,
                 )
                 .await
                 .map_err(anyhow::Error::from)?;

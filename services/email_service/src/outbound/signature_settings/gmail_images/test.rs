@@ -192,6 +192,7 @@ impl ProviderTokenSource for StaticToken {
     ) -> Result<AccessToken, TokenError> {
         Ok(AccessToken::new("token"))
     }
+    async fn report_rejected_grant(&self, _: Uuid) {}
 }
 
 type FakeApi =
