@@ -25,6 +25,9 @@ use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
+#[cfg(test)]
+mod test;
+
 /// The path the stored objects are served under, as the CDN would.
 pub(crate) const CDN_PATH: &str = "_cdn";
 /// The header every SQS request carries.
@@ -37,6 +40,11 @@ const PAYLOAD_HASH: &str = "x-amz-content-sha256";
 /// The largest request body the endpoint reads.
 const BODY_LIMIT: usize = 64 * 1024 * 1024;
 const DEFAULT_CONTENT_TYPE: &str = "application/octet-stream";
+/// The operation a queue send is, at the end of its `x-amz-target`.
+const SEND_MESSAGE: &str = ".SendMessage";
+const SQS_CONTENT_TYPE: &str = "application/x-amz-json-1.0";
+/// An SQS error the AWS client reports without retrying.
+const REFUSED_SEND: &str = r#"{"__type":"com.amazonaws.sqs#KmsAccessDenied","message":"email_e2e: the scenario refused this send"}"#;
 
 /// An object the email services stored.
 #[derive(Clone, Debug)]
@@ -58,12 +66,17 @@ struct Endpoint {
     http: reqwest::Client,
     sqs_url: String,
     objects: Objects,
+    refused_sends: RefusedSends,
 }
+
+/// The queue URLs whose next `SendMessage` is refused, once per entry.
+type RefusedSends = Arc<Mutex<Vec<String>>>;
 
 /// The running endpoint.
 pub(crate) struct Aws {
     address: SocketAddr,
     objects: Objects,
+    refused_sends: RefusedSends,
     cancel: CancellationToken,
     tracker: TaskTracker,
 }
@@ -72,12 +85,14 @@ impl Aws {
     /// Starts the endpoint in front of the SQS server at `sqs_url`.
     pub(crate) async fn start(sqs_url: &str) -> Result<Self, Report> {
         let objects = Objects::default();
+        let refused_sends = RefusedSends::default();
         let endpoint = Endpoint {
             http: reqwest::Client::builder()
                 .build()
                 .context("could not build the AWS endpoint's HTTP client")?,
             sqs_url: sqs_url.trim_end_matches('/').to_owned(),
             objects: objects.clone(),
+            refused_sends: refused_sends.clone(),
         };
 
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -101,6 +116,7 @@ impl Aws {
         Ok(Self {
             address,
             objects,
+            refused_sends,
             cancel,
             tracker,
         })
@@ -126,6 +142,16 @@ impl Aws {
             .collect()
     }
 
+    /// Refuses the services' next `times` sends to the queue at `queue_url`
+    /// with an error the AWS client does not retry.
+    pub(crate) fn refuse_sends(&self, queue_url: &str, times: usize) {
+        let mut refused = self
+            .refused_sends
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        refused.extend(std::iter::repeat_n(queue_url.to_owned(), times));
+    }
+
     /// Stops the endpoint.
     pub(crate) async fn stop(self) {
         self.cancel.cancel();
@@ -144,6 +170,9 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
     };
 
     if headers.contains_key(SQS_TARGET) {
+        if let Some(refusal) = refused_send(&endpoint.refused_sends, &headers, &body) {
+            return refusal;
+        }
         return forward_to_sqs(&endpoint, method, &headers, &path, query.as_deref(), body).await;
     }
 
@@ -284,6 +313,27 @@ fn unchunk(body: &Bytes) -> Bytes {
         rest = rest.get(start + size + 2..).unwrap_or_default();
     }
     Bytes::from(joined)
+}
+
+/// The refusal of a `SendMessage` a scenario asked to fail, when this is one.
+fn refused_send(refused: &RefusedSends, headers: &HeaderMap, body: &Bytes) -> Option<Response> {
+    let target = headers.get(SQS_TARGET)?.to_str().ok()?;
+    if !target.ends_with(SEND_MESSAGE) {
+        return None;
+    }
+    let request: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let queue_url = request["QueueUrl"].as_str()?;
+    let mut refused = refused.lock().unwrap_or_else(PoisonError::into_inner);
+    let index = refused.iter().position(|url| url == queue_url)?;
+    refused.remove(index);
+    Some(
+        (
+            StatusCode::BAD_REQUEST,
+            [(CONTENT_TYPE, SQS_CONTENT_TYPE)],
+            REFUSED_SEND,
+        )
+            .into_response(),
+    )
 }
 
 /// Passes an SQS request on and answers what the SQS server answered.
