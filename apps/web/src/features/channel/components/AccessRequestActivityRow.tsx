@@ -16,9 +16,10 @@ export type AccessRequestOutcome =
  * A request to join, announced in the channel with inline answers.
  *
  * The channel list measures a row once when it mounts, so the row's height
- * never depends on what loads later: the request line truncates (names resolve
- * asynchronously), and the answer line keeps the buttons' height in every
- * state (taller on touch, like them), including while the request loads.
+ * never depends on what loads later. The request wraps like message text from
+ * what is known at mount (the name stored with the event, or the email), and
+ * the answer line keeps the buttons' height in every state (taller on touch,
+ * like them), including while the request loads.
  */
 export function AccessRequestActivityRow(props: {
   eventId: string;
@@ -34,13 +35,6 @@ export function AccessRequestActivityRow(props: {
     props.requesterEmail && props.requesterEmail !== props.requesterName
       ? props.requesterEmail
       : undefined;
-  const summary = () => {
-    const requester = email()
-      ? `${props.requesterName} (${email()})`
-      : props.requesterName;
-    return `${requester} asked to join the channel`;
-  };
-
   return (
     <div
       class="flex gap-2 py-1.5 pl-(--message-padding-x) pr-2 text-sm text-ink-muted"
@@ -53,18 +47,12 @@ export function AccessRequestActivityRow(props: {
         <UserPlusIcon class="size-4.5 text-accent" />
       </span>
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
-        <div class="h-6 flex items-center gap-2">
-          <Tooltip
-            label={summary()}
-            class="min-w-0 max-w-max flex-1 truncate"
-            as="span"
-          >
-            <span class="truncate">
-              <span class="font-medium text-ink">{props.requesterName}</span>{' '}
-              <Show when={email()}>{(email) => <span>({email()}) </span>}</Show>
-              asked to join the channel
-            </span>
-          </Tooltip>
+        <div class="flex items-start gap-2 leading-6">
+          <p class="min-w-0 flex-1 wrap-break-word">
+            <span class="font-medium text-ink">{props.requesterName}</span>{' '}
+            <Show when={email()}>{(email) => <span>({email()}) </span>}</Show>
+            asked to join the channel
+          </p>
           <time
             class="shrink-0 text-xs text-ink-extra-muted"
             dateTime={props.occurredAt}

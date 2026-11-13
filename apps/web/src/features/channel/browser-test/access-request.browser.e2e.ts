@@ -19,11 +19,10 @@ for (const pane of ['none', '320px']) {
     await page.goto(`/access-request.html?pane=${pane}`);
     const { height } = await rowBox(page);
     // Without fonts every text measures 0×0 and no line could ever wrap.
-    const name = await page.getByText('Someone', { exact: true }).boundingBox();
+    const name = await page.getByText(LONG_NAME, { exact: true }).boundingBox();
     expect(name?.width).toBeGreaterThan(0);
 
     const states: Partial<RowState>[] = [
-      { requesterName: LONG_NAME },
       { outcome: { kind: 'pending', canAnswer: false } },
       { outcome: { kind: 'pending', canAnswer: true } },
       { busy: true },
@@ -38,6 +37,22 @@ for (const pane of ['none', '320px']) {
     }
   });
 }
+
+// The request reads like message text: it wraps rather than hiding the email.
+test('a long request wraps in a narrow pane', async ({ page }) => {
+  await page.goto('/access-request.html?pane=320px');
+  const sentence = page.locator('p', { hasText: 'asked to join the channel' });
+  const box = await sentence.boundingBox();
+  if (!box) throw new Error('The request sentence is not rendered');
+
+  expect(box.height).toBeGreaterThan(24);
+  expect(
+    await sentence.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth
+    )
+  ).toBe(true);
+  await expect(sentence).toContainText('(alex.requester@example.com)');
+});
 
 // Buttons grow to 36px on touch; the answer line grows with them.
 test('the answer buttons fit inside their line', async ({ page, isMobile }) => {

@@ -11,7 +11,8 @@ export type SystemActivity = {
     | { kind: 'participant_added'; participants: string[] }
     | { kind: 'participant_removed'; participant: string }
     | { kind: 'call_ended'; durationMs: number }
-    | { kind: 'access_requested'; requestId: string }
+    /** `requesterName` is their profile name when they asked; older events lack it. */
+    | { kind: 'access_requested'; requestId: string; requesterName?: string }
     | { kind: 'unknown' };
 };
 

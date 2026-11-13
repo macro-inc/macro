@@ -345,8 +345,9 @@ react, and edit or delete their own messages.
 Signed-out meeting guests get initial avatars in tiles and the roster; do not
 mount account profile-picture queries for them.
 
-A channel's request-to-join row keeps the height it mounted at through loading,
-late names, and every answer, on desktop and phone (backend-free):
+A channel's request-to-join row keeps the height it mounted at through loading
+and every answer, on desktop and phone, and wraps from the requester name stored on
+the event (backend-free):
 `bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
 Channel history keeps the message being read in place when a split opens or

@@ -95,6 +95,17 @@ it('describes completed calls, renames, and self membership changes', () => {
       payload: { request_id: 'request-1' },
     }).action
   ).toEqual({ kind: 'access_requested', requestId: 'request-1' });
+  expect(
+    decodeSystemActivity({
+      ...event,
+      action: 'access_requested',
+      payload: { request_id: 'request-1', requester_name: 'Sarah Lee' },
+    }).action
+  ).toEqual({
+    kind: 'access_requested',
+    requestId: 'request-1',
+    requesterName: 'Sarah Lee',
+  });
 });
 
 it('formats durations and tolerates malformed future activity', () => {

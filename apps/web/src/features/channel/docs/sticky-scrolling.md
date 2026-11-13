@@ -108,11 +108,12 @@ Message images reserve a responsive box from attachment dimensions, with the loa
 placeholder overlaid inside it. Keep the border on the frame: a border on the image
 can change portrait/landscape sizing when intrinsic dimensions become available.
 
-No row may change height after it mounts because data loaded later: reserve the
-space or keep the text to one line. A request-to-join row truncates its names,
-which resolve asynchronously, to one line with a tooltip, and keeps its answer line
-at the buttons' height (36px on touch) in every state, including while the request
-loads. Its backend-free desktop/phone regression is
+No row may change height after it mounts because of data loaded later. Text may
+wrap, but only from what is known at mount; reserve the space for anything fetched,
+or keep it to one line. A request-to-join row wraps its sentence from the
+requester's name stored on the event (older events show the email), as mentions do,
+and keeps its answer line at the buttons' height (36px on touch) in every state,
+including while the request loads. Its backend-free desktop/phone regression is
 `bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
 Message IDs also key Solid's rendered components, preserving editors and expanded

@@ -1,6 +1,11 @@
 import type { TimelineActivity } from '@service-storage/messages';
 import { isSelfJoin, type SystemActivity } from '../core/system-activity';
 
+function nonEmptyString(fields: object, key: string): string | undefined {
+  const value: unknown = Reflect.get(fields, key);
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 /** Decode the durable vocabulary at the transport boundary, tolerating future actions. */
 export function decodeSystemActivity(event: TimelineActivity): SystemActivity {
   const payload: unknown = event.payload;
@@ -35,7 +40,11 @@ export function decodeSystemActivity(event: TimelineActivity): SystemActivity {
     'request_id' in fields &&
     typeof fields.request_id === 'string'
   ) {
-    action = { kind: 'access_requested', requestId: fields.request_id };
+    action = {
+      kind: 'access_requested',
+      requestId: fields.request_id,
+      requesterName: nonEmptyString(fields, 'requester_name'),
+    };
   }
   return {
     id: event.id,

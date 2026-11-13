@@ -1,6 +1,6 @@
 // The request-to-join row as a channel first mounts it: the request still
-// loading and the requester's name not yet resolved. The test then delivers
-// each later state through `window.update`.
+// loading, with the name stored on the event. The test then delivers each
+// later state through `window.update`.
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createStore } from 'solid-js/store';
@@ -32,7 +32,8 @@ const PANE_WIDTH = new URLSearchParams(location.search).get('pane') ?? 'none';
 
 function Fixture() {
   const [row, setRow] = createStore<RowState>({
-    requesterName: 'Someone',
+    requesterName:
+      'Alexandra Konstantinopoulou-Vanderbilt de la Fontaine Montgomery',
     outcome: { kind: 'loading' },
     busy: false,
   });
