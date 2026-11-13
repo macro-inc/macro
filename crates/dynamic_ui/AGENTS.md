@@ -26,7 +26,9 @@ and the web's TypeScript through specta.
 
 ## Recipes
 
-- Add a widget: add a `Widget` variant with its doc comment, run
+- Add a widget: add a `Widget` variant with its doc comment (the widget
+  lists pinned in `ai_tools` `display_results` and `agent_code_mode` review
+  tests name every variant), run
   `just gen-dynamic-ui-types` and `just gen-agent-fold-types` in `apps/web`
   (agent_fold's wire types embed the view), and add its arm to `Render` in
   `apps/web/src/features/dynamic-ui/render.tsx`; the exhaustive `match` fails
@@ -41,8 +43,9 @@ and the web's TypeScript through specta.
 - `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` snapshots
   the model-facing schema with insta.
 - `just gen-dynamic-ui-types` and `just gen-agent-fold-types` in `apps/web`,
-  then commit `src/features/dynamic-ui/generated`,
-  `packages/lexical-core/generated` and the agent-fold types;
+  and `bun run gen-api document-cognition` (ExecuteCode's description embeds
+  the view schema), then commit `src/features/dynamic-ui/generated`,
+  `packages/lexical-core/generated`, the agent-fold and cognition types;
   CI's Check Specta Types step fails when they are stale.
 
 ## Gotchas
