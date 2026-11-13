@@ -1,0 +1,19 @@
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_422464c85346e5::t_aac0b13bfdcf42 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e7680656eaf7624d6adbd342ab2221ec93afcf08",
+  "prompts": {},
+  "sessions": {
+    "s_422464c85346e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae48edd-7ffa-4908-b6b8-ce91c4bf54e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
