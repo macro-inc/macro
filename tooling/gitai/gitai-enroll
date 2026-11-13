@@ -7,7 +7,10 @@
 # Keep this file bash 3.2 compatible: it runs on stock macOS.
 set -euo pipefail
 
-PINNED_VERSION="${GITAI_CLIENT_VERSION:-1.7.7}"
+# 1.7.7 has no GitHub release; it is 1.7.6 plus a version bump, so we install
+# 1.7.6 and accept either one already installed (Nix packages build 1.7.7).
+PINNED_VERSION="${GITAI_CLIENT_VERSION:-1.7.6}"
+ACCEPTED_VERSIONS="${GITAI_CLIENT_VERSION:-1.7.6 1.7.7}"
 RELEASE_REPO="git-ai-project/git-ai"
 BASE_URL="${GITAI_BASE_URL:-https://gateway.macro.com/gitai}"
 BASE_URL="${BASE_URL%/}"
@@ -25,6 +28,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_SOURCE="$SCRIPT_DIR/$SKILL_NAME/SKILL.md"
 GIT_AI_DIR="$HOME/.git-ai"
 CONFIG="$GIT_AI_DIR/config.json"
+# Where a managed machine keeps its credential; git-ai reads it from GIT_AI_API_KEY.
+KEY_ENV_FILE="$GIT_AI_DIR/api-key.env"
 OWN_BIN="$GIT_AI_DIR/bin/git-ai"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
@@ -130,6 +135,13 @@ sha256_of() {
   fi
 }
 
+version_accepted() {
+  case " $ACCEPTED_VERSIONS " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
 client_version() {
   child "$1" --version 2>/dev/null | awk '{print $NF}' | sed 's/^v//' || true
 }
@@ -172,9 +184,9 @@ GITAI_BIN=""
 INSTALL_CLIENT=0
 PATH_BIN="$(command -v git-ai 2>/dev/null || true)"
 
-if [ -n "$PATH_BIN" ] && [ "$(client_version "$PATH_BIN")" = "$PINNED_VERSION" ]; then
+if [ -n "$PATH_BIN" ] && version_accepted "$(client_version "$PATH_BIN")"; then
   GITAI_BIN="$PATH_BIN"
-elif [ -x "$OWN_BIN" ] && [ "$(client_version "$OWN_BIN")" = "$PINNED_VERSION" ]; then
+elif [ -x "$OWN_BIN" ] && version_accepted "$(client_version "$OWN_BIN")"; then
   GITAI_BIN="$OWN_BIN"
 else
   GITAI_BIN="$OWN_BIN"
@@ -182,9 +194,12 @@ else
 fi
 
 # A config.json owned by a package manager (a Home Manager symlink into the Nix
-# store, say) cannot hold a per-machine credential. Stop before minting one.
+# store, say) is managed mode: its settings come from that manager, and the
+# credential, which must never enter the world-readable store, goes into
+# KEY_ENV_FILE for GIT_AI_API_KEY instead.
+MANAGED=0
 if [ -L "$CONFIG" ] || { [ -e "$CONFIG" ] && [ ! -w "$CONFIG" ]; }; then
-  die "$CONFIG is a symlink or read-only (managed by $(readlink "$CONFIG" 2>/dev/null || echo 'another tool')); make it a regular writable file, then re-run"
+  MANAGED=1
 fi
 
 config_get() {
@@ -194,9 +209,13 @@ config_get() {
 }
 
 PREVIOUS_BASE="$(config_get api_base_url)"
-EXISTING_KEY="$(config_get api_key)"
+if [ "$MANAGED" -eq 1 ]; then
+  EXISTING_KEY="$(sed -n 's/^GIT_AI_API_KEY=//p' "$KEY_ENV_FILE" 2>/dev/null || true)"
+else
+  EXISTING_KEY="$(config_get api_key)"
+fi
 MINT=1
-if [ "$ROTATE" -eq 0 ] && [ "$PREVIOUS_BASE" = "$BASE_URL" ]; then
+if [ "$ROTATE" -eq 0 ] && { [ "$PREVIOUS_BASE" = "$BASE_URL" ] || [ "$MANAGED" -eq 1 ]; }; then
   case "$EXISTING_KEY" in
     gitai_*) MINT=0 ;;
   esac
@@ -211,14 +230,22 @@ note "server:     $BASE_URL"
 if [ "$INSTALL_CLIENT" -eq 1 ]; then
   note "git-ai:     install v$PINNED_VERSION from github.com/$RELEASE_REPO into $GIT_AI_DIR/bin"
 else
-  note "git-ai:     $PINNED_VERSION already installed at $GITAI_BIN; leaving it alone"
+  note "git-ai:     $(client_version "$GITAI_BIN") already installed at $GITAI_BIN; leaving it alone"
+fi
+if [ "$MANAGED" -eq 1 ]; then
+  note "config:     $CONFIG is managed by another tool; the credential goes to $KEY_ENV_FILE,"
+  note "            and you get the settings to put in that tool. Hooks and login start are left to it."
 fi
 if [ "$MINT" -eq 1 ]; then
   note "credential: mint a new device credential$([ "$ROTATE" -eq 1 ] && echo ' and revoke this machine'"'"'s old ones')"
 else
   note "credential: keep the existing one (pass --rotate to replace it)"
 fi
-note "agents:     git-ai hooks, daemon login start, $SKILL_NAME skill and PR line for Claude Code and Codex"
+if [ "$MANAGED" -eq 1 ]; then
+  note "agents:     $SKILL_NAME skill and PR line for Claude Code and Codex"
+else
+  note "agents:     git-ai hooks, daemon login start, $SKILL_NAME skill and PR line for Claude Code and Codex"
+fi
 
 if [ "$MINT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] && [ -z "$SHARED_KEY" ]; then
   die "GITAI_SHARED_KEY is not set; run under: doppler run -p gitai-service -c prd -- gitai-enroll"
@@ -251,7 +278,7 @@ if [ "$INSTALL_CLIENT" -eq 1 ]; then
     fi
     mkdir -p "$HOME/.local/bin"
     ln -sf "$OWN_BIN" "$HOME/.local/bin/git-ai"
-    [ "$(client_version "$OWN_BIN")" = "$PINNED_VERSION" ] || die "installed binary does not report version $PINNED_VERSION"
+    version_accepted "$(client_version "$OWN_BIN")" || die "installed binary does not report version $PINNED_VERSION"
     note "installed $OWN_BIN (linked from ~/.local/bin/git-ai)"
   fi
   if [ -n "$PATH_BIN" ] && [ "$PATH_BIN" != "$OWN_BIN" ] && [ "$PATH_BIN" != "$HOME/.local/bin/git-ai" ]; then
@@ -263,17 +290,23 @@ fi
 # The base URL goes first: with a credential and the default URL, the client
 # would upload to the vendor.
 
-say "Configuring git-ai"
-change "$GITAI_BIN" config set api_base_url "$BASE_URL"
-change "$GITAI_BIN" config set telemetry_oss off
-change "$GITAI_BIN" config set disable_auto_updates true
-change "$GITAI_BIN" config set allow_repositories "$ALLOWED_REPOSITORIES"
-
 # git-ai finds git only in fixed locations (/usr/bin, Homebrew, ...). Elsewhere
 # (NixOS, say) tell it where git is.
+GIT_PATH_SETTING=""
 if [ -z "$(config_get git_path)" ] && [ ! -x /usr/bin/git ] && [ ! -x /usr/local/bin/git ] &&
   [ ! -x /opt/homebrew/bin/git ]; then
-  change "$GITAI_BIN" config set git_path "$(command -v git)"
+  GIT_PATH_SETTING="$(command -v git)"
+fi
+
+if [ "$MANAGED" -eq 0 ]; then
+  say "Configuring git-ai"
+  change "$GITAI_BIN" config set api_base_url "$BASE_URL"
+  change "$GITAI_BIN" config set telemetry_oss off
+  change "$GITAI_BIN" config set disable_auto_updates true
+  change "$GITAI_BIN" config set allow_repositories "$ALLOWED_REPOSITORIES"
+  if [ -n "$GIT_PATH_SETTING" ]; then
+    change "$GITAI_BIN" config set git_path "$GIT_PATH_SETTING"
+  fi
 fi
 
 # --- (d) Device credential -----------------------------------------------------
@@ -304,14 +337,23 @@ shared_key_request() {
 response_status() { printf '%s\n' "$1" | tail -n 1; }
 response_body() { printf '%s\n' "$1" | sed '$d'; }
 
-# Write the credential into config.json without putting it on a command line.
+# Store the credential without putting it on a command line: in config.json,
+# or in managed mode in KEY_ENV_FILE (KEY=value, readable by shells and systemd).
 write_api_key() {
-  local tmp="$CONFIG.gitai-enroll.$$"
+  local target="$CONFIG"
+  [ "$MANAGED" -eq 0 ] || target="$KEY_ENV_FILE"
+  local tmp="$target.gitai-enroll.$$"
   (
     umask 077
-    printf '%s' "$1" | jq --rawfile key /dev/stdin '.api_key = $key' "$CONFIG" >"$tmp"
+    mkdir -p "$GIT_AI_DIR"
+    if [ "$MANAGED" -eq 1 ]; then
+      printf 'GIT_AI_API_KEY=%s\n' "$1" >"$tmp"
+    else
+      printf '%s' "$1" | jq --rawfile key /dev/stdin '.api_key = $key' "$CONFIG" >"$tmp"
+    fi
   )
-  mv -f "$tmp" "$CONFIG"
+  mv -f "$tmp" "$target"
+  STORED_IN="$target"
 }
 
 if [ "$MINT" -eq 0 ]; then
@@ -339,7 +381,7 @@ else
   esac
   write_api_key "$credential"
   unset credential
-  note "stored credential $credential_id in $CONFIG"
+  note "stored credential $credential_id in $STORED_IN"
 
   if [ "$ROTATE" -eq 1 ]; then
     response="$(shared_key_request GET /v1/credentials)"
@@ -359,33 +401,39 @@ unset SHARED_KEY
 
 # --- (e) Agent hooks and daemon login start -----------------------------------
 
-say "Installing git-ai hooks"
-# `git-ai install` hooks every agent it detects (Claude Code, Codex, ...),
-# writes git's trace2 config and restarts the daemon. --env also puts our own
-# install on the shell PATH, as the upstream installer does.
-if [ "$GITAI_BIN" = "$OWN_BIN" ]; then
-  change "$GITAI_BIN" install --env || warn "git-ai install reported errors; see above"
-else
-  change "$GITAI_BIN" install || warn "git-ai install reported errors; see above"
-fi
-
-say "Starting the daemon at login"
-login_asset="git-ai-login-start-$OS.sh"
-login_args=()
-if [ "$GITAI_BIN" != "$OWN_BIN" ]; then
-  login_args=(--bin "$GITAI_BIN")
-fi
-if [ "$DRY_RUN" -eq 1 ]; then
-  note "would download $RELEASE_URL/$login_asset, verify it and run it${login_args[0]:+ with --bin $GITAI_BIN}"
-else
-  # A failure here is not fatal: without it the daemon still starts on the
-  # first git-ai command, it just misses git commands run before that.
-  if (fetch_release_asset "$login_asset"); then
-    child sh "$WORK_DIR/$login_asset" ${login_args[@]+"${login_args[@]}"} ||
-      warn "the login-start installer failed; the daemon will start on first use instead"
+install_hooks_and_login_start() {
+  say "Installing git-ai hooks"
+  # `git-ai install` hooks every agent it detects (Claude Code, Codex, ...),
+  # writes git's trace2 config and restarts the daemon. --env also puts our own
+  # install on the shell PATH, as the upstream installer does.
+  if [ "$GITAI_BIN" = "$OWN_BIN" ]; then
+    change "$GITAI_BIN" install --env || warn "git-ai install reported errors; see above"
   else
-    warn "could not fetch $login_asset; the daemon will start on first use instead"
+    change "$GITAI_BIN" install || warn "git-ai install reported errors; see above"
   fi
+
+  say "Starting the daemon at login"
+  local login_asset="git-ai-login-start-$OS.sh"
+  local login_args=()
+  if [ "$GITAI_BIN" != "$OWN_BIN" ]; then
+    login_args=(--bin "$GITAI_BIN")
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "would download $RELEASE_URL/$login_asset, verify it and run it${login_args[0]:+ with --bin $GITAI_BIN}"
+  else
+    # A failure here is not fatal: without it the daemon still starts on the
+    # first git-ai command, it just misses git commands run before that.
+    if (fetch_release_asset "$login_asset"); then
+      child sh "$WORK_DIR/$login_asset" ${login_args[@]+"${login_args[@]}"} ||
+        warn "the login-start installer failed; the daemon will start on first use instead"
+    else
+      warn "could not fetch $login_asset; the daemon will start on first use instead"
+    fi
+  fi
+}
+
+if [ "$MANAGED" -eq 0 ]; then
+  install_hooks_and_login_start
 fi
 
 # --- (f) Agent skill and PR instruction --------------------------------------
@@ -456,9 +504,46 @@ fi
 
 # --- (g) Status ------------------------------------------------------------------
 
+if [ "$MANAGED" -eq 1 ]; then
+  say "Settings for the tool that manages $CONFIG"
+  note "Put these keys in config.json (for Home Manager: home.file.\".git-ai/config.json\"); none is secret:"
+  jq -n --arg base "$BASE_URL" --argjson repos "$ALLOWED_REPOSITORIES" --arg git "$GIT_PATH_SETTING" \
+    '{api_base_url: $base, telemetry_oss: "off", disable_auto_updates: true, allow_repositories: $repos}
+     + (if $git == "" then {} else {git_path: $git} end)' | sed 's/^/    /'
+  note "Then export the credential from $KEY_ENV_FILE (mode 600, outside the store) to every"
+  note "process that runs git-ai, agents included. git-ai reads it as GIT_AI_API_KEY:"
+  note "  shell rc:        set -a; . \"\$HOME/.git-ai/api-key.env\"; set +a"
+  note "  systemd --user:  EnvironmentFile=%h/.git-ai/api-key.env"
+  note "Apply api_base_url first: with the key and the default URL, git-ai would upload to the vendor."
+  note "Then restart the daemon (git-ai bg shutdown; it restarts on next use) from a shell that has the key."
+  if [ "$PREVIOUS_BASE" != "$BASE_URL" ]; then
+    warn "$CONFIG does not set api_base_url to $BASE_URL yet"
+  fi
+fi
+
 say "git-ai whoami"
 if [ "$DRY_RUN" -eq 1 ]; then
   note "would run: $GITAI_BIN whoami"
+elif [ "$MANAGED" -eq 1 ] && [ "$PREVIOUS_BASE" != "$BASE_URL" ]; then
+  note "skipped until $CONFIG points at $BASE_URL"
+elif [ "$MANAGED" -eq 1 ]; then
+  # The key reaches git-ai through its environment, never argv.
+  (
+    set -a
+    # shellcheck source=/dev/null
+    . "$KEY_ENV_FILE"
+    set +a
+    # Drop every other exported variable (Doppler's secrets) instead of using
+    # env -i, which would need the key on its command line.
+    for name in $(compgen -e); do
+      # shellcheck disable=SC2163 # unexport the variable named by $name
+      case " ${CHILD_ENV[*]} " in
+        *" $name="*) ;;
+        *) [ "$name" = GIT_AI_API_KEY ] || export -n "$name" ;;
+      esac
+    done
+    "$GITAI_BIN" whoami
+  )
 else
   child "$GITAI_BIN" whoami
 fi

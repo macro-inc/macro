@@ -18,7 +18,7 @@ doppler run -p gitai-service -c prd -- tooling/gitai/gitai-enroll
 
 It shows a plan and asks before changing anything (`--yes` skips the question, `--dry-run` prints the plan only). In order, it:
 
-1. Installs git-ai 1.7.7 from the project's GitHub release into `~/.git-ai/bin`, checked against the release's `SHA256SUMS`. If `git-ai --version` already reports 1.7.7 (a Nix-managed install, say), it uses that one and leaves it alone.
+1. Installs git-ai 1.7.6 from the project's GitHub release into `~/.git-ai/bin`, checked against the release's `SHA256SUMS`. If `git-ai --version` already reports 1.7.6 or 1.7.7 (a Nix-managed install, say), it uses that one and leaves it alone. 1.7.7 has no GitHub release; it is 1.7.6 plus a version bump, which is why both count as pinned.
 2. Sets `api_base_url` to `https://gateway.macro.com/gitai`, before any credential exists, so nothing is ever sent to the vendor.
 3. Sets `telemetry_oss` off, `disable_auto_updates` on, and `allow_repositories` to `https://github.com/macro-inc/macro` (the client matches that against both HTTPS and SSH remotes). On machines without git in a standard location (NixOS) it also sets `git_path`.
 4. Mints a device credential: `POST /v1/credentials {email, hostname}` with the shared key, using your `git config user.email` and `uname -n`. The credential goes into `~/.git-ai/config.json` as `api_key` (file mode 600).
@@ -30,11 +30,17 @@ Re-running is safe: it re-applies the settings and keeps the existing credential
 
 The shared key never touches disk, a log or a command line: the script removes it from the environment at start and hands it to curl as a config file on stdin. Every program it starts (git-ai, its daemon, the login-start installer) gets a minimal environment, so none of the Doppler secrets live on in the daemon.
 
-Environment overrides, for testing: `GITAI_BASE_URL` (plain `http` only for localhost) and `GITAI_CLIENT_VERSION`.
+Environment overrides, for testing: `GITAI_BASE_URL` (plain `http` only for localhost) and `GITAI_CLIENT_VERSION` (installs and accepts only that version).
 
 ### Nix-managed machines
 
-If `~/.git-ai/config.json` is a Home Manager symlink into the Nix store, the script stops before minting: a credential must not land in the world-readable store. Make it a regular file (drop it from the Home Manager config), then re-run.
+If `~/.git-ai/config.json` is a symlink or read-only (a Home Manager file in the Nix store, say), the script switches to managed mode, because a credential must never land in the world-readable store:
+
+- It changes no git-ai settings, hooks or login start; those stay with your Nix config.
+- It mints the credential into `~/.git-ai/api-key.env` (`GIT_AI_API_KEY=...`, mode 600). git-ai reads `GIT_AI_API_KEY` from its environment ahead of `api_key`; it has no other place for a key outside `config.json`.
+- It prints the exact non-secret keys for `config.json` (`api_base_url`, `telemetry_oss`, `disable_auto_updates`, `allow_repositories`, and `git_path` where needed).
+
+Then put those keys in the Home Manager config and switch, so the base URL is in place before the key is used. Export the key file to everything that runs git-ai, agents included: `set -a; . ~/.git-ai/api-key.env; set +a` in your shell rc, and `EnvironmentFile=%h/.git-ai/api-key.env` for systemd user units. Restart the daemon (`git-ai bg shutdown`; it starts again on next use) from a shell that has the key, then re-run the script: it keeps the credential and prints `git-ai whoami`.
 
 ## Credentials
 

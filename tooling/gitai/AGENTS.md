@@ -15,8 +15,8 @@ installs. `README.md` is the human guide: enrolment steps, credentials, testing.
 
 - Change the PR instruction line: edit `INSTRUCTION` in `gitai-enroll`; re-runs
   replace the block between the `gitai-enroll` markers.
-- Bump the client: change `PINNED_VERSION`, and the version the server pins in
-  `/worker/releases`, together.
+- Bump the client: change `PINNED_VERSION` and `ACCEPTED_VERSIONS`, and the
+  version the server pins in `/worker/releases`, together.
 
 ## Checks
 
@@ -28,8 +28,10 @@ installs. `README.md` is the human guide: enrolment steps, credentials, testing.
 - Bash 3.2 (stock macOS): no associative arrays, `mapfile` or `${var,,}`, and
   guard empty array expansions.
 - Secrets reach curl only through `--config -` on stdin and reach config.json
-  only through `jq --rawfile /dev/stdin`, never through argv; `change` prints
+  only through `jq --rawfile /dev/stdin` or `printf` redirection, never through argv; `change` prints
   its arguments under `--dry-run`.
-- `api_base_url` must be set before any credential is written.
+- `api_base_url` must be set before any credential is written. In managed mode
+  (read-only or symlinked config.json) the script cannot set it, so it writes the
+  credential only to `~/.git-ai/api-key.env`, which git-ai never reads by itself.
 - The read API, credential endpoints and metric names are fixed by
   gitai-service; keep the skill and the dashboard in step with it.
