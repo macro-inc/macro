@@ -153,10 +153,24 @@ impl SyncSession {
         };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.
-        let prepared = match document::update(&access, &port, &effects, &revision, &update).await {
-            Ok(prepared) => prepared,
-            Err(error) => return error_response(error),
-        };
+        let mut prepared =
+            match document::update(&access, &port, &effects, &revision, &update).await {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    if matches!(error, DocumentError::Persistence) {
+                        self.discard_failed_append();
+                    }
+                    return error_response(error);
+                }
+            };
+        // Preflight's fork may not carry already-pending imports. Return the
+        // revision actually applied and persisted, including the released suffix.
+        if let Some(revision) = self
+            .release_resolved_pending_revision(&state, &storage)
+            .await?
+        {
+            prepared.revision = revision;
+        }
         // Taken from the request, so a retry of an applied update still maps them.
         let writers = match document::writing_peers(&update) {
             Ok(writers) => writers,

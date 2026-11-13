@@ -3,3 +3,5 @@
 pub mod document;
 pub mod models;
 pub mod permissions;
+
+pub(crate) mod fanout;

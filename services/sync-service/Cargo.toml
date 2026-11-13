@@ -49,6 +49,7 @@ sync_service_bebop_schema = { path = "bebop-schema" }
 serde_json.workspace = true
 sha2.workspace = true
 serde.workspace = true
+serde-wasm-bindgen.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }

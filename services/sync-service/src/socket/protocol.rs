@@ -246,7 +246,8 @@ pub async fn process_message(
             for update in &updates {
                 let imported = session_storage
                     .append_pending_operation(update, document_state)
-                    .await?;
+                    .await
+                    .inspect_err(|_| dss.discard_failed_append())?;
                 if imported.changed {
                     dss.record_editor(attribution.as_ref());
                 }
@@ -302,6 +303,8 @@ pub async fn process_message(
                     }
                 }
             }
+            dss.release_resolved_pending(document_state, session_storage)
+                .await?;
         }
         // Handle an incoming awareness update from a peer
         // Should apply the update to the local epehemeral awareness strore

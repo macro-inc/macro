@@ -1,6 +1,15 @@
-use loro::VersionVector;
+use crate::domain::fanout::{
+    FANOUT_DEBT_KEY, FanoutDebt, LEGACY_FANOUT_DEBT_KEY, is_fanout_debt_key,
+};
+use crate::domain::fanout::{PendingOperations, StatePort};
+use crate::storage::operation_chunks::{
+    FORMAT_MARKER_KEY, FORMAT_MARKER_VALUE, INLINE_BYTES, INLINE_COMPLETE_TAG, Manifest, chunk_key,
+};
+use loro::{LoroDoc, VersionVector};
+mod fanout;
+use serde::Deserialize;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{
         RwLock,
         atomic::{AtomicUsize, Ordering},
@@ -26,7 +35,9 @@ const LAST_VERSION_VECTOR_KEY: &str = "LAST_VERSION_VECTOR";
 pub struct DurableKVStorage {
     inner: Storage,
     ids: OrederedIds,
-    applied_keys: RwLock<BTreeSet<String>>,
+    pending: RwLock<PendingOperations>,
+    archive_incomplete: RwLock<BTreeSet<String>>,
+    physical_keys: RwLock<BTreeMap<String, BTreeSet<String>>>,
 }
 
 /// For a given op, if it has been applied but the snapshot has not be saved, it is considered
@@ -36,6 +47,53 @@ const PENDING_OP_PREFIX: &str = "o/";
 /// NB: This does not contain all historical ops, just ops since we started tracking. So it can't
 /// be used to recreate all documents.
 const ALL_OP_PREFIX: &str = "a/";
+const ARCHIVE_STATUS_PREFIX: &str = "o/!archive-status-v1/";
+
+#[derive(Deserialize)]
+#[serde(transparent)]
+struct RawStorageValue(
+    #[serde(with = "serde_wasm_bindgen::preserve")] worker::wasm_bindgen::JsValue,
+);
+
+// Readers recognize the deployed receipt format even though this build never
+// writes it. Preserve the byte buffer instead of coercing the tuple to bytes.
+fn operation_bytes(value: &worker::wasm_bindgen::JsValue) -> Result<Vec<u8>> {
+    if js_sys::Array::is_array(value) {
+        let tag = Reflect::get_u32(value, 0)?.as_f64();
+        let namespace = f64::from(INLINE_COMPLETE_TAG & 0xffff_0000);
+        if tag == Some(f64::from(INLINE_COMPLETE_TAG)) {
+            let data = Reflect::get_u32(value, 1)?;
+            if Reflect::get(value, &"length".into())?.as_f64() != Some(2.0)
+                || !data.is_instance_of::<js_sys::Uint8Array>()
+            {
+                return Err(worker::Error::from("invalid inline operation receipt"));
+            }
+            let bytes = js_sys::Uint8Array::new(&data).to_vec();
+            if bytes.is_empty() || bytes.len() > INLINE_BYTES {
+                return Err(worker::Error::from(
+                    "invalid inline operation receipt length",
+                ));
+            }
+            return Ok(bytes);
+        }
+        if tag.is_some_and(|tag| tag >= namespace && tag < namespace + 65536.0) {
+            return Err(worker::Error::from(
+                "invalid inline operation receipt version",
+            ));
+        }
+    }
+    Ok(js_sys::Uint8Array::new(value).to_vec())
+}
+
+/// Always-on reader for sidecars created by the separately activated writer.
+#[derive(Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+enum ArchiveStatus {
+    Incomplete {
+        attribution: Option<crate::domain::document::DocumentAttribution>,
+    },
+    Complete,
+}
 
 fn pending_op_key(id: &str) -> String {
     format!("{PENDING_OP_PREFIX}{id}")
@@ -53,47 +111,160 @@ impl DurableKVStorage {
         Self {
             inner,
             ids: OrederedIds::default(),
-            applied_keys: Default::default(),
+            pending: Default::default(),
+            archive_incomplete: Default::default(),
+            physical_keys: Default::default(),
         }
     }
 
     pub(in crate::outbound::storage) async fn get_key(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        do_kv_result_to_result_opt(self.inner.get(key).await)
+        match self.inner.get::<RawStorageValue>(key).await? {
+            Some(value) => self
+                .resolve_operation(key, operation_bytes(&value.0)?)
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     pub(in crate::outbound::storage) async fn list_do_kv(
         &self,
         prefix: &str,
     ) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        Ok(self
+        let entries = self
             .inner
             .list_with_options(ListOptions::new().prefix(prefix))
-            .await?
-            .entries()
-            .into_iter()
-            .map(|res| {
-                let entry = res.context("Error getting entry")?;
-                let key: String = Reflect::get_u32(&entry, 0)
-                    .context("failed to get key")?
-                    .as_string()
-                    .context("Key is not a string")?;
+            .await?;
+        let mut operations = Vec::new();
+        for entry in entries.entries().into_iter() {
+            let entry = entry.context("error getting operation entry")?;
+            let key = Reflect::get_u32(&entry, 0)?
+                .as_string()
+                .context("operation key is not a string")?;
+            let value = Reflect::get_u32(&entry, 1)?;
+            // Incomplete or corrupt physical records fail the entire read: a
+            // partial document must never be published as a successful load.
+            let bytes = self
+                .resolve_operation(&key, operation_bytes(&value)?)
+                .await?;
+            operations.push(Ok((key, bytes)));
+        }
+        Ok(operations)
+    }
 
-                let value = Reflect::get_u32(&entry, 1).context("failed to get value")?;
-
-                let bytes = if value.is_instance_of::<js_sys::Uint8Array>() {
-                    js_sys::Uint8Array::unchecked_from_js_ref(&value).to_vec()
-                } else {
-                    js_sys::Uint8Array::new(&value).to_vec()
-                };
-
-                Ok((key, bytes))
-            })
-            .collect())
+    async fn resolve_operation(&self, key: &str, bytes: Vec<u8>) -> Result<Vec<u8>> {
+        if is_fanout_debt_key(key) {
+            let debt: FanoutDebt = serde_json::from_slice(&bytes).context("invalid fanout debt")?;
+            debt.vectors().context("invalid fanout version vectors")?;
+            return Ok(bytes);
+        }
+        if key == FORMAT_MARKER_KEY {
+            if bytes != FORMAT_MARKER_VALUE {
+                return Err(worker::Error::from("invalid operation format marker"));
+            }
+            return Ok(bytes);
+        }
+        if key.starts_with(ARCHIVE_STATUS_PREFIX) {
+            let _: ArchiveStatus =
+                serde_json::from_slice(&bytes).context("invalid archive receipt")?;
+            return Ok(bytes);
+        }
+        if !(key.starts_with(PENDING_OP_PREFIX) || key.starts_with(ALL_OP_PREFIX)) {
+            return Ok(bytes);
+        }
+        let Some(header) =
+            Manifest::decode(&bytes).map_err(|error| worker::Error::from(error.to_string()))?
+        else {
+            return Ok(bytes);
+        };
+        let mut chunks = Vec::new();
+        for start in (0..header.count()).step_by(128) {
+            let end = start.saturating_add(128).min(header.count());
+            let keys: Vec<_> = (start..end).map(|index| chunk_key(key, index)).collect();
+            let values = self
+                .inner
+                .get_multiple(keys.iter().map(String::as_str).collect())
+                .await?;
+            for key in &keys {
+                let value = values.get(&key.into());
+                if !value.is_instance_of::<js_sys::Uint8Array>() {
+                    return Err(worker::Error::from("missing or invalid operation chunk"));
+                }
+                chunks.push(js_sys::Uint8Array::new(&value).to_vec());
+            }
+        }
+        let update = header
+            .assemble(&chunks)
+            .map_err(|error| worker::Error::from(error.to_string()))?;
+        let physical: Vec<_> = (0..header.count())
+            .map(|index| chunk_key(key, index))
+            .collect();
+        if key.starts_with(PENDING_OP_PREFIX) {
+            self.physical_keys
+                .write()
+                .unwrap_context("physical operation keys lock")
+                .entry(key.to_owned())
+                .or_default()
+                .extend(physical);
+        }
+        Ok(update)
     }
 
     /// get pending operations from the operation log
     pub(crate) async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        self.list_do_kv(PENDING_OP_PREFIX).await
+        let entries = self.list_do_kv(PENDING_OP_PREFIX).await?;
+        let mut operations = Vec::new();
+        let mut incomplete = BTreeSet::new();
+        let mut debt: Option<FanoutDebt> = None;
+        for entry in entries {
+            let (key, bytes) = entry?;
+            if key == FORMAT_MARKER_KEY {
+                continue;
+            }
+            if is_fanout_debt_key(&key) {
+                let found: FanoutDebt =
+                    serde_json::from_slice(&bytes).context("invalid fanout debt")?;
+                debt = Some(found);
+                continue;
+            }
+            if let Some(id) = key.strip_prefix(ARCHIVE_STATUS_PREFIX) {
+                let status: ArchiveStatus =
+                    serde_json::from_slice(&bytes).context("invalid archive receipt")?;
+                self.physical_keys
+                    .write()
+                    .unwrap_context("physical operation keys lock")
+                    .entry(pending_op_key(id))
+                    .or_default()
+                    .insert(key.clone());
+                if let ArchiveStatus::Incomplete { attribution } = status {
+                    // Preserve original signed claims in the sidecar. This
+                    // reader-only build never repairs or reattributes archives.
+                    let _ = attribution;
+                    incomplete.insert(pending_op_key(id));
+                }
+                continue;
+            }
+            operations.push(Ok((key, bytes)));
+        }
+        // One cold read outside the legacy pending-prefix scan. Read failures
+        // and invalid metadata preserve both keys and fail restoration.
+        if let Some(bytes) = self.inner.get::<Vec<u8>>(FANOUT_DEBT_KEY).await? {
+            let found: FanoutDebt =
+                serde_json::from_slice(&bytes).context("invalid fanout debt")?;
+            found.vectors().context("invalid fanout version vectors")?;
+            debt = Some(match debt {
+                Some(old) => old
+                    .merged_with(&found)
+                    .context("incompatible fanout debts")?,
+                None => found,
+            });
+        }
+        self.with_pending(|state| state.restore_debt(debt));
+        *self
+            .archive_incomplete
+            .write()
+            .unwrap_context("archive status lock") = incomplete;
+        Ok(operations)
     }
 
     pub async fn apply_op(
@@ -113,21 +284,15 @@ impl DurableKVStorage {
         op_update: &[u8],
         attribution: Option<&crate::domain::document::DocumentAttribution>,
     ) -> Result<ImportedUpdate> {
-        let op_id = self.ids.id();
-        let op_key = pending_op_key(&op_id);
-        let imported = document_state.import(op_update)?;
-        self.inner.put(&op_key, op_update).await?;
-        self.applied_keys
-            .write()
-            .unwrap_context("applied_keys mutex poisoned")
-            .insert(op_key);
-        self.inner.put(&all_op_key(&op_id), op_update).await?;
-        if let Some(attribution) = attribution {
-            let metadata = serde_json::to_vec(attribution)
-                .context("failed to serialize signed document attribution")?;
-            self.inner.put(&format!("actor/{op_id}"), metadata).await?;
-        }
-        Ok(imported)
+        crate::domain::fanout::append(
+            &fanout::Append {
+                storage: self,
+                document: document_state,
+                attribution,
+            },
+            op_update,
+        )
+        .await
     }
 
     pub async fn apply_pending_ops(&self, snapshot: &DocumentState) -> Result<()> {
@@ -141,52 +306,65 @@ impl DurableKVStorage {
             "Applying [{}] pending ops", n_pending_ops
         );
 
-        let mut ers = vec![];
-        let mut ops = vec![];
-        let mut keys = vec![];
-        for res_op in pending_ops {
-            match res_op {
-                Ok((k, o)) => {
-                    keys.push(k);
-                    ops.push(o);
-                }
-                Err(e) => ers.push(e),
-            }
+        let mut rows = Vec::new();
+        for entry in pending_ops {
+            let (key, bytes) = entry?;
+            let required = LoroDoc::decode_import_blob_meta(&bytes, false)
+                .context("invalid pending operation metadata")?
+                .partial_end_vv;
+            rows.push((key, required, bytes));
         }
-
-        if !ers.is_empty() {
-            error!(errors =? ers, "got [{}] invalid things from durable ojbect KV", ers.len());
-        }
-
-        snapshot
-            .replay_pending_operations(&ops)
-            .context("failed applying pending ops")?;
-
-        self.applied_keys
-            .write()
-            .unwrap_context("applied_keys mutex poisoned")
-            .extend(keys);
-
+        snapshot.replay_pending_operations(
+            &rows
+                .iter()
+                .map(|(_, _, bytes)| bytes.clone())
+                .collect::<Vec<_>>(),
+        )?;
+        self.with_pending(|state| {
+            state.restore_pending(
+                rows.into_iter().map(|(key, required, _)| (key, required)),
+                &snapshot.loro_doc.oplog_vv(),
+            )
+        });
         Ok(())
     }
 
     pub async fn clear_applied_ops(&self) -> Result<()> {
         let keys: Vec<String> = {
             let keys = self
-                .applied_keys
+                .pending
                 .read()
                 .unwrap_context("applied_keys mutex poisoned");
-            if keys.is_empty() {
+            if keys.applied_keys().next().is_none() {
                 return Ok(());
             }
-            keys.clone().into_iter().collect()
+            let incomplete = self
+                .archive_incomplete
+                .read()
+                .unwrap_context("archive status lock");
+            keys.applied_keys()
+                .filter(|key| !incomplete.contains(*key))
+                .cloned()
+                .collect()
         };
+        let mut physical = keys.clone();
+        {
+            let chunks = self
+                .physical_keys
+                .read()
+                .unwrap_context("physical operation keys lock");
+            for key in &keys {
+                if let Some(extra) = chunks.get(key) {
+                    physical.extend(extra.iter().cloned());
+                }
+            }
+        }
         let n_deleted = self
             .inner
-            .delete_multiple(keys.clone())
+            .delete_multiple(physical.clone())
             .await
             .inspect_err(|e| warn!(keys =? keys, error=?e, "error in kv.delete_multiple()"))?;
-        if n_deleted != keys.len() {
+        if n_deleted != physical.len() {
             error!(
                 n_deleted = n_deleted,
                 keys_len = keys.len(),
@@ -199,11 +377,16 @@ TODO
             );
         }
         let mut app_keys = self
-            .applied_keys
+            .pending
             .write()
             .unwrap_context("applied_keys mutex poisoned");
+        let mut physical_keys = self
+            .physical_keys
+            .write()
+            .unwrap_context("physical operation keys lock");
         for k in keys {
-            app_keys.remove(&k);
+            app_keys.forget_applied(&k);
+            physical_keys.remove(&k);
         }
         Ok(())
     }
