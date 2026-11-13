@@ -138,7 +138,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     rejected: 'declineImportEntity',
     imported: 'importNotionPage',
     read: `
-      getUsageHandler getChatHistoryHandler getChat fetchWebPage
+      getUsageHandler getAgentSpendHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
     `,
     searched: 'searchWeb',

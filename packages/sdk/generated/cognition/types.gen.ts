@@ -51,6 +51,33 @@ export type AddServerRequest = {
 };
 
 /**
+ * An agent's AI spend over a window ending now.
+ */
+export type AgentSpendResponse = {
+    /**
+     * The period each bucket covers.
+     */
+    bucket: SpendBucket;
+    /**
+     * Buckets with priced usage, oldest first. Buckets without usage are
+     * omitted; fill them with zero.
+     */
+    buckets: Array<SpendBucketTotal>;
+    /**
+     * Always `USD`.
+     */
+    currency: Currency;
+    /**
+     * Start of the oldest bucket (inclusive), in UTC.
+     */
+    from: string;
+    /**
+     * End of the window (exclusive): the time of the request.
+     */
+    until: string;
+};
+
+/**
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
@@ -494,6 +521,11 @@ export type CreateChatRequest = {
      */
     projectId?: string | null;
 };
+
+/**
+ * The currency spend is reported in.
+ */
+export type Currency = 'USD';
 
 /**
  * What a successful tool call committed to the user's databases.
@@ -2140,6 +2172,25 @@ export type SlackParticipant = {
 };
 
 /**
+ * The calendar period one spend bucket covers, in UTC.
+ */
+export type SpendBucket = 'day' | 'week' | 'month' | 'year';
+
+/**
+ * The cost recorded in one bucket.
+ */
+export type SpendBucketTotal = {
+    /**
+     * Sum of priced usage in the bucket, in USD.
+     */
+    costUsd: number;
+    /**
+     * Start of the bucket, in UTC.
+     */
+    start: string;
+};
+
+/**
  * Request body for starting an OAuth authorization flow.
  */
 export type StartAuthRequest = {
@@ -2875,6 +2926,49 @@ export type ReadMyActivityResponses = {
 };
 
 export type ReadMyActivityResponse = ReadMyActivityResponses[keyof ReadMyActivityResponses];
+
+export type GetAgentSpendHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * The agent account's Macro user id
+         */
+        agent_id: string;
+    };
+    query?: {
+        /**
+         * The period each bucket covers; `day` when omitted.
+         */
+        bucket?: SpendBucket;
+    };
+    url: '/ai-cost/agents/{agent_id}/spend';
+};
+
+export type GetAgentSpendHandlerErrors = {
+    /**
+     * Invalid bucket
+     */
+    400: unknown;
+    /**
+     * No such agent, or not readable
+     */
+    404: ErrorBody;
+    /**
+     * Internal server error
+     */
+    500: ErrorBody;
+};
+
+export type GetAgentSpendHandlerError = GetAgentSpendHandlerErrors[keyof GetAgentSpendHandlerErrors];
+
+export type GetAgentSpendHandlerResponses = {
+    /**
+     * Spend per bucket
+     */
+    200: AgentSpendResponse;
+};
+
+export type GetAgentSpendHandlerResponse = GetAgentSpendHandlerResponses[keyof GetAgentSpendHandlerResponses];
 
 export type SetPricingHandlerData = {
     body: SetPricingRequest;

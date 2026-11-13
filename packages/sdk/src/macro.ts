@@ -584,7 +584,11 @@ export {
   ExternalProfilePicture,
   type ProfilePicture,
 } from './entities/users/profile-picture';
-export type { ActivityReport } from './entities/users/user';
+export type {
+  ActivityReport,
+  AgentSpend,
+  AgentSpendBucket,
+} from './entities/users/user';
 export type {
   WebFetchOptions,
   WebFetchResponse,

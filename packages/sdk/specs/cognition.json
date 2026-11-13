@@ -73,6 +73,68 @@
         }
       }
     },
+    "/ai-cost/agents/{agent_id}/spend": {
+      "get": {
+        "tags": ["ai_usage"],
+        "summary": "An agent account's AI spend, bucketed by UTC day (last 30 days), ISO week\n(last 26), month (last 12), or year (last 5). Readable by the agent itself\nand by owners and admins of a team it belongs to, behind the\n`enable-agent-dashboards` flag; anyone else gets 404.",
+        "operationId": "get_agent_spend_handler",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The agent account's Macro user id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "description": "The period each bucket covers; `day` when omitted.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpendBucket"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Spend per bucket",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSpendResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid bucket"
+          },
+          "404": {
+            "description": "No such agent, or not readable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-cost/pricing": {
       "post": {
         "tags": ["ai_usage"],
@@ -3685,6 +3747,38 @@
           }
         }
       },
+      "AgentSpendResponse": {
+        "type": "object",
+        "description": "An agent's AI spend over a window ending now.",
+        "required": ["bucket", "from", "until", "currency", "buckets"],
+        "properties": {
+          "bucket": {
+            "$ref": "#/components/schemas/SpendBucket",
+            "description": "The period each bucket covers."
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpendBucketTotal"
+            },
+            "description": "Buckets with priced usage, oldest first. Buckets without usage are\nomitted; fill them with zero."
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency",
+            "description": "Always `USD`."
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the oldest bucket (inclusive), in UTC."
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "End of the window (exclusive): the time of the request."
+          }
+        }
+      },
       "AiFeature": {
         "type": "string",
         "description": "Everything we use AI for. The wire / DB form of each variant is its\n`snake_case` name.",
@@ -4462,6 +4556,11 @@
             "description": "Optional project to associate the chat with."
           }
         }
+      },
+      "Currency": {
+        "type": "string",
+        "description": "The currency spend is reported in.",
+        "enum": ["USD"]
       },
       "DatabaseChange": {
         "oneOf": [
@@ -7173,6 +7272,28 @@
           "name": {
             "type": "string",
             "description": "Display name or Slack handle."
+          }
+        }
+      },
+      "SpendBucket": {
+        "type": "string",
+        "description": "The calendar period one spend bucket covers, in UTC.",
+        "enum": ["day", "week", "month", "year"]
+      },
+      "SpendBucketTotal": {
+        "type": "object",
+        "description": "The cost recorded in one bucket.",
+        "required": ["start", "costUsd"],
+        "properties": {
+          "costUsd": {
+            "type": "number",
+            "format": "double",
+            "description": "Sum of priced usage in the bucket, in USD."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the bucket, in UTC."
           }
         }
       },

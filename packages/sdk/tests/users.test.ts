@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { Macro } from '../src/macro';
+import { type AgentSpend, Macro } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -82,4 +82,36 @@ test('person search failures propagate and a blank query is refused', async () =
   status = 500;
   await expect(macro.users.search('Alice')).rejects.toThrow();
   await expect(macro.users.search('  ')).rejects.toThrow('name or email');
+});
+
+test('agent spend reads one bucketed window for the agent account', async () => {
+  const requests: Request[] = [];
+  const body: AgentSpend = {
+    bucket: 'week',
+    from: '2026-05-18T00:00:00Z',
+    until: '2026-11-13T07:00:00Z',
+    currency: 'USD',
+    buckets: [{ start: '2026-11-09T00:00:00Z', costUsd: 1.25 }],
+  };
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json(body);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { cognition: 'https://cognition.test' },
+  });
+
+  const spend = await macro.users
+    .byId('macro|agent@example.com')
+    .spend({ bucket: 'week' });
+
+  expect(spend).toEqual(body);
+  expect(requests.map((request) => request.url)).toEqual([
+    'https://cognition.test/ai-cost/agents/macro%7Cagent%40example.com/spend?bucket=week',
+  ]);
 });

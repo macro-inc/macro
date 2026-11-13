@@ -1,5 +1,9 @@
 import type { UserName } from '../../../generated/auth/types.gen';
-import type { Activity } from '../../../generated/cognition/types.gen';
+import type {
+  Activity,
+  AgentSpendResponse,
+  SpendBucket,
+} from '../../../generated/cognition/types.gen';
 import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -9,6 +13,12 @@ import { type ProfilePicture, toProfilePicture } from './profile-picture';
 
 /** A privacy-reviewed summary of a user's professional work over one period. */
 export type ActivityReport = Activity;
+
+/** The UTC period one bucket of {@link User.spend} covers. */
+export type AgentSpendBucket = SpendBucket;
+
+/** An agent account's AI spend, summed per bucket, from {@link User.spend}. */
+export type AgentSpend = AgentSpendResponse;
 
 /**
  * A Macro user. Identity lives in the auth service, so details like the
@@ -155,6 +165,30 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
       }),
     );
     return reports;
+  }
+
+  /**
+   * This agent account's AI spend in USD, summed per UTC day (last 30 days),
+   * Monday-start week (last 26), month (last 12) or year (last 5), oldest
+   * first. Only buckets with spend are listed; treat missing ones as zero.
+   *
+   * Readable by the agent itself and by owners and admins of a team it
+   * belongs to. Anyone else, or reading a person rather than an agent account,
+   * fails with a not-found error.
+   *
+   * @example
+   * const weeks = await agentAccount.spend({ bucket: 'week' });
+   * const total = weeks.buckets.reduce((sum, b) => sum + b.costUsd, 0);
+   *
+   * @readonly
+   */
+  async spend(options?: { bucket?: AgentSpendBucket }): Promise<AgentSpend> {
+    return unwrap(
+      await this.client.cognition.getAgentSpendHandler({
+        path: { agent_id: this.id },
+        query: { bucket: options?.bucket },
+      }),
+    );
   }
 
   /**
