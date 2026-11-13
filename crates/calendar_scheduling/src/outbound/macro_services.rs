@@ -74,7 +74,9 @@ impl<O: CalendarSyncHealthReader, M, L> MacroCalendars<O, M, L> {
         }
         .check_availability(Utc::now())
         .map_err(|refusal| {
-            tracing::Span::current().record("reason", refusal.as_str());
+            let span = tracing::Span::current();
+            span.record("outcome", "refused");
+            span.record("reason", refusal.as_str());
             Error::CalendarUnavailable
         })
     }
@@ -470,7 +472,10 @@ where
     #[tracing::instrument(
         name = "scheduling.attachment_readiness",
         skip_all,
-        fields(reason = tracing::field::Empty),
+        fields(
+            outcome = tracing::field::Empty,
+            reason = tracing::field::Empty,
+        ),
         err(level = tracing::Level::DEBUG)
     )]
     async fn ready(&self, host: &str) -> Result<(), Error> {
@@ -479,7 +484,8 @@ where
             .list_visible_calendars(host)
             .await
             .map_err(|_| Error::CalendarUnavailable)?;
-        self.check_availability(host, &calendars).await?;
+        let served = self.check_availability(host, &calendars).await?;
+        tracing::Span::current().record("outcome", served.as_str());
         Ok(())
     }
 }
