@@ -29,16 +29,16 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
-  // The button stays enabled while deleting, so ignore presses while an
-  // attempt is in flight instead of deleting the same items twice.
-  let deleting = false;
+  // A large folder can take a while; the button shows it is working and
+  // ignores presses until the attempt settles, so nothing is deleted twice.
+  const [deleting, setDeleting] = createSignal(false);
   const handleDelete = async () => {
-    if (deleting) return;
-    deleting = true;
+    if (deleting()) return;
+    setDeleting(true);
     try {
       await deleteEntities();
     } finally {
-      deleting = false;
+      setDeleting(false);
     }
   };
   const deleteEntities = async () => {
@@ -105,6 +105,7 @@ export const BulkDeleteView = (props: {
         <Button
           ref={props.deleteButtonRef}
           variant="secondary"
+          loading={deleting()}
           // Delete takes focus when the dialog opens, so an Enter held down to
           // open it would repeat onto Delete. Confirm only on a fresh press.
           onKeyDown={(event: KeyboardEvent) => {

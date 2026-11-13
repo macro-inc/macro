@@ -292,6 +292,7 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
             power_on_requested: false,
             capacity_wait: None,
             retried_by_team: false,
+            failure: None,
         },
         harness_id: Some(harness_id),
         enrollment_generation: Default::default(),

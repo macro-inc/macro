@@ -22,6 +22,7 @@ mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
 use scheduled_action::domain::event_runs::{
@@ -30,7 +31,7 @@ use scheduled_action::domain::event_runs::{
 };
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
-    DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+    DraftHandBacks, DraftJobStore, RequestSessions, ScheduledActionDispatcher, SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
@@ -41,6 +42,9 @@ use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
+use scheduled_action::inbound::draft_job_router::{
+    RoutineDraftJobRouterState, routine_draft_job_router,
+};
 use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
@@ -223,6 +227,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(
         &conn_gateway_client,
     )));
+    let draft_updates = Arc::clone(&live_updates);
 
     let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
@@ -432,7 +437,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // the model the person's Ask AI steps use, admitted and billed as their
     // agent session usage. A draft's session hands its routine back by checking
     // it; the check is kept on the draft's row, so any replica can read it.
-    let hand_backs: Arc<dyn DraftHandBacks> = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let draft_rows = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let hand_backs: Arc<dyn DraftHandBacks> = Arc::clone(&draft_rows) as _;
     let drafts = Arc::new(
         RoutineDrafts::new(
             Arc::clone(&code),
@@ -449,9 +455,21 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )))
         .with_conditions_enabled(conditions_enabled),
     );
-    // Drafts a stopped process left behind lose their session and row.
+    // Background drafts run here, on the replica they were started on, and
+    // keep their state on the same row, so a reload or any replica reads
+    // it. Shutdown fails the ones still drafting as interrupted.
+    let draft_jobs = Arc::new(DraftJobs::new(
+        Arc::clone(&drafts),
+        draft_rows as Arc<dyn DraftJobStore>,
+        draft_updates,
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
+    // Drafts a stopped process left behind lose their session and row, and
+    // background drafts whose drafter stopped fail.
     {
         let drafts = Arc::clone(&drafts);
+        let draft_jobs = Arc::clone(&draft_jobs);
         let stop = lifecycle.stop_workers.clone();
         lifecycle.workers.spawn(async move {
             let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
@@ -461,8 +479,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = stop.cancelled() => return,
                     _ = every.tick() => {}
                 }
-                // Logged by the sweep's span.
+                // Logged by the sweeps' spans.
                 let _ = drafts.sweep().await;
+                let _ = draft_jobs.sweep().await;
             }
         });
     }
@@ -616,6 +635,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: drafts,
         authorization_state: authorization_state.clone(),
     };
+    let draft_job_state = RoutineDraftJobRouterState {
+        service: draft_jobs,
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
@@ -624,6 +647,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
+        .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
         .merge(suggestion_router::<_, _, ()>(feed_state))
         .merge(generation_router::<_, _, ()>(generation_state));

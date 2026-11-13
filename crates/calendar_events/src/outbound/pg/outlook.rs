@@ -274,32 +274,52 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             SELECT gen_random_uuid(),l.macro_id,l.id,'outlook',l.email_address::text FROM email_links l
             JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation
             WHERE l.provider='OUTLOOK' AND l.is_sync_active AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]
+              AND NOT EXISTS(SELECT 1 FROM calendar_accounts x WHERE x.email_link_id=l.id AND x.owner_id=l.macro_id AND x.sync_status<>'disabled')
             ON CONFLICT(email_link_id) DO UPDATE SET owner_id=EXCLUDED.owner_id,
                 sync_status=CASE WHEN calendar_accounts.sync_status='disabled' THEN 'pending' ELSE calendar_accounts.sync_status END
             WHERE calendar_accounts.owner_id<>EXCLUDED.owner_id OR calendar_accounts.sync_status='disabled'"#).execute(&mut *tx).await.map_err(report)?;
         sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,sync_generation,grant_generation,starts_at,ends_at)
             SELECT gen_random_uuid(),a.id,l.sync_generation,l.grant_generation,$1,$2 FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id
             WHERE a.provider='outlook' AND a.sync_status<>'disabled' AND l.is_sync_active
+              AND NOT EXISTS(SELECT 1 FROM calendar_outlook_work x WHERE x.account_id=a.id AND x.calendar_id IS NULL)
             ON CONFLICT(account_id) WHERE calendar_id IS NULL DO NOTHING"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
+        // Maintenance runs on every claim, so it must cost index probes while
+        // nothing needs it. A generation differs when it sorts either below or
+        // above the link's, and each side is a range of
+        // calendar_outlook_work_account_generation.
         // A replacement grant is the only automatic exit from reauthorization.
         sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status='pending',last_sync_error=NULL
             FROM email_links l WHERE l.id=a.email_link_id AND a.provider='outlook' AND a.sync_status='reauth_required'
-            AND l.is_sync_active AND EXISTS(SELECT 1 FROM calendar_outlook_work w WHERE w.account_id=a.id
-                AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation))"#)
+            AND l.is_sync_active AND(EXISTS(SELECT 1 FROM calendar_outlook_work w WHERE w.account_id=a.id
+                AND(w.account_id,w.sync_generation,w.grant_generation)<(a.id,l.sync_generation,l.grant_generation))
+              OR EXISTS(SELECT 1 FROM calendar_outlook_work w WHERE w.account_id=a.id
+                AND(w.account_id,w.sync_generation,w.grant_generation)>(a.id,l.sync_generation,l.grant_generation)))"#)
             .execute(&mut *tx).await.map_err(report)?;
         // Replacement credentials invalidate every old lease and cursor. Sliding
-        // windows only advance on month boundaries, never on each poll.
+        // windows only advance on month boundaries, never on each poll. The
+        // final predicate repeats the ranges for rows changed under a concurrent
+        // claim.
         sqlx::query!(r#"UPDATE calendar_outlook_work w SET sync_generation=l.sync_generation,grant_generation=l.grant_generation,
             cursor=NULL,page_cursor=NULL,next_page=NULL,terminal_cursor=NULL,pending_ids='{}',visited_pages='{}',scan_id=gen_random_uuid(),full_scan=true,page_loaded=false,starts_at=$1,ends_at=$2,lease_id=NULL,lease_until=NULL,next_run_at=now(),attempts=0
-            FROM calendar_accounts a,email_links l WHERE a.id=w.account_id AND l.id=a.email_link_id AND l.is_sync_active
-            AND a.provider='outlook' AND a.sync_status<>'disabled'
+            FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id CROSS JOIN LATERAL(
+                SELECT x.id FROM calendar_outlook_work x WHERE x.account_id=a.id
+                    AND(x.account_id,x.sync_generation,x.grant_generation,x.ends_at)<(a.id,l.sync_generation,l.grant_generation,$2)
+                UNION ALL SELECT x.id FROM calendar_outlook_work x WHERE x.account_id=a.id
+                    AND(x.account_id,x.sync_generation,x.grant_generation)>(a.id,l.sync_generation,l.grant_generation)) stale
+            WHERE w.id=stale.id AND a.id=w.account_id AND l.is_sync_active AND a.provider='outlook' AND a.sync_status<>'disabled'
             AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation OR w.ends_at<$2)"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
-        let row=sqlx::query!(r#"WITH candidate AS(SELECT w.id FROM calendar_outlook_work w JOIN calendar_accounts a ON a.id=w.account_id
-            JOIN email_links l ON l.id=a.email_link_id JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation
-            LEFT JOIN calendars c ON c.id=w.calendar_id
+        // Work of unclaimable accounts stays due, so the claim takes each
+        // claimable account's first due row from calendar_outlook_work_account_due
+        // instead of walking the global due order past them.
+        let row=sqlx::query!(r#"WITH candidate AS(SELECT w.id FROM(SELECT due.id,due.next_run_at,due.calendar_id FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id
+            JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation
+            CROSS JOIN LATERAL(SELECT x.id,x.next_run_at,x.calendar_id FROM calendar_outlook_work x LEFT JOIN calendars c ON c.id=x.calendar_id
+                WHERE x.account_id=a.id AND x.next_run_at<=now() AND(x.lease_until IS NULL OR x.lease_until<now()) AND(x.calendar_id IS NULL OR NOT c.is_deleted)
+                ORDER BY x.next_run_at,x.calendar_id NULLS FIRST LIMIT 1) due
             WHERE l.is_sync_active AND a.provider='outlook' AND a.sync_status NOT IN ('disabled','reauth_required') AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]
-              AND(w.calendar_id IS NULL OR NOT c.is_deleted) AND w.next_run_at<=now() AND(w.lease_until IS NULL OR w.lease_until<now())
-            ORDER BY w.next_run_at,w.calendar_id NULLS FIRST LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
+            ORDER BY due.next_run_at,due.calendar_id NULLS FIRST) due JOIN calendar_outlook_work w ON w.id=due.id
+            WHERE w.next_run_at<=now() AND(w.lease_until IS NULL OR w.lease_until<now())
+            ORDER BY due.next_run_at,due.calendar_id NULLS FIRST LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE calendar_outlook_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate,calendar_accounts a,email_links l WHERE w.id=candidate.id AND a.id=w.account_id AND l.id=a.email_link_id
             RETURNING w.id,w.account_id,w.calendar_id,w.sync_generation,w.grant_generation,w.cursor,w.starts_at,w.ends_at,w.pending_ids,w.page_loaded,w.page_cursor,a.owner_id,l.id AS link_id,l.email_address::text AS "email_address!",l.fusionauth_user_id"#,lease_id).fetch_optional(&mut *tx).await.map_err(report)?;

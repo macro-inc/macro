@@ -29,12 +29,25 @@ async function draftErrorResponseHandler(
   return aiUsageErrorResponseHandler(response);
 }
 
+/** Why a background draft didn't start, beside the blocking draft's reasons. */
+export type DraftJobErrorCode = DraftErrorCode | 'TOO_MANY';
+
+async function draftJobErrorResponseHandler(
+  response: Response
+): Promise<ResultError<DraftJobErrorCode | FetchWithTokenErrorCode>> {
+  if (response.status === 409) {
+    return { code: 'TOO_MANY', message: 'Too many drafts in progress' };
+  }
+  return draftErrorResponseHandler(response);
+}
+
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
   CatalogEntry,
   CodeUpgrade,
   Draft,
+  DraftJob,
   DraftRoutineRequest,
   ExecutionRecordResponse,
   InProgressExecution,
@@ -44,6 +57,7 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartDraftJobRequest,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -205,6 +219,33 @@ export const scheduledActionClient = {
         errorResponseHandler: draftErrorResponseHandler,
       }
     ),
+
+  /**
+   * Start drafting in the background; the answer comes once drafting is
+   * under way. Sent again with the same `clientId`, it answers with the job
+   * that start began.
+   */
+  startRoutineDraftJob: async (body: StartDraftJobRequest) =>
+    fetchWithToken<DraftJob, DraftJobErrorCode>(
+      `${scheduledActionHost}/scheduled-actions/draft-jobs`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: draftJobErrorResponseHandler,
+      }
+    ),
+
+  /** The caller's background drafts, newest first: drafting, ready and failed. */
+  listRoutineDraftJobs: async () =>
+    scheduledActionFetch<DraftJob[]>('/scheduled-actions/draft-jobs', {
+      method: 'GET',
+    }),
+
+  /** Cancel a background draft still drafting, or discard a finished one. */
+  discardRoutineDraftJob: async (args: { draftId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/draft-jobs/${args.draftId}`, {
+      method: 'DELETE',
+    }),
 
   listCodeUpgrades: async (args: { scheduleId: string }) =>
     scheduledActionFetch<CodeUpgrade[]>(

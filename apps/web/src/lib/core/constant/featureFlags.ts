@@ -1025,6 +1025,16 @@ export const enableRoutineSuggestions = defineFlag({
   default: onInDev,
 });
 
+// New routine drafts in the background: the dialog shows the draft's progress,
+// it keeps going after the dialog closes, and a toast says when it is ready.
+// Off, the dialog waits on the blocking draft request as before. The
+// background routes must be deployed before this turns on.
+export const enableRoutineBackgroundDrafts = defineFlag({
+  key: 'enable-routine-background-drafts',
+  env: 'ENABLE_ROUTINE_BACKGROUND_DRAFTS',
+  default: onInDev,
+});
+
 // Suggestions: the For you feed of proactive suggestions. The backend gates every
 // suggestions route on the same PostHog flag.
 export const enableSuggestions = defineFlag({

@@ -219,6 +219,38 @@ impl CustomerRepositoryImpl {
         Ok(outcome)
     }
 
+    /// Called while holding the subscription guard, for a pending change
+    /// sent less than [`super::billing::PENDING_SETTLE_AFTER`] ago whose
+    /// sender let go of the guard. Its first request may still be running at
+    /// the provider, so marking it abandoned now could miss a change that
+    /// lands later. Instead the exact stored request is sent again under the
+    /// same `Idempotency-Key`, which the provider runs at most once: a
+    /// finished first request answers with its saved result, one still
+    /// running answers 409, and one that never arrived runs now. Only a
+    /// definite outcome lets the caller go ahead; anything else is
+    /// [`CustomerError::ItemChangeInFlight`], as before.
+    pub(super) async fn finish_in_flight_locked(
+        &self,
+        key: &str,
+        change: ItemChange,
+    ) -> Result<(), CustomerError> {
+        match self.replay_item_change_locked(key, change).await {
+            // A decline is recorded on the receipt: that change is over.
+            Ok(()) | Err(CustomerError::PaymentFailed) => {
+                tracing::info!(
+                    idempotency_key = key,
+                    "finished an item change its sender left in flight"
+                );
+                Ok(())
+            }
+            Err(error) => {
+                tracing::info!(idempotency_key = key, error = ?error,
+                    "an item change is still in flight; refusing for now");
+                Err(CustomerError::ItemChangeInFlight)
+            }
+        }
+    }
+
     /// Where the change keyed `key` stands; `None` when it was never sent.
     pub(super) async fn item_change_status(
         &self,
