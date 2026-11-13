@@ -101,8 +101,7 @@ export interface CacheWorkerCoreOptions {
   afterArrivedMessages?: (resume: () => void) => void;
 }
 
-/** A message posted now is normally handled after the ones already waiting;
- * where a browser orders them otherwise, the queue only keeps arrival order. */
+/** Runs `resume` in a later task, after at least one waiting message. */
 function afterArrivedMessages(resume: () => void): void {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = () => {
@@ -428,7 +427,7 @@ export class CacheWorkerCore {
         if (duplicate) {
           duplicate.priority = Math.max(duplicate.priority, priority);
           duplicate.waiters.push({ resolve, reject });
-          this.drainQueue();
+          this.collectArrivalsThenDrain();
           return;
         }
       }
@@ -439,7 +438,7 @@ export class CacheWorkerCore {
         readSignature: signature,
         waiters: [{ resolve, reject }],
       });
-      this.drainQueue();
+      this.collectArrivalsThenDrain();
     });
   }
 
@@ -519,28 +518,41 @@ export class CacheWorkerCore {
       )
       .finally(() => {
         this.running = false;
-        if (this.queue.length === 0) {
-          this.resolveDrainWaitersIfIdle();
-          return;
-        }
-
-        // Engine calls can run to completion without returning to the event
-        // loop, so requests that arrived meanwhile are not in the queue yet.
-        // Picking the next one now would run the whole backlog in arrival
-        // order whatever their priority.
-        const resume = () => {
-          this.yielding = false;
-          this.drainQueue();
-          this.resolveDrainWaitersIfIdle();
-        };
-        this.yielding = true;
-        try {
-          this.afterArrivedMessages(resume);
-        } catch {
-          // Without a way to yield, keep the queue moving in arrival order.
-          resume();
-        }
+        this.collectArrivalsThenDrain();
+        this.resolveDrainWaitersIfIdle();
       });
+  }
+
+  /**
+   * Starts the next request only once the requests already sent have joined
+   * the queue. The browser delivers one message per task and engine calls
+   * run to completion, so a request started the moment it arrives always
+   * finishes before the next is even seen: the queue never holds two, and
+   * its priorities never apply. Each yield lets waiting messages in; it
+   * repeats while they keep coming.
+   */
+  private collectArrivalsThenDrain(): void {
+    if (this.running || this.yielding || this.queue.length === 0) return;
+
+    const seen = this.queue.length;
+    const resume = () => {
+      this.yielding = false;
+      if (this.queue.length > seen) {
+        this.collectArrivalsThenDrain();
+        return;
+      }
+
+      this.drainQueue();
+      this.resolveDrainWaitersIfIdle();
+    };
+    this.yielding = true;
+    try {
+      this.afterArrivedMessages(resume);
+    } catch {
+      // Without a way to yield, keep the queue moving in arrival order.
+      this.yielding = false;
+      this.drainQueue();
+    }
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {

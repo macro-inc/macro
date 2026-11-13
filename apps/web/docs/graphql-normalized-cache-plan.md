@@ -277,11 +277,12 @@ list rereads and past generation checks and operation teardowns. It registers
 nothing and writes nothing, so those fences do not order it; it never passes
 `init` or `clear`. It can run before a write queued ahead of it, returning rows
 that are only older; that write's cache change then refreshes the list.
-The engine worker hands control back to its event loop between two requests.
-Engine calls usually run to completion without yielding, so a request that
-arrives during a busy stretch is otherwise still an undelivered message when
-the next one is picked, and the backlog runs in arrival order whatever its
-priorities. A visible consumer starts a one-second read budget
+The engine worker does not start a request the moment it arrives. The browser
+delivers one message per task and engine calls run to completion, so a request
+started on arrival always finishes before the next is seen: the queue would
+never hold two and its priorities would never apply. The worker instead yields
+to its event loop before starting (and again after each request), repeating
+while requests keep arriving, and then picks by priority. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.

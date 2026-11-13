@@ -1068,20 +1068,14 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
-  it('lets a request that arrived while the engine was busy join the queue before the next one is picked', async () => {
+  it('collects the requests already sent before starting one, so a typed search is not run in arrival order', async () => {
     const order: string[] = [];
-    const blocker = Promise.withResolvers<void>();
-    const started = Promise.withResolvers<void>();
     const resumes: (() => void)[] = [];
-    const yielded = { next: Promise.withResolvers<void>() };
+    let holdArrivals = false;
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({
         readQuery: async (opId: string) => {
           order.push(`read:${opId}`);
-          if (opId === 'blocker') {
-            started.resolve();
-            await blocker.promise;
-          }
           return { kind: 'miss' };
         },
         search: async (request: { query: string }) => {
@@ -1091,42 +1085,29 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const port = { postMessage: vi.fn() };
-    let holdArrivals = false;
     const core = new CacheWorkerCore({
       afterArrivedMessages: (resume) => {
-        if (!holdArrivals) {
-          queueMicrotask(resume);
-          return;
-        }
-        resumes.push(resume);
-        yielded.next.resolve();
+        if (holdArrivals) resumes.push(resume);
+        else queueMicrotask(resume);
       },
     });
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
-    const running = core.handleRequest(port, {
-      id: 2,
-      kind: 'read',
-      opId: 'blocker',
-      query: 'query Blocker { blocker }',
-    });
-    await started.promise;
+    // Let the engine finish releasing `init` before the next message.
+    await new Promise<void>((resolve) => setImmediate(resolve));
     holdArrivals = true;
+
+    // The browser delivers one message per task: the replayed read first.
     const replayed = core.handleRequest(port, {
-      id: 3,
+      id: 2,
       kind: 'read',
       opId: 'replayed',
       query: 'query Replayed { replayed }',
       priority: 'user-visible',
     });
-
-    // The blocker finishes; the search is still an undelivered message.
-    blocker.resolve();
-    await running;
-    await yielded.next.promise;
-    expect(order).toEqual(['read:blocker']);
-
+    expect(order).toEqual([]);
+    // The search is delivered in the task the worker yielded to.
     const search = core.handleRequest(port, {
-      id: 4,
+      id: 3,
       kind: 'search',
       request: {
         profile: 'quick-access-v1',
@@ -1136,14 +1117,17 @@ describe('CacheWorkerCore', () => {
         nowMs: 1,
       },
     });
-    yielded.next = Promise.withResolvers<void>();
+    resumes.shift()?.();
+    // Something arrived during that yield, so it yields once more.
+    expect(order).toEqual([]);
     resumes.shift()?.();
     await search;
-    await yielded.next.promise;
+    expect(order).toEqual(['search:todo']);
+
+    await vi.waitFor(() => expect(resumes).toHaveLength(1));
     resumes.shift()?.();
     await replayed;
-
-    expect(order).toEqual(['read:blocker', 'search:todo', 'read:replayed']);
+    expect(order).toEqual(['search:todo', 'read:replayed']);
   });
 
   it('keeps the queue moving when it cannot yield between requests', async () => {
