@@ -222,6 +222,8 @@ agent_session = { path = "../../crates/agent_session", features = ["test-utils"]
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 async-trait = { workspace = true }
 bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
+# The hosts the SDK can reach, which the code-mode scope test checks.
+code_mode_assets = { path = "../../crates/code_mode_assets" }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
