@@ -4,6 +4,7 @@
  * was detached before the upload finished. lexical-gif.ts rechecks attachment
  * only for a RangeSelection; these record what Source does for the other kinds.
  */
+import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import {
   $createTableNode,
   $createTableRowNode,
@@ -56,12 +57,15 @@ function mount() {
     () => editor,
     () => plugins
   );
+  const history = createEmptyHistoryState();
+  const stopHistory = registerHistory(editor, history, 0);
   const dispose = () => {
+    stopHistory();
     plugins.cleanup();
     editor.setRootElement(null);
     element.remove();
   };
-  return { editor, host, dispose };
+  return { editor, host, history, dispose };
 }
 
 /** Where the file ended up: the root child types, in order. */
@@ -113,6 +117,7 @@ function commitCaptured(
   if (!insertion) throw new Error('Missing actual Source insertion');
   runtime.editor.update(detach, { discrete: true });
   const beforeCommit = describeSelection(runtime.editor, names);
+  const undoBefore = runtime.history.undoStack.length;
   const updates: Array<{
     dirtyElements: number;
     dirtyLeaves: number;
@@ -145,7 +150,17 @@ function commitCaptured(
     stop();
   }
   const afterCommit = describeSelection(runtime.editor, names);
-  return { result, owned, thrown, beforeCommit, afterCommit, updates };
+  // The empty update leaves no undo entry: history ignores it.
+  const undoEntriesAdded = runtime.history.undoStack.length - undoBefore;
+  return {
+    result,
+    owned,
+    thrown,
+    beforeCommit,
+    afterCommit,
+    updates,
+    undoEntriesAdded,
+  };
 }
 
 test('Source: a detached NodeSelection capture inserts nothing yet reports the upload owned', () => {
@@ -253,6 +268,7 @@ const RECORD_NODE = {
   updates: [
     { dirtyElements: 0, dirtyLeaves: 0, tags: [], selectionChanged: false },
   ],
+  undoEntriesAdded: 0,
   root: [
     { type: 'paragraph', text: 'before', hasFile: false },
     { type: 'paragraph', text: 'after', hasFile: false },
@@ -281,6 +297,7 @@ const RECORD_TABLE = {
   updates: [
     { dirtyElements: 0, dirtyLeaves: 0, tags: [], selectionChanged: false },
   ],
+  undoEntriesAdded: 0,
   root: [
     { type: 'paragraph', text: 'before', hasFile: false },
     { type: 'paragraph', text: 'after', hasFile: false },
