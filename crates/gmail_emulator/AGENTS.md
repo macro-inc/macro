@@ -37,7 +37,10 @@ a local stack, without Google accounts.
 - A meeting's guests who are users of the emulator hold their own copy on
   their primary calendar, as at Google: an answer travels to the organizer's
   copy and every other, and a guest changes only what the organizer's guest
-  switches allow.
+  switches allow. Google takes 15 to 30 seconds to carry a change to the
+  other copies; the emulator does it at once unless a test asks for the lag:
+  between `hold_event_copies` and `release_event_copies` a change shows only
+  on the calendar it was made on.
 - After `events.watch`, a change posts Google's header-only notification to
   the address the channel was opened with, first a `sync` one for the channel
   itself.
@@ -109,6 +112,10 @@ a local stack, without Google accounts.
   answer: `POST …/events/{id}/responses`. An expired sync token:
   `POST …/calendars/{calendar}/sync-tokens/expire`, or a `gone` fault on
   `events.list`. What was pushed: `GET /_emulator/push/channel-deliveries`.
+  One calendar Google cannot list while the account's others are fine:
+  `POST …/calendars/{calendar}/failure` with `{"error": "internal"}`,
+  `DELETE` to end it. Google's lag before a change reaches a meeting's other copies:
+  `POST /_emulator/calendar/copies/hold`, then `…/copies/release`.
 - Sign in without a browser: `POST /o/oauth2/v2/auth` with the authorization
   request's parameters as a form, plus `user=<email>` and one `granted=<scope>`
   per scope to grant; the `Location` header carries the code.

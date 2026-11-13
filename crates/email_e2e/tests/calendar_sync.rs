@@ -497,3 +497,96 @@ async fn the_calendar_service_answers_behind_the_gateway_prefix() -> Result<(), 
 
     stack.finish().await
 }
+
+/// A change at Google that arrives while a sync round is running is picked
+/// up when that round ends. Fails while a push that finds a round under way
+/// is dropped: the second of two quick changes at Google stays missing until
+/// something else changes on that calendar.
+/// (cal-google-push-during-sync-dropped)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "known bug: cal-google-push-during-sync-dropped"]
+async fn a_google_change_during_a_sync_round_is_not_lost() -> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    seed_google_calendars(&stack, &ada, json!([]))?;
+    ada.link_gmail_with_calendar().await?;
+    let calendar = ada.calendar()?;
+    calendar.wait_until_synced(ada.email()).await?;
+
+    // The round the first change starts reads the calendar, then waits on
+    // Google's answer for a few seconds.
+    stack.gmail().inject_fault(Fault {
+        mailbox: Some(ada.email().to_owned()),
+        route: Some(Route::EventsList),
+        delay_ms: Some(4000),
+        times: Some(1),
+        ..Fault::default()
+    });
+    let day = events::hour_in_days(2);
+    stack
+        .gmail()
+        .add_event(ada.email(), PRIMARY, events::google("First", day))?;
+    eventually(
+        "the sync round to read the calendar",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.gmail().faults().is_empty().then_some(())),
+    )
+    .await?;
+    stack.gmail().add_event(
+        ada.email(),
+        PRIMARY,
+        events::google("Second", day + Duration::hours(2)),
+    )?;
+
+    calendar.wait_for_event("First").await?;
+    calendar.wait_for_event("Second").await?;
+
+    stack.finish().await
+}
+
+/// One Google calendar that cannot be read does not stop the account's
+/// other calendars from syncing, and it catches up once Google can read it
+/// again. Fails when a failure of one calendar aborts the whole round: a
+/// broken shared calendar then freezes the user's own.
+/// (cal-google-one-bad-calendar-wedges-account)
+#[tokio::test(flavor = "multi_thread")]
+async fn one_unreadable_google_calendar_does_not_stop_the_others() -> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    let day = events::hour_in_days(4);
+    seed_google_calendars(
+        &stack,
+        &ada,
+        json!([
+            { "events": [events::google("Standup", day)] },
+            { "id": TEAM_CALENDAR, "summary": "Team", "events": [events::google("Planning", day)] },
+        ]),
+    )?;
+    ada.link_gmail_with_calendar().await?;
+    let calendar = ada.calendar()?;
+    calendar.wait_for_event("Planning").await?;
+    calendar.wait_until_synced(ada.email()).await?;
+
+    stack.gmail().fail_calendar(
+        ada.email(),
+        TEAM_CALENDAR,
+        Some(FaultError::PreconditionFailed),
+    )?;
+    stack.gmail().add_event(
+        ada.email(),
+        PRIMARY,
+        events::google("Review", day + Duration::hours(2)),
+    )?;
+    calendar.wait_for_event("Review").await?;
+    calendar.wait_until_synced(ada.email()).await?;
+
+    stack.gmail().fail_calendar(ada.email(), TEAM_CALENDAR, None)?;
+    stack.gmail().add_event(
+        ada.email(),
+        TEAM_CALENDAR,
+        events::google("Retro", day + Duration::hours(4)),
+    )?;
+    calendar.wait_for_event("Retro").await?;
+
+    stack.finish().await
+}

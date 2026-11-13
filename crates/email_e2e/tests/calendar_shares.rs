@@ -567,3 +567,60 @@ async fn a_channel_shared_event_shows_others_no_macro_call_link() -> Result<(), 
 
     stack.finish().await
 }
+
+/// A copy that the organizer later turns into a real invitation stops
+/// being a copy: the copier is a guest and can answer. Fails when the event
+/// keeps counting as a copy, so the invited user cannot answer their own
+/// invitation. (cal-snapshot-and-join-requests)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_copy_that_becomes_an_invitation_can_be_answered() -> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    let ben = stack.user("ben").await?;
+    let (_, bens, event_id) = shared_offsite(&stack, &ada, &ben).await?;
+    bens.post(&format!("/events/{event_id}/copy"), &json!({}))
+        .await?
+        .ok()?;
+    let copy = bens.wait_for_event("Offsite").await?;
+    assert_eq!(copy["event"]["isSnapshot"], true, "{copy}");
+    bens.wait_until_synced(ben.email()).await?;
+
+    // At Google the invitation folds into the copy: the same event now
+    // lists the organizer and Ben, who has not answered.
+    let held = stack.gmail().events(ben.email(), PRIMARY)?;
+    let provider_id = held
+        .iter()
+        .find(|event| event["summary"] == "Offsite")
+        .and_then(|event| event["id"].as_str())
+        .unwrap_or_default()
+        .to_owned();
+    let invited = email_e2e::gmail_emulator::NewEvent::from_json(json!({ "attendees": [
+        { "email": ada.email(), "responseStatus": "accepted" },
+        { "email": ben.email(), "responseStatus": "needsAction" },
+    ] }));
+    stack
+        .gmail()
+        .change_event(ben.email(), PRIMARY, &provider_id, invited)?;
+    let items = bens
+        .wait_for_occurrences("the copy to become an invitation", |items| {
+            items.iter().any(|item| {
+                item["event"]["title"] == "Offsite" && item["event"]["isSnapshot"] == false
+            })
+        })
+        .await?;
+    let own_id = items
+        .iter()
+        .find(|item| item["event"]["title"] == "Offsite")
+        .and_then(|item| item["event"]["id"].as_str())
+        .unwrap_or_default();
+
+    let answered = bens
+        .put(
+            &format!("/events/{own_id}/rsvp"),
+            &json!({ "response": "accepted" }),
+        )
+        .await?;
+    assert_eq!(answered.status, 200, "{}", answered.text);
+
+    stack.finish().await
+}

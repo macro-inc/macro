@@ -12,7 +12,7 @@ use serde_json::Value;
 use super::done;
 use crate::calendar::{Actor, CalendarSummary, WriteOptions};
 use crate::seed::{NewEvent, SeedCalendar};
-use crate::{ChannelDelivery, EmulatorError, GmailEmulator};
+use crate::{ChannelDelivery, EmulatorError, FaultError, GmailEmulator};
 
 type Emulator = AxumState<GmailEmulator>;
 
@@ -145,6 +145,35 @@ impl GmailEmulator {
         })
     }
 
+    /// Makes `events.list` of one calendar answer `error` until it is
+    /// called with `None`: one calendar of an account that Google cannot
+    /// serve while the others are fine. A fault cannot name a calendar.
+    pub fn fail_calendar(
+        &self,
+        email: &str,
+        calendar_id: &str,
+        error: Option<FaultError>,
+    ) -> Result<(), EmulatorError> {
+        let email = email.to_lowercase();
+        self.with_state(|state| {
+            state.calendar(&email, calendar_id)?.failing = error;
+            Ok(())
+        })
+    }
+
+    /// Holds changes to meetings back from their other copies, as Google
+    /// does for some seconds: until [`Self::release_event_copies`] a change
+    /// shows only on the calendar it was made on.
+    pub fn hold_event_copies(&self) {
+        self.with_state(|state| state.hold_copies());
+    }
+
+    /// Carries the changes held since [`Self::hold_event_copies`] to the
+    /// other copies of their meetings and stops holding.
+    pub fn release_event_copies(&self) {
+        self.with_state(|state| state.release_copies());
+    }
+
     /// Every Calendar push notification delivered, or given up on, so far.
     pub fn channel_deliveries(&self) -> Vec<ChannelDelivery> {
         self.lock().channel_deliveries.clone()
@@ -188,6 +217,12 @@ pub(super) fn router() -> Router<GmailEmulator> {
             "/mailboxes/{email}/calendars/{calendar}/sync-tokens/expire",
             post(expire_sync_tokens),
         )
+        .route(
+            "/mailboxes/{email}/calendars/{calendar}/failure",
+            post(fail_calendar).delete(heal_calendar),
+        )
+        .route("/calendar/copies/hold", post(hold_event_copies))
+        .route("/calendar/copies/release", post(release_event_copies))
         .route("/push/channel-deliveries", get(channel_deliveries))
 }
 
@@ -250,6 +285,37 @@ async fn respond_to_event(
     Json(answer): Json<Answer>,
 ) -> Response {
     done(emulator.respond_to_event(&email, &calendar, &event, &answer.attendee, answer.response))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Failure {
+    error: FaultError,
+}
+
+async fn fail_calendar(
+    AxumState(emulator): Emulator,
+    Path((email, calendar)): Path<(String, String)>,
+    Json(failure): Json<Failure>,
+) -> Response {
+    done(emulator.fail_calendar(&email, &calendar, Some(failure.error)))
+}
+
+async fn heal_calendar(
+    AxumState(emulator): Emulator,
+    Path((email, calendar)): Path<(String, String)>,
+) -> Response {
+    done(emulator.fail_calendar(&email, &calendar, None))
+}
+
+async fn hold_event_copies(AxumState(emulator): Emulator) -> Response {
+    emulator.hold_event_copies();
+    done(Ok::<_, EmulatorError>(()))
+}
+
+async fn release_event_copies(AxumState(emulator): Emulator) -> Response {
+    emulator.release_event_copies();
+    done(Ok::<_, EmulatorError>(()))
 }
 
 async fn expire_sync_tokens(

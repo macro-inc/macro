@@ -105,7 +105,18 @@ calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &c
 - Google changes arrive by push. Outlook has no calendar push: after changing
   an Outlook calendar call `calendar.poll_outlook_now(address)`, which stands
   in for the two-minute poll.
-- Scenarios live in `tests/calendar_*.rs`.
+- A push from Google that finds a sync round under way starts no new round
+  (known bug `cal-google-push-during-sync-dropped`): call
+  `calendar.wait_until_synced(address)` between one change at Google and the
+  next, or the second can be missed.
+- `events::{google, google_with, outlook, outlook_with, hour_in_days}` build
+  provider events. Team, channel-share and notification rows have no API in
+  the stack: the scenarios that need them insert the rows the other services
+  would (`tests/calendar_team.rs`, `tests/calendar_shares.rs`).
+- Scenarios live in `tests/calendar_*.rs`: `sync` (import, push, poll,
+  failures), `outlook`, `events` (occurrences, guests, series), `guests`
+  (guest permissions), `identity` (which inbox acts), `shares` (channel
+  shares, copies, requests to join, booking), `team` (out-of-office overlay).
 
 ## Start here
 
