@@ -332,7 +332,7 @@ describe('suggestions feed', () => {
     vi.useRealTimers();
   });
 
-  it('puts an suggestion back when the server refused its dismissal', async () => {
+  it('puts a suggestion back, marked failed, when the server refused its dismissal', async () => {
     const deps = host([composerSuggestion]);
     deps.source.dismiss.mockRejectedValueOnce(new Error('refused'));
 
@@ -345,6 +345,8 @@ describe('suggestions feed', () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(shownIds(feed)).toEqual(['suggestion-composer']);
+      const view = feed.view();
+      expect(view.kind === 'suggestions' && view.entries[0]?.failed).toBe(true);
       dispose();
     });
   });

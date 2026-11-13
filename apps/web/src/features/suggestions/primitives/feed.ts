@@ -167,8 +167,10 @@ export function createSuggestionsFeed(
     try {
       await source.dismiss(id, { leaving });
     } catch (error) {
-      // Refused: the suggestion is back in the feed, to dismiss again.
+      // Refused: the suggestion is back in the feed, and its card says the
+      // dismissal didn't go through.
       setSentIds(without(id));
+      setFailedIds((ids) => [...without(id)(ids), id]);
       throw error;
     }
   };

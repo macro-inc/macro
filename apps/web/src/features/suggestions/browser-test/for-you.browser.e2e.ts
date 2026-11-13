@@ -232,3 +232,20 @@ test('loading, failure with retry, and empty', async ({ page }) => {
   await page.goto('/?scenario=empty');
   await expect(page.getByText('You’re all caught up')).toBeVisible();
 });
+
+test('dismissing a running suggestion says its run is stopped', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const running = card(page, 'suggestion-running');
+  await running.hover();
+  await running
+    .getByRole('button', {
+      name: 'Stop the run and dismiss “Post the weekly status summary”',
+    })
+    .click();
+
+  await expect(
+    page.locator('[data-suggestion-dismissed="suggestion-running"]')
+  ).toContainText('and stopped its run');
+});

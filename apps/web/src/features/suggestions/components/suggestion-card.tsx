@@ -368,10 +368,17 @@ export function SuggestionCard(props: SuggestionCardProps) {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={t('suggestions.dismissSuggestion', {
-                title: props.suggestion.title,
-              })}
-              tooltip={t('suggestions.dismiss')}
+              aria-label={t(
+                props.status === 'running'
+                  ? 'suggestions.stopAndDismissSuggestion'
+                  : 'suggestions.dismissSuggestion',
+                { title: props.suggestion.title }
+              )}
+              tooltip={t(
+                props.status === 'running'
+                  ? 'suggestions.stopAndDismiss'
+                  : 'suggestions.dismiss'
+              )}
               onClick={props.onDismiss}
             >
               <CloseIcon class="size-4" />
@@ -457,6 +464,8 @@ export function DoneSuggestionRow(props: {
 /** A dismissed suggestion, until the person leaves: one line and Undo. */
 export function DismissedSuggestion(props: {
   suggestion: Suggestion;
+  /** Its run was under way: dismissing stops it. */
+  wasRunning: boolean;
   onUndo(): void;
 }) {
   return (
@@ -467,7 +476,12 @@ export function DismissedSuggestion(props: {
         </Item.Icon>
         <Item.Content>
           <Card.Description class="truncate">
-            {t('suggestions.dismissed', { title: props.suggestion.title })}
+            {t(
+              props.wasRunning
+                ? 'suggestions.dismissedAndStopped'
+                : 'suggestions.dismissed',
+              { title: props.suggestion.title }
+            )}
           </Card.Description>
         </Item.Content>
         <Item.Actions>

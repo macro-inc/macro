@@ -20,6 +20,10 @@ export default {
   turnOn: 'Turn on',
   dismiss: 'Dismiss',
   dismissSuggestion: 'Dismiss “{{title}}”',
+  stopAndDismiss: 'Stop the run and dismiss',
+  stopAndDismissSuggestion: 'Stop the run and dismiss “{{title}}”',
+  dismissedAndStopped:
+    'Dismissed “{{title}}” and stopped its run. You won’t see it again unless it changes.',
   dismissed: 'Dismissed “{{title}}”. You won’t see it again unless it changes.',
   undo: 'Undo',
   sendsNothing: 'Runs in the background. It posts and sends nothing.',
