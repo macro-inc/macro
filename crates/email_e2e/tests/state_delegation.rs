@@ -520,10 +520,12 @@ async fn outlook_a_waiting_change_survives_a_reconnect() -> Result<(), Report> {
 }
 
 /// Deleting a user who had access to someone's Outlook mailbox takes that
-/// user's access and grant away.
+/// user's access and grant away, before anything else is done with the
+/// mailbox.
 ///
-/// When it fails: the deleted user's access to the mailbox, and the grant
-/// Microsoft holds for them, outlive their account.
+/// When it fails: the deleted user's access to the mailbox, or the grant
+/// Microsoft holds for them, outlives their account, or is dealt with
+/// only after the steps that should follow it.
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report> {
     let stack = Stack::start().await?;
@@ -535,9 +537,9 @@ async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report
     // The mailbox's lifecycle effects are deleted with the mailbox's rows
     // once they are done, so a copy of each is kept as it is queued.
     for statement in [
-        "CREATE TABLE e2e_lifecycle_effects (link_id uuid, payload jsonb)",
+        "CREATE TABLE e2e_lifecycle_effects (seq bigserial, link_id uuid, payload jsonb)",
         "CREATE FUNCTION e2e_keep_effect() RETURNS trigger LANGUAGE plpgsql AS $$ \
-         BEGIN INSERT INTO e2e_lifecycle_effects VALUES (NEW.link_id, NEW.payload); RETURN NEW; END $$",
+         BEGIN INSERT INTO e2e_lifecycle_effects (link_id, payload) VALUES (NEW.link_id, NEW.payload); RETURN NEW; END $$",
         "CREATE TRIGGER e2e_keep_effect AFTER INSERT ON email_mailbox_lifecycle_outbox \
          FOR EACH ROW EXECUTE FUNCTION e2e_keep_effect()",
     ] {
@@ -569,11 +571,12 @@ async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report
         "the deleted user's grant to be queued for revocation",
         email_e2e::DEFAULT_TIMEOUT,
         async || {
-            let effects: Vec<(Value,)> =
-                sqlx::query_as("SELECT payload FROM e2e_lifecycle_effects WHERE link_id = $1")
-                    .bind(inbox.link_id())
-                    .fetch_all(stack.db())
-                    .await?;
+            let effects: Vec<(Value,)> = sqlx::query_as(
+                "SELECT payload FROM e2e_lifecycle_effects WHERE link_id = $1 ORDER BY seq",
+            )
+            .bind(inbox.link_id())
+            .fetch_all(stack.db())
+            .await?;
             let effects: Vec<Value> = effects.into_iter().map(|(payload,)| payload).collect();
             Ok(effects
                 .iter()
@@ -585,11 +588,10 @@ async fn outlook_deleting_a_delegate_removes_their_access() -> Result<(), Report
         },
     )
     .await?;
+    let first = effects.first().cloned().unwrap_or_default();
     assert!(
-        effects.iter().any(|effect| {
-            effect["kind"] == "access_removed" && effect["viewer"] == zed.macro_id()
-        }),
-        "the deleted user's open clients are told: {effects:?}"
+        first["kind"] == "access_removed" && first["viewer"] == zed.macro_id(),
+        "removing the deleted user's access comes first: {effects:?}"
     );
     assert!(link_ids(&zed).await?.is_empty());
 
