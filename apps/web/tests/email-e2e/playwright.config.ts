@@ -9,6 +9,10 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   fullyParallel: true,
   retries: 0,
+  // A test of a bug that is not fixed yet asserts the right behaviour and is
+  // tagged `@known-bug`: left out here, run alone with EMAIL_E2E_KNOWN_BUGS=1.
+  grep: process.env.EMAIL_E2E_KNOWN_BUGS ? /@known-bug/ : undefined,
+  grepInvert: process.env.EMAIL_E2E_KNOWN_BUGS ? undefined : /@known-bug/,
   workers: Number(process.env.EMAIL_E2E_BROWSER_WORKERS ?? 4),
   forbidOnly: !!process.env.CI,
   reporter: 'list',
