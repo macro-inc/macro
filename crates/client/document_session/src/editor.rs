@@ -880,7 +880,7 @@ mod routed_history_test;
 
 #[cfg(all(test, feature = "application"))]
 mod grouping_test;
-#[cfg(all(test, feature = "application"))]
+#[cfg(all(test, feature = "application", feature = "test-faults"))]
 mod metadata_test;
 
 #[cfg(all(test, feature = "application"))]

@@ -4,7 +4,6 @@
 use super::*;
 use std::sync::atomic::AtomicI64;
 
-#[cfg(feature = "test-faults")]
 #[test]
 fn a_failed_load_refresh_is_reported_and_the_open_continues() {
     let mut config = crate::application::application_editor_config(
