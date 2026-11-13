@@ -382,12 +382,16 @@ describe("macroSink", () => {
 			secrets: async () => [],
 			traces: { transcript, intervalMs: 60_000, heartbeatMs: 180_000 },
 		});
+		// Each upload reads the transcript from disk: let it finish each time.
 		await sink(session);
 		await clock.advance(0);
+		await flush();
 		expect(traces).toHaveLength(1);
 		await clock.advance(120_000);
+		await flush();
 		expect(traces).toHaveLength(1);
 		await clock.advance(60_000);
+		await flush();
 		expect(traces).toHaveLength(2);
 		expect(traces[1]?.trace).toEqual(traces[0]?.trace);
 	});
