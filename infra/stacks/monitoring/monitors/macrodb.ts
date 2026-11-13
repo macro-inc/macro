@@ -70,8 +70,7 @@ const dashboard = new datadog.Dashboard('macrodb-alerts', {
       }),
       {
         timeseriesDefinition: {
-          title:
-            'Read plus write IOPS against the instance baseline (6,000 sustained; provisioned storage allows 12,000)',
+          title: 'Read plus write IOPS against the provisioned storage IOPS',
           requests: [
             {
               q: 'avg:aws.rds.read_iops{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} + avg:aws.rds.write_iops{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}',
@@ -80,8 +79,8 @@ const dashboard = new datadog.Dashboard('macrodb-alerts', {
           ],
           markers: [
             {
-              label: 'instance baseline',
-              value: 'y = 6000',
+              label: 'provisioned storage IOPS',
+              value: 'y = 12000',
               displayType: 'warning dashed',
             },
           ],
@@ -284,17 +283,20 @@ prodMonitor('macrodb-read-latency', {
   runbook: 'docs/runbooks/macrodb.md#load',
 });
 
-// The instance class sustains 6,000 IOPS; above that it spends EBSIOBalance%,
-// which is separate from the storage volume's 12,000 provisioned IOPS and from
-// CPU credits (this class has none). At zero the instance is held to the
-// baseline, reads queue and the replica stops keeping up. In the 30 days to
-// 2026-11-13 the balance fell below 70 twice (to 56 on 2026-10-14 and to zero
-// on 2026-10-27) and below 40 only on 2026-10-27, when the warning would have
-// fired about 4 hours and the critical about 2.5 hours before it reached zero.
-// All of that is the replica: the primary stopped reporting a balance in late
-// October, so it is covered only if it reports one again.
-// IOPS above the baseline and disk queue depth are graphed, not alerted on:
-// both cross any useful threshold most nights without draining the balance.
+// An instance class sustains a baseline of IOPS; above it the instance spends
+// EBSIOBalance%, which is separate from the storage volume's 12,000
+// provisioned IOPS and from CPU credits (these classes have none). At zero
+// the instance is held to its baseline, reads queue and a replica stops
+// keeping up. In the 30 days to 2026-11-13 the replica's balance fell below 70
+// twice (to 56 on 2026-10-14 and to zero on 2026-10-27) and below 40 only on
+// 2026-10-27, when the warning would have fired about 4 hours and the critical
+// about 2.5 hours before it reached zero. The replica was a db.m9g.xlarge
+// then and sat flat at about 6,000 IOPS once the balance was gone. Both
+// instances were resized on 2026-10-28: the replica (db.m9g.2xlarge) has
+// stayed at 99% since, and the primary (db.m9g.8xlarge) reports no balance, so
+// today this guards the replica against a class or workload change.
+// IOPS and disk queue depth are graphed, not alerted on: both crossed any
+// useful threshold most nights without draining the balance.
 prodMonitor('macrodb-io-credits', {
   title: 'macro-db-prod instance I/O credits draining',
   service: 'macro-db-prod',
@@ -303,7 +305,7 @@ prodMonitor('macrodb-io-credits', {
   monitorThresholds: { critical: '40', warning: '70' },
   pages: false,
   description:
-    '{{dbinstanceidentifier.name}} has {{value}}% of its instance I/O credits left (EBSIOBalance%). Normal is 99%. Read plus write IOPS have been above the 6,000 the instance class sustains; at 0% the instance is held to that baseline, disk reads queue and the replica falls behind. This is not the storage volume (12,000 provisioned IOPS) and not CPU credits. Find the query doing the reads before the balance reaches zero.',
+    '{{dbinstanceidentifier.name}} has {{value}}% of its instance I/O credits left (EBSIOBalance%). Normal is 99%. Read plus write IOPS have been above what its instance class sustains; at 0% the instance is held to that baseline, disk reads queue and a replica falls behind. This is not the storage volume (12,000 provisioned IOPS) and not CPU credits. Find the query doing the reads before the balance reaches zero.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#io-credits',
 });

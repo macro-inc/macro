@@ -225,12 +225,12 @@ const dashboard = new datadog.Dashboard('storage-pool-saturation', {
         `min:aws.rds.ebsiobalance${DB} by {dbinstanceidentifier}, min:aws.rds.ebsbyte_balance${DB} by {dbinstanceidentifier}`
       ),
       lines(
-        'Read plus write IOPS against the 6,000 the prod instance class sustains',
+        'Read plus write IOPS against the prod provisioned storage IOPS',
         `avg:aws.rds.read_iops${DB} by {dbinstanceidentifier} + avg:aws.rds.write_iops${DB} by {dbinstanceidentifier}`,
         [
           {
-            label: 'prod instance baseline',
-            value: 'y = 6000',
+            label: 'prod provisioned storage IOPS',
+            value: 'y = 12000',
             displayType: 'warning dashed',
           },
         ]

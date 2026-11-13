@@ -3,8 +3,10 @@
 Runbook for the `macro-db-prod` and `macro-db-prod-read-replica` monitors in
 [`monitors/macrodb.ts`](../../infra/stacks/monitoring/monitors/macrodb.ts), and the
 cloud-storage-service pool monitor in
-[`monitors/storage-pool.ts`](../../infra/stacks/monitoring/monitors/storage-pool.ts). Both instances are
-`db.m9g.2xlarge`: 8 vCPU, about 30 GB of memory, `max_connections` 3,439.
+[`monitors/storage-pool.ts`](../../infra/stacks/monitoring/monitors/storage-pool.ts). Since 2026-10-28 the
+primary is a `db.m9g.8xlarge` and the read replica a `db.m9g.2xlarge`
+(`infra/stacks/macrodb/Pulumi.prod.yaml`); figures below that predate the
+resize say so.
 
 Start in three places:
 
@@ -74,31 +76,36 @@ so users see stale lists and items they just created go missing.
 Instance I/O credits (`EBSIOBalance%`) are draining on one instance. Three
 limits are easy to confuse:
 
-- **Instance I/O credits.** The instance class sustains 6,000 read plus write
-  IOPS and bursts above that by spending `EBSIOBalance%`. This alert. At zero
-  the instance is held to the baseline whatever the volume allows.
+- **Instance I/O credits.** Each instance class sustains a baseline of read
+  plus write IOPS and bursts above it by spending `EBSIOBalance%`. This alert.
+  At zero the instance is held to its baseline whatever the volume allows. The
+  baseline depends on the class: look it up for the class running now rather
+  than reusing a number from an incident.
 - **Provisioned storage IOPS.** The volume allows 12,000. It is not the limit
   here, and raising it does not help.
 - **CPU credits.** Burstable classes only (`CPUCreditBalance`); these
   instances have none. CPU stays moderate through an I/O credit drain.
 
-On 2026-10-27 the replica's balance fell from 99% to zero in five and a half
-hours. Once at zero, IOPS sat flat at 6,000, disk queue depth and read latency
+On 2026-10-27 the replica, then a `db.m9g.xlarge`, went from 99% to zero in
+five and a half hours. Once at zero, IOPS sat flat at about 6,000, that
+class's baseline, and disk queue depth and read latency
 rose tenfold, active sessions reached 65 per vCPU and the replica fell 30
 minutes behind for about two hours. That day the warning (70%) would have come
 four hours before the balance reached zero and the critical (40%) two and a
 half; a steady drain at the same average rate leaves a little over two hours
-at 40%.
+at 40%. Since the resize the replica has stayed at 99% and the primary, on a
+class that reports no balance, is not covered.
 
 - On the MacroDB alerts dashboard, check read plus write IOPS against the
-  6,000 line. A nightly burst at about 06:00 UTC crosses it for an hour and
-  costs a few percent; a drain is hours above it.
+  instance's baseline (the graph marks the volume's 12,000). A nightly burst
+  at about 06:00 UTC is an hour long and cost the old class a few percent; a
+  drain is hours above the baseline.
 - In Performance Insights, `IO:DataFileRead` and `IO:BufFileRead` waits name
   the SQL doing the reads. Bytes rather than operations would show in
   `EBSByteBalance%`, which has not moved in any incident.
 - Levers: cancel or bound the query doing the reads; move its callers off the
-  replica while it recovers (the balance refills at about 12% an hour once
-  IOPS are back under the baseline); a larger instance class raises the
+  replica while it recovers (on 2026-10-27 the balance refilled at about 12% an hour
+  once IOPS were back under the baseline); a larger instance class raises the
   baseline, and a resize restarts the instance.
 
 ## Pool waits

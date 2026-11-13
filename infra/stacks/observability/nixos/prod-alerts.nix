@@ -235,7 +235,7 @@ in
           firesWhen = "below";
           warning = 70;
           critical = 40;
-          description = "{{ $labels.DBInstanceIdentifier }} has {{ humanize $values.B.Value }}% of its instance I/O credits left (EBSIOBalance%). Normal is 99%. Read plus write IOPS have been above the 6,000 the instance class sustains; at 0% the instance is held to that baseline, disk reads queue and the replica falls behind. This is not the storage volume (12,000 provisioned IOPS) and not CPU credits.";
+          description = "{{ $labels.DBInstanceIdentifier }} has {{ humanize $values.B.Value }}% of its instance I/O credits left (EBSIOBalance%). Normal is 99%. Read plus write IOPS have been above what its instance class sustains; at 0% the instance is held to that baseline, disk reads queue and a replica falls behind. This is not the storage volume (12,000 provisioned IOPS) and not CPU credits.";
           runbook = "macrodb.md#io-credits";
         }
         {
