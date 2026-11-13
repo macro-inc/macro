@@ -63,7 +63,7 @@ export function DemoAgentChip(props: {
                 <Check class="size-3" />
               </span>
               <span
-                class="min-w-0 truncate text-xs font-semibold"
+                class="min-w-0 truncate text-xs font-medium"
                 data-magic-chip-agent
               >
                 Cursor Agent

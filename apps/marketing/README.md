@@ -69,6 +69,8 @@ moving it below the closing security section; retain the desktop rail and compac
 
 Model-picker search fields use a borderless input with a subtle rounded focus ring around the complete search row, including the icon. Keep this styling local to the frozen marketing picker.
 
+Use Inter Variable at no more than 500 weight in website graphics and interactive demos: 500 for titles, tabs, and emphasis; 400 for table rows and body text. Preserve lighter existing text weights. Keep these graphic styles scoped away from page headings and the authenticated app.
+
 Use `demo-glass.css` for live graphic panels over gradients: 64% charcoal, a 16px backdrop blur, and a faint edge highlight. Let nested workspace canvases stay transparent and sidebars use a faint tint so they cannot cover the glass. Keep text fully opaque, nested popovers and overlaid mobile navigation solid, and the treatment quieter than Wall of Love cards. Reduced-transparency preferences use a solid panel. Apply this to feature-page and homepage graphics, not the authenticated app or video pixels.
 
 Marketing demos use `DemoInteractionBoundary`: wheel and touch gestures scroll

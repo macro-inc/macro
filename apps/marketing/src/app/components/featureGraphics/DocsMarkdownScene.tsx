@@ -1400,7 +1400,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
         }
         .mds-title {
           font-size: 1.36em;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           margin: 0 0 1.8em;
         }
@@ -1411,7 +1411,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
            column the task line broke with its closing full stop alone on the
            last line, which reads as a rendering fault rather than as a wrap. */
         .mds-line { margin: 0 0 0.86em; min-height: 1.5em; position: relative; text-wrap: pretty; }
-        .mds-line.h2 { font-size: 1.2em; font-weight: 600; }
+        .mds-line.h2 { font-size: 1.2em; font-weight: 500; }
         .mds-line.row { display: flex; gap: 0.6em; }
         .mds-line.rowmid { margin-bottom: 0.36em; }
         /* The commented row carries its badge at the far end. */
@@ -1455,7 +1455,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
           color: var(--c1);
           display: inline-grid;
           flex: none;
-          font-weight: 600;
+          font-weight: 500;
           line-height: 1;
           place-items: center;
         }
