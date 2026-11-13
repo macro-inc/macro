@@ -121,13 +121,14 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id,
             entity_type,
         },
-        // Named people subscribe from their own workspaces, as a departed
-        // session's owner does.
+        // Named people get it on their own streams, team-scoped ones too: a
+        // runtime shared with a team streams team-scoped, and a requester's
+        // composer request is still theirs alone.
         TriggerAudience::People(people) => StreamAudience::Any(
             people
                 .into_iter()
-                .map(|person| StreamAudience::Workspace {
-                    workspace_id: person.to_string(),
+                .map(|person| StreamAudience::Person {
+                    user_id: person.to_string(),
                 })
                 .collect(),
         ),

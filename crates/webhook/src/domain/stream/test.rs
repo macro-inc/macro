@@ -739,3 +739,76 @@ async fn team_stream_does_not_get_contact_audience() {
     );
     assert_eq!(*contacts.calls.lock().unwrap(), 0);
 }
+
+const TEAMMATE_ID: &str = "macro|teammate@example.com";
+
+/// A composer request to a bot's own runtime, asked by `requester`.
+fn requested_session_candidate(requester: &str) -> StreamCandidateEvent {
+    use agent_trigger::domain::broker_events::{
+        AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    let event = macro_event_broker::Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
+            repo_url: None,
+            bot_id: bot_id::BotId::new_from_uuid(Uuid::from_u128(0xB07)),
+            session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
+                Uuid::from_u128(0x5E55),
+            ),
+            owner: requester.to_owned(),
+            context: None,
+        }),
+    ));
+    crate::domain::ingestion::stream::agent_trigger_stream_candidate(&event)
+        .expect("requested sessions stream")
+}
+
+/// The first event a stream delivers when a requested session for
+/// `requester` is followed by a team event every team stream receives.
+async fn first_after_requested(
+    subscriber_id: &str,
+    scope: WebhookScope,
+    requester: &str,
+) -> NormalizedWebhookEvent {
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+    let requested = requested_session_candidate(requester);
+    let mut stream = service
+        .open_stream(
+            MacroUserIdStr::try_from(subscriber_id.to_owned()).expect("valid user id"),
+            scope,
+            filter(&[requested.event.event_name.as_str(), "webhook.created"]),
+        )
+        .await
+        .expect("stream opens");
+    sender.send(requested).unwrap();
+    sender
+        .send(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID))
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
+        .await
+        .expect("an event is delivered in time")
+        .expect("the stream stays open")
+}
+
+/// A harness shared with a team streams team-scoped, so a requester's own
+/// composer request must still reach it there.
+#[tokio::test]
+async fn a_requested_session_reaches_the_requesters_team_stream() {
+    let first = first_after_requested(SUBSCRIBER_ID, WebhookScope::Team, SUBSCRIBER_ID).await;
+    assert_ne!(
+        first.event_name, "webhook.created",
+        "the request was dropped"
+    );
+}
+
+#[tokio::test]
+async fn a_requested_session_does_not_reach_a_teammates_team_stream() {
+    let first = first_after_requested(TEAMMATE_ID, WebhookScope::Team, SUBSCRIBER_ID).await;
+    assert_eq!(first.event_name, "webhook.created");
+}
+
+#[tokio::test]
+async fn a_requested_session_reaches_the_requesters_user_stream() {
+    let first = first_after_requested(SUBSCRIBER_ID, WebhookScope::User, SUBSCRIBER_ID).await;
+    assert_ne!(first.event_name, "webhook.created");
+}
