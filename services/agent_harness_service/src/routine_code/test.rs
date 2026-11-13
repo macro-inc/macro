@@ -683,7 +683,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
     /// copied by agents, so both must check against today's SDK.
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn every_catalog_routine_and_the_create_routine_example_type_check() {
+    async fn every_catalog_routine_and_example_step_type_checks() {
         let (_root, code) = code("http://127.0.0.1:9").await;
         for routine in routine_program::CATALOG.iter() {
             let Some(step) = &routine.code else { continue };
@@ -696,6 +696,27 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         let steps: serde_json::Value = serde_json::from_str(example.trim()).unwrap();
         let problems = code.check_program(&program(steps)).await.unwrap();
         assert_eq!(problems, Vec::new(), "the CreateRoutine example");
+        // The Compose Routines skill's example step, as code mode carries it
+        // after the routines guide.
+        let routines = agent_code_mode::domain::sdk_documentation()
+            .iter()
+            .find(|doc| doc.name == "routines")
+            .unwrap();
+        let guide = agent_code_mode::domain::with_attached_skill(routines)
+            .guide
+            .unwrap();
+        let (_, rest) = guide.split_once("        source: `").unwrap();
+        let (source, _) = rest.split_once("`,\n").unwrap();
+        let steps = json!([{
+            "type": "code",
+            "title": "Post the bug",
+            "summary": "Posts a message that reports a bug in the triage channel.",
+            "knobs": [{ "type": "text", "name": "channel", "label": "Channel to post bugs in", "value": "bug-triage" }],
+            "sentence": "Post the message in {channel}.",
+            "source": source,
+        }]);
+        let problems = code.check_program(&program(steps)).await.unwrap();
+        assert_eq!(problems, Vec::new(), "the Compose Routines example");
     }
 }
 

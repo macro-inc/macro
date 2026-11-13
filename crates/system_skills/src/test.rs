@@ -46,3 +46,31 @@ fn skills_render_non_empty_titled_markdown() {
         assert!(content.starts_with(&format!("# {}", skill.name)));
     }
 }
+
+/// The Compose Routines skill ends with the text every writer of routines
+/// follows, whole, so a chat session and the drafter write by the same rules.
+/// The code form code mode carries leaves out the routine-tools part, and the
+/// routine-tools form carries that text short of the code-step contract,
+/// which `CreateRoutine`'s description already carries.
+#[test]
+fn compose_routines_carries_the_shared_writing_text() {
+    let content = compose_routines::SKILL.render_content();
+    assert!(content.contains(routine_program::WRITING));
+    for rule in [
+        "one `macro.search.names([...])` call",
+        "macro.routines.check(routine, { created })",
+        "kinds: ['channel']",
+        "# Without code",
+    ] {
+        assert!(content.contains(rule), "{rule}");
+    }
+    let code = compose_routines::CODE.to_string();
+    assert!(code.contains(routine_program::WRITING));
+    assert!(code.contains("macro.routines.check(routine, { created })"));
+    assert!(!code.contains("# Without code"));
+    let direct = compose_routines::DIRECT.to_string();
+    assert!(direct.contains(routine_program::ROUTINE_RULES));
+    assert!(!direct.contains(routine_program::CODE_STEPS));
+    assert!(direct.contains("`NameSearch`"));
+    assert!(!direct.contains("ExecuteCode"));
+}

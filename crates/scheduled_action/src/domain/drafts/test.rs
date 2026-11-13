@@ -312,7 +312,7 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     }
 }
 
-/// Stands in for the SDK's routines guide, which `agent_code_mode` tests.
+/// Stands in for `routine_program::ROUTINE_RULES`.
 const GUIDE: &str = "Find the item whose name is exactly the name used.";
 
 fn agent() -> DraftAgent {
@@ -494,10 +494,22 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     assert!(prompt.contains("macro.routines.check"), "{prompt}");
     // The rules every session follows, read from one place, plus drafting's.
     assert!(
-        prompt.contains(&format!("<routines-guide>\n{GUIDE}\n</routines-guide>")),
+        prompt.contains(&format!("<writing-routines>\n{GUIDE}\n</writing-routines>")),
         "{prompt}"
     );
     assert!(prompt.contains("You can't ask them anything"), "{prompt}");
+    // Where code steps can be written, the brief adds their contract.
+    assert!(prompt.contains(routine_program::CODE_STEPS), "{prompt}");
+    // The writing text leaves out how the SDK spells a filter's items, and
+    // what to create beforehand; drafting says both.
+    assert!(prompt.contains(super::FILTER_ITEMS), "{prompt}");
+    // Hidden draft sessions also carry the Compose Routines skill, which asks
+    // and saves; the brief says its points come first.
+    assert!(
+        prompt.contains("in place of the Compose Routines skill"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("Create nothing else."), "{prompt}");
     // Macro's code routines are its worked examples.
     let inbox = routine_program::CATALOG
         .iter()
@@ -894,6 +906,7 @@ async fn without_code_the_brief_has_no_code_examples() {
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains("Code steps can't be used"), "{prompt}");
     assert!(!prompt.contains("<example>"), "{prompt}");
+    assert!(!prompt.contains(routine_program::CODE_STEPS), "{prompt}");
 }
 
 #[tokio::test]

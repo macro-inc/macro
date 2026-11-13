@@ -2,7 +2,10 @@
 
 A skill is a markdown document (sub type `skill`) of instructions an agent
 follows. Built-in system skills (`crates/system_skills`) work the same way but
-have no document.
+have no document, and are never routed. A system skill can instead come with
+an SDK area's guide (`agent_code_mode`'s `attached_skill`): Compose Routines
+follows the routines guide wherever that guide goes, so a session asked for a
+routine has it without looking; hosts without code get its routine-tools form.
 
 ## Descriptions
 

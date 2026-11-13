@@ -22,6 +22,17 @@ fn the_catalog_shown_is_the_sessions_surfaces() {
     assert!(brief.starts_with("You suggest automations"));
     assert!(brief.lines().next().unwrap().contains("calls"));
     assert!(brief.contains("Code steps can't be used"));
+    assert!(!brief.contains(CODE_STEPS));
+    assert!(brief.contains("<writing-routines>\nThe guide.\n</writing-routines>"));
+    assert!(brief.contains(FILTER_ITEMS));
+    assert!(brief.contains("takes the place of the Compose Routines skill"));
+}
+
+#[test]
+fn where_code_steps_can_be_written_the_brief_has_their_contract() {
+    let brief = brief(&data(&[Surface::Calls], &[], true));
+    assert!(brief.contains(CODE_STEPS));
+    assert!(!brief.contains("Code steps can't be used"));
 }
 
 #[test]

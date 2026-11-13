@@ -265,7 +265,7 @@ fn harness(flag: bool) -> Harness {
         generations.clone(),
         Some(flags),
         RoutineBriefing {
-            guide: "The routines guide.",
+            guide: "The guide.",
             agent_model: "test-model".to_owned(),
         },
     );
@@ -777,7 +777,7 @@ async fn the_brief_holds_the_inbox_as_data_that_cannot_close_its_tag() {
         )
         .await
         .unwrap();
-    assert!(brief.contains("The routines guide."));
+    assert!(brief.contains("The guide."));
     assert!(brief.contains("Delivery confirmed"));
     assert!(brief.contains("\"slack\""));
     // The subject's closing tag can't end the untrusted block early.

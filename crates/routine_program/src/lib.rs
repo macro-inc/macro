@@ -20,7 +20,9 @@ mod plan;
 mod validate;
 
 pub use catalog::{CATALOG, CatalogRoutine, NamedItemKind, Surface, catalog_routine};
-pub use contract::{CODE_STEPS, CheckFile, MAX_OUTPUT_BYTES, STEP_CONTEXT, code_version};
+pub use contract::{
+    CODE_STEPS, CheckFile, MAX_OUTPUT_BYTES, ROUTINE_RULES, STEP_CONTEXT, WRITING, code_version,
+};
 pub use knob::{
     InvalidKnobName, Knob, KnobName, SentenceRun, SentenceSlot, SentenceSyntax, sentence_runs,
     sentence_slots,

@@ -367,6 +367,7 @@ dependencies = [
  "specta-serde",
  "specta-typescript",
  "sqlx",
+ "system_skills",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -20587,6 +20588,7 @@ name = "system_skills"
 version = "0.1.0"
 dependencies = [
  "prompt",
+ "routine_program",
  "uuid",
  "workspace-hack",
 ]

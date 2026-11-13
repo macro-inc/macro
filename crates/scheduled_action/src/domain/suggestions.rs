@@ -81,7 +81,8 @@ const TEMPLATE_NAMESPACE: Uuid = Uuid::from_u128(0x7c1f_0b5e_3d2a_4e9b_9a41_5f6c
 /// What routines sessions are told to write routines with.
 #[derive(Debug, Clone)]
 pub struct RoutineBriefing {
-    /// The SDK's routines guide, as drafts read it.
+    /// How to write a routine (`routine_program::ROUTINE_RULES`), as drafts
+    /// read it.
     pub guide: &'static str,
     /// The model the Ask AI steps they write run on.
     pub agent_model: String,

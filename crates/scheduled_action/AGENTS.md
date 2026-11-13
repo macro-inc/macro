@@ -46,10 +46,12 @@ each run.
   may delete, never counted as a routine's run. It runs as the person, with its usual
   tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
   the session admits and bills its turns as agent session usage. One
-  prompt, the brief (`brief`): the SDK's routines guide (`DraftAgent::guide`,
-  the `@agent` text on `RoutineNamespace` every code-mode session reads, so
-  the rules for writing a routine live there, not here), the code-step guide,
-  and only what is particular to drafting: leave out an item it can't
+  prompt, the brief (`brief`): how to write a routine (`DraftAgent::guide`,
+  `routine_program::ROUTINE_RULES`, plus `CODE_STEPS` when code steps can be
+  written: the text the Compose Routines skill also carries, so the rules live
+  there, not here), `STEP_CONTEXT`, the catalog's code
+  routines as examples, and only what is particular to drafting: find names
+  with one `macro.search.names` call, leave out an item it can't
   match exactly, and hand the routine back by checking it with `macro.routines.check`
   (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
   saved), naming what it created. The draft's `created` merges what its
@@ -126,7 +128,8 @@ each run.
   themselves belong to generations (`crates/suggestion_generation`: an
   onboarding run once the inbox connects, then nightly, and on request), which brief each
   routines session through `RoutineSuggestionApi::brief` (`suggestions/prompt.rs`:
-  the routines guide, the catalog for its surfaces, what was dismissed, and the
+  `routine_program::ROUTINE_RULES`, with `CODE_STEPS` when code steps can be
+  written, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags, angle
   brackets in the data swapped so it can't close them; a nightly or manual
   brief adds review and retire, and only onboarding's asks for speed) and

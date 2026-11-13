@@ -12,8 +12,25 @@ use crate::model::{CodeStep, RoutineProgram, SdkFingerprint, Step, StepId};
 mod test;
 
 /// How to write a code step, for whoever writes one: the agent tool that
-/// creates routines and the routine drafter read the same text.
+/// creates routines reads it, and it ends [`WRITING`].
 pub const CODE_STEPS: &str = include_str!("code_steps.md");
+
+/// How to write a routine short of its code steps: its triggers and the
+/// events they start on, when a step is code and when it is Ask AI, and how it
+/// uses the items a request names. It begins [`WRITING`]. A host whose
+/// routine tool already carries [`CODE_STEPS`] carries this alone, and the
+/// drafter and suggestions add [`CODE_STEPS`] only when code steps can be
+/// written.
+pub const ROUTINE_RULES: &str = include_str!("writing.md");
+
+/// How to write a whole routine: its triggers and the events they start on,
+/// when a step is code and when it is Ask AI, how it uses the items a request
+/// names, and [`CODE_STEPS`]. The one text every writer of routines follows,
+/// as the Compose Routines skill a chat session reads carries it; the drafter
+/// and suggestions carry its two parts. It names no tool, says nothing of how
+/// a trigger's filter spells its items, and is the same for every request, so
+/// each writer adds only how it works.
+pub const WRITING: &str = concat!(include_str!("writing.md"), include_str!("code_steps.md"));
 
 /// The ambient declarations code steps are type-checked with: what `main`
 /// receives. The SDK's own declarations come from the checker. A step

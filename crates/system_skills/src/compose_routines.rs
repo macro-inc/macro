@@ -1,58 +1,134 @@
-//! System skill for composing a routine's triggers and steps.
+//! System skill for writing a routine, or changing one, from a conversation.
+//!
+//! It ends with `routine_program::WRITING`, the text every writer of routines
+//! follows; this module adds only how a session finds the items, checks and
+//! saves the routine, and answers. The skill ([`PROMPT`]) says that for code,
+//! then briefly for the routine tools; [`CODE`] is the code part alone, which
+//! code mode carries after the routines guide, and [`DIRECT`] the
+//! routine-tools part alone, for hosts without code, which ends with
+//! `routine_program::ROUTINE_RULES` instead: `CreateRoutine`'s description
+//! carries the code-step half.
 
-use prompt::StaticPrompt;
+use prompt::{ComposedPrompt, StaticPrompt};
 
 use crate::SystemSkill;
 
 static TITLE: &str = "Compose Routines";
 
-static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to create a routine or to change one - when it runs, what each run does, or whether it runs at all. A routine is triggers plus steps that run as the user after this session ends. `CreateRoutine` documents the configuration and how to write code steps; this skill is how to put one together well.
+static INSTRUCTIONS: &str = r##"Follow this skill when someone asks for a routine, or to change one.
 
-## Start from what exists
+Be quick. Usually one program finds what the request names, checks the routine and saves it, and then a one- or two-sentence reply ends the turn. Write that program from this skill and the example below; read the SDK reference only for a method a step calls that isn't shown here.
 
-1. When the user means an existing routine (attached, mentioned, or "my invoice routine"), find it with `ListRoutines` and call `ReadRoutine`. Its `configuration` (name, `triggers`, `steps`, `requiredApps`) is the starting point. When it has `notEditableHere` instead (GitHub or payload filters), you can only pause or resume it; send the user to the routine's page for anything else.
-2. Before creating one, check `ListRoutines` for a routine that already does this, and offer to change it instead of adding a duplicate.
+## Find what it names
 
-## Choose the triggers
+- Look up every item the request names with one `macro.search.names([...])` call (it takes up to ten names; split more across calls), each name as written, as `{ name, kinds }` when the request says its kind: `channel` (a #name), `person`, `initiative` (what the app calls a project), `project` (a folder), `document`, `task`, `database`, `agent`, `label` (an email label) or `tag`. The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
+- When a name has no exact match, or several, ask which one before saving anything: with `AskUser` where you have it, otherwise in your reply. Ask about nothing else: a vague request gets the routine it most likely means, which your reply describes so they can change it.
+- When they mean a routine they have (attached, or "my invoice routine"), change it rather than adding another. Find it by name in `await macro.routines.list({ includeEvents: true })`, or with `macro.routines.byId(id)` when it is attached. Return `routine.toJSON().detail` (after `await routine.name()` for one from `byId`) to read its `trigger` and `task` as stored.
 
-- **Schedule**: `cron` (six fields, seconds first, with the user's IANA time zone) for recurring work, `once` (a future RFC3339 time) for a single run. A scheduled run has no triggering item.
-- **Activity**: `event` with the events that should start a run. Limit message, status, priority and deletion events to chosen channels, tasks or documents with `ids`; creation events, `channel.mentioned` and `email.message_received` usually watch everything. Add a yes/no `condition` when only some events matter ("Is this email from a customer?"); events answered no are skipped before any step runs.
-- Any trigger starts a run. Only people's actions trigger routines, never routines or agents. GitHub triggers aren't available through these tools; point the user to the routine's page for them.
+## Write it
 
-## Compose the steps
+Write it as `macro.routines.create` takes it:
 
-Steps run in order and a failed step stops the run.
+- `trigger`: `{ type: 'cron', schedule, timezone }` in the person's time zone, `{ type: 'once', at }`, `{ type: 'events', filters: [{ events, entities, condition }] }`, or `{ type: 'multiple', triggers }`. A filter names the items it watches in `entities`, as references to the handles the lookup returned: `{ type: 'channel', entity: channel }`, or `'document'` for a task or document. Never an id, and never an `ids` key.
+- `steps`: code steps `{ type: 'code', title, summary, knobs, sentence, source }`, then an Ask AI step `{ type: 'agent', instructions, model: 'anthropic/claude-sonnet-5-5' }` only when the work needs one.
+- A knob for an item the request names holds the name it matched, and the step looks it up when it runs, as in the example.
+- Create beforehand only what the routine needs to exist before it runs, when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into): create it with the name given, put its id in the knob, and pass its handle in `created`. Create nothing else.
+- To change a routine, `routine.update(options)` replaces all of it, so pass everything as stored with only the change asked for: each code step with its `id`, an Ask AI step's `model` and, when it has one, its agent (`macro.agents.byId(step.agent.bot_id)`), `dangerouslyOperateAsUser` from `task.dangerously_operate_as_user`, and each filter with every field kept (such as a `property` or `github` selector) but its `ids` given again as `entities` (`macro.channels.byId(id)`, `macro.tasks.byId(id)`): a filter passed back with its stored `ids` loses them and watches everything. A routine stored as one agent task (`task.prompt`) is passed back the same way, as `prompt`, `userPrompt`, `model` and `agent`, or, when the change adds a step, as `steps` ending in an Ask AI step whose instructions join its `prompt` and `user_prompt`. A routine with apps (`task.mcp_servers`) can't be changed here: say so, with its link.
 
-A routine has two kinds of step: `code` and `agent` ("Ask AI").
+## Check, then save, in the same program
 
-- Use a `code` step for everything that acts or decides: label or archive an email, set a property, create a task, comment, post in a channel, move to a folder, judge items with `macro.ai.decide`, or read many items and loop. One code step usually does all of it. Write it like code-mode code, type the argument `StepContext`, check `trigger.kind` before reading the triggering item, take the run's time from `run.at` and `run.timezone` rather than the clock, list every area it changes in `writes`, and give it a title and one-sentence summary the user can read. Saving type-checks it; fix the errors the tool returns and save again.
-- Use an `agent` step only for open-ended work: drafting, research, summarizing many items. A routine has at most one, and it sees the triggering event and what earlier steps returned, so put it last. Apps it needs beyond its own go in `requiredApps`, and the user must already have them connected.
-- A later code step reads an earlier one's output as `steps.<id>`. Saving gives a step without an `id` one from its title ("Find invoices" becomes `find_invoices`); set one to choose the name.
-- Resolve names in code through the SDK, or look ids up first (ListTags, GetEntityProperties, ListTeamMembers, channel search). Never invent an id.
-- Limits: 40 steps in all.
+`macro.routines.check(routine, { created })` runs saving's checks without saving. Save only when `ok` is true; otherwise return `problems` and `steps`, fix what they name, and run the program again. A new routine is switched on. Don't run or test it.
 
-## Confirm, then write
+## Reply
 
-1. When something is ambiguous - which channel, label, folder or person, or whether it should run on a schedule or on activity - ask before writing.
-2. Pass `steps` as a JSON array encoded in a string.
-3. To change a routine, call `UpdateRoutine` with `"type": "configuration"` and its `configuration` from ReadRoutine with only the user's change: it replaces the name, triggers and steps, so carry over everything the user didn't ask to change. Omit `requiredApps` to keep its apps; a list replaces them. Pause or resume with `"type": "enabled"` instead. A running routine can be paused but not reconfigured until its run ends.
-4. If the tool refuses, fix what its message names and try once more; otherwise relay the reason.
-
-## Report
-
-Say in one or two sentences what the routine now does - when it runs and what each run does - and mention it as `CreateRoutine` describes. Offer `RunRoutine` to try a scheduled routine; one that reads its triggering item only does something on real activity.
+In one or two sentences, say when it runs and what each run does, with its link (`routine.webUrl()`). Add only what they must act on.
 
 ## Example
 
-"When an invoice email arrives, label it Finance." `CreateRoutine` ends with this routine's configuration: an `email.message_received` trigger and one code step that asks `macro.ai.decide` whether the email is an invoice and adds the inbox's Finance label if so.
+"Whenever someone reports a bug in #customer-feedback, post it in #bug-triage."
+
+```js
+export async function main({ macro }) {
+  const { results } = await macro.search.names([
+    { name: '#customer-feedback', kinds: ['channel'] },
+    { name: '#bug-triage', kinds: ['channel'] },
+  ]);
+  const exact = results.map((result) => result.matches.filter((match) => match.exact));
+  if (exact.some((matches) => matches.length !== 1)) {
+    const options = results.map(({ name, matches }) => ({ name, matches: matches.map(({ type, name, exact }) => ({ type, name, exact })) }));
+    return { data: { ask: options } };
+  }
+  const [feedback, triage] = exact.map(([match]) => match);
+  const routine = {
+    name: 'Bugs from #customer-feedback in #bug-triage',
+    trigger: {
+      type: 'events',
+      filters: [
+        {
+          events: ['channel.message_posted'],
+          entities: [{ type: 'channel', entity: feedback.entity }],
+          condition: 'Does the message report a bug?',
+        },
+      ],
+    },
+    steps: [
+      {
+        type: 'code',
+        title: 'Post the bug',
+        summary: 'Posts a message that reports a bug in the triage channel.',
+        knobs: [{ type: 'text', name: 'channel', label: 'Channel to post bugs in', value: triage.name }],
+        sentence: 'Post the message in {channel}.',
+        source: `export async function main({ macro, trigger, knobs }: StepContext) {
+  if (trigger.kind !== 'event') return { posted: false };
+  const [lookup] = (await macro.search.names([{ name: knobs.channel, kinds: ['channel'] }])).results;
+  const channel = lookup?.matches.find((match) => match.exact && match.type === 'channel');
+  if (channel?.type !== 'channel') throw new Error('There is no channel named ' + knobs.channel + '. Change the channel to post bugs in.');
+  await channel.entity.send(trigger.item.message?.text ?? 'A bug was reported.');
+  return { posted: true };
+}`,
+      },
+    ],
+  };
+  const check = await macro.routines.check(routine);
+  if (!check.ok) return { data: { problems: check.problems, steps: check.steps } };
+  const saved = await macro.routines.create(routine);
+  return { data: { url: saved.webUrl() } };
+}
+```
 "##;
 
-static INTENT: &str = "Requests to create or change a routine become one complete configuration - triggers \
-     that fit the work, code steps that act and decide, and at most one Ask AI step, with every \
-     id resolved - written through CreateRoutine or UpdateRoutine and reported in plain words.";
+static INTENT: &str = "A request for a routine, or a change to one, becomes a checked routine in as few \
+     programs as possible: the items it names found in one name lookup or asked about, triggers \
+     that fit the work, code steps that act and decide and at most one Ask AI step, saved switched \
+     on and reported in a sentence or two with its link.";
 
-/// The skill's instructions as a composable prompt section.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+static SESSION: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+static DIRECT_INSTRUCTIONS: &str = r##"With the routine tools instead of code: find every item the request names with the tool for its kind, comparing names exactly: `NameSearch` for a channel, document or folder, and `ListLabels`, `ListTags`, `ListTeamMembers`, `ListDatabases`, `ListInitiatives` or `ListAgents` for the others. Ask in your reply about a name with no exact match, or several. Find a routine they mean to change with `ListRoutines` and `ReadRoutine`, and change it rather than adding another. Save with `CreateRoutine`, or `UpdateRoutine` (`"type": "configuration"`, the whole configuration with only the change asked for): their descriptions give the configuration's shape, in which a filter lists its items' ids in `ids`. Saving checks it: fix what a refusal names and save again. Then say in one or two sentences when it runs and what each run does, with its link."##;
+
+static WITHOUT_CODE: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Without code",
+    DIRECT_INSTRUCTIONS,
+    "A session that can't run programs saves the routine with the routine tools.",
+);
+
+static WRITING: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Writing the routine",
+    routine_program::WRITING,
+    "Triggers, steps, items and code steps, the same for every writer of routines.",
+);
+
+static SESSION_WITHOUT_CODE: ComposedPrompt = SESSION.compose(&WITHOUT_CODE);
+
+/// The skill as code mode carries it after the routines guide: how a
+/// code-mode session finds, checks, saves and reports a routine, then how to
+/// write one, without the routine-tools part it has no tools for.
+pub static CODE: ComposedPrompt = SESSION.compose(&WRITING);
+
+/// The skill's instructions as a composable prompt section: how a code-mode
+/// session finds, checks, saves and reports a routine, what a session without
+/// code does instead, then how to write one.
+pub static PROMPT: ComposedPrompt = SESSION_WITHOUT_CODE.compose(&WRITING);
 
 /// The compose-routines system skill.
 pub static SKILL: SystemSkill = SystemSkill {
@@ -60,3 +136,21 @@ pub static SKILL: SystemSkill = SystemSkill {
     name: "Compose Routines",
     content: &PROMPT,
 };
+
+static DIRECT_INTENT: &str = "A request for a routine, or a change to one, is saved with the routine \
+     tools in one call when nothing is unsettled, and reported in a sentence or two.";
+
+static DIRECT_SESSION: StaticPrompt<'static> =
+    StaticPrompt::borrowed(TITLE, DIRECT_INSTRUCTIONS, DIRECT_INTENT);
+
+static RULES: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Writing the routine",
+    routine_program::ROUTINE_RULES,
+    "Triggers, steps and items, the same for every writer of routines.",
+);
+
+/// The skill as hosts that save routines with the routine tools carry it
+/// after the routines guide: its without-code part, then how to write a
+/// routine, short of the code-step contract `CreateRoutine`'s description
+/// carries.
+pub static DIRECT: ComposedPrompt = DIRECT_SESSION.compose(&RULES);

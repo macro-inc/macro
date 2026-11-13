@@ -2,6 +2,7 @@
 use crate::domain::{
     CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
     TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
+    with_attached_skill,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -373,7 +374,7 @@ impl DescribeCodeTools {
                     catalog
                         .iter()
                         .find(|doc| &doc.name == name)
-                        .cloned()
+                        .map(with_attached_skill)
                         .ok_or_else(|| {
                             CodeModeError::Invalid(format!(
                                 "Unknown SDK entity {name}; request the catalog first."

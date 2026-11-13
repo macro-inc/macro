@@ -51,7 +51,51 @@ static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
         .expect("generated SDK documentation is valid")
 });
 
-/// Every SDK entity with its index, supplied at build time.
+/// The system skill that comes with an entity's guidance, so a session that
+/// reads how an area works also reads how to do its main job there, without
+/// having to find the skill: how to write a routine. Code mode carries the
+/// skill's code form; direct hosts carry its routine-tools form. No byte
+/// budget counts it: it has a fixed size, and only a session that gets the
+/// routines guide gets it.
+fn attached_skill(entity: &str, host: GuideHost) -> Option<&'static str> {
+    use system_skills::compose_routines;
+    static CODE: LazyLock<String> = LazyLock::new(|| compose_routines::CODE.to_string());
+    static DIRECT: LazyLock<String> = LazyLock::new(|| compose_routines::DIRECT.to_string());
+    (entity == ROUTINES_ENTITY).then(|| match host {
+        GuideHost::Code => CODE.as_str(),
+        GuideHost::Direct => DIRECT.as_str(),
+    })
+}
+
+/// The entity whose guidance carries the Compose Routines skill.
+const ROUTINES_ENTITY: &str = "routines";
+
+/// An entity's guide followed by the system skill attached to it, as `host`
+/// carries it.
+fn guide_with_skill(doc: &SdkDocumentation, host: GuideHost) -> Option<String> {
+    match (doc.guide.as_deref(), attached_skill(&doc.name, host)) {
+        (Some(guide), Some(skill)) => Some(format!("{guide}\n\n{skill}")),
+        (guide, skill) => guide.or(skill).map(str::to_owned),
+    }
+}
+
+/// `doc` as code mode hands it to a session in a `DescribeCodeTools` result:
+/// its guide followed by the system skill attached to it.
+pub fn with_attached_skill(doc: &SdkDocumentation) -> SdkDocumentation {
+    SdkDocumentation {
+        guide: guide_with_skill(doc, GuideHost::Code),
+        ..doc.clone()
+    }
+}
+
+/// The bytes of `doc`'s index and guide.
+fn documentation_size(doc: &SdkDocumentation) -> usize {
+    doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len)
+}
+
+/// Every SDK entity with its index and guide, supplied at build time. Byte
+/// budgets count these; a session gets an entity's attached skill on top
+/// ([`with_attached_skill`]).
 pub fn sdk_documentation() -> &'static [SdkDocumentation] {
     &GENERATED.entities
 }
@@ -99,7 +143,8 @@ pub fn index_digest(methods: &[&str], fields_of: &[&str]) -> String {
     digest.join("\n")
 }
 
-/// One entity's `@agent` guidance, for hosts that carry a single area whole.
+/// One entity's `@agent` guidance as the SDK declares it, without an attached
+/// skill, for hosts that carry a single area whole.
 pub fn entity_guide(name: &str) -> Option<&'static str> {
     sdk_documentation()
         .iter()
@@ -149,7 +194,8 @@ const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
 
 /// Every area's guidance as one prompt section, for prompts that do not route
 /// entities per turn. The search guide stays a `DescribeCodeTools` topic, as
-/// it is SDK how-to rather than how an area works.
+/// it is SDK how-to rather than how an area works. Each guide comes with its
+/// attached skill, in the form that host can follow.
 pub fn inline_guides(host: GuideHost) -> &'static str {
     fn render(host: GuideHost) -> String {
         sdk_documentation()
@@ -157,8 +203,7 @@ pub fn inline_guides(host: GuideHost) -> &'static str {
             .filter(|doc| doc.name != SEARCH_ENTITY)
             .filter(|doc| host == GuideHost::Code || !SDK_ONLY_GUIDES.contains(&doc.name.as_str()))
             .filter_map(|doc| {
-                doc.guide
-                    .as_deref()
+                guide_with_skill(doc, host)
                     .map(|guide| format!("\n# Macro {}\n{guide}\n", doc.name))
             })
             .collect()
@@ -276,9 +321,10 @@ async fn rank_entities<'a>(
 }
 
 /// Load the entities a request needs, ranked by Jev, at most four: their
-/// indexes, and with [`Guidance::Selected`] their guidance too. Failures retain
-/// the compact catalog. The byte cap bounds prompt growth; it is not an exact
-/// tokenizer count.
+/// indexes, and with [`Guidance::Selected`] their guidance too, each guide
+/// followed by its attached skill. Failures retain the compact catalog. The
+/// byte cap bounds prompt growth and leaves out an attached skill; it is not
+/// an exact tokenizer count.
 #[tracing::instrument(skip_all, fields(guidance = ?guidance, batches = tracing::field::Empty, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn select_documentation(
     user: &MacroUserIdStr<'static>,
@@ -305,6 +351,7 @@ pub async fn select_documentation(
     )
     .await;
     let mut selected_entities = Vec::new();
+    let mut counted = output.len();
     for doc in ranking.entities.into_iter().take(4) {
         let Some(index) = doc.index.as_ref() else {
             continue;
@@ -317,8 +364,12 @@ pub async fn select_documentation(
             Some(guide) => format!("\n{index}\n{guide}\n"),
             None => format!("\n{index}"),
         };
-        if output.len() + section.len() <= 48 * 1024 {
+        if counted + section.len() <= 48 * 1024 {
+            counted += section.len();
             output.push_str(&section);
+            if let (Some(_), Some(skill)) = (guide, attached_skill(&doc.name, GuideHost::Code)) {
+                output.push_str(&format!("\n{skill}\n"));
+            }
             selected_entities.push(doc.name.as_str());
         }
     }
@@ -355,7 +406,8 @@ pub struct TaskDocumentation {
 }
 
 /// Select entity indexes for a task the agent describes, for clients that
-/// never show the server the user's request.
+/// never show the server the user's request. The budget counts each
+/// entity's index and guide; its attached skill comes on top.
 #[tracing::instrument(name = "code_mode.task_documentation", skip_all, fields(batches = tracing::field::Empty, selected = tracing::field::Empty, omitted = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn documentation_for_task(
     user: &MacroUserIdStr<'static>,
@@ -381,11 +433,10 @@ pub async fn documentation_for_task(
     let mut entities = Vec::new();
     let mut omitted = Vec::new();
     for doc in ranking.entities {
-        let size =
-            doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len);
+        let size = documentation_size(doc);
         if bytes + size <= DOCUMENTATION_BYTES {
             bytes += size;
-            entities.push(doc.clone());
+            entities.push(with_attached_skill(doc));
         } else {
             omitted.push(doc.name.clone());
         }
@@ -394,7 +445,12 @@ pub async fn documentation_for_task(
     span.record("batches", ranking.batches);
     span.record("selected", entities.len());
     span.record("omitted", omitted.len());
-    span.record("bytes", bytes);
+    // What the result holds, the attached skill included, like the routed
+    // prompt's `bytes`.
+    span.record(
+        "bytes",
+        entities.iter().map(documentation_size).sum::<usize>(),
+    );
     span.record("selection_status", ranking.status.as_str());
     span.record(
         "selected_entities",

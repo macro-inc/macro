@@ -14,9 +14,14 @@ no I/O.
   as the owner; `CodeIdentity`), `AgentTask`, `RoutineTask` (the two stored
   forms, as the scheduler's API describes `task`), and
   `RoutineProgram::from_task`.
-- `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
-  (`src/code_steps.md`, how to write a code step: the one description
-  CreateRoutine and the scheduler's drafter both read), `STEP_CONTEXT` (the type of
+- `src/contract.rs`: what a code step receives and returns. `WRITING`
+  (`src/writing.md` then `src/code_steps.md`: how to write a routine, the one
+  text every writer follows, which the Compose Routines skill carries; it names
+  no tool and no filter spelling), `ROUTINE_RULES` (`src/writing.md` alone,
+  which the skill's routine-tools form, the drafter and suggestions carry),
+  `CODE_STEPS` (`src/code_steps.md` alone, which CreateRoutine's description,
+  `code_check`'s guide, and the drafter and suggestions when code steps can be
+  written append), `STEP_CONTEXT` (the type of
   `main`'s argument: `run`, `routine`, `trigger`, `steps`, `knobs`), `code_version`
   (the SDK fingerprint plus a hash of `STEP_CONTEXT`, recorded as `sdk`),
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
@@ -49,7 +54,8 @@ no I/O.
 ## Boundaries
 
 - Depends on: `bots` (`AgentMcpServer`).
-- Used by: `scheduled_action`, `routines` (agent tools), and through the
+- Used by: `scheduled_action`, `routines` (agent tools), `system_skills`
+  (Compose Routines), and through the
   scheduler's generated clients the SDK (`macro.routines`) and the web app's
   routines editor (`core/routine-steps.ts`).
 
