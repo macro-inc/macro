@@ -57,6 +57,21 @@ export class PropertyOption {
     return this.record.updated_at;
   }
 
+  /** Identity and value, without the authenticated client. */
+  toJSON(): {
+    id: string;
+    definitionId: string;
+    value: PropertyOptionRecord['value'];
+    color?: string;
+  } {
+    return {
+      id: this.id,
+      definitionId: this.definitionId,
+      value: this.value,
+      ...(this.color === undefined ? {} : { color: this.color }),
+    };
+  }
+
   /**
    * Update this option's label, color, or display order.
    *

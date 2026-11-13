@@ -40,7 +40,8 @@ enforced by the ordinary backend APIs.
   `search.names` (`search/names.ts`) is one `POST /search/names` that
   resolves up to 10 names to items of every kind, exact matches first; tag
   and channel-label matches load their records (one read per tag set) to
-  return `PropertyOption` and `ChannelLabel` values.
+  return `PropertyOption` and `ChannelLabel` values; a failed record read
+  drops only that kind's matches and lists the kind in `unavailable`.
 - `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
   (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the

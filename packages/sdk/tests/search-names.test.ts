@@ -167,6 +167,66 @@ test('reads each matched tag set once and drops matches whose record is gone', a
   expect(matches[1]?.entity).toMatchObject({ id: 'label-1', name: 'Urgent' });
 });
 
+test('a failed record read drops only its kind, which then counts as unavailable', async () => {
+  serve((request) => {
+    const url = new URL(request.url);
+    if (url.pathname === '/search/names')
+      return Response.json({
+        results: [
+          {
+            name: 'Urgent',
+            matches: [
+              {
+                name: 'urgent',
+                exact: true,
+                item: { kind: 'channel', id: 'channel-1' },
+              },
+              {
+                name: 'Urgent',
+                exact: true,
+                item: { kind: 'tag', id: 'option-1', definitionId: 'def-1' },
+              },
+              {
+                name: 'Urgent',
+                exact: true,
+                item: { kind: 'channel_label', id: 'label-1' },
+              },
+            ],
+          },
+        ],
+        unavailable: ['tag'],
+      });
+    if (url.pathname === '/properties/definitions/def-1/options')
+      return new Response('unavailable', { status: 503 });
+    if (url.pathname === '/channel-labels')
+      return new Response('unavailable', { status: 503 });
+    throw new Error(`unexpected request ${url.pathname}`);
+  });
+
+  const lookup = await macro().search.names(['Urgent']);
+
+  expect(lookup.results[0]?.matches.map((m) => m.type)).toEqual(['channel']);
+  expect(lookup.unavailable).toEqual(['tag', 'channel_label']);
+});
+
+test('a tag match serializes its identity and value, not its client', () => {
+  const option = PropertyOption.from(macro()._client, 'def-1', {
+    id: 'option-1',
+    property_definition_id: 'def-1',
+    value: { type: 'string', value: 'Urgent' },
+    color: null,
+    display_order: 0,
+    created_at: '2026-11-01T00:00:00Z',
+    updated_at: '2026-11-01T00:00:00Z',
+  });
+
+  expect(JSON.parse(JSON.stringify(option))).toEqual({
+    id: 'option-1',
+    definitionId: 'def-1',
+    value: { type: 'string', value: 'Urgent' },
+  });
+});
+
 test('refuses a bad call before sending it', async () => {
   serve(() => {
     throw new Error('no request expected');
