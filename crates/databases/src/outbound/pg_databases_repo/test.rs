@@ -211,7 +211,7 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
                 first_table: None,
             },
             FirstTable {
-                name: "Table 1",
+                name: "Table 1".into(),
                 title_column: "Name",
             },
         )
@@ -258,7 +258,7 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
                 first_table: None,
             },
             FirstTable {
-                name: "Table 1",
+                name: "Table 1".into(),
                 title_column: "Name",
             },
         )

@@ -264,7 +264,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
                 first_table: None,
             },
             FirstTable {
-                name: "Contacts",
+                name: "Contacts".into(),
                 title_column: "Name",
             },
         )

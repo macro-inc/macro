@@ -57,7 +57,7 @@ async fn create_database(pool: &PgPool, owner: &MacroUserIdStr<'static>) -> Data
                 first_table: None,
             },
             FirstTable {
-                name: "Table 1",
+                name: "Table 1".into(),
                 title_column: "Name",
             },
         )

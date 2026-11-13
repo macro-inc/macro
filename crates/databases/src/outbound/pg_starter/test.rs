@@ -269,7 +269,7 @@ async fn existing_database_skips_seed_even_after_it_is_deleted(pool: PgPool) {
                 first_table: None,
             },
             FirstTable {
-                name: "Tasks",
+                name: "Tasks".into(),
                 title_column: "Name",
             },
         )

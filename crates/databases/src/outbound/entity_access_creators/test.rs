@@ -55,7 +55,7 @@ async fn the_owner_gets_an_edit_receipt_and_a_stranger_none(pool: PgPool) {
                 first_table: None,
             },
             FirstTable {
-                name: "Table 1",
+                name: "Table 1".into(),
                 title_column: "Name",
             },
         )
