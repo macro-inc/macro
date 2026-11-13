@@ -16,13 +16,19 @@ import { MobileHeader } from './mobile-header';
 export function MobileBlockHeader(props: {
   id: string;
   name: string;
+  /** The name the title menu acts on, when it differs from the title. */
+  menuName?: string;
   iconType: EntityIconSelector;
+  /** Replaces the entity icon, e.g. the chat's model. */
+  icon?: JSX.Element;
   /** Title menu rows, before the shared entity actions and `ops`. */
   menuTools: BlockTool[];
   ops: FileOperation[];
   itemType?: ItemType;
   /** Shown before the file name, such as the file type. */
   badges?: JSX.Element;
+  /** Shown after the file name, such as a Beta badge. */
+  trailingBadges?: JSX.Element;
   /** Islands after the title, before the permissions badge. */
   children?: JSX.Element;
   /** Islands before Info. */
@@ -41,8 +47,10 @@ export function MobileBlockHeader(props: {
         <MobileHeader.Title
           class="ph-no-capture"
           iconType={props.iconType}
+          icon={props.icon}
           colorIcon
           badges={props.badges}
+          trailingBadges={props.trailingBadges}
           label={props.name}
         />
         {props.children}
@@ -54,7 +62,7 @@ export function MobileBlockHeader(props: {
       <BlockSplitFileMenu
         id={props.id}
         itemType={props.itemType ?? 'document'}
-        name={props.name}
+        name={props.menuName ?? props.name}
         ops={props.ops}
         tools={props.menuTools}
       />

@@ -22,14 +22,20 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
+  - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
+  - apps/web/src/features/block-fig/fig-block.tsx
   - apps/web/src/features/block-image/component/Block.tsx
   - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/block-pdf/component/Block.tsx
+  - apps/web/src/features/block-pptx/pptx-block.tsx
+  - apps/web/src/features/block-psd/psd-block.tsx
   - apps/web/src/features/block-unknown/component/Block.tsx
   - apps/web/src/features/block-video/component/Block.tsx
+  - apps/web/src/features/block-write/DocxBlock.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
@@ -44,7 +50,6 @@ ignores:
   - apps/web/src/features/block-agent/component/EffortSelector.tsx
   - apps/web/src/features/block-agent/ui/AgentInput.tsx
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
-  - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx
@@ -53,30 +58,25 @@ ignores:
   - apps/web/src/features/block-call/views/CallDetailView.tsx
   - apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
   - apps/web/src/features/block-channel/component/Top.tsx
-  - apps/web/src/features/block-chat/component/TopBar.tsx
   - apps/web/src/features/block-company/component/CompanyBlockAdapter.tsx
   - apps/web/src/features/block-contact/component/ContactBlockAdapter.tsx
   - apps/web/src/features/block-database/component/TopBar.tsx
-  - apps/web/src/features/block-fig/fig-block.tsx
   - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-form/views/builder-view.tsx
   - apps/web/src/features/block-image/component/ImageContent.tsx
   - apps/web/src/features/block-md/comments/CommentMargin.tsx
   - apps/web/src/features/block-md/component/MarkdownPopup.tsx
-  - apps/web/src/features/block-pptx/pptx-block.tsx
   - apps/web/src/features/block-pr/component/Block.tsx
   - apps/web/src/features/block-pr/hooks/usePrShare.tsx
   - apps/web/src/features/block-pr/views/PrDetail.tsx
   - apps/web/src/features/block-project/component/ProjectCreateMenu.tsx
   - apps/web/src/features/block-project/component/TopBar.tsx
-  - apps/web/src/features/block-psd/psd-block.tsx
   - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-spreadsheet/components/FormulaInput.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetSheetTabs.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetToolbar.tsx
   - apps/web/src/features/block-spreadsheet/views/SpreadsheetDraftMenu.tsx
   - apps/web/src/features/block-spreadsheet/views/SpreadsheetEditor.tsx
-  - apps/web/src/features/block-write/DocxBlock.tsx
   - apps/web/src/features/calendar-view/components/CalendarSidebar.tsx
   - apps/web/src/features/calendar-view/components/EventGuests.tsx
   - apps/web/src/features/calendar-view/components/Header.tsx
