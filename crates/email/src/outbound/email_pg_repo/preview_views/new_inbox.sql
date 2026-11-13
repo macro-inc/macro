@@ -181,9 +181,10 @@ FROM (
                 t.link_id = links.link_id
               AND t.inbox_visible = TRUE
               AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL
-              AND (($3::timestamptz IS NULL) OR (
-                  GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at), t.id
-              ) < ($3::timestamptz, $4::uuid))
+              AND (GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at), t.id) < (
+                  COALESCE($3::timestamptz, 'infinity'),
+                  COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')
+              )
             ORDER BY GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) DESC, t.id DESC
             LIMIT $2
         ) AS per_link
