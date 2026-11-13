@@ -661,23 +661,112 @@ test('table focus cell deleted while the insert is queued (table and anchor rema
   expect(images(runtime)).toHaveLength(0);
 });
 
-test('a table capture detached before commit: nothing attached, stale selection kept, true and owned, as Source', async () => {
-  const runtime = mount();
-  const gif = bound(runtime);
-  const { table } = tableSelection(runtime);
+/** Selection kind and keys, named by the fixture, in the Source oracle's shape. */
+function describeSelection(
+  runtime: ReturnType<typeof mount>,
+  names: Map<string, string>
+) {
+  const name = (key: string) =>
+    names.get(key) ?? `unnamed:${runtime.view.node(key)?.type ?? 'missing'}`;
+  const { selection } = runtime.view.selection();
+  if (selection.kind === 'node')
+    return { kind: 'node', keys: selection.keys.map(name) };
+  if (selection.kind === 'table')
+    return {
+      kind: 'table',
+      table: name(selection.table),
+      anchor: name(selection.anchorCell),
+      focus: name(selection.focusCell),
+    };
+  if (selection.kind === 'range')
+    return {
+      kind: 'range',
+      anchor: [name(selection.anchor.key), selection.anchor.offset],
+      focus: [name(selection.focus.key), selection.focus.offset],
+    };
+  return { kind: selection.kind };
+}
+
+/** Commit a detached capture; record the Source oracle's facts natively. */
+async function commitDetached(
+  runtime: ReturnType<typeof mount>,
+  gif: ReturnType<typeof bound>,
+  names: Map<string, string>
+) {
   const insertion = prepared(gif);
   runtime.port.setState(REPLACED);
-  expect(runtime.view.node(table.key)).toBeNull();
-  const before = runtime.view.query.serializedState();
-  const selectionBefore = runtime.view.selection().selection;
+  const state = runtime.view.query.serializedState();
+  const beforeCommit = describeSelection(runtime, names);
+  const commits: Array<{ mutations: number; selectionChanged: boolean }> = [];
+  const stop = runtime.view.onCommit((commit) => {
+    commits.push({
+      mutations: commit.mutations.size,
+      selectionChanged: commit.selectionChanged,
+    });
+  });
   const onInserted = vi.fn();
-  await expect(
-    gif.host.commit(insertion, GIF, FILE_ID, onInserted)
-  ).resolves.toBe(true);
-  expect(onInserted).toHaveBeenCalledTimes(1);
-  expect(images(runtime)).toHaveLength(0);
-  expect(runtime.view.query.serializedState()).toBe(before);
-  expect(runtime.view.selection().selection).toEqual(selectionBefore);
+  const result = await gif.host.commit(insertion, GIF, FILE_ID, onInserted);
+  stop();
+  return {
+    result,
+    owned: onInserted.mock.calls.length,
+    beforeCommit,
+    afterCommit: describeSelection(runtime, names),
+    commits,
+    stateUnchanged: runtime.view.query.serializedState() === state,
+    images: images(runtime).length,
+  };
+}
+
+test('a table capture detached before commit: Source outcome (oracle detachedCapture.source.test.ts)', async () => {
+  const runtime = mount();
+  const gif = bound(runtime);
+  const { table, anchor, focus } = tableSelection(runtime);
+  const names = new Map([
+    [table.key, 'table'],
+    [anchor.key, 'anchorCell'],
+    [focus.key, 'focusCell'],
+  ]);
+  expect(await commitDetached(runtime, gif, names)).toEqual({
+    result: true,
+    owned: 1,
+    // Named difference (pending PM ruling): the native mirror holds no
+    // selection over removed keys, so after the detaching state the live
+    // selection is none, where Lexical keeps the stale capture.
+    beforeCommit: { kind: 'none' },
+    afterCommit: { kind: 'none' },
+    // Source runs one empty update (nothing dirty, no tags, no selection
+    // change); native sends no input, so no commit is published.
+    commits: [],
+    stateUnchanged: true,
+    images: 0,
+  });
+});
+
+test('a node capture detached before commit: Source outcome (oracle detachedCapture.source.test.ts)', async () => {
+  const runtime = mount();
+  const gif = bound(runtime);
+  runtime.caret(0, 5);
+  await gif.host.commit(prepared(gif), GIF, 'node-fixture-image', vi.fn());
+  const [image] = images(runtime);
+  if (!image) throw new Error('Missing actual image');
+  runtime.port.selectionFromView({ kind: 'node', keys: [image.key] });
+  expect(runtime.view.selection().selection.kind).toBe('node');
+  const names = new Map([[image.key, 'image']]);
+  expect(await commitDetached(runtime, gif, names)).toEqual({
+    result: true,
+    owned: 1,
+    // Named difference (pending PM ruling): the native mirror holds no
+    // selection over removed keys, so after the detaching state the live
+    // selection is none, where Lexical keeps the stale capture.
+    beforeCommit: { kind: 'none' },
+    afterCommit: { kind: 'none' },
+    // Source runs one empty update (nothing dirty, no tags, no selection
+    // change); native sends no input, so no commit is published.
+    commits: [],
+    stateUnchanged: true,
+    images: 0,
+  });
 });
 
 for (const [label, cause] of [

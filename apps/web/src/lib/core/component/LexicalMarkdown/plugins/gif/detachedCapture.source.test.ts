@@ -8,6 +8,7 @@ import {
   $createTableNode,
   $createTableRowNode,
   $createTableSelection,
+  $isTableSelection,
   type TableCellNode,
 } from '@lexical/table';
 import { $createImageNode, SupportedNodeTypes } from '@macro-inc/lexical-core';
@@ -18,6 +19,8 @@ import {
   $getNodeByKey,
   $getRoot,
   $getSelection,
+  $isNodeSelection,
+  $isRangeSelection,
   $setSelection,
   type BaseSelection,
   createEditor,
@@ -74,14 +77,61 @@ function rootTypes(editor: LexicalEditor) {
   );
 }
 
+/** Selection kind and its keys, named by the fixture (unnamed keys by type). */
+function describeSelection(editor: LexicalEditor, names: Map<string, string>) {
+  return editor.getEditorState().read(() => {
+    const name = (key: string) =>
+      names.get(key) ?? `unnamed:${$getNodeByKey(key)?.getType() ?? 'missing'}`;
+    const selection = $getSelection();
+    if ($isNodeSelection(selection))
+      // _nodes keeps removed keys; getNodes() would drop them.
+      return { kind: 'node', keys: [...selection._nodes].map(name) };
+    if ($isTableSelection(selection))
+      return {
+        kind: 'table',
+        table: name(selection.tableKey),
+        anchor: name(selection.anchor.key),
+        focus: name(selection.focus.key),
+      };
+    if ($isRangeSelection(selection))
+      return {
+        kind: 'range',
+        anchor: [name(selection.anchor.key), selection.anchor.offset],
+        focus: [name(selection.focus.key), selection.focus.offset],
+      };
+    return { kind: 'none' };
+  });
+}
+
 function commitCaptured(
   runtime: ReturnType<typeof mount>,
   target: BaseSelection | null,
+  names: Map<string, string>,
   detach: () => void
 ) {
   const insertion = runtime.host.prepareInsertion(target, () => true);
   if (!insertion) throw new Error('Missing actual Source insertion');
   runtime.editor.update(detach, { discrete: true });
+  const beforeCommit = describeSelection(runtime.editor, names);
+  const updates: Array<{
+    dirtyElements: number;
+    dirtyLeaves: number;
+    tags: string[];
+    selectionChanged: boolean;
+  }> = [];
+  const stop = runtime.editor.registerUpdateListener(
+    ({ dirtyElements, dirtyLeaves, tags, editorState, prevEditorState }) => {
+      updates.push({
+        dirtyElements: dirtyElements.size,
+        dirtyLeaves: dirtyLeaves.size,
+        tags: [...tags].sort(),
+        selectionChanged: !(
+          editorState._selection?.is(prevEditorState._selection) ??
+          prevEditorState._selection === null
+        ),
+      });
+    }
+  );
   let owned = false;
   let thrown: unknown;
   let result: boolean | undefined;
@@ -91,11 +141,11 @@ function commitCaptured(
     });
   } catch (error) {
     thrown = error;
+  } finally {
+    stop();
   }
-  const selection = runtime.editor
-    .getEditorState()
-    .read(() => $getSelection()?.constructor.name ?? 'none');
-  return { result, owned, thrown, selection };
+  const afterCommit = describeSelection(runtime.editor, names);
+  return { result, owned, thrown, beforeCommit, afterCommit, updates };
 }
 
 test('Source: a detached NodeSelection capture inserts nothing yet reports the upload owned', () => {
@@ -122,7 +172,8 @@ test('Source: a detached NodeSelection capture inserts nothing yet reports the u
       },
       { discrete: true }
     );
-    const outcome = commitCaptured(runtime, target, () => {
+    const names = new Map([[imageKey, 'image']]);
+    const outcome = commitCaptured(runtime, target, names, () => {
       $getNodeByKey(imageKey)?.getParentOrThrow().remove();
     });
     expect({ ...outcome, root: rootTypes(runtime.editor) }).toEqual(
@@ -138,6 +189,8 @@ test('Source: a detached TableSelection capture inserts nothing yet reports the 
   try {
     let target: BaseSelection | null = null;
     let tableKey = '';
+    let anchorKey = '';
+    let focusKey = '';
     runtime.editor.update(
       () => {
         const table = $createTableNode();
@@ -161,13 +214,20 @@ test('Source: a detached TableSelection capture inserts nothing yet reports the 
         const [first, , , last] = cells;
         if (!first || !last) throw new Error('Missing table cells');
         const selection = $createTableSelection();
-        selection.set(tableKey, first.getKey(), last.getKey());
+        anchorKey = first.getKey();
+        focusKey = last.getKey();
+        selection.set(tableKey, anchorKey, focusKey);
         $setSelection(selection);
         target = runtime.host.captureTarget();
       },
       { discrete: true }
     );
-    const outcome = commitCaptured(runtime, target, () => {
+    const names = new Map([
+      [tableKey, 'table'],
+      [anchorKey, 'anchorCell'],
+      [focusKey, 'focusCell'],
+    ]);
+    const outcome = commitCaptured(runtime, target, names, () => {
       $getNodeByKey(tableKey)?.remove();
     });
     expect({ ...outcome, root: rootTypes(runtime.editor) }).toEqual(
@@ -178,13 +238,21 @@ test('Source: a detached TableSelection capture inserts nothing yet reports the 
   }
 });
 
-// $insertNodesAndSplitList on a selection whose nodes are gone attaches nothing
-// and throws nothing, so the command "ran" and onInserted fires.
+// $insertNodesAndSplitList on a non-range selection attaches nothing and
+// throws nothing, so the command "ran" and onInserted fires (a shared leak).
 const RECORD_NODE = {
   result: true,
   owned: true,
   thrown: undefined,
-  selection: 'NodeSelection',
+  // Lexical keeps a node/table selection over removed keys: the live selection
+  // is already the stale capture, and $setSelection(saved) leaves it unchanged.
+  beforeCommit: { kind: 'node', keys: ['image'] },
+  afterCommit: { kind: 'node', keys: ['image'] },
+  // One committed update with nothing dirty and no tags: history ignores it,
+  // and no selection change is published.
+  updates: [
+    { dirtyElements: 0, dirtyLeaves: 0, tags: [], selectionChanged: false },
+  ],
   root: [
     { type: 'paragraph', text: 'before', hasFile: false },
     { type: 'paragraph', text: 'after', hasFile: false },
@@ -194,7 +262,25 @@ const RECORD_TABLE = {
   result: true,
   owned: true,
   thrown: undefined,
-  selection: 'TableSelection',
+  // Lexical keeps a node/table selection over removed keys: the live selection
+  // is already the stale capture, and $setSelection(saved) leaves it unchanged.
+  beforeCommit: {
+    kind: 'table',
+    table: 'table',
+    anchor: 'anchorCell',
+    focus: 'focusCell',
+  },
+  afterCommit: {
+    kind: 'table',
+    table: 'table',
+    anchor: 'anchorCell',
+    focus: 'focusCell',
+  },
+  // One committed update with nothing dirty and no tags: history ignores it,
+  // and no selection change is published.
+  updates: [
+    { dirtyElements: 0, dirtyLeaves: 0, tags: [], selectionChanged: false },
+  ],
   root: [
     { type: 'paragraph', text: 'before', hasFile: false },
     { type: 'paragraph', text: 'after', hasFile: false },
