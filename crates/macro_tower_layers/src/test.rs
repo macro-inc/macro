@@ -260,11 +260,31 @@ async fn starvation_detector_warns_when_runtime_blocked() {
         assert_eq!(fields.get("expected_ms").unwrap(), "10");
         assert_eq!(fields.get("actual_ms").unwrap(), "50");
         assert_eq!(fields.get("delay_ms").unwrap(), "40");
+        let schedstat = crate::thread_cpu::ThreadCpuSample::take().is_some();
+        assert_eq!(fields.contains_key("cpu_wait_ms"), schedstat);
+        assert_eq!(fields.contains_key("cpu_run_ms"), schedstat);
     }
 
     // The next on-time tick must not emit another starvation warning.
     tokio::time::advance(Duration::from_millis(10)).await;
     tokio::task::yield_now().await;
+    assert_eq!(captured.event_count(Level::WARN), 1);
+}
+
+/// agent-harness-service builds several routers in one process; each builds
+/// the tracing layer, and a late tick must still warn once.
+#[tokio::test(start_paused = true)]
+async fn starvation_detector_runs_once_per_runtime() {
+    let (subscriber, captured) = TracingCapture::new();
+    let _guard = set_default(subscriber);
+
+    spawn_starvation_detector(Duration::from_millis(10));
+    spawn_starvation_detector(Duration::from_millis(10));
+    tokio::task::yield_now().await;
+
+    tokio::time::advance(Duration::from_millis(50)).await;
+    tokio::task::yield_now().await;
+
     assert_eq!(captured.event_count(Level::WARN), 1);
 }
 

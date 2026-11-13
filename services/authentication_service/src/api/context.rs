@@ -202,6 +202,7 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         hosted_runtimes::domain::ports::NoComps,
         hosted_runtimes::outbound::pg::PgComputerRepo,
     >,
+    agent_credentials::rollout::PgAgentCreators,
     feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 

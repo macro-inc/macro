@@ -89,6 +89,9 @@ its menus stay inside the dialog, which blocks the page around it. A label and
 value list, such as a CRM record's Pipelines card, passes `layout="property"`
 for 32px rows and full-ink editable values instead of restyling the cell from
 outside; grids and boards keep the default `grid` layout.
+Hosts can mark select columns with `fixedOptions` and `defaultValue` for system
+fields. Pair a numeric column with `currencyColumnId` to format its values and
+group monetary summaries by denomination; pass the row's cells to `GridCell`.
 View preferences in the example are local; hosts that save views pass their own
 view state and authorized persistence callback. Shared filter, sort, toolbar and
 view components are in `components/`.

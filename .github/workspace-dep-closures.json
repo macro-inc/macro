@@ -534,6 +534,7 @@
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
+      "crates/feature_flags",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",

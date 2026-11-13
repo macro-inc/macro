@@ -838,7 +838,12 @@ async fn run() -> anyhow::Result<()> {
         public_code_mode,
         feature_flags
             .clone()
-            .map(anthropic_gateway::brain::BrainRollout::new)
+            .map(|flags| {
+                anthropic_gateway::brain::BrainRollout::new(
+                    agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
+                    flags,
+                )
+            })
             .unwrap_or_default(),
     )
     .await
@@ -1408,10 +1413,16 @@ async fn run() -> anyhow::Result<()> {
     let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
         anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
     );
-    // Both brain routes serve only agents with agent teammates on.
+    // Both brain routes serve only agents with agent teammates on for their
+    // creator.
     let brain_rollout = feature_flags
         .clone()
-        .map(anthropic_gateway::brain::BrainRollout::new)
+        .map(|flags| {
+            anthropic_gateway::brain::BrainRollout::new(
+                agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
+                flags,
+            )
+        })
         .unwrap_or_default();
     let speech = Arc::new(speech_gateway::SpeechGateway::new(
         brains.clone(),

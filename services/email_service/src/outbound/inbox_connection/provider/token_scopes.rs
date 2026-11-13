@@ -1,5 +1,14 @@
-/// Ask Google which scopes an access token actually carries.
-pub(super) async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec<String>> {
+use macro_service_urls::GoogleOauthTokenInfoUrl;
+
+#[cfg(test)]
+mod test;
+
+/// Ask Google (or the endpoint `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL` names)
+/// which scopes an access token actually carries.
+pub(super) async fn fetch_token_scopes(
+    token_info_url: &GoogleOauthTokenInfoUrl,
+    access_token: &str,
+) -> anyhow::Result<Vec<String>> {
     #[derive(serde::Deserialize)]
     struct TokenInfo {
         scope: String,
@@ -14,7 +23,7 @@ pub(super) async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec
                 .expect("static reqwest client configuration is valid")
         });
     let info: TokenInfo = TOKENINFO_CLIENT
-        .post("https://www.googleapis.com/oauth2/v3/tokeninfo")
+        .post(token_info_url.as_str())
         .form(&[("access_token", access_token)])
         .send()
         .await?

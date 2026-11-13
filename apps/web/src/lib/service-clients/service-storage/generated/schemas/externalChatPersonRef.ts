@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ExternalChatPersonRefPictureFileId } from './externalChatPersonRefPictureFileId';
 import type { ExternalChatPersonRefUserId } from './externalChatPersonRefUserId';
 
 /**
@@ -13,6 +14,9 @@ at the provider, else their phone number.
 export interface ExternalChatPersonRef {
   /** Display name, never authentication evidence. */
   name: string;
+  /** Their profile picture as the chat owner's account sees it: a static
+file id; `null` when hidden, unset or not fetched yet. */
+  pictureFileId?: ExternalChatPersonRefPictureFileId;
   /** Verified Macro user, if any. */
   userId?: ExternalChatPersonRefUserId;
 }

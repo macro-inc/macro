@@ -5,6 +5,17 @@ fn rendered() -> serde_yaml::Value {
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
 }
 
+/// The committed YAML of a workflow PR CI calls.
+fn called(call: &Call) -> serde_yaml::Value {
+    let path = format!(
+        "{}/../../../../.github/workflows/{}",
+        env!("CARGO_MANIFEST_DIR"),
+        call.file
+    );
+    serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
+        .expect("called workflow parses")
+}
+
 /// A called workflow the gate doesn't wait for could fail after the gate passed.
 #[test]
 fn the_gate_waits_for_start_and_every_call() {
@@ -26,12 +37,8 @@ fn the_gate_waits_for_start_and_every_call() {
 /// GitHub refuses to call a workflow without a `workflow_call` trigger.
 #[test]
 fn every_called_workflow_can_be_called() {
-    let workflows = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
     for call in CALLS {
-        let path = format!("{workflows}/{}", call.file);
-        let workflow: serde_yaml::Value =
-            serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
-                .expect("called workflow parses");
+        let workflow = called(call);
         let triggers = &workflow["on"];
 
         assert!(
@@ -39,6 +46,39 @@ fn every_called_workflow_can_be_called() {
             "{} has no workflow_call trigger",
             call.file
         );
+    }
+}
+
+/// Without a limit GitHub lets a stalled job run for six hours, holding the gate.
+/// A job limit at or just above a step limit inside it would cut that step short.
+#[test]
+fn every_job_the_gate_waits_for_has_a_timeout() {
+    let workflows = std::iter::once(("pr-ci.yml", rendered()))
+        .chain(CALLS.iter().map(|call| (call.file, called(call))));
+
+    for (file, workflow) in workflows {
+        let jobs = workflow["jobs"].as_mapping().expect("jobs");
+        for (id, job) in jobs {
+            if job.get("uses").is_some() {
+                continue;
+            }
+            let id = id.as_str().unwrap_or_default();
+            let limit = job
+                .get("timeout-minutes")
+                .and_then(serde_yaml::Value::as_u64)
+                .unwrap_or_else(|| panic!("{file} job {id} has no numeric timeout-minutes"));
+            let longest_step = job["steps"]
+                .as_sequence()
+                .into_iter()
+                .flatten()
+                .filter_map(|step| step.get("timeout-minutes")?.as_u64())
+                .max()
+                .unwrap_or_default();
+            assert!(
+                limit >= longest_step + 5,
+                "{file} job {id} allows {limit} minutes, too little for its {longest_step}-minute step"
+            );
+        }
     }
 }
 

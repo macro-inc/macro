@@ -1,4 +1,10 @@
-import { expect, type Page, type Route, test } from '@playwright/test';
+import {
+  expect,
+  type Locator,
+  type Page,
+  type Route,
+  test,
+} from '@playwright/test';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 
@@ -187,6 +193,11 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     });
 
     await page.goto('/');
+    // Get a Macro computer leads Machines, with its facts and price.
+    const entry = page.locator('[data-settings-target="get-macro-computer"]');
+    await expect(
+      entry.getByRole('heading', { name: 'Get a Macro computer' })
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Get a computer' }).click();
     await expect(dialog(page)).toBeVisible();
     await expect(
@@ -230,16 +241,31 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     );
     await shoot(page, 'buy-agent');
 
-    // Billing comes first, then setup carries on behind the step, with the
-    // stage and its elapsed time.
-    const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
-    await expect(progress.getByRole('listitem').first()).toHaveText(
-      /Updating billing…\s*\d+:\d\d/
-    );
+    // Billing comes first, then setup carries on behind the step: one line
+    // under the step bar names the stage and its elapsed time.
+    const progressLine = dialog(page).getByRole('button', {
+      name: /^(Updating billing…|Creating the computer) · \d+:\d\d$/,
+    });
+    await expect(progressLine).toHaveText(/^Updating billing… · \d+:\d\d$/);
+    await expect(progressLine).toHaveAttribute('aria-expanded', 'false');
     await expect(
       page.locator('[data-runtime-row="Maya\'s Agent Box"]')
     ).toContainText(/Setting up · Updating billing… · \d+:\d\d/);
     await shoot(page, 'buy-billing');
+    // The whole step fits a desktop dialog without scrolling.
+    if (!phone) {
+      const overflow = await dialog(page)
+        .locator('.overflow-y-auto')
+        .first()
+        .evaluate((body) => body.scrollHeight - body.clientHeight);
+      expect(overflow).toBeLessThanOrEqual(0);
+    }
+
+    // Expanded, the line shows every stage.
+    const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
+    await expect(progress).toHaveCount(0);
+    await progressLine.click();
+    await expect(progressLine).toHaveAttribute('aria-expanded', 'true');
     await expect(progress.getByRole('listitem')).toHaveText(
       [
         'Billing updated',
@@ -250,20 +276,34 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
       ],
       { timeout: 10_000 }
     );
-    // Continue is disabled until a Claude is chosen, and says so.
+    await expect(progressLine).toHaveText(/^Creating the computer · \d+:\d\d$/);
+    await shoot(page, 'buy-agent-progress');
+    await progressLine.click();
+    await expect(progress).toHaveCount(0);
+    // Continue waits for a Claude choice, which sits right above it.
     await expect(
       dialog(page).getByRole('button', { name: 'Continue' })
     ).toBeDisabled();
-    await expect(dialog(page)).toContainText(
-      'Choose which Claude it should use to continue.'
-    );
+    await expect(dialog(page)).not.toContainText('to continue.');
+    const claudeChoice = dialog(page).getByRole('radiogroup', {
+      name: 'Which Claude should it use?',
+    });
+    await expect(
+      claudeChoice.getByRole('radio', { name: 'Macro credits' })
+    ).not.toBeChecked();
     await expect(
       page.locator('[data-runtime-row="Maya\'s Agent Box"]')
     ).toContainText(/Setting up · Creating the computer \(1 of 3\) · \d+:\d\d/);
 
-    await dialog(page)
-      .getByRole('radio', { name: 'Your Claude account' })
-      .check();
+    await claudeChoice
+      .getByText('Your Claude account', { exact: true })
+      .click();
+    await expect(
+      claudeChoice.getByRole('radio', { name: 'Your Claude account' })
+    ).toBeChecked();
+    await shoot(page, 'buy-agent-claude');
+    // Opened again, the list stays open on the next step.
+    await progressLine.click();
     await dialog(page).getByRole('button', { name: 'Continue' }).click();
     await expect(
       dialog(page).getByRole('heading', { name: 'Sign in to Claude' })
@@ -330,6 +370,13 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
       dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
     ).toBeVisible({ timeout: 10_000 });
     await expect(progress).toHaveCount(0);
+    // Bring your AI was visited, so credits complete it rather than skip it.
+    await expect(steps.getByRole('listitem').nth(2)).toContainText(
+      'Macro credits'
+    );
+    await expect(steps.getByRole('listitem').nth(2)).not.toContainText(
+      'skipped'
+    );
     await expect(steps.getByRole('listitem').last()).toHaveAttribute(
       'aria-current',
       'step'
@@ -385,6 +432,119 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     await shoot(page, 'create-agent-form');
   });
 
+/**
+ * Whether the element is fully on screen: inside the viewport and every
+ * scrolling ancestor, and on top at its centre and corners, so no footer
+ * or other layer covers any of it.
+ */
+async function fullyInView(option: Locator) {
+  return option.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const inside = (outer: DOMRect) =>
+      box.top >= outer.top - 0.5 &&
+      box.bottom <= outer.bottom + 0.5 &&
+      box.left >= outer.left - 0.5 &&
+      box.right <= outer.right + 0.5;
+    if (!inside(new DOMRect(0, 0, window.innerWidth, window.innerHeight)))
+      return 'outside the viewport';
+    for (
+      let parent = element.parentElement;
+      parent;
+      parent = parent.parentElement
+    ) {
+      const { overflowY } = getComputedStyle(parent);
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        !inside(parent.getBoundingClientRect())
+      )
+        return 'clipped by its scroll area';
+    }
+    // Pills round their corners off, so sample the ends at mid-height and
+    // the middle at its top and bottom edges.
+    const middleX = box.left + box.width / 2;
+    const middleY = box.top + box.height / 2;
+    const radius = Math.min(box.height / 2, box.width / 4);
+    const points = [
+      [middleX, middleY],
+      [box.left + radius, middleY],
+      [box.right - radius, middleY],
+      [middleX, box.top + 2],
+      [middleX, box.bottom - 2],
+    ];
+    for (const [x, y] of points) {
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || !element.contains(hit))
+        return `covered at ${Math.round(x)},${Math.round(y)} by ${hit?.outerHTML.slice(0, 160)}`;
+    }
+    return 'in view';
+  });
+}
+
+test('keeps both Claude options reachable above the footer at short heights, with progress collapsed', async ({
+  page,
+}) => {
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [computer];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await expect(
+    dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
+  ).toBeVisible();
+
+  // Progress starts as the one collapsed line.
+  const progressLine = dialog(page).getByRole('button', {
+    name: /^Creating the computer · \d+:\d\d$/,
+  });
+  await expect(progressLine).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    dialog(page).getByRole('list', { name: 'Setup progress' })
+  ).toHaveCount(0);
+
+  // The purchase toast is its own layer; let it go before checking cover.
+  await expect(
+    page.getByText('Computer purchased. Provisioning now.')
+  ).toHaveCount(0, { timeout: 15_000 });
+  const claudeChoice = dialog(page).getByRole('radiogroup', {
+    name: 'Which Claude should it use?',
+  });
+  const heights =
+    test.info().project.name === 'phone' ? [664, 560] : [720, 600, 480];
+  for (const height of heights) {
+    await page.setViewportSize({
+      width: page.viewportSize()?.width ?? 1280,
+      height,
+    });
+    for (const name of ['Your Claude account', 'Macro credits']) {
+      // The option is the segment around its visually hidden radio.
+      const option = claudeChoice.getByRole('radio', { name }).locator('..');
+      await option.scrollIntoViewIfNeeded();
+      expect(await fullyInView(option), `${name} at ${height}px`).toBe(
+        'in view'
+      );
+    }
+    // The footer's actions stay reachable too.
+    const footerContinue = dialog(page).getByRole('button', {
+      name: 'Continue',
+    });
+    await footerContinue.scrollIntoViewIfNeeded();
+    expect(await fullyInView(footerContinue), `Continue at ${height}px`).toBe(
+      'in view'
+    );
+    await shoot(page, `claude-choice-${height}`);
+  }
+});
+
 test('a failed setup says why, offers Retry, and carries on after it', async ({
   page,
 }) => {
@@ -411,21 +571,34 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
     .getByRole('button', { name: 'Buy · $40.00/month' })
     .click();
 
-  const progress = dialog(page).getByRole('list', { name: 'Setup progress' });
-  const stuck = progress.getByRole('listitem').nth(1);
-  await expect(stuck).toContainText(
-    'The host ran out of disk. The computer could not be set up'
+  // One banner at the top says what failed and why, in place of the line.
+  const banner = dialog(page).getByRole('alert');
+  await expect(banner).toHaveText(
+    "Couldn't create the computer: the host ran out of disk"
   );
   await expect(
-    page.locator('[data-runtime-row="Maya\'s Agent Box"]')
-  ).toContainText('Failed');
+    dialog(page).getByRole('list', { name: 'Setup progress' })
+  ).toHaveCount(0);
+  await expect(dialog(page)).not.toContainText('no extra charge');
+  const row = page.locator('[data-runtime-row="Maya\'s Agent Box"]');
+  await expect(row).toContainText('Setup failed: The host ran out of disk.');
+  // The modal hides the page from assistive tech, so match the label as text.
+  await expect(row.getByText('Retry setup', { exact: true })).toBeVisible();
   await shoot(page, 'setup-failed');
 
-  await stuck.getByRole('button', { name: 'Retry setup' }).click();
-  await expect(stuck).not.toContainText('could not be set up', {
-    timeout: 10_000,
-  });
-  await expect(stuck).toContainText(/Creating the computer\s*\d+:\d\d/);
+  await dialog(page).getByRole('button', { name: 'Details' }).click();
+  await expect(dialog(page)).toContainText(
+    'Retry sets it up again at no extra charge. Contact support if it fails again.'
+  );
+  await shoot(page, 'setup-failed-details');
+
+  await dialog(page).getByRole('button', { name: 'Retry setup' }).click();
+  await expect(banner).toHaveCount(0, { timeout: 10_000 });
+  await expect(
+    dialog(page).getByRole('button', {
+      name: /^Creating the computer · \d+:\d\d$/,
+    })
+  ).toBeVisible();
 });
 
 test('a team without a paid plan is told so and sent to Billing', async ({
@@ -555,4 +728,19 @@ test('a request that never answers times out instead of spinning forever', async
   await expect(
     dialog(page).getByRole('radio', { name: 'Large' })
   ).toBeVisible();
+});
+
+test('with no size on offer, the step shows only why', async ({ page }) => {
+  await openBuyFlow(page, (route) => json(route, 200, []));
+  await expect(dialog(page)).toContainText(
+    'No computer sizes are available right now.'
+  );
+  await expect(dialog(page)).toContainText(
+    "Macro's hosts have no room for a new computer. Try again later."
+  );
+  await expect(dialog(page).getByLabel('Name')).toHaveCount(0);
+  await expect(dialog(page).getByRole('button', { name: /^Buy/ })).toHaveCount(
+    0
+  );
+  await shoot(page, 'no-sizes');
 });

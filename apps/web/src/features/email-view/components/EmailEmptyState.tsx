@@ -97,10 +97,13 @@ export function EmailEmptyState() {
     searchText().length > 0 &&
     !validateSearchServiceText(searchText());
 
+  // These states fill the list pane, which is narrow beside the reading pane,
+  // so they center in it instead of hugging the sidebar.
   return (
     <Switch>
       <Match when={!emailActive()}>
         <EmptyStatePanel
+          centered
           graphic={EmptyStateEmailGraphic}
           title="Connect your email"
           description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
@@ -168,6 +171,7 @@ export function EmailEmptyState() {
       <Match when={tabCopy(state.tab)}>
         {(copy) => (
           <EmptyStatePanel
+            centered
             graphic={EmptyStateInboxTrayGraphic}
             title={copy().title}
             description={copy().description}

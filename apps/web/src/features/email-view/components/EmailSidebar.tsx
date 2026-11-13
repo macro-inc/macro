@@ -175,7 +175,11 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
   );
 }
 
-export function EmailSidebar() {
+export function EmailSidebar(props: {
+  searchOpen?: boolean;
+  onSearchOpenChange?: (open: boolean) => void;
+  searchRef?: (input: HTMLInputElement) => void;
+}) {
   const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
@@ -206,10 +210,13 @@ export function EmailSidebar() {
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Header
           searchLabel="Search email"
+          searchOpen={props.searchOpen}
+          onSearchOpenChange={props.onSearchOpenChange}
           search={
             canSearchEmailTab(state.tab)
               ? () => (
                   <SearchBar
+                    ref={props.searchRef}
                     label="Search email"
                     placeholder="Search email"
                     value={state.search}

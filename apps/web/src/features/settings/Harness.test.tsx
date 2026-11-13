@@ -51,6 +51,10 @@ vi.mock('./computers/views/MacroComputers', () => ({
   MacroComputers: () => null,
 }));
 
+vi.mock('./computers/views/get-computer-entry', () => ({
+  GetComputerEntry: () => null,
+}));
+
 vi.mock('./computers/primitives/team-computers', () => ({
   useTeamComputers: () => ({
     // With computers on, a computer's harness is listed only under them.

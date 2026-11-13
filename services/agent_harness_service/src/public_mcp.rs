@@ -83,7 +83,6 @@ pub async fn router(
         macro_authorization::PgUserApiKeyAuthorizer::new(
             macro_authorization::PgUserApiKeyAuthorizationRepo::new(db.clone()),
         ),
-        db.clone(),
         rollout,
     ));
     let analytics = build_analytics(config, db);

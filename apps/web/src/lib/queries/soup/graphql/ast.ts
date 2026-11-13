@@ -805,6 +805,8 @@ function mapSortMethod(
       return unsupported('sort_method notified_at');
     case 'property':
       return 'PROPERTY';
+    case 'name':
+      return 'NAME';
     case undefined:
       return undefined;
   }
