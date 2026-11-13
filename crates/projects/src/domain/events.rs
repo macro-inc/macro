@@ -136,12 +136,91 @@ pub enum ProjectTopicEvent {
     Uploaded(ProjectUploadedMetadata),
 }
 
+/// What a [`ProjectTopicEvent::Updated`] changed, without the new values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectChange {
+    /// The project was renamed.
+    Name,
+    /// The project moved under another parent, or to the root.
+    Parent,
+    /// Who the project is shared with changed.
+    Sharing,
+}
+
+/// Public payload of `project.created`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PublicProjectCreated {
+    /// The created project.
+    pub project_id: String,
+    /// Its parent project, when it has one.
+    pub parent_project_id: Option<String>,
+    /// Creation time reported by the repository.
+    pub created_at: Option<DateTime<Utc>>,
+}
+
+/// Public payload of `project.updated`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PublicProjectUpdated {
+    /// The updated project.
+    pub project_id: String,
+    /// The authenticated user who updated it, if any.
+    #[cfg_attr(feature = "axum", schema(value_type = Option<String>))]
+    pub actor_user_id: Option<MacroUserIdStr<'static>>,
+    /// What changed; read the project for the new values.
+    pub changes: Vec<ProjectChange>,
+}
+
+/// Public payload of `project.deleted`, `project.restored`,
+/// `project.permanently_deleted` and `project.uploaded`: the root project of
+/// the tree. Child ids are left out; each child is read, or emits, on its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PublicProjectTree {
+    /// The root project of the affected tree.
+    pub project_id: String,
+    /// The root project's parent, when it has one.
+    pub parent_project_id: Option<String>,
+    /// The authenticated user who acted, if any.
+    #[cfg_attr(feature = "axum", schema(value_type = Option<String>))]
+    pub actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+/// The public projection of [`ProjectTopicEvent`], delivered under the same
+/// event names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum ProjectPublicEvent {
+    /// A project was created.
+    #[serde(rename = "project.created")]
+    Created(PublicProjectCreated),
+    /// A project's name, parent or sharing changed.
+    #[serde(rename = "project.updated")]
+    Updated(PublicProjectUpdated),
+    /// A project tree was moved to the trash.
+    #[serde(rename = "project.deleted")]
+    Deleted(PublicProjectTree),
+    /// A project tree was restored from the trash.
+    #[serde(rename = "project.restored")]
+    Restored(PublicProjectTree),
+    /// A project tree was permanently deleted.
+    #[serde(rename = "project.permanently_deleted")]
+    PermanentlyDeleted(PublicProjectTree),
+    /// An uploaded project tree was made live.
+    #[serde(rename = "project.uploaded")]
+    Uploaded(PublicProjectTree),
+}
+
 impl TopicEvent for ProjectTopicEvent {
     type Topic = MacroProjectsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = ProjectPublicEvent;
 
     fn exposure(
         &self,
@@ -149,22 +228,103 @@ impl TopicEvent for ProjectTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, EntityType, Exposure, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::Created(_)
-            | Self::Updated(_)
-            | Self::Deleted(_)
-            | Self::Restored(_)
-            | Self::Uploaded(_) => Exposure::pending(
-                PendingPhase::EntityFamilies,
-                "project family: Entity(Project) with a thin projection that drops child id lists",
+        let (name, project_id, audience, payload) = match self {
+            Self::Created(metadata) => (
+                "project.created",
+                &metadata.project_id,
+                None,
+                ProjectPublicEvent::Created(PublicProjectCreated {
+                    project_id: metadata.project_id.clone(),
+                    parent_project_id: metadata.parent_project_id.clone(),
+                    created_at: metadata.created_at,
+                }),
             ),
-            Self::PermanentlyDeleted(_) => Exposure::pending(
-                PendingPhase::EntityFamilies,
-                "owner may be a user, team or bot, so the rule is Owner, Team or the bot owner, not Owner alone; drop child id lists",
+            Self::Updated(metadata) => (
+                "project.updated",
+                &metadata.project_id,
+                None,
+                ProjectPublicEvent::Updated(PublicProjectUpdated {
+                    project_id: metadata.project_id.clone(),
+                    actor_user_id: metadata.actor_user_id.clone(),
+                    changes: [
+                        (metadata.name.is_some(), ProjectChange::Name),
+                        (metadata.parent_id.is_some(), ProjectChange::Parent),
+                        (metadata.share_permission_updated, ProjectChange::Sharing),
+                    ]
+                    .into_iter()
+                    .filter_map(|(changed, change)| changed.then_some(change))
+                    .collect(),
+                }),
             ),
-        })
+            Self::Deleted(metadata) => (
+                "project.deleted",
+                &metadata.project_id,
+                None,
+                ProjectPublicEvent::Deleted(PublicProjectTree {
+                    project_id: metadata.project_id.clone(),
+                    parent_project_id: metadata.parent_project_id.clone(),
+                    actor_user_id: metadata.actor_user_id.clone(),
+                }),
+            ),
+            Self::Restored(metadata) => (
+                "project.restored",
+                &metadata.project_id,
+                None,
+                ProjectPublicEvent::Restored(PublicProjectTree {
+                    project_id: metadata.project_id.clone(),
+                    parent_project_id: metadata.parent_project_id.clone(),
+                    actor_user_id: metadata.actor_user_id.clone(),
+                }),
+            ),
+            // The grants are gone with the tree. A user owner still owns the
+            // fact; a team's members or a bot's owner were never the
+            // project's audience as such (members without a grant would
+            // learn of it), so those stay internal.
+            Self::PermanentlyDeleted(metadata) => match &metadata.owner {
+                Owner::User(owner) => (
+                    "project.permanently_deleted",
+                    &metadata.project_id,
+                    Some(Audience::Owner {
+                        user_id: owner.clone(),
+                    }),
+                    ProjectPublicEvent::PermanentlyDeleted(PublicProjectTree {
+                        project_id: metadata.project_id.clone(),
+                        parent_project_id: metadata.parent_project_id.clone(),
+                        actor_user_id: metadata.actor_user_id.clone(),
+                    }),
+                ),
+                Owner::Team(_) | Owner::Bot(_) => {
+                    return Ok(Exposure::internal_by_design(
+                        "a purged team- or bot-owned project has no audience left: its grants are gone and team membership is not access",
+                    ));
+                }
+            },
+            Self::Uploaded(metadata) => (
+                "project.uploaded",
+                &metadata.root_project_id,
+                None,
+                ProjectPublicEvent::Uploaded(PublicProjectTree {
+                    project_id: metadata.root_project_id.clone(),
+                    parent_project_id: metadata.parent_project_id.clone(),
+                    actor_user_id: None,
+                }),
+            ),
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(EntityType::Project, project_id.clone()),
+            audience: audience.unwrap_or_else(|| Audience::Entity {
+                entity_type: EntityType::Project,
+                entity_id: project_id.clone(),
+            }),
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
     }
 }
 
