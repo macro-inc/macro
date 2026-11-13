@@ -1,0 +1,30 @@
+apps/web/src/components/app/split-layout/split-router/legacy-route.ts
+  s_699e95788b47ad::t_2b92fd0df15eab 285-287,429-430
+  s_699e95788b47ad::t_6c72ac97f8f889 2-4
+  s_699e95788b47ad::t_33eb04b98f750c 1,431
+apps/web/src/components/app/split-layout/componentRegistry.tsx
+  s_699e95788b47ad::t_fe6b32e320e729 43-50,351-360
+apps/web/src/features/agent-dashboards/dashboard-navigation.ts
+  s_699e95788b47ad::t_2b92fd0df15eab 3,31
+  s_699e95788b47ad::t_9771d822493175 1-2,4-30,32-79
+apps/web/src/routes/routes.ts
+  s_699e95788b47ad::t_2b92fd0df15eab 1-4,637,647
+apps/web/src/features/agent-dashboards/dashboard-navigation.test.ts
+  s_699e95788b47ad::t_61ada03d8fee67 1-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f977939b812860df070646c9f2edb8d27e8ab9b5",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
