@@ -33,4 +33,5 @@ export type AddFavoriteRequestEntityType =
   | 'database'
   | 'database_row'
   | 'form'
-  | 'external_chat';
+  | 'external_chat'
+  | 'dashboard';

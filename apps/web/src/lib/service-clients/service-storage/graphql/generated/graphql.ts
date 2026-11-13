@@ -1571,6 +1571,8 @@ export type GraphqlEntityType =
   | 'CRM_CONTACT'
   /** CRM pipeline entity. */
   | 'CRM_PIPELINE'
+  /** A saved dynamic-UI view with its own grants and versions. */
+  | 'DASHBOARD'
   /** Macro Database entity (a collection of user-defined tables). */
   | 'DATABASE'
   /** Row of a Macro Database table. */
