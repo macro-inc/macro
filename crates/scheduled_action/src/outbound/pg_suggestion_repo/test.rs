@@ -4,6 +4,7 @@ use serde_json::{Map, json};
 use super::*;
 use crate::domain::ports::ScheduledActionRepo;
 use crate::domain::service::test::configuration;
+use crate::domain::suggestions::model::CheckedRoutineSuggestionCard;
 use crate::outbound::pg_scheduled_action_repo::test::{
     USER_A, USER_B, insert_user, sample_action, test_repo, user_owner,
 };
@@ -23,6 +24,7 @@ fn catalog(key: &str) -> CheckedSuggestion {
             key: key.to_owned(),
             knobs,
         },
+        card: None,
     }
 }
 
@@ -34,110 +36,140 @@ fn drafted() -> CheckedSuggestion {
         pick: StoredPick::Routine {
             routine: configuration(false),
         },
+        card: Some(CheckedRoutineSuggestionCard {
+            title: "Plan the week".to_owned(),
+            importance: 30,
+            categories: Vec::new(),
+        }),
     }
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_generation_starts_once_and_records_how_it_ended(pool: PgPool) {
-    insert_user(&pool, USER_A).await;
-    let repo = PgSuggestionRepo::new(pool);
-    let a = user(USER_A);
-    assert_eq!(repo.generation(&a).await.unwrap(), None);
-    let stale = |now: DateTime<Utc>| now - chrono::TimeDelta::minutes(10);
-    let now = Utc::now();
-    assert!(repo.begin(&a, now, stale(now)).await.unwrap());
-    // Running, and not stale yet.
-    assert!(!repo.begin(&a, now, stale(now)).await.unwrap());
-    // Still running twenty minutes later: its process stopped, so it starts again.
-    let later = now + chrono::TimeDelta::minutes(20);
-    assert!(repo.begin(&a, later, stale(later)).await.unwrap());
-    assert_eq!(
-        repo.generation(&a)
-            .await
-            .unwrap()
-            .unwrap()
-            .started_at
-            .timestamp(),
-        later.timestamp()
-    );
-    assert_eq!(
-        repo.generation(&a).await.unwrap().unwrap().status,
-        GenerationStatus::Generating
-    );
-    repo.finish(&a, false, Utc::now()).await.unwrap();
-    let stored = repo.generation(&a).await.unwrap().unwrap();
-    assert_eq!(stored.status, GenerationStatus::Failed);
-    assert!(stored.finished_at.is_some());
-    // A finished generation never runs again, however long ago.
-    let much_later = later + chrono::TimeDelta::days(30);
-    assert!(!repo.begin(&a, much_later, stale(much_later)).await.unwrap());
+fn stored(kept: Kept) -> Uuid {
+    match kept {
+        Kept::Stored(id) => id,
+        other => panic!("not kept: {other:?}"),
+    }
+}
+
+/// The state of suggestion `suggestion`'s routine suggestion, and what it
+/// produced.
+async fn routine_card(pool: &PgPool, suggestion: Uuid) -> Option<(String, Vec<String>)> {
+    let card = sqlx::query!(
+        r#"SELECT i.id, i.state FROM suggestion i JOIN suggestion_routine r ON r.suggestion_id = i.id
+           WHERE r.routine_suggestion_id = $1"#,
+        suggestion,
+    )
+    .fetch_optional(pool)
+    .await
+    .unwrap()?;
+    let produced = sqlx::query_scalar!(
+        "SELECT entity_id FROM suggestion_target WHERE suggestion_id = $1 AND role = 'produced'",
+        card.id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    Some((card.state, produced))
+}
+
+/// A generation of `user`'s, for the change log's rows to point at.
+async fn generation(pool: &PgPool, user: &str) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO suggestion_generation (id, user_id, trigger, status, started_at)
+           VALUES ($1, $2, 'nightly', 'generating', now())"#,
+        id,
+        user,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_session_suggests_while_open_and_counts_what_it_kept(pool: PgPool) {
+async fn a_session_counts_what_it_kept_and_every_keep_and_retire_is_logged(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    let repo = PgSuggestionRepo::new(pool);
+    let generation = generation(&pool, USER_A).await;
+    let repo = PgSuggestionRepo::new(pool.clone());
     let a = user(USER_A);
     let session = Uuid::now_v7();
-    let opened = Utc::now() - chrono::TimeDelta::minutes(20);
-    repo.open_session(
-        session,
-        &a,
-        bot_id::MACRO_NEW_BOT_ID,
-        &[Surface::Email, Surface::Tasks],
-        opened,
-    )
-    .await
-    .unwrap();
-    let found = repo.session(session).await.unwrap().unwrap();
-    assert_eq!(found.owner, a);
-    assert_eq!(found.agent, bot_id::MACRO_NEW_BOT_ID);
-    assert_eq!(found.surfaces, [Surface::Email, Surface::Tasks]);
-    assert_eq!(found.kept, 0);
-
-    repo.add(&a, session, &catalog("email_tags"), Utc::now())
-        .await
-        .unwrap();
-    repo.add(&a, session, &drafted(), Utc::now()).await.unwrap();
-    assert_eq!(repo.session(session).await.unwrap().unwrap().kept, 2);
-
-    let stale = repo.stale_sessions(Utc::now(), 10).await.unwrap();
-    assert_eq!(
-        stale.iter().map(|s| s.session).collect::<Vec<_>>(),
-        [session]
+    assert_eq!(repo.kept_by(&a, session).await.unwrap(), 0);
+    let picked = stored(
+        repo.add(&a, session, generation, &catalog("email_tags"), Utc::now())
+            .await
+            .unwrap(),
     );
-    repo.close_session(session).await.unwrap();
-    assert_eq!(repo.session(session).await.unwrap(), None);
+    stored(
+        repo.add(&a, session, generation, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+    );
+    assert_eq!(repo.kept_by(&a, session).await.unwrap(), 2);
+
     assert!(
-        repo.stale_sessions(Utc::now(), 10)
+        repo.retire(
+            &a,
+            picked,
+            session,
+            generation,
+            "No longer fits",
+            Utc::now()
+        )
+        .await
+        .unwrap()
+    );
+    // Already retired.
+    assert!(
+        !repo
+            .retire(&a, picked, session, generation, "Again", Utc::now())
             .await
             .unwrap()
-            .is_empty()
     );
-    assert_eq!(repo.session(Uuid::now_v7()).await.unwrap(), None);
+    let stored = repo.suggestions(&a).await.unwrap();
+    assert!(stored[0].retired_at.is_some() && stored[0].dismissed_at.is_none());
+    assert!(stored[1].is_open());
+
+    let logged = sqlx::query!(
+        r#"SELECT action, subject, reason FROM suggestion_change
+           WHERE generation_id = $1 AND subject = 'routine_suggestion' ORDER BY created_at, id"#,
+        generation,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let logged: Vec<(String, String)> = logged
+        .into_iter()
+        .map(|row| (row.action, row.subject))
+        .collect();
+    assert_eq!(
+        logged,
+        [
+            ("created".to_owned(), "routine_suggestion".to_owned()),
+            ("created".to_owned(), "routine_suggestion".to_owned()),
+            ("retired".to_owned(), "routine_suggestion".to_owned()),
+        ]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn suggestions_round_trip_and_dismissals_and_saves_are_the_persons(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
+    let generation = generation(&pool, USER_A).await;
     let repo = PgSuggestionRepo::new(pool.clone());
     let (a, b) = (user(USER_A), user(USER_B));
     let session = Uuid::now_v7();
-    repo.open_session(
-        session,
-        &a,
-        bot_id::MACRO_NEW_BOT_ID,
-        &[Surface::Email],
-        Utc::now(),
-    )
-    .await
-    .unwrap();
-    let picked = repo
-        .add(&a, session, &catalog("email_tags"), Utc::now())
-        .await
-        .unwrap();
-    let written = repo.add(&a, session, &drafted(), Utc::now()).await.unwrap();
+    let picked = stored(
+        repo.add(&a, session, generation, &catalog("email_tags"), Utc::now())
+            .await
+            .unwrap(),
+    );
+    let written = stored(
+        repo.add(&a, session, generation, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+    );
 
     let stored = repo.suggestions(&a).await.unwrap();
     assert_eq!(stored.len(), 2);
@@ -152,7 +184,7 @@ async fn suggestions_round_trip_and_dismissals_and_saves_are_the_persons(pool: P
     assert!(repo.dismiss(&a, picked).await.unwrap());
     assert!(repo.dismiss(&a, picked).await.unwrap());
     let stored = repo.suggestions(&a).await.unwrap();
-    assert!(stored[0].dismissed && !stored[1].dismissed);
+    assert!(stored[0].dismissed_at.is_some() && stored[1].dismissed_at.is_none());
 
     repo.dismiss_template(&a, "brief").await.unwrap();
     repo.dismiss_template(&a, "brief").await.unwrap();
@@ -168,4 +200,138 @@ async fn suggestions_round_trip_and_dismissals_and_saves_are_the_persons(pool: P
     theirs.suggestion_id = Some(picked);
     actions.create_action(theirs).await.unwrap();
     assert_eq!(repo.saved_from(&a).await.unwrap(), [written]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_drafted_suggestion_and_its_card_are_kept_and_closed_together(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let generation = generation(&pool, USER_A).await;
+    let repo = PgSuggestionRepo::new(pool.clone());
+    let a = user(USER_A);
+    let session = Uuid::now_v7();
+    let add = |suggestion: CheckedSuggestion| {
+        let repo = &repo;
+        let a = a.clone();
+        async move {
+            stored(
+                repo.add(&a, session, generation, &suggestion, Utc::now())
+                    .await
+                    .unwrap(),
+            )
+        }
+    };
+    let picked = add(catalog("email_tags")).await;
+    let dismissed = add(drafted()).await;
+    let retired = add(drafted()).await;
+    let saved = add(drafted()).await;
+    // A catalog pick has no suggestion; each drafted routine has one.
+    assert_eq!(routine_card(&pool, picked).await, None);
+    assert_eq!(
+        routine_card(&pool, dismissed).await,
+        Some(("proposed".to_owned(), Vec::new()))
+    );
+
+    assert!(repo.dismiss(&a, dismissed).await.unwrap());
+    assert_eq!(routine_card(&pool, dismissed).await.unwrap().0, "dismissed");
+    assert!(
+        repo.retire(
+            &a,
+            retired,
+            session,
+            generation,
+            "No longer fits",
+            Utc::now()
+        )
+        .await
+        .unwrap()
+    );
+    assert_eq!(routine_card(&pool, retired).await.unwrap().0, "retired");
+
+    // Saving a routine from it finishes its suggestion, which produced the routine.
+    let mut routine = sample_action(user_owner(USER_A), "Weekly planning");
+    routine.suggestion_id = Some(saved);
+    let created = test_repo(pool.clone())
+        .create_action(routine)
+        .await
+        .unwrap();
+    assert_eq!(
+        routine_card(&pool, saved).await,
+        Some(("done".to_owned(), vec![created.id.unwrap().to_string()]))
+    );
+
+    // Every change to the suggestions was logged under the generation.
+    let logged = sqlx::query_scalar!(
+        r#"SELECT action FROM suggestion_change
+           WHERE generation_id = $1 AND subject = 'suggestion' ORDER BY created_at, id"#,
+        generation,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(logged, ["created", "created", "created", "retired"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_drafted_suggestion_past_the_suggestions_limit_keeps_nothing(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgSuggestionRepo::new(pool.clone());
+    let a = user(USER_A);
+    // One generation already added its most suggestions.
+    let full = generation(&pool, USER_A).await;
+    for _ in 0..suggestions::domain::service::NEW_PER_GENERATION {
+        stored(
+            repo.add(&a, Uuid::now_v7(), full, &drafted(), Utc::now())
+                .await
+                .unwrap(),
+        );
+    }
+    assert_eq!(
+        repo.add(&a, Uuid::now_v7(), full, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+        Kept::NightFull
+    );
+    assert_eq!(
+        repo.suggestions(&a).await.unwrap().len(),
+        usize::try_from(suggestions::domain::service::NEW_PER_GENERATION).unwrap()
+    );
+}
+
+/// A drafted suggestion with no suggestion (one the previous release drafted
+/// during a deploy) is still retired and dismissed.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_drafted_suggestion_without_its_card_still_closes(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let generation = generation(&pool, USER_A).await;
+    let repo = PgSuggestionRepo::new(pool.clone());
+    let a = user(USER_A);
+    let session = Uuid::now_v7();
+    let retired = stored(
+        repo.add(&a, session, generation, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+    );
+    let dismissed = stored(
+        repo.add(&a, session, generation, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+    );
+    sqlx::query("DELETE FROM suggestion WHERE user_id = $1")
+        .bind(USER_A)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.retire(
+            &a,
+            retired,
+            session,
+            generation,
+            "No longer fits",
+            Utc::now()
+        )
+        .await
+        .unwrap()
+    );
+    assert!(repo.dismiss(&a, dismissed).await.unwrap());
 }

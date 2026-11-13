@@ -731,6 +731,7 @@ dependencies = [
  "static_file_service_client",
  "stream",
  "strum 0.27.2",
+ "suggestion_generation",
  "suggestions",
  "sync_service_client",
  "system_properties",
@@ -1403,9 +1404,9 @@ checksum = "c880a97d28a3681c0267bd29cff89621202715b065127cd445fa0f0fe0aa2880"
 
 [[package]]
 name = "ammonia"
-version = "4.1.8"
+version = "4.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f6660fb4ff692ef4937b1b4e74ab3d378653d8588389587d91f96a296907ea0"
+checksum = "935c841d86ee68ba89a983ea6e4255436f769ab1e2b701574653baf4b30739ce"
 dependencies = [
  "cssparser 0.37.0",
  "html5ever 0.39.0",
@@ -17996,6 +17997,8 @@ dependencies = [
  "shown_text",
  "sqlx",
  "strum 0.27.2",
+ "suggestions",
+ "suggestions_db_utils",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
@@ -20112,33 +20115,96 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "suggestion_generation"
+version = "0.1.0"
+dependencies = [
+ "agent_runtime_protocol",
+ "agent_session",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "bot_id",
+ "chrono",
+ "chrono-tz",
+ "feature_flags",
+ "futures",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "macro_uuid",
+ "model_owner",
+ "rootcause",
+ "routine_program",
+ "scheduled_action",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "suggestions",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "trigger_context",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "suggestions"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
  "async-trait",
  "axum",
+ "channels",
  "chrono",
+ "chrono-tz",
+ "documents",
+ "email",
  "entity_access",
  "entity_registry",
  "feature_flags",
  "futures",
+ "kafka_util",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
  "macro_user_id",
  "macro_uuid",
+ "messages",
  "model-entity",
  "model_owner",
+ "projects",
+ "rdkafka",
  "rootcause",
  "serde",
  "serde_json",
  "shown_text",
  "sqlx",
  "strum 0.27.2",
+ "suggestions_db_utils",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "suggestions_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "macro_uuid",
+ "serde_json",
+ "sqlx",
  "workspace-hack",
 ]
 

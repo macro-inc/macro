@@ -47,11 +47,78 @@ impl RequestSessions for SameSession {
     }
 }
 
+/// Generation sessions as their rows in the database say, as the
+/// generation crate's adapter reads them.
+struct RowSessions(PgPool);
+
+#[async_trait::async_trait]
+impl GenerationSessions for RowSessions {
+    async fn open_session(
+        &self,
+        session: Uuid,
+    ) -> Result<Option<GenerationSession>, rootcause::Report> {
+        let row = sqlx::query!(
+            r#"SELECT session_id, generation_id, user_id, kind FROM suggestion_generation_session
+               WHERE session_id = $1 AND closed_at IS NULL"#,
+            session,
+        )
+        .fetch_optional(&self.0)
+        .await
+        .unwrap();
+        Ok(row.map(|row| GenerationSession {
+            session: row.session_id,
+            generation: row.generation_id,
+            user: MacroUserIdStr::try_from(row.user_id).unwrap(),
+            kind: row.kind.parse().unwrap(),
+            surfaces: Vec::new(),
+            trace_id: None,
+        }))
+    }
+}
+
+/// Who read their feed, in which zone.
+#[derive(Default)]
+struct FakeAudience(Mutex<Vec<(String, String)>>);
+
+#[async_trait::async_trait]
+impl SuggestionAudience for FakeAudience {
+    async fn seen(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        timezone: &str,
+        _: chrono::DateTime<Utc>,
+    ) -> Result<(), rootcause::Report> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((user.as_ref().to_owned(), timezone.to_owned()));
+        Ok(())
+    }
+}
+
+/// Routine suggestions dismissed through the port.
+#[derive(Default)]
+struct FakeDismissal(Mutex<Vec<Uuid>>);
+
+#[async_trait::async_trait]
+impl RoutineSuggestionDismissal for FakeDismissal {
+    async fn dismiss_suggestion(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        suggestion: Uuid,
+    ) -> Result<bool, rootcause::Report> {
+        self.0.lock().unwrap().push(suggestion);
+        Ok(true)
+    }
+}
+
 type Service = SuggestionService<PgSuggestionRepo, FakeAccess, FakeFeatureFlags>;
 
 struct Harness {
     service: Service,
     access: Arc<FakeAccess>,
+    audience: Arc<FakeAudience>,
+    dismissal: Arc<FakeDismissal>,
     pool: PgPool,
 }
 
@@ -70,14 +137,21 @@ async fn harness(pool: PgPool, flag: bool) -> Harness {
         );
     }
     let access = Arc::new(FakeAccess::default());
+    let audience = Arc::new(FakeAudience::default());
+    let dismissal = Arc::new(FakeDismissal::default());
     Harness {
         service: SuggestionService::new(
             Arc::new(PgSuggestionRepo::new(pool.clone())),
             Arc::clone(&access),
             Arc::new(SameSession),
+            Arc::new(RowSessions(pool.clone())),
+            audience.clone(),
+            dismissal.clone(),
             Some(flags),
         ),
         access,
+        audience,
+        dismissal,
         pool,
     }
 }
@@ -227,11 +301,19 @@ async fn an_suggestions_session_adds_an_suggestion_the_person_sees(pool: PgPool)
             Some("Three quotes for the same order".to_owned())
         )]
     );
-    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), Some(chrono_tz::Europe::Paris))
+        .await
+        .unwrap();
     assert_eq!(feed.suggestions, vec![suggestion]);
+    assert_eq!(
+        *h.audience.0.lock().unwrap(),
+        vec![(OWNER.to_owned(), "Europe/Paris".to_owned())]
+    );
     assert!(
         h.service
-            .feed(&user(OTHER))
+            .feed(&user(OTHER), None)
             .await
             .unwrap()
             .suggestions
@@ -295,7 +377,7 @@ async fn suggestions_are_off_without_the_flag(pool: PgPool) {
         Err(SuggestionError::NotFound)
     ));
     assert!(matches!(
-        h.service.feed(&user(OWNER)).await,
+        h.service.feed(&user(OWNER), None).await,
         Err(SuggestionError::NotFound)
     ));
 }
@@ -324,7 +406,7 @@ async fn the_same_dedup_key_updates_the_suggestion_and_its_kind_never_changes(po
     assert_eq!(second.title, "Pick the cheapest supplier");
     assert_eq!(
         h.service
-            .feed(&user(OWNER))
+            .feed(&user(OWNER), None)
             .await
             .unwrap()
             .suggestions
@@ -367,7 +449,7 @@ async fn a_dismissed_suggestion_comes_back_only_with_a_reason(pool: PgPool) {
         .unwrap();
     assert!(
         h.service
-            .feed(&user(OWNER))
+            .feed(&user(OWNER), None)
             .await
             .unwrap()
             .suggestions
@@ -450,7 +532,7 @@ async fn a_session_rewrites_and_retires_open_suggestions_and_a_retired_one_comes
     assert_eq!(retired.suggestion.unwrap().state, SuggestionState::Retired);
     assert!(
         h.service
-            .feed(&user(OWNER))
+            .feed(&user(OWNER), None)
             .await
             .unwrap()
             .suggestions
@@ -603,7 +685,7 @@ async fn an_suggestion_names_a_part_only_with_its_own_item(pool: PgPool) {
         .suggest(session, with_part("quotes:own", "thread-1:message"))
         .await;
     assert!(own.ok, "{:?}", own.problems);
-    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     assert_eq!(feed.suggestions.len(), 1);
     assert_eq!(
         feed.suggestions[0].about[0].part_id.as_deref(),
@@ -622,7 +704,9 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
     .await;
     h.suggest(session, entity_suggestion("venue:headcount"))
         .await;
-    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    h.suggest(session, entity_suggestion("venue:headcount"))
+        .await;
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     // Best first.
     assert_eq!(feed.suggestions[0].dedup_key, "venue:headcount");
     h.access
@@ -630,7 +714,7 @@ async fn the_feed_hides_suggestions_about_items_the_person_lost(pool: PgPool) {
         .lock()
         .unwrap()
         .insert("thread-2".to_owned());
-    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     assert_eq!(feed.suggestions.len(), 1);
     assert_eq!(feed.suggestions[0].dedup_key, "quotes:compare");
 }
@@ -651,7 +735,7 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
     // Acting on a suggestion that isn't a background run finishes it: it shows
     // in the feed's done list, and accepting it again changes nothing.
     h.service.accept(&user(OWNER), suggestion.id).await.unwrap();
-    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     assert!(feed.suggestions.is_empty());
     assert_eq!(feed.done[0].id, suggestion.id);
     assert_eq!(feed.done[0].state, SuggestionState::Done);
@@ -671,7 +755,12 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
         .unwrap();
     h.service.accept(&user(OWNER), background.id).await.unwrap();
     assert_eq!(
-        h.service.feed(&user(OWNER)).await.unwrap().suggestions[0].state,
+        h.service
+            .feed(&user(OWNER), None)
+            .await
+            .unwrap()
+            .suggestions[0]
+            .state,
         SuggestionState::Accepted
     );
     h.service
@@ -684,8 +773,92 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
     ));
 }
 
-/// The feed keeps suggestions done in the last day, newest first, apart from the
-/// open ones; older ones and other closed ones leave it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let generation = sqlx::query_scalar!(
+        "SELECT generation_id FROM suggestion_generation_session WHERE session_id = $1",
+        session,
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+    let suggestion = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO routine_suggestion
+             (id, user_id, session_id, surfaces, routine, reason, keep_probability, created_at)
+           VALUES ($1, $2, $3, '{tasks}', '{}'::jsonb, 'You plan on Mondays', 0.4, now())"#,
+        suggestion,
+        OWNER,
+        session,
+    )
+    .execute(&h.pool)
+    .await
+    .unwrap();
+    let mut tx = h.pool.begin().await.unwrap();
+    suggestions_db_utils::add_routine_card(
+        &mut tx,
+        &suggestions_db_utils::NewRoutineSuggestionCard {
+            user: OWNER,
+            suggestion,
+            title: "Plan the week",
+            summary: "You plan on Mondays",
+            importance: 40,
+            categories: &[],
+            session,
+            generation,
+            at: Utc::now(),
+        },
+        OPEN_LIMIT,
+        NEW_PER_GENERATION,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let card = feed.suggestions[0].clone();
+    assert_eq!(
+        card.kind,
+        SuggestionKind::Routine {
+            routine_suggestion_id: suggestion
+        }
+    );
+    // Sessions never rewrite or retire it here; its suggestion decides.
+    let rewrite = h
+        .service
+        .rewrite(
+            &principal(OWNER),
+            Some(session),
+            card.id,
+            RewriteSuggestion {
+                importance: Some(90),
+                reason: "Matters more".to_owned(),
+                ..RewriteSuggestion::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!rewrite.ok);
+    let retire = h
+        .service
+        .retire(
+            &principal(OWNER),
+            Some(session),
+            card.id,
+            RetireSuggestionRequest {
+                reason: "No longer fits".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!retire.ok);
+    // The person dismissing it dismisses its suggestion, which closes both.
+    h.service.dismiss(&user(OWNER), card.id).await.unwrap();
+    assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     let h = harness(pool, true).await;
@@ -724,7 +897,7 @@ async fn the_feed_keeps_suggestions_done_in_the_last_day(pool: PgPool) {
     .execute(&h.pool)
     .await
     .unwrap();
-    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     assert_eq!(
         feed.suggestions
             .iter()

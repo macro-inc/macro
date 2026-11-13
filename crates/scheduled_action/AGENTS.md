@@ -122,41 +122,46 @@ each run.
   (it holds an email). Replicas still on code without job rows sweep them
   as stale blocking drafts after `STALE_DRAFT`.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
-  suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
-  (onboarding calls it once the inbox connects) starts the person's one
-  generation ever: hidden background sessions of the in-process Macro agent,
-  as the person, three at once by surface group (`SuggestionLayout`: email,
-  calendar, tasks; crm, calls, chat; files, reviews, agents), each capped at
-  `SESSION_TIMEOUT` (240 s), handing back catalog picks first, then drafts.
-  A prompt whose delivery is unknown ends the session like a failure, so it
-  gets the one retry. Each brief (`suggestions/prompt.rs`) holds the
-  routines guide, the catalog for its surfaces, what was dismissed, and the
-  newest 100 messages and connected apps inside `<untrusted>` tags (angle
-  brackets in the data are swapped so it can't close them). A session hands
-  back each suggestion through `macro.routines.suggest`
-  (`POST /scheduled-actions/suggestions`), which only the person's own open
-  suggestion session may call (`routine_suggestion_session`, found from the
-  request's code-mode invocation like a draft's check; anything else is 403
-  `NotSuggesting`). `suggestions/decode.rs` is the trust boundary: a catalog
-  key with knob values that fit their knob, or a drafted routine that passes
-  saving's checks, kept switched off and never acting as the user; a one-line
-  reason; no email address, phone number or street address in the reason or
-  the drafted routine's words (`personal_detail`, by shape); the session's
-  surfaces. A session that keeps
-  nothing is retried once; then Macro's templates fill in. `GET
-  /scheduled-actions/suggestions?surface=` never generates: per surface,
-  drafted routines, then catalog picks (each best first, a second with the
-  same catalog title or name left out), then catalog routines marked `suggest` as
-  Macro's templates (stable ids, `template_id`) to `PER_SURFACE`, skipping
-  dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
-  (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
-  catalog picks AI rated likely kept, never one that affects others. Unlike a draft's, a suggestion session
-  is prepared with `SessionBilling::NonBillable`, so its turns are
-  recorded as the non-billable `NonBillableAgentSession`, never billed as
-  agent session usage. The sweep deletes sessions a stopped
-  process left open. Spans: `routine.suggestions.generate`, `.session`,
-  `.suggest`; log events `routine_suggestions.generated`, `.suggested`,
-  `.dismissed`, `.saved`.
+  suggestions and the tools routines sessions write them with. The sessions
+  themselves belong to generations (`crates/suggestion_generation`: an
+  onboarding run once the inbox connects, then nightly), which brief each
+  routines session through `RoutineSuggestionApi::brief` (`suggestions/prompt.rs`:
+  the routines guide, the catalog for its surfaces, what was dismissed, and the
+  newest 100 messages and connected apps inside `<untrusted>` tags, angle
+  brackets in the data swapped so it can't close them; a nightly brief adds
+  review and retire) and count what it kept (`kept`). A session hands back
+  each suggestion through `macro.routines.suggest`
+  (`POST /scheduled-actions/suggestions`), reads earlier ones through
+  `macro.routines.review()` (`GET .../suggestions/review`) and retires open
+  ones through `suggestion.retire(reason)` (`POST .../{id}/retire`); only the
+  person's own open routines session in `suggestion_generation_session` may
+  (the `GenerationSessions` port, found from the request's code-mode
+  invocation like a draft's check; anything else is 403 `NotSuggesting`).
+  Suggestions are never rewritten; a retired catalog pick may be suggested
+  again, a dismissed one never. A drafted routine comes with its `card` (title,
+  importance, categories) and is written with its `routine` suggestion in one
+  transaction (`suggestions_db_utils`), refused when that would pass the suggestion
+  limits; dismissing, retiring or saving it from the routine suggestion closes
+  that `routine` suggestion in the same transaction. A catalog pick takes no
+  `card`. Every kept and retired suggestion is logged in
+  `suggestion_change`. `suggestions/decode.rs` is the trust boundary: a
+  catalog key with knob values that fit their knob, or a drafted routine that
+  passes saving's checks, kept switched off and never acting as the user; a
+  one-line reason; no email address, phone number or street address in the
+  reason or the drafted routine's words (`shown_text::personal_detail`, by
+  shape); the session's surfaces. `GET /scheduled-actions/suggestions?surface=`
+  never generates: per surface, drafted routines, then catalog picks (each
+  best first, a second with the same catalog title or name left out), then
+  catalog routines marked `suggest` as Macro's templates (stable ids,
+  `template_id`) to `PER_SURFACE`, skipping dismissed (permanent,
+  `.../{id}/dismiss` for either kind), retired and saved ones
+  (`scheduled_action.suggestion_id`); its `status` is the person's latest
+  generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
+  catalog picks AI rated likely kept, never one that affects others. Spans:
+  `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`; log events
+  `routine_suggestions.generated` and `.surface` (from `record`, after a
+  generation's routines sessions), `.suggested`, `.retired`, `.dismissed`,
+  `.saved`.
 - The `routine_suggestions.*` INFO logs (`suggestions.rs`, and `saved` in
   `service.rs`, which names the suggestion through the `SuggestionOrigins`
   port the harness sets with `with_suggestion_origins`) are the field

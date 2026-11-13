@@ -786,6 +786,14 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
+    // Suggestion generation sessions' code and tools are limited to reads
+    // and their own writes, wherever their credential is used.
+    let session_scopes: Arc<dyn code_mode::SessionScopes> =
+        Arc::new(code_mode::GenerationScopes(Arc::new(
+            suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo::new(
+                pool.clone(),
+            ),
+        )));
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
@@ -800,6 +808,7 @@ async fn run() -> anyhow::Result<()> {
                         config.macro_api_token_private_secret_key.as_ref(),
                     ),
                     endpoints: code_mode::sdk_endpoints()?,
+                    scopes: Arc::clone(&session_scopes),
                 }),
             )),
         }),
@@ -830,12 +839,16 @@ async fn run() -> anyhow::Result<()> {
             .entity_access_service
             .clone(),
     );
-    let owner_tool_gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate> = Arc::new(
-        agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
-            session_repo.clone(),
-            Arc::clone(&tool_approvals),
-        ),
-    );
+    let owner_tool_gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate> =
+        Arc::new(code_mode::ScopedToolGate {
+            inner: Arc::new(
+                agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
+                    session_repo.clone(),
+                    Arc::clone(&tool_approvals),
+                ),
+            ),
+            scopes: Arc::clone(&session_scopes),
+        });
     let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
@@ -900,6 +913,7 @@ async fn run() -> anyhow::Result<()> {
                 ),
                 gate: owner_tool_gate.clone(),
                 endpoints: code_mode::sdk_endpoints()?,
+                scopes: Arc::clone(&session_scopes),
             }),
             execution_store,
             execution_turns,

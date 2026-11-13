@@ -1046,6 +1046,14 @@ export const enableRoutineBackgroundDrafts = defineFlag({
   default: onInDev,
 });
 
+// Suggestions: the For you feed of proactive suggestions. The backend gates every
+// suggestions route on the same PostHog flag.
+export const enableSuggestions = defineFlag({
+  key: 'enable-suggestions',
+  env: 'ENABLE_SUGGESTIONS',
+  default: onInDev,
+});
+
 // Templates are not ready for general use. Follow PostHog even in development
 // so the UI and the server's per-user rollout agree.
 export const enableRoutineSharing = defineFlag({

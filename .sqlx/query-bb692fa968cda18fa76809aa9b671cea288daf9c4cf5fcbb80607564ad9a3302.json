@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT CASE WHEN status = 'generating' AND started_at < $2 THEN 'failed'\n                           ELSE status END AS \"status!\"\n               FROM suggestion_generation WHERE user_id = $1\n               ORDER BY started_at DESC, id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bb692fa968cda18fa76809aa9b671cea288daf9c4cf5fcbb80607564ad9a3302"
+}

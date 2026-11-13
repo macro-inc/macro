@@ -3,6 +3,8 @@
 use crate::AgentVerb;
 use uuid::Uuid;
 
+use crate::scope::SessionScope;
+
 /// What the current work is attributed to, accepted at its boundary.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Attribution {
@@ -10,6 +12,10 @@ pub struct Attribution {
     pub correlation_id: Option<Uuid>,
     /// Routine whose run the work acts for, from a signed token claim.
     pub routine_id: Option<Uuid>,
+    /// The validated invocation's agent session.
+    pub session_id: Option<Uuid>,
+    /// The scope that session's credential was minted with.
+    pub scope: Option<SessionScope>,
     /// Display verb the SDK sent with a validated correlation. Display only;
     /// it is dropped whenever there is no correlation.
     pub verb: Option<AgentVerb>,
@@ -28,6 +34,16 @@ fn attribution() -> Attribution {
 /// The invocation accepted at the current request or message boundary.
 pub fn current() -> Option<Uuid> {
     attribution().correlation_id
+}
+
+/// The agent session behind the current request's validated invocation.
+pub fn current_session() -> Option<Uuid> {
+    attribution().session_id
+}
+
+/// The scope the current request's session credential was minted with.
+pub fn current_scope() -> Option<SessionScope> {
+    attribution().scope
 }
 
 /// Display verb accepted with the current correlation, if any.
@@ -62,8 +78,8 @@ pub async fn scope_with_verb<F: Future>(
 ) -> F::Output {
     let attribution = Attribution {
         correlation_id: id,
-        routine_id: None,
         verb,
+        ..Attribution::default()
     };
     scope_attribution(attribution, future).await
 }
@@ -118,7 +134,7 @@ mod tests {
         let routine_run = Attribution {
             correlation_id: Some(correlation),
             routine_id: Some(routine),
-            verb: None,
+            ..Attribution::default()
         };
         let (a, b) = tokio::join!(
             scope_attribution(routine_run, async {

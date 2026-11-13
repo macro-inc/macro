@@ -192,9 +192,15 @@ Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected
-  Pipedream apps; their hidden sessions run on the free tier's model, gated
-  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
-  sessions a stopped process left open every minute.
+  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  suggestions and routines sessions hidden on the free tier's model, each kind
+  gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
+  `scheduling.rs` sweeps generation sessions a stopped process left open
+  every minute and starts nightly generations every five minutes, once the
+  process is ready.
+  The suggestions routes are served here too, and `scheduling.rs` runs suggestions'
+  resolution consumer (group `suggestions-resolution`, `crates/suggestions`) beside the
+  event intake, under the same readiness gate and shutdown.
   The agent dashboard's routines summary
   (`GET /scheduled-actions/agents/{agent_id}`, `AgentRoutineServiceImpl`)
   reuses the scheduling PostHog flags (`enable-agent-dashboards` for the

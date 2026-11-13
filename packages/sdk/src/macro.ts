@@ -558,6 +558,7 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export { RoutineSuggestion } from './entities/routines/suggestion';
 export {
   SavedView,
   type SavedViewConfig,

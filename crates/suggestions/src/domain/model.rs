@@ -426,6 +426,19 @@ pub enum NewKind {
     },
 }
 
+/// What starts a generation: a person finishing onboarding, or their night.
+/// Shared by everything a generation's sessions write.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr, strum::IntoStaticStr,
+)]
+#[strum(serialize_all = "snake_case")]
+pub enum GenerationTrigger {
+    /// The person just signed up; their workspace is nearly empty.
+    Onboarding,
+    /// The nightly run in the person's night: full research, then manage.
+    Nightly,
+}
+
 /// What a generation session may call: suggestions or routine suggestions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -447,6 +460,12 @@ pub struct GenerationSession {
     pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
     /// What it may write.
     pub kind: SessionKind,
+    /// The surfaces a routines session suggests for, by wire name; empty
+    /// for suggestions.
+    pub surfaces: Vec<String>,
+    /// The trace its generation runs in. A session's tool calls reach the
+    /// API without its trace context, so they record this to be joined.
+    pub trace_id: Option<String>,
 }
 
 /// What a change-log entry records.
@@ -480,6 +499,33 @@ pub struct Change {
     pub reason: Option<String>,
     /// When.
     pub at: DateTime<Utc>,
+}
+
+/// Why code resolved a suggestion, as stored in `state_reason`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ResolveReason {
+    /// The person answered what the suggestion asked them to answer.
+    Replied,
+    /// An item it is about was deleted.
+    Deleted,
+    /// The person can no longer open an item it is about.
+    AccessLost,
+}
+
+/// An open suggestion about an item, once per target naming that item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenTarget {
+    /// The suggestion.
+    pub suggestion: Uuid,
+    /// Whose it is.
+    pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// When it was first proposed.
+    pub created_at: DateTime<Utc>,
+    /// Whether it is an entity suggestion asking for a reply.
+    pub reply: bool,
+    /// The part of the item the target names, if only a part.
+    pub part_id: Option<String>,
 }
 
 /// Why a suggestions call failed.
