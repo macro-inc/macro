@@ -413,13 +413,10 @@ impl AccessRepository for PgAccessRepository {
         let group_uuid = group_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid external chat ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
         Ok(queries::external_chat_access::get_external_chat_access(
             &self.pool,
             &group_uuid,
-            &source_ids,
+            Viewer::from_user(user_id),
         )
         .await?)
     }
@@ -532,9 +529,6 @@ impl AccessRepository for PgAccessRepository {
             .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
         let bot_principal = bot_id.into_storage_id();
         let viewer = queries::team_bot_viewer(&self.pool, &bot_principal, team_id).await?;
-        let source_ids = queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
-            .await
-            .map_err(anyhow_access_error)?;
 
         let access = match entity_type {
             EntityType::Document => {
@@ -585,7 +579,7 @@ impl AccessRepository for PgAccessRepository {
                 .await
             }
             EntityType::ExternalChat => {
-                queries::external_chat_access::get_external_chat_access(&self.pool, &entity_uuid, &source_ids).await
+                queries::external_chat_access::get_external_chat_access(&self.pool, &entity_uuid, viewer).await
             }
             EntityType::Form => {
                 queries::form_access::get_form_access(&self.pool, &entity_uuid, viewer).await
