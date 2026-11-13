@@ -139,7 +139,7 @@ Local authentication includes a working signing key pair for Macro API tokens,
 which settings actions such as enabling CRM require. New teams start with CRM
 disabled; enable it in Settings > CRM before creating pipelines.
 
-The stack supplies stubbed values for required configuration, including third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Local auth, documents, and search work independently. The agent harness currently also requires a configured Google Gmail identity provider for its public MCP routes; without real Google OAuth configuration, it exits during startup.
+The stack supplies stubbed values for required configuration, including third-party integrations (GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Local auth, documents, and search work independently. Google is the exception: without a real Google OAuth client the stack runs the [Gmail emulator](#google-sign-in-and-gmail-without-a-google-account) in Google's place, so Google sign-in, Gmail linking and mail sync work with seeded users.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
 
@@ -198,6 +198,90 @@ The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
+
+### Google sign-in and Gmail without a Google account
+
+A stack whose environment names no real Google OAuth client (`--no-doppler`
+without Google keys in `--env-file`) starts the Gmail emulator
+(`crates/gmail_emulator`) as the `gmail_emulator` service. FusionAuth's `google`
+and `google_gmail` identity providers and the services' Google URLs
+(`OVERRIDE_GMAIL_API_URL`, `OVERRIDE_GOOGLE_OAUTH_TOKEN_URL` and the rest, in
+`xtask_local`'s `google_emulator.rs`) point at it. Nothing talks to Google.
+
+- **Continue with Google** opens the emulator's page in place of Google's. Pick
+  one of the seeded users (`ada@example.com`, `bob@example.com`,
+  `carol@example.com`, from `crates/gmail_emulator/seed.example.yaml`). A first
+  sign-in creates the Macro account and connects that user's mailbox.
+- **Connect another account** in Email, and the email steps of onboarding, open
+  the same page; pick another seeded user to add their mailbox.
+- The page and the emulator's control API are at the `gmail_emulator` port,
+  `http://localhost:8480` on the default instance and the window's port on a
+  named one (`docker compose port gmail_emulator 8080`). Add users and mail
+  while the stack runs with `POST /_emulator/seed`; deliver new mail with
+  `POST /_emulator/mailboxes/{email}/messages`. See the crate's `AGENTS.md`.
+- Like FusionAuth's own pages, the sign-in page is addressed as `localhost`,
+  so sign in with Google from a browser on this machine.
+- The emulator keeps its state in memory: restarting its container returns it
+  to the seed, while Macro's database keeps what it synced.
+- FusionAuth only gets the emulator's identity providers when its database
+  is first filled. A stack created before the emulator existed, or with
+  different Google keys, stops at "Waiting for FusionAuth" and says so:
+  start it once with `--fresh`.
+- The emulator is also those users' Google Calendar: the seed file gives them
+  calendars with repeating events, the calendar service syncs them, and the
+  emulator pushes each change to its webhook. Put an event on a calendar with
+  `POST /_emulator/mailboxes/{email}/calendars/primary/events` (Google's event
+  resource). A mailbox added through **Connect another account** gets calendar
+  sync. One connected only by signing in does not yet: the email service reads
+  that grant's scopes from Google's token-info endpoint, which is not behind a
+  service URL override.
+
+With real Google keys the emulator does not start and Google is used as before.
+
+### Microsoft sign-in and Outlook without a Microsoft account
+
+A stack whose environment names no real Microsoft OAuth client
+(`MICROSOFT_CLIENT_ID` absent from Doppler and `--env-file`) starts the Outlook
+emulator (`crates/outlook_emulator`) as the `outlook_emulator` service.
+FusionAuth's `microsoft` identity provider and the services' Microsoft URLs
+(`OVERRIDE_MICROSOFT_GRAPH_URL`, `OVERRIDE_MICROSOFT_LOGIN_URL`,
+`OVERRIDE_MICROSOFT_LOGIN_PAGE_URL`, with the emulator's OAuth client and the
+Outlook switches, in `xtask_local`'s `microsoft_emulator.rs`) point at it.
+The authentication service runs without a PostHog key there, so
+`OUTLOOK_CONNECTIONS_ENABLED` alone admits new Outlook connections, not the
+`enable-outlook` flag. Nothing talks to Microsoft.
+
+- **Continue with Microsoft** opens the emulator's page in place of Microsoft's.
+  Pick one of the seeded users (`ada@example.com`, `bob@example.com`,
+  `carol@example.com`, from `crates/outlook_emulator/seed.example.yaml`). A first
+  sign-in creates the Macro account.
+- **Connect Outlook**, in onboarding and in Email, opens the same page; pick a
+  seeded user to connect their mailbox. Sign-in and the mailbox are separate
+  grants, as with Microsoft, so a Microsoft sign-up connects its mailbox in the
+  onboarding email step.
+- The page and the emulator's control API are at the `outlook_emulator` port,
+  `http://localhost:8481` on the default instance and the window's port on a
+  named one (`docker compose port outlook_emulator 8080`). Add users, mail and
+  calendars while the stack runs with `POST /_emulator/seed`; deliver new mail with
+  `POST /_emulator/mailboxes/{email}/messages`. See the crate's `AGENTS.md`.
+- Like FusionAuth's own pages, the sign-in page is addressed as `localhost`,
+  so sign in with Microsoft from a browser on this machine.
+- The emulator keeps its state in memory: restarting its container returns it
+  to the seed, while Macro's database keeps what it synced and the refresh
+  tokens it holds stop working. Reconnect the mailbox after a restart.
+- Change notifications are not delivered: Graph subscriptions need an HTTPS
+  webhook, and the stack's services reach each other over HTTP. Mail that
+  arrives at the emulator later shows up with the next sync, not at once.
+- A connected mailbox's Outlook calendars sync from the emulator too: the
+  seed gives Ada and Bob calendars with repeating events, and events created
+  or changed in Macro are written to the emulator. The calendar service polls
+  every two minutes, so a change made in the emulator
+  (`POST /_emulator/mailboxes/{email}/calendars/default/events`) shows up
+  with the next poll.
+
+With a real Microsoft client in the environment the emulator does not start.
+Sign in with Microsoft is then unavailable locally, as before: the stack defines
+no `microsoft` identity provider for a real client.
 
 ### Recover an existing instance without resetting data
 
@@ -276,12 +360,13 @@ project and Compose files, or Compose `down`/`up` without `--volumes`. The xtask
 up/down paths can reset metadata or remove volumes, and stack init snapshots do
 not include the vault.
 
-A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, and the agent harness additionally needs the Google Gmail identity provider created from real Google OAuth configuration:
+A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, except Google, which the Gmail emulator stands in for:
 
 | Integration | Keys | Stub behavior |
 | --- | --- | --- |
-| Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service skips inbox syncing without a Gmail grant. The agent harness cannot start its public MCP routes without the Google Gmail identity provider. |
+| Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | The Gmail emulator answers in Google's place: Google sign-in and Gmail linking work with its seeded users, never a real account. Real keys (a `GOCSPX-` secret) switch the stack to Google. |
 | Pipedream | `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, `PIPEDREAM_PROJECT_ID` | Placeholders satisfy the harness configuration loader; Pipedream integrations require real credentials. |
+| Microsoft login / Outlook | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | The Outlook emulator answers in Microsoft's place: Microsoft sign-in, Outlook linking and Outlook calendar sync work with its seeded users, never a real account. A real client id switches the emulator off. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
 | Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
@@ -577,12 +662,16 @@ authentication_service and agent_harness_service; set them only to override.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
+`COMPUTERS_AGENT_IMAGE` (agent teammates' computers),
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
 Local orchestration supplies reserve `7` GB and oversell factor `3` for both
-fleets. The Docker image is `macro-box:latest`; for Incus set
-`COMPUTERS_INCUS_IMAGE` to the versioned alias imported on `runtime-dev-1`
-(`macro-box/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
-xtask fails when it is unset.
+fleets. The Docker images are `macro-box:latest` and `macro-box-agent:latest`
+(`run_local` builds and loads both: `.#macro-box-docker` and
+`.#macro-box-agent-docker`); for Incus set
+`COMPUTERS_INCUS_IMAGE` and `COMPUTERS_INCUS_AGENT_IMAGE` to the versioned
+aliases imported on `runtime-dev-1` (`macro-box/<version>` and
+`macro-box-agent/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
+xtask fails when either is unset.
 
 Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
 `COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
@@ -666,7 +755,8 @@ mappings. A recreate consumes the current deployment addresses and fresh credent
 ### Incus on runtime-dev-1
 
 ```bash
-COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
+COMPUTERS_INCUS_IMAGE=macro-box/<version> COMPUTERS_INCUS_AGENT_IMAGE=macro-box-agent/<version> \
+  just run_local --instance computers --computers-incus
 ```
 
 This path is currently unavailable: `runtime-dev-1` no longer joins a tailnet
@@ -751,7 +841,7 @@ moves, run `just seed-scenario apply` again to get links that match.
 Local service builds inherit `RUSTC_WRAPPER`, including an empty value to disable
 compiler caching.
 
-The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted into a shared runtime image together with `/nix/store`, which holds the loader and libraries they link. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
+The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted, together with `/nix/store` (which holds the loader and libraries they link), into a runtime image tagged by the Dockerfile and target-platform content hash. Generated compose files use that exact tag, so another worktree rebuilding a different runtime recipe cannot replace a running stack's image. The recipe includes git for agent workspace repositories. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
 
 A Nix garbage collection can delete libraries a running stack's binaries use; rebuild with `r` or `just stack update` if a service then fails to start.
 
@@ -945,8 +1035,3 @@ dropped after a week.
 
 To try it without the hosted stack, run a throwaway Loki and point the file at
 it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
-
-## Local Kubernetes
-
-For the Nix-declared kind runtime, isolated namespaces and two HTTPS slots, see
-[local Kubernetes](local-kubernetes.md).

@@ -4067,6 +4067,133 @@
           }
         }
       }
+    },
+    "/voices": {
+      "get": {
+        "tags": ["voices"],
+        "summary": "The voices an agent teammate can speak with on calls. Team admins only.",
+        "operationId": "get_agent_voices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Voice"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voices/{model}/sample": {
+      "get": {
+        "tags": ["voices"],
+        "summary": "A catalog voice saying a fixed line, as WAV. Team admins only; the first\nplay of each voice is billed to the admin's team.",
+        "operationId": "get_agent_voice_sample",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "description": "An Aura-2 model, such as aura-2-thalia-en",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WAV audio",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6589,6 +6716,17 @@
           "external_chat"
         ]
       },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
       "ExecutionActivity": {
         "type": "object",
         "description": "A bounded SDK operation observed during execution; not an authorization or write receipt.",
@@ -8731,6 +8869,39 @@
           }
         }
       },
+      "Voice": {
+        "type": "object",
+        "description": "One voice of the provider's catalog.",
+        "required": ["model", "name", "accent", "tags", "languages"],
+        "properties": {
+          "accent": {
+            "type": "string",
+            "description": "The provider's accent label."
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Languages the voice speaks."
+          },
+          "model": {
+            "type": "string",
+            "description": "The model to save as the agent's voice."
+          },
+          "name": {
+            "type": "string",
+            "description": "The provider's name for the voice."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The provider's gender and character tags."
+          }
+        }
+      },
       "WarmAgentSessionRequest": {
         "type": "object",
         "description": "A client-minted id deduplicates warm calls without creating a conversation.",
@@ -8831,6 +9002,10 @@
     {
       "name": "computers",
       "description": "Claude sign-in on Macro computers"
+    },
+    {
+      "name": "voices",
+      "description": "Voices agent teammates speak with on calls"
     }
   ]
 }

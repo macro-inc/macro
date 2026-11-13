@@ -38,7 +38,7 @@ impl PgComputerRepo {
             ReservationRow,
             r#"
             SELECT id, team_id, host_id, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, name,
-                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at
+                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at, agent_user_id
             FROM computer_reservation
             WHERE purchase_key = $1
             "#,
@@ -96,6 +96,7 @@ impl PgComputerRepo {
             SELECT host.id
             FROM hosted_runtime_host host
             LEFT JOIN held ON held.host_id = host.id
+            WHERE host.awake_capacity_units >= $1::BIGINT
             GROUP BY host.id, host.sold_capacity_units
             HAVING host.sold_capacity_units - COALESCE(SUM(held.units), 0) >= $1::BIGINT
             ORDER BY host.sold_capacity_units - COALESCE(SUM(held.units), 0) DESC
@@ -120,8 +121,8 @@ impl PgComputerRepo {
             INSERT INTO computer_reservation
                 (id, team_id, host_id, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id,
                  comp_reason, name, purchase_key, created_by, extra_items, provision_traceparent,
-                 expires_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 expires_at, created_at, agent_user_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             "#,
             reservation.id.as_uuid(),
             reservation.team_id,
@@ -141,6 +142,7 @@ impl PgComputerRepo {
             reservation.provision_traceparent.as_deref(),
             expires_at,
             now,
+            reservation.agent.as_ref().map(|agent| agent.as_ref()),
         )
         .execute(&mut *tx)
         .await
@@ -162,6 +164,7 @@ impl PgComputerRepo {
             provision_traceparent: reservation.provision_traceparent,
             expires_at,
             created_at: now,
+            agent: reservation.agent,
         }))
     }
 }

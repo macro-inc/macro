@@ -4,7 +4,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableMacroComputers } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
 import {
@@ -21,14 +20,10 @@ import {
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import {
-  type ComputerStatus,
-  type SizeOffer,
-  TEAM_ON_TRIAL,
-} from '@service-auth/computers';
+import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   MachineCardError,
@@ -48,13 +43,20 @@ import {
   computerFailureMessage,
   formatComputerDate,
   formatQuote,
+  type OffersFailure,
+  offersFailure,
 } from '../core/computer-display';
+import {
+  computerSetupRequest,
+  consumeComputerSetupRequest,
+} from '../primitives/setup-request';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
 import { ComputerBuyFlow } from './computer-buy-flow';
+import type { SetupStepId } from './computer-setup-dialog';
 
-/** Opens Billing, where a trialing team ends its trial and subscribes. */
-function TrialBillingButton() {
+/** Opens Billing, where a trialing team ends its trial or a team subscribes. */
+function BillingButton() {
   const settings = useSettingsState();
   return (
     <Button
@@ -68,14 +70,17 @@ function TrialBillingButton() {
   );
 }
 
-/** Whether the offers failed because the team's subscription is trialing. */
-export function offersBlockedByTrial(offers: {
+/**
+ * The offers failed for a reason Billing settles: a trial, or no paid plan.
+ * The buy row says so instead of offering a dialog that would say the same.
+ */
+export function offersBlockedByPlan(offers: {
   isError: boolean;
   error: unknown;
-}): boolean {
-  return (
-    offers.isError && thrownResultErrorHasCode(offers.error, TEAM_ON_TRIAL)
-  );
+}): OffersFailure | undefined {
+  if (!offers.isError) return undefined;
+  const failure = offersFailure(offers.error);
+  return failure.remedy === 'billing' ? failure : undefined;
 }
 
 /**
@@ -409,16 +414,31 @@ export function MacroComputers(props: {
 }) {
   const isAdmin = useIsTeamAdmin();
   const { enabled, canPurchase, computers, failed } = useTeamComputers();
+  // Runs as soon as the buy row shows, so the dialog opens with the sizes.
   const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
   const release = useReleaseComputerMutation();
   const agents = useAgentsQuery();
-  const onTrial = () => offersBlockedByTrial(offers);
+  const planBlock = () => offersBlockedByPlan(offers);
 
   const [buying, setBuying] = createSignal(false);
   const [settingUp, setSettingUp] = createSignal<string>();
+  // Set when a setup notification reopens the flow: it lands on Bring your AI.
+  const [resumeAt, setResumeAt] =
+    createSignal<Exclude<SetupStepId, 'computer'>>();
   const [signingIn, setSigningIn] = createSignal<string>();
   const [releasing, setReleasing] = createSignal<ComputerStatus>();
   const [releaseError, setReleaseError] = createSignal<string>();
+
+  // A setup notification, or its link opened cold, names the computer.
+  createEffect(
+    on(computerSetupRequest, (request) => {
+      if (!request) return;
+      setBuying(false);
+      setResumeAt('claude');
+      setSettingUp(request.computerId);
+      consumeComputerSetupRequest(request.id);
+    })
+  );
 
   const harnessFor = (computer: ComputerStatus) =>
     props.harnesses.find((candidate) => candidate.id === computer.harnessId);
@@ -483,7 +503,10 @@ export function MacroComputers(props: {
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}
                   canFinishSetup={isAdmin()}
-                  onFinishSetup={() => setSettingUp(computer.id)}
+                  onFinishSetup={() => {
+                    setResumeAt(undefined);
+                    setSettingUp(computer.id);
+                  }}
                   onSignIn={() => setSigningIn(computer.id)}
                   onRelease={() => {
                     setReleaseError(undefined);
@@ -496,14 +519,13 @@ export function MacroComputers(props: {
               <MachineRow
                 name={t('computers.getComputer')}
                 meta={
-                  onTrial()
-                    ? t('computers.trialBlocked')
-                    : [t('computers.getComputerLine'), fromPriceLine()]
-                        .filter(Boolean)
-                        .join(' · ')
+                  planBlock()?.message ??
+                  [t('computers.getComputerLine'), fromPriceLine()]
+                    .filter(Boolean)
+                    .join(' · ')
                 }
                 actions={
-                  <Show when={!onTrial()} fallback={<TrialBillingButton />}>
+                  <Show when={!planBlock()} fallback={<BillingButton />}>
                     <Button
                       type="button"
                       variant="secondary"
@@ -523,16 +545,23 @@ export function MacroComputers(props: {
         </div>
       </Show>
 
-      <ComputerBuyFlow open={buying()} onClose={() => setBuying(false)} />
+      {/* One dialog for buying and for Finish setup, so a computer bought
+          here reopens where its setup left off. */}
       <ComputerBuyFlow
-        open={!!settingUp()}
+        open={buying() || !!settingUp()}
         computerId={settingUp()}
-        onClose={() => setSettingUp(undefined)}
+        resumeStep={resumeAt()}
+        onClose={() => {
+          setBuying(false);
+          setSettingUp(undefined);
+          setResumeAt(undefined);
+        }}
       />
       <Show when={byId(signingIn())?.harnessId}>
         {(harnessId) => (
           <ClaudeSignInDialog
             harnessId={harnessId()}
+            entry="computer_row"
             onClose={() => setSigningIn(undefined)}
           />
         )}

@@ -1114,7 +1114,8 @@ describe('Quick Access source integration', () => {
       );
       await vi.waitFor(() => expect(list.items()).toHaveLength(1));
       expect(mocks.search).toHaveBeenCalledWith(
-        expect.objectContaining({ buckets: ['crm_company'], query })
+        expect.objectContaining({ buckets: ['crm_company'], query }),
+        expect.anything()
       );
       expect(list.items()[0]).toMatchObject({
         id: 'company-1',
@@ -1150,7 +1151,8 @@ describe('Quick Access source integration', () => {
     );
     await vi.waitFor(() => expect(list.items()).toHaveLength(1));
     expect(mocks.search).toHaveBeenCalledWith(
-      expect.objectContaining({ buckets: ['initiative'], query: 'launch' })
+      expect.objectContaining({ buckets: ['initiative'], query: 'launch' }),
+      expect.anything()
     );
     expect(list.items()[0]).toMatchObject({
       id: 'initiative-1',
@@ -1297,7 +1299,8 @@ describe('Quick Access source integration', () => {
     );
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
     expect(mocks.search).toHaveBeenCalledWith(
-      expect.objectContaining({ buckets: ['note'] })
+      expect.objectContaining({ buckets: ['note'] }),
+      expect.anything()
     );
     expect(list.items()).toEqual([]);
   });
@@ -1411,7 +1414,8 @@ describe('Quick Access source integration', () => {
       setCrmEnabled(true);
       await vi.waitFor(() => expect(list.items()).toHaveLength(1));
       expect(mocks.search).toHaveBeenLastCalledWith(
-        expect.objectContaining({ buckets })
+        expect.objectContaining({ buckets }),
+        expect.anything()
       );
       setCrmEnabled(false);
       await vi.waitFor(() => expect(list.items()).toEqual([]));
@@ -1498,7 +1502,8 @@ describe('Quick Access source integration', () => {
     expect(mocks.search).toHaveBeenCalledWith(
       expect.objectContaining({
         buckets: expect.arrayContaining(['initiative']),
-      })
+      }),
+      expect.anything()
     );
   });
 
@@ -1573,6 +1578,22 @@ describe('Quick Access source integration', () => {
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     dispose?.();
     expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the listed rows when a cache change replays the same search result', async () => {
+    mocks.search.mockResolvedValue(page(0, 1));
+    const list = setup((source) => source.useList({ buckets: ['note'] }));
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    const listed = list.items();
+    const searches = mocks.search.mock.calls.length;
+
+    mocks.changed?.();
+    await vi.waitFor(() =>
+      expect(mocks.search.mock.calls.length).toBeGreaterThan(searches)
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+
+    expect(list.items()).toBe(listed);
   });
 
   it('keeps hidden lists stable and refreshes their latest state once on visibility', async () => {
@@ -1697,7 +1718,8 @@ describe('CRM contacts', () => {
     expect(list.items().map((item) => item.id)).toEqual(['contact-1']);
     await vi.waitFor(() =>
       expect(mocks.search).toHaveBeenCalledWith(
-        expect.objectContaining({ buckets: ['crm_contact'], query: 'wile@' })
+        expect.objectContaining({ buckets: ['crm_contact'], query: 'wile@' }),
+        expect.anything()
       )
     );
   });
