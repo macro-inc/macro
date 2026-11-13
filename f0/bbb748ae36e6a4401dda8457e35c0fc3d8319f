@@ -1,0 +1,92 @@
+services/document_storage_service/Cargo.toml
+  s_c6fe7b7c1d36f7::t_164e1446bd3d2f 305-308
+services/document_storage_service/src/api/swagger.rs
+  s_c6fe7b7c1d36f7::t_059b3695283b05 548-561,888-897
+crates/dashboards/src/domain/models.rs
+  s_c6fe7b7c1d36f7::t_1d4feabbdad8fc 1-212
+crates/dashboards/src/outbound/pg_dashboard_repo.rs
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 345-350
+  s_c6fe7b7c1d36f7::t_5d8cd15710e070 50
+  s_c6fe7b7c1d36f7::t_33e70bd4494632 1-49,51-344,351-366
+crates/dashboards/src/inbound/axum_router.rs
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 13,82-85
+  s_c6fe7b7c1d36f7::t_df6ee4290ebfb2 1-12,14-81,86-632
+crates/dashboards/src/domain/ports.rs
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 68-71
+  s_c6fe7b7c1d36f7::t_414f994970be66 1-67,72-192
+crates/dashboards/src/outbound.rs
+  s_c6fe7b7c1d36f7::t_1d4feabbdad8fc 1-5
+services/document_storage_service/src/api.rs
+  s_c6fe7b7c1d36f7::t_164e1446bd3d2f 312-314
+  s_39f63794c112b9::t_94a1caa9314508 311
+crates/dashboards/src/domain/service/test.rs
+  s_c6fe7b7c1d36f7::t_343bf422b7d1a7 1-2,4-23,25,29-31,39-63,68-155,160-174,178-179,181-196,198-208,210-213,222-329,333-345,349-352,360-392,399-402,409-446,454-458,466-467,471-472,480-562
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 32-38,64-67,156-159,330-332,346-348,353-359,393-398,403-408,447-453,459-465,468-470,473-479
+  s_c6fe7b7c1d36f7::t_ab247d89ae08aa 3,24,26-28,175-177,180,197,209,214-221
+crates/dashboards/src/domain/service.rs
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 14-15,273-277,303-305,316
+  s_c6fe7b7c1d36f7::t_a6266845a63d89 45-58,256,295
+  s_c6fe7b7c1d36f7::t_b5e20e7fbf4915 1-13,16-44,59-255,257-272,278-294,296-302,306-315,317-415
+crates/dashboards/src/outbound/access.rs
+  s_c6fe7b7c1d36f7::t_5d8cd15710e070 1-28
+crates/dashboards/src/outbound/gate.rs
+  s_c6fe7b7c1d36f7::t_5d8cd15710e070 1-22
+crates/dashboards/src/lib.rs
+  s_c6fe7b7c1d36f7::t_1d4feabbdad8fc 1-9
+services/document_storage_service/src/server.rs
+  s_c6fe7b7c1d36f7::t_059b3695283b05 954
+  s_c6fe7b7c1d36f7::t_164e1446bd3d2f 2183-2187,2500-2501
+  s_39f63794c112b9::t_f190cfeff2404a 2502-2503
+crates/dashboards/Cargo.toml
+  s_c6fe7b7c1d36f7::t_47e03f4eab8946 1-43
+crates/dashboards/src/inbound.rs
+  s_c6fe7b7c1d36f7::t_1d4feabbdad8fc 1-3
+services/document_storage_service/src/api/context.rs
+  s_c6fe7b7c1d36f7::t_164e1446bd3d2f 674-681,686,998
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 682-685
+crates/dashboards/src/domain.rs
+  s_c6fe7b7c1d36f7::t_1d4feabbdad8fc 1-5
+Cargo.toml
+  s_c6fe7b7c1d36f7::t_83a4cd0349e9f2 21
+crates/dashboards/src/outbound/pg_dashboard_repo/test.rs
+  s_c6fe7b7c1d36f7::t_cebfb4c29e75ba 82-85,135-138
+  s_c6fe7b7c1d36f7::t_b77cf8a12446a9 1-81,86-134,139-186
+Cargo.lock
+  s_39f63794c112b9::t_f740656c96b67c 6035-6063,6733
+crates/dashboards/AGENTS.md
+  s_dfeff50ab3a311::t_74e63f255d5067 1-53
+crates/dashboards/CLAUDE.md
+  s_dfeff50ab3a311::t_4a2798d41b276a 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f0bbb748ae36e6a4401dda8457e35c0fc3d8319f",
+  "prompts": {},
+  "sessions": {
+    "s_39f63794c112b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "493005d8-5973-4e79-898b-d765f923c354",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
