@@ -1,0 +1,22 @@
+.agents/rules/config-and-service-urls.md
+  s_6dd028f21c9ecc::t_0d0bfbc40aa6d7 44-46
+crates/macro_service_urls/src/lib.rs
+  s_6dd028f21c9ecc::t_3ca143d5062a47 752-760
+  s_6dd028f21c9ecc::t_aab603aa1e6154 751
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fd3a325b9a9688266ed27eeef4caebb86bbbe457",
+  "prompts": {},
+  "sessions": {
+    "s_6dd028f21c9ecc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12ca901f-69ea-43d0-ba06-391ff7d83e32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
