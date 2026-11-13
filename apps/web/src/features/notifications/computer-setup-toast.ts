@@ -87,10 +87,7 @@ async function showAgentSetupToast(
     message: () => openAgentDirectMessage(agent.userId),
     bringAi: canBringAi ? () => openAgentClaude(agent.userId) : undefined,
     retry: () =>
-      fireAndForget(
-        retryAgentSetup(notice.computerId, agent),
-        'notifications'
-      ),
+      fireAndForget(retryAgentSetup(notice.computerId, agent), 'notifications'),
   });
 }
 
