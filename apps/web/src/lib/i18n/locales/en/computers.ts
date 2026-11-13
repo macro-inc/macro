@@ -113,10 +113,11 @@ export default {
   buy: 'Buy',
   buyHeadsUp:
     "Next you'll name your agent and sign in to Claude (Pro or Max) — have claude.ai handy.",
-  stepComputer: 'Computer',
-  stepAgent: 'Agent',
-  stepClaude: 'Claude',
+  stepBuy: 'Buy computer',
+  stepConfigureAgent: 'Configure agent',
+  stepBringAi: 'Bring your AI',
   stepReady: 'Ready',
+  loadingSizes: 'Loading computer sizes',
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
   signInLinkWaiting:
@@ -146,7 +147,10 @@ export default {
   getComputerLine:
     'A full computer, with your Claude sub, and a Macro agent, ready to go',
   trialBlocked:
-    'Computers are available on paid plans. Your team is on a trial.',
+    'Computers can be added once your trial ends and your team is on a paid plan.',
+  noPaidPlan:
+    'Computers need a paid Macro plan. Your team does not have one yet.',
+  rolloutDisabled: "Computers aren't available for this account yet.",
   trialBillingAction: 'Go to Billing',
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',
@@ -156,6 +160,11 @@ export default {
   errorComputersUnavailable:
     "Computers aren't available right now. Try again later.",
   offersFailed: "Couldn't load computer sizes. Try again.",
+  offersTimedOut: 'Loading computer sizes took too long. Try again.',
+  errorBillingProvider:
+    "Macro's billing provider didn't answer. Try again in a moment.",
+  errorTimedOut: 'Macro took too long to answer. Try again.',
+  errorNetwork: "Couldn't reach Macro. Check your connection and try again.",
   errorSalesUnavailable:
     "Computers can't be bought right now. Try again later.",
   errorNotRestorable: "This computer can't be restored anymore.",

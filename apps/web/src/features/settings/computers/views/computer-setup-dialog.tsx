@@ -4,6 +4,8 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   type AgentWithHarnessId,
   invalidateAgents,
@@ -25,6 +27,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ChoiceRow } from '../../primitives';
 import {
   isProvisioning,
@@ -59,40 +62,64 @@ const STEP_ORDER: readonly SetupStepId[] = [
 ];
 
 function stepLabel(step: SetupStepId): string {
-  if (step === 'computer') return t('computers.stepComputer');
-  if (step === 'agent') return t('computers.stepAgent');
-  if (step === 'claude') return t('computers.stepClaude');
-  return t('computers.stepReady');
+  return match(step)
+    .with('computer', () => t('computers.stepBuy'))
+    .with('agent', () => t('computers.stepConfigureAgent'))
+    .with('claude', () => t('computers.stepBringAi'))
+    .with('ready', () => t('computers.stepReady'))
+    .exhaustive();
 }
 
-/** Computer · Agent · Claude · Ready, the current one in ink. */
+/**
+ * Buy computer → Configure agent → Bring your AI → Ready: done steps carry a
+ * check, the current one is in ink, and a step the choice skips is struck.
+ */
 export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
   const current = () => STEP_ORDER.indexOf(props.step);
   return (
     <ol
       aria-label={t('computers.setupSteps')}
-      class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+      class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs"
     >
       <For each={STEP_ORDER}>
-        {(step, index) => (
-          <li
-            class={cn(
-              'flex items-center gap-2',
-              index() === current()
-                ? 'font-medium text-ink'
-                : 'text-ink-extra-muted',
-              step === 'claude' && props.skipsClaude && 'line-through'
-            )}
-            aria-current={index() === current() ? 'step' : undefined}
-          >
-            <Show when={index() > 0}>
-              <span aria-hidden="true" class="text-ink-extra-muted">
-                ·
-              </span>
-            </Show>
-            {stepLabel(step)}
-          </li>
-        )}
+        {(step, index) => {
+          const done = () => index() < current();
+          const active = () => index() === current();
+          return (
+            <li
+              class={cn(
+                'flex items-center gap-1.5',
+                active() && 'font-medium text-ink',
+                done() && 'text-ink-muted',
+                !active() && !done() && 'text-ink-extra-muted',
+                step === 'claude' && props.skipsClaude && 'line-through'
+              )}
+              aria-current={active() ? 'step' : undefined}
+            >
+              <Show when={index() > 0}>
+                <CaretRightIcon
+                  aria-hidden="true"
+                  class="size-3 shrink-0 text-ink-extra-muted"
+                />
+              </Show>
+              <Show
+                when={done()}
+                fallback={
+                  <span
+                    aria-hidden="true"
+                    class={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      active() ? 'bg-accent' : 'border border-ink-extra-muted'
+                    )}
+                  />
+                }
+              >
+                <CheckIcon aria-hidden="true" class="size-3 shrink-0" />
+              </Show>
+              {stepLabel(step)}
+            </li>
+          );
+        }}
       </For>
     </ol>
   );
