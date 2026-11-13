@@ -12,7 +12,7 @@ use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 /// Get the highest access level a user has for a document.
 #[tracing::instrument(err, skip(pool, source_ids, user_id))]
@@ -201,6 +201,52 @@ pub async fn get_document_access(
         .max();
 
     Ok(highest_level)
+}
+
+/// The highest access level a signed-in user has on each of many documents,
+/// in one statement.
+///
+/// Gives each document the answer [`get_document_access`] gives it, from the
+/// same four sources; documents the user cannot reach are left out. A project
+/// read checks every task it holds, and one statement per task at two round
+/// trips each was most of its time. `source_ids` must be the user's own
+/// (from [`get_user_source_ids`](super::get_user_source_ids)), which always
+/// include the user id: the anonymous public-link-only check stays in
+/// [`get_document_access`].
+#[tracing::instrument(err, skip_all, fields(document_count = document_ids.len()))]
+pub async fn get_documents_access(
+    pool: &PgPool,
+    document_ids: &[uuid::Uuid],
+    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<HashMap<uuid::Uuid, AccessLevel>, sqlx::Error> {
+    let mut highest: HashMap<uuid::Uuid, AccessLevel> = HashMap::new();
+    if document_ids.is_empty() {
+        return Ok(highest);
+    }
+    // Its cost follows the caller's source ids (one per channel and team), which
+    // no caller bounds, so bound the statement. The services' pools set no timeout.
+    let mut transaction = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *transaction)
+        .await?;
+    let rows = sqlx::query_file!(
+        "src/outbound/pg_access_repo/queries/document_access/documents_access.sql",
+        document_ids,
+        &source_ids.0,
+        user_id.as_ref(),
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
+
+    for row in rows {
+        highest
+            .entry(row.document_id)
+            .and_modify(|level| *level = (*level).max(row.access_level))
+            .or_insert(row.access_level);
+    }
+    Ok(highest)
 }
 
 #[cfg(feature = "explain_binary")]

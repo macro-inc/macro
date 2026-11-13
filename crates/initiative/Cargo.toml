@@ -70,6 +70,7 @@ agent_correlation = { path = "../agent_correlation" }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 anyhow = { workspace = true }
 http-body-util = { workspace = true }
+log = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 properties = { path = "../properties", default-features = false, features = ["outbound"] }
