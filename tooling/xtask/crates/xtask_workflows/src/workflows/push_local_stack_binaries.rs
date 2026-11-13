@@ -11,7 +11,7 @@
 //! Runs hourly from main, not on every push. A build that changes Rust takes
 //! about 30 minutes and main takes several pushes in that time, so a run per
 //! push cancelled the one before it and most main commits showed a cancelled
-//! check. Hourly keeps the cache within about an hour of main.
+//! check. Hourly, the cache trails main by up to an hour plus the build.
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Schedule, Workflow, WorkflowDispatch,
@@ -22,9 +22,9 @@ use crate::workflows::{runners, steps};
 /// Off the hour, when GitHub delays fewer scheduled runs.
 const HOURLY: &str = "17 * * * *";
 
-/// Ends a stuck build so the runs queued behind it drain, instead of GitHub
-/// cancelling each waiting tick as the next one arrives. The longest
-/// successful build took 69 minutes.
+/// Ends a stuck build. GitHub keeps one waiting run per concurrency group and
+/// cancels it when a newer one queues, so a build that outlasts the next tick
+/// risks a cancelled run. The longest successful build took 69 minutes.
 const TIMEOUT_MINUTES: u32 = 110;
 
 /// Build the workflow.
@@ -37,8 +37,9 @@ pub fn push_local_stack_binaries() -> Workflow {
         .on(Event::default()
             .add_schedule(Schedule::new(HOURLY))
             .workflow_dispatch(WorkflowDispatch::default()))
-        // Never cancel a build in progress: a later tick or a manual dispatch
-        // waits for it and then builds only what changed.
+        // Never cancel a build in progress. The next tick or dispatch waits
+        // for it (a newer one replaces a waiting one) and builds only what
+        // changed.
         .concurrency(
             Concurrency::new(Expression::new("${{ github.workflow }}-${{ github.ref }}"))
                 .cancel_in_progress(false),
