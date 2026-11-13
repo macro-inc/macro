@@ -8,14 +8,18 @@
  * select-cells plugin event.
  */
 import {
+  $createTableNode,
+  $createTableRowNode,
   $createTableSelection,
   $getTableNodeFromLexicalNodeOrThrow,
   $isTableCellNode,
+  $isTableNode,
   $isTableRowNode,
   $isTableSelection,
 } from '@lexical/table';
 import {
   $getNodeByKey,
+  $getRoot,
   $getSelection,
   $setSelection,
   COMMAND_PRIORITY_CRITICAL,
@@ -25,6 +29,7 @@ import {
 import { afterEach, expect, test } from 'vitest';
 import { popupPlugin } from '../popup';
 import {
+  $createTextCell,
   $getTable,
   buildTable,
   createTableTestEditor,
@@ -52,8 +57,8 @@ function describe(editor: LexicalEditor, pending: boolean) {
   return pending ? read() : editor.getEditorState().read(read);
 }
 
-async function setup() {
-  const editor = createTableTestEditor();
+async function setup(onError?: (error: Error) => void) {
+  const editor = createTableTestEditor(onError ? { onError } : {});
   cleanups.push(() => editor.getRootElement()?.remove());
   await buildTable(
     editor,
@@ -218,4 +223,88 @@ test('missing tracked keys: the command still fires; with no selection the popup
     { at: 'command', pending: 'none', committed: 'none' },
     { at: 'popup', visible: false },
   ]);
+});
+
+// The app's editor onError reports without throwing (LexicalWrapperContext),
+// as this test's recorder does: Lexical discards the failed update.
+test('anchor and focus in different tables: the table plugin reports an invariant error and the selection never commits', async () => {
+  // Lexical routes update errors to onError; record each instead of throwing.
+  const errors: string[] = [];
+  const { editor, events } = await setup((error) => errors.push(error.message));
+  // A second table after the first; the handle can only track cells of one table,
+  // so this pins what selectHandleCells does if its corners straddle two.
+  await new Promise<void>((resolve) =>
+    editor.update(
+      () => {
+        const second = $createTableNode();
+        for (const texts of [
+          ['C1', 'C2'],
+          ['D1', 'D2'],
+        ]) {
+          const row = $createTableRowNode();
+          row.append(...texts.map((text) => $createTextCell(text)));
+          second.append(row);
+        }
+        $getRoot().append(second);
+      },
+      { onUpdate: () => resolve() }
+    )
+  );
+  await settle();
+  const keys = editor.getEditorState().read(() =>
+    $getRoot()
+      .getChildren()
+      .filter($isTableNode)
+      .map((table) =>
+        table
+          .getChildren()
+          .filter($isTableRowNode)
+          .flatMap((row) => row.getChildren().map((cell) => cell.getKey()))
+      )
+  );
+  const [first, second] = keys;
+  const a1 = first?.[0];
+  const d2 = second?.[3];
+  events.length = 0;
+  let thrown: unknown;
+  try {
+    selectHandleCells(editor, a1, d2);
+  } catch (error) {
+    thrown = error;
+  }
+  await settle();
+  const facts = editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (!$isTableSelection(selection))
+      return { kind: selection ? 'other' : 'none' };
+    const table = $getNodeByKey(selection.tableKey);
+    return {
+      kind: 'table',
+      table:
+        $isTableNode(table) && table.getTextContent().includes('A1')
+          ? 'first'
+          : 'other',
+      anchor: $getNodeByKey(selection.anchor.key)?.getTextContent(),
+      focus: $getNodeByKey(selection.focus.key)?.getTextContent(),
+      isValid: selection.isValid(),
+    };
+  });
+  expect({
+    thrown: thrown instanceof Error ? thrown.message : thrown,
+    errors,
+    facts,
+    events,
+  }).toEqual({
+    thrown: undefined,
+    errors: [
+      'Expected TableSelection anchor and focus to be in the same table',
+    ],
+    facts: { kind: 'none' },
+    events: [
+      // The explicit dispatch still reaches observers once, against the pending straddle.
+      { at: 'command', pending: 'A1>D2', committed: 'none' },
+      { at: 'commit', committed: 'none' },
+      { at: 'popup', visible: false },
+    ],
+  });
 });
