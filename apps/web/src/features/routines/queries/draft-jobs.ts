@@ -3,6 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
+import { queryAccountSessionPending } from '@queries/auth/account-scope';
 import { queryClient } from '@queries/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { DraftJob } from '@service-scheduled-action/generated/schemas';
@@ -76,12 +77,14 @@ async function fetchDraftJobs(): Promise<DraftJob[]> {
 
 /**
  * The caller's routine drafts; empty until they're read or while `enabled`
- * is false. A read again that fails keeps the list it had.
+ * is false. A read again that fails keeps the list it had. A login that
+ * replaces the session forgets them (`resetQueryAccountSession`), and they
+ * are read again once the new session is confirmed.
  */
 export function useDraftJobs(enabled: Accessor<boolean>) {
   const query = useQuery(() => ({
     ...routineDraftJobsQueryOptions(),
-    enabled: enabled(),
+    enabled: enabled() && !queryAccountSessionPending(),
   }));
   return {
     jobs: (): DraftJob[] => (query.isPending ? [] : (query.data ?? [])),

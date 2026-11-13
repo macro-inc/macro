@@ -1,3 +1,4 @@
+import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { resetMacroApiToken } from '@service-auth/fetch';
 import {
@@ -18,6 +19,7 @@ const ACCOUNT_SOURCE_PREFIXES = [
   emailKeys.links._def,
   emailKeys.linksHealthProbe._def,
   authKeys.userNameSelf._def,
+  scheduledActionKeys.draftJobs.queryKey,
 ];
 
 /** Captured before async work; a new login fences even a return to the same account. */

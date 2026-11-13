@@ -1,3 +1,5 @@
+import { resetQueryAccountSession } from '@queries/auth/account-scope';
+import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import type { DraftJob } from '@service-scheduled-action/generated/schemas';
 import { QueryClientProvider, QueryObserver } from '@tanstack/solid-query';
@@ -235,8 +237,11 @@ function mountDraftJobs() {
     createComponent(QueryClientProvider, {
       client: queryClient,
       get children() {
-        drafts = useDraftJobs(() => true);
-        return null;
+        // A component, so its body runs untracked as the app's does.
+        return createComponent(() => {
+          drafts = useDraftJobs(() => true);
+          return null;
+        }, {});
       },
     });
     if (!drafts) throw new Error('useDraftJobs did not mount');
@@ -268,6 +273,30 @@ describe('useDraftJobs', () => {
     expect(queryClient.getQueryState(KEY)?.status).toBe('error');
     expect(drafts.jobs()).toEqual([]);
     expect(drafts.loaded()).toBe(false);
+    dispose();
+  });
+
+  it('reads them again once a login that replaced the session is confirmed', async () => {
+    vi.useFakeTimers();
+    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('a')]));
+    const { drafts, dispose } = mountDraftJobs();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(drafts.jobs().map((job) => job.id)).toEqual(['a']);
+
+    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('b')]));
+    client.listRoutineDraftJobs.mockClear();
+    await resetQueryAccountSession();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(drafts.jobs()).toEqual([]);
+    expect(client.listRoutineDraftJobs).not.toHaveBeenCalled();
+
+    await queryClient.fetchQuery({
+      queryKey: authKeys.userInfo.queryKey,
+      queryFn: () => ({ id: 'someone-else', authenticated: true }),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.listRoutineDraftJobs).toHaveBeenCalledTimes(1);
+    expect(drafts.jobs().map((job) => job.id)).toEqual(['b']);
     dispose();
   });
 });
