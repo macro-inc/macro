@@ -1,5 +1,6 @@
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isMobile } from '@core/mobile/isMobile';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type { ProjectTitleMenuViewProps } from '../../components/project-title-menu';
 import {
@@ -31,6 +32,7 @@ export function MobileProjectTitleMenu(props: ProjectTitleMenuViewProps) {
       <ProjectTitleActions
         project={props.project}
         tools={[
+          ...(!isMobile() ? [props.actions.openInNewSplit] : []),
           props.actions.rename,
           props.actions.status,
           props.actions.priority,

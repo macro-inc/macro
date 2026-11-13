@@ -147,6 +147,18 @@ it('opens the actions-only shared title drawer from a phone island', () => {
   expect(mocks.entity).toMatchObject({ type: 'initiative', ownerId: 'owner' });
 });
 
+it('retains split navigation for touch tablets', () => {
+  mocks.mobile = false;
+  mocks.touch = true;
+  mount();
+  const action = mocks.tools.find(
+    (tool) =>
+      typeof tool.label === 'function' &&
+      tool.label() === 'entityActions.openInNewSplit'
+  );
+  expect(action?.condition?.()).toBe(true);
+});
+
 it('keeps editing and deletion gated while retaining desktop navigation', () => {
   mocks.mobile = false;
   mocks.touch = false;
