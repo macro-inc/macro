@@ -567,6 +567,89 @@ describe('createGraphqlSoupAstItemsQuery', () => {
   });
 
   it.each([
+    { entityType: 'DOCUMENT', typename: 'GraphqlSoupDocument' },
+    { entityType: 'PROJECT', typename: 'GraphqlSoupProject' },
+  ] as const)(
+    'does not refetch 100 warm $entityType favorites after a predicate failure',
+    async ({ entityType, typename }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const changes = new Set<(revision: string) => void>();
+      let fails = false;
+      entityFilterMock.mockImplementation((args) => {
+        if (args.liveQuery?.release)
+          return Promise.resolve({ kind: 'unsupported' });
+        if (fails) return Promise.reject(new Error('predicate unavailable'));
+        const id =
+          args.filters.documentFilter?.literal?.id ??
+          args.filters.projectFilter?.literal?.projectIdSelf;
+        const record = { __typename: typename, id };
+        return Promise.resolve({
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_1),
+          reset: true,
+          keys: [`${typename}:${id}`],
+          upserts: [{ recordKey: `${typename}:${id}`, record }],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: (revision: string) => void) => {
+          changes.add(callback);
+          return () => changes.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const { queries, dispose } = createRoot((dispose) => ({
+        queries: Array.from({ length: 100 }, (_, index) => {
+          const id = `favorite-${index}`;
+          return createSoupLiveQuery(
+            () => ({
+              sortMethod: 'UPDATED_AT',
+              limit: 1,
+              filters:
+                entityType === 'DOCUMENT'
+                  ? { documentFilter: { literal: { id } } }
+                  : { projectFilter: { literal: { projectIdSelf: id } } },
+            }),
+            () => ({ cacheFirstEntities: [{ entityType, entityId: id }] })
+          );
+        }),
+        dispose,
+      }));
+      try {
+        await vi.waitFor(() =>
+          expect(
+            queries.every((query) => query.cacheStatus() === 'ready')
+          ).toBe(true)
+        );
+        expect(fake.executions).toHaveLength(0);
+        fails = true;
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() =>
+          expect(
+            queries.every((query) => query.cacheStatus() === 'error')
+          ).toBe(true)
+        );
+        expect(fake.executions).toHaveLength(0);
+        for (const [index, query] of queries.entries()) {
+          expect(query.data()?.map((record) => record.id)).toEqual([
+            `favorite-${index}`,
+          ]);
+        }
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it.each([
     {
       name: 'fully cached',
       initiallyMissing: false,

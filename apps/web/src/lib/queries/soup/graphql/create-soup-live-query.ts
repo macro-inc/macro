@@ -772,7 +772,10 @@ export function createSoupLiveQuery(
     }
     const sameScope =
       current?.scope === input && current.generation === cacheGeneration;
+    // Force warm membership recovery only for channel navigation. Other
+    // cache-first readers keep their existing missing-record hydration policy.
     if (
+      options().projection === 'channel-list' &&
       cacheStatus === 'error' &&
       (failedPredicateScope?.input !== input ||
         failedPredicateScope.generation !== cacheGeneration)

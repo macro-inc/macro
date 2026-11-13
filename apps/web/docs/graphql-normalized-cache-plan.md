@@ -936,10 +936,13 @@ coordinating query lifetimes.
 
 A predicate that still trails the observed cache revision after three consecutive
 reads reports a cache error instead of holding initial hydration indefinitely.
-The existing network path then refreshes every requested identity once per
-failure, including previously cached rows. Existing rows remain visible while
-loading; a complete recovery response replaces them, including removals. A later
-cache change can recover the local predicate without publishing stale replies.
+For channel-list projections, the existing network path then refreshes every
+requested identity once per failure, including previously cached rows. Other
+cache-first readers retain their existing missing-record hydration policy, so a
+cache failure does not trigger one full refresh per warm favorite. Existing
+channel rows remain visible while loading; a complete recovery response replaces
+them, including removals. A later cache change can recover the local predicate
+without publishing stale replies.
 A change received during the final stale read is deferred to a new task rather
 than lost or retried indefinitely in the same microtask chain. If the predicate
 recovers before its network refresh finishes, its confirmed removals remain
