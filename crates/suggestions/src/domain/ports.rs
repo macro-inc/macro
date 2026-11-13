@@ -5,13 +5,16 @@ use std::future::Future;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion, RetireSuggestionRequest,
-    RewriteSuggestion, Suggestion, SuggestionContent, SuggestionError, SuggestionFeed,
-    SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
+    Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion, OpenTarget,
+    ResolveReason, RetireSuggestionRequest, RewriteSuggestion, Suggestion, SuggestionContent,
+    SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target,
 };
+use super::resolution::{ResolutionEvent, Resolved};
 
 /// Limits a write must stay within, checked where it is stored so two
 /// writes at once can't pass them together.
@@ -119,6 +122,23 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         change: Option<&Change>,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Every open suggestion about the item, once per target naming it.
+    fn open_about(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<Vec<OpenTarget>, Self::Err>> + Send;
+
+    /// Resolve the person's suggestion `id` for `reason` if it is still open;
+    /// whether it moved.
+    fn resolve(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        reason: ResolveReason,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Whether the person can open an item.
@@ -171,6 +191,19 @@ pub trait SuggestionAudience: Send + Sync + 'static {
         timezone: &str,
         now: DateTime<Utc>,
     ) -> Result<(), rootcause::Report>;
+}
+
+/// Routine suggestions, which a routine suggestion shows. Object-safe: the
+/// harness hands in the routine suggestions service.
+#[async_trait::async_trait]
+pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
+    /// The person isn't interested in routine suggestion `suggestion`: it
+    /// and its routine suggestion are dismissed together. Whether it was theirs.
+    async fn dismiss_suggestion(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        suggestion: Uuid,
+    ) -> Result<bool, rootcause::Report>;
 }
 
 /// Suggestions as the API serves them: the person's feed, and the tools hidden
@@ -244,4 +277,13 @@ pub trait SuggestionApi: Send + Sync + 'static {
         id: Uuid,
         request: RetireSuggestionRequest,
     ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
+}
+
+/// Ends the open suggestions an event settles.
+pub trait ResolveSuggestions: Send + Sync + 'static {
+    /// Resolve the open suggestions `event` settles; resolving twice is a no-op.
+    fn resolve(
+        &self,
+        event: &ResolutionEvent,
+    ) -> impl Future<Output = Result<Resolved, SuggestionError>> + Send;
 }

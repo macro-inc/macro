@@ -268,3 +268,59 @@ async fn reads_load_only_the_suggestions_they_show(pool: PgPool) {
         Some(ids[2])
     );
 }
+
+async fn suggestion_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid {
+    let suggestion = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
+                             categories, state, session_id, created_at, updated_at, state_changed_at)
+           VALUES ($1, $2, 'entity', 'doc:review', 'Review the plan', 'It changed.', 50,
+                   '{}', 'proposed', $3, now(), now(), now())"#,
+        suggestion,
+        user,
+        Uuid::now_v7(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO suggestion_entity (suggestion_id, action) VALUES ($1, 'review')",
+        suggestion
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)
+           VALUES ($1, 'about', 0, 'document', $2)"#,
+        suggestion,
+        document,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    suggestion
+}
+
+/// A suggestion row that doesn't decode is skipped, so the item's other suggestions
+/// still resolve.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_broken_row_about_an_item_is_skipped_and_the_rest_found(pool: PgPool) {
+    const LEGACY: &str = "not a macro user id";
+    insert_user(&pool, OWNER).await;
+    insert_user(&pool, LEGACY).await;
+    let document = Uuid::now_v7().to_string();
+    let good = suggestion_about_document(&pool, OWNER, &document).await;
+    suggestion_about_document(&pool, LEGACY, &document).await;
+    let found = PgSuggestionRepo::new(pool)
+        .open_about(EntityType::Document, &document)
+        .await
+        .unwrap();
+    assert_eq!(
+        found
+            .iter()
+            .map(|target| target.suggestion)
+            .collect::<Vec<_>>(),
+        vec![good]
+    );
+}

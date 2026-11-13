@@ -28,6 +28,19 @@ scheduler's spec.
   when a suggestion stops mattering are the session's call; a refused write answers
   `{ ok: false, problems }` the session can act on. Keep it that way: no
   reconciliation, auto-retire or scoring code here.
+- The one exception is resolution by events (`domain/resolution.rs`, consumed
+  by `inbound/kafka_consumer.rs`, group `suggestions-resolution`, run by the
+  harness): open suggestions are resolved with `state_reason` `replied` (the
+  owner's own `email.message_sent` on the thread, or `message.posted` in the
+  item or in the suggestion's thread part, after the suggestion was created; reply suggestions
+  only), `deleted` (`document.deleted`/`purged`, `channel.deleted`,
+  `message.deleted` for that part, `project.deleted`/`permanently_deleted`) or
+  `access_lost` (`channel.participant_removed`, or a document's share
+  permissions changing, then only for people `SuggestionAccess` now refuses). Keep
+  it literal. No event covers email threads being deleted, an inbox being
+  disconnected, or team membership; the feed's access filter and the next
+  generation session cover those. Resolutions write no `suggestion_change`
+  row (that log is for sessions), and a record that keeps failing is skipped.
 - Every accepted write adds a `suggestion_change` row (old and new values and
   the session's reason). Changes are silent to the person.
 
@@ -55,9 +68,20 @@ scheduler's spec.
 - After an API change: regenerate the scheduler's spec and clients (see the
   `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/suggestions`.
 
+- Routine suggestions: every drafted ("smart") routine suggestion has exactly one,
+  written with it by `macro.routines.suggest` through `crates/suggestions_db_utils`
+  in one transaction; catalog picks never have one. One a replica on the
+  previous release drafts during a deploy has none: every path that closes
+  a routine suggestion tolerates a missing one. Dismissing a routine suggestion
+  dismisses its suggestion through `RoutineSuggestionDismissal`; retiring its
+  suggestion retires it; saving a routine from the suggestion makes it done
+  with the routine as `produced`. Suggestions sessions never add, rewrite or retire
+  routine suggestions.
+
 ## Gotchas
 
-- Gate every entry point on `enable-suggestions` (`SUGGESTIONS_FLAG`).
+- Gate every entry point on `enable-suggestions` (`SUGGESTIONS_FLAG`). Event resolution
+  isn't gated: it only closes suggestions that already exist.
 - Deleting a kind's row (for instance a routine suggestion cascading into
   `suggestion_routine`) deletes its suggestion by trigger; reads skip and log a row that
   doesn't decode instead of failing the person's whole feed.

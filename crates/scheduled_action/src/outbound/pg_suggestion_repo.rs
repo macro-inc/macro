@@ -7,7 +7,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::domain::suggestions::model::{CheckedSuggestion, StoredPick, StoredSuggestion};
-use crate::domain::suggestions::ports::SuggestionRepo;
+use crate::domain::suggestions::ports::{Kept, SuggestionRepo};
 
 #[cfg(test)]
 mod test;
@@ -100,7 +100,7 @@ impl SuggestionRepo for PgSuggestionRepo {
         generation: Uuid,
         suggestion: &CheckedSuggestion,
         now: DateTime<Utc>,
-    ) -> Result<Uuid> {
+    ) -> Result<Kept> {
         let id = Uuid::now_v7();
         let mut tx = self.pool.begin().await?;
         let (catalog_key, knob_values, routine) = match &suggestion.pick {
@@ -144,8 +144,38 @@ impl SuggestionRepo for PgSuggestionRepo {
             },
         )
         .await?;
+        if let Some(card) = &suggestion.card {
+            let categories: Vec<String> = card
+                .categories
+                .iter()
+                .map(|category| category.as_ref().to_owned())
+                .collect();
+            let room = suggestions_db_utils::add_routine_card(
+                &mut tx,
+                &suggestions_db_utils::NewRoutineSuggestionCard {
+                    user: user.as_ref(),
+                    suggestion: id,
+                    title: &card.title,
+                    summary: &suggestion.reason,
+                    importance: i16::from(card.importance),
+                    categories: &categories,
+                    session,
+                    generation,
+                    at: now,
+                },
+                suggestions::domain::service::OPEN_LIMIT,
+                suggestions::domain::service::NEW_PER_GENERATION,
+            )
+            .await?;
+            match room {
+                suggestions_db_utils::Room::Fits => {}
+                // Dropping the transaction keeps nothing.
+                suggestions_db_utils::Room::OpenFull => return Ok(Kept::SuggestionsFull),
+                suggestions_db_utils::Room::GenerationFull => return Ok(Kept::NightFull),
+            }
+        }
         tx.commit().await?;
-        Ok(id)
+        Ok(Kept::Stored(id))
     }
 
     async fn retire(
@@ -182,6 +212,22 @@ impl SuggestionRepo for PgSuggestionRepo {
                     reason: Some(reason),
                     at: now,
                 },
+            )
+            .await?;
+            suggestions_db_utils::close_routine_card(
+                &mut tx,
+                id,
+                "retired",
+                Some(&suggestions_db_utils::SuggestionChange {
+                    generation,
+                    session,
+                    action: "retired",
+                    old: None,
+                    new: None,
+                    reason: Some(reason),
+                    at: now,
+                }),
+                now,
             )
             .await?;
         }
@@ -236,16 +282,23 @@ impl SuggestionRepo for PgSuggestionRepo {
     }
 
     async fn dismiss(&self, user: &MacroUserIdStr<'_>, id: Uuid) -> Result<bool> {
+        let mut tx = self.pool.begin().await?;
         let found = sqlx::query!(
             r#"UPDATE routine_suggestion SET dismissed_at = COALESCE(dismissed_at, now())
                WHERE id = $1 AND user_id = $2"#,
             id,
             user.as_ref(),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?
-        .rows_affected();
-        Ok(found == 1)
+        .rows_affected()
+            == 1;
+        if found {
+            suggestions_db_utils::close_routine_card(&mut tx, id, "dismissed", None, Utc::now())
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(found)
     }
 
     async fn dismiss_template(&self, user: &MacroUserIdStr<'_>, key: &str) -> Result<()> {

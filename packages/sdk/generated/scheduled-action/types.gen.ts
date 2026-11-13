@@ -1230,6 +1230,26 @@ export type RoutineSuggestion = SuggestedPick & {
 };
 
 /**
+ * How a drafted routine suggestion shows in the person's Suggestions feed:
+ * every routine a session drafts is also one suggestion there, kept and
+ * closed with it.
+ */
+export type RoutineSuggestionCard = {
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * 0 to 100: how much the person would regret missing it this week.
+     */
+    importance: number;
+    /**
+     * What it does for the person, in a few words.
+     */
+    title: string;
+};
+
+/**
  * A person's suggestions, and whether more are on the way.
  */
 export type RoutineSuggestions = {
@@ -1579,6 +1599,7 @@ export type SuggestOutcome = {
  * What a suggestion session hands back through `macro.routines.suggest`.
  */
 export type SuggestRequest = {
+    card?: null | RoutineSuggestionCard;
     keepProbability: number;
     key: string;
     kind: 'catalog';
@@ -1588,6 +1609,10 @@ export type SuggestRequest = {
     reason: string;
     surfaces: Array<Surface>;
 } | {
+    /**
+     * How it shows in the person's Suggestions feed.
+     */
+    card: RoutineSuggestionCard;
     /**
      * What the session created for it, as `macro.routines.check` takes.
      */
