@@ -21,7 +21,8 @@ use crate::test_support::{
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 
-const BODY_LIMIT: usize = 64 * 1024;
+/// Broker pages inline their font, so they run to tens of kilobytes.
+const BODY_LIMIT: usize = 256 * 1024;
 
 struct Response {
     status: StatusCode,
@@ -342,7 +343,7 @@ async fn approving_keeps_the_requested_sign_in_method() {
         "same-origin",
     )
     .into_parts();
-    let form = axum::body::to_bytes(body, 64 * 1024)
+    let form = axum::body::to_bytes(body, BODY_LIMIT)
         .await
         .expect("form should read");
     let form = format!("{}&sign_in=login", String::from_utf8_lossy(&form));
@@ -629,11 +630,40 @@ async fn the_sign_in_choice_escapes_the_query() {
         .expect("the policy is ascii")
         .to_owned();
     assert!(csp.contains("default-src 'none'"), "{csp}");
-    let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+    let body = axum::body::to_bytes(response.into_body(), BODY_LIMIT)
         .await
         .expect("page should read");
     let page = String::from_utf8(body.to_vec()).expect("page is utf-8");
     assert!(!page.contains("<script"), "{page}");
+}
+
+/// The pages are styled like the app's sign-in, but load nothing to do it:
+/// the font is inlined and the policy allows fonts only from the page itself.
+#[tokio::test]
+async fn broker_pages_load_nothing_from_any_origin() {
+    let response = super::sign_in_choice(Some("a=1"), true);
+    let csp = response.headers()[axum::http::header::CONTENT_SECURITY_POLICY]
+        .to_str()
+        .expect("the policy is ascii")
+        .to_owned();
+    assert!(csp.contains("font-src data:;"), "{csp}");
+    assert!(!csp.contains("http"), "{csp}");
+    let body = axum::body::to_bytes(response.into_body(), BODY_LIMIT)
+        .await
+        .expect("page should read");
+    let page = String::from_utf8(body.to_vec()).expect("page is utf-8");
+    assert!(
+        page.contains("url(\"data:font/woff2;base64,"),
+        "the font is inlined"
+    );
+    assert!(
+        !page.contains("src=\""),
+        "the page loads no images or scripts"
+    );
+    assert!(
+        !page.contains("url(\"http"),
+        "the page loads no remote styles"
+    );
 }
 
 /// A browser partway through an email sign-in: the cookie that started it, and
