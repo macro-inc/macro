@@ -1,0 +1,31 @@
+services/ai-editing-worker/src/canvas/artifact-prompt.md
+  s_39eee246ac6b4a::t_c59fa9fba1069d 13
+apps/web/src/features/block-canvas/browser-test/artifact.e2e.ts
+  s_39eee246ac6b4a::t_faa039d4e46972 228-230
+  s_39eee246ac6b4a::t_d3ea69cfd1982d 211,227,237
+  s_39eee246ac6b4a::t_3980db62f426a5 357-360,377
+  s_39eee246ac6b4a::t_b4510cfeecd37c 321
+  s_39eee246ac6b4a::t_bdcaadc10eb895 312-318,320,366-367,371-372,376,378
+  s_39eee246ac6b4a::t_51c6ca335e6d6e 221-223,226,232-235,322-324,338-340,368-370,373-375
+  s_39eee246ac6b4a::t_193ebd8ce84dc4 206-210,212-220,224-225,231,236,238-239,361
+apps/web/src/features/block-canvas/README.md
+  s_39eee246ac6b4a::t_7df4bd1b12b32d 111-120
+packages/graphics/src/loro/README.md
+  s_39eee246ac6b4a::t_75be6d6ef879e8 180-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "070e382d7a6bb488a0e5723cfbe78eeafb566c4f",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
