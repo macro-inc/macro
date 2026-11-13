@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE calendars SET last_sync_error=$2,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1 RETURNING consecutive_sync_failures",
+  "query": "UPDATE calendars SET last_sync_error=$2,last_sync_error_kind=$3,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1 RETURNING consecutive_sync_failures",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
         "Text"
       ]
     },
@@ -19,5 +20,5 @@
       false
     ]
   },
-  "hash": "599a42d00923771e0fb8a6a36d845dba18b117b256392e6ad5b28c9f5ac143d4"
+  "hash": "3baae6683f910607b668ebc171afef4e6aac9d494ba109087b298b3185f23f0d"
 }

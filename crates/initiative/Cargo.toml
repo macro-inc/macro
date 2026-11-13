@@ -77,3 +77,4 @@ serde_json = { workspace = true }
 system_properties = { path = "../system_properties" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }

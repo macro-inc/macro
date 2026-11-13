@@ -314,7 +314,7 @@ impl<R> AccessibleDatabases for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn accessible_databases(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -327,7 +327,7 @@ impl<R> AccessibleForms for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn accessible_forms(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -340,7 +340,7 @@ impl<R> EntityAccessService for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -518,7 +518,7 @@ where
         receipts
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, scope))]
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         bot_id: BotId,
@@ -551,7 +551,7 @@ where
         )
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_access_level(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -599,7 +599,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn check_access(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -633,7 +633,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_entity_permission(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -662,7 +662,7 @@ where
                     tracing::warn!(
                         entity_id,
                         entity_type = "agent_session",
-                        viewer = user_id.map_or("anonymous", AsRef::as_ref),
+                        signed_in = user_id.is_some(),
                         session_exists = exists,
                         "agent session access denied"
                     );
@@ -751,7 +751,7 @@ where
         }
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_crm_entity_permission_with_team(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -865,7 +865,7 @@ where
         self.repo.get_call_channel_by_channel_id(channel_id).await
     }
 
-    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
     async fn get_user_team(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,

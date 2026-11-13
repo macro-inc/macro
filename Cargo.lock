@@ -7974,6 +7974,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -9570,6 +9571,7 @@ dependencies = [
  "soup",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -9628,6 +9630,7 @@ dependencies = [
  "model-entity",
  "rootcause",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -11337,6 +11340,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "unicode-segmentation",
  "utoipa",
  "uuid",

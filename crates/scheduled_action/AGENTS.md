@@ -68,7 +68,11 @@ each run.
   the row every `POLL` and the session's turn every few polls (it reads the
   whole log); the first passing check ends the draft, else the turn ending
   does (all bounded by `DRAFT_TIMEOUT`). It turns the last
-  passing check (else the last check) into the draft, then stops and deletes
+  passing check (else the last check) into the draft (a single agent task,
+  which the SDK still accepts, becomes one agent step holding its prompt
+  and user prompt, or fails the draft if it declares apps, which a draft
+  can't hold, or that step breaks a program's
+  rules), then stops and deletes
   the session and the row, also once it sees the request dropped mid-draft
   (the web composer, given no answer, sends the draft once more,
   `compose-routine.ts`);
@@ -77,8 +81,8 @@ each run.
   again. The `routine.draft` span records the session id, checks, items
   created, the session's tool calls and turns, why it waited for activity
   or that it didn't (`settle`: `skipped`, `tool`, `program`, `unknown`,
-  `unstopped`),
-  status reads and outcome
+  `unstopped`), status reads, whether a single agent task became steps
+  (`routine.draft.agent_task`) and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send. `bench/`
