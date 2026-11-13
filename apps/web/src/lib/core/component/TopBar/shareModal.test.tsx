@@ -25,6 +25,9 @@ vi.mock(
     usePendingNotificationNavigationEffect: () => {},
   })
 );
+vi.mock('@app/features/routines/routine-drafts-host', () => ({
+  RoutineDraftsHost: (props: { children: unknown }) => props.children,
+}));
 vi.mock('@app/features/soup/search/context', () => ({
   SearchProvider: (props: { children: unknown }) => props.children,
 }));

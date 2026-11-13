@@ -1,4 +1,5 @@
 const codexAccess = vi.hoisted(() => ({ enabled: true }));
+const teamComputers = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => codexAccess.enabled,
 }));
@@ -7,7 +8,9 @@ vi.mock('@core/codex/flag', () => ({
  * @vitest-environment jsdom
  */
 
+import { ThrownResultError } from '@core/util/result';
 import { useAgentModelsQuery } from '@queries/agents/models';
+import { invalidateHarnesses } from '@queries/harnesses/harnesses';
 import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
@@ -23,6 +26,7 @@ import {
 } from '@tanstack/solid-query';
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computerSetupRequest } from './computers/primitives/setup-request';
 import { Harness } from './Harness';
 import {
   requestRuntimeShare,
@@ -42,6 +46,20 @@ vi.mock('./codex/views/CodexHarness', () => ({
 vi.mock('./components/pending-requests-section', () => ({
   PendingRequestsSection: () => null,
 }));
+
+vi.mock('./computers/views/MacroComputers', () => ({
+  MacroComputers: () => null,
+}));
+
+vi.mock('./computers/primitives/team-computers', () => ({
+  useTeamComputers: () => ({
+    // With computers on, a computer's harness is listed only under them.
+    enabled: () => teamComputers.enabled,
+    computers: () => [],
+    failed: () => false,
+  }),
+}));
+
 vi.mock('./components/teammate-runtimes-section', () => ({
   TeammateRuntimesSection: () => null,
 }));
@@ -101,7 +119,10 @@ const harnessMocks = vi.hoisted(() => ({
     },
     isError: false,
   },
-  searchParams: { pair: undefined as string | undefined },
+  searchParams: {
+    pair: undefined as string | undefined,
+    computerSetup: undefined as string | undefined,
+  },
   setSearchParams: vi.fn(),
 }));
 
@@ -211,6 +232,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  teamComputers.enabled = true;
   codexAccess.enabled = true;
   vi.clearAllMocks();
   mocks.status.data = {
@@ -235,6 +257,7 @@ beforeEach(() => {
   harnessMocks.deleteHarness.mockResolvedValue(undefined);
   harnessMocks.approve.mockResolvedValue(REGISTERED_HARNESS);
   harnessMocks.searchParams.pair = undefined;
+  harnessMocks.searchParams.computerSetup = undefined;
 });
 
 describe('Harness', () => {
@@ -578,6 +601,63 @@ describe('Harness', () => {
     });
   });
 
+  it('sends one removal for a double click and treats an already removed machine as removed', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+    let finish: (value: undefined) => void = () => {};
+    harnessMocks.deleteHarness.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve))
+    );
+
+    render(() => <Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Remove machine',
+    });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(harnessMocks.deleteHarness).toHaveBeenCalledTimes(1);
+    finish(undefined);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    harnessMocks.deleteHarness.mockRejectedValueOnce(
+      new ThrownResultError([
+        { code: 'NOT_FOUND', message: 'Resource not found' },
+      ])
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Remove machine',
+      })
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(invalidateHarnesses).toHaveBeenCalled();
+  });
+
+  it('lists a Macro computer only under Macro computers, without Remove or Rename', () => {
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, access: 'owner', computer_id: 'computer-1' },
+    ];
+
+    render(() => <Harness />);
+    expect(screen.queryByText('Dev box')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+  });
+
+  it('never offers Share or Remove on a Macro computer, even with computers off', () => {
+    teamComputers.enabled = false;
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, access: 'owner', computer_id: 'computer-1' },
+    ];
+
+    render(() => <Harness />);
+    expect(screen.getByText('Dev box')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
   it('renames a paired runtime', async () => {
     harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
@@ -608,6 +688,17 @@ describe('Harness', () => {
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(
       { pair: undefined },
+      { replace: true }
+    );
+  });
+  it('hands a computer setup link to Settings → Machines and clears it', () => {
+    harnessMocks.searchParams.computerSetup = 'computer-1';
+
+    render(() => <Harness />);
+
+    expect(computerSetupRequest()).toMatchObject({ computerId: 'computer-1' });
+    expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(
+      { computerSetup: undefined },
       { replace: true }
     );
   });

@@ -33,12 +33,12 @@ use crate::domain::{
 };
 
 use models::{
-    AddEntriesRequest, AddEntriesResponse, CompanyImportResponse, EditPipelineRequest,
-    EntrySearchQuery, FindEntriesRequest, FoundEntriesResponse, ImportCompaniesCsvRequest,
-    ImportPipelineCsvRequest, PipelineCsvResponse, PipelineEntries, PipelineEntry,
-    PipelineExportResponse, PipelineFields, PipelineImportResponse, RecordEntriesRequest,
-    RemoveEntriesRequest, RemoveEntriesResponse, UpdateEntriesRequest, UpdateEntriesResponse,
-    UpdatedPipelineEntry, pairs,
+    AddEntriesRequest, AddEntriesResponse, CompanyImportResponse, CreatePipelineRequest,
+    EditPipelineRequest, EntrySearchQuery, FindEntriesRequest, FoundEntriesResponse,
+    ImportCompaniesCsvRequest, ImportPipelineCsvRequest, PipelineCsvResponse, PipelineEntries,
+    PipelineEntry, PipelineExportResponse, PipelineFields, PipelineImportResponse,
+    RecordEntriesRequest, RemoveEntriesRequest, RemoveEntriesResponse, UpdateEntriesRequest,
+    UpdateEntriesResponse, UpdatedPipelineEntry, pairs,
 };
 
 /// Entries a read returns when it names no limit.
@@ -97,6 +97,14 @@ where
         .route(
             "/pipelines/entry-search",
             get(search_entries::<Workflows, Transfer, Authorization>),
+        )
+        .route(
+            "/pipelines/details",
+            get(list_details::<Workflows, Transfer, Authorization>),
+        )
+        .route(
+            "/pipelines/create",
+            post(create::<Workflows, Transfer, Authorization>),
         )
         .route(
             "/pipelines/{id}/edit",
@@ -161,6 +169,24 @@ fn csv_input(csv: Option<String>, document_id: Option<Uuid>) -> Result<CsvInput,
             "Give exactly one of csv (the CSV text) or documentId (a CSV file in Macro).".into(),
         )),
     }
+}
+
+/// The caller's live pipelines, each with its fields in column order (a
+/// select field lists its options, so Stage lists the stages) and its table
+/// version: what `ListPipelines` gives the agent, in one call.
+#[utoipa::path(get, path = "/crm/pipelines/details", operation_id = "list_crm_pipeline_details",
+    responses((status = 200, body = Vec<PipelineFields>), (status = 400, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_details<
+    Workflows: PipelineWorkflowService,
+    Transfer: CrmTransferService,
+    Authorization: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+    State(state): State<PipelineWorkflowRouterState<Workflows, Transfer, Authorization>>,
+) -> Result<Json<Vec<PipelineFields>>, WorkflowError> {
+    let pipelines = state.workflows.pipelines(&viewer(&auth)).await?;
+    Ok(Json(pipelines.iter().map(PipelineFields::from).collect()))
 }
 
 /// Entries of one pipeline matching filters, records or a search, with
@@ -382,6 +408,28 @@ pub async fn remove_entries<
         removed: removed.removed.iter().map(PipelineEntry::from).collect(),
         version: removed.version.map(|version| version.0),
     }))
+}
+
+/// Create a pipeline with its stages, replacing the team's defaults, and its
+/// fields, in one call.
+#[utoipa::path(post, path = "/crm/pipelines/create", operation_id = "create_crm_pipeline_with_fields",
+    request_body = CreatePipelineRequest,
+    responses((status = 200, body = PipelineFields), (status = 400, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all, fields(stages = request.stages.len(), fields = request.fields.len()))]
+pub async fn create<
+    Workflows: PipelineWorkflowService,
+    Transfer: CrmTransferService,
+    Authorization: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+    State(state): State<PipelineWorkflowRouterState<Workflows, Transfer, Authorization>>,
+    Json(request): Json<CreatePipelineRequest>,
+) -> Result<Json<PipelineFields>, WorkflowError> {
+    let created = state
+        .workflows
+        .create(&viewer(&auth), request.into())
+        .await?;
+    Ok(Json((&created).into()))
 }
 
 /// Rename or share a pipeline, and add, rename or delete its fields and

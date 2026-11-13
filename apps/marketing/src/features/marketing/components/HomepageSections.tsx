@@ -10,7 +10,7 @@ import {
 import siteStyles from '../../../app/main/index.css?inline';
 import { DeferredDemo, DemoPlaceholder } from './DeferredDemo';
 import { DemoInteractionBoundary } from './DemoInteractionBoundary';
-import { DemoMention } from './DemoMention';
+import { emailDraftMessages } from './email/emailDraftMessages';
 import { HomepageAgentLogos } from './HomepageAgentLogos';
 import { HomepageBlog } from './HomepageBlog';
 import { HomepageClosing } from './HomepageClosing';
@@ -184,30 +184,7 @@ export function HomepageSections() {
           ]}
           title="Email and chat"
           description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
-          messages={[
-            {
-              person: 'eric',
-              text: 'Can you send Austin Barron the demo follow-up?',
-            },
-            {
-              person: 'jacob',
-              text: (
-                <>
-                  <DemoMention
-                    item={{ id: 'macro', label: 'Macro', kind: 'person' }}
-                  />{' '}
-                  draft Austin Barron’s follow-up from{' '}
-                  <HomepageMention
-                    kind="call"
-                    label="Demo call transcript"
-                    description="Transcript of the September 14 demo with Austin Barron · Team rollout, sales materials, and follow-up next steps."
-                    href="#email"
-                  />
-                  . Link the sales PDF and rollout plan. Cc Julia.
-                </>
-              ),
-            },
-          ]}
+          messages={emailDraftMessages('#email')}
           render={() => (
             <DeferredDemo
               preload={loadEmailCompose}

@@ -115,6 +115,14 @@ pub enum Port {
     PreviewHttps = 8443,
     /// Local Passwords vault API. Loopback-only, outside the browser proxy.
     OpenBao = 8200,
+    /// Local-only plaintext gateway reachable from Macro computers.
+    ComputerGateway = 8112,
+    /// The Gmail emulator: Google's sign-in page for the browser, and its
+    /// control API.
+    GmailEmulator = 8480,
+    /// The Outlook emulator: Microsoft's sign-in page for the browser, and
+    /// its control API.
+    OutlookEmulator = 8481,
 }
 
 impl Port {

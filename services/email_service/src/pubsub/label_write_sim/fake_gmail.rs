@@ -7,7 +7,7 @@
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{Method, StatusCode, Uri};
+use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use serde_json::{Value, json};
@@ -349,7 +349,23 @@ impl GmailState {
     }
 }
 
-async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
+async fn handle(
+    State(gmail): State<FakeGmail>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    // Local listener discovery is not a Gmail request.
+    if method == Method::GET
+        && uri.path() == "/"
+        && uri.query().is_none()
+        && body.is_empty()
+        && !headers.contains_key(axum::http::header::AUTHORIZATION)
+    {
+        return (StatusCode::OK, axum::Json(json!({}))).into_response();
+    }
+
     let request = parse(&method, &uri, &body);
     // The answer is decided on arrival, even when it is applied later.
     let reply = gmail.choose_reply(&request);
@@ -470,3 +486,6 @@ fn history_record(entry: &HistoryEntry) -> Value {
     }
     record
 }
+
+#[cfg(test)]
+mod test;

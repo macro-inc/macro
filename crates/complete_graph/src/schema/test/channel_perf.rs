@@ -203,7 +203,7 @@ async fn channel_latest_graphql_and_rest_server_timings() {
           entries {{ ... on GraphqlChannelMessage {{ {} }}
             ... on GraphqlChannelTimelineActivity {{ __typename id channelId sortKey actorId occurredAt action payload }} }}
           olderCursor newerCursor seq }} }} }}",
-        super::channel::message_selection(),
+        super::channel_messages::message_selection(),
     );
     let mut graphql_times = Vec::with_capacity(SAMPLE_PAIRS);
     let mut rest_times = Vec::with_capacity(SAMPLE_PAIRS);

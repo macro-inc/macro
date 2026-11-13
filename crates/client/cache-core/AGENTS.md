@@ -62,7 +62,8 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - Change what a query can select: `src/predicate.rs` → `src/record_selection.rs`
   → `src/query_inspection.rs`.
 
-Live views retain at most 32 validated specifications. A registration token
+Live views retain at most 256 validated specifications; visible readers beyond
+the bound rebuild a full view on every read, so keep it above what open panes register. A registration token
 identifies one retained specification, not the caller's reusable view id.
 `resume_live_query` hydrates durable optimistic state before token lookup;
 the engine owner serializes token lookup and the read. Replacement, release,

@@ -9,6 +9,7 @@
     "get_bundle_debug_info",
     "get_bundle_update_status",
     "get_macos_notification_permission",
+    "get_native_build_time",
     "get_native_update_status",
     "get_pending_share_filenames",
     "grant_bundle_update",
