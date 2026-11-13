@@ -4,6 +4,14 @@ use super::*;
 const MAX_FOLDERS: usize = 500;
 const MAX_DEPTH: i32 = 8;
 
+/// `New` is a plain insert, so a reused id fails; only `Ensure` tolerates an
+/// existing row (it already looked under the tree lock).
+#[derive(Clone, Copy)]
+enum Insert {
+    New,
+    Ensure,
+}
+
 impl PgRepository {
     async fn folder_transaction(
         &self,
@@ -63,7 +71,7 @@ impl PgRepository {
     #[tracing::instrument(skip_all,err,name="passwords.folder.create",fields(team_id=%folder.team_id.0,folder_id=%folder.id))]
     pub(super) async fn create_folder(&self, folder: &Folder) -> Result<(), Error> {
         let mut transaction = self.folder_transaction(folder.team_id).await?;
-        Self::insert_folder(&mut transaction, folder).await?;
+        Self::insert_folder(&mut transaction, folder, Insert::New).await?;
         transaction.commit().await.map_err(database_error)
     }
 
@@ -97,7 +105,7 @@ impl PgRepository {
                     name: name.to_owned(),
                     parent_id,
                 };
-                Self::insert_folder(&mut transaction, &folder).await?;
+                Self::insert_folder(&mut transaction, &folder, Insert::Ensure).await?;
                 folder
             }
         };
@@ -108,6 +116,7 @@ impl PgRepository {
     async fn insert_folder(
         transaction: &mut Transaction<'static, Postgres>,
         folder: &Folder,
+        insert: Insert,
     ) -> Result<(), Error> {
         let existing = sqlx::query!(
             "SELECT id FROM password_folders WHERE team_id=$1 LIMIT 501",
@@ -120,16 +129,28 @@ impl PgRepository {
             return Err(Error::Invalid);
         }
         Self::parent_depth(transaction, folder.team_id, folder.parent_id).await?;
-        sqlx::query!(
-            "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4) ON CONFLICT(team_id,id) DO NOTHING",
-            folder.team_id.0,
-            folder.id,
-            folder.name,
-            folder.parent_id
-        )
-        .execute(&mut **transaction)
-        .await
-        .map_err(folder_error)?;
+        match insert {
+            Insert::New => sqlx::query!(
+                "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4)",
+                folder.team_id.0,
+                folder.id,
+                folder.name,
+                folder.parent_id
+            )
+            .execute(&mut **transaction)
+            .await
+            .map_err(folder_error)?,
+            Insert::Ensure => sqlx::query!(
+                "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4) ON CONFLICT(team_id,id) DO NOTHING",
+                folder.team_id.0,
+                folder.id,
+                folder.name,
+                folder.parent_id
+            )
+            .execute(&mut **transaction)
+            .await
+            .map_err(folder_error)?,
+        };
         Ok(())
     }
 

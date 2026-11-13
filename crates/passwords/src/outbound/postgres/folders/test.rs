@@ -436,3 +436,27 @@ async fn contended_item_lease_returns_busy_result_and_still_records_batch_audit(
     assert_eq!(count, Some(1));
     held.release().await.unwrap();
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_rejects_a_reused_id_while_ensure_keeps_the_existing_folder(pool: PgPool) {
+    let (repository, _, record) = folder_fixture(pool).await;
+    let team = record.metadata.team_id;
+    let folder = Folder {
+        id: Uuid::now_v7(),
+        team_id: team,
+        name: "Original".into(),
+        parent_id: None,
+    };
+    repository.save_folder(&folder).await.expect("create");
+    let renamed = Folder {
+        name: "Renamed".into(),
+        ..folder.clone()
+    };
+    assert!(repository.save_folder(&renamed).await.is_err());
+    let ensured = repository
+        .ensure_folder(team, folder.id, "Renamed", None)
+        .await
+        .expect("ensure");
+    assert_eq!(ensured.name, "Original");
+    assert_eq!(repository.folders(team).await.expect("folders").len(), 1);
+}
