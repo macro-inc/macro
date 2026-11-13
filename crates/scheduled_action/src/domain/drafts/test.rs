@@ -592,8 +592,8 @@ fn agent_task(name: &str, trigger: Value, task: Value) -> ActionConfiguration {
     }
 }
 
-/// A session that checks a single agent task hands back the one agent step
-/// it runs as, which the editor saves as steps.
+/// A session that checks a single agent task hands back one agent step
+/// holding its prompt and user prompt, which the editor saves as steps.
 #[tokio::test(start_paused = true)]
 async fn a_draft_of_a_single_agent_task_becomes_its_agent_step() {
     let task = json!({
@@ -630,25 +630,41 @@ async fn a_draft_of_a_single_agent_task_becomes_its_agent_step() {
 
 /// A single agent task whose step a program wouldn't accept, here blank
 /// instructions, fails the draft as before rather than handing back a step
-/// the editor can't save.
+/// the editor can't save, and still says what its session created.
 #[tokio::test(start_paused = true)]
 async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
     let task = json!({ "prompt": " ", "user_prompt": "", "model": "anthropic/claude-sonnet-5-5" });
+    let notes = CreatedItem {
+        entity_type: model_entity::EntityType::Document,
+        entity_id: "recap-notes".into(),
+    };
     let rows = Arc::new(Rows::default());
+    let named = notes.clone();
     let sessions = Arc::new(Sessions::new(
         &rows,
         Box::new(move |_| {
-            vec![plain(agent_task(
-                "Recap",
-                message_posted(&[]),
-                task.clone(),
-            ))]
+            vec![(
+                agent_task("Recap", message_posted(&[]), task.clone()),
+                vec![named.clone()],
+            )]
         }),
     ));
 
-    let draft = draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await;
+    let Draft::Failed { message, created } =
+        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await
+    else {
+        panic!("expected a failed draft");
+    };
 
-    assert!(matches!(draft, Draft::Failed { .. }), "{draft:?}");
+    assert_eq!(message, ROUTINE_FAILED);
+    assert_eq!(
+        created,
+        [DraftCreated {
+            entity_type: notes.entity_type,
+            entity_id: notes.entity_id,
+            used: false,
+        }]
+    );
 }
 
 #[tokio::test(start_paused = true)]

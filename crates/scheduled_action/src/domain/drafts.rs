@@ -867,24 +867,30 @@ fn routine_data(routine: &RoutineSoFar) -> String {
 }
 
 /// The steps of a checked routine's task. A single agent task, which the
-/// SDK still accepts and a draft's session sometimes checks, becomes the
-/// one agent step it runs as, if that step passes a program's rules: the
-/// editor saves the draft as steps. `None` for anything else.
+/// SDK still accepts and a draft's session sometimes checks, becomes one
+/// agent step holding its prompt and user prompt, if that step passes a
+/// program's rules: the editor saves the draft as steps. `None` for
+/// anything else.
 fn task_steps(task: &Value) -> Option<Vec<Value>> {
     if let Some(steps) = task.get("steps").and_then(Value::as_array) {
         return Some(steps.clone());
     }
-    let program = RoutineProgram::new(RoutineProgram::from_task(task).ok()?.steps);
-    let steps = program.validate().ok().and_then(|()| {
-        program
-            .steps
-            .iter()
-            .map(serde_json::to_value)
-            .collect::<Result<Vec<_>, _>>()
-            .ok()
-    });
+    let steps = agent_task_steps(task);
     tracing::Span::current().record("routine.draft.agent_task", steps.is_some());
     steps
+}
+
+/// A single agent task as a program's one agent step, if it is one and the
+/// step passes a program's rules.
+fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
+    let program = RoutineProgram::new(RoutineProgram::from_task(task).ok()?.steps);
+    program.validate().ok()?;
+    program
+        .steps
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()
 }
 
 /// The draft `request` asks for, from the session's last check.
@@ -897,7 +903,7 @@ fn drafted(
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
     let Some(steps) = task_steps(&check.routine.task) else {
-        return failed(request.failed());
+        return failed_with(request.failed(), created);
     };
     let problems_at = |index: usize| -> Vec<String> {
         check
