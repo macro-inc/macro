@@ -60,7 +60,9 @@ may still offer Next; it is not proof that the directory is exhausted.
 Returning to a previously paged query or exclusion policy restarts at its first
 window. An offline picker waiting for local context should recover when that
 context arrives. Partial caches stay local even online; Refresh schedules background
-sync rather than remote search. Hydration/context changes restart stale windows and
+sync rather than remote search. A tab with no usable local cache (unsupported
+browser, or a cache taken over by a newer build) lists server contact pages while
+online instead of showing options as unavailable. Hydration/context changes restart stale windows and
 must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
 person target. Resolving 500 selected people keeps all 500 and looks up self
 separately when that would otherwise overflow the batch.
