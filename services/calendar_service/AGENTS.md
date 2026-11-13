@@ -64,9 +64,10 @@ gateway `/calendar` prefix.
   `calendar.replacement_recovery`, `recover_once`), so a
   `tokio runtime starvation detected` warning can be matched to the rounds
   running at that moment. Read its `cpu_wait_ms` first: near `delay_ms`, the
-  task's threads could not get a CPU. One constant `delay_ms` per task means
-  its quota ran out, which work anywhere in the task (these rounds included)
-  can cause; moving code to `spawn_blocking` would not help there.
+  task's threads could not get a CPU. With that wait, one constant `delay_ms`
+  per task points at its quota running out, which work anywhere in the task
+  (these rounds included) can cause; moving code to `spawn_blocking` would not
+  help there.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;

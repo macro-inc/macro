@@ -58,15 +58,18 @@ fn an_exited_thread_does_not_cancel_the_others() {
     );
 }
 
-#[cfg(target_os = "linux")]
+/// Needs a kernel with scheduler statistics; elsewhere `take` is `None` and
+/// there is nothing live to check.
 #[test]
-fn samples_this_process_on_linux() {
-    let before = ThreadCpuSample::take().expect("Linux exposes schedstat");
+fn samples_this_process_where_the_kernel_exposes_schedstat() {
+    let Some(before) = ThreadCpuSample::take() else {
+        return;
+    };
     let started = std::time::Instant::now();
     let mut spin = 0u64;
     while started.elapsed() < Duration::from_millis(20) {
         spin = std::hint::black_box(spin.wrapping_add(1));
     }
-    let after = ThreadCpuSample::take().expect("Linux exposes schedstat");
+    let after = ThreadCpuSample::take().expect("schedstat stays readable");
     assert!(after.since(&before).run > Duration::ZERO);
 }

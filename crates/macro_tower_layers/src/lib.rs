@@ -257,8 +257,9 @@ static WATCHED_RUNTIMES: LazyLock<Mutex<HashSet<tokio::runtime::Id>>> =
 /// - `cpu_wait_ms` is the longest any one thread was runnable but got no CPU.
 ///   Near or above `delay_ms`, threads could not get a CPU: the container
 ///   spent its CPU quota for the 100 ms period and every thread waited out the
-///   rest of it (a task that keeps logging one constant `delay_ms`), or every
-///   CPU was busy, with this process's work or another's.
+///   rest of it, or every CPU was busy, with this process's work or another's.
+///   With that wait, one task logging the same `delay_ms` over and over (the
+///   rest of the period) points at the quota.
 /// - Well below `delay_ms`, the delay came from inside the runtime: a task
 ///   held a worker thread, computing or blocked (synchronous I/O or DNS, a
 ///   contended `std::sync` lock). `cpu_run_ms`, the CPU time all threads ran

@@ -53,9 +53,9 @@ stall.
 - `@cpu_wait_ms`, the longest any one thread waited for a CPU, near or above
   `@delay_ms` means the replica's threads could not get a CPU: the task spent
   its CPU quota for the 100 ms period, or every CPU was busy (its own work,
-  its sidecars or other processes). A task that keeps logging one constant
-  `@delay_ms` is hitting its quota. Moving work off the runtime does not help
-  there; less CPU or a larger task does.
+  its sidecars or other processes). With that wait, one task logging the
+  same `@delay_ms` over and over points at its quota. Moving work off the
+  runtime does not help there; less CPU or a larger task does.
 - `@cpu_wait_ms` well below `@delay_ms` means a task held a runtime thread,
   computing or blocked. `@cpu_run_ms` (CPU all threads used in the interval,
   `@actual_ms` long) tells which, against the replica's usual CPU use.
