@@ -6,12 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SuggestionKindOneOfSevenKind } from './suggestionKindOneOfSevenKind';
+import type { SuggestionKindOneOfSevenRoutine } from './suggestionKindOneOfSevenRoutine';
 
 /**
  * A routine suggestion, shown among suggestions.
  */
 export type SuggestionKindOneOfSeven = {
   kind: SuggestionKindOneOfSevenKind;
+  routine?: SuggestionKindOneOfSevenRoutine;
   /** The suggestion it shows. */
   routineSuggestionId: string;
 };

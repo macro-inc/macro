@@ -4653,6 +4653,21 @@
         },
         "additionalProperties": false
       },
+      "RoutineSentencePart": {
+        "type": "object",
+        "description": "A part of a routine's sentence.",
+        "required": ["text", "picked"],
+        "properties": {
+          "picked": {
+            "type": "boolean",
+            "description": "It is a value AI picked, which the person can change."
+          },
+          "text": {
+            "type": "string",
+            "description": "What it says."
+          }
+        }
+      },
       "RoutineSoFar": {
         "type": "object",
         "description": "The routine a step is added to or changed in.",
@@ -4873,6 +4888,24 @@
             "items": {
               "$ref": "#/components/schemas/TemplateVariable"
             }
+          }
+        }
+      },
+      "RoutineText": {
+        "type": "object",
+        "description": "How a routine suggestion's drafted routine reads on its card.",
+        "required": ["sentence", "when"],
+        "properties": {
+          "sentence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSentencePart"
+            },
+            "description": "What it does: a step's sentence with the values AI picked marked, or\nits description (else its name) as one unmarked part."
+          },
+          "when": {
+            "type": "string",
+            "description": "When it runs, e.g. \"Fridays at 9:00 AM\" or \"New email received\"."
           }
         }
       },
@@ -5745,6 +5778,17 @@
               "kind": {
                 "type": "string",
                 "enum": ["routine"]
+              },
+              "routine": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RoutineText",
+                    "description": "How its drafted routine reads, in the feed only; absent when the\nroutine suggestion couldn't be read."
+                  }
+                ]
               },
               "routineSuggestionId": {
                 "type": "string",

@@ -1156,6 +1156,20 @@ export type RoutineProgram = {
 };
 
 /**
+ * A part of a routine's sentence.
+ */
+export type RoutineSentencePart = {
+    /**
+     * It is a value AI picked, which the person can change.
+     */
+    picked: boolean;
+    /**
+     * What it says.
+     */
+    text: string;
+};
+
+/**
  * The routine a step is added to or changed in.
  */
 export type RoutineSoFar = {
@@ -1279,6 +1293,21 @@ export type RoutineTemplate = {
     trigger: ActionTrigger;
     updated_at: string;
     variables: Array<TemplateVariable>;
+};
+
+/**
+ * How a routine suggestion's drafted routine reads on its card.
+ */
+export type RoutineText = {
+    /**
+     * What it does: a step's sentence with the values AI picked marked, or
+     * its description (else its name) as one unmarked part.
+     */
+    sentence: Array<RoutineSentencePart>;
+    /**
+     * When it runs, e.g. "Fridays at 9:00 AM" or "New email received".
+     */
+    when: string;
 };
 
 /**
@@ -1760,6 +1789,7 @@ export type SuggestionKind = {
     kind: 'entity';
 } | {
     kind: 'routine';
+    routine?: null | RoutineText;
     /**
      * The suggestion it shows.
      */
