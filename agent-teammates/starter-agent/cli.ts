@@ -24,6 +24,7 @@ import { macroKey } from "./behavior/context/index.ts";
 import { stayOnline } from "./behavior/capabilities/chat/presence.ts";
 import { ensureMailSchedules } from "./behavior/capabilities/mail/schedule.ts";
 import { ensureSchedules } from "./behavior/capabilities/heartbeat/schedules.ts";
+import { ensureHomeDashboard } from "./behavior/capabilities/dashboard/index.ts";
 import { ensureIntroduction } from "./behavior/events/handlers/identity.ts";
 import { assistant, base, scripts } from "./index.ts";
 
@@ -80,6 +81,10 @@ const run = async (): Promise<void> => {
 	await ensureSchedules(assistant.decorations.schedules);
 	// A new agent's first wake is to ask its owner who it is.
 	await ensureIntroduction(base, assistant.decorations.schedules);
+	// A new agent's page in Macro shows a default dashboard until it makes its own.
+	await ensureHomeDashboard(base).catch((error: unknown) =>
+		base.log.event("dashboard", { kind: "failed", error: String(error) }),
+	);
 	await assistant.run(
 		parallel({
 			systemPrompt: (await base.disk.read(base.config.charter)) ?? "",

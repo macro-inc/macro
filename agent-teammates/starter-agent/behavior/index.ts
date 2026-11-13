@@ -15,6 +15,7 @@ import { peopleContext } from "./capabilities/people/context.ts";
 import { peopleCapabilities } from "./capabilities/people/index.ts";
 import { screenContext } from "./capabilities/screen/context.ts";
 import { screenCapabilities } from "./capabilities/screen/index.ts";
+import { dashboardCapabilities } from "./capabilities/dashboard/index.ts";
 import { identityCapabilities } from "./capabilities/identity/index.ts";
 import { laterContext } from "./capabilities/later/context.ts";
 import { laterCapabilities } from "./capabilities/later/index.ts";
@@ -81,6 +82,7 @@ export const assistant = (base: Base, agent: Agent) => {
 		.use(chatCapabilities)
 		.use(chatHandlers(chatEvents))
 		.use(identityCapabilities)
+		.use(dashboardCapabilities)
 		.use(identityHandlers())
 		.use(later)
 		.use(laterCapabilities)
