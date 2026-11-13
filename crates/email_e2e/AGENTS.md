@@ -74,7 +74,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   for that (deliver a second mail, then assert the first has no duplicate).
 - The scheduled-send cron: `stack.run_scheduled_sweep()` runs the real
   `email_scheduled_handler` once. Work of the other crons is enqueued by the
-  scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`.
+  scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`, and on a
+  stack with `document_storage` the reminder sweep tick
+  (`"reminder-dispatch"`, `{ "operation": "sweep" }`).
 - One file per area in `tests/` (`gmail.rs`, `outlook.rs`, …); each file is a
   test binary, so keep shared helpers in the harness, not in `tests/`.
 - Every scenario is `#[tokio::test(flavor = "multi_thread")]`: the stack's
@@ -137,8 +139,8 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 
 - `tests/gmail.rs`, `tests/outlook.rs`: one worked scenario per provider.
 - `tests/journey_*.rs`: whole user journeys (compose, organise, read,
-  account, sender rules, agent, provider parity, connect), each for Gmail
-  and Outlook where the product has both.
+  account, sender rules, agent, provider parity, connect, follow-up),
+  each for Gmail and Outlook where the product has both.
 - `src/stack.rs`: `Stack`, what it starts and what a scenario can ask it.
 - `src/inbox.rs`, `src/user.rs`: the scenario's vocabulary.
 
