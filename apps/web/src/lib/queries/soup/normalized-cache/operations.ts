@@ -153,12 +153,13 @@ function updateSoupEntity<T extends SoupEntityTag>(
   };
 }
 
-/** Apply a row read from the server to every list holding it, without
- * cancelling a list revalidation it may accompany. */
+/** Apply a server row to every list holding it. A realtime push cancels older
+ * reads of those lists; ordinary hydration preserves its accompanying read. */
 export function hydrateSoupEntity<T extends SoupEntityTag>(
-  partial: SoupEntityPartial<T>
+  partial: SoupEntityPartial<T>,
+  cancelRefetches = false
 ): void {
-  updateSoupEntity(partial, false);
+  updateSoupEntity(partial, cancelRefetches);
 }
 
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {

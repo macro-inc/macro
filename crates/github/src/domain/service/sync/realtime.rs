@@ -20,6 +20,11 @@ impl<
     P: GithubSyncRealtime,
 > GithubSyncServiceImpl<D, R, C, G, N, P>
 {
+    #[tracing::instrument(
+        name = "github.pull_request.realtime",
+        skip_all,
+        fields(foreign_entity_id = %entity.id, outcome = tracing::field::Empty)
+    )]
     pub(super) async fn publish_pull_request(
         &self,
         source: &GithubAppInstallationSource,
@@ -32,16 +37,21 @@ impl<
             .await
             .into_iter()
             .collect();
-        if recipients.is_empty() {
-            return;
-        }
-        self.realtime
-            .publish_pull_request(&recipients, entity)
-            .await
-            .inspect_err(|error| {
-                tracing::error!(error=?error, foreign_entity_id=%entity.id,
-                "failed to publish GitHub PR update")
-            })
-            .ok();
+        let outcome = if recipients.is_empty() {
+            "no_recipients"
+        } else {
+            match self
+                .realtime
+                .publish_pull_request(&recipients, entity)
+                .await
+            {
+                Ok(()) => "published",
+                Err(error) => {
+                    tracing::error!(error=?error, "failed to publish GitHub PR update");
+                    "error"
+                }
+            }
+        };
+        tracing::Span::current().record("outcome", outcome);
     }
 }
