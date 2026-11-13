@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\",\n            owner_tu.team_id AS \"owner_team_id!\"\n        FROM \"SharePermission\" sp\n        JOIN \"ChatPermission\" cp ON cp.\"sharePermissionId\" = sp.id\n        JOIN \"Chat\" c ON c.id = cp.\"chatId\"\n        JOIN owner_team(c.\"userId\") owner_tu\n          ON EXISTS (SELECT FROM entity_access_source_matches(owner_tu.team_id::text, $2, NULL))\n        WHERE cp.\"chatId\" = $1\n          AND sp.\"linkShare\" = 'TEAM'\n          AND sp.\"linkShareAccessLevel\" IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "8f1aeecdba92a1d0085893decd7f0642d21992cf44efca31ee114a04ea279ebb"
+}

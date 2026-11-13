@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ea.access_level::text\n        FROM database_rows r\n        JOIN database_tables t ON t.id = r.table_id\n        JOIN database_entities d ON d.database_id = t.database_id\n        JOIN entity_access ea ON ea.entity_id = d.database_id\n        WHERE r.id = $1\n        AND ea.entity_type = 'database'\n        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))\n\n        UNION ALL\n\n        SELECT 'edit'\n        FROM database_rows r\n        JOIN database_tables t ON t.id = r.table_id\n        JOIN forms f ON f.database_id = t.database_id\n        JOIN database_entities d ON d.database_id = f.database_id\n        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'\n        WHERE r.id = $1\n        AND f.trashed_at IS NULL\n        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))\n        AND ea.access_level IN ('edit', 'owner')\n\n        UNION ALL\n\n        SELECT 'view'\n        FROM database_rows r\n        JOIN database_tables t ON t.id = r.table_id\n        JOIN forms f ON f.database_id = t.database_id\n        JOIN database_entities d ON d.database_id = f.database_id\n        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'\n        WHERE r.id = $1\n        AND f.trashed_at IS NULL\n        AND f.responses_visible\n        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))\n        AND ea.access_level = 'view'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "86d10149426d533a2a0dbd296e2c8cf4fb12345c3541722439e0d26225c52b45"
+}
