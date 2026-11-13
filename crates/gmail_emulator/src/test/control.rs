@@ -309,3 +309,68 @@ mailboxes:
         .unwrap();
     assert_eq!(expired.status().as_u16(), 200);
 }
+
+#[tokio::test]
+async fn the_control_api_sets_a_mailbox_signature() {
+    let emulator = GmailEmulator::start(Seed::default()).await.unwrap();
+    let http = reqwest::Client::new();
+    let control = format!("{}/_emulator", emulator.base_url());
+    let seeded = http
+        .post(format!("{control}/seed"))
+        .body(SEED)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(seeded.status().as_u16(), 200);
+
+    let set = http
+        .put(format!("{control}/mailboxes/ada@example.com/signature"))
+        .json(&serde_json::json!({ "signature": "<div>Ada</div>" }))
+        .send()
+        .await
+        .unwrap();
+    assert!(set.status().is_success(), "{}", set.status());
+
+    let token: serde_json::Value = http
+        .post(format!("{control}/mailboxes/ada@example.com/access-tokens"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let ada = token["access_token"].as_str().unwrap();
+    let aliases = client(&emulator)
+        .list_send_as(ada)
+        .await
+        .unwrap()
+        .send_as
+        .unwrap();
+    assert_eq!(aliases[0].is_primary, Some(true));
+    assert_eq!(aliases[0].signature.as_deref(), Some("<div>Ada</div>"));
+
+    // The other mailbox keeps its own, and an unknown mailbox is refused.
+    let token: serde_json::Value = http
+        .post(format!("{control}/mailboxes/bob@example.com/access-tokens"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let bob = token["access_token"].as_str().unwrap();
+    let untouched = client(&emulator)
+        .list_send_as(bob)
+        .await
+        .unwrap()
+        .send_as
+        .unwrap();
+    assert_eq!(untouched[0].signature.as_deref(), Some(""));
+    let unknown = http
+        .put(format!("{control}/mailboxes/nobody@example.com/signature"))
+        .json(&serde_json::json!({ "signature": "<div>Nobody</div>" }))
+        .send()
+        .await
+        .unwrap();
+    assert!(unknown.status().is_client_error(), "{}", unknown.status());
+}
