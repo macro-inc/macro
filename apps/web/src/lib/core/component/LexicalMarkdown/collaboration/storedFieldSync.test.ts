@@ -1,51 +1,77 @@
-import { FROM_LORO_TAG } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
+// Source control on the real app editor composition: the block-md wrapper
+// (createLexicalWrapper markdown-sync withIds), its base plugins with Loro history and
+// registerMarkdownEditing. The load and sync wiring is a replica of
+// collaboration/CollabProvider.tsx at git blob db6531bfc6f7: the versioned-state load
+// (initializeEditorWithVersionedState, :565), syncLexicalToLoro's skip tags and first-sync
+// gate (:410, :433, :441) and codeNodeUpdateHandler (:355). Re-check it against that file
+// when the blob changes.
+import { CodeHighlightNode, CodeNode } from '@lexical/code-core';
+import {
+  CODE_HIGHLIGHT_IDS_TAG,
+  FROM_LORO_TAG,
+} from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
+import {
+  createLexicalWrapper,
+  isWrapperWithIds,
+} from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { registerMarkdownEditing } from '@core/component/LexicalMarkdown/editing/registerMarkdownEditing';
 import {
   initializeEditorWithVersionedState,
   loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
-import { registerList } from '@lexical/list';
+import { MARKDOWN_VERSION_COUNTER } from '@core/component/LexicalMarkdown/version';
 import { $convertFromMarkdownString } from '@lexical/markdown';
-import { registerRichText } from '@lexical/rich-text';
 import {
   createLoroManager,
   type LoroManager,
 } from '@macro-inc/collaboration/collab/manager';
 import {
+  $isCustomCodeNode,
   $updateAllNodeIds,
   ALL_TRANSFORMERS,
-  type NodeIdMappings,
-  nodeIdPlugin,
+  COLLABORATION_TAG,
+  CustomCodeNode,
+  LOCAL_STATUS_TAG,
 } from '@macro-inc/lexical-core';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
-import {
-  NodeReplacements,
-  SupportedNodeTypes,
-} from '@macro-inc/lexical-core/node-list';
 import { ClassedBlockNode } from '@macro-inc/lexical-core/nodes/ClassedBlockNode';
 import { PullRequestMentionNode } from '@macro-inc/lexical-core/nodes/PullRequestMentionNode';
 import {
   $createParagraphNode,
+  $getNodeByKey,
   $getRoot,
+  $isCodeNode as $isLexicalCodeNode,
   $isElementNode,
-  createEditor,
+  CONTROLLED_TEXT_INSERTION_COMMAND,
+  type MutatedNodes,
+  type NodeKey,
   type SerializedEditorState,
 } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import { tablePlugin } from '../plugins/tables/tablePlugin';
 
+vi.mock('@core/internal/BlockLoader', () => ({}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|control@example.com',
+}));
 // The editor utilities pull in the plugin barrel, whose leaves open the
 // storage and connection-gateway sockets on import.
 vi.mock('@service-storage/websocket', () => ({
-  storageWS: { reconnectIfDisconnected: vi.fn() },
+  storageWS: {
+    send() {},
+    addEventListener() {},
+    removeEventListener() {},
+    reconnectIfDisconnected() {},
+  },
   createWebSocketJob: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({
-  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  ws: { send() {}, addEventListener() {}, removeEventListener() {} },
   state: () => 'closed',
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
+  parseWebsocketPayload: () => undefined,
 }));
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -175,28 +201,118 @@ const EXPECTED: Record<string, Verdict> = {
   'pr-mention/url-id.url=null': 'write "https://github.com/o/r/pull/3"',
 };
 
-function sourceEditor(namespace: string) {
-  const editor = createEditor({
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * Wait until the editor and its sync are idle: every queued Loro write has resolved and
+ * a further macrotask queues no new write and adds no op. Fails rather than reading a
+ * state that is still changing.
+ */
+async function settleUntilIdle(loro: Loaded, writes: Promise<unknown>[]) {
+  for (let round = 0; round < 200; round++) {
+    const queued = writes.length;
+    const before = JSON.stringify(loro.doc.oplogVersion().toJSON());
+    await Promise.all(writes);
+    await settle();
+    if (
+      writes.length === queued &&
+      JSON.stringify(loro.doc.oplogVersion().toJSON()) === before
+    ) {
+      return;
+    }
+  }
+  throw new Error('editor sync did not go idle');
+}
+
+type Loaded = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
+
+/** The block-md wrapper with the app's base plugins and registerMarkdownEditing. */
+function appEditor(namespace: string, loro?: Loaded) {
+  const wrapper = createLexicalWrapper({
+    type: 'markdown-sync',
     namespace,
-    nodes: [...SupportedNodeTypes, ...NodeReplacements],
-    onError: (error) => {
-      throw error;
+    isInteractable: () => true,
+    withIds: true,
+  });
+  if (!isWrapperWithIds(wrapper)) throw new Error('expected node ids');
+  wrapper.editor.setRootElement(document.createElement('div'));
+  wrapper.plugins
+    .richText()
+    .list()
+    .markdownShortcuts()
+    .delete()
+    .history(400, loro);
+  registerMarkdownEditing({
+    lexicalWrapper: wrapper,
+    isContentEditable: () => true,
+    peerIdValidator: () => true,
+    source: { id: 'control', trackMentions: false },
+    onVersionError: (error) => {
+      throw new Error(`version error ${error}`);
     },
   });
-  const mappings: NodeIdMappings = {
-    idToNodeKeyMap: new Map(),
-    nodeKeyToIdMap: new Map(),
+  return wrapper;
+}
+
+/** CollabProvider.syncLexicalToLoro and codeNodeUpdateHandler, as written there. */
+function wireSync(
+  wrapper: ReturnType<typeof appEditor>,
+  loro: Loaded,
+  writes: Promise<unknown>[]
+) {
+  const { editor, mapping: mappings } = wrapper;
+  const writeState = () =>
+    writes.push(
+      loro.syncToLoro(loroSyncState(editor.getEditorState()) as never)
+    );
+  const codeIdsPass = (mutatedNodes: MutatedNodes | null): boolean => {
+    if (!mutatedNodes || mutatedNodes.size === 0) return false;
+    const keys = new Set<NodeKey>();
+    for (const [klass, mutations] of mutatedNodes) {
+      if (
+        klass === CodeHighlightNode ||
+        klass === CodeNode ||
+        klass === CustomCodeNode
+      ) {
+        for (const [key, mutation] of mutations) {
+          if (mutation !== 'destroyed') keys.add(key);
+        }
+      }
+    }
+    if (keys.size > 0) {
+      editor.update(
+        () => {
+          const parents = new Set<CodeNode | CustomCodeNode>();
+          for (const key of keys) {
+            const node = $getNodeByKey(key);
+            if ($isLexicalCodeNode(node) || $isCustomCodeNode(node)) {
+              parents.add(node);
+              continue;
+            }
+            const parent = node?.getParent();
+            if ($isLexicalCodeNode(parent) || $isCustomCodeNode(parent))
+              parents.add(parent);
+          }
+          for (const node of parents) $updateAllNodeIds(mappings, node);
+        },
+        { discrete: true, tag: CODE_HIGHLIGHT_IDS_TAG, onUpdate: writeState }
+      );
+    }
+    return keys.size > 0;
   };
-  editor.setRootElement(document.createElement('div'));
-  registerRichText(editor);
-  registerList(editor);
-  tablePlugin({
-    hasCellMerge: true,
-    hasCellBackgroundColor: true,
-    hasTabHandler: true,
-  })(editor);
-  nodeIdPlugin({ nodes: SupportedNodeTypes, mappings })(editor);
-  return { editor, mappings };
+  return editor.registerUpdateListener(({ tags, mutatedNodes }) => {
+    if (
+      tags.has(FROM_LORO_TAG) ||
+      tags.has(COLLABORATION_TAG) ||
+      tags.has(LOCAL_STATUS_TAG) ||
+      tags.has(CODE_HIGHLIGHT_IDS_TAG)
+    ) {
+      return;
+    }
+    if (mutatedNodes && mutatedNodes.size > 0 && !codeIdsPass(mutatedNodes)) {
+      writeState();
+    }
+  });
 }
 
 async function manager(
@@ -212,7 +328,8 @@ async function manager(
 }
 
 function baseState(): SerializedEditorState {
-  const { editor, mappings } = sourceEditor('stored-field-seed');
+  const wrapper = appEditor('stored-field-seed');
+  const { editor, mapping: mappings } = wrapper;
   editor.update(
     () => {
       $convertFromMarkdownString(MARKDOWN, ALL_TRANSFORMERS);
@@ -229,10 +346,18 @@ function baseState(): SerializedEditorState {
     { discrete: true }
   );
   // A JSON round trip drops undefined fields, so the seed stores only the field
-  // under test; the mirror would otherwise insert them as null.
-  return JSON.parse(
+  // under test; the mirror would otherwise insert them as null. The seed carries
+  // current metadata, as an ordinary document does.
+  const state = JSON.parse(
     JSON.stringify(loroSyncState(editor.getEditorState()))
   ) as SerializedEditorState;
+  const root = state.root as unknown as JsonNode;
+  root.$ = {
+    ...((root.$ as JsonNode | undefined) ?? {}),
+    documentMetadata: { version: MARKDOWN_VERSION_COUNTER },
+  };
+  wrapper.cleanup();
+  return state;
 }
 
 function visit(
@@ -322,30 +447,33 @@ async function runCase(
   const snapshot = writer.doc.export({ mode: 'snapshot' });
 
   const loaded = await manager('doc', snapshot);
-  const { editor } = sourceEditor('stored-field-load');
+  const opened = loaded.doc.oplogVersion();
+  const wrapper = appEditor('stored-field-load', loaded);
+  const { editor } = wrapper;
+  // CollabProvider's versioned-state load, then startSync.
   const initError = initializeEditorWithVersionedState(
     editor,
     loaded.state?.state as unknown as SerializedEditorState,
     () => loaded.peerIdStr
   );
   expect(initError).toBeNull();
-  const opened = loaded.doc.oplogVersion();
-  const syncs: Promise<unknown>[] = [];
-  editor.registerUpdateListener(({ editorState, tags, mutatedNodes }) => {
-    if (tags.has(FROM_LORO_TAG) || !mutatedNodes?.size) return;
-    syncs.push(loaded.syncToLoro(loroSyncState(editorState) as never));
-  });
+  const writes: Promise<unknown>[] = [];
+  wireSync(wrapper, loaded, writes);
+  await settleUntilIdle(loaded, writes);
+  // One keystroke at the end of the trailing paragraph.
   editor.update(
     () => {
       const last = $getRoot().getLastChild();
-      if ($isElementNode(last)) last.selectEnd().insertText('!');
+      if ($isElementNode(last)) last.selectEnd();
     },
     { discrete: true }
   );
-  await Promise.all(syncs);
+  editor.dispatchCommand(CONTROLLED_TEXT_INSERTION_COMMAND, '!');
+  await settleUntilIdle(loaded, writes);
   const actions = mapActions(loaded.doc, opened, entry.field);
   const source: Verdict =
     actions.length === 0 ? 'keep' : (actions.join(', ') as Verdict);
+  wrapper.cleanup();
   return { ...entry, source, snapshot };
 }
 
