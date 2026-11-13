@@ -22,7 +22,7 @@ use crate::workflows::{cargo_deny, runners, steps};
 mod test;
 
 /// The branch the bump PR comes from.
-pub const BRANCH: &str = "ci/advisory-db-bump";
+pub const BRANCH: &str = "synoet/advisory-db-bump-trial-pr";
 
 const CHANGED: &str = "steps.prepare.outputs.changed == 'true'";
 
@@ -31,7 +31,8 @@ pub fn advisory_db_bump() -> Workflow {
     Workflow::new("Advisory DB Bump")
         .on(Event::default()
             .add_schedule(Schedule::new("17 6 * * *"))
-            .workflow_dispatch(WorkflowDispatch::default()))
+            .workflow_dispatch(WorkflowDispatch::default())
+            .push(gh_workflow::Push::default().add_branch("synoet/advisory-db-bump-trial")))
         // Two runs at once would both push to the branch.
         .concurrency(Concurrency::new(Expression::new("advisory-db-bump")))
         .add_job("bump", bump_job())
@@ -50,7 +51,7 @@ fn bump_job() -> Job {
         )
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("BUMP_BRANCH", BRANCH))
-        .add_env(("BUMP_BASE", "main"))
+        .add_env(("BUMP_BASE", "synoet/advisory-db-bump-trial"))
         .add_env(("REV_FILE", cargo_deny::ADVISORY_DB_REV.as_str()))
         // The script pushes with the token checkout leaves in git config.
         .add_step(steps::checkout(false, true))

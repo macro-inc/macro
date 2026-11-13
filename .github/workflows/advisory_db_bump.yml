@@ -2,6 +2,9 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/advisory_db_bump.rs
 name: Advisory DB Bump
 'on':
+  push:
+    branches:
+    - synoet/advisory-db-bump-trial
   schedule:
   - cron: '17 6 * * *'
   workflow_dispatch: {}
@@ -14,8 +17,8 @@ jobs:
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
-      BUMP_BRANCH: ci/advisory-db-bump
-      BUMP_BASE: main
+      BUMP_BRANCH: synoet/advisory-db-bump-trial-pr
+      BUMP_BASE: synoet/advisory-db-bump-trial
       REV_FILE: '.github/advisory-db-rev'
     timeout-minutes: 15
     steps:
