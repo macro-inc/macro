@@ -447,9 +447,10 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                     id,
                     progress: &reporter,
                     cancellable: true,
+                    interrupt,
                 };
                 return drafts
-                    .direct_draft(direct, &owner, &request, &program, &context, run, interrupt)
+                    .direct_draft(direct, &owner, &request, &program, &context, run)
                     .await;
             }
             let brief = match drafts.briefed(&owner, &request, &program, &context) {

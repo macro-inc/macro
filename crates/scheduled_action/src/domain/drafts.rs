@@ -387,17 +387,10 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
                     id: macro_uuid::generate_uuid_v7(),
                     progress: &Unreported,
                     cancellable: false,
+                    interrupt: CancellationToken::new(),
                 };
                 let draft = self
-                    .direct_draft(
-                        direct,
-                        &owner,
-                        &request,
-                        &program,
-                        &context,
-                        run,
-                        CancellationToken::new(),
-                    )
+                    .direct_draft(direct, &owner, &request, &program, &context, run)
                     .await?
                     // Only a background draft can be cancelled.
                     .unwrap_or_else(|| failed(request.failed()));

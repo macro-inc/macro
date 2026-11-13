@@ -306,8 +306,8 @@ fn catalog_examples(conditions: bool) -> String {
     )
 }
 
-/// One direct draft as it runs: where it reports, and the background job
-/// whose row says whether its owner cancelled it.
+/// One direct draft as it runs: where it reports, the background job
+/// whose row says whether its owner cancelled it, and what cuts it off.
 pub(super) struct DirectRun<'a> {
     /// The draft's id: its job's, or a fresh one for a draft its request
     /// waits for. Setup's credential carries it as the routine's.
@@ -315,6 +315,8 @@ pub(super) struct DirectRun<'a> {
     pub progress: &'a dyn DraftProgress,
     /// Whether the draft's row is read for a cancel: a background draft's.
     pub cancellable: bool,
+    /// Cuts the draft off, like the timeout: the replica shutting down.
+    pub interrupt: CancellationToken,
 }
 
 /// What the find call named.
@@ -945,7 +947,7 @@ enum Stopped {
 
 impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
     /// Write `request`'s draft directly, within [`DRAFT_TIMEOUT`] and until
-    /// `interrupt`. Only a refused admission is an error; a draft its owner
+    /// `run.interrupt`. Only a refused admission is an error; a draft its owner
     /// cancelled is none, and its row is gone.
     pub(super) async fn direct_draft(
         &self,
@@ -955,9 +957,9 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         program: &[Step],
         context: &DraftContext,
         run: DirectRun<'_>,
-        interrupt: CancellationToken,
     ) -> anyhow::Result<Option<Draft>> {
         let id = run.id;
+        let interrupt = run.interrupt.clone();
         let cancellable = run.cancellable;
         let mut so_far = DirectSoFar::default();
         let stopped = tokio::select! {

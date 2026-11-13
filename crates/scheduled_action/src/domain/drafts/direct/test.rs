@@ -285,8 +285,8 @@ async fn draft_in<Code: RoutineCode>(
                 id,
                 progress: milestones,
                 cancellable: true,
+                interrupt,
             },
-            interrupt,
         )
         .await
 }
