@@ -18,6 +18,10 @@ import {
 } from '@macro-inc/graphics';
 import { Button, Tabs, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  editedTransition,
+  transitionOfKind,
+} from '../core/transitions/transition-edits';
 import { InspectorField } from './inspector-field';
 import { InspectorNumberField } from './inspector-number-field';
 import { InspectorSection } from './inspector-section';
@@ -114,13 +118,10 @@ export function TransitionInspector(props: {
   const tileButtons: HTMLButtonElement[] = [];
   const [focusIndex, setFocusIndex] = createSignal<number>();
 
-  /** The slide's transition with one field changed; an inherited one is
-   * copied first so the edit keeps what was playing. */
+  /** The slide's transition with one field changed. An inheriting slide
+   * starts from the stored deck default, so it keeps what was playing. */
   const edit = (patch: Partial<SlideTransition>) =>
-    props.onChange({
-      ...(props.own ?? { kind: props.effective.kind }),
-      ...patch,
-    });
+    props.onChange(editedTransition(props.own, props.deckDefault, patch));
 
   const choose = (value: TileValue) => {
     if (value === 'default') {
@@ -129,9 +130,7 @@ export function TransitionInspector(props: {
     }
     if (value === props.own?.kind) return;
 
-    // A new kind starts from its own duration; easing and direction carry over.
-    const { durationMs: _duration, ...kept } = props.own ?? { kind: value };
-    props.onChange({ ...kept, kind: value });
+    props.onChange(transitionOfKind(props.own, props.deckDefault, value));
   };
 
   const tileKind = (value: TileValue): SlideTransitionKind =>

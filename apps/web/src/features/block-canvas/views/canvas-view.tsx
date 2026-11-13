@@ -506,7 +506,6 @@ export function CanvasView(props: {
                         />
                         <SlideTransitionInspector
                           editor={editor}
-                          document={editor.document}
                           slide={artifact()}
                         />
                         <Show when={artifacts.edit}>

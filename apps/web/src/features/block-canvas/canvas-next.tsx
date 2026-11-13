@@ -15,6 +15,7 @@ import {
   type SlideTransition,
   screenToWorld,
   setAllTransitionsCommand,
+  validSlideTransition,
 } from '@macro-inc/graphics';
 import {
   createLoroGraphicsBackendFromDoc,
@@ -113,6 +114,9 @@ export function CanvasNextEditor(props: {
     transition: SlideTransition | null,
     everySlide: boolean
   ) => {
+    // Same check the shared root map makes, so both paths refuse alike.
+    if (transition && !validSlideTransition(transition))
+      throw new Error('Invalid slide transition');
     if (!backend) {
       if (everySlide)
         editor.execute(setAllTransitionsCommand, { transition: null });

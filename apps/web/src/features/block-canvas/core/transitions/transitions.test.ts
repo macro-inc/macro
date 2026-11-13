@@ -1,4 +1,9 @@
-import { createScene, type ShapeItem, translation } from '@macro-inc/graphics';
+import {
+  createScene,
+  type ShapeItem,
+  translation,
+  validSlideTransition,
+} from '@macro-inc/graphics';
 import { describe, expect, it } from 'vitest';
 import {
   cameraTransform,
@@ -13,6 +18,11 @@ import { cameraPlan } from './camera-plan';
 import { classicKeyframes, type LayerKeyframe } from './classic-keyframes';
 import { easingCss, easingFunction } from './easing';
 import { connectorRoute } from './scene-geometry';
+import {
+  deckDefaultForAll,
+  editedTransition,
+  transitionOfKind,
+} from './transition-edits';
 
 const STAGE = { width: 1600, height: 900 };
 
@@ -228,5 +238,37 @@ describe('camera plans', () => {
     expect(plan.baseScale).toBeLessThanOrEqual(
       Math.min(...plan.views.map((v) => v.zoom))
     );
+  });
+});
+
+describe('transition edits', () => {
+  const deck = { kind: 'push', direction: 'right', durationMs: 1500 } as const;
+
+  it('starts an inheriting slide from the stored deck default', () => {
+    expect(editedTransition(undefined, deck, { easing: 'linear' })).toEqual({
+      ...deck,
+      easing: 'linear',
+    });
+    expect(transitionOfKind(undefined, deck, 'cube')).toEqual({
+      kind: 'cube',
+      direction: 'right',
+    });
+    expect(
+      transitionOfKind(
+        { kind: 'flip', durationMs: 900, easing: 'ease' },
+        deck,
+        'zoom'
+      )
+    ).toEqual({ kind: 'zoom', easing: 'ease' });
+  });
+
+  it('never writes a resolved value, so a deck with no transitions stays valid', () => {
+    expect(deckDefaultForAll(undefined, undefined)).toBeNull();
+    expect(deckDefaultForAll(undefined, deck)).toEqual(deck);
+    expect(deckDefaultForAll({ kind: 'fade' }, deck)).toEqual({ kind: 'fade' });
+
+    const edited = editedTransition(undefined, undefined, { easing: 'easeIn' });
+    expect(edited).toEqual({ kind: 'none', easing: 'easeIn' });
+    expect(validSlideTransition(edited)).toBe(true);
   });
 });
