@@ -1,5 +1,7 @@
+import { useAgentProfile } from '@app/features/agent-dashboards/agent-profile';
 import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
 import { createBotSettingsUserCardAction } from '@app/features/settings/bot-settings-user-action';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
@@ -9,6 +11,7 @@ import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import WideChat from '@icon/system/regular/chat.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import WideTask from '@icon/system/regular/list-checks.svg';
+import UserCircleIcon from '@icon/system/regular/user-circle.svg';
 import {
   type Accessor,
   type Component,
@@ -26,6 +29,7 @@ export type UserCardTarget = {
 };
 
 type UserCardActionId =
+  | 'open-profile'
   | 'copy-email'
   | 'copy-name'
   | 'open-contact'
@@ -71,6 +75,7 @@ export function useUserCardActions(
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const { popoverSplit } = useSplitLayout();
   const openDm = useOpenDirectMessage();
+  const agentProfile = useAgentProfile();
 
   const userId = () => target().id;
   const canTreatAsUser = () =>
@@ -130,6 +135,23 @@ export function useUserCardActions(
   return createMemo(() => {
     const { displayName, email } = target();
     const actions: UserCardAction[] = [];
+
+    // An agent teammate's profile (its dashboard) leads the card.
+    const profileId = target().isDeleted
+      ? undefined
+      : agentProfile.profileOf(userId());
+    if (profileId) {
+      actions.push({
+        id: 'open-profile',
+        label: t('agentDashboards.openProfile'),
+        icon: UserCircleIcon,
+        onSelect: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          agentProfile.open(profileId, 'user-card', event);
+        },
+      });
+    }
 
     if (email) {
       actions.push(

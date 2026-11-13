@@ -6,10 +6,20 @@ import type { SplitContent } from '@components/app/split-layout/layoutManager';
 export const AGENT_DASHBOARD_ROUTE_ID = 'agent-dashboard';
 export const DASHBOARD_ROUTE_ID = 'dashboard';
 
-/** An agent account's page, at `agent-accounts/:userId`. */
+/** An agent account's profile page, at `agent-accounts/:userId`. */
 export function agentDashboardLocation(userId: string): SplitLocation {
   return {
     route: paneRoute({ id: AGENT_DASHBOARD_ROUTE_ID, params: { userId } }),
+  };
+}
+
+/** An agent's profile as split content: what a click on the agent opens. */
+export function agentDashboardContent(userId: string): SplitContent {
+  return {
+    type: 'component',
+    id: AGENT_DASHBOARD_ROUTE_ID,
+    params: { userId },
+    entryMetadata: agentDashboardLocation(userId),
   };
 }
 
@@ -36,12 +46,7 @@ export function dashboardContentFromLocation(
     const { userId } = params;
     if (typeof userId !== 'string' || userId === '') return undefined;
 
-    return {
-      type: 'component',
-      id: AGENT_DASHBOARD_ROUTE_ID,
-      params: { userId },
-      entryMetadata: agentDashboardLocation(userId),
-    };
+    return agentDashboardContent(userId);
   }
 
   if (root.id === DASHBOARD_ROUTE_ID) {

@@ -1161,9 +1161,10 @@ export const enablePasswords = defineFlag({
 });
 
 /**
- * Agent dashboards: the agent account page (`/agent-accounts/:userId`), the
- * dashboard page (`/dashboard/:dashboardId`), and the DM header's Dashboard
- * action. The backend evaluates the same key and 404s its dashboard routes
+ * Agent dashboards: the agent profile page (`/agent-accounts/:userId`), the
+ * dashboard page (`/dashboard/:dashboardId`), clicks on an agent teammate
+ * (picture, name, mention, member row, card) opening that profile, and the DM
+ * header's Dashboard action. The backend evaluates the same key and 404s its dashboard routes
  * without it. On in dev; deployed environments follow PostHog. Override
  * locally with VITE_ENABLE_AGENT_DASHBOARDS=true.
  */

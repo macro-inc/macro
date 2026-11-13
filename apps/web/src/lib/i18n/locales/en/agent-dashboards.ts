@@ -2,6 +2,8 @@ export default {
   sections: 'Agent sections',
   dashboardTab: 'Dashboard',
   openDashboard: 'Open dashboard',
+  openProfile: 'Open profile',
+  openProfileOf: 'Open {{name}}’s profile',
   loading: 'Loading dashboard',
   emptyTitle: 'No dashboard yet',
   emptyBody: 'This agent hasn’t set up a dashboard. Ask it to make one.',

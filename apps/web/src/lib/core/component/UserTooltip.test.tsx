@@ -28,6 +28,13 @@ const mocks = vi.hoisted(() => ({
     };
   }>,
   bots: [] as Array<{ id: string }>,
+  agentDashboards: true,
+}));
+
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: (flag: { key?: string }) =>
+    flag.key === 'enable-agent-dashboards' && mocks.agentDashboards,
 }));
 
 vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
@@ -58,6 +65,8 @@ vi.mock('@core/context/user', () => ({
 
 vi.mock('@core/user', () => ({
   useIsConnectedSecondaryInbox: () => () => false,
+  isAgentAccount: (id: string | undefined) => id === 'macro|agent@example.com',
+  tryMacroId: (id: string) => id,
 }));
 
 vi.mock('@queries/channel/get-or-create-dm', () => ({
@@ -121,6 +130,7 @@ beforeEach(() => {
   mocks.openSettings.mockReset();
   mocks.agents = [];
   mocks.bots = [];
+  mocks.agentDashboards = true;
 });
 
 describe('UserTooltip clipboard action', () => {
@@ -199,6 +209,49 @@ describe('UserTooltip direct message action', () => {
     // The rest of the card is untouched: an agent still hovers like a person.
     expect(screen.getByText('Cursor')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
+  });
+});
+
+describe('UserTooltip open profile action', () => {
+  const agent = {
+    displayName: 'Ops Agent',
+    email: 'agent@example.com',
+    id: 'macro|agent@example.com',
+  };
+
+  it("leads an agent teammate's card and opens its profile", async () => {
+    const user = userEvent.setup({ skipHover: true });
+    render(() => <UserTooltip {...agent} onClose={mocks.onClose} />);
+
+    const actions = screen.getAllByRole('button');
+    expect(actions[0]?.textContent).toBe('Open profile');
+
+    await user.click(actions[0] as HTMLElement);
+
+    expect(mocks.openWithSplit).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        id: 'agent-dashboard',
+        params: { userId: agent.id },
+      }),
+      { activate: true, preferNewSplit: true }
+    );
+    expect(mocks.onClose).toHaveBeenCalled();
+  });
+
+  it('offers no profile for a person or with agent dashboards off', () => {
+    const { unmount } = render(() => (
+      <UserTooltip
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Open profile' })).toBeNull();
+    unmount();
+
+    mocks.agentDashboards = false;
+    render(() => <UserTooltip {...agent} />);
+    expect(screen.queryByRole('button', { name: 'Open profile' })).toBeNull();
   });
 });
 

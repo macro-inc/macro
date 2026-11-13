@@ -1,3 +1,4 @@
+import { useAgentProfile } from '@app/features/agent-dashboards/agent-profile';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
@@ -159,9 +160,15 @@ export function UserIcon(props: UserIconProps) {
 
   const openDirectMessage = useOpenDirectMessage();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
+  const agentProfile = useAgentProfile();
+  // A click on an agent teammate opens its profile, not a DM: the card
+  // trigger does that on click, so the DM on press stands aside.
+  const opensProfile = () =>
+    !props.suppressClick && !!agentProfile.profileOf(props.id);
 
   const openDm = (event: MouseEvent) => {
     if (!props.id || isConnectedSecondaryInbox(props.id)) return;
+    if (opensProfile()) return;
     fireAndForget(
       openDirectMessage(props.id, {
         activate: true,
@@ -178,6 +185,16 @@ export function UserIcon(props: UserIconProps) {
   // its actions rather than jumping straight into a conversation.
   const avatarMouseDown = () =>
     props.suppressClick || isTouchDevice() ? undefined : openDm;
+  const profileSurface = () => (props.suppressClick ? undefined : 'avatar');
+
+  // Without a card, the avatar itself opens an agent's profile on click.
+  const openProfileWithoutCard = (event: MouseEvent) => {
+    const id = props.id;
+    if (!id || !opensProfile()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    agentProfile.open(id, 'avatar', event);
+  };
 
   const triggerClass = () =>
     size() === 'fill' ? 'size-full' : 'inline-flex shrink-0';
@@ -224,6 +241,7 @@ export function UserIcon(props: UserIconProps) {
           size={size()}
           class={props.class}
           onMouseDown={props.suppressClick ? undefined : openDm}
+          onClick={props.suppressClick ? undefined : openProfileWithoutCard}
         >
           <UserIconContent
             name={props.name}
@@ -242,6 +260,7 @@ export function UserIcon(props: UserIconProps) {
             triggerAs="div"
             triggerClass={triggerClass()}
             triggerTabIndex={isTouchDevice() ? 0 : -1}
+            profileSurface={profileSurface()}
             user={{
               displayName: displayName() || email() || '',
               email: email(),

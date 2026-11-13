@@ -73,6 +73,7 @@ export function UserMention(props: UserMentionDecoratorProps) {
     <UserCardTrigger
       placement="top"
       triggerAs="span"
+      profileSurface="mention"
       user={{
         displayName: tooltipDisplayName() || email() || propEmail(),
         email: email() || propEmail(),

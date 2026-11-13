@@ -45,3 +45,17 @@ export function directMessageAgent(options: {
 export function dashboardTitle(dashboard: Dashboard): string | undefined {
   return dashboard.title ?? dashboard.view.title ?? undefined;
 }
+
+/**
+ * Whose profile a click on an account opens: the account itself when it is an
+ * agent and agent dashboards are on. Undefined means the click keeps doing
+ * what it did before (a person's DM, their card).
+ */
+export function agentProfileTarget(options: {
+  userId: string | undefined;
+  flagEnabled: boolean;
+  isAgentAccount: (id: string) => boolean;
+}): string | undefined {
+  if (!options.flagEnabled || !options.userId) return undefined;
+  return options.isAgentAccount(options.userId) ? options.userId : undefined;
+}

@@ -11,6 +11,24 @@ import { UserCardTrigger } from './UserCardTrigger';
 const mocks = vi.hoisted(() => ({
   isTouchDevice: false,
   openUserCard: vi.fn(),
+  openWithSplit: vi.fn(),
+  agentDashboards: true,
+  agents: new Set(['macro|agent@example.com']),
+}));
+
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: (flag: { key?: string }) =>
+    flag.key === 'enable-agent-dashboards' && mocks.agentDashboards,
+}));
+
+vi.mock('@core/user', () => ({
+  isAgentAccount: (id: string | undefined) => !!id && mocks.agents.has(id),
+  tryMacroId: (id: string) => id,
+}));
+
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => ({ openWithSplit: mocks.openWithSplit }),
 }));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -28,8 +46,13 @@ vi.mock('./UserTooltip', () => ({
 }));
 
 vi.mock('./HoverCard', () => ({
-  HoverCard: (props: { trigger: JSX.Element }) => (
-    <span data-testid="hover-card">{props.trigger}</span>
+  HoverCard: (props: {
+    trigger: JSX.Element;
+    triggerOnClick?: (event: MouseEvent) => void;
+  }) => (
+    <span data-testid="hover-card" onClick={(e) => props.triggerOnClick?.(e)}>
+      {props.trigger}
+    </span>
   ),
 }));
 
@@ -39,9 +62,23 @@ const jane = {
   id: 'macro|jane.doe@example.com',
 };
 
+const agent = {
+  displayName: 'Ops Agent',
+  email: 'agent@example.com',
+  id: 'macro|agent@example.com',
+};
+
+const agentProfile = expect.objectContaining({
+  type: 'component',
+  id: 'agent-dashboard',
+  params: { userId: agent.id },
+});
+
 beforeEach(() => {
   mocks.isTouchDevice = false;
+  mocks.agentDashboards = true;
   mocks.openUserCard.mockReset();
+  mocks.openWithSplit.mockReset();
 });
 
 describe('UserCardTrigger', () => {
@@ -111,5 +148,90 @@ describe('UserCardTrigger', () => {
     ));
 
     expect(screen.getByRole('button').tabIndex).toBe(-1);
+  });
+});
+
+describe('UserCardTrigger on an agent teammate', () => {
+  it("opens the agent's profile in a new pane on click", async () => {
+    const user = userEvent.setup({ skipHover: true });
+    render(() => (
+      <UserCardTrigger
+        user={agent}
+        profileSurface="mention"
+        trigger={<span>@Ops</span>}
+      />
+    ));
+
+    await user.click(screen.getByText('@Ops'));
+
+    expect(mocks.openWithSplit).toHaveBeenCalledExactlyOnceWith(agentProfile, {
+      activate: true,
+      preferNewSplit: true,
+    });
+    expect(mocks.openUserCard).not.toHaveBeenCalled();
+  });
+
+  it('opens the profile instead of the sheet on a touch tap', async () => {
+    mocks.isTouchDevice = true;
+    const user = userEvent.setup({ skipHover: true });
+    render(() => (
+      <UserCardTrigger
+        user={agent}
+        profileSurface="avatar"
+        trigger={<span>@Ops</span>}
+      />
+    ));
+
+    await user.click(screen.getByText('@Ops'));
+
+    expect(mocks.openWithSplit).toHaveBeenCalledExactlyOnceWith(
+      agentProfile,
+      expect.anything()
+    );
+    expect(mocks.openUserCard).not.toHaveBeenCalled();
+  });
+
+  it('keeps the card for a person', async () => {
+    mocks.isTouchDevice = true;
+    const user = userEvent.setup({ skipHover: true });
+    render(() => (
+      <UserCardTrigger
+        user={jane}
+        profileSurface="avatar"
+        trigger={<span>@Jane</span>}
+      />
+    ));
+
+    await user.click(screen.getByText('@Jane'));
+
+    expect(mocks.openUserCard).toHaveBeenCalledWith(jane);
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the card with agent dashboards off', async () => {
+    mocks.isTouchDevice = true;
+    mocks.agentDashboards = false;
+    const user = userEvent.setup({ skipHover: true });
+    render(() => (
+      <UserCardTrigger
+        user={agent}
+        profileSurface="avatar"
+        trigger={<span>@Ops</span>}
+      />
+    ));
+
+    await user.click(screen.getByText('@Ops'));
+
+    expect(mocks.openUserCard).toHaveBeenCalledWith(agent);
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the card where the trigger names no surface', async () => {
+    const user = userEvent.setup({ skipHover: true });
+    render(() => <UserCardTrigger user={agent} trigger={<span>@Ops</span>} />);
+
+    await user.click(screen.getByText('@Ops'));
+
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
   });
 });
