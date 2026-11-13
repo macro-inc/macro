@@ -3,7 +3,9 @@
 //
 // New monitor, not adopted. It reads the OTel pool metrics
 // cloud-storage-service records for each of its sqlx pools, so these are its
-// contract; renaming one silently turns the monitor into missing data:
+// contract; renaming one silently turns the monitor into missing data. The
+// metrics ship separately from this file: the monitor and the pool graphs
+// have no data until that cloud-storage-service release is deployed.
 //
 // - `db.client.connection.wait_time`: seconds a probe waited for a connection
 //   (histogram). Each task acquires and releases one connection per pool every

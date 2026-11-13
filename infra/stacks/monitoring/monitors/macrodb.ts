@@ -291,6 +291,8 @@ prodMonitor('macrodb-read-latency', {
 // 2026-11-13 the balance fell below 70 twice (to 56 on 2026-10-14 and to zero
 // on 2026-10-27) and below 40 only on 2026-10-27, when the warning would have
 // fired about 4 hours and the critical about 2.5 hours before it reached zero.
+// All of that is the replica: the primary stopped reporting a balance in late
+// October, so it is covered only if it reports one again.
 // IOPS above the baseline and disk queue depth are graphed, not alerted on:
 // both cross any useful threshold most nights without draining the balance.
 prodMonitor('macrodb-io-credits', {

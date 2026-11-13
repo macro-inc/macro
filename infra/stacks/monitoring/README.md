@@ -352,7 +352,8 @@ onward. There is no baseline yet; the 10% threshold is a starting point.
 ## Database saturation coverage
 
 `monitors/macrodb.ts` adds a monitor on instance I/O credits
-(`EBSIOBalance%`) for both prod instances, with graphs of read plus write IOPS
+(`EBSIOBalance%`) for the prod instances that report a balance (the read
+replica today; the primary has reported none since late October), with graphs of read plus write IOPS
 against the instance baseline, disk queue depth and throughput credits beside
 it, and a Grafana copy. `monitors/storage-pool.ts` adds **one monitor and one
 dashboard** for cloud-storage-service pool waits, per pool. Neither pages.

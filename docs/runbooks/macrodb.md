@@ -85,8 +85,10 @@ limits are easy to confuse:
 On 2026-10-27 the replica's balance fell from 99% to zero in five and a half
 hours. Once at zero, IOPS sat flat at 6,000, disk queue depth and read latency
 rose tenfold, active sessions reached 65 per vCPU and the replica fell 30
-minutes behind for about two hours. The warning (70%) leaves about four hours
-at that rate and the critical (40%) about two and a half.
+minutes behind for about two hours. That day the warning (70%) would have come
+four hours before the balance reached zero and the critical (40%) two and a
+half; a steady drain at the same average rate leaves a little over two hours
+at 40%.
 
 - On the MacroDB alerts dashboard, check read plus write IOPS against the
   6,000 line. A nightly burst at about 06:00 UTC crosses it for an hour and
