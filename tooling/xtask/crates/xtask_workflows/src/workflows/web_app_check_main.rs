@@ -322,6 +322,7 @@ fn functional() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(build_wasm_for_functional_tests())
+        .add_step(run_decorator_browser_typecheck())
         .add_step(run_session_tests())
         .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
@@ -616,6 +617,17 @@ fn check_platform_rules() -> Step<Run> {
     Step::new("Check Browser Floor and Native Permissions").run(
         "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
     )
+}
+
+/// Check artifact-dependent fixtures only after this job builds their canonical WASM.
+fn run_decorator_browser_typecheck() -> Step<Run> {
+    Step::new("Check decorator browser fixture types")
+        .run(indoc::indoc! {r#"
+            git diff --exit-code -- ../../packages/collaboration/src/session/wasm.generated.d.ts && \
+            bun scripts/check-decorator-browser-wasm.ts && \
+            bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.decorator-browser-tests.json
+        "#})
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 fn run_session_tests() -> Step<Run> {

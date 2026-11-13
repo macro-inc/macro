@@ -777,6 +777,12 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
+    - name: Check decorator browser fixture types
+      run: |
+        git diff --exit-code -- ../../packages/collaboration/src/session/wasm.generated.d.ts && \
+        bun scripts/check-decorator-browser-wasm.ts && \
+        bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.decorator-browser-tests.json
+      working-directory: apps/web
     - name: Check document session executor and storage
       run: git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && bunx playwright test --config src/session/browser-test/playwright.config.ts
       working-directory: packages/collaboration

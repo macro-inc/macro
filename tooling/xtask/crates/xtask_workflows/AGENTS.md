@@ -14,6 +14,8 @@ TypeScript job logic in the owning package.
 
 ## Boundaries
 
+- Typecheck decorator browser fixtures in the functional job after its canonical WASM build, outside the artifact-independent main web typecheck.
+
 - Edit Rust sources; regenerate YAML with `cargo x workflows`.
 - Keep reusable-workflow permissions within the caller's permissions.
 - Scope future-path exceptions to a closed list, filter group and committed spec.
