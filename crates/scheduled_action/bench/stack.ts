@@ -24,6 +24,11 @@ export type Stack = {
 
 const REPO = resolve(import.meta.dir, '../../..');
 
+/** `run_local`'s instance with no `--instance`, which keeps the base compose file's ports. */
+const DEFAULT_INSTANCE = 'macro';
+/** Its Postgres port (`Port::Postgres` in `xtask_ports`). */
+const DEFAULT_POSTGRES_PORT = 5432;
+
 /**
  * The instance's portmap, from this checkout or from the worktree that
  * started it: a stack belongs to the checkout `run_local` ran in, and other
@@ -41,8 +46,9 @@ function portmapPath(instance: string): string {
   throw new Error(`no portmap for instance ${instance}; start it with \`just run_local --instance ${instance}\``);
 }
 
-/** The instance's port block, from `run_local`'s registry. */
+/** The instance's port block, from `run_local`'s registry; the default instance's ports are fixed. */
 function portBase(instance: string): number {
+  if (instance === DEFAULT_INSTANCE) return DEFAULT_POSTGRES_PORT;
   const registry = JSON.parse(
     readFileSync(join(homedir(), '.local/state/macro-local/instances.json'), 'utf8'),
   ) as Record<string, { port_base: number }>;
@@ -78,9 +84,17 @@ export function stack(instance: string, tempo: string): Stack {
  */
 export function searchIndexer(at: Stack): { url: string; key: string } {
   const generated = join(at.owner, 'infra/local/generated', at.instance);
-  const compose = readFileSync(join(generated, 'docker-compose.override.yml'), 'utf8');
-  const service = compose.split(/\n {2}search_processing_service:\n/)[1]?.split(/\n {2}\S/)[0];
-  const port = service?.match(/- (\d+):8080/)?.[1];
+  const hostPort = (compose: string) =>
+    compose
+      .split(/\n {2}search_processing_service:\n/)[1]
+      ?.split(/\n {2}\S/)[0]
+      .match(/- "?(\d+):8080"?/)?.[1];
+  // A named instance publishes its own port; the default one keeps the base compose file's.
+  const port =
+    hostPort(readFileSync(join(generated, 'docker-compose.override.yml'), 'utf8')) ??
+    (at.instance === DEFAULT_INSTANCE
+      ? hostPort(readFileSync(join(at.owner, 'docker/docker-compose.yml'), 'utf8'))
+      : undefined);
   if (!port) throw new Error(`${at.instance} runs no search_processing_service, so nothing indexes it for search`);
   const env = readFileSync(join(generated, 'local.generated.env'), 'utf8');
   const key = env.match(/^INTERNAL_API_KEY=(.*)$/m)?.[1];
