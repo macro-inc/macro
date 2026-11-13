@@ -58,6 +58,10 @@ const ROW_READS_PER_TURN_READ: u32 = 8;
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
+/// The model drafts run on without thinking. In the drafting eval
+/// (`bench/`) its drafts came back much sooner with the same checks
+/// passing; other models were not measured and keep their default effort.
+const NO_THINKING_MODEL: &str = "anthropic/claude-sonnet-5-5";
 
 const ROUTINE_FAILED: &str = "Couldn’t draft that routine. Please try again.";
 const STEP_FAILED: &str = "Couldn’t write that step. Please try again.";
@@ -474,9 +478,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 action: action.clone(),
                 prompt: brief,
                 context: None,
-                // No thinking, where the model can: drafts came back much
-                // sooner with the same checks passing in the drafting eval.
-                reasoning_effort: Some("none".to_owned()),
+                reasoning_effort: (model == NO_THINKING_MODEL).then(|| "none".to_owned()),
             })
             .await?;
         let span = tracing::Span::current();

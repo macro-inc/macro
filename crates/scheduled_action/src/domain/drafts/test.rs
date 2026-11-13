@@ -606,15 +606,28 @@ async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     assert!(rows.drafts.lock().unwrap().is_empty());
 }
 
-/// A draft asks its one prompt to run without thinking, where its model can.
+/// A draft on Sonnet 5.5 asks its one prompt to run without thinking; on
+/// any other model it keeps the default.
 #[tokio::test(start_paused = true)]
-async fn a_draft_asks_for_no_thinking() {
-    let rows = Arc::new(Rows::default());
-    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+async fn a_draft_asks_for_no_thinking_on_sonnet_only() {
+    for (model, effort) in [
+        ("anthropic/claude-sonnet-5-5", Some("none".to_owned())),
+        ("openai/gpt-5.5", None),
+    ] {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+        let context = DraftContext {
+            agent_model: model.into(),
+            ..context()
+        };
 
-    draft(&drafts(&rows, &sessions), routine("label mail")).await;
+        drafts(&rows, &sessions)
+            .draft(owner(), routine("label mail"), context)
+            .await
+            .unwrap();
 
-    assert_eq!(*sessions.efforts.lock().unwrap(), [Some("none".to_owned())]);
+        assert_eq!(*sessions.efforts.lock().unwrap(), [effort], "{model}");
+    }
 }
 
 /// The first check that passes is the draft: the session is stopped there,
