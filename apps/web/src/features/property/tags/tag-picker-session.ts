@@ -342,7 +342,7 @@ export function createTagPickerSession(props: {
     if (
       event.target instanceof Element &&
       event.target.closest('button') &&
-      event.key !== 'Escape'
+      (event.key === 'Enter' || event.key === ' ')
     )
       return;
 

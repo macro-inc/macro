@@ -230,6 +230,16 @@ it('goes back through creation steps without losing the name or chosen color', a
   expect(mocks.add).not.toHaveBeenCalled();
   fireEvent.click(back);
   expect(screen.getByText('Green', { exact: true })).toBeTruthy();
+  const flow = back.closest('[tabindex="-1"]');
+  expect(document.activeElement).toBe(flow);
+  back.focus();
+  fireEvent.keyDown(back, { key: 'ArrowDown' });
+  expect(document.activeElement).toBe(flow);
+  if (!flow) throw new Error('Missing tag creation flow');
+  fireEvent.keyDown(flow, { key: 'ArrowUp' });
+  fireEvent.keyDown(flow, { key: 'Enter' });
+  expect(screen.getByText('Personal', { exact: true })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
   const name = screen.getByPlaceholderText('Change or add tags');

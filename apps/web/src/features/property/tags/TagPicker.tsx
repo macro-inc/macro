@@ -769,8 +769,20 @@ function CreateTagFlow(props: {
   onScopeMouseEnter: (index: number) => void;
   onScopeSelect: (scope: TagScope) => void;
 }) {
+  let container: HTMLDivElement | undefined;
+  onMount(() => container?.focus());
   return (
-    <div class="p-1.5">
+    <div
+      ref={container}
+      class="p-1.5 outline-none"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        const isArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
+        const isShortcut =
+          event.ctrlKey && (event.key === 'j' || event.key === 'k');
+        if (isArrow || isShortcut) event.currentTarget.focus();
+      }}
+    >
       <div class="flex items-center gap-2 px-2 pb-1 pt-1">
         <Button
           variant="ghost"
@@ -778,7 +790,10 @@ function CreateTagFlow(props: {
           aria-label={t('common.back')}
           tooltip={t('common.back')}
           disabled={props.pending}
-          onClick={props.onBack}
+          onClick={() => {
+            props.onBack();
+            if (container?.isConnected) container.focus();
+          }}
         >
           <BackIcon class="size-4" />
         </Button>
