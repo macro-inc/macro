@@ -9,13 +9,13 @@ use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use macro_authorization::{INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER};
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::compat::IntoRootcause as _;
 use scheduled_action::domain::drafts::direct::{
     DraftCall, DraftCallError, DraftModelChoice, DraftTurn, Effort, ItemKind, NameAnswer,
-    NameAsked, NameLookupError, NameMatch,
+    NameAnswers, NameAsked, NameLookupError, NameMatch,
 };
 use scheduled_action::domain::ports::{DraftModel, NameLookups};
 use serde::{Deserialize, Serialize};
-use rootcause::compat::IntoRootcause as _;
 use serde_json::{Value, json};
 
 #[cfg(test)]
@@ -114,9 +114,7 @@ pub(super) struct DocumentStorageNames {
 impl DocumentStorageNames {
     pub(super) fn new(base: &str, internal_api_key: String) -> anyhow::Result<Self> {
         Ok(Self {
-            client: reqwest::Client::builder()
-                .timeout(LOOKUP_TIMEOUT)
-                .build()?,
+            client: reqwest::Client::builder().timeout(LOOKUP_TIMEOUT).build()?,
             url: format!("{}/{NAMES_PATH}", base.trim_end_matches('/')),
             internal_api_key,
         })
@@ -130,7 +128,7 @@ impl NameLookups for DocumentStorageNames {
         &self,
         owner: &MacroUserIdStr<'static>,
         names: &[NameAsked],
-    ) -> Result<Vec<NameAnswer>, NameLookupError> {
+    ) -> Result<NameAnswers, NameLookupError> {
         let body = NamesRequest {
             names: names
                 .iter()
@@ -163,7 +161,10 @@ impl NameLookups for DocumentStorageNames {
                 "some kinds of item couldn't be looked up by name"
             );
         }
-        Ok(answer.results.into_iter().map(NameAnswer::from).collect())
+        Ok(NameAnswers {
+            answers: answer.results.into_iter().map(NameAnswer::from).collect(),
+            unavailable: answer.unavailable,
+        })
     }
 }
 

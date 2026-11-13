@@ -35,10 +35,13 @@ impl Call {
 }
 
 /// Answers the find call with `find` (failing without it) and each writing
-/// or fixing call with the next of `answers`, recording every call.
+/// or fixing call with the next of `answers`, recording every call. Out of
+/// answers, it fails the call, or with `interrupts`, cancels that token and
+/// never answers, as a model still working when the harness shuts down.
 #[derive(Default)]
 struct Model {
     refuses: bool,
+    interrupts: Option<CancellationToken>,
     find: Option<String>,
     answers: Mutex<VecDeque<String>>,
     calls: Mutex<Vec<Call>>,
@@ -90,6 +93,12 @@ impl DraftModel for Model {
             CallPurpose::Find => self.find.clone(),
             CallPurpose::Write | CallPurpose::Fix => self.answers.lock().unwrap().pop_front(),
         };
+        if answer.is_none()
+            && let Some(interrupts) = &self.interrupts
+        {
+            interrupts.cancel();
+            std::future::pending::<()>().await;
+        }
         answer.ok_or_else(|| DraftCallError(rootcause::report!("no answer")))
     }
 }
@@ -118,12 +127,12 @@ impl NameLookups for Names {
         &self,
         _: &MacroUserIdStr<'static>,
         names: &[NameAsked],
-    ) -> Result<Vec<NameAnswer>, NameLookupError> {
+    ) -> Result<NameAnswers, NameLookupError> {
         self.asked.lock().unwrap().extend(names.iter().cloned());
         if self.fails {
             return Err(NameLookupError(rootcause::report!("search is down")));
         }
-        Ok(names
+        let answers = names
             .iter()
             .map(|asked| NameAnswer {
                 name: asked.name.clone(),
@@ -141,7 +150,11 @@ impl NameLookups for Names {
                     })
                     .collect(),
             })
-            .collect())
+            .collect();
+        Ok(NameAnswers {
+            answers,
+            unavailable: Vec::new(),
+        })
     }
 }
 
@@ -176,6 +189,7 @@ impl Milestones {
             .unwrap()
             .iter()
             .map(|milestone| match milestone {
+                DraftMilestone::Admitted => "admitted",
                 DraftMilestone::Found(_) => "found",
                 DraftMilestone::Writing => "writing",
                 DraftMilestone::Checked(check) if check.ok => "passed",
@@ -220,6 +234,18 @@ async fn draft_as(
     id: Uuid,
     milestones: &Milestones,
 ) -> anyhow::Result<Option<Draft>> {
+    draft_until(drafts, request, id, milestones, CancellationToken::new()).await
+}
+
+/// Draft `request` directly, as a background draft with id `id` would,
+/// until `interrupt`.
+async fn draft_until<Code: RoutineCode>(
+    drafts: &RoutineDrafts<Code, Sessions>,
+    request: DraftRequest,
+    id: Uuid,
+    milestones: &Milestones,
+    interrupt: CancellationToken,
+) -> anyhow::Result<Option<Draft>> {
     let (program, context) = drafts.read_request(&request, context())?;
     let direct = Arc::clone(drafts.direct.as_ref().expect("drafts directly"));
     drafts
@@ -234,7 +260,7 @@ async fn draft_as(
                 progress: milestones,
                 cancellable: true,
             },
-            CancellationToken::new(),
+            interrupt,
         )
         .await
 }
@@ -331,7 +357,10 @@ async fn a_draft_finds_the_items_its_words_name_then_writes_once_and_checks() {
     assert!(asked.contains(BUG_REPORTS));
     assert!(asked.contains(&format!("the channel named \"bug-reports\", id {channel}")));
     assert!(asked.contains("\"Jordan\" (person): 2 have that name"));
-    assert_eq!(milestones.stages(), ["found", "writing", "passed"]);
+    assert_eq!(
+        milestones.stages(),
+        ["admitted", "found", "writing", "passed"]
+    );
     assert_eq!(
         milestones.found(),
         FoundNames {
@@ -385,7 +414,7 @@ async fn a_failing_check_goes_back_to_the_model_for_only_what_changes() {
     assert!(fix.asked().contains("declarations for 1 problems"));
     assert_eq!(
         milestones.stages(),
-        ["found", "writing", "failed", "fixing", "passed"]
+        ["admitted", "found", "writing", "failed", "fixing", "passed"]
     );
 }
 
@@ -437,7 +466,7 @@ async fn an_answer_that_isnt_a_routine_is_sent_back_unchecked() {
     // Only the routine that could be checked was.
     assert_eq!(
         milestones.stages(),
-        ["found", "writing", "fixing", "fixing", "passed"]
+        ["admitted", "found", "writing", "fixing", "fixing", "passed"]
     );
 }
 
@@ -620,34 +649,37 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
             asked("Ops", Vec::new()),
             asked("Nobody", vec![ItemKind::Person]),
         ],
-        vec![
-            NameAnswer {
-                name: "Finance".into(),
-                matches: vec![
-                    item(ItemKind::Project, "Finance", "folder", true),
-                    item(ItemKind::Label, "Finance", "label", true),
-                    item(ItemKind::Label, "Finance/Receipts", "nested", false),
-                ],
-            },
-            NameAnswer {
-                name: "Design".into(),
-                matches: vec![
-                    item(ItemKind::Channel, "design", "one", true),
-                    item(ItemKind::Channel, "Design", "two", true),
-                ],
-            },
-            NameAnswer {
-                name: "Ops".into(),
-                matches: vec![
-                    item(ItemKind::Channel, "ops", "channel", true),
-                    item(ItemKind::Channel, "ops", "channel", true),
-                ],
-            },
-            NameAnswer {
-                name: "Nobody".into(),
-                matches: vec![item(ItemKind::Person, "Nobody Else", "person", false)],
-            },
-        ],
+        NameAnswers {
+            answers: vec![
+                NameAnswer {
+                    name: "Finance".into(),
+                    matches: vec![
+                        item(ItemKind::Project, "Finance", "folder", true),
+                        item(ItemKind::Label, "Finance", "label", true),
+                        item(ItemKind::Label, "Finance/Receipts", "nested", false),
+                    ],
+                },
+                NameAnswer {
+                    name: "Design".into(),
+                    matches: vec![
+                        item(ItemKind::Channel, "design", "one", true),
+                        item(ItemKind::Channel, "Design", "two", true),
+                    ],
+                },
+                NameAnswer {
+                    name: "Ops".into(),
+                    matches: vec![
+                        item(ItemKind::Channel, "ops", "channel", true),
+                        item(ItemKind::Channel, "ops", "channel", true),
+                    ],
+                },
+                NameAnswer {
+                    name: "Nobody".into(),
+                    matches: vec![item(ItemKind::Person, "Nobody Else", "person", false)],
+                },
+            ],
+            unavailable: Vec::new(),
+        },
     );
 
     let found: Vec<(&str, ItemKind)> = lookup
@@ -720,11 +752,29 @@ fn setup_ids_replace_their_placeholders_and_count_as_created() {
     assert!(!ids.contains_key("ignored"));
 }
 
-/// Checks as `Checker` does, and runs setup, returning `returns`.
+/// Checks as `Checker` does, and runs setup: each run fails as the next of
+/// `fails` says (after a write or not), and once they are spent returns
+/// `returns`.
 struct SetsUp {
     checker: Checker,
     returns: Value,
+    fails: Mutex<VecDeque<bool>>,
     ran: Mutex<Vec<(String, Uuid)>>,
+}
+
+impl SetsUp {
+    fn returning(returns: Value) -> Self {
+        Self {
+            checker: Checker::default(),
+            returns,
+            fails: Mutex::new(VecDeque::new()),
+            ran: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn ran(&self) -> Vec<(String, Uuid)> {
+        self.ran.lock().unwrap().clone()
+    }
 }
 
 impl RoutineCode for SetsUp {
@@ -749,11 +799,31 @@ impl RoutineCode for SetsUp {
             .lock()
             .unwrap()
             .push((run.step.source.clone(), run.routine_id));
-        CodeOutcome {
-            result: Ok(self.returns.clone()),
-            calls: Vec::new(),
-            calls_truncated: false,
-            waited_ms: None,
+        let fails = self.fails.lock().unwrap().pop_front();
+        match fails {
+            None => CodeOutcome {
+                result: Ok(self.returns.clone()),
+                calls: Vec::new(),
+                calls_truncated: false,
+                waited_ms: None,
+            },
+            Some(wrote) => CodeOutcome {
+                result: Err("the API refused it".into()),
+                calls: vec![routine_program::CallRecord {
+                    operation: "databases.create".into(),
+                    label: "Create".into(),
+                    write: true,
+                    status: if wrote {
+                        routine_program::CallStatus::Completed
+                    } else {
+                        routine_program::CallStatus::Failed
+                    },
+                    started_ms: 0,
+                    duration_ms: Some(1),
+                }],
+                calls_truncated: false,
+                waited_ms: None,
+            },
         }
     }
 
@@ -780,71 +850,73 @@ impl RoutineCode for SetsUp {
     }
 }
 
-#[tokio::test]
-async fn setup_runs_once_and_what_it_made_takes_its_placeholders() {
-    let database = Uuid::now_v7().to_string();
-    let code = Arc::new(SetsUp {
-        checker: Checker::default(),
-        returns: json!({ "orders": { "type": "database", "id": database } }),
-        ran: Mutex::new(Vec::new()),
-    });
-    let step = |source: &str| {
-        json!({
-            "type": "code",
-            "title": "Add a row",
-            "summary": "",
-            "source": source,
-            "knobs": [{ "name": "databaseId", "label": "Database", "type": "text", "value": "{{setup.orders}}" }],
-        })
-    };
-    let model = Arc::new(Model::new(
-        named(&[]),
-        vec![
-            json!({
-                "name": "Orders",
-                "trigger": posted_in(&[]),
-                "steps": [step("bad")],
-                "setup": "export async function main() { return {}; }",
-            })
-            .to_string(),
-            json!({ "steps": { "0": step("good") } }).to_string(),
-        ],
-    ));
+fn setting_up(code: &Arc<SetsUp>, model: &Arc<Model>) -> RoutineDrafts<SetsUp, Sessions> {
     let rows = Arc::new(Rows::default());
     let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
-    let drafts = RoutineDrafts::new(
-        Arc::clone(&code),
+    RoutineDrafts::new(
+        Arc::clone(code),
         sessions,
         Arc::clone(&rows) as Arc<dyn crate::domain::ports::DraftHandBacks>,
         agent(),
     )
     .with_direct(DirectDrafting {
-        model: Arc::clone(&model) as Arc<dyn DraftModel>,
+        model: Arc::clone(model) as Arc<dyn DraftModel>,
         names: Arc::new(Names::default()),
         checks: Arc::new(Checks(Arc::new(Checker::default()))),
         tuning: DirectTuning::default(),
-    });
-    let id = Uuid::now_v7();
-    let direct = Arc::clone(drafts.direct.as_ref().unwrap());
-    let request = routine("add a row to a new Orders database for every order email");
+    })
+}
 
-    let draft = drafts
-        .direct_draft(
-            &direct,
-            &owner(),
-            &request,
-            &[],
-            &context(),
-            DirectRun {
-                id,
-                progress: &Milestones::default(),
-                cancellable: false,
-            },
-            CancellationToken::new(),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+/// A step adding a row to the database setup made as `orders`, or to the
+/// database `id`.
+fn add_row(source: &str, id: &str) -> Value {
+    json!({
+        "type": "code",
+        "title": "Add a row",
+        "summary": "",
+        "source": source,
+        "knobs": [{ "name": "databaseId", "label": "Database", "type": "text", "value": id }],
+    })
+}
+
+const ORDERS: &str = "{{setup.orders}}";
+const ORDERS_REQUEST: &str = "add a row to a new Orders database for every order email";
+
+/// The writer's first answer: a routine whose setup is `setup`.
+fn with_setup(trigger: Value, step: Value, setup: &str) -> String {
+    json!({ "name": "Orders", "trigger": trigger, "steps": [step], "setup": setup }).to_string()
+}
+
+#[tokio::test]
+async fn setup_runs_once_and_what_it_made_takes_its_placeholders() {
+    let database = Uuid::now_v7().to_string();
+    let code = Arc::new(SetsUp::returning(
+        json!({ "orders": { "type": "database", "id": database } }),
+    ));
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            with_setup(
+                posted_in(&[]),
+                add_row("bad", ORDERS),
+                "export async function main() { return {}; }",
+            ),
+            json!({ "steps": { "0": add_row("good", ORDERS) }, "setup": "changed" }).to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+    let id = Uuid::now_v7();
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        id,
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
 
     let drafted = drafted_routine(draft);
     assert_eq!(drafted.steps[0]["knobs"][0]["value"], json!(database));
@@ -856,8 +928,339 @@ async fn setup_runs_once_and_what_it_made_takes_its_placeholders() {
             used: true,
         }]
     );
-    // Setup ran once, as the draft, though the routine was fixed after it.
-    let ran = code.ran.lock().unwrap().clone();
+    // Setup ran once, as the draft, though the routine and its setup were
+    // changed after it; the fix was told it won't run again.
+    let ran = code.ran();
     assert_eq!(ran.len(), 1);
     assert_eq!(ran[0].1, id);
+    assert!(model.calls()[2].asked().contains("won't run again"));
+}
+
+#[tokio::test]
+async fn setup_that_failed_before_changing_anything_runs_again_once_fixed() {
+    let database = Uuid::now_v7().to_string();
+    let code = Arc::new(SetsUp::returning(
+        json!({ "orders": { "type": "database", "id": database } }),
+    ));
+    code.fails.lock().unwrap().push_back(false);
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            with_setup(posted_in(&[]), add_row("good", ORDERS), "first"),
+            json!({ "setup": "second" }).to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let drafted = drafted_routine(draft);
+    assert_eq!(drafted.steps[0]["knobs"][0]["value"], json!(database));
+    let ran: Vec<String> = code.ran().into_iter().map(|(source, _)| source).collect();
+    assert_eq!(ran, ["first", "second"]);
+    assert!(
+        model.calls()[2]
+            .asked()
+            .contains("`setup` failed when it ran: the API refused it\nFix it, and it runs again")
+    );
+}
+
+#[tokio::test]
+async fn setup_that_failed_after_changing_something_never_runs_again() {
+    let code = Arc::new(SetsUp::returning(json!({})));
+    code.fails.lock().unwrap().push_back(true);
+    let database = Uuid::now_v7().to_string();
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            with_setup(posted_in(&[]), add_row("good", ORDERS), "first"),
+            json!({ "setup": "second" }).to_string(),
+            json!({ "steps": { "0": add_row("good", &database) } }).to_string(),
+        ],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let drafted = drafted_routine(draft);
+    assert!(drafted.problems.is_empty());
+    assert_eq!(code.ran().len(), 1);
+    let calls = model.calls();
+    assert!(calls[2].asked().contains("so it won't run again"));
+    // Its placeholder is never checked as if it were an id.
+    assert!(
+        calls[3]
+            .asked()
+            .contains("The routine still uses `{{setup.orders}}`")
+    );
+}
+
+#[tokio::test]
+async fn a_draft_failing_after_setup_changed_something_says_so() {
+    let code = Arc::new(SetsUp::returning(json!({})));
+    code.fails.lock().unwrap().push_back(true);
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![with_setup(posted_in(&[]), add_row("good", ORDERS), "first")],
+    ));
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert!(
+        matches!(&draft, Draft::Failed { message, .. } if message == SETUP_FAILED_PARTWAY),
+        "{draft:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_placeholder_with_no_setup_goes_back_to_the_writer() {
+    let database = Uuid::now_v7().to_string();
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            json!({ "name": "Orders", "trigger": posted_in(&[]), "steps": [add_row("good", ORDERS)] })
+                .to_string(),
+            json!({ "steps": { "0": add_row("good", &database) } }).to_string(),
+        ],
+    ));
+    let (drafts, _) = direct_drafts(&model, &Arc::new(Names::default()));
+
+    let drafted =
+        drafted_routine(draft(&drafts, routine(ORDERS_REQUEST), &Milestones::default()).await);
+
+    assert_eq!(drafted.steps[0]["knobs"][0]["value"], json!(database));
+    assert!(
+        model.calls()[2]
+            .asked()
+            .contains("uses `{{setup.orders}}`, but has no `setup`")
+    );
+}
+
+#[tokio::test]
+async fn an_interrupted_draft_hands_back_its_last_check() {
+    let interrupt = CancellationToken::new();
+    let model = Arc::new(Model {
+        interrupts: Some(interrupt.clone()),
+        ..Model::new(
+            named(&[]),
+            vec![written(
+                posted_in(&[]),
+                json!([code_step("Make a task", "bad")]),
+            )],
+        )
+    });
+    let (drafts, _) = direct_drafts(&model, &Arc::new(Names::default()));
+
+    let draft = draft_until(
+        &drafts,
+        routine(BUG_REPORTS),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        interrupt,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    // The fix never came; the routine its check failed comes back with its
+    // problem, as when the fixes run out.
+    let drafted = drafted_routine(draft);
+    assert_eq!(drafted.problems.len(), 1);
+    assert_eq!(
+        model.purposes(),
+        [CallPurpose::Find, CallPurpose::Write, CallPurpose::Fix]
+    );
+}
+
+#[tokio::test]
+async fn an_interrupted_draft_keeps_what_its_setup_made() {
+    let database = Uuid::now_v7().to_string();
+    let code = Arc::new(SetsUp::returning(
+        json!({ "orders": { "type": "database", "id": database } }),
+    ));
+    let interrupt = CancellationToken::new();
+    let model = Arc::new(Model {
+        interrupts: Some(interrupt.clone()),
+        ..Model::new(
+            named(&[]),
+            vec![with_setup(
+                json!({ "type": "hourly" }),
+                add_row("good", ORDERS),
+                "first",
+            )],
+        )
+    });
+    let drafts = setting_up(&code, &model);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        interrupt,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let Draft::Failed { message, created } = draft else {
+        panic!("expected a failure, got {draft:?}");
+    };
+    assert_eq!(message, INTERRUPTED);
+    assert_eq!(
+        created,
+        [super::super::DraftCreated {
+            entity_type: model_entity::EntityType::Database,
+            entity_id: database,
+            used: false,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn a_routine_needs_a_trigger_even_when_a_fix_leaves_it_out() {
+    let step = code_step("Make a task", "good");
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![
+            json!({ "name": "Bug tasks", "steps": [step] }).to_string(),
+            json!({ "steps": { "0": step } }).to_string(),
+            json!({ "trigger": posted_in(&[]) }).to_string(),
+        ],
+    ));
+    let (drafts, _) = direct_drafts(&model, &Arc::new(Names::default()));
+    let milestones = Milestones::default();
+
+    let drafted = drafted_routine(draft(&drafts, routine(BUG_REPORTS), &milestones).await);
+
+    assert_eq!(
+        serde_json::to_value(drafted.trigger.unwrap()).unwrap()["type"],
+        "events"
+    );
+    let calls = model.calls();
+    assert!(calls[2].asked().contains("the routine has no `trigger`"));
+    assert!(calls[3].asked().contains("the routine has no `trigger`"));
+    assert_eq!(
+        milestones.stages(),
+        ["admitted", "found", "writing", "fixing", "fixing", "passed"]
+    );
+}
+
+#[tokio::test]
+async fn names_the_lookup_would_refuse_are_never_asked() {
+    let long = "x".repeat(MAX_NAME_CHARS + 1);
+    let model = Arc::new(Model::new(
+        named(&[
+            ("#", &[]),
+            ("  @ ", &[]),
+            (&long, &[]),
+            ("#engineering", &["channel"]),
+        ]),
+        vec![written(
+            posted_in(&[]),
+            json!([code_step("Make a task", "good")]),
+        )],
+    ));
+    let names = Arc::new(Names::default());
+    let (drafts, _) = direct_drafts(&model, &names);
+
+    drafted_routine(draft(&drafts, routine(BUG_REPORTS), &Milestones::default()).await);
+
+    let asked: Vec<String> = names
+        .asked
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|asked| asked.name.clone())
+        .collect();
+    assert_eq!(asked, ["#engineering"]);
+}
+
+#[test]
+fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
+    let item = |kind, name: &str, id: &str| NameMatch {
+        name: name.into(),
+        exact: true,
+        kind,
+        id: id.into(),
+        definition_id: None,
+    };
+    let asked = |name: &str, kinds: Vec<ItemKind>| NameAsked {
+        name: name.into(),
+        kinds,
+    };
+    let lookup = settle(
+        &[
+            asked("Finance", vec![ItemKind::Label, ItemKind::Project]),
+            asked("design", vec![ItemKind::Channel, ItemKind::Label]),
+            asked("Ops", Vec::new()),
+            asked("Nobody", vec![ItemKind::Person]),
+        ],
+        NameAnswers {
+            answers: vec![
+                NameAnswer {
+                    name: "Finance".into(),
+                    matches: vec![item(ItemKind::Project, "Finance", "folder")],
+                },
+                NameAnswer {
+                    name: "design".into(),
+                    matches: vec![item(ItemKind::Channel, "design", "channel")],
+                },
+                NameAnswer {
+                    name: "Ops".into(),
+                    matches: Vec::new(),
+                },
+                NameAnswer {
+                    name: "Nobody".into(),
+                    matches: Vec::new(),
+                },
+            ],
+            unavailable: vec![ItemKind::Label],
+        },
+    );
+
+    // Not the folder: the label it more likely names couldn't be searched.
+    assert_eq!(lookup.failed, ["Finance", "Ops"]);
+    let found: Vec<&str> = lookup
+        .found
+        .iter()
+        .map(|(item, _)| item.id.as_str())
+        .collect();
+    assert_eq!(found, ["channel"]);
+    assert_eq!(
+        lookup.left,
+        [LeftName {
+            name: "Nobody".into(),
+            kind: Some(ItemKind::Person),
+            matches: 0,
+        }]
+    );
 }

@@ -30,6 +30,9 @@ impl DraftProgress for Unreported {
 /// Something the drafter reached.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DraftMilestone {
+    /// A direct draft's usage was admitted, before it looks anything up:
+    /// the start of a background draft can answer.
+    Admitted,
     /// The items the person’s words name were looked up, before the
     /// model writes: which were found, and which are left for them to pick.
     Found(FoundNames),
@@ -82,6 +85,7 @@ impl DraftJobProgress {
     /// The progress once `milestone` is reached.
     pub fn reach(&mut self, milestone: DraftMilestone) {
         match milestone {
+            DraftMilestone::Admitted => {}
             DraftMilestone::Found(names) => {
                 self.stage = DraftStage::Found;
                 self.found = Some(u32::try_from(names.found.len()).unwrap_or(u32::MAX));

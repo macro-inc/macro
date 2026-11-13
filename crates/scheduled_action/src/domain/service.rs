@@ -901,6 +901,8 @@ where
         Ok(check)
     }
 
+    // `routine.check.draft` is a constant: this span is always a draft's check.
+    // ast-grep-ignore: rust-span-field-recorded-once
     #[tracing::instrument(name = "routine.check", skip_all, fields(
         routine.check.ok = tracing::field::Empty,
         routine.check.problems = tracing::field::Empty,

@@ -31,8 +31,14 @@ fn a_writer_is_told_its_effort_and_thinking_only_where_its_model_takes_them() {
         model_params("openai/gpt-5.5", Some(Effort::Low), true),
         Some(json!({ "reasoning": { "effort": "low" } }))
     );
-    assert_eq!(model_params("anthropic/claude-haiku-4-5", Some(Effort::Low), false), None);
-    assert_eq!(model_params("anthropic/claude-sonnet-5-5", None, false), None);
+    assert_eq!(
+        model_params("anthropic/claude-haiku-4-5", Some(Effort::Low), false),
+        None
+    );
+    assert_eq!(
+        model_params("anthropic/claude-sonnet-5-5", None, false),
+        None
+    );
 }
 
 #[tokio::test]
@@ -70,8 +76,8 @@ async fn names_are_looked_up_in_document_storage_as_the_owner() {
         .expect(1)
         .mount(&server)
         .await;
-    let names = DocumentStorageNames::new(&format!("{}/", server.uri()), "internal".to_owned())
-        .unwrap();
+    let names =
+        DocumentStorageNames::new(&format!("{}/", server.uri()), "internal".to_owned()).unwrap();
 
     let answers = names
         .look_up(
@@ -92,28 +98,33 @@ async fn names_are_looked_up_in_document_storage_as_the_owner() {
 
     assert_eq!(
         answers,
-        vec![
-            NameAnswer {
-                name: "Finance".to_owned(),
-                matches: vec![NameMatch {
+        NameAnswers {
+            answers: vec![
+                NameAnswer {
                     name: "Finance".to_owned(),
-                    exact: true,
-                    kind: ItemKind::Label,
-                    id: "l1".to_owned(),
-                    definition_id: None,
-                }],
-            },
-            NameAnswer {
-                name: "urgent".to_owned(),
-                matches: vec![NameMatch {
-                    name: "Urgent".to_owned(),
-                    exact: true,
-                    kind: ItemKind::Tag,
-                    id: "t1".to_owned(),
-                    definition_id: Some("d1".to_owned()),
-                }],
-            },
-        ]
+                    matches: vec![NameMatch {
+                        name: "Finance".to_owned(),
+                        exact: true,
+                        kind: ItemKind::Label,
+                        id: "l1".to_owned(),
+                        definition_id: None,
+                    }],
+                },
+                NameAnswer {
+                    name: "urgent".to_owned(),
+                    matches: vec![NameMatch {
+                        name: "Urgent".to_owned(),
+                        exact: true,
+                        kind: ItemKind::Tag,
+                        id: "t1".to_owned(),
+                        definition_id: Some("d1".to_owned()),
+                    }],
+                },
+            ],
+            // A kind whose source failed or was slow comes back, so its
+            // names can be left unknown rather than missing.
+            unavailable: vec![ItemKind::Agent],
+        }
     );
 }
 

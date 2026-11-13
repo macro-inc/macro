@@ -464,12 +464,13 @@ pub trait DraftModel: Send + Sync + 'static {
 /// erased.
 #[async_trait::async_trait]
 pub trait NameLookups: Send + Sync + 'static {
-    /// What each of `names` matched, in the order asked.
+    /// What each of `names` matched, in the order asked, and the kinds that
+    /// couldn't be searched.
     async fn look_up(
         &self,
         owner: &MacroUserIdStr<'static>,
         names: &[super::drafts::direct::NameAsked],
-    ) -> Result<Vec<super::drafts::direct::NameAnswer>, super::drafts::direct::NameLookupError>;
+    ) -> Result<super::drafts::direct::NameAnswers, super::drafts::direct::NameLookupError>;
 }
 
 /// Saving's checks for a routine a drafter wrote, as its owner, saving

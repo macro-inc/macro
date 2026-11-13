@@ -13,7 +13,9 @@ use std::sync::Arc;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use routine_program::{CATALOG, CODE_STEPS, CodeIdentity, CodeStep, STEP_CONTEXT, Step};
+use routine_program::{
+    CATALOG, CODE_STEPS, CallStatus, CodeIdentity, CodeStep, STEP_CONTEXT, Step,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
@@ -42,6 +44,11 @@ const FIND: &str = include_str!("direct/find.md");
 const WRITE: &str = include_str!("direct/write.md");
 /// The most names one lookup takes.
 const MAX_NAMES: usize = 10;
+/// The longest name the lookup takes, in characters.
+const MAX_NAME_CHARS: usize = 200;
+/// What the person reads when setup failed after it had changed something,
+/// and no routine came of the draft.
+const SETUP_FAILED_PARTWAY: &str = "Drafting stopped after setting up part of the routine. Check for anything it made, then try again.";
 /// The most SDK areas the writer is given the reference of.
 const MAX_AREAS: usize = 6;
 /// The area every code step may use, whose reference the writer always has.
@@ -92,6 +99,16 @@ pub struct NameAsked {
     pub name: String,
     /// The kinds it may name, most likely first; empty for any.
     pub kinds: Vec<ItemKind>,
+}
+
+/// What the names matched, and the kinds that couldn't be searched.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NameAnswers {
+    /// One per name asked, in the order asked.
+    pub answers: Vec<NameAnswer>,
+    /// Kinds whose items couldn't be searched this time: a name of one of
+    /// them that matched nothing may still be someone's.
+    pub unavailable: Vec<ItemKind>,
 }
 
 /// What one name matched.
@@ -386,7 +403,13 @@ fn kind_words(kind: ItemKind) -> &'static str {
 
 /// Settle each name on the one item of its likeliest kind that has it
 /// exactly; a name no item has, or several items of that kind do, is left.
-pub(super) fn settle(asked: &[NameAsked], answers: Vec<NameAnswer>) -> Lookup {
+/// A name a likelier kind that couldn't be searched might have is left
+/// unknown, as is one that matched nothing while any kind couldn't be.
+pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
+    let NameAnswers {
+        answers,
+        unavailable,
+    } = answers;
     let mut lookup = Lookup::default();
     for (asked, answer) in asked.iter().zip(answers) {
         let exact: Vec<NameMatch> = answer.matches.into_iter().filter(|m| m.exact).collect();
@@ -402,7 +425,12 @@ pub(super) fn settle(asked: &[NameAsked], answers: Vec<NameAnswer>) -> Lookup {
             asked.kinds.clone()
         };
         let mut chosen: Option<Vec<NameMatch>> = None;
+        let mut unknown = asked.kinds.is_empty() && exact.is_empty() && !unavailable.is_empty();
         for kind in &kinds {
+            if unavailable.contains(kind) {
+                unknown = true;
+                break;
+            }
             let mut of_kind: Vec<NameMatch> = Vec::new();
             for item in exact.iter().filter(|item| item.kind == *kind) {
                 if !of_kind.iter().any(|seen| seen.id == item.id) {
@@ -425,6 +453,7 @@ pub(super) fn settle(asked: &[NameAsked], answers: Vec<NameAnswer>) -> Lookup {
                 kind: items.first().map(|item| item.kind),
                 matches: u32::try_from(items.len()).unwrap_or(u32::MAX),
             }),
+            None if unknown => lookup.failed.push(asked.name.clone()),
             None => lookup.left.push(LeftName {
                 name: asked.name.clone(),
                 kind: asked.kinds.first().copied(),
@@ -435,16 +464,27 @@ pub(super) fn settle(asked: &[NameAsked], answers: Vec<NameAnswer>) -> Lookup {
     lookup
 }
 
+/// What is wrong with what the writer answered, told back to it.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0}")]
+pub(super) struct WriterProblem(String);
+
+impl WriterProblem {
+    fn new(text: impl Into<String>) -> Self {
+        Self(text.into())
+    }
+}
+
 /// The first JSON object in a model's answer, past any prose or code fence.
-pub(super) fn json_answer(text: &str) -> Result<Value, String> {
+pub(super) fn json_answer(text: &str) -> Result<Value, WriterProblem> {
     let start = text
         .find('{')
-        .ok_or_else(|| "the answer has no JSON object".to_owned())?;
+        .ok_or_else(|| WriterProblem::new("the answer has no JSON object"))?;
     serde_json::Deserializer::from_str(&text[start..])
         .into_iter::<Value>()
         .next()
-        .ok_or_else(|| "the answer has no JSON object".to_owned())?
-        .map_err(|error| format!("the answer isn't valid JSON: {error}"))
+        .ok_or_else(|| WriterProblem::new("the answer has no JSON object"))?
+        .map_err(|error| WriterProblem::new(format!("the answer isn't valid JSON: {error}")))
 }
 
 /// The routine as it is being written.
@@ -486,11 +526,11 @@ impl Routine {
     }
 
     /// Take what the writer answered, whole or, when it `fixes`, only what
-    /// it changed. Why the answer can't be read, for the writer.
-    fn take(&mut self, shape: Shape, answer: &Value, fixes: bool) -> Result<(), String> {
+    /// it changed. A whole routine needs a trigger by the end of it.
+    fn take(&mut self, shape: Shape, answer: &Value, fixes: bool) -> Result<(), WriterProblem> {
         let object = answer
             .as_object()
-            .ok_or_else(|| "the answer isn't a JSON object".to_owned())?;
+            .ok_or_else(|| WriterProblem::new("the answer isn't a JSON object"))?;
         if let Some(setup) = object.get("setup").and_then(Value::as_str) {
             self.setup = Some(setup.to_owned()).filter(|setup| !setup.trim().is_empty());
         }
@@ -506,18 +546,20 @@ impl Routine {
                     Some(Value::Array(steps)) => self.steps = steps.clone(),
                     Some(Value::Object(changed)) if fixes => {
                         for (index, step) in changed {
-                            let index: usize = index
-                                .parse()
-                                .map_err(|_| format!("`steps` key `{index}` isn't a step index"))?;
+                            let index: usize = index.parse().map_err(|_| {
+                                WriterProblem::new(format!(
+                                    "`steps` key `{index}` isn't a step index"
+                                ))
+                            })?;
                             put_step(&mut self.steps, index, step)?;
                         }
                     }
-                    Some(_) => return Err("`steps` must be a list of steps".to_owned()),
-                    None if !fixes => return Err("the answer has no `steps`".to_owned()),
+                    Some(_) => return Err(WriterProblem::new("`steps` must be a list of steps")),
+                    None if !fixes => return Err(WriterProblem::new("the answer has no `steps`")),
                     None => {}
                 }
-                if !fixes && self.trigger.is_none() {
-                    return Err("the answer has no `trigger`".to_owned());
+                if self.trigger.is_none() {
+                    return Err(WriterProblem::new("the routine has no `trigger`"));
                 }
                 Ok(())
             }
@@ -525,7 +567,7 @@ impl Routine {
                 let step = object
                     .get("step")
                     .filter(|step| step.is_object())
-                    .ok_or_else(|| "the answer has no `step` object".to_owned())?;
+                    .ok_or_else(|| WriterProblem::new("the answer has no `step` object"))?;
                 put_step(&mut self.steps, index, step)
             }
         }
@@ -551,16 +593,39 @@ impl Routine {
         }
     }
 
+    /// The keys of the setup placeholders the routine still names, each
+    /// once.
+    fn placeholders(&self) -> Vec<String> {
+        let mut keys: Vec<String> = Vec::new();
+        for value in self.trigger.iter().chain(&self.steps) {
+            let text = value.to_string();
+            for (_, [key]) in lazy_regex::regex!(r"\{\{setup\.([^{}]*)\}\}")
+                .captures_iter(&text)
+                .map(|found| found.extract())
+            {
+                if !keys.iter().any(|seen| seen == key) {
+                    keys.push(key.to_owned());
+                }
+            }
+        }
+        keys
+    }
+
     /// The routine as saving's check takes it, Ask AI steps on `model`, or
-    /// why it isn't one, for the writer.
+    /// why it isn't one. A step drafted for a routine with no trigger yet is
+    /// checked on `fallback`, so only the step's own problems count.
     fn configuration(
         &self,
         model: &str,
-        fallback_trigger: &Value,
-    ) -> Result<ActionConfiguration, String> {
-        let trigger = self.trigger.as_ref().unwrap_or(fallback_trigger);
+        fallback: Option<&Value>,
+    ) -> Result<ActionConfiguration, WriterProblem> {
+        let trigger = self
+            .trigger
+            .as_ref()
+            .or(fallback)
+            .ok_or_else(|| WriterProblem::new("the routine has no `trigger`"))?;
         let trigger: ActionTrigger = serde_json::from_value(trigger.clone())
-            .map_err(|error| format!("`trigger` isn't a trigger: {error}"))?;
+            .map_err(|error| WriterProblem::new(format!("`trigger` isn't a trigger: {error}")))?;
         let steps: Vec<Value> = self
             .steps
             .iter()
@@ -593,16 +658,117 @@ impl Routine {
 }
 
 /// Put `step` at `index`, or after the last step.
-fn put_step(steps: &mut Vec<Value>, index: usize, step: &Value) -> Result<(), String> {
+fn put_step(steps: &mut Vec<Value>, index: usize, step: &Value) -> Result<(), WriterProblem> {
     if index == steps.len() {
         steps.push(step.clone());
         return Ok(());
     }
     let slot = steps
         .get_mut(index)
-        .ok_or_else(|| format!("there's no step {index}"))?;
+        .ok_or_else(|| WriterProblem::new(format!("there's no step {index}")))?;
     *slot = step.clone();
     Ok(())
+}
+
+/// Where a draft's `setup` module is. It changes things as the person, so
+/// it runs once; a run that failed runs again only once the writer changed
+/// it, and only if it changed nothing.
+#[derive(Debug, Default)]
+enum Setup {
+    #[default]
+    NotRun,
+    /// It ran, returning these ids by placeholder key.
+    Ran(BTreeMap<String, String>),
+    Failed {
+        source: String,
+        /// Why, for the writer.
+        problem: String,
+        /// Whether it may have changed something before it failed.
+        wrote: bool,
+    },
+}
+
+impl Setup {
+    /// Whether `source` runs now.
+    fn due(&self, source: &str) -> bool {
+        match self {
+            Self::NotRun => true,
+            Self::Ran(_) => false,
+            Self::Failed {
+                source: failed,
+                wrote,
+                ..
+            } => !wrote && failed != source,
+        }
+    }
+
+    /// Whether it won't run again, whatever the writer answers.
+    fn settled(&self) -> bool {
+        matches!(self, Self::Ran(_) | Self::Failed { wrote: true, .. })
+    }
+
+    /// `routine` with the ids setup returned in place of their placeholders.
+    fn fill(&self, routine: &Routine) -> Routine {
+        match self {
+            Self::Ran(ids) => routine.with_ids(ids),
+            Self::NotRun | Self::Failed { .. } => routine.clone(),
+        }
+    }
+
+    /// Why `routine`, once filled, still names placeholders, for the writer.
+    fn unfilled(&self, routine: &Routine) -> Option<WriterProblem> {
+        let keys = routine.placeholders();
+        if keys.is_empty() {
+            return None;
+        }
+        let named = placeholder_list(&keys);
+        Some(WriterProblem::new(match self {
+            Self::NotRun => format!(
+                "The routine uses {named}, but has no `setup` to make them. Add `setup`, or leave those items for the owner to pick."
+            ),
+            Self::Ran(ids) => {
+                let returned: Vec<String> = ids.keys().cloned().collect();
+                let returned = if returned.is_empty() {
+                    "nothing".to_owned()
+                } else {
+                    placeholder_list(&returned)
+                };
+                format!(
+                    "The routine uses {named}, but `setup` already ran and won't run again; it returned {returned}. Use only those, or leave the other items for the owner to pick."
+                )
+            }
+            Self::Failed { problem, .. } => format!("{problem}\nThe routine still uses {named}."),
+        }))
+    }
+}
+
+fn placeholder_list(keys: &[String]) -> String {
+    keys.iter()
+        .map(|key| format!("`{SETUP_PREFIX}{key}}}}}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Why setup failed when it ran.
+#[derive(Debug, thiserror::Error)]
+#[error("`setup` failed when it ran: {error}")]
+struct SetupFailed {
+    error: String,
+    /// Whether it may have changed something first.
+    wrote: bool,
+}
+
+impl SetupFailed {
+    /// What the writer is told.
+    fn for_writer(&self) -> String {
+        if self.wrote {
+            format!(
+                "{self}\nIt had already changed something, so it won't run again: leave whatever it was to make for the owner to pick."
+            )
+        } else {
+            format!("{self}\nFix it, and it runs again.")
+        }
+    }
 }
 
 /// Saving's checks for a routine a drafter wrote, through the routines
@@ -620,8 +786,14 @@ impl<S: ScheduledActionService + Send + Sync + 'static> DraftChecks for ServiceC
     }
 }
 
-/// What the routine's problems are, for the writer to fix.
-fn problems_for_writer(check: &RoutineCheck, shape: Shape, declarations: &str) -> String {
+/// What the routine's problems are, for the writer to fix; `setup` says
+/// whether setup can still change.
+fn problems_for_writer(
+    check: &RoutineCheck,
+    shape: Shape,
+    declarations: &str,
+    setup: &Setup,
+) -> String {
     let mut text = String::from("Saving's check found problems in what you wrote:\n");
     if matches!(shape, Shape::Routine) {
         for problem in &check.problems {
@@ -642,10 +814,15 @@ fn problems_for_writer(check: &RoutineCheck, shape: Shape, declarations: &str) -
             "\nThe SDK's declarations of the types those errors name:\n```ts\n{declarations}```\n"
         ));
     }
-    text.push_str(match shape {
-        Shape::Routine => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger`, `name` or `setup` only if they change.",
-        Shape::Step(_) => "\nFix them. Answer with the whole step again, as `{\"step\": ...}`.",
+    let settled = setup.settled();
+    text.push_str(match (shape, settled) {
+        (Shape::Routine, false) => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger`, `name` or `setup` only if they change.",
+        (Shape::Routine, true) => "\nFix them. Answer with JSON holding only what changes: `{\"steps\": {\"<index>\": <the whole step>}}`, and `trigger` or `name` only if they change.",
+        (Shape::Step(_), _) => "\nFix them. Answer with the whole step again, as `{\"step\": ...}`.",
     });
+    if settled {
+        text.push_str(" `setup` has already run and won't run again.");
+    }
     text
 }
 
@@ -680,6 +857,55 @@ fn write_prompt(
     )
 }
 
+/// What a direct draft has got so far, kept by whoever stops it, so a draft
+/// cut off by the time limit or a shutdown still hands back its last check
+/// and what its setup made.
+#[derive(Debug, Default)]
+struct DirectSoFar {
+    last: Option<RoutineCheck>,
+    created: Vec<CreatedItem>,
+    setup: Setup,
+    checks: u32,
+    fixes: u8,
+}
+
+impl DirectSoFar {
+    /// The draft, ended for the reason `ended` names: its last check, or
+    /// else the failure, `failure` unless setup failed partway.
+    fn ended(
+        self,
+        ended: &'static str,
+        request: &DraftRequest,
+        program: &[Step],
+        failure: &str,
+    ) -> Draft {
+        let span = tracing::Span::current();
+        span.record("routine.draft.ended", ended);
+        span.record("routine.draft.checks", self.checks);
+        span.record("routine.draft.fixes", self.fixes);
+        let created = super::created_items(self.created, Vec::new(), self.last.as_ref());
+        span.record("routine.draft.created", created.len());
+        span.record(
+            "routine.draft.created_unused",
+            created.iter().filter(|item| !item.used).count(),
+        );
+        match self.last {
+            Some(check) => drafted(request, program, check, created),
+            None if matches!(self.setup, Setup::Failed { wrote: true, .. }) => {
+                super::failed_with(SETUP_FAILED_PARTWAY, created)
+            }
+            None => super::failed_with(failure, created),
+        }
+    }
+}
+
+/// How a direct draft stopped.
+enum Stopped {
+    Drafted(anyhow::Result<Option<Draft>>),
+    TimedOut,
+    Interrupted,
+}
+
 impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
     /// Write `request`'s draft directly, within [`DRAFT_TIMEOUT`] and until
     /// `interrupt`. Only a refused admission is an error; a draft its owner
@@ -696,18 +922,23 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
     ) -> anyhow::Result<Option<Draft>> {
         let id = run.id;
         let cancellable = run.cancellable;
-        let drafted = tokio::select! {
+        let mut so_far = DirectSoFar::default();
+        let stopped = tokio::select! {
             drafted = tokio::time::timeout(
                 DRAFT_TIMEOUT,
-                self.direct_drafted(&direct.drafting, &direct.prompts, owner, request, program, context, run),
-            ) => drafted.unwrap_or_else(|_| {
-                tracing::Span::current().record("routine.draft.ended", "timeout");
-                Ok(Some(super::failed(TIMED_OUT)))
-            }),
-            () = interrupt.cancelled() => {
-                tracing::Span::current().record("routine.draft.ended", "interrupted");
-                Ok(Some(super::failed(INTERRUPTED)))
-            }
+                self.direct_drafted(&direct.drafting, &direct.prompts, owner, request, program, context, run, &mut so_far),
+            ) => drafted.map_or(Stopped::TimedOut, Stopped::Drafted),
+            () = interrupt.cancelled() => Stopped::Interrupted,
+        };
+        let drafted = match stopped {
+            Stopped::Drafted(drafted) => drafted,
+            Stopped::TimedOut => Ok(Some(so_far.ended("timeout", request, program, TIMED_OUT))),
+            Stopped::Interrupted => Ok(Some(so_far.ended(
+                "interrupted",
+                request,
+                program,
+                INTERRUPTED,
+            ))),
         };
         if cancellable && matches!(drafted, Ok(None)) {
             tracing::Span::current().record("routine.draft.outcome", "cancelled");
@@ -718,8 +949,13 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         drafted
     }
 
-    /// Write `request`'s draft directly. Only a refused admission is an
-    /// error; a draft its owner cancelled is none.
+    /// Write `request`'s draft directly, keeping what it has got in
+    /// `so_far`. Only a refused admission is an error; a draft its owner
+    /// cancelled is none.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one draft's request, context and run, each borrowed"
+    )]
     async fn direct_drafted(
         &self,
         direct: &DirectDrafting,
@@ -729,6 +965,7 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         program: &[Step],
         context: &DraftContext,
         run: DirectRun<'_>,
+        so_far: &mut DirectSoFar,
     ) -> anyhow::Result<Option<Draft>> {
         let span = tracing::Span::current();
         span.record("routine.draft.drafter", "direct");
@@ -738,6 +975,7 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
             Err(message) => return Ok(Some(super::failed(message))),
         };
         direct.model.admit(owner).await?;
+        run.progress.report(DraftMilestone::Admitted);
         let shape = Shape::of(request, program);
         let named = if direct.tuning.find {
             self.find(direct, prompts, owner, request).await
@@ -793,18 +1031,14 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         };
         // A step drafted for a routine with no trigger yet is checked on one
         // that passes, so only the step's own problems count.
-        let fallback_trigger = json!({
-            "type": "once",
-            "at": (Utc::now() + chrono::Duration::days(1)).to_rfc3339_opts(SecondsFormat::Secs, true),
+        let fallback_trigger = matches!(shape, Shape::Step(_)).then(|| {
+            json!({
+                "type": "once",
+                "at": (Utc::now() + chrono::Duration::days(1)).to_rfc3339_opts(SecondsFormat::Secs, true),
+            })
         });
-        let mut ids: BTreeMap<String, String> = BTreeMap::new();
-        let mut created: Vec<CreatedItem> = Vec::new();
-        let mut setup_ran = false;
-        let mut last: Option<RoutineCheck> = None;
-        let mut checks = 0_u32;
-        let mut fixes = 0_u8;
         let ended = loop {
-            let purpose = if fixes == 0 {
+            let purpose = if so_far.fixes == 0 {
                 CallPurpose::Write
             } else {
                 CallPurpose::Fix
@@ -827,39 +1061,41 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                 break "model_failed";
             };
             turns.push(DraftTurn::Assistant(answer.clone()));
-            let taken =
-                json_answer(&answer).and_then(|value| routine.take(shape, &value, fixes > 0));
+            let taken = json_answer(&answer)
+                .and_then(|value| routine.take(shape, &value, so_far.fixes > 0));
             if self.cancelled(&run).await {
                 return Ok(None);
             }
             let problem = match taken {
                 Err(problem) => Some(problem),
-                Ok(()) => {
-                    if !setup_ran && let Some(source) = routine.setup.clone() {
-                        setup_ran = true;
+                Ok(()) => match routine.setup.clone() {
+                    Some(source) if so_far.setup.due(&source) => {
                         match self.set_up(owner, &run, context, &routine, &source).await {
-                            Ok((made, items)) => {
-                                ids.extend(made);
-                                created.extend(items);
+                            Ok((ids, items)) => {
+                                so_far.created.extend(items);
+                                so_far.setup = Setup::Ran(ids);
                                 None
                             }
-                            Err(problem) => {
-                                setup_ran = false;
-                                Some(problem)
+                            Err(failed) => {
+                                let problem = failed.for_writer();
+                                so_far.setup = Setup::Failed {
+                                    source,
+                                    problem: problem.clone(),
+                                    wrote: failed.wrote,
+                                };
+                                Some(WriterProblem::new(problem))
                             }
                         }
-                    } else {
-                        None
                     }
-                }
+                    _ => None,
+                },
             };
-            let problem = match problem {
-                Some(problem) => problem,
-                None => match routine
-                    .with_ids(&ids)
-                    .configuration(&context.agent_model, &fallback_trigger)
+            let filled = so_far.setup.fill(&routine);
+            let problem = match problem.or_else(|| so_far.setup.unfilled(&filled)) {
+                Some(problem) => problem.0,
+                None => match filled.configuration(&context.agent_model, fallback_trigger.as_ref())
                 {
-                    Err(problem) => problem,
+                    Err(problem) => problem.0,
                     Ok(configuration) => {
                         let check = match direct.checks.check(owner, configuration).await {
                             Ok(check) => check,
@@ -868,10 +1104,12 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                                 break "check_failed";
                             }
                         };
-                        checks += 1;
-                        span.record("routine.draft.checks", checks);
+                        so_far.checks += 1;
                         run.progress
-                            .report(DraftMilestone::Checked(CheckSummary::of(&check, checks)));
+                            .report(DraftMilestone::Checked(CheckSummary::of(
+                                &check,
+                                so_far.checks,
+                            )));
                         let fix = needs_fix(&check, shape);
                         let declarations = if fix {
                             let problems: Vec<String> = check
@@ -883,8 +1121,8 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                         } else {
                             String::new()
                         };
-                        let text = problems_for_writer(&check, shape, &declarations);
-                        last = Some(check);
+                        let text = problems_for_writer(&check, shape, &declarations, &so_far.setup);
+                        so_far.last = Some(check);
                         if !fix {
                             break "checked";
                         }
@@ -892,21 +1130,19 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                     }
                 },
             };
-            if fixes >= direct.tuning.max_fixes {
+            if so_far.fixes >= direct.tuning.max_fixes {
                 break "fixes_spent";
             }
-            fixes += 1;
-            span.record("routine.draft.fixes", fixes);
+            so_far.fixes += 1;
             run.progress.report(DraftMilestone::Fixing);
             turns.push(DraftTurn::User(problem));
         };
-        span.record("routine.draft.ended", ended);
-        let created = super::created_items(created, Vec::new(), last.as_ref());
-        span.record("routine.draft.created", created.len());
-        Ok(Some(match last {
-            Some(check) => drafted(request, program, check, created),
-            None => super::failed_with(request.failed(), created),
-        }))
+        Ok(Some(std::mem::take(so_far).ended(
+            ended,
+            request,
+            program,
+            request.failed(),
+        )))
     }
 
     /// Whether `request` may be written with code steps here.
@@ -997,7 +1233,8 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
             .unwrap_or_default()
     }
 
-    /// Look up the names the find call gave.
+    /// Look up the names the find call gave, skipping any the lookup
+    /// refuses, since it refuses the whole lookup for one.
     async fn look_up(
         &self,
         direct: &DirectDrafting,
@@ -1007,16 +1244,22 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         let asked: Vec<NameAsked> = named
             .names
             .iter()
-            .filter(|name| !name.name.trim().is_empty())
-            .take(MAX_NAMES)
-            .map(|name| NameAsked {
-                name: name.name.trim().to_owned(),
-                kinds: name
-                    .kinds
-                    .iter()
-                    .filter_map(|kind| kind.parse().ok())
-                    .collect(),
+            .filter_map(|name| {
+                let name_text = name.name.trim();
+                let bare = name_text.strip_prefix(['#', '@']).unwrap_or(name_text);
+                if bare.trim().is_empty() || name_text.chars().count() > MAX_NAME_CHARS {
+                    return None;
+                }
+                Some(NameAsked {
+                    name: name_text.to_owned(),
+                    kinds: name
+                        .kinds
+                        .iter()
+                        .filter_map(|kind| kind.parse().ok())
+                        .collect(),
+                })
             })
+            .take(MAX_NAMES)
             .collect();
         if asked.is_empty() {
             return Lookup::default();
@@ -1050,8 +1293,9 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         .await
     }
 
-    /// Run the routine's setup once, now: the ids it returned by
-    /// placeholder, and what it created. Why it failed, for the writer.
+    /// Run the routine's setup, now: the ids it returned by placeholder,
+    /// and what it created. Why it failed, and whether it may have changed
+    /// something first.
     async fn set_up(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -1059,10 +1303,11 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         context: &DraftContext,
         routine: &Routine,
         source: &str,
-    ) -> Result<(BTreeMap<String, String>, Vec<CreatedItem>), String> {
+    ) -> Result<(BTreeMap<String, String>, Vec<CreatedItem>), SetupFailed> {
         let span = tracing::info_span!(
             "routine.draft.setup",
             routine.draft.created = tracing::field::Empty,
+            routine.draft.setup_wrote = tracing::field::Empty,
         );
         async {
             let step = CodeStep {
@@ -1099,11 +1344,19 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                     },
                 )
                 .await;
-            let returned = outcome
-                .result
-                .map_err(|error| format!("`setup` failed when it ran: {error}"))?;
+            let span = tracing::Span::current();
+            let returned = outcome.result.map_err(|error| {
+                // A write that was refused, skipped or failed changed nothing.
+                let wrote = outcome.calls_truncated
+                    || outcome.calls.iter().any(|call| {
+                        call.write
+                            && matches!(call.status, CallStatus::Completed | CallStatus::Unknown)
+                    });
+                span.record("routine.draft.setup_wrote", wrote);
+                SetupFailed { error, wrote }
+            })?;
             let (ids, created) = setup_ids(&returned);
-            tracing::Span::current().record("routine.draft.created", created.len());
+            span.record("routine.draft.created", created.len());
             Ok((ids, created))
         }
         .instrument(span)

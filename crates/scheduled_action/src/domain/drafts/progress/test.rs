@@ -71,6 +71,9 @@ fn a_check_reads_as_its_counts_trigger_and_step_titles_never_its_code() {
 fn progress_moves_through_its_milestones_keeping_what_each_found() {
     let mut progress = DraftJobProgress::default();
     assert_eq!(progress.stage, DraftStage::Started);
+    // Admission only answers a background start; nothing to show yet.
+    progress.reach(DraftMilestone::Admitted);
+    assert_eq!(progress, DraftJobProgress::default());
 
     progress.reach(DraftMilestone::Found(FoundNames {
         found: vec![

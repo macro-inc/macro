@@ -378,7 +378,7 @@ fn answer(answer: &Answer, admission: Admission) {
 }
 
 /// A job's progress: kept for its writer, which writes and pushes it, and the
-/// first time the model writes, the answer to its start.
+/// first time the draft is under way, the answer to its start.
 struct JobProgress {
     progress: watch::Sender<DraftJobProgress>,
     answer: Answer,
@@ -386,10 +386,11 @@ struct JobProgress {
 
 impl DraftProgress for JobProgress {
     fn report(&self, milestone: DraftMilestone) {
-        // A direct draft finds its items first, once its usage is admitted.
+        // A direct draft says so once its usage is admitted; a session draft
+        // once its prompt is accepted. Either may skip ahead.
         let writing = matches!(
             milestone,
-            DraftMilestone::Found(_) | DraftMilestone::Writing
+            DraftMilestone::Admitted | DraftMilestone::Found(_) | DraftMilestone::Writing
         );
         self.progress
             .send_modify(|progress| progress.reach(milestone));
