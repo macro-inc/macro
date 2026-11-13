@@ -4794,7 +4794,7 @@ export type AnswerAgentSessionToolApprovalData = {
 export type AnswerAgentSessionToolApprovalErrors = {
     401: string;
     /**
-     * Not the owner, for approve or deny; or no edit access
+     * Agent run approving, not the owner for approve or deny, or no edit access
      */
     403: string;
     404: string;
