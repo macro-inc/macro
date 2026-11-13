@@ -8,34 +8,18 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/result';
 import type { SoupAstItemsQueryArgs } from '@queries/soup/items';
+import type { AgentSpendResponse } from '@service-cognition/generated/schemas/agentSpendResponse';
+import type { AgentRoutine } from '@service-scheduled-action/generated/schemas/agentRoutine';
+import type { AgentRoutines } from '@service-scheduled-action/generated/schemas/agentRoutines';
 import { queryOptions } from '@tanstack/solid-query';
 import type { SpendBucket } from '../generated/types';
 import { agentPaneKeys } from './keys';
 
-/** The agent's spend, one entry per period that had any. */
-export type AgentSpend = {
-  bucket: SpendBucket;
-  /** Inclusive start of the window the buckets cover. */
-  from: string;
-  /** Exclusive end of the window. */
-  until: string;
-  buckets: { start: string; costUsd: number }[];
-};
+/** The agent's spend, one entry per period that had any, oldest first. */
+export type AgentSpend = AgentSpendResponse;
 
-export type AgentRoutineSummary = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  running: boolean;
-  triggerKind: string;
-  nextRunAt?: string | null;
-  lastRun?: { startedAt: string; endedAt: string; succeeded: boolean } | null;
-};
-
-export type AgentRoutines = {
-  routines: AgentRoutineSummary[];
-  truncated: boolean;
-};
+export type AgentRoutineSummary = AgentRoutine;
+export type AgentRoutineList = AgentRoutines;
 
 /** Panes refresh on focus and every few minutes; spend moves slowly. */
 const PANE_STALE_MS = 60_000;
@@ -60,7 +44,7 @@ export function agentRoutinesQueryOptions(agentId: string) {
     queryKey: agentPaneKeys.routines(agentId).queryKey,
     queryFn: ({ signal }) =>
       throwOnErr(() =>
-        fetchWithToken<AgentRoutines>(
+        fetchWithToken<AgentRoutineList>(
           `${SERVER_HOSTS['scheduled-action']}/scheduled-actions/agents/${encodeURIComponent(agentId)}`,
           { method: 'GET', signal }
         )

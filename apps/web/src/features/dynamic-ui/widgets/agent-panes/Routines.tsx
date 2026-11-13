@@ -1,5 +1,4 @@
 import { RoutineListRow } from '@app/features/routines/components/routine-row';
-import type { TriggerKind } from '@app/features/routines/core/routine-triggers';
 import type { RoutineRow } from '@app/features/routines/core/types';
 import { routineContent } from '@app/features/routines/routine-navigation';
 import { formatLocale, t } from '@app/lib/i18n';
@@ -24,16 +23,6 @@ import {
 } from '../panes/pane';
 
 export type RoutinesProps = Omit<WidgetOf<'routines'>, 'type'>;
-
-const TRIGGER_KINDS: readonly TriggerKind[] = [
-  'schedule',
-  'email',
-  'task',
-  'document',
-  'channel',
-  'call',
-  'github',
-];
 
 /**
  * The routines an agent owns, in the Routines list's rows: when each runs
@@ -109,7 +98,9 @@ function RoutineRows(props: { agentId: string; dense: boolean }) {
 
 /** The Routines list's row for a summary: no steps, never editable here. */
 function routineRow(routine: AgentRoutineSummary): RoutineRow {
-  const whenKind = TRIGGER_KINDS.find((kind) => kind === routine.triggerKind);
+  // A schedule's icon for timed routines; event routines keep the default,
+  // since the summary does not say which events.
+  const whenKind = routine.triggerKind === 'events' ? undefined : 'schedule';
   const next = routine.nextRunAt ? nextRunLabel(routine.nextRunAt) : undefined;
   return {
     id: routine.id,
@@ -119,7 +110,7 @@ function routineRow(routine: AgentRoutineSummary): RoutineRow {
     when: next ?? '',
     whenKind,
     does: '',
-    group: whenKind === 'schedule' ? 'schedule' : 'activity',
+    group: routine.triggerKind === 'events' ? 'activity' : 'schedule',
     lastRun: routine.lastRun
       ? {
           at: formatRelativeDate(routine.lastRun.startedAt),

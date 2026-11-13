@@ -102,7 +102,7 @@ describe('routines pane', () => {
             name: 'Morning digest',
             enabled: true,
             running: false,
-            triggerKind: 'schedule',
+            triggerKind: 'cron',
             nextRunAt: '2026-11-14T14:00:00Z',
             lastRun: {
               startedAt: '2026-11-13T14:00:00Z',
