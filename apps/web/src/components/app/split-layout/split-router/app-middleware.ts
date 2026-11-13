@@ -42,6 +42,8 @@ import { decodeLegacyPair } from './legacy-route';
 
 type AppMiddlewareState = {
   isTouchDevice: () => boolean;
+  /** Phone layout; defaults to touch, which shows one pane. */
+  isMobile?: () => boolean;
 };
 
 function crmPipelinePath(pipelineId: string): string {
@@ -89,6 +91,7 @@ function redirectLegacyRoutes(
   const rootId = paneRootMatch(route)?.id;
 
   const isTouch = options.isTouchDevice();
+  const isPhone = options.isMobile?.() ?? isTouch;
 
   // Touch shows records on their own pages, as the Customers lists open them.
   if (rootId === 'view-companies' && isTouch) {
@@ -129,10 +132,10 @@ function redirectLegacyRoutes(
     .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
       calendarPath(getPreferredCalendarPeriodView())
     )
-    // Desktop writes a new email beside the Email list; touch keeps the
-    // full-screen composer.
+    // A new email is written beside the Email list, as a selected thread is
+    // read there; phones keep the full-screen composer.
     .with({ type: 'component', id: 'email-compose' }, () =>
-      isTouch ? undefined : '/mail/new'
+      isPhone ? undefined : '/mail/new'
     )
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined

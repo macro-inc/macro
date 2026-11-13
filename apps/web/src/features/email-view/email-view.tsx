@@ -167,7 +167,7 @@ function TouchEmailPanes(props: {
       hasDetail={!!selectedThread() || composing()}
       empty={<EmailReaderEmpty />}
       onListWidthChangeEnd={props.onListWidthChange}
-      onBack={selectedThread() ? navigateToList : undefined}
+      onBack={selectedThread() || composing() ? navigateToList : undefined}
     >
       <EmailReader
         focusList={() => {
