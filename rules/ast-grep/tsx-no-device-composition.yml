@@ -23,6 +23,7 @@ ignores:
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
   - apps/web/src/features/block-ai/ai-block.tsx
+  - apps/web/src/features/block-call/component/CallBlockAdapter.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
@@ -53,7 +54,6 @@ ignores:
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
-  - apps/web/src/features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
   - apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
   - apps/web/src/features/block-call/views/CallDetailView.tsx
