@@ -229,7 +229,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `outlook: false` and `/link/outlook` answers 404 for a new connection when
   either is off; reconnecting an inbox reads neither. A failed flag load
   closes new connections and logs one warning. Without `POSTHOG_API_KEY`
-  (local, tests) the switch alone decides. Each decision is the
+  (tests), or with a blank one, the switch alone decides. A local stack that
+  runs the Outlook emulator blanks the key for this service
+  (`xtask_local`'s `microsoft_emulator.rs`): its placeholder key cannot load
+  flags. Each decision is the
   `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
@@ -294,8 +297,10 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
 
 ## Team vault cleanup
 
-- Supply the Passwords metadata port to the existing owned-entity cleanup adapter:
-  authoritative empty teams skip vault RPC; retained data requires acknowledged DSS
+- Supply the Passwords metadata and team-computer release ports to the existing
+  owned-entity cleanup adapter; group internal HTTP endpoints and the fleet-wide
+  key in `TeamOwnedEntityCleanupConfig`. Authoritative empty teams skip vault RPC;
+  retained data requires acknowledged DSS
   namespace purge before `clear_team` lists or purges ordinary entities. Recheck
   emptiness under the existing team lease and retain its guard in `ClearedTeam`
   through team deletion; drop it before DSS RPC if data appeared.

@@ -1316,6 +1316,28 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 export type ApiPropertyEntityType = 'CALL_RECORD' | 'CALENDAR_EVENT' | 'DATABASE_ROW' | 'INITIATIVE' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor = 'gray' | 'red' | 'tomato' | 'orange' | 'amber' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink';
+
+/**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon = {
+    kind: 'macro';
+    /**
+     * Catalog name without the SVG extension.
+     */
+    name: string;
+} | {
+    kind: 'emoji';
+    /**
+     * Unicode emoji text, not markup or a URL.
+     */
+    value: string;
+};
+
+/**
  * What a committed batch answers: a result per op, and the journal's change
  * for each table version it produced.
  */
@@ -3403,6 +3425,10 @@ export type ChangesetSourceDto = 'github_pull_request';
  */
 export type Channel = {
     /**
+     * Whether members of the channel's team join it automatically.
+     */
+    auto_join_team?: boolean;
+    /**
      * Channel type.
      */
     channel_type: ChannelType;
@@ -4691,6 +4717,17 @@ export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 export type Conjunction = 'and' | 'or';
 
 /**
+ * One of a contact's addresses. It travels in the body, never the path, so
+ * request telemetry does not record it.
+ */
+export type ContactEmailRequest = {
+    /**
+     * The address to add or remove. An identical retry is accepted.
+     */
+    email: string;
+};
+
+/**
  * Source Slack conversation ID (C, G or D prefix); unique only within a source.
  */
 export type ConversationId = string;
@@ -4867,6 +4904,12 @@ export type CountedReaction = {
      * Emoji being reacted with.
      */
     emoji: string;
+    /**
+     * Display names for reactors whose account identity is not visible to this viewer.
+     */
+    names?: {
+        [key: string]: string;
+    };
     /**
      * User identifiers.
      */
@@ -5516,6 +5559,30 @@ export type CreatePipeline = {
     sharing?: PipelineSharing;
 };
 
+/**
+ * A new pipeline with its stages and fields.
+ */
+export type CreatePipelineRequest = {
+    /**
+     * Fields to add after the standard ones, or after a generic pipeline's Name.
+     */
+    fields?: Array<NewFieldRequest>;
+    /**
+     * Its name.
+     */
+    name: string;
+    recordType?: null | PipelineRecordType;
+    /**
+     * Defaults to private.
+     */
+    sharing?: PipelineSharing;
+    /**
+     * Its stages, first to last, replacing the team's default stages. A
+     * generic pipeline starts without a Stage field, so these add one.
+     */
+    stages?: Array<string>;
+};
+
 export type CreateProjectRequest = {
     /**
      * The name of the project.
@@ -6030,6 +6097,17 @@ export type CrmCompanyResponse = {
  */
 export type CrmContactResponse = {
     /**
+     * Whether the contact has an address on one of its company's domains.
+     * Such a contact cannot be unlinked from the company or moved to another.
+     * Older servers omit this classification; clients must then keep it read-only.
+     */
+    companyDomain?: boolean;
+    /**
+     * The addresses on one of the company's domains. The last one cannot be
+     * removed while the contact is linked to the company.
+     */
+    companyDomainEmails?: Array<string>;
+    /**
      * The id of the company the contact belongs to; absent for a
      * contact without a company.
      */
@@ -6039,10 +6117,15 @@ export type CrmContactResponse = {
      */
     createdAt: string;
     /**
-     * The contact's email address; absent for contacts added by name
-     * alone.
+     * The contact's primary email address; absent for contacts added by
+     * name alone.
      */
     email?: string | null;
+    /**
+     * Every address the contact is known by: the primary first, then the
+     * rest oldest first. Older servers omit it; clients then show `email`.
+     */
+    emails?: Array<string>;
     /**
      * Earliest known interaction with this contact.
      */
@@ -6067,7 +6150,8 @@ export type CrmContactResponse = {
      */
     name?: string | null;
     /**
-     * Whether the address uses a known personal provider and permits company edits.
+     * Whether the primary address uses a known personal provider. Linking
+     * or switching the company needs this and `companyDomain = false`.
      * Older servers omit this classification; clients must then keep it read-only.
      */
     personalEmail?: boolean;
@@ -6227,6 +6311,7 @@ export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' |
  * A database: a named collection of tables, owned and shared as one entity.
  */
 export type Database = {
+    appearance?: null | EntityAppearance;
     /**
      * Creation time.
      */
@@ -6885,6 +6970,7 @@ export type DocumentMarkdownWritten = {
 };
 
 export type DocumentMetadata = {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -7019,6 +7105,7 @@ export type DocumentPreview = (DocumentPreviewData & {
 });
 
 export type DocumentPreviewData = {
+    appearance?: null | EntityAppearance;
     /**
      * The document id
      */
@@ -7086,6 +7173,7 @@ export type DocumentResponse = {
 };
 
 export type DocumentResponseMetadata = {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -7309,6 +7397,10 @@ export type DocumentUpdatedMetadata = {
      */
     actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
+    /**
+     * Previous and new presentation overrides, in that order; no content edit occurred.
+     */
+    appearance_change?: Array<EntityAppearance> | null;
     /**
      * The id of the updated document.
      */
@@ -9254,6 +9346,14 @@ export type EnsureCollabSurfaceRequest = {
 };
 
 /**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export type EntityAppearance = {
+    color?: null | AppearanceColor;
+    icon?: null | AppearanceIcon;
+};
+
+/**
  * a bundle of all of the filters for each entity type
  */
 export type EntityFilters = {
@@ -10898,6 +10998,7 @@ export type Form = {
      * responds twice. Fixed once anyone has responded.
      */
     anonymous: boolean;
+    appearance?: null | EntityAppearance;
     /**
      * Who may respond.
      */
@@ -11044,7 +11145,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'invalidAppearance' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -12306,6 +12407,16 @@ export type GuestChatPage = {
 };
 
 /**
+ * Text-only update to a guest-authored message.
+ */
+export type GuestChatPatch = {
+    /**
+     * Replacement message body.
+     */
+    content: string;
+};
+
+/**
  * Guests may send text only; attribution and parent are server-owned.
  */
 export type GuestChatPost = {
@@ -12317,6 +12428,17 @@ export type GuestChatPost = {
      * UUIDv7 used to deduplicate retries, including the first message.
      */
     id: string;
+};
+
+/**
+ * A call thread and the verified viewer's sender identity.
+ */
+export type GuestChatThread = {
+    thread?: null | MessageThread;
+    /**
+     * Guest sender ID used for own-message controls.
+     */
+    viewer_id: string;
 };
 
 /**
@@ -12919,6 +13041,7 @@ export type InitiativeDescription = {
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
+    appearance?: null | EntityAppearance;
     /**
      * When the initiative was created.
      */
@@ -13082,6 +13205,7 @@ export type InitiativeSort = 'updated' | 'name' | 'due';
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
+    appearance?: null | EntityAppearance;
     /**
      * Opaque identifier.
      */
@@ -17745,17 +17869,18 @@ export type SetCompanyNameRequest = {
  */
 export type SetContactCompanyRequest = {
     /**
-     * Destination company in the same team. Unlinking is not supported.
+     * Destination company in the same team.
      */
     companyId: string;
 };
 
 /**
- * Add a missing contact email. Existing addresses are read-only.
+ * Choose a contact's primary email.
  */
 export type SetContactEmailRequest = {
     /**
-     * The address to add. An identical retry is accepted.
+     * The address to make primary. It is added when the contact does not
+     * hold it yet. An identical retry is accepted.
      */
     email: string;
 };
@@ -18255,6 +18380,24 @@ export type SortKey = {
 };
 
 /**
+ * The persona of a viewer's private conversation with an agent.
+ */
+export type SoupAgentDmProfile = {
+    /**
+     * Persona avatar, when supplied.
+     */
+    avatar_url?: string | null;
+    /**
+     * Persona id.
+     */
+    bot_id: string;
+    /**
+     * Persona display name.
+     */
+    name: string;
+};
+
+/**
  * An agent session as displayed in Soup.
  *
  * Includes the persisted runtime and repository metadata needed to render
@@ -18656,6 +18799,7 @@ export type SoupCallRecordSoupPropertiesField = {
  * A channel as displayed in Soup.
  */
 export type SoupChannel = ChannelWithParticipants & LatestMessage & {
+    agent_dm?: null | SoupAgentDmProfile;
     /**
      * Timestamp when the requesting user last interacted with this channel.
      */
@@ -19025,6 +19169,7 @@ export type SoupDocumentSoupPropertiesField = {
      */
     properties: Array<SoupProperty>;
 } & {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -19267,6 +19412,7 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     properties: Array<SoupProperty>;
 } & {
+    appearance?: null | EntityAppearance;
     /**
      * Creation timestamp.
      */
@@ -22236,6 +22382,24 @@ export type UploadFileResponse = {
     sizeBytes: number;
 };
 
+/**
+ * Files of an extracted folder moved into storage so far.
+ */
+export type UploadFolderProgress = {
+    /**
+     * Files that could not be stored.
+     */
+    filesFailed: number;
+    /**
+     * Files stored successfully.
+     */
+    filesStored: number;
+    /**
+     * Files the folder holds.
+     */
+    filesTotal: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -22262,6 +22426,11 @@ export type UploadFolderRequest = {
      */
     uploadRequestId: string;
 };
+
+/**
+ * The upload status of the folder
+ */
+export type UploadFolderStatus = 'pending' | 'uploaded' | 'processing' | 'partially_completed' | 'completed' | 'failed' | 'unknown';
 
 /**
  * Signed upload permission returned just before PUT; never persisted as an identity.
@@ -24324,6 +24493,104 @@ export type GuestCallChatPostResponses = {
 };
 
 export type GuestCallChatPostResponse = GuestCallChatPostResponses[keyof GuestCallChatPostResponses];
+
+export type GuestCallChatPostMessageData = {
+    body: GuestChatPost;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages';
+};
+
+export type GuestCallChatPostMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPostMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatPostMessageResponse = GuestCallChatPostMessageResponses[keyof GuestCallChatPostMessageResponses];
+
+export type GuestCallChatDeleteMessageData = {
+    body?: never;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}';
+};
+
+export type GuestCallChatDeleteMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatDeleteMessageResponses = {
+    204: void;
+};
+
+export type GuestCallChatDeleteMessageResponse = GuestCallChatDeleteMessageResponses[keyof GuestCallChatDeleteMessageResponses];
+
+export type GuestCallChatPatchMessageData = {
+    body: GuestChatPatch;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}';
+};
+
+export type GuestCallChatPatchMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPatchMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatPatchMessageResponse = GuestCallChatPatchMessageResponses[keyof GuestCallChatPatchMessageResponses];
+
+export type GuestCallChatReactMessageData = {
+    body: ReactionInput;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}/reactions';
+};
+
+export type GuestCallChatReactMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReactMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatReactMessageResponse = GuestCallChatReactMessageResponses[keyof GuestCallChatReactMessageResponses];
+
+export type GuestCallChatReadThreadData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/thread';
+};
+
+export type GuestCallChatReadThreadErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReadThreadResponses = {
+    200: GuestChatThread;
+};
+
+export type GuestCallChatReadThreadResponse = GuestCallChatReadThreadResponses[keyof GuestCallChatReadThreadResponses];
 
 export type MeetingLookupData = {
     body?: never;
@@ -27013,6 +27280,35 @@ export type GetContactResponses = {
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
 
+export type UnlinkCrmContactCompanyData = {
+    body?: never;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/company';
+};
+
+export type UnlinkCrmContactCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnlinkCrmContactCompanyError = UnlinkCrmContactCompanyErrors[keyof UnlinkCrmContactCompanyErrors];
+
+export type UnlinkCrmContactCompanyResponses = {
+    200: CrmContactResponse;
+};
+
+export type UnlinkCrmContactCompanyResponse = UnlinkCrmContactCompanyResponses[keyof UnlinkCrmContactCompanyResponses];
+
 export type SetCrmContactCompanyData = {
     body: SetContactCompanyRequest;
     path: {
@@ -27070,6 +27366,64 @@ export type SetCrmContactEmailResponses = {
 };
 
 export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
+
+export type RemoveCrmContactEmailData = {
+    body: ContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/emails';
+};
+
+export type RemoveCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmContactEmailError = RemoveCrmContactEmailErrors[keyof RemoveCrmContactEmailErrors];
+
+export type RemoveCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type RemoveCrmContactEmailResponse = RemoveCrmContactEmailResponses[keyof RemoveCrmContactEmailResponses];
+
+export type AddCrmContactEmailData = {
+    body: ContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/emails';
+};
+
+export type AddCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmContactEmailError = AddCrmContactEmailErrors[keyof AddCrmContactEmailErrors];
+
+export type AddCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type AddCrmContactEmailResponse = AddCrmContactEmailResponses[keyof AddCrmContactEmailResponses];
 
 export type SetContactHiddenData = {
     body: SetContactHiddenRequest;
@@ -27175,6 +27529,44 @@ export type CreateCrmPipelineResponses = {
 };
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
+
+export type CreateCrmPipelineWithFieldsData = {
+    body: CreatePipelineRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/create';
+};
+
+export type CreateCrmPipelineWithFieldsErrors = {
+    400: ErrorResponse;
+};
+
+export type CreateCrmPipelineWithFieldsError = CreateCrmPipelineWithFieldsErrors[keyof CreateCrmPipelineWithFieldsErrors];
+
+export type CreateCrmPipelineWithFieldsResponses = {
+    200: PipelineFields;
+};
+
+export type CreateCrmPipelineWithFieldsResponse = CreateCrmPipelineWithFieldsResponses[keyof CreateCrmPipelineWithFieldsResponses];
+
+export type ListCrmPipelineDetailsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/details';
+};
+
+export type ListCrmPipelineDetailsErrors = {
+    400: ErrorResponse;
+};
+
+export type ListCrmPipelineDetailsError = ListCrmPipelineDetailsErrors[keyof ListCrmPipelineDetailsErrors];
+
+export type ListCrmPipelineDetailsResponses = {
+    200: Array<PipelineFields>;
+};
+
+export type ListCrmPipelineDetailsResponse = ListCrmPipelineDetailsResponses[keyof ListCrmPipelineDetailsResponses];
 
 export type SearchCrmPipelineEntriesData = {
     body?: never;
@@ -27911,6 +28303,33 @@ export type GetDatabaseResponses = {
 };
 
 export type GetDatabaseResponse = GetDatabaseResponses[keyof GetDatabaseResponses];
+
+export type SetDatabaseAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/appearance';
+};
+
+export type SetDatabaseAppearanceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type SetDatabaseAppearanceError = SetDatabaseAppearanceErrors[keyof SetDatabaseAppearanceErrors];
+
+export type SetDatabaseAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetDatabaseAppearanceResponse = SetDatabaseAppearanceResponses[keyof SetDatabaseAppearanceResponses];
 
 export type ShareDatabaseAwarenessData = {
     body: Awareness;
@@ -29270,6 +29689,30 @@ export type EditDocumentWithAiResponses = {
 };
 
 export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
+
+export type SetDocumentAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/appearance';
+};
+
+export type SetDocumentAppearanceErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type SetDocumentAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetDocumentAppearanceResponse = SetDocumentAppearanceResponses[keyof SetDocumentAppearanceResponses];
 
 export type GetDocumentBranchNameData = {
     body?: never;
@@ -31441,6 +31884,33 @@ export type UpdateFormResponses = {
 
 export type UpdateFormResponse = UpdateFormResponses[keyof UpdateFormResponses];
 
+export type SetFormAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/appearance';
+};
+
+export type SetFormAppearanceErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+};
+
+export type SetFormAppearanceError = SetFormAppearanceErrors[keyof SetFormAppearanceErrors];
+
+export type SetFormAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetFormAppearanceResponse = SetFormAppearanceResponses[keyof SetFormAppearanceResponses];
+
 export type CollaborateFormData = {
     body?: never;
     path: {
@@ -32502,6 +32972,30 @@ export type GetInitiativeActivityResponses = {
 };
 
 export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
+
+export type SetInitiativeAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/appearance';
+};
+
+export type SetInitiativeAppearanceErrors = {
+    400: unknown;
+    401: unknown;
+    404: unknown;
+};
+
+export type SetInitiativeAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetInitiativeAppearanceResponse = SetInitiativeAppearanceResponses[keyof SetInitiativeAppearanceResponses];
 
 export type GetInitiativeDescriptionData = {
     body?: never;
@@ -33827,6 +34321,48 @@ export type UploadExtractFolderHandlerResponses = {
 };
 
 export type UploadExtractFolderHandlerResponse = UploadExtractFolderHandlerResponses[keyof UploadExtractFolderHandlerResponses];
+
+export type GetUploadExtractStatusHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * The upload request id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/projects/upload_extract/{request_id}';
+};
+
+export type GetUploadExtractStatusHandlerErrors = {
+    401: GenericErrorResponse;
+    404: GenericErrorResponse;
+    500: GenericErrorResponse;
+};
+
+export type GetUploadExtractStatusHandlerError = GetUploadExtractStatusHandlerErrors[keyof GetUploadExtractStatusHandlerErrors];
+
+export type GetUploadExtractStatusHandlerResponses = {
+    200: {
+        /**
+         * Where a folder upload stands, for the uploader to follow it to the end.
+         */
+        data: {
+            progress?: null | UploadFolderProgress;
+            /**
+             * The uploaded folder, once it exists.
+             */
+            projectId?: string | null;
+            status: UploadFolderStatus;
+        };
+        /**
+         * Indicates if an error occurred
+         */
+        error: boolean;
+    };
+};
+
+export type GetUploadExtractStatusHandlerResponse = GetUploadExtractStatusHandlerResponses[keyof GetUploadExtractStatusHandlerResponses];
 
 export type DeleteProjectHandlerData = {
     body?: never;

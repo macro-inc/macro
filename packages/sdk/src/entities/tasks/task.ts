@@ -1,11 +1,12 @@
 import type { PropertyInput } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
-import type { Team } from '../teams/team';
+import { Team } from '../teams/team';
 import { User } from '../users/user';
 
 /**
@@ -86,6 +87,22 @@ export class Task extends Document {
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.create takes an options object, { name, markdown, ... }.',
+      );
+    rejectUnknownOptions('tasks.create', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+      initiative: true,
+      assignees: true,
+      dueDate: true,
+      team: true,
+      shareWithTeam: true,
+    });
+    if (typeof opts.name !== 'string' || !opts.name.trim())
+      throw new MacroError('tasks.create needs `name`, the task title.');
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
@@ -145,6 +162,18 @@ export class Task extends Document {
     client: MacroClient,
     opts: { title: string; body?: string },
   ): Promise<SimilarTask[]> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.findSimilar takes an options object, { title, body }.',
+      );
+    rejectUnknownOptions('tasks.findSimilar', opts, {
+      title: true,
+      body: true,
+    });
+    if (typeof opts.title !== 'string' || !opts.title.trim())
+      throw new MacroError(
+        'tasks.findSimilar needs `title`, the title of the task you would create.',
+      );
     const { results } = unwrap(
       await client.storage.taskSimilaritySearchHandler({
         body: { taskName: opts.title, markdown: opts.body ?? null },
@@ -192,6 +221,28 @@ export class Task extends Document {
       value?.type === 'SelectOption' &&
       value.value.includes(COMPLETED_STATUS_OPTION_ID)
     );
+  }
+
+  /**
+   * The task's team slug, such as `DB-245`, the short name to put in git
+   * branch names. It is the slug of the team the task is numbered in, then
+   * the task's number in that team; `documents.byTeamSlug` resolves a slug of
+   * the caller's current team back to its task. `undefined` when the task has
+   * no team number, or that team is not one of the caller's. `branchName()`
+   * suggests a whole branch name, but takes its prefix from the caller's first
+   * team, so it can differ from this slug.
+   *
+   * @readonly
+   */
+  async slug(): Promise<string | undefined> {
+    const { teamId, teamTaskId } = await this.detail.get();
+    if (!teamId || !teamTaskId) return undefined;
+
+    const teams = await Team.list(this.client);
+    const taskTeam = teams.find((team) => team.id === teamId);
+    if (!taskTeam) return undefined;
+
+    return `${await taskTeam.slug()}-${teamTaskId}`;
   }
 
   /**

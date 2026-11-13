@@ -15,6 +15,8 @@ export type PerQueryPersistence = {
   get: (queryHash: string) => Promise<PersistedQueryEntry | undefined>;
   set: (entry: PersistedQueryEntry) => void;
   remove: (queryHash: string) => void;
+  /** Delete every stored entry `keep` rejects. */
+  prune: (keep: (entry: PersistedQueryEntry) => boolean) => Promise<void>;
   flush: (options?: { throwOnError?: boolean }) => Promise<void>;
 };
 
@@ -157,6 +159,27 @@ export function createPerQueryIDBStore(
       pendingPuts.delete(queryHash);
       pendingDeletes.add(queryHash);
       scheduleFlush();
+    },
+
+    prune: (keep) => {
+      const currentGeneration = generation;
+      return enqueueWrite(async () => {
+        const tx = await database(dbName).transaction(STORE_NAME, 'readwrite');
+        if (generation !== currentGeneration) return;
+        const cursorRequest = tx.objectStore(STORE_NAME).openCursor();
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          if (!keep(cursor.value as PersistedQueryEntry)) cursor.delete();
+          cursor.continue();
+        };
+
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+      });
     },
 
     flush: async (options) => {

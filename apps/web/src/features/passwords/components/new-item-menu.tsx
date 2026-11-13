@@ -4,7 +4,6 @@ import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
-import FolderPlusIcon from '@icon/system/regular/folder-plus.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
@@ -13,12 +12,14 @@ import { PASSWORD_KINDS } from '../core/kinds';
 import type { PasswordKind } from '../core/types';
 import { KIND_ICONS } from './kind-icon';
 
-/** The kind is chosen here, before any editor opens. */
+/**
+ * The kind is chosen here, before any editor opens. Folders come from the
+ * sidebar's Folders "+".
+ */
 export function NewItemMenu(props: {
   presentation: 'sidebar' | 'toolbar';
   destination: string;
   onCreate: (kind: PasswordKind) => void;
-  onFolder: () => void;
 }) {
   const label = () =>
     t('passwords.newItemOrFolder', { destination: props.destination });
@@ -66,12 +67,6 @@ export function NewItemMenu(props: {
               </Dropdown.Item>
             )}
           </For>
-        </Dropdown.Group>
-        <Dropdown.Group>
-          <Dropdown.Item onSelect={props.onFolder}>
-            <FolderPlusIcon class="size-4 shrink-0" />
-            <span class="truncate">{t('passwords.folder')}</span>
-          </Dropdown.Item>
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>

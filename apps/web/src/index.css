@@ -316,6 +316,8 @@ body.tauri-ios {
   --color-write:       var(--color-blue);
   --color-code:        var(--color-lime);
   --color-chat:        var(--color-cyan);
+  /* Brand marks of partner agents. */
+  --color-brand-claude: #D97757;
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
@@ -522,6 +524,8 @@ body.tauri-ios {
   --color-write:       var(--color-blue);
   --color-code:        var(--color-lime);
   --color-chat:        var(--color-cyan);
+  /* Brand marks of partner agents. */
+  --color-brand-claude: #D97757;
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);

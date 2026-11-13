@@ -90,19 +90,21 @@ RPC or provider work. The caller rechecks emptiness under the existing vault lea
 and retains its opaque guard in `ClearedTeam` through ordinary team deletion, so a
 first create cannot race the proof. If data appears under that lease, release it
 before DSS takes the same lease for namespace purge. Any retained item or tombstone requires
-the internal team purge, with the same global rollout and provider gate as human
-admission. Off-existing, remote error and absent provider configuration fail before
-ordinary team cleanup. Namespace erasure precedes metadata purge; incomplete
+the trusted internal team purge, independent of user rollout. Absent provider
+configuration or failed purge blocks ordinary team cleanup. Namespace erasure precedes metadata purge; incomplete
 erasure retains retry identities and the closed-team fence.
 
-The global rollout evaluates `enable-passwords-v1` for explicit service context
-`passwords-v1` through the shared strict feature_flags transport. Human admissions
-also require the same key for the authenticated actor, matching frontend discovery.
-Configure the service context explicitly alongside the intended human cohorts. Local
-composition enables both explicitly; missing/error results in either never default on.
-Both bounded jobs gate before discovery: explicit failed-item deletion and retained
-TOTP generation cleanup pause while off and resume on enablement. No person-erasure
-queue or per-person fence is used.
+Human admission evaluates `enable-passwords-v1` for the authenticated user through
+the shared strict feature_flags transport, matching frontend discovery. Disabled,
+missing or failed evaluations deny the request; provider configuration is still
+required. Local composition explicitly enables the user flag. No service identity
+is evaluated.
+
+The bounded explicit-item and TOTP cleanup jobs, reconciliation and trusted internal
+team purge run independently of flags. Empty maintenance passes do no provider work
+and need no provider configuration. Retained erasure work checks provider readiness
+and preserves retry journals on failure. No person-erasure queue or per-person fence
+is used.
 
 ## OpenBao
 
@@ -189,7 +191,10 @@ subject/audience and exact team claim. Its token may read/delete only that team'
 namespace and expires within 60 seconds; the normal values role gains no parent
 privileges. Local bootstrap provisions it idempotently. Hosted deployment must
 provision the same role before deploying this deletion path; missing roles fail
-loudly. Runtime services never receive the bootstrap token. OpenBao DELETE begins
+loudly. Hosted dev provisions the namespace, mounts, policies, and both JWT
+roles with the [hosted provisioning procedure](../../infra/openbao/README.md),
+which shares the local bootstrap's logic. Runtime services never receive the
+bootstrap token. OpenBao DELETE begins
 asynchronous erasure, so the adapter confirms namespace disappearance before
 acknowledging success and removing vault metadata. Closed team identities remain
 fenced against delayed senders.
