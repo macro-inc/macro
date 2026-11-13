@@ -1,5 +1,8 @@
 //! Broker envelope and publication for verified GitHub App deliveries.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::GithubWebhookReceived;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroGithubWebhooksTopic;
@@ -18,7 +21,7 @@ impl TopicEvent for GithubWebhookTopicEvent {
     type Topic = MacroGithubWebhooksTopic;
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = GithubWebhookPublicEvent;
 
     fn exposure(
         &self,
@@ -26,14 +29,79 @@ impl TopicEvent for GithubWebhookTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, PublicEntityType, PublicEvent, Stage,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::Received(_) => Exposure::pending(
-                PendingPhase::TeamFamilies,
-                "GithubInstallation(installation_id), resolved to its owners at fan-out; project event, action and repository, never the raw payload",
-            ),
-        })
+        match self {
+            Self::Received(delivery) => {
+                let installation_id = delivery.installation_id.to_string();
+                // Delivery resolves the installation to the owners who may
+                // see it (the routines claim rule), at fan-out time.
+                Ok(Exposure::Public(PublicEvent {
+                    name: "github_webhook.received",
+                    entity: EntityRef::new(
+                        PublicEntityType::GithubInstallation,
+                        installation_id.clone(),
+                    ),
+                    audience: Audience::GithubInstallation { installation_id },
+                    stage: Stage::Preview,
+                    payload: Cow::Owned(GithubWebhookPublicEvent::Received(
+                        GithubWebhookDelivery::from(delivery),
+                    )),
+                }))
+            }
+        }
+    }
+}
+
+/// The public projection of [`GithubWebhookTopicEvent`]: what kind of
+/// delivery arrived and for which repository. Never the raw payload or the
+/// sender; read details from GitHub.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum GithubWebhookPublicEvent {
+    /// Macro's GitHub App received and verified a delivery.
+    #[serde(rename = "github_webhook.received")]
+    Received(GithubWebhookDelivery),
+}
+
+/// Public body of `github_webhook.received`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct GithubWebhookDelivery {
+    /// The `X-GitHub-Event` header, such as `workflow_run`.
+    pub event: String,
+    /// The payload's `action`, such as `completed`; absent for events like `push`.
+    pub action: Option<String>,
+    /// The repository it is about, when it is about one.
+    pub repository: Option<GithubWebhookDeliveryRepository>,
+}
+
+/// A repository in a public GitHub delivery.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct GithubWebhookDeliveryRepository {
+    /// GitHub's numeric repository id.
+    pub id: u64,
+    /// `owner/name` at the time of the delivery.
+    pub full_name: String,
+}
+
+impl From<&GithubWebhookReceived> for GithubWebhookDelivery {
+    fn from(delivery: &GithubWebhookReceived) -> Self {
+        Self {
+            event: delivery.event.clone(),
+            action: delivery.action.clone(),
+            repository: delivery.repository.as_ref().map(|repository| {
+                GithubWebhookDeliveryRepository {
+                    id: repository.id,
+                    full_name: repository.full_name.clone(),
+                }
+            }),
+        }
     }
 }
 
