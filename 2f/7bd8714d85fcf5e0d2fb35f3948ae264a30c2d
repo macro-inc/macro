@@ -1,0 +1,29 @@
+apps/web/src/lib/core/util/url.test.ts
+  s_fb3e62830425eb::t_24d14b6d73257c 16-23,47,105-122
+apps/web/src/lib/core/util/url.ts
+  s_566949b96aabd0::t_01940c5b0c9b5b 2,51-54,59-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2f7bd8714d85fcf5e0d2fb35f3948ae264a30c2d",
+  "prompts": {},
+  "sessions": {
+    "s_566949b96aabd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cf7ecf1-c75e-4236-a82c-0eb762650a3d",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fb3e62830425eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fcdff70-f5b1-4849-9585-6d4147c7231a",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
