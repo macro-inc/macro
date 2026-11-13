@@ -1821,9 +1821,11 @@ async fn run() -> anyhow::Result<()> {
         (*bots_directory).clone(),
         (*harness).clone(),
         draining_sessions.clone(),
-        broker.clone(),
-        session_repo.clone(),
-        PgHarnessRepo::new(pool.clone()),
+        external_session_requests::BrokerExternalSessionRequests::new(
+            broker.clone(),
+            session_repo.clone(),
+            PgHarnessRepo::new(pool.clone()),
+        ),
         PgConnectionRepo::new(pool.clone()),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
