@@ -5,7 +5,7 @@
 // (initializeEditorWithVersionedState, :565), syncLexicalToLoro's skip tags and first-sync
 // gate (:410, :433, :441) and codeNodeUpdateHandler (:355). Re-check it against that file
 // when the blob changes.
-import { CodeHighlightNode, CodeNode } from '@lexical/code-core';
+
 import {
   CODE_HIGHLIGHT_IDS_TAG,
   FROM_LORO_TAG,
@@ -20,6 +20,11 @@ import {
   loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
 import { MARKDOWN_VERSION_COUNTER } from '@core/component/LexicalMarkdown/version';
+import {
+  $isCodeNode as $isLexicalCodeNode,
+  CodeHighlightNode,
+  CodeNode,
+} from '@lexical/code-core';
 import { $convertFromMarkdownString } from '@lexical/markdown';
 import {
   createLoroManager,
@@ -40,12 +45,11 @@ import {
   $createParagraphNode,
   $getNodeByKey,
   $getRoot,
-  $isCodeNode as $isLexicalCodeNode,
   $isElementNode,
   CONTROLLED_TEXT_INSERTION_COMMAND,
-  type MutatedNodes,
   type NodeKey,
   type SerializedEditorState,
+  type UpdateListenerPayload,
 } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import { createRoot } from 'solid-js';
@@ -265,7 +269,9 @@ function wireSync(
     writes.push(
       loro.syncToLoro(loroSyncState(editor.getEditorState()) as never)
     );
-  const codeIdsPass = (mutatedNodes: MutatedNodes | null): boolean => {
+  const codeIdsPass = (
+    mutatedNodes: UpdateListenerPayload['mutatedNodes']
+  ): boolean => {
     if (!mutatedNodes || mutatedNodes.size === 0) return false;
     const keys = new Set<NodeKey>();
     for (const [klass, mutations] of mutatedNodes) {
@@ -289,7 +295,7 @@ function wireSync(
               parents.add(node);
               continue;
             }
-            const parent = node?.getParent();
+            const parent = node?.getParent() ?? null;
             if ($isLexicalCodeNode(parent) || $isCustomCodeNode(parent))
               parents.add(parent);
           }
