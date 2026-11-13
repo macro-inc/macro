@@ -1,0 +1,19 @@
+infra/stacks/gitai-service/storage.ts
+  s_6dd028f21c9ecc::t_6e1694beff983e 42-43,57-62,138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1575dad161b40cf2ea2f95949cb3d681e59384c9",
+  "prompts": {},
+  "sessions": {
+    "s_6dd028f21c9ecc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12ca901f-69ea-43d0-ba06-391ff7d83e32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
