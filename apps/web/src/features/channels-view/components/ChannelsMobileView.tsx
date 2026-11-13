@@ -46,6 +46,7 @@ import type { ChannelsDataSource } from '../queries';
 import type { ChannelSectionPreferences } from '../types';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
+import { ChannelMentionCount } from './rail/ChannelCountPill';
 import { ChannelLiveCallBadge } from './rail/ChannelLiveCallBadge';
 import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
@@ -309,6 +310,11 @@ export function ChannelsMobileView(props: {
                         : undefined
                     }
                     trailing={callActions(channel.id)}
+                    badge={
+                      <ChannelMentionCount
+                        count={channelActivity.mentionCount(channel.id)}
+                      />
+                    }
                     item={{
                       ...toInboxCardDisplayItem(channel),
                       unread: isUnread(channel),
@@ -415,6 +421,7 @@ export function ChannelsMobileView(props: {
                       <ChannelPin
                         channel={channel}
                         unread={isUnread(channel)}
+                        mentions={channelActivity.mentionCount(channel.id)}
                         onActivate={(event) =>
                           fireAndForget(
                             openChannel(channel, event),

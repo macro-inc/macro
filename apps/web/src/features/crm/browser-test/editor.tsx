@@ -144,6 +144,12 @@ function Fixture() {
         [id(6)]: { type: 'String', value: 'Follow up' },
       },
     },
+    {
+      rowId: id(11),
+      cells: {
+        [id(6)]: { type: 'String', value: 'Line one\nLine two\nLine three' },
+      },
+    },
   ];
   const api = createPipelineApi(
     {

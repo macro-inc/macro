@@ -114,6 +114,16 @@ async fn changed(
     }
 }
 
+/// The catalog sizes no host can sell, from what `allocation` reports.
+async fn sold_out(repo: &PgComputerRepo) -> Vec<ComputerSize> {
+    let hosts = repo.allocation().await.unwrap();
+    crate::domain::size::current_catalog()
+        .into_iter()
+        .filter(|entry| !hosts.iter().any(|host| host.sells(entry.resources.units())))
+        .map(|entry| entry.size)
+        .collect()
+}
+
 async fn host(
     repo: &PgComputerRepo,
     name: &str,
@@ -154,9 +164,7 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
 
     assert!(matches!(tenth, Err(ReserveError::SoldOut)));
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog(), now())
-            .await
-            .unwrap(),
+        sold_out(&repo).await,
         vec![
             ComputerSize::Standard,
             ComputerSize::Large,
@@ -165,19 +173,6 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
     );
     // Expired reservations still hold capacity: one may yet settle as
     // charged and become a computer.
-    assert_eq!(
-        repo.sold_out_sizes(
-            &crate::domain::size::current_catalog(),
-            now() + Duration::minutes(15)
-        )
-        .await
-        .unwrap(),
-        vec![
-            ComputerSize::Standard,
-            ComputerSize::Large,
-            ComputerSize::Xl
-        ]
-    );
     assert!(matches!(
         repo.reserve(
             standard(10),
@@ -388,7 +383,21 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
-    assert!(matches!(second[0].effect, Effect::Stop { .. }));
+    // The first connection told the buyer setup finished.
+    assert_eq!(
+        second[0].effect,
+        Effect::NotifySetup {
+            outcome: crate::domain::lifecycle::SetupOutcome::Ready,
+        }
+    );
+    repo.complete_effect(second[0].id).await.unwrap();
+
+    let third = repo
+        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .await
+        .unwrap();
+    assert_eq!(third.len(), 1);
+    assert!(matches!(third[0].effect, Effect::Stop { .. }));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -607,9 +616,7 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
     );
     assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog(), now())
-            .await
-            .unwrap(),
+        sold_out(&repo).await,
         vec![ComputerSize::Large, ComputerSize::Xl]
     );
     reserve(&repo, standard(51)).await;
