@@ -55,7 +55,8 @@ pub struct ActivityFeedInput {
     pub scope: ActivityFeedScope,
     /// With the `TEAM` scope, only this teammate's activity: still only on
     /// entities shared with the user, and none for someone who is not a
-    /// teammate. Not allowed with `MINE`.
+    /// teammate. Not allowed with `MINE`, nor naming the user, whose own
+    /// activity is the `MINE` scope.
     pub actor_id: Option<String>,
 }
 
@@ -97,6 +98,11 @@ fn encode_cursor(occurred_at: DateTime<Utc>, id: Uuid, limit: u32) -> String {
     .type_erase()
 }
 
+/// The error for an `actorId` outside the team feed: with `MINE`, or naming
+/// the user.
+const ACTOR_NEEDS_TEAMMATE: &str =
+    "actorId names a teammate and needs the TEAM scope; read your own activity with MINE";
+
 /// Resolve one page of the authenticated user's activity feed, newest first.
 ///
 /// In the `MINE` scope the subject is the viewer's principal string, so
@@ -123,9 +129,12 @@ where
             reader.subject_feed(user_id.as_ref(), cursor, limit).await
         }
         (ActivityFeedScope::Mine, Some(_)) => {
-            return Err(async_graphql::Error::new(
-                "actorId is only allowed with the TEAM scope",
-            ));
+            return Err(async_graphql::Error::new(ACTOR_NEEDS_TEAMMATE));
+        }
+        // The team feed never holds the viewer's own rows, so this would
+        // be an empty page that looks like no activity.
+        (ActivityFeedScope::Team, Some(actor)) if actor == user_id.as_ref() => {
+            return Err(async_graphql::Error::new(ACTOR_NEEDS_TEAMMATE));
         }
         (ActivityFeedScope::Team, actor) => {
             reader

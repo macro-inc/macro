@@ -95,4 +95,10 @@ async fn team_activity_reads_one_teammate_when_asked() {
 
     let mine = actor_page(&harness, "MINE", TEAMMATE_ID).await;
     assert_eq!(mine.errors.len(), 1, "an actor needs the TEAM scope");
+
+    // The viewer is never their own teammate: refused like MINE + actorId,
+    // not an empty page.
+    let own = actor_page(&harness, "TEAM", VALID_USER_ID).await;
+    assert_eq!(own.errors.len(), 1, "the viewer is not a teammate");
+    assert_eq!(own.errors[0].message, mine.errors[0].message);
 }
