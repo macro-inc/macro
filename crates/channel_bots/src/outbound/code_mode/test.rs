@@ -46,7 +46,12 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     }
     assert!(names.iter().any(|name| name == "RenderCanvas"));
     assert!(tools.system_prompt().contains("Code Mode"));
-    assert!(!tools.system_prompt().contains("execution.views.present"));
+    // Replies cannot present views, so the bot is never told to.
+    assert!(
+        !tools
+            .system_prompt()
+            .contains("present them with `execution.views.present`")
+    );
 }
 
 #[test]
