@@ -1,0 +1,27 @@
+.github/workflows/deploy-service-generic.yml
+  s_9b1603f4fd6889::t_eea824dc9daf88 27
+.github/workspace-dep-closures.json
+  s_9b1603f4fd6889::t_ac50fb937b9236 7719-7736
+.github/services-config.json
+  s_9b1603f4fd6889::t_6c01fcd1fd37a4 321-331
+crates/macro_service_urls/src/lib.rs
+  s_9b1603f4fd6889::t_6c01fcd1fd37a4 663-668
+nix/cloud-storage.nix
+  s_9b1603f4fd6889::t_6c01fcd1fd37a4 524-527,678
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ab8ade13cc1e9922d34412ded5a39129004df65",
+  "prompts": {},
+  "sessions": {
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
