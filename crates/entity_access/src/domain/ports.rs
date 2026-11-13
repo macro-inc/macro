@@ -350,6 +350,15 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         principal_id: &str,
     ) -> impl Future<Output = Result<bool, AccessError>> + Send;
 
+    /// The members of [`Self::get_entity_users`]'s generic union reached
+    /// through a grant at `min_level` or above, in one read, uncached.
+    fn get_entity_users_at_least(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        min_level: AccessLevel,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
     /// Whether `principal_id` holds a direct `user` grant on an entity, not
     /// inherited from a project: membership in [`Self::get_direct_entity_users`].
     /// `principal_id` matches as in [`Self::is_entity_user`].
@@ -677,6 +686,34 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
                 .await?
                 .iter()
                 .any(|user| user.as_ref() == principal.as_ref()))
+        }
+    }
+
+    /// The explicit accessors (as [`Self::get_users_by_entity_uncached`])
+    /// whose access is at least `min_level`, such as a form's editors.
+    ///
+    /// The default asks each accessor's level; the database-backed service
+    /// overrides it with one set-based read over the grants.
+    fn get_users_by_entity_at_least(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: AccessLevel,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send {
+        async move {
+            let mut admitted = Vec::new();
+            for user in self
+                .get_users_by_entity_uncached(entity_id, entity_type)
+                .await?
+            {
+                let level = self
+                    .get_access_level(Some(&user.0), entity_id, entity_type)
+                    .await?;
+                if level.is_some_and(|level| level >= min_level) {
+                    admitted.push(user);
+                }
+            }
+            Ok(admitted)
         }
     }
 

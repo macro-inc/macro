@@ -682,6 +682,15 @@ impl AccessRepository for MockRepo {
         Ok(self.channel_users.lock().await.clone())
     }
 
+    async fn get_entity_users_at_least(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        _min_level: AccessLevel,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.get_entity_users(entity_id, entity_type).await
+    }
+
     async fn is_entity_user(
         &self,
         entity_id: &Uuid,

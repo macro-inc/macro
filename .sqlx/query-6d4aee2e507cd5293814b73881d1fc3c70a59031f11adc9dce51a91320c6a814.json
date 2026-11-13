@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT user_id AS \"user_id!\" FROM (\n            SELECT ea.source_id AS user_id FROM entity_access ea\n            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'user'\n              AND ea.access_level >= $3::text::\"AccessLevel\"\n\n            UNION\n\n            SELECT cp.user_id FROM entity_access ea\n            JOIN comms_channel_participants cp\n              ON cp.channel_id = ea.source_id::uuid AND cp.left_at IS NULL\n            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'channel'\n              AND ea.access_level >= $3::text::\"AccessLevel\"\n\n            UNION\n\n            SELECT tu.user_id FROM entity_access ea\n            JOIN team_user tu ON tu.team_id = ea.source_id::uuid\n            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'\n              AND ea.access_level >= $3::text::\"AccessLevel\"\n        ) AS granted\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6d4aee2e507cd5293814b73881d1fc3c70a59031f11adc9dce51a91320c6a814"
+}

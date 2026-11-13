@@ -13,6 +13,9 @@
 //! index narrows the rows, which is why no expression index is needed.
 //! Nothing here goes through a process cache: callers see changes at once.
 
+use crate::domain::models::AccessLevel;
+use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -22,6 +25,10 @@ mod test;
 
 /// Whether `principal_id` holds a direct `user` grant, is an active
 /// participant of a granting channel, or is a member of a granting team.
+///
+/// The exact id is probed first: stored ids are normally canonical, so a hit
+/// is one index probe per arm. Only a miss also tries the case-folded
+/// comparison, which filters every member of the granting channels and teams.
 #[tracing::instrument(err, skip(pool))]
 pub async fn is_entity_user(
     pool: &PgPool,
@@ -29,29 +36,57 @@ pub async fn is_entity_user(
     entity_type: EntityType,
     principal_id: &str,
 ) -> Result<bool, sqlx::Error> {
+    let exact = sqlx::query_scalar!(
+        r#"
+        SELECT (
+            EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'user'
+                  AND ea.source_id = $3
+            )
+            OR EXISTS (
+                SELECT 1 FROM entity_access ea
+                JOIN comms_channel_participants cp
+                  ON cp.channel_id = ea.source_id::uuid AND cp.user_id = $3
+                WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'channel'
+                  AND cp.left_at IS NULL
+            )
+            OR EXISTS (
+                SELECT 1 FROM entity_access ea
+                JOIN team_user tu ON tu.team_id = ea.source_id::uuid AND tu.user_id = $3
+                WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'
+            )
+        ) AS "is_user!"
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        principal_id,
+    )
+    .fetch_one(pool)
+    .await?;
+    if exact {
+        return Ok(true);
+    }
     sqlx::query_scalar!(
         r#"
         SELECT (
             EXISTS (
                 SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'user'
-                  AND (ea.source_id = $3
-                       OR (ea.source_id LIKE 'macro|%' AND lower(ea.source_id) = $3))
+                  AND ea.source_id LIKE 'macro|%' AND lower(ea.source_id) = $3
             )
             OR EXISTS (
                 SELECT 1 FROM entity_access ea
                 JOIN comms_channel_participants cp ON cp.channel_id = ea.source_id::uuid
                 WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'channel'
                   AND cp.left_at IS NULL
-                  AND (cp.user_id = $3
-                       OR (cp.user_id LIKE 'macro|%' AND lower(cp.user_id) = $3))
+                  AND cp.user_id LIKE 'macro|%' AND lower(cp.user_id) = $3
             )
             OR EXISTS (
                 SELECT 1 FROM entity_access ea
                 JOIN team_user tu ON tu.team_id = ea.source_id::uuid
                 WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'
-                  AND (tu.user_id = $3
-                       OR (tu.user_id LIKE 'macro|%' AND lower(tu.user_id) = $3))
+                  AND tu.user_id LIKE 'macro|%' AND lower(tu.user_id) = $3
             )
         ) AS "is_user!"
         "#,
@@ -90,20 +125,35 @@ pub async fn is_direct_entity_user(
     .await
 }
 
-/// Whether `principal_id` is an active participant of a channel.
+/// Whether `principal_id` is an active participant of a channel: the exact
+/// id first (one index probe), the case-folded comparison only on a miss.
 #[tracing::instrument(err, skip(pool))]
 pub async fn is_channel_user(
     pool: &PgPool,
     channel_id: &Uuid,
     principal_id: &str,
 ) -> Result<bool, sqlx::Error> {
+    let exact = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM comms_channel_participants cp
+            WHERE cp.channel_id = $1 AND cp.user_id = $2 AND cp.left_at IS NULL
+        ) AS "is_user!"
+        "#,
+        channel_id,
+        principal_id,
+    )
+    .fetch_one(pool)
+    .await?;
+    if exact {
+        return Ok(true);
+    }
     sqlx::query_scalar!(
         r#"
         SELECT EXISTS (
             SELECT 1 FROM comms_channel_participants cp
             WHERE cp.channel_id = $1 AND cp.left_at IS NULL
-              AND (cp.user_id = $2
-                   OR (cp.user_id LIKE 'macro|%' AND lower(cp.user_id) = $2))
+              AND cp.user_id LIKE 'macro|%' AND lower(cp.user_id) = $2
         ) AS "is_user!"
         "#,
         channel_id,
@@ -111,4 +161,58 @@ pub async fn is_channel_user(
     )
     .fetch_one(pool)
     .await
+}
+
+/// Explicit accessors whose grant is at least `min_level`: direct user
+/// grants, active participants of granting channels and members of granting
+/// teams, each counted only through a grant at that level or above. One
+/// set-based read; link-share access never counts.
+#[tracing::instrument(err, skip(pool))]
+pub async fn entity_users_at_least(
+    pool: &PgPool,
+    entity_id: &Uuid,
+    entity_type: EntityType,
+    min_level: AccessLevel,
+) -> Result<Vec<MacroUserIdStr<'static>>, sqlx::Error> {
+    let users = sqlx::query_scalar!(
+        r#"
+        SELECT user_id AS "user_id!" FROM (
+            SELECT ea.source_id AS user_id FROM entity_access ea
+            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'user'
+              AND ea.access_level >= $3::text::"AccessLevel"
+
+            UNION
+
+            SELECT cp.user_id FROM entity_access ea
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = ea.source_id::uuid AND cp.left_at IS NULL
+            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'channel'
+              AND ea.access_level >= $3::text::"AccessLevel"
+
+            UNION
+
+            SELECT tu.user_id FROM entity_access ea
+            JOIN team_user tu ON tu.team_id = ea.source_id::uuid
+            WHERE ea.entity_id = $1 AND ea.entity_type = $2 AND ea.source_type = 'team'
+              AND ea.access_level >= $3::text::"AccessLevel"
+        ) AS granted
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        min_level.to_string(),
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut users: Vec<MacroUserIdStr<'static>> = users
+        .iter()
+        .filter_map(|user| {
+            MacroUserIdStr::parse_from_str(user)
+                .ok()
+                .map(|user| user.into_owned())
+        })
+        .collect();
+    users.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    users.dedup();
+    Ok(users)
 }

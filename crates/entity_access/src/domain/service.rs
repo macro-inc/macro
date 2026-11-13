@@ -897,6 +897,65 @@ where
     }
 
     #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn get_users_by_entity_at_least(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: AccessLevel,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match entity_type {
+            // Grants carry their level: one set-based read.
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::AgentSession
+            | EntityType::Initiative
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form => {
+                let entity_id = parse_accessor_entity_id(entity_id)?;
+                self.repo
+                    .get_entity_users_at_least(&entity_id, entity_type, min_level)
+                    .await
+            }
+            // A row's audience is its database's.
+            EntityType::DatabaseRow => {
+                let row_id = parse_accessor_entity_id(entity_id)?;
+                match self.repo.get_database_row_database(&row_id).await? {
+                    Some(database_id) => {
+                        self.repo
+                            .get_entity_users_at_least(
+                                &database_id,
+                                EntityType::Database,
+                                min_level,
+                            )
+                            .await
+                    }
+                    None => Ok(Vec::new()),
+                }
+            }
+            // Channels, calls, email threads, CRM and foreign entities derive
+            // levels differently; ask each accessor's level.
+            _ => {
+                let mut admitted = Vec::new();
+                for user in self
+                    .get_users_by_entity_uncached(entity_id, entity_type)
+                    .await?
+                {
+                    let level = self
+                        .get_access_level(Some(&user.0), entity_id, entity_type)
+                        .await?;
+                    if level.is_some_and(|level| level >= min_level) {
+                        admitted.push(user);
+                    }
+                }
+                Ok(admitted)
+            }
+        }
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn is_accessor(
         &self,
         principal_id: &str,

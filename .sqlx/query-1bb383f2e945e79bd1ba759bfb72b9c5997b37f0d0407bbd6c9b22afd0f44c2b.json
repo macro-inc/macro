@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1 FROM comms_channel_participants cp\n            WHERE cp.channel_id = $1 AND cp.left_at IS NULL\n              AND cp.user_id LIKE 'macro|%' AND lower(cp.user_id) = $2\n        ) AS \"is_user!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_user!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1bb383f2e945e79bd1ba759bfb72b9c5997b37f0d0407bbd6c9b22afd0f44c2b"
+}

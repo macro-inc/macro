@@ -439,3 +439,59 @@ async fn participant_removal_is_visible_immediately(pool: PgPool) {
         assert!(!accessor_matches_listing(&service, USER_B, entity_id, entity_type).await);
     }
 }
+
+async fn grant_at(pool: &PgPool, entity_id: Uuid, source: &str, kind: &str, level: &str) {
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1, 'document', $2, $3::text::entity_access_source_type, $4::text::"AccessLevel")"#,
+        entity_id,
+        source,
+        kind,
+        level,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Accessors at a level come from the grants' own levels in one read: an
+/// editor directly or through a channel or team grant at edit, never a viewer
+/// or a link-share outsider.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn accessors_at_least_follow_the_grant_levels(pool: PgPool) {
+    seed(&pool).await;
+    let service = service(&pool);
+    let document = insert_public_document(&pool).await;
+    grant_at(&pool, document, DIRECT_STORED, "user", "edit").await;
+    grant_at(&pool, document, USER_D, "user", "view").await;
+    grant_at(&pool, document, &CHANNEL.to_string(), "channel", "edit").await;
+    grant_at(&pool, document, &TEAM_ALPHA.to_string(), "team", "comment").await;
+    leave(&pool, CHANNEL, USER_C).await;
+    let document = document.to_string();
+
+    let mut editors: Vec<String> = service
+        .get_users_by_entity_at_least(&document, EntityType::Document, AccessLevel::Edit)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|user| user.as_ref().to_owned())
+        .collect();
+    editors.sort();
+    let mut commenters: Vec<String> = service
+        .get_users_by_entity_at_least(&document, EntityType::Document, AccessLevel::Comment)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|user| user.as_ref().to_owned())
+        .collect();
+    commenters.sort();
+
+    assert_eq!(editors, vec![DIRECT, USER_A, USER_B]);
+    assert!(commenters.contains(&TEAM_MEMBER.to_owned()));
+    assert!(!commenters.contains(&USER_D.to_owned()), "a viewer");
+    assert!(
+        !commenters.contains(&OUTSIDER.to_owned()),
+        "link share only"
+    );
+    assert!(!commenters.contains(&USER_C.to_owned()), "left the channel");
+}
