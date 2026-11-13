@@ -1,0 +1,35 @@
+Cargo.lock
+  s_43e28e08e9205b::t_cf90ba26704e02 8162
+crates/event_stream/AGENTS.md
+  s_43e28e08e9205b::t_08b6219317b4c3 73-78
+crates/event_stream/Cargo.toml
+  s_8f5cd2f46a7af5::t_c2e7b080c2599e 113
+crates/event_stream/src/domain/invalidations.rs
+  s_43e28e08e9205b::t_fdf92cf821c501 6-8,14-15,18-19,21,27-33,35-55,57-112,171-177
+crates/event_stream/src/domain/invalidations/test.rs
+  s_43e28e08e9205b::t_26ec2d39c7089b 1-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "38c28b1ff2908445e3e46dac2b7af1f3fc8d06b8",
+  "prompts": {},
+  "sessions": {
+    "s_43e28e08e9205b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3ada1a62-6499-4ad0-96d4-e7bc713257be",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8f5cd2f46a7af5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e83c6eab-d99e-49ab-9db5-cee4773c8a6e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
