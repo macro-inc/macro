@@ -373,6 +373,7 @@ fn valid_filters() -> WebhookFilters {
     vec![WebhookFilter {
         events: vec!["file.created".to_string()],
         ids: None,
+        entity_types: None,
     }]
 }
 
@@ -707,6 +708,7 @@ async fn patch_endpoint_and_headers_publish_final_validity_row_without_secrets()
     let replacement_filters = vec![WebhookFilter {
         events: vec!["webhook.updated".to_string()],
         ids: Some(vec!["wh_target".to_string()]),
+        entity_types: None,
     }];
     let request = PatchWebhookRequest {
         name: None,
@@ -1059,6 +1061,7 @@ async fn filter_with_empty_events_is_rejected() {
     request.filters = vec![WebhookFilter {
         events: Vec::new(),
         ids: None,
+        entity_types: None,
     }];
 
     assert_bad_request(service.create_webhook(caller(), request).await);
@@ -1073,6 +1076,7 @@ async fn filter_with_empty_ids_is_rejected() {
     request.filters = vec![WebhookFilter {
         events: vec!["file.created".to_string()],
         ids: Some(Vec::new()),
+        entity_types: None,
     }];
 
     assert_bad_request(service.create_webhook(caller(), request).await);
@@ -1101,6 +1105,7 @@ async fn filter_with_valid_ids_is_accepted() {
     request.filters = vec![WebhookFilter {
         events: vec!["file.created".to_string()],
         ids: Some(vec!["file_1".to_string()]),
+        entity_types: None,
     }];
     let expected_filters = request.filters.clone();
 

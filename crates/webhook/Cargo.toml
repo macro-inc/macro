@@ -13,7 +13,7 @@ consumer = [
   "ingestion",
   "macro_event_broker/outbound",
 ]
-default = ["consumer", "inbound", "outbound", "ports", "stream"]
+default = ["consumer", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
   "dep:axum-extra",
@@ -26,6 +26,7 @@ inbound = [
   "dep:serde_json",
   "dep:utoipa",
   "agent_session/schema",
+  "event_stream/schema",
   "call/inbound",
   "channels/schema",
   "documents/schema",
@@ -57,15 +58,6 @@ outbound = [
   "ports",
 ]
 ports = ["dep:serde_json", "dep:url"]
-stream = [
-  "dep:futures",
-  "dep:kafka_util",
-  "dep:tokio",
-  "dep:uuid",
-  "ingestion",
-  "inbound",
-  "macro_event_broker/outbound",
-]
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
@@ -79,6 +71,7 @@ call = { path = "../call", default-features = false, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
+event_stream = { path = "../event_stream" }
 model_owner = { path = "../model_owner" }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
@@ -89,7 +82,6 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
   "axum",
 ] }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
@@ -103,7 +95,6 @@ serde_json = { workspace = true, optional = true }
 webhook_signature = { path = "../webhook_signature", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
-strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                w.id,\n                w.workspace_id,\n                w.namespace,\n                w.name,\n                w.endpoint_url,\n                w.signing_secret,\n                w.headers,\n                w.status,\n                w.is_valid,\n                w.created_by_user_id,\n                w.created_at,\n                w.updated_at,\n                w.deleted_at,\n                w.filters\n            FROM webhook w\n            WHERE w.workspace_id = ANY($1)\n              AND w.deleted_at IS NULL\n              AND w.status = 'active'\n              AND w.is_valid\n              AND w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))\n              AND jsonb_path_exists(\n                  w.filters,\n                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',\n                  jsonb_build_object('event', $2::text, 'id', $3::text)\n              )\n            ORDER BY w.id\n            ",
+  "query": "\n            SELECT\n                w.id,\n                w.workspace_id,\n                w.namespace,\n                w.name,\n                w.endpoint_url,\n                w.signing_secret,\n                w.headers,\n                w.status,\n                w.is_valid,\n                w.created_by_user_id,\n                w.created_at,\n                w.updated_at,\n                w.deleted_at,\n                w.filters\n            FROM webhook w\n            WHERE w.workspace_id = ANY($1)\n              AND w.deleted_at IS NULL\n              AND w.status = 'active'\n              AND w.is_valid\n              AND (\n                  w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))\n                  OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($4::text)))\n                  OR w.filters @> '[{\"events\": [\"*\"]}]'::jsonb\n              )\n              AND jsonb_path_exists(\n                  w.filters,\n                  '$[*] ? ((@.events[*] == $event || @.events[*] == $family || @.events[*] == \"*\") && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',\n                  jsonb_build_object('event', $2::text, 'family', $4::text, 'id', $3::text)\n              )\n            ORDER BY w.id\n            ",
   "describe": {
     "columns": [
       {
@@ -78,6 +78,7 @@
       "Left": [
         "TextArray",
         "Text",
+        "Text",
         "Text"
       ]
     },
@@ -98,5 +99,5 @@
       false
     ]
   },
-  "hash": "8d07edbac300d8210fde997e9872e8963f71911ff794a8f0e0c8b65cfe799855"
+  "hash": "7ac8c8f4dd59a8b3157a8f5b50889454cdcf49a02855625e5b8f2f69d800ccbe"
 }

@@ -5,7 +5,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::WebhookFilter;
+use crate::domain::filters::WebhookFilter;
 
 const WEBHOOK_ID: &str = "wh_01998a2f-aaaa-7bbb-8ccc-dddddddddddd";
 const WORKSPACE_ID: &str = "team_0123";
@@ -25,10 +25,12 @@ fn filters() -> WebhookFilters {
         WebhookFilter {
             events: vec!["document.updated".to_string()],
             ids: Some(vec!["document-123".to_string()]),
+            entity_types: None,
         },
         WebhookFilter {
             events: vec!["webhook.updated".to_string()],
             ids: None,
+            entity_types: None,
         },
     ]
 }

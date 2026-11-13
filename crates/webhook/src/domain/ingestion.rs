@@ -5,8 +5,6 @@
 //! separate from `WebhookService`, which is the CRUD surface for webhook
 //! creation and edits.
 
-#[cfg(feature = "stream")]
-pub(crate) mod stream;
 #[cfg(test)]
 mod test;
 
@@ -19,12 +17,14 @@ use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
-use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
-use entity_access::domain::models::{AccessError, EntityType};
+use entity_access::domain::models::{AccessError, AccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
+use event_stream::domain::filters::{self, FilterSubject};
+use event_stream::domain::normalize::NormalizeError;
+use event_stream::domain::ports::PreviewFlag;
 use futures::future::join_all;
-use macro_event_broker::exposure::{Audience, Exposure, ExposureError, MinTeamRole, Stage};
+use macro_event_broker::exposure::{Audience, ExposureError, MinAccessLevel, MinTeamRole, Stage};
 use macro_event_broker::{Event, TopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::outbound::broker::MessageTopicEvent;
@@ -53,6 +53,10 @@ pub enum WebhookEventIngestionError {
     /// The broker envelope could not be represented by the queue contract.
     #[error("failed to serialize broker envelope: {0}")]
     Serialization(#[from] serde_json::Error),
+    /// The event is declared public under a name the event catalog does not
+    /// register.
+    #[error("public event `{0}` is not registered in the event catalog")]
+    Unregistered(&'static str),
     /// The event's audience has a class webhook delivery cannot resolve yet.
     #[error("unsupported webhook audience: {0}")]
     UnsupportedAudience(&'static str),
@@ -153,32 +157,84 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
         &self,
         event: Event<UserTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one event of any other public topic. A family that turns
+    /// public adds its topic to `event_stream::topics::DeclaredMacroEvent`
+    /// and one arm calling this in `inbound::kafka_consumer`.
+    fn ingest_public_event<E: TopicEvent>(
+        &self,
+        event: Event<E>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
 /// Webhook event ingestion service implementation.
-#[derive(Clone)]
-pub struct WebhookEventIngestionServiceImpl<A, R, Q> {
+///
+/// `P` evaluates the `public-event-stream` flag for a webhook's owner:
+/// preview events, and filters matched only through a wildcard, reach a
+/// webhook only when its owner has the flag. Without one ([`NoPreview`]) no
+/// owner has it, which is how every webhook behaved before the flag.
+pub struct WebhookEventIngestionServiceImpl<A, R, Q, P = NoPreview> {
     entity_access_service: Arc<A>,
     repository: R,
     enqueuer: Q,
+    preview: Arc<P>,
+}
+
+impl<A, R: Clone, Q: Clone, P> Clone for WebhookEventIngestionServiceImpl<A, R, Q, P> {
+    fn clone(&self) -> Self {
+        Self {
+            entity_access_service: self.entity_access_service.clone(),
+            repository: self.repository.clone(),
+            enqueuer: self.enqueuer.clone(),
+            preview: self.preview.clone(),
+        }
+    }
+}
+
+/// A [`PreviewFlag`] no user has.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPreview;
+
+impl PreviewFlag for NoPreview {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'static>) -> bool {
+        false
+    }
 }
 
 impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
-    /// Create a webhook event ingestion service.
+    /// Create a webhook event ingestion service with no preview access.
     pub fn new(entity_access_service: Arc<A>, repository: R, enqueuer: Q) -> Self {
         Self {
             entity_access_service,
             repository,
             enqueuer,
+            preview: Arc::new(NoPreview),
         }
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, P> WebhookEventIngestionServiceImpl<A, R, Q, P> {
+    /// Evaluate the `public-event-stream` flag for webhook owners with
+    /// `preview`.
+    pub fn with_preview_flag<P2>(
+        self,
+        preview: Arc<P2>,
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P2> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            preview,
+        }
+    }
+}
+
+impl<A, R, Q, P> WebhookEventIngestionServiceImpl<A, R, Q, P>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    P: PreviewFlag,
 {
     /// Resolve the users that currently have access to an entity.
     #[tracing::instrument(skip(self), err)]
@@ -191,6 +247,33 @@ where
             .get_users_by_entity(entity_id, entity_type)
             .await
             .map_err(WebhookEventIngestionError::EntityAccess)
+    }
+
+    /// The explicit accessors whose access level is at least `min_level`:
+    /// the accessor set (no link viewers), then each one's level.
+    #[tracing::instrument(skip(self), err)]
+    async fn accessors_at_least(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        min_level: MinAccessLevel,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
+        let floor = match min_level {
+            MinAccessLevel::Comment => AccessLevel::Comment,
+            MinAccessLevel::Edit => AccessLevel::Edit,
+            MinAccessLevel::Owner => AccessLevel::Owner,
+        };
+        let mut admitted = Vec::new();
+        for accessor in self.users_with_access(entity_id, entity_type).await? {
+            let level = self
+                .entity_access_service
+                .get_access_level(Some(&accessor.0), entity_id, entity_type)
+                .await?;
+            if level.is_some_and(|level| level >= floor) {
+                admitted.push(accessor);
+            }
+        }
+        Ok(admitted)
     }
 
     #[tracing::instrument(
@@ -208,9 +291,10 @@ where
     async fn match_and_enqueue(
         &self,
         event: NormalizedWebhookEvent,
+        stage: Stage,
         workspace_ids: Vec<String>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let webhooks = self
+        let candidates = self
             .repository
             .list_active_webhooks_matching_event(
                 workspace_ids,
@@ -219,8 +303,51 @@ where
             )
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
+        let webhooks = self.admitted_webhooks(candidates, &event, stage).await;
         tracing::Span::current().record("match_count", webhooks.len());
         self.enqueue_all(webhooks, event).await
+    }
+
+    /// The webhooks whose filters accept the event once the owner's flag is
+    /// known: a preview event, or a filter that matches only through a
+    /// wildcard, needs the owner to have `public-event-stream`. Every other
+    /// match stands as before.
+    async fn admitted_webhooks(
+        &self,
+        candidates: Vec<crate::domain::models::Webhook>,
+        event: &NormalizedWebhookEvent,
+        stage: Stage,
+    ) -> Vec<crate::domain::models::Webhook> {
+        let subject = FilterSubject {
+            event_name: &event.event_name,
+            entity_type: &event.entity_type,
+            entity_id: &event.entity_id,
+        };
+        let mut admitted = Vec::with_capacity(candidates.len());
+        for webhook in candidates {
+            // The repository matched exact names and ids. Only wildcards,
+            // entity types and preview events need deciding here.
+            let decided_by_repository = stage == Stage::Stable
+                && webhook
+                    .filters
+                    .iter()
+                    .all(|filter| !filter.uses_wildcards() && filter.entity_types.is_none());
+            if decided_by_repository
+                || (stage == Stage::Stable
+                    && filters::any_accepts(&webhook.filters, subject, false))
+            {
+                admitted.push(webhook);
+                continue;
+            }
+            let owner_flagged = match MacroUserIdStr::try_from(webhook.created_by_user_id.clone()) {
+                Ok(owner) => self.preview.enabled_for(&owner).await,
+                Err(_) => false,
+            };
+            if owner_flagged && filters::any_accepts(&webhook.filters, subject, true) {
+                admitted.push(webhook);
+            }
+        }
+        admitted
     }
 
     async fn enqueue_all(
@@ -250,46 +377,32 @@ where
     }
 }
 
-/// Normalize one broker event for delivery from its declared exposure.
+/// Normalize one broker event for webhook delivery from its declared
+/// exposure, through the normalization live streams share.
 ///
-/// `None` when the event is internal (or still in preview): it is not
-/// delivered by webhook or stream. The delivered body is the broker envelope
-/// around the event's public payload, so the payload's `event_type` and
-/// `metadata` sit where they always have.
+/// `None` when the event is internal. Preview events are returned with their
+/// stage; matching admits them only for flagged webhook owners.
+#[cfg(test)]
 pub(crate) fn normalize<E: TopicEvent>(
     event: &Event<E>,
 ) -> Result<Option<(NormalizedWebhookEvent, Audience)>, WebhookEventIngestionError> {
-    let public = match event.event.exposure()? {
-        Exposure::Public(public) => public,
-        Exposure::Internal(_) => return Ok(None),
+    Ok(normalize_staged(event)?.map(|(event, audience, _)| (event, audience)))
+}
+
+/// [`normalize`], with the event's rollout stage.
+fn normalize_staged<E: TopicEvent>(
+    event: &Event<E>,
+) -> Result<Option<(NormalizedWebhookEvent, Audience, Stage)>, WebhookEventIngestionError> {
+    let public = match event_stream::domain::normalize::normalize(event) {
+        Ok(Some(public)) => public,
+        Ok(None) => return Ok(None),
+        Err(NormalizeError::Exposure(error)) => return Err(error.into()),
+        Err(NormalizeError::Serialization(error)) => return Err(error.into()),
+        Err(NormalizeError::Unregistered(name)) => {
+            return Err(WebhookEventIngestionError::Unregistered(name));
+        }
     };
-    match public.stage {
-        Stage::Stable => {}
-        // Preview families are flag-gated by the event stream; until that
-        // gate exists here, they are not delivered.
-        Stage::Preview => return Ok(None),
-    }
-    let envelope = Event {
-        event_id: event.event_id,
-        agent_correlation_id: event.agent_correlation_id,
-        routine_id: event.routine_id,
-        agent_verb: event.agent_verb.clone(),
-        schema_version: event.schema_version,
-        event: public.payload.as_ref(),
-    };
-    let broker_envelope = serde_json::to_value(&envelope)?;
-    let entity_id = public.entity.entity_id;
-    let normalized = NormalizedWebhookEvent {
-        event_id: event.event_id.to_string(),
-        schema_version: event.schema_version,
-        event_name: public.name.to_string(),
-        entity_type: public.entity.entity_type.to_string(),
-        ordering_key: entity_id.clone(),
-        entity_id,
-        occurred_at: Utc::now(),
-        broker_envelope,
-    };
-    Ok(Some((normalized, public.audience)))
+    Ok(Some((public.event, public.audience, public.stage)))
 }
 
 /// Every audience nested in `audience`, depth first, with `Any` expanded.
@@ -303,6 +416,7 @@ fn audience_members(audience: &Audience) -> Vec<&Audience> {
         | Audience::TeamsOf { .. }
         | Audience::ContactsOf { .. }
         | Audience::GithubInstallation { .. }
+        | Audience::EntityAtLeast { .. }
         | Audience::Workspace { .. }
         | Audience::Snapshot { .. } => vec![audience],
     }
@@ -334,11 +448,12 @@ impl WorkspaceAudience {
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, P> WebhookEventIngestionServiceImpl<A, R, Q, P>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    P: PreviewFlag,
 {
     /// Normalize one event and enqueue it for every matching webhook its
     /// audience reaches.
@@ -346,10 +461,10 @@ where
         &self,
         event: &Event<E>,
     ) -> Result<(), WebhookEventIngestionError> {
-        let Some((normalized, audience)) = normalize(event)? else {
+        let Some((normalized, audience, stage)) = normalize_staged(event)? else {
             return Ok(());
         };
-        self.resolve_audience_and_enqueue(normalized, &audience)
+        self.resolve_audience_and_enqueue(normalized, stage, &audience)
             .await
     }
 
@@ -368,6 +483,7 @@ where
     async fn resolve_audience_and_enqueue(
         &self,
         event: NormalizedWebhookEvent,
+        stage: Stage,
         audience: &Audience,
     ) -> Result<(), WebhookEventIngestionError> {
         let mut workspaces = WorkspaceAudience::default();
@@ -404,6 +520,19 @@ where
                         "team admins",
                     ));
                 }
+                Audience::EntityAtLeast {
+                    entity_type,
+                    entity_id,
+                    min_level,
+                } => {
+                    workspaces.resolve = true;
+                    for accessor in self
+                        .accessors_at_least(entity_id, *entity_type, *min_level)
+                        .await?
+                    {
+                        workspaces.add_person(&accessor);
+                    }
+                }
                 Audience::GithubInstallation { .. } => {
                     return Err(WebhookEventIngestionError::UnsupportedAudience(
                         "GitHub installation",
@@ -429,15 +558,16 @@ where
         workspace_ids.extend(workspaces.exact);
         tracing::Span::current().record("workspace_count", workspace_ids.len());
 
-        self.match_and_enqueue(event, workspace_ids).await
+        self.match_and_enqueue(event, stage, workspace_ids).await
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, P> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q, P>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    P: PreviewFlag,
 {
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(
@@ -504,6 +634,19 @@ where
     async fn ingest_user_event(
         &self,
         event: Event<UserTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest(&event).await
+    }
+
+    #[tracing::instrument(
+        name = "webhook.ingest_public_event",
+        skip(self, event),
+        fields(event_id = %event.event_id),
+        err
+    )]
+    async fn ingest_public_event<E: TopicEvent>(
+        &self,
+        event: Event<E>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest(&event).await
     }

@@ -174,6 +174,8 @@ struct MockAccessService {
     users: Vec<MacroUserIdStr<'static>>,
     failure: Option<AccessFailure>,
     calls: Arc<Mutex<Vec<(String, EntityType)>>>,
+    /// Access levels by user id, for access-floor audiences.
+    levels: Arc<Mutex<std::collections::HashMap<String, AccessLevel>>>,
 }
 
 impl MockAccessService {
@@ -182,6 +184,7 @@ impl MockAccessService {
             users,
             failure: None,
             calls: Arc::default(),
+            levels: Arc::default(),
         }
     }
 }
@@ -209,11 +212,14 @@ impl EntityAccessService for MockAccessService {
 
     async fn get_access_level(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        unimplemented!("not used by webhook event ingestion")
+        let user_id = user_id
+            .map(|user| user.as_ref().to_string())
+            .unwrap_or_default();
+        Ok(lock(&self.levels).get(&user_id).copied())
     }
 
     async fn check_access(
@@ -1065,6 +1071,7 @@ async fn search_only_document_events_skip_webhook_delivery() {
         users: vec![user_id(PERSONAL_WORKSPACE_ID)],
         failure: Some(AccessFailure::Internal),
         calls: Arc::default(),
+        levels: Arc::default(),
     };
     let repository = MockRepository::new(
         vec![PERSONAL_WORKSPACE_ID.to_string()],
@@ -1105,6 +1112,7 @@ async fn normalizes_all_webhook_variants_with_direct_workspace_ownership() {
             users: vec![user_id("macro|unrelated@example.com")],
             failure: Some(AccessFailure::Internal),
             calls: Arc::default(),
+            levels: Arc::default(),
         };
         let repository = MockRepository::new(
             vec!["workspace-that-must-not-be-used".to_string()],
@@ -1444,6 +1452,7 @@ async fn entity_access_internal_error_is_not_transient() {
         users: Vec::new(),
         failure: Some(AccessFailure::Internal),
         calls: Arc::default(),
+        levels: Arc::default(),
     };
     let repository = MockRepository::new(Vec::new(), Vec::new());
     let enqueuer = MockEnqueuer::default();
@@ -1977,39 +1986,6 @@ async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
     );
 }
 
-/// The live stream mirrors the persisted fan-out: a departed session's owner
-/// keeps ownership, so the stream audience is the union of the owner's
-/// workspace and the origin parent, not the parent alone.
-#[tokio::test]
-async fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
-    use crate::domain::ingestion::stream::stream_candidate;
-    use crate::domain::stream::StreamAudience;
-    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
-
-    let event = agent_session_lifecycle_event(|identity| {
-        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
-    });
-
-    let repository = MockRepository::new(Vec::new(), Vec::new());
-    let candidate = stream_candidate(&event, &repository)
-        .await
-        .expect("a deleted session streams")
-        .expect("a deleted session is public");
-
-    assert_eq!(
-        candidate.audience,
-        StreamAudience::Any(vec![
-            StreamAudience::Workspace {
-                workspace_id: "macro|asker@example.com".to_owned(),
-            },
-            StreamAudience::Entity {
-                entity_id: uuid::Uuid::from_u128(1).to_string(),
-                entity_type: EntityType::Channel,
-            },
-        ]),
-    );
-}
-
 #[tokio::test]
 async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
     let user = "macro|owner@example.com";
@@ -2287,4 +2263,196 @@ fn agent_conversation_messages_stay_undelivered() {
     ));
 
     assert!(normalize(&event).unwrap().is_none());
+}
+
+mod preview_and_wildcards {
+    use super::*;
+    use crate::domain::models::WebhookFilter;
+    use event_stream::domain::ports::PreviewFlag;
+    use macro_event_broker::exposure::Stage;
+
+    const FLAGGED: &str = "macro|flagged@example.com";
+
+    #[derive(Clone, Copy)]
+    struct OnlyFlagged;
+
+    impl PreviewFlag for OnlyFlagged {
+        async fn enabled_for(&self, user: &MacroUserIdStr<'static>) -> bool {
+            user.as_ref() == FLAGGED
+        }
+    }
+
+    fn webhook_with(
+        id: &str,
+        owner: &str,
+        events: &[&str],
+        entity_types: Option<&[&str]>,
+    ) -> Webhook {
+        let mut webhook = webhook(id, owner);
+        webhook.created_by_user_id = owner.to_string();
+        webhook.filters = vec![WebhookFilter {
+            events: events.iter().map(|event| (*event).to_string()).collect(),
+            ids: None,
+            entity_types: entity_types
+                .map(|types| types.iter().map(|kind| (*kind).to_string()).collect()),
+        }];
+        webhook
+    }
+
+    fn document_updated() -> NormalizedWebhookEvent {
+        NormalizedWebhookEvent {
+            event_id: "0193b3a0-0000-7000-8000-000000000001".to_string(),
+            schema_version: 1,
+            event_name: "document.updated".to_string(),
+            entity_type: "document".to_string(),
+            entity_id: "0193b3a0-0000-7000-8000-00000000d0c1".to_string(),
+            ordering_key: "0193b3a0-0000-7000-8000-00000000d0c1".to_string(),
+            occurred_at: timestamp(),
+            broker_envelope: Value::Null,
+        }
+    }
+
+    fn ids(webhooks: &[Webhook]) -> Vec<&str> {
+        webhooks.iter().map(|webhook| webhook.id.as_str()).collect()
+    }
+
+    fn flagged_service() -> WebhookEventIngestionServiceImpl<
+        MockAccessService,
+        MockRepository,
+        MockEnqueuer,
+        OnlyFlagged,
+    > {
+        service(
+            MockAccessService::with_users(Vec::new()),
+            MockRepository::new(Vec::new(), Vec::new()),
+            MockEnqueuer::default(),
+        )
+        .with_preview_flag(Arc::new(OnlyFlagged))
+    }
+
+    #[tokio::test]
+    async fn a_wildcard_matches_only_for_a_flagged_creator() {
+        let candidates = vec![
+            webhook_with("wh_flagged", FLAGGED, &["document.*"], None),
+            webhook_with("wh_unflagged", PERSONAL_WORKSPACE_ID, &["document.*"], None),
+            webhook_with(
+                "wh_exact",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                None,
+            ),
+        ];
+
+        let admitted = flagged_service()
+            .admitted_webhooks(candidates, &document_updated(), Stage::Stable)
+            .await;
+
+        assert_eq!(ids(&admitted), vec!["wh_flagged", "wh_exact"]);
+    }
+
+    #[tokio::test]
+    async fn a_preview_event_reaches_only_flagged_creators() {
+        let candidates = vec![
+            webhook_with("wh_flagged", FLAGGED, &["document.updated"], None),
+            webhook_with(
+                "wh_unflagged",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                None,
+            ),
+        ];
+
+        let admitted = flagged_service()
+            .admitted_webhooks(candidates, &document_updated(), Stage::Preview)
+            .await;
+
+        assert_eq!(ids(&admitted), vec!["wh_flagged"]);
+    }
+
+    #[tokio::test]
+    async fn with_the_flag_off_for_everyone_preview_events_and_wildcards_never_match() {
+        let candidates = vec![
+            webhook_with("wh_star", FLAGGED, &["*"], None),
+            webhook_with("wh_exact", FLAGGED, &["document.updated"], None),
+        ];
+        let unflagged = service(
+            MockAccessService::with_users(Vec::new()),
+            MockRepository::new(Vec::new(), Vec::new()),
+            MockEnqueuer::default(),
+        );
+
+        let stable = unflagged
+            .admitted_webhooks(candidates.clone(), &document_updated(), Stage::Stable)
+            .await;
+        let preview = unflagged
+            .admitted_webhooks(candidates, &document_updated(), Stage::Preview)
+            .await;
+
+        assert_eq!(ids(&stable), vec!["wh_exact"]);
+        assert!(preview.is_empty());
+    }
+
+    #[tokio::test]
+    async fn entity_types_narrow_a_match() {
+        let candidates = vec![
+            webhook_with(
+                "wh_document",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                Some(&["document"]),
+            ),
+            webhook_with(
+                "wh_channel",
+                PERSONAL_WORKSPACE_ID,
+                &["document.updated"],
+                Some(&["channel"]),
+            ),
+        ];
+
+        let admitted = flagged_service()
+            .admitted_webhooks(candidates, &document_updated(), Stage::Stable)
+            .await;
+
+        assert_eq!(ids(&admitted), vec!["wh_document"]);
+    }
+}
+
+/// Form responses go to editors: explicit accessors at Edit or above.
+#[tokio::test]
+async fn an_access_floor_audience_reaches_only_accessors_at_that_level() {
+    let editor = "macro|editor@example.com";
+    let viewer = "macro|viewer@example.com";
+    let access = MockAccessService::with_users(vec![user_id(editor), user_id(viewer)]);
+    lock(&access.levels).insert(editor.to_string(), AccessLevel::Edit);
+    lock(&access.levels).insert(viewer.to_string(), AccessLevel::View);
+    let repository = MockRepository::new(vec![editor.to_string()], Vec::new());
+    let service = service(access, repository.clone(), MockEnqueuer::default());
+    let event = NormalizedWebhookEvent {
+        event_id: "0193b3a0-0000-7000-8000-000000000001".to_string(),
+        schema_version: 1,
+        event_name: "form.response_submitted".to_string(),
+        entity_type: "form".to_string(),
+        entity_id: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+        ordering_key: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+        occurred_at: timestamp(),
+        broker_envelope: Value::Null,
+    };
+
+    service
+        .resolve_audience_and_enqueue(
+            event,
+            macro_event_broker::exposure::Stage::Stable,
+            &Audience::EntityAtLeast {
+                entity_type: EntityType::Form,
+                entity_id: "0193b3a0-0000-7000-8000-0000000f0f00".to_string(),
+                min_level: macro_event_broker::exposure::MinAccessLevel::Edit,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        lock(&repository.state).workspace_calls,
+        vec![vec![user_id(editor)]]
+    );
 }

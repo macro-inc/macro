@@ -1,0 +1,90 @@
+[package]
+edition = "2024"
+name = "event_stream"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+outbound = [
+  "dep:entity_access",
+  "dep:feature_flags",
+  "dep:opentelemetry",
+  "dep:rate_limit",
+  "dep:redis",
+  "dep:sqlx",
+  "dep:tracing-opentelemetry",
+]
+schema = [
+  "dep:utoipa",
+  "agent_session/schema",
+  "call/inbound",
+  "channels/schema",
+  "documents/schema",
+  "messages/schema",
+  "user_events/schema",
+]
+
+consumer = [
+  "dep:kafka_util",
+  "dep:rdkafka",
+  "macro_event_broker/outbound",
+]
+inbound = [
+  "dep:axum",
+  "dep:hex",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:sha2",
+  "schema",
+]
+
+[dependencies]
+agent_session = { path = "../agent_session", default-features = false }
+agent_trigger = { path = "../agent_trigger" }
+bots = { path = "../bots", default-features = false }
+call = { path = "../call", default-features = false }
+channels = { path = "../channels", default-features = false }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+documents = { path = "../documents", default-features = false }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+], optional = true }
+event_exposure = { path = "../event_exposure" }
+feature_flags = { path = "../feature_flags", optional = true }
+futures = { workspace = true }
+hex = { workspace = true, optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
+messages = { path = "../messages", features = ["broker"] }
+model-error-response = { path = "../model-error-response", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+opentelemetry = { workspace = true, optional = true }
+rate_limit = { path = "../rate_limit", optional = true }
+rdkafka = { workspace = true, optional = true }
+redis = { workspace = true, optional = true, features = ["aio", "streams", "tokio-comp"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+teams = { path = "../teams", default-features = false, features = ["ports"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+user_events = { path = "../user_events" }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

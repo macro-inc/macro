@@ -78,6 +78,7 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
         .connect::<Envelope>(&[WebhookFilter {
             events: vec!["agent_trigger.new".to_owned()],
             ids: None,
+            entity_types: None,
         }])
         .await
         .expect("open the stream");

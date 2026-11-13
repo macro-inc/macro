@@ -282,6 +282,12 @@ impl WebhookRepo for PgRepository {
         event: String,
         entity_id: String,
     ) -> Result<Vec<Webhook>, Self::Err> {
+        // Filters may name the event exactly, by family (`document.*`) or as
+        // `*`. All three are fetched here; whether a wildcard counts (its
+        // owner's rollout flag) and `entity_types` are decided by ingestion.
+        let family_pattern = event
+            .split_once('.')
+            .map_or_else(|| event.clone(), |(family, _)| format!("{family}.*"));
         let rows = sqlx::query_as!(
             WebhookRow,
             r#"
@@ -305,17 +311,22 @@ impl WebhookRepo for PgRepository {
               AND w.deleted_at IS NULL
               AND w.status = 'active'
               AND w.is_valid
-              AND w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+              AND (
+                  w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+                  OR w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($4::text)))
+                  OR w.filters @> '[{"events": ["*"]}]'::jsonb
+              )
               AND jsonb_path_exists(
                   w.filters,
-                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $2::text, 'id', $3::text)
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $family || @.events[*] == "*") && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $2::text, 'family', $4::text, 'id', $3::text)
               )
             ORDER BY w.id
             "#,
             &workspace_ids,
             &event,
-            &entity_id
+            &entity_id,
+            &family_pattern,
         )
         .fetch_all(&self.pool)
         .await?;

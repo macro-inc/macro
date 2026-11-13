@@ -401,12 +401,11 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/webhook",
-            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()).merge(
-                webhook::inbound::stream_router::webhook_stream_router(
-                    state.sse_stream_state.clone(),
-                ),
-            ),
+            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()),
         )
+        .merge(event_stream::inbound::stream_router::event_stream_router(
+            state.sse_stream_state.clone(),
+        ))
         .nest(
             "/crm",
             crm::inbound::axum_router::crm_router(state.crm_state.clone())

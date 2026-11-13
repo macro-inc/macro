@@ -187,6 +187,12 @@ impl FlakyIngestionService {
 }
 
 impl WebhookEventIngestionService for FlakyIngestionService {
+    async fn ingest_public_event<E: macro_event_broker::TopicEvent>(
+        &self,
+        _event: Event<E>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
     async fn ingest_call_notification_event(
         &self,
         _event: macro_event_broker::Event<call::domain::notification_events::CallNotificationEvent>,

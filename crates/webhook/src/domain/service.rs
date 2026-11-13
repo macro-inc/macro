@@ -23,10 +23,6 @@ use url::Url;
 
 const MAX_NAME_LEN: usize = 128;
 const MAX_NAMESPACE_LEN: usize = 128;
-const MAX_FILTERS: usize = 50;
-const MAX_FILTER_EVENTS: usize = 100;
-const MAX_FILTER_IDS: usize = 100;
-const MAX_FILTER_VALUE_LEN: usize = 256;
 const VALIDATION_EVENT_NAME: &str = "webhook.validation.test";
 
 /// Webhook service implementation.
@@ -113,78 +109,11 @@ fn validate_endpoint_url(
     Ok(())
 }
 
-fn validate_filter_value(value: &str) -> bool {
-    let value = value.trim();
-    !value.is_empty() && value.len() <= MAX_FILTER_VALUE_LEN
-}
-
-fn validate_filter_events(events: &[String]) -> Result<(), WebhookError> {
-    if events.is_empty() {
-        return Err(WebhookError::BadRequest(
-            "filters[].events must be a non-empty array of strings".to_string(),
-        ));
-    }
-
-    if events.len() > MAX_FILTER_EVENTS {
-        return Err(WebhookError::BadRequest(format!(
-            "filters[].events must include at most {MAX_FILTER_EVENTS} entries"
-        )));
-    }
-
-    if !events.iter().all(|event| validate_filter_value(event)) {
-        return Err(WebhookError::BadRequest(format!(
-            "filters[].events entries must be non-empty strings at most {MAX_FILTER_VALUE_LEN} characters"
-        )));
-    }
-
-    Ok(())
-}
-
-fn validate_filter_ids(ids: &[String]) -> Result<(), WebhookError> {
-    if ids.is_empty() {
-        return Err(WebhookError::BadRequest(
-            "filters[].ids must be a non-empty array of strings when present".to_string(),
-        ));
-    }
-
-    if ids.len() > MAX_FILTER_IDS {
-        return Err(WebhookError::BadRequest(format!(
-            "filters[].ids must include at most {MAX_FILTER_IDS} entries"
-        )));
-    }
-
-    if !ids.iter().all(|id| validate_filter_value(id)) {
-        return Err(WebhookError::BadRequest(format!(
-            "filters[].ids entries must be non-empty strings at most {MAX_FILTER_VALUE_LEN} characters"
-        )));
-    }
-
-    Ok(())
-}
-
-/// Validate a filter set for persistence or streaming: non-empty, within the
-/// per-list and per-value size caps, no blank entries.
+/// Validate a filter set for persistence: the same rules a live stream
+/// applies, so a filter set is valid for both deliveries or neither.
 pub(crate) fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
-    if filters.is_empty() {
-        return Err(WebhookError::BadRequest(
-            "filters must be a non-empty array".to_string(),
-        ));
-    }
-
-    if filters.len() > MAX_FILTERS {
-        return Err(WebhookError::BadRequest(format!(
-            "filters must include at most {MAX_FILTERS} entries"
-        )));
-    }
-
-    for filter in filters {
-        validate_filter_events(&filter.events)?;
-        if let Some(ids) = &filter.ids {
-            validate_filter_ids(ids)?;
-        }
-    }
-
-    Ok(())
+    event_stream::domain::filters::validate_filters(filters)
+        .map_err(|error| WebhookError::BadRequest(error.0))
 }
 
 fn validate_create_request(

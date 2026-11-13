@@ -33,3 +33,15 @@ fn every_topic_is_delivered_or_listed_internal() {
         covered.difference(&all).collect::<Vec<_>>()
     );
 }
+
+/// The log writer reads every delivered topic plus exactly the access-change
+/// topics.
+#[test]
+fn the_log_reads_the_delivered_topics_and_the_access_change_topics() {
+    let delivered: BTreeSet<&str> = DeclaredMacroEvent::topics().iter().copied().collect();
+    let logged: BTreeSet<&str> = LogMacroEvent::topics().iter().copied().collect();
+    let access: BTreeSet<&str> = ACCESS_CHANGE_TOPICS.iter().copied().collect();
+
+    assert_eq!(logged, delivered.union(&access).copied().collect());
+    assert!(access.iter().all(|topic| INTERNAL_TOPICS.contains(topic)));
+}

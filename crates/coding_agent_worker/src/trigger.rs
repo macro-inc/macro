@@ -195,6 +195,7 @@ pub fn trigger_filters(bots: impl IntoIterator<Item = impl ToString>) -> Vec<Web
             .map(|event| event.to_string())
             .collect(),
         ids: Some(ids),
+        entity_types: None,
     }]
 }
 

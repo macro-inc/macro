@@ -953,7 +953,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1013,50 +1013,81 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let (webhook_stream_sender, _) =
-        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
-    let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_sender.clone(),
-        entity_access_service.clone(),
-        webhook_repository.clone(),
-        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
-            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        )),
+    // Public event streams: the `public-event-log` writer appends every
+    // public event to the Redis log; this process tails the log and fans
+    // each event out, resolving its audience once for all local streams.
+    let event_log = Arc::new(event_stream::outbound::redis_log::RedisEventLog::new(
+        redis_client.clone(),
+    ));
+    let event_stream_registry = Arc::new(event_stream::domain::registry::Registry::default());
+    let event_audience_resolver: Arc<crate::api::context::DssEventAudienceResolver> =
+        Arc::new(event_stream::domain::access::AudienceResolver::new(
+            event_stream::outbound::entity_access::EntityAccessDirectory::new(
+                entity_access_service.clone(),
+            ),
+            event_stream::outbound::pg_teams::PgTeamDirectory::new(db.clone()),
+            crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            )),
+            crate::outbound::event_stream::InstallationClaims::new(
+                github::outbound::pg_installation_claims::PgGithubInstallationClaims::new(
+                    db.clone(),
+                ),
+            ),
+            Arc::new(event_stream::domain::access::AccessCaches::default()),
+        ));
+    let event_stream_service = event_stream::domain::stream::StreamService::new(
+        event_stream_registry.clone(),
+        event_audience_resolver.clone(),
+        event_log.clone(),
+        Arc::new(event_stream::outbound::preview_flag::FeatureFlagPreview::new(flags.clone())),
+        Arc::new(
+            event_stream::outbound::stream_limiter::LeaseStreamLimiter::new(
+                rate_limit::RedisConcurrencyLimitAdapter {
+                    redis: redis_client.clone(),
+                },
+            ),
+        ),
     );
-    let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
-        sse_stream_service,
+    let sse_stream_state = event_stream::inbound::stream_router::EventStreamRouterState::new(
+        event_stream_service,
+        crate::outbound::event_stream::RepoBotOwners::new(Arc::new(PgBotsRepo::new(db.clone()))),
         authorization_state.clone(),
     );
     consumer_tracker.spawn({
+        let fan_out = event_stream::domain::fan_out::FanOut::new(
+            event_stream_registry,
+            event_audience_resolver,
+        );
+        let tail = event_log.tail();
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move { fan_out.run(tail, cancellation_token).await }
+    });
+    consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let sender = webhook_stream_sender;
-        let workspace_resolver = webhook_repository.clone();
+        let writer = event_stream::domain::log_writer::LogWriter::new(
+            event_log,
+            event_stream::outbound::service_switches::FlagWriterSwitches::new(flags.clone()),
+        );
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
-                let result = tokio::select! {
-                    biased;
-                    _ = cancellation_token.cancelled() => break,
-                    result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
-                        &brokers,
-                        &sender,
-                        &workspace_resolver,
-                    ) => result,
-                };
-
+                let result = event_stream::inbound::log_writer::run_public_event_log_writer(
+                    &brokers,
+                    &writer,
+                    cancellation_token.cancelled(),
+                )
+                .await;
                 if cancellation_token.is_cancelled() {
                     break;
                 }
                 if let Err(error) = result {
-                    tracing::error!(
-                        error = ?error,
-                        "webhook SSE Kafka consumer stopped"
-                    );
-                    tokio::select! {
-                        biased;
-                        _ = cancellation_token.cancelled() => break,
-                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
-                    }
+                    tracing::error!(error = ?error, "public event log writer stopped");
+                }
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
                 }
             }
         }
@@ -1067,7 +1098,10 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             webhook_repository,
             webhook_event_queue.clone(),
-        );
+        )
+        .with_preview_flag(Arc::new(
+            event_stream::outbound::preview_flag::FeatureFlagPreview::new(flags.clone()),
+        ));
     let webhook_delivery_repository =
         webhook::outbound::PgWebhookDeliveryRepository::new(db.clone());
     let webhook_delivery_service = webhook::domain::delivery::WebhookEventDeliveryServiceImpl::new(
