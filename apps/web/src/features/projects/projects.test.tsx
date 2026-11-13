@@ -472,6 +472,42 @@ it('keeps permission denials latched across cache hits and hides disabled detail
   expect(query.isSuccess).toBe(false);
 });
 
+it('settles a project the server cannot load as an error without data', () => {
+  const { client, requests } = controlledClient();
+  const reads = createRoot((dispose) => {
+    disposeSource = dispose;
+    return {
+      identity: createProjectIdentityQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+      detail: createProjectDetailQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+    };
+  });
+  const notFound = new CombinedError({
+    graphQLErrors: [
+      {
+        message: 'initiative not found',
+        path: ['user', 'initiative'],
+        extensions: { code: 'NOT_FOUND' },
+      },
+    ],
+  });
+  expect(requests).toHaveLength(2);
+  for (const request of requests)
+    request.next({ user: { id: 'viewer' } }, notFound);
+  for (const query of [reads.identity, reads.detail]) {
+    expect(query.data).toBeUndefined();
+    expect(query.isPending).toBe(false);
+    expect(query.isError).toBe(true);
+  }
+});
+
 it('reauthorizes a denied identity after remount without exposing cached data', async () => {
   setupGraphql();
   const data = (
