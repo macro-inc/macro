@@ -269,7 +269,7 @@ impl Harnesses for FakeHarnesses {
         let generation = enrollments.len() as u128;
         enrollments.push(computer.harness_id);
         if self.lose_response.swap(false, Ordering::SeqCst) {
-            return Err(FakeError);
+            return Err(FakeError::Storage);
         }
         Ok(HostedPairing {
             pairing_id: PairingId::new_from_uuid(Uuid::from_u128(
@@ -305,7 +305,7 @@ impl Harnesses for FakeHarnesses {
             .unwrap()
             .push((computer.id, harness_id));
         if self.fail_default_agent.load(Ordering::SeqCst) {
-            return Err(FakeError);
+            return Err(FakeError::Storage);
         }
         Ok(DefaultAgent::Created {
             agent_id: DEFAULT_AGENT,
@@ -498,6 +498,38 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
         *operator.harnesses.default_agents.lock().unwrap(),
         vec![(id, HARNESS)]
     );
+}
+
+/// A pool timeout is not the effect's failure: the pass reports storage
+/// unavailable, the effect keeps its attempts and runs on the next pass.
+#[tokio::test]
+async fn a_pool_timeout_never_spends_an_effect_attempt() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    let gets = operator.repo.gets.load(std::sync::atomic::Ordering::SeqCst);
+    // The pass's read, the effect's read, then Create's own read times out.
+    *operator.repo.unavailable_gets.lock().unwrap() = vec![gets + 3];
+
+    let error = operator.run_fleet_effects().await.unwrap_err();
+
+    assert!(error.is_storage_unavailable(), "{error:?}");
+    let effects = operator.repo.effects.lock().unwrap().clone();
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].attempts, 0);
+    assert_eq!(
+        operator.repo.effect_run_after.lock().unwrap()[&effects[0].id],
+        now()
+    );
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    let booting = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(booting.state.phase, Phase::Booting);
 }
 
 #[tokio::test]

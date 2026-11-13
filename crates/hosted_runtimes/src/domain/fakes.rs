@@ -70,8 +70,21 @@ impl Clock for FixedClock {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("fake storage error")]
-pub struct FakeError;
+pub enum FakeError {
+    #[error("fake storage error")]
+    Storage,
+    /// A pool timeout, as the Postgres adapter reports one.
+    #[error("{0}")]
+    Unavailable(#[source] crate::domain::ports::StorageUnavailable),
+}
+
+impl FakeError {
+    pub fn unavailable() -> Self {
+        Self::Unavailable(crate::domain::ports::StorageUnavailable(
+            "pool timed out".into(),
+        ))
+    }
+}
 
 /// One host with `sold_units` of sold capacity; every computer awake fits.
 #[derive(Default)]
@@ -84,6 +97,10 @@ pub struct FakeRepo {
     pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
+    /// `get` calls so far.
+    pub gets: AtomicUsize,
+    /// The 1-based `get` calls that fail as if no connection could be had.
+    pub unavailable_gets: Mutex<Vec<usize>>,
     pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub billing_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
@@ -349,7 +366,7 @@ impl ComputerRepo for FakeRepo {
     ) -> Result<Option<Applied>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_next_apply.swap(false, Ordering::SeqCst) {
-            return Err(FakeError);
+            return Err(FakeError::Storage);
         }
         self.events
             .lock()
@@ -381,6 +398,10 @@ impl ComputerRepo for FakeRepo {
 
     async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let call = self.gets.fetch_add(1, Ordering::SeqCst) + 1;
+        if self.unavailable_gets.lock().unwrap().contains(&call) {
+            return Err(FakeError::unavailable());
+        }
         Ok(self
             .computers
             .lock()

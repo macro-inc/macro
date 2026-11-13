@@ -61,6 +61,8 @@ pub(crate) struct FakeBilling {
     pub adds: Mutex<Vec<AddRequest>>,
     pub settled: Mutex<Vec<String>>,
     pub removals: Mutex<Vec<(SubscriptionItemId, String)>>,
+    /// Keys whose change was given up while its outcome was unknown.
+    pub abandoned_keys: Mutex<Vec<String>>,
     pub calls: Mutex<Vec<&'static str>>,
 }
 
@@ -175,6 +177,24 @@ impl Billing for FakeBilling {
         &self,
         idempotency_key: &str,
     ) -> Result<Option<ChargeStatus>, BillingError> {
+        if self
+            .abandoned_keys
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|key| key == idempotency_key)
+        {
+            return Ok(Some(ChargeStatus::NotApplied));
+        }
+        if self
+            .removals
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(_, key)| key == idempotency_key)
+        {
+            return Ok(Some(ChargeStatus::Applied));
+        }
         if self
             .charged_keys
             .lock()
@@ -417,8 +437,8 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         status.setup,
         Some(crate::domain::models::SetupProgress {
             step: crate::domain::models::SetupStep::Creating,
-            position: 1,
-            total: 4,
+            position: 2,
+            total: 5,
         })
     );
     assert_eq!(
@@ -804,6 +824,131 @@ async fn removing_an_item_whose_subscription_is_gone_completes() {
         !effects_of(&service.repo, computer_id)
             .iter()
             .any(|effect| matches!(effect, Effect::RemoveBillingItem { .. }))
+    );
+}
+
+/// A removal released with one billed item, and its effect's id.
+async fn released_with_removal(
+    billing: FakeBilling,
+) -> (
+    ComputerService<FakeRepo, FakeBilling, std::sync::Arc<MovingClock>, StaticFleetAttachment>,
+    std::sync::Arc<MovingClock>,
+    i64,
+) {
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
+    let repo = FakeRepo::default();
+    repo.computers.lock().unwrap().insert(
+        computer_id,
+        computer(
+            computer_id,
+            Phase::Running,
+            BillingState::Active {
+                subscription_item: item("si_1"),
+            },
+        ),
+    );
+    let clock = MovingClock::new();
+    let service = ComputerService::new(
+        repo,
+        billing,
+        clock.clone(),
+        StaticFleetAttachment(FleetAttachment::Attached),
+    );
+    service
+        .release_now(TEAM, computer_id, "Build box")
+        .await
+        .unwrap();
+    let removal_id = service
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|pending| matches!(pending.effect, Effect::RemoveBillingItem { .. }))
+        .unwrap()
+        .id;
+    (service, clock, removal_id)
+}
+
+/// A retried removal sends its own key again, so the subscription guard
+/// lets it replay its change instead of refusing it as another one in flight.
+#[tokio::test]
+async fn a_retried_removal_reuses_its_own_key() {
+    let billing = FakeBilling::default();
+    *billing.remove_outcome.lock().unwrap() = RemoveOutcome::ProviderError;
+    let (service, clock, removal_id) = released_with_removal(billing).await;
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+
+    *service.billing.remove_outcome.lock().unwrap() = RemoveOutcome::Removed;
+    clock.advance(chrono::Duration::hours(1));
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+
+    assert_eq!(
+        *service.billing.removals.lock().unwrap(),
+        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+    );
+}
+
+/// A pool timeout is not the removal's failure: no attempt is spent and the
+/// removal runs, under the same key, once its lease expires.
+#[tokio::test]
+async fn a_pool_timeout_never_spends_a_removal_attempt() {
+    let (service, clock, removal_id) = released_with_removal(FakeBilling::default()).await;
+    let gets = service.repo.gets.load(std::sync::atomic::Ordering::SeqCst);
+    *service.repo.unavailable_gets.lock().unwrap() = vec![gets + 1];
+
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+
+    let attempts = service
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|pending| pending.id == removal_id)
+        .unwrap()
+        .attempts;
+    assert_eq!(attempts, 0);
+    assert!(service.billing.removals.lock().unwrap().is_empty());
+    clock.advance(chrono::Duration::minutes(3));
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+    assert_eq!(
+        *service.billing.removals.lock().unwrap(),
+        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+    );
+}
+
+/// Only a key whose change was given up is spent: the next one is used, and
+/// a removal that already landed is not sent again.
+#[tokio::test]
+async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
+    let billing = FakeBilling::default();
+    *billing.remove_outcome.lock().unwrap() = RemoveOutcome::ProviderError;
+    let (service, clock, removal_id) = released_with_removal(billing).await;
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+    service
+        .billing
+        .abandoned_keys
+        .lock()
+        .unwrap()
+        .push(format!("computer-remove:{removal_id}:0"));
+
+    *service.billing.remove_outcome.lock().unwrap() = RemoveOutcome::Removed;
+    clock.advance(chrono::Duration::hours(1));
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+
+    assert_eq!(
+        *service.billing.removals.lock().unwrap(),
+        vec![(item("si_1"), format!("computer-remove:{removal_id}:1"))]
+    );
+    assert!(
+        service
+            .repo
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|pending| pending.id != removal_id)
     );
 }
 

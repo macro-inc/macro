@@ -136,8 +136,15 @@ where
                 let retry_seconds = delay.num_seconds();
                 readiness.failures = readiness.failures.saturating_add(1);
                 readiness.retry_at = Some(self.clock.now() + delay);
-                tracing::error!(error = ?error, healthy = false, retry_seconds,
-                    "computer host unavailable; retrying registration");
+                if error.is_storage_unavailable() {
+                    tracing::warn!(
+                        retry_seconds,
+                        "computer storage unavailable; retrying host registration"
+                    );
+                } else {
+                    tracing::error!(error = ?error, healthy = false, retry_seconds,
+                        "computer host unavailable; retrying registration");
+                }
                 Err(error)
             }
         }
@@ -151,7 +158,8 @@ where
     /// Stop leasing on shutdown, drain the active effect, then return unfinished leases.
     /// Every effect in the batch shares a deadline measured before leasing, so
     /// queued effects and slow composite fleet calls cannot outlive their lease.
-    #[tracing::instrument(skip_all, err)]
+    // Not `err`: the pass reports failures, and skips unavailable storage quietly.
+    #[tracing::instrument(skip_all)]
     pub async fn run_fleet_effects_until(
         &self,
         shutdown: impl Future<Output = ()> + Send,
@@ -261,6 +269,9 @@ where
                     .await
                     .map_err(internal)?;
             }
+            // Not the effect's failure: its lease is returned and it runs
+            // again on a later pass, without spending an attempt.
+            Err(error) if error.is_storage_unavailable() => return Err(error),
             Err(error) if pending.attempts + 1 < MAX_EFFECT_ATTEMPTS => {
                 super::telemetry::effect_failed(phase);
                 tracing::warn!(error = ?error, "computer effect failed; retrying");
@@ -448,7 +459,8 @@ where
     /// awake computer is a crash; a missing stopped or failed guest is recreated.
     /// Only owned orphans older than the grace period are removed. Each pass
     /// also gauges the fleet's allocation (`computer.capacity.*`).
-    #[tracing::instrument(skip(self), err)]
+    // Not `err`: the pass reports failures, and skips unavailable storage quietly.
+    #[tracing::instrument(skip(self))]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let host = self.host_id().await?;
         self.repo
