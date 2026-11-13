@@ -72,7 +72,10 @@ describe('agentClaudeState', () => {
     // Some credentials never report an expiry.
     expect(
       agentClaudeState(
-        { mode: 'own_account', account: { signedInAt: '2026-11-01T12:00:00Z' } },
+        {
+          mode: 'own_account',
+          account: { signedInAt: '2026-11-01T12:00:00Z' },
+        },
         now
       )
     ).toBe('signed_in');
