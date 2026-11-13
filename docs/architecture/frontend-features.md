@@ -330,11 +330,13 @@ desktop-only.
 `features/block-email` (`EmailBlockAdapter.tsx` and `views/`) are the
 references.
 
-A large view can be split in steps, header first. `features/block-md` is at
-that stage: `component/Block.tsx` switches between
-`views/markdown-header.tsx` and `views/mobile/markdown-header.tsx`, while the
-document body below them is still shared and its files are still in the
-baseline.
+A large view can be split in steps, header first. `features/block-md` and
+`features/block-agent` are at that stage: each block's `component/Block.tsx`
+switches between a desktop `views/*-header.tsx` and a
+`views/mobile/*-header.tsx`, while the body below them is still shared and its
+files are still in the baseline. A hook above the switch
+(`useAgentSessionHeader`) can hold the header's state and actions so both
+views list from the same source.
 
 ### `context/`: the feature's capability contract
 
