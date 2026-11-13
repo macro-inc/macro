@@ -141,7 +141,8 @@ const CALLER: &str = "macro|person@example.com";
 async fn a_request_that_does_not_ask_stays_strict_without_reading_the_rollout() {
     let rollout = Rollout::new(true);
 
-    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::All, 7).await;
+    let matching =
+        resolve_document_term_matching(&rollout, CALLER, TermMatching::All, 7, None).await;
 
     assert_eq!(matching, DocumentTermMatching::All);
     assert_eq!(rollout.reads.load(Ordering::SeqCst), 0);
@@ -151,7 +152,8 @@ async fn a_request_that_does_not_ask_stays_strict_without_reading_the_rollout() 
 async fn a_dynamic_request_is_strict_while_the_rollout_is_off() {
     let rollout = Rollout::new(false);
 
-    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 7).await;
+    let matching =
+        resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 7, None).await;
 
     assert_eq!(matching, DocumentTermMatching::All);
     assert_eq!(rollout.reads.load(Ordering::SeqCst), 1);
@@ -161,7 +163,8 @@ async fn a_dynamic_request_is_strict_while_the_rollout_is_off() {
 async fn a_dynamic_request_is_dynamic_once_the_rollout_is_on() {
     let rollout = Rollout::new(true);
 
-    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 3).await;
+    let matching =
+        resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 3, None).await;
 
     assert_eq!(matching, DocumentTermMatching::Dynamic);
 }
@@ -170,10 +173,93 @@ async fn a_dynamic_request_is_dynamic_once_the_rollout_is_on() {
 async fn a_short_query_stays_strict_without_reading_the_rollout() {
     let rollout = Rollout::new(true);
 
-    let matching = resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 2).await;
+    let matching =
+        resolve_document_term_matching(&rollout, CALLER, TermMatching::Dynamic, 2, None).await;
 
     assert_eq!(matching, DocumentTermMatching::All);
     assert_eq!(rollout.reads.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_later_page_runs_its_first_pages_mode_without_reading_the_rollout() {
+    // The first page ran strict in a process that had not learned the flag;
+    // this process has it on.
+    let rollout = Rollout::new(true);
+    let matching = resolve_document_term_matching(
+        &rollout,
+        CALLER,
+        TermMatching::Dynamic,
+        7,
+        Some(CursorTermMatching::All),
+    )
+    .await;
+    assert_eq!(matching, DocumentTermMatching::All);
+    assert_eq!(rollout.reads.load(Ordering::SeqCst), 0);
+
+    // The first page ran dynamic; this process has not learned the flag.
+    let rollout = Rollout::new(false);
+    let matching = resolve_document_term_matching(
+        &rollout,
+        CALLER,
+        TermMatching::Dynamic,
+        7,
+        Some(CursorTermMatching::Dynamic),
+    )
+    .await;
+    assert_eq!(matching, DocumentTermMatching::Dynamic);
+    assert_eq!(rollout.reads.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_cursor_cannot_turn_dynamic_matching_on_for_a_request_that_did_not_ask() {
+    let rollout = Rollout::new(true);
+
+    let matching = resolve_document_term_matching(
+        &rollout,
+        CALLER,
+        TermMatching::All,
+        7,
+        Some(CursorTermMatching::Dynamic),
+    )
+    .await;
+
+    assert_eq!(matching, DocumentTermMatching::All);
+}
+
+#[tokio::test]
+async fn a_cursor_from_before_the_mode_was_carried_decides_per_page() {
+    let legacy = r#"{"chat_name_cursor":"Done","content_cursor":{"NotDone":null},"project_name_cursor":"Done","crm_company_cursor":"Done","channel_name_cursor":"Done"}"#;
+    let cursor: models_search_cursor::SearchCursor =
+        serde_json::from_str(legacy).expect("legacy cursor decodes");
+    let rollout = Rollout::new(true);
+
+    let matching = resolve_document_term_matching(
+        &rollout,
+        CALLER,
+        TermMatching::Dynamic,
+        7,
+        cursor.document_term_matching,
+    )
+    .await;
+
+    assert_eq!(matching, DocumentTermMatching::Dynamic);
+    assert_eq!(rollout.reads.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_next_cursor_carries_the_mode_only_for_requests_that_asked() {
+    assert_eq!(
+        term_matching_for_cursor(TermMatching::Dynamic, DocumentTermMatching::Dynamic),
+        Some(CursorTermMatching::Dynamic)
+    );
+    assert_eq!(
+        term_matching_for_cursor(TermMatching::Dynamic, DocumentTermMatching::All),
+        Some(CursorTermMatching::All)
+    );
+    assert_eq!(
+        term_matching_for_cursor(TermMatching::All, DocumentTermMatching::All),
+        None
+    );
 }
 
 #[test]

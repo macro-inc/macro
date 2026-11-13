@@ -149,6 +149,16 @@ impl SearchCursorOption {
     }
 }
 
+/// How the search that minted a cursor matched multi-term document content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CursorTermMatching {
+    /// Every term somewhere in the document.
+    All,
+    /// Most terms in one passage.
+    Dynamic,
+}
+
 /// The search cursor contains all the individual `SearchCursorOption` for each search method.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct SearchCursor {
@@ -166,6 +176,12 @@ pub struct SearchCursor {
     /// channels were name-searched in Postgres still decode.
     #[serde(default)]
     pub channel_name_cursor: SearchCursorOption,
+    /// The matching mode the first page ran with, so every later page runs
+    /// the same one. Absent on cursors minted before it existed and on
+    /// searches that never asked for dynamic matching; the page then decides
+    /// for itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_term_matching: Option<CursorTermMatching>,
 }
 
 impl SearchCursor {
@@ -231,6 +247,32 @@ mod test {
         assert!(!cursor.is_exhausted());
     }
 
+    /// A cursor minted before the matching mode was carried decodes without
+    /// one, and a cursor without one serializes exactly as it used to.
+    #[test]
+    fn legacy_cursor_has_no_term_matching_and_stays_byte_identical() {
+        let legacy = r#"{"chat_name_cursor":"Done","content_cursor":{"NotDone":null},"project_name_cursor":"Done","crm_company_cursor":"Done","channel_name_cursor":"Done"}"#;
+
+        let cursor = SearchCursor::decode(&BASE64.encode(legacy)).expect("legacy cursor decodes");
+
+        assert_eq!(cursor.document_term_matching, None);
+        assert_eq!(cursor.encode(), Some(BASE64.encode(legacy)));
+    }
+
+    #[test]
+    fn term_matching_round_trips() {
+        for mode in [CursorTermMatching::All, CursorTermMatching::Dynamic] {
+            let cursor = SearchCursor {
+                document_term_matching: Some(mode),
+                ..Default::default()
+            };
+
+            let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+
+            assert_eq!(decoded.document_term_matching, Some(mode));
+        }
+    }
+
     #[test]
     fn crm_cursor_round_trips() {
         let cursor = SearchCursor {
@@ -249,6 +291,7 @@ mod test {
             project_name_cursor: SearchCursorOption::Done,
             crm_company_cursor: SearchCursorOption::Done,
             channel_name_cursor: SearchCursorOption::Done,
+            document_term_matching: None,
         };
         assert!(cursor.is_exhausted());
 
