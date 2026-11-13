@@ -49,7 +49,8 @@ Put the types next to the domain that owns the fact
 
 - A topic enum with `#[serde(tag = "event_type", content = "metadata")]` and
   `#[serde(rename = "<entity>.<past_tense>")]` per variant, implementing
-  `TopicEvent { type Topic; const SCHEMA_VERSION: u8 }`.
+  `TopicEvent { type Topic; const SCHEMA_VERSION: u8; type PublicPayload; fn
+  exposure }` (section 8 covers the last two).
 - A `XMacroEvent { key, event: Event<XTopicEvent> }` implementing `MacroEvent`,
   with one constructor per variant. Build envelopes with `Event::new` (UUIDv7
   `event_id`).
@@ -184,20 +185,45 @@ payload change must be readable by both the deployed code and the new code.
   other than the consumer's compiled one, in both directions. Additive changes
   do not bump it.
 
-## 8. Public contract (webhook-delivered topics only)
+## 8. Declare exposure
 
-Variants on `macro.documents`, `macro.channels`, `macro.messages`, and
-`macro.agent_session_lifecycle` reach customers through `WebhookEvent`
-(`crates/webhook/src/domain/events.rs`), which is part of the storage OpenAPI spec.
+`TopicEvent::exposure()` is required and has no default: every variant says
+whether it leaves Macro, to whom, and in what shape. The vocabulary is in
+`crates/event_exposure` (re-exported as `macro_event_broker::exposure`).
 
-- Derive `utoipa::ToSchema` on the new metadata under the crate's `schema` or
-  `inbound` feature, like `MessageTopicEvent`.
+- Match every variant; never `_ =>` or a bare binding as a catch-all (ast-grep
+  `rust-exposure-no-wildcard-arm`). Group variants that share a declaration
+  with `|`.
+- **Internal** is a legal answer: `Exposure::internal_by_design("<why>")` for
+  plumbing, projections and commands, or `Exposure::pending(PendingPhase::..,
+  "<rule and what the payload still lacks>")` for a family a later phase will
+  make public. Set `type PublicPayload = macro_event_broker::exposure::Unexposed`
+  when nothing on the topic is public.
+- **Public** returns `PublicEvent { name, entity, audience, stage, payload }`.
+  `name` equals the variant's serde tag. `audience` is whose current access
+  decides delivery (`Audience::Entity` for an entity's explicit accessors,
+  `Recipient`, `Owner`, `Team`, `ContactsOf`, `Snapshot` when grants are gone,
+  `Any` for a union); it reads only the payload. Routing fields such as a
+  recipient go on the audience and are stripped from the payload.
+- The payload is an explicit projection, not the whole metadata by default: a
+  new family ships thin (ids, actor, what changed). It derives
+  `utoipa::ToSchema` under the crate's `schema` or `inbound` feature and has a
+  JSON-literal test. Start new families at `Stage::Preview`.
+- A topic is delivered only when `crates/webhook/src/topics.rs` subscribes to
+  it; otherwise list it in `INTERNAL_TOPICS` there. A new topic fails
+  `every_topic_is_delivered_or_listed_internal` until it is in one of the two.
+
+When a family becomes public (subscribed in `topics.rs`, part of `WebhookEvent`
+in `crates/webhook/src/domain/events.rs`, which is in the storage OpenAPI spec):
+
+- Add its payload to `WebhookEvent` and to the `has_schema` assertions beside
+  it.
 - Regenerate: `bun run gen-api cloud-storage` in `apps/web`, then
   `just update-generated` in `packages/sdk`. Commit both generated trees.
 - Hydrate it in the SDK (`packages/sdk/src/events/hydrate/`, routed from
   `src/events/receiver.ts`); see the
   [add-sdk-endpoint skill](../../.agents/skills/add-sdk-endpoint/SKILL.md) for
-  SDK conventions.
+  SDK conventions, and add its row to `crates/webhook/README.md`.
 
 ## Verify locally
 
