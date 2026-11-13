@@ -16,6 +16,16 @@
   installer.cloneConfig = false;
   documentation.enable = lib.mkForce false;
 
+  # incus-agent mounts its 9p shares as it starts. Started early by
+  # multi-user.target (DefaultDependencies=no), its first attempt can run
+  # before the virtio devices are up, fail, and restart only after its 5 s
+  # RestartSec. Wait for the agent's virtio port instead; udev already starts
+  # it when that device appears.
+  systemd.services.incus-agent = {
+    wants = [ "dev-virtio\\x2dports-org.linuxcontainers.incus.device" ];
+    after = [ "dev-virtio\\x2dports-org.linuxcontainers.incus.device" ];
+  };
+
   boot.loader.timeout = 0;
   # `quiet` keeps kernel messages off the slow serial console, which remains
   # the recovery console.

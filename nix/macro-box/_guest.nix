@@ -293,6 +293,9 @@ in
 
     virtualisation.docker = {
       enable = true;
+      # Started by docker.socket on first use, so dockerd and containerd stay
+      # out of first boot, where they compete with enrollment for the CPU.
+      enableOnBoot = false;
       # Images and containers survive image updates on the data disk.
       daemon.settings = lib.mkIf (cfg.dataDisk != null) {
         data-root = "/home/.system/docker";
