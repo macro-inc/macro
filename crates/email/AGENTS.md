@@ -336,7 +336,10 @@ tools — hexagonal, heavily feature-gated.
   index bound and every enqueue's `available_at = now()` revives it. Any query
   that reads queued or import-running state must leave those rows out, as
   `settle_import`, the health snapshot, the backfill status and resync do.
-  Throttling and token refusals give their claim back to `attempts`.
+  Throttling and token refusals give their claim back to `attempts`, and so
+  does a transient provider failure (Graph 5xx or 408, a request Graph never
+  answered) once its backoff is at 30 minutes, so a provider outage never
+  abandons a message.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
 - Process deleted-user bindings in the domain by link id, custodian before
