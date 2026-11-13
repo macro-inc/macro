@@ -3,8 +3,8 @@
 
 import { spawn } from 'node:child_process';
 import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -12,7 +12,8 @@ export default async function globalSetup(): Promise<(() => void) | undefined> {
   if (process.env.EMAIL_E2E_STACKS_URL) return undefined;
 
   const binary =
-    process.env.EMAIL_E2E_STACKS_BIN ?? `${REPOSITORY}target/debug/email_e2e_stacks`;
+    process.env.EMAIL_E2E_STACKS_BIN ??
+    `${REPOSITORY}target/debug/email_e2e_stacks`;
   const server = spawn(binary, [], {
     stdio: ['ignore', 'pipe', 'inherit'],
     // The services it starts are built beside it.

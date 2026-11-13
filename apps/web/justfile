@@ -271,7 +271,7 @@ test-email-fixtures-browser *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     for feature in {{email_fixture_suites}}; do
-        env -u LD_LIBRARY_PATH bunx playwright test --config "src/features//browser-test/playwright.config.ts" --grep-invert @known-bug {{ARGS}}
+        env -u LD_LIBRARY_PATH bunx playwright test --config "src/features/$feature/browser-test/playwright.config.ts" --grep-invert @known-bug {{ARGS}}
     done
 
 test-email-rendering:

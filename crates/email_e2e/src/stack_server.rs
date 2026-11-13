@@ -77,6 +77,7 @@ impl IntoResponse for Failed {
 /// - `DELETE /stacks/{id}` ends the stack; it fails when a service died or
 ///   panicked.
 pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
+    let stacks = Stacks::default();
     let app = Router::new()
         .route("/stacks", post(start))
         .route("/stacks/{id}", delete(finish))
@@ -93,10 +94,22 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
         .route("/stacks/{id}/seed", post(seed_mailbox))
         .route("/stacks/{id}/sql", post(sql))
         .route("/stacks/{id}/scheduled-sweep", post(scheduled_sweep))
-        .with_state(Stacks::default());
+        .with_state(stacks.clone());
     axum::serve(listener, app)
+        .with_graceful_shutdown(stopped())
         .await
         .context("the stack server stopped")?;
+    // Stacks of tests that died before finishing theirs: without this their
+    // services, databases and queues would outlive the run.
+    let left: Vec<_> = stacks.lock().await.drain().collect();
+    for (id, running) in left {
+        let Ok(running) = Arc::try_unwrap(running) else {
+            continue;
+        };
+        if let Err(error) = running.into_inner().stack.finish().await {
+            eprintln!("the stack {id} was left unfinished and did not end cleanly: {error}");
+        }
+    }
     Ok(())
 }
 
@@ -258,9 +271,18 @@ async fn finish(
         .await
         .remove(&id)
         .ok_or_else(|| Failed(StatusCode::NOT_FOUND, format!("no stack {id}")))?;
-    let running = Arc::try_unwrap(running)
-        .map_err(|_| report!("the stack {id} is still answering a request"))?
-        .into_inner();
+    let running = match Arc::try_unwrap(running) {
+        Ok(running) => running.into_inner(),
+        // Another request of the same test is still being answered: the
+        // stack stays, and the client asks again.
+        Err(shared) => {
+            stacks.lock().await.insert(id.clone(), shared);
+            return Err(Failed(
+                StatusCode::CONFLICT,
+                format!("the stack {id} is still answering a request"),
+            ));
+        }
+    };
     running.stack.finish().await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -445,4 +467,19 @@ async fn sql(
     serde_json::from_str(&rows)
         .map(Json)
         .map_err(|error| Failed(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))
+}
+
+/// Resolves when the process is asked to stop.
+async fn stopped() {
+    let interrupted = tokio::signal::ctrl_c();
+    let Ok(mut terminated) =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+    else {
+        // Without the handler the server runs until killed, as before.
+        return std::future::pending().await;
+    };
+    tokio::select! {
+        _ = interrupted => {}
+        _ = terminated.recv() => {}
+    }
 }

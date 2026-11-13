@@ -55,14 +55,20 @@ export type ServiceRequest = {
 
 function stacksUrl(): string {
   const url = process.env.EMAIL_E2E_STACKS_URL;
-  if (!url) throw new Error('EMAIL_E2E_STACKS_URL is not set: see global-setup.ts');
+  if (!url)
+    throw new Error('EMAIL_E2E_STACKS_URL is not set: see global-setup.ts');
   return url;
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<T> {
   const response = await fetch(`${stacksUrl()}${path}`, {
     method,
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+    headers:
+      body === undefined ? undefined : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await response.text();
@@ -89,7 +95,11 @@ export class Stack {
   }
 
   /** Links a mailbox to the user and waits for its first sync. */
-  link(user: SignedInUser, provider: Provider, address = user.email): Promise<LinkedInbox> {
+  link(
+    user: SignedInUser,
+    provider: Provider,
+    address = user.email
+  ): Promise<LinkedInbox> {
     return call('POST', this.path('/inboxes'), {
       user: user.email,
       provider,
@@ -99,11 +109,18 @@ export class Stack {
 
   /** Puts a message in the mailbox at the provider, as if it just arrived. */
   deliver(address: string, mail: Mail): Promise<ProviderMessage> {
-    return call('POST', this.path(`/inboxes/${encodeURIComponent(address)}/messages`), mail);
+    return call(
+      'POST',
+      this.path(`/inboxes/${encodeURIComponent(address)}/messages`),
+      mail
+    );
   }
 
   providerMessages(address: string): Promise<ProviderMessage[]> {
-    return call('GET', this.path(`/inboxes/${encodeURIComponent(address)}/messages`));
+    return call(
+      'GET',
+      this.path(`/inboxes/${encodeURIComponent(address)}/messages`)
+    );
   }
 
   /** What the email services asked the other Macro services. */
@@ -152,7 +169,20 @@ export class Stack {
   }
 
   /** Ends the stack. Rejects when a service died or panicked. */
-  finish(): Promise<void> {
-    return call('DELETE', this.path(''));
+  async finish(): Promise<void> {
+    // The server answers 409 while another request of this test is still
+    // being answered; that request ends by itself.
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await fetch(`${stacksUrl()}${this.path('')}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) return;
+      if (response.status !== 409 || attempt === 50) {
+        throw new Error(
+          `the stack did not end (${response.status}):\n${await response.text()}`
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
   }
 }

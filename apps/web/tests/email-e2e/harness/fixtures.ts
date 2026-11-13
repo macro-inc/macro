@@ -18,7 +18,8 @@ import {
 } from './stack';
 
 const DIST =
-  process.env.EMAIL_E2E_DIST ?? fileURLToPath(new URL('../../../dist', import.meta.url));
+  process.env.EMAIL_E2E_DIST ??
+  fileURLToPath(new URL('../../../dist', import.meta.url));
 
 /** A thread as the email service lists it. */
 export type ThreadPreview = {
@@ -65,7 +66,7 @@ async function relayGateway(
   page: Page,
   stack: Stack,
   user: SignedInUser
-): Promise<() => void> {
+): Promise<() => Promise<void>> {
   const sockets = new Set<WebSocketRoute>();
   await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
     sockets.add(socket);
@@ -79,7 +80,13 @@ async function relayGateway(
   let stopped = false;
   const pass = async () => {
     while (!stopped) {
-      const sent = (await stack.serviceRequests().catch(() => [])).filter(
+      // A failed read leaves the cursor where it is: the next one catches up.
+      const all = await stack.serviceRequests().catch(() => undefined);
+      if (all === undefined) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      const sent = all.filter(
         (request) =>
           request.service === 'connection-gateway' &&
           decodeURIComponent(request.path) === mine
@@ -97,9 +104,9 @@ async function relayGateway(
     }
   };
   const passing = pass();
-  return () => {
+  return async () => {
     stopped = true;
-    void passing;
+    await passing;
   };
 }
 
@@ -110,61 +117,76 @@ export const test = base.extend<Options & { mailbox: Mailbox }>({
 
   mailbox: async ({ page, provider, stackEnv, address }, use, testInfo) => {
     const stack = await Stack.start(stackEnv);
-    const user = await stack.user(address);
-    const inbox = await stack.link(user, provider);
-    const front = await startFront({
-      dist: DIST,
-      emailUrl: stack.info.emailUrl,
-      documentStorageUrl: stack.info.documentStorageUrl,
-      internalApiKey: stack.info.internalApiKey,
-      user,
-    });
+    let failed = true;
+    try {
+      await serve(stack);
+      failed = testInfo.status !== testInfo.expectedStatus;
+    } finally {
+      // Whatever went wrong, the stack's services and database go away.
+      if (failed) console.log(`service logs: ${stack.info.logDir}`);
+      await stack.finish();
+    }
 
-    await page.addInitScript(() => {
-      localStorage.setItem('macro:login', 'true');
-    });
-    const stopRelay = await relayGateway(page, stack, user);
-
-    const api = (path: string, init?: RequestInit) =>
-      fetch(`${front.origin}${path}`, {
-        ...init,
-        headers: { 'x-email-link-id': inbox.linkId, ...init?.headers },
+    async function serve(stack: Stack): Promise<void> {
+      const user = await stack.user(address);
+      const inbox = await stack.link(user, provider);
+      const front = await startFront({
+        dist: DIST,
+        emailUrl: stack.info.emailUrl,
+        documentStorageUrl: stack.info.documentStorageUrl,
+        internalApiKey: stack.info.internalApiKey,
+        user,
       });
 
-    await use({
-      stack,
-      user,
-      inbox,
-      front,
-      deliver: (mail) => stack.deliver(inbox.email, mail),
-      providerMessages: () => stack.providerMessages(inbox.email),
-      api,
-      synced: async (subject) => {
-        let found: ThreadPreview | undefined;
-        await expect
-          .poll(
-            async () => {
-              const response = await api('/email/email/threads/previews/cursor/all?limit=100');
-              const page = (await response.json()) as { items: ThreadPreview[] };
-              found = page.items.find((item) => item.name === subject);
-              return found !== undefined;
-            },
-            { message: `Macro never synced "${subject}"`, timeout: 60_000 }
-          )
-          .toBe(true);
-        return found as ThreadPreview;
-      },
-      open: async (path = '/app/mail') => {
-        await page.goto(`${front.origin}${path}`);
-      },
-    });
+      try {
+        await page.addInitScript(() => {
+          localStorage.setItem('macro:login', 'true');
+        });
+        const stopRelay = await relayGateway(page, stack, user);
 
-    stopRelay();
-    await front.close();
-    if (testInfo.status !== testInfo.expectedStatus) {
-      console.log(`service logs: ${stack.info.logDir}`);
+        const api = (path: string, init?: RequestInit) =>
+          fetch(`${front.origin}${path}`, {
+            ...init,
+            headers: { 'x-email-link-id': inbox.linkId, ...init?.headers },
+          });
+
+        await use({
+          stack,
+          user,
+          inbox,
+          front,
+          deliver: (mail) => stack.deliver(inbox.email, mail),
+          providerMessages: () => stack.providerMessages(inbox.email),
+          api,
+          synced: async (subject) => {
+            let found: ThreadPreview | undefined;
+            await expect
+              .poll(
+                async () => {
+                  const response = await api(
+                    '/email/email/threads/previews/cursor/all?limit=100'
+                  );
+                  const page = (await response.json()) as {
+                    items: ThreadPreview[];
+                  };
+                  found = page.items.find((item) => item.name === subject);
+                  return found !== undefined;
+                },
+                { message: `Macro never synced "${subject}"`, timeout: 60_000 }
+              )
+              .toBe(true);
+            return found as ThreadPreview;
+          },
+          open: async (path = '/app/mail') => {
+            await page.goto(`${front.origin}${path}`);
+          },
+        });
+
+        await stopRelay();
+      } finally {
+        await front.close();
+      }
     }
-    await stack.finish();
   },
 });
 

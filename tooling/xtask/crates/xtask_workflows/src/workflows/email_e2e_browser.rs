@@ -17,7 +17,7 @@ use xtask_paths::RepoGlob;
 use crate::workflows::{
     code_check_cloud_storage, email_e2e, runners,
     steps::{self, FluentBuilder},
-    vars,
+    vars, web_app_check_main,
 };
 
 /// Files whose change makes `PR CI` call this workflow: what
@@ -133,10 +133,9 @@ fn suite() -> Job {
 
 /// The built app against the stack.
 fn run_suite() -> Step<Run> {
-    Step::new("run the email browser suite")
-        .run(include_str!("scripts/email_e2e_browser.sh"))
-        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
-        .add_env(("WASM_PKG_HTTP_CACHE", "1"))
+    web_app_check_main::with_pr_wasm_env(
+        Step::new("run the email browser suite").run(include_str!("scripts/email_e2e_browser.sh")),
+    )
 }
 
 /// The email and calendar features' own browser suites: real components over
@@ -151,7 +150,7 @@ fn fixture_suites() -> Step<Run> {
 /// fails the job: its output says which still fail and which now pass.
 fn known_bugs() -> Step<Run> {
     Step::new("report tests for known bugs")
-        .run("just test-email-e2e-browser")
+        .run("just test-email-e2e-browser --pass-with-no-tests")
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)

@@ -13,8 +13,8 @@ import {
   type Server,
   type ServerResponse,
 } from 'node:http';
-import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
+import { connect } from 'node:net';
 import { extname, join } from 'node:path';
 import type { Duplex } from 'node:stream';
 
@@ -241,12 +241,17 @@ export async function startFront(options: FrontOptions): Promise<Front> {
     }
 
     unanswered.push({ method, path, status: 404 });
-    response.writeHead(404, { ...ISOLATION, 'content-type': 'application/json' });
+    response.writeHead(404, {
+      ...ISOLATION,
+      'content-type': 'application/json',
+    });
     response.end('{}');
   };
 
-  const server: Server = createServer((request, response) => {
-    handle(request, response).catch((error: unknown) => {
+  const server: Server = createServer(async (request, response) => {
+    try {
+      await handle(request, response);
+    } catch (error: unknown) {
       unanswered.push({
         method: request.method ?? 'GET',
         path: request.url ?? '/',
@@ -254,7 +259,7 @@ export async function startFront(options: FrontOptions): Promise<Front> {
       });
       if (!response.headersSent) response.writeHead(502, ISOLATION);
       response.end(String(error));
-    });
+    }
   });
 
   // A websocket to a service is piped through with the same headers; the
@@ -268,7 +273,10 @@ export async function startFront(options: FrontOptions): Promise<Front> {
     }
     const base = new URL(target.base);
     const service = connect(Number(base.port), base.hostname, () => {
-      const lines = [`GET ${target.path}${url.search} HTTP/1.1`, `host: ${base.host}`];
+      const lines = [
+        `GET ${target.path}${url.search} HTTP/1.1`,
+        `host: ${base.host}`,
+      ];
       for (const [name, value] of Object.entries(request.headers)) {
         if (name === 'host' || name.startsWith('x-internal-')) continue;
         if (typeof value === 'string') lines.push(`${name}: ${value}`);
@@ -286,9 +294,9 @@ export async function startFront(options: FrontOptions): Promise<Front> {
   });
 
   const sockets = new Set<Duplex>();
-  server.on("connection", (socket) => {
+  server.on('connection', (socket) => {
     sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
+    socket.on('close', () => sockets.delete(socket));
   });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

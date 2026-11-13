@@ -25,7 +25,8 @@ export async function gmailRawMessage(
     `${stack.gmailUrl}/gmail/v1/users/me/messages/${id}?format=raw`,
     { headers: { authorization: `Bearer ${token}` } }
   );
-  if (!response.ok) throw new Error(`no Gmail message ${id}: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`no Gmail message ${id}: ${response.status}`);
   const body = (await response.json()) as { raw: string };
   return Buffer.from(body.raw, 'base64url').toString('utf8');
 }
@@ -35,6 +36,8 @@ export function header(raw: string, name: string): string | undefined {
   const head = raw.split(/\r?\n\r?\n/, 1)[0].replace(/\r?\n[ \t]+/g, ' ');
   const line = head
     .split(/\r?\n/)
-    .find((candidate) => candidate.toLowerCase().startsWith(`${name.toLowerCase()}:`));
+    .find((candidate) =>
+      candidate.toLowerCase().startsWith(`${name.toLowerCase()}:`)
+    );
   return line?.slice(name.length + 1).trim();
 }

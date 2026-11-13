@@ -32,7 +32,10 @@ test.describe('replying from the thread', () => {
   // prefix, in any case and without a space, keeps it and gets no second
   // one. A stacked `Re: RE: x` splits the thread in other mail clients.
   for (const subject of ['RE: Budget', 're:budget']) {
-    test(`a reply to "${subject}" keeps that subject`, async ({ page, mailbox }) => {
+    test(`a reply to "${subject}" keeps that subject`, async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject,
