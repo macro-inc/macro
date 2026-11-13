@@ -128,6 +128,11 @@ Pulumi stacks; they do not host extra agent processes.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, the `enable-agent-navigation` flag, Redis budgets and
   the gateway `ui_command` send.
+  Channel-mention bots in document storage run their code-mode programs on
+  their own executor budget here, through `agent_code_mode`'s internal
+  `/internal/code-mode/user-executions` route. It is mounted only when Deno is
+  configured; a host without `DENO_BINARY` is unsupported for channel-mention
+  replies (startup warns, and their programs answer "not configured").
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the

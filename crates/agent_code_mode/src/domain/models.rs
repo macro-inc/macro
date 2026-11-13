@@ -184,6 +184,12 @@ pub enum CodeModeError {
     /// A review changed or was already submitted. Reload before acting.
     #[error("review changed; reload before acting")]
     Conflict,
+    /// The program may have run, but its outcome was lost on the way back.
+    /// Never replay it blindly: what it changed may already stand.
+    #[error(
+        "the program may have run, but its outcome was lost; check what it was meant to change before running it again"
+    )]
+    Unconfirmed,
     /// The supervised request task failed unexpectedly.
     #[error("code execution task failed")]
     Task(#[source] tokio::task::JoinError),

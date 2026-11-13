@@ -7,3 +7,5 @@ pub mod domain;
 pub mod inbound;
 /// Toolset dispatch and PostgreSQL persistence.
 pub mod outbound;
+/// The internal user-execution route's wire contract.
+pub mod user_executions;

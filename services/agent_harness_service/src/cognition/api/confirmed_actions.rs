@@ -92,6 +92,14 @@ pub async fn send_confirmed_email(
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     body: Bytes,
 ) -> Result<Json<SendEmailResponse>, ConfirmedActionError> {
+    // A channel-mention bot's program never sends: its direct tools could
+    // not, and its quoted approval is one it wrote itself.
+    if email::is_channel_mention_run() {
+        return Err(ConfirmedActionError {
+            status: StatusCode::FORBIDDEN,
+            message: email::CHANNEL_MENTION_SEND_REFUSAL.to_owned(),
+        });
+    }
     run_confirmed::<SendConfirmedEmail, _>(
         state.tool_service_context.email_tool_context.clone(),
         &user,

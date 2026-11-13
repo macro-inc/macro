@@ -75,6 +75,7 @@ never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
 client label (public MCP code mode signs the MCP client's name); `mint_for`
 signs none of these claims. `mint_for_routine` signs the routine whose run the
 token acts for (and optionally an agent; `None` writes as the owner).
+`mint_for_channel_mention` signs the channel message a bot's program answers.
 
 ## Gotchas
 

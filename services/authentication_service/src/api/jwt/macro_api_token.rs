@@ -94,6 +94,8 @@ pub async fn handler(
             // Re-minting keeps the signed routine `propagate` accepted, so a
             // routine run cannot shed it; callers can never supply one.
             routine_id: agent_correlation::context::current_routine(),
+            // Likewise a channel-mention program cannot shed its email refusal.
+            channel_mention_id: agent_correlation::context::current_channel_mention(),
             agent_id: authorization
                 .authorization
                 .user

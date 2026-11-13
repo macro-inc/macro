@@ -16,6 +16,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         agent_id: Some(agent),
         agent_via: Some("Claude Code".into()),
         routine_id: None,
+        channel_mention_id: None,
     })
     .unwrap();
     let args = JwtValidationArgs {
@@ -89,6 +90,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: Some(routine),
+        channel_mention_id: None,
     })
     .unwrap();
     let args = JwtValidationArgs {
@@ -119,6 +121,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: None,
+        channel_mention_id: None,
     })
     .unwrap();
     let [header, _, signature]: [&str; 3] =

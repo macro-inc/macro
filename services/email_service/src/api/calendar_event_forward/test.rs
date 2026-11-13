@@ -47,3 +47,19 @@ fn the_reason_for_invalid_recipients_reaches_the_user() {
     ));
     assert_eq!(error.message, "a recipient is not an email address");
 }
+
+#[tokio::test]
+async fn a_channel_mention_program_cannot_forward() {
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let refusal = agent_correlation::context::scope_attribution(mention, async {
+        refuse_channel_mention().unwrap_err()
+    })
+    .await;
+    assert_eq!(refusal.message, email::CHANNEL_MENTION_SEND_REFUSAL);
+    assert_eq!(refusal.into_response().status(), StatusCode::FORBIDDEN);
+    // Anyone else's forward is unchanged.
+    assert!(refuse_channel_mention().is_ok());
+}

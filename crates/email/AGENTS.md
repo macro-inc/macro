@@ -155,7 +155,10 @@ tools — hexagonal, heavily feature-gated.
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
   (`SendEmail`/`SendConfirmedEmail`), or a confirmed draft schedule. Keep any
-  new route that sends or schedules mail behind the same check.
+  new route that sends or schedules mail behind the same check. A program
+  answering a channel mention (`is_channel_mention_run`, its token's signed
+  `channel_mention_id`) is refused even with a quote, here, at the
+  harness's confirmed send, and at `email_service`'s calendar-event forward.
 
 - Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict

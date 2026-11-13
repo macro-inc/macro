@@ -107,7 +107,8 @@ the gateway `/email` prefix.
 ## Recipes
 
 - Add an email API route: `src/api/email.rs` (or `src/api/gmail.rs`,
-  `src/api/calendar_invitations.rs`, `src/api/calendar_event_forward.rs`) →
+  `src/api/calendar_invitations.rs`, `src/api/calendar_event_forward.rs`; the
+  forward refuses a channel-mention program, see `email::is_channel_mention_run`) →
   `src/api/context.rs` → `src/api/swagger.rs`.
 - Add a pubsub consumer: new module under `src/pubsub/` → wire into
   `src/pubsub/mod.rs` and the `pubsub_workers` binary.

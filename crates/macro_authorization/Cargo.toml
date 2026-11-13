@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 axum = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:macro_auth",
   "dep:model-error-response",
@@ -17,6 +18,7 @@ outbound = ["dep:macro_auth"]
 postgres = ["dep:sqlx", "dep:sha2"]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation", optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 bot_token = { path = "../bot_token" }

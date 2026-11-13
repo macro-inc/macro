@@ -1573,7 +1573,6 @@ async fn run_server() -> anyhow::Result<()> {
             )),
             message_service.clone(),
         );
-    let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let conversation_access = Arc::new(
         channel_bots::outbound::conversation::EntityAccessConversation(
             entity_access_service.clone(),
@@ -1650,12 +1649,20 @@ async fn run_server() -> anyhow::Result<()> {
             config.document_permission_jwt.as_ref().to_string(),
         ),
     );
+    // Mention replies run code mode; programs run on the harness's Deno runtime.
+    let channel_bot_tools = channel_bots::outbound::code_mode::ChannelBotTools::new(Arc::new(
+        agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions::new(
+            macro_service_urls::AgentHarnessServiceUrl::new()?.as_ref(),
+            config.internal_api_key.as_ref(),
+        )
+        .map_err(|error| anyhow::anyhow!("invalid agent harness client: {error}"))?,
+    ));
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(
             macro_agent_tool_context,
-            macro_agent_tools,
+            channel_bot_tools,
         )),
         Arc::new(
             channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(

@@ -352,12 +352,14 @@ dependencies = [
  "jev",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
  "nom 8.0.0",
  "nutype",
  "pipedream_mcp",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -370,10 +372,12 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "urlencoding",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -4258,6 +4262,7 @@ name = "channel_bots"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_code_mode",
  "ai_billing",
  "ai_tools",
  "ai_toolset",
@@ -4269,6 +4274,8 @@ dependencies = [
  "channel_sender",
  "chrono",
  "chrono-tz",
+ "code_execution",
+ "cognition",
  "entity_access",
  "futures",
  "lexical_client",
@@ -4279,6 +4286,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -6661,6 +6669,7 @@ dependencies = [
  "account_manager",
  "activity",
  "agent_changes",
+ "agent_code_mode",
  "agent_correlation",
  "agent_session",
  "agent_session_realtime",
@@ -12570,6 +12579,7 @@ dependencies = [
 name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "axum",
  "bot_id",
  "bot_token",

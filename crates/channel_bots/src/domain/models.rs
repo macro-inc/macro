@@ -38,6 +38,15 @@ pub struct BotEvent {
     pub requesting_user: MacroUserIdStr<'static>,
 }
 
+/// The message a reply answers, carried to the tools that act for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BotMention {
+    /// The message that triggered the bot.
+    pub message_id: Uuid,
+    /// The conversation it belongs to.
+    pub root_id: Uuid,
+}
+
 /// A thread message rendered for trigger inference, oldest-first.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranscriptMessage {

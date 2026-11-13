@@ -113,6 +113,13 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
     response
 }
 
+/// A channel-mention bot's program never reaches the public MCP: its
+/// `ExecuteCode` would mint a fresh token without the signed mention, and with
+/// it the program's email refusal.
+fn answers_channel_mention(token: &JwtToken) -> bool {
+    matches!(token, JwtToken::MacroApiToken(api) if api.channel_mention_id.is_some())
+}
+
 /// Validates `Authorization: Bearer <token>` and stores the authenticated
 /// [`MacroUserIdStr`], its [`McpAuthMethod`], and its [`ToolCaller`] in the
 /// request extensions. Every authenticated request carries a caller:
@@ -147,6 +154,13 @@ pub async fn validate_bearer(
             return unauthorized_response(&request, Some("invalid_token"));
         }
     };
+
+    if answers_channel_mention(&jwt_token) {
+        tracing::warn!("MCP request with a channel-mention program's token refused");
+        let mut response = Response::new(Body::empty());
+        *response.status_mut() = StatusCode::FORBIDDEN;
+        return response;
+    }
 
     if let JwtToken::MacroApiToken(api) = &jwt_token
         && api.agent_id.is_some()

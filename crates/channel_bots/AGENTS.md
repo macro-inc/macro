@@ -14,6 +14,13 @@ decides whether to trigger, authorizes, and delivers a reply.
 - `src/outbound/fast_model_trigger_classifier.rs`: Haiku-based implicit-trigger
   classifier used when there's no explicit mention.
 - `src/outbound/agent_loop_responder.rs`: drives the agent loop to produce a reply.
+- `src/outbound/code_mode.rs`: every reply runs code mode (`ChannelBotTools`).
+  The direct tools are `ai_tools::tools_for_channel_bot_code_mode` (SDK-covered
+  and Anthropic sandbox tools dropped) plus `agent_code_mode`'s user `ExecuteCode`,
+  `DescribeCodeTools` and `ReadCodeDocs`. Programs run on the agent harness
+  (`POST /internal/code-mode/user-executions`, internal key) as the mentioning
+  user attributed to Macro AI, the same identity as the direct tools. A call to
+  a tool the code-mode reply was not offered is refused, never dispatched.
 - `src/outbound/lexical_comment_marks.rs`: comment-mark delivery for document bots.
 - `src/inbound/bot_trigger_router.rs`: wires channel/document message events in.
 
@@ -27,7 +34,9 @@ decides whether to trigger, authorizes, and delivers a reply.
 ## Boundaries
 
 - Depends on: `bots`, `channels`, `calendar_events` (time zones), `lexical_client`,
-  `messages`, `prompt`, `ai_tools`/`ai_toolset`, `ai_usage`/`ai_billing`.
+  `messages`, `prompt`, `ai_tools`/`ai_toolset`, `ai_usage`/`ai_billing`,
+  `agent_code_mode` (the `MentionCodeMode` port and user code tools),
+  `code_execution`, `cognition`.
 - Used by: `services/document_storage_service`, its composition root.
 
 ## Recipes

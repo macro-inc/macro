@@ -4,6 +4,7 @@
     "access_requests": [
       "crates/access_requests",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -153,6 +154,7 @@
     ],
     "agent": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -1222,6 +1224,7 @@
     ],
     "agent_preview": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_preview",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
@@ -2282,6 +2285,7 @@
       "crates/workspace-hack"
     ],
     "ai_usage": [
+      "crates/agent_correlation",
       "crates/ai_usage",
       "crates/bot_id",
       "crates/bot_token",
@@ -2736,6 +2740,7 @@
     ],
     "authentication_service_client": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -3636,6 +3641,7 @@
     ],
     "channel_labels": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4651,6 +4657,7 @@
     ],
     "connection": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -5520,6 +5527,7 @@
       "crates/workspace-hack"
     ],
     "delete_chat_handler": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -5673,6 +5681,7 @@
       "services/deleted_item_poller"
     ],
     "dictation": [
+      "crates/agent_correlation",
       "crates/ai_usage",
       "crates/bot_id",
       "crates/bot_token",
@@ -5944,6 +5953,7 @@
     ],
     "document_storage_service_client": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -5982,6 +5992,7 @@
     ],
     "document_text_extractor": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -6765,6 +6776,7 @@
     ],
     "email_refresh_handler": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7155,6 +7167,7 @@
     ],
     "email_sfs_delete_handler": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7287,6 +7300,7 @@
     ],
     "entity_access": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7351,6 +7365,7 @@
     ],
     "entity_mutation": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7388,6 +7403,7 @@
       "crates/workspace-hack"
     ],
     "entity_registry": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -7408,6 +7424,7 @@
       "crates/workspace-hack"
     ],
     "entity_registry_db_utils": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -7435,6 +7452,7 @@
     ],
     "external_chat": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7475,6 +7493,7 @@
     ],
     "favorites": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7527,6 +7546,7 @@
     ],
     "foreign_entity": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7908,6 +7928,7 @@
     ],
     "google_token": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -8261,6 +8282,7 @@
       "crates/workspace-hack"
     ],
     "graphql_common": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -9411,6 +9433,7 @@
     ],
     "graphql_permission": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -9967,6 +9990,7 @@
       "crates/workspace-hack"
     ],
     "graphql_soup_filter_input": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -10154,6 +10178,7 @@
       "crates/workspace-hack"
     ],
     "gtm_invite": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -10191,6 +10216,7 @@
       "crates/workspace-hack"
     ],
     "harnesses": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/computer_id",
@@ -10219,6 +10245,7 @@
     ],
     "hosted_runtimes": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -10563,6 +10590,7 @@
       "crates/workspace-hack"
     ],
     "import_jira": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10587,6 +10615,7 @@
       "crates/workspace-hack"
     ],
     "import_linear": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10611,6 +10640,7 @@
       "crates/workspace-hack"
     ],
     "import_notion": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10636,6 +10666,7 @@
       "crates/workspace-hack"
     ],
     "import_tracker": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11149,6 +11180,7 @@
       "crates/workspace-hack"
     ],
     "macro_authorization": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -11394,6 +11426,7 @@
     ],
     "macro_sha_count_client": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -11444,6 +11477,7 @@
     ],
     "mcp_auth_proxy": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -11482,6 +11516,7 @@
     ],
     "mcp_client": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -11516,6 +11551,7 @@
     ],
     "mcp_select": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -11785,6 +11821,7 @@
     ],
     "model": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12667,6 +12704,7 @@
     ],
     "onboarding": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12719,6 +12757,7 @@
     ],
     "organization_retention_handler": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12760,6 +12799,7 @@
     ],
     "organization_retention_trigger": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12886,6 +12926,7 @@
       "crates/workspace-hack"
     ],
     "pipedream_mcp": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -14062,6 +14103,7 @@
     ],
     "search_upload_handler": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -14238,6 +14280,7 @@
     ],
     "sha_cleanup_worker": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15226,6 +15269,7 @@
     ],
     "sqs_client": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15276,6 +15320,7 @@
     ],
     "static_file_service": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15349,6 +15394,7 @@
     ],
     "sync_service_client": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15383,6 +15429,7 @@
       "crates/workspace-hack"
     ],
     "sync_service_hex": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -15414,6 +15461,7 @@
       "crates/workspace-hack"
     ],
     "system_status": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/connection_gateway_client",
@@ -15726,6 +15774,7 @@
     ],
     "upload_extractor_lambda_handler": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15773,6 +15822,7 @@
     ],
     "upload_extractor_lambda_trigger": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -15818,6 +15868,7 @@
       "crates/workspace-hack"
     ],
     "user_api_key": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -15849,6 +15900,7 @@
       "crates/workspace-hack"
     ],
     "user_language": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -16174,6 +16226,7 @@
     ],
     "whatsapp_e2e": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -16236,6 +16289,7 @@
     ],
     "whatsapp_linked": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -16280,6 +16334,7 @@
     ],
     "whatsapp_session_service": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
