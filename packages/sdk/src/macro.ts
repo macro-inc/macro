@@ -585,6 +585,13 @@ export {
   type ProfilePicture,
 } from './entities/users/profile-picture';
 export type { ActivityReport } from './entities/users/user';
+export {
+  AgentWake,
+  type AgentWakeFilter,
+  type AgentWakeStatusFilter,
+  type WakeRecord,
+  type WakeTrace,
+} from './entities/users/wake';
 export type {
   WebFetchOptions,
   WebFetchResponse,
