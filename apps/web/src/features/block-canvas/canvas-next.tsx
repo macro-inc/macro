@@ -117,6 +117,14 @@ export function CanvasNextEditor(props: {
     // Same check the shared root map makes, so both paths refuse alike.
     if (transition && !validSlideTransition(transition))
       throw new Error('Invalid slide transition');
+
+    // Applying "nothing" to a deck with nothing set would commit an unchanged
+    // scene: an undo step that undoes nothing.
+    const anySlideHasOwn = Object.values(editor.document.items).some(
+      (item) => item.type === 'artifact' && item.geometry.transition
+    );
+    if (everySlide && !transition && !anySlideHasOwn && !deckDefault()) return;
+
     if (!backend) {
       if (everySlide)
         editor.execute(setAllTransitionsCommand, { transition: null });

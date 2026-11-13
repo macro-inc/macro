@@ -329,6 +329,8 @@ test('picks, times and previews a transition from the inspector', async ({
     'Uses the deck default: Cut'
   );
   expect(errors).toEqual([]);
+  // Nothing changed, so there is nothing to undo.
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0);
   await section.getByRole('radio', { name: 'Push', exact: true }).click();
   await expect(
     section.getByRole('radio', { name: 'Push', exact: true })
