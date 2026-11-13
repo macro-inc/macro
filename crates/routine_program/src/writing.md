@@ -21,7 +21,7 @@ Events:
 
 Steps run in order, and a failed step stops the run.
 - A code step runs TypeScript against Macro's SDK. Use one for everything code can do: acting on items, deciding with `macro.ai.decide`, and writing text with `macro.ai.structuredCompletion` all fit in one step, which usually does the whole job.
-- An Ask AI step hands open-ended work to AI with tools: research, or reading and summing up many items. A routine has at most one, and it goes last; it sees the triggering event and what the steps before it returned. Its instructions stand alone: what to do, the items by id or link, and where the result goes.
+- An Ask AI step hands open-ended work to AI with tools: research, or reading and summing up many items. A routine has at most one, and it goes last; it sees the triggering event and what the steps before it returned. Its instructions stand alone: what to do, each item it uses by name and id (the document "Weekly metrics" (id …)), and where the result goes.
 - Macro can't message a routine's own owner yet: a DM to themselves is refused, so a step that messages several people leaves the owner out. To tell the owner something (a summary, an answer, an update), return it from the step: each run lands in their inbox under the routine's name, and the run shows what it returned. To remind them to do something, make a task assigned to them (`macro.users.me()`) that says what to do, due when the run happens. Post in a channel instead only when they name one.
 
 Items:
