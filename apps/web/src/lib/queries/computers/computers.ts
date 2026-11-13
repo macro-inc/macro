@@ -221,6 +221,10 @@ export function usePurchaseComputerMutation() {
         queryClient.invalidateQueries({
           queryKey: computerKeys.offers.queryKey,
         }),
+        // A purchase can take a computer that is already up: its runtime is
+        // new to the team and already connected, so setup can go on now
+        // rather than at the next presence poll.
+        queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey }),
       ]);
     },
   }));

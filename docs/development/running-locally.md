@@ -659,6 +659,9 @@ document storage, app and egress URLs) that the harness resolves through
 `COMPUTER_RETENTION_DAYS` (default `14`) and `COMPUTER_PAST_DUE_GRACE_DAYS`
 (default `7`) set Macro computers' retention and past-due grace in both
 authentication_service and agent_harness_service; set them only to override.
+`COMPUTERS_POOL_STANDARD` (default `1`), `COMPUTERS_POOL_LARGE` and
+`COMPUTERS_POOL_XL` (default `0`) set how many booted warm-pool computers
+agent_harness_service keeps per host and size; `0` turns a size's pool off.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,

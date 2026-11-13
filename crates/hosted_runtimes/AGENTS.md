@@ -20,6 +20,8 @@ read it before changing behaviour.
 
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, list, power, retry, cancel, release).
+- `src/domain/pool.rs`: the warm pool's pure plan; `outbound/pg/pool.rs`
+  takes a pool computer for a purchase in one transaction.
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
@@ -65,6 +67,9 @@ read it before changing behaviour.
   keep their attempts. Never count it as an effect failure.
 - A billing removal keeps one idempotency key across retries; see
   `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
+- A pool computer has no team (`Computer::owner` is `None`, billing
+  `Billing::Pool`): every sold-unit query filters `team_id IS NOT NULL`, and
+  every team-scoped one already skips it. Keep both true in new queries.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).

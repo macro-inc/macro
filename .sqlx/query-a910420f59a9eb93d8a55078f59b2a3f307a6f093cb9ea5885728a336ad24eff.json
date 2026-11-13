@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, team_id FROM hosted_runtime WHERE id = ANY($1)",
+  "query": "SELECT id, team_id AS \"team_id!\" FROM hosted_runtime WHERE id = ANY($1) AND team_id IS NOT NULL",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "team_id",
+        "name": "team_id!",
         "type_info": "Uuid"
       }
     ],
@@ -21,8 +21,8 @@
     },
     "nullable": [
       false,
-      false
+      true
     ]
   },
-  "hash": "489ee125f147e905a65444c29fd968c45ab8cd5a8bacdaa0fcdb32eda7a281f9"
+  "hash": "a910420f59a9eb93d8a55078f59b2a3f307a6f093cb9ea5885728a336ad24eff"
 }

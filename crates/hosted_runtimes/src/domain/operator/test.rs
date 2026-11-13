@@ -1,5 +1,6 @@
 use std::str::FromStr;
 mod data_disk;
+mod pool;
 mod redeploy;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -193,6 +194,7 @@ impl Fleet for FakeFleet {
             memory_gb: 31,
             reserve_gb: 7,
             oversell_factor: 3,
+            image: crate::domain::image::GuestImage::try_new(BASE_IMAGE).unwrap(),
         })
     }
 
@@ -267,6 +269,7 @@ struct FakeHarnesses {
     enrollments: Mutex<Vec<Option<HarnessId>>>,
     fail_default_agent: std::sync::atomic::AtomicBool,
     default_agents: Mutex<Vec<(ComputerId, HarnessId)>>,
+    reconnects: Mutex<Vec<HarnessId>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -296,6 +299,11 @@ impl Harnesses for FakeHarnesses {
 
     async fn pairing_claimed(&self, _pairing_id: PairingId) -> Result<bool, FakeError> {
         Ok(self.claimed.load(Ordering::SeqCst))
+    }
+
+    async fn reconnect(&self, harness_id: HarnessId) -> Result<(), FakeError> {
+        self.reconnects.lock().unwrap().push(harness_id);
+        Ok(())
     }
 
     async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, FakeError> {

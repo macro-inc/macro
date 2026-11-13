@@ -317,6 +317,21 @@ async fn a_displaced_connections_close_reports_only_that_connection() {
     assert_eq!(listed_connection(&registry).id, current.id);
 }
 
+#[tokio::test]
+async fn a_disconnect_unlists_the_connection_and_ends_it() {
+    let registry = RuntimeRegistry::<ContainerSender>::new();
+    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    let dropped = listed_connection(&registry);
+
+    assert!(registry.disconnect(HarnessId::TEST_A));
+
+    assert!(!registry.is_connected(HarnessId::TEST_A));
+    // Its socket's end is what makes the runtime dial again.
+    dropped.connection.closed().await;
+    // Nothing is left to drop.
+    assert!(!registry.disconnect(HarnessId::TEST_A));
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_close_waits_for_its_own_connected_write() {
     let presence = Arc::new(RecordingPresence::default());

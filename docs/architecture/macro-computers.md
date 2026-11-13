@@ -151,8 +151,48 @@ attempt, so a busy database never fails a computer or abandons a removal.
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
   are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
+- **Warm pool** (`domain::pool`): each host keeps `COMPUTERS_POOL_{STANDARD,LARGE,XL}`
+  (default 1, 0, 0) booted, enrolled computers that no team owns:
+  `hosted_runtime.team_id`, `created_by`, `purchase_key`, price and comp
+  reason are NULL (`hosted_runtime_pool_check`), and their state's billing is
+  `Billing::Pool`; a row whose ownership and billing disagree is quarantined.
+  Every team-scoped read (`team_id = $1`) skips them, they hold awake units but
+  no sold units, and their harness is owned by `POOL_HARNESS_OWNER` with no
+  team grant, so `harness_access_level` gives nobody access and
+  `harness_can_run` refuses every session on it. The operator fills the pool in
+  reconcile and after each purchase that takes one (`ComputerOperator::fill_pool`,
+  pure plan `pool::plan`): it drains (`Event::Drain`, destroy) members built from
+  another image than the host's (`hosted_runtime_host.image`, written at
+  registration), that gave up or are off, or beyond the target, and creates the
+  missing ones through the ordinary `Create` effect (fresh pairing for the pool
+  owner) only while the host has awake room (`add_pool_computer` counts under
+  the host lock). A pool computer's first connection records neither
+  enrollment nor a default agent.
+  A Stripe or comped purchase first tries `ComputerRepo::claim_pool_computer`:
+  in one transaction under the host locks it takes the oldest up, connected
+  pool computer of the purchase's exact resources on the host's current image
+  with sold units left (`FOR UPDATE SKIP LOCKED`), unless the key was used or
+  (Stripe) the team already has a `Charging` computer (also a unique index);
+  it sets the team, buyer, name, key, funding and `created_at`, applies
+  `Event::Claimed` (billing `Charging`, or `Comped`; effects `Charge` and
+  `JoinTeam`), and hands the harness to the team
+  (`harnesses::outbound::pg_harness_repo::join_hosted_harness`: name, owner, team
+  `edit` grant). Any failure rolls all of it back and the purchase creates a
+  computer as below. The purchase answers `Ready` at once; the status is Ready
+  with billing `purchasing` while the charge settles. `Charge` runs in the
+  billing worker with key `computer-add:{id}`: success →
+  `ChargeSucceeded` (`Active`), a definite refusal → `ChargeFailed` (released,
+  nothing to remove); unknown outcomes retry, and the attempt at
+  `MAX_BILLING_ATTEMPTS` settles the add instead (fenced): an item bills it,
+  none releases it. A `Charging` computer refuses cancel, undo, restore and
+  release (`Rejected::PaymentPending`), and subscription snapshots leave its
+  items alone. `JoinTeam` (fleet worker) records enrollment and the default
+  agent, drops macrod's connection through the runtime command bus
+  (`Harnesses::reconnect`, `RuntimeRegistry::disconnect` on the replica that
+  holds it) so macrod reloads as the team's, then refills. A taken computer
+  never returns to the pool.
 - **Capacity**: free sold units are sold capacity minus the units of live
-  computers (phase not `destroying`) and every reservation, expired or not
+  bought computers (phase not `destroying`) and every reservation, expired or not
   (an expired one may still settle as charged), reserved under
   the host lock. A size is only reserved on a host whose awake capacity
   fits it, so a sold computer can always be powered on somewhere.

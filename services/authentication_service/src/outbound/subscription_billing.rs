@@ -204,6 +204,14 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                     let status = computer
                         .status(0, chrono::Utc::now(), self.computers.policy())
                         .status;
+                    let price_id = match computer.funding() {
+                        Some(hosted_runtimes::domain::models::Funding::Stripe { price_id }) => {
+                            Some(price_id.clone())
+                        }
+                        Some(hosted_runtimes::domain::models::Funding::Comped { .. }) | None => {
+                            None
+                        }
+                    };
                     computers.push(BillingComputer {
                         id: computer.id,
                         catalog_entry: CatalogEntry {
@@ -211,12 +219,7 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                             size: computer.size,
                             resources: computer.resources,
                         },
-                        price_id: match &computer.funding {
-                            hosted_runtimes::domain::models::Funding::Stripe { price_id } => {
-                                Some(price_id.clone())
-                            }
-                            hosted_runtimes::domain::models::Funding::Comped { .. } => None,
-                        },
+                        price_id,
                         name: computer.name,
                         status,
                         included: matches!(computer.state.billing, ComputerBilling::Comped { .. }),

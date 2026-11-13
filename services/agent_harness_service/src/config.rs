@@ -168,6 +168,16 @@ pub struct Config {
     /// it is turned off.
     #[macro_config_default(7)]
     pub computer_past_due_grace_days: u32,
+    /// Standard Macro computers each fleet host keeps booted and enrolled in
+    /// the warm pool for purchases to take at once; 0 turns the pool off.
+    #[macro_config_default(1)]
+    pub computers_pool_standard: u32,
+    /// Large computers in each host's warm pool; off unless set.
+    #[macro_config_default(0)]
+    pub computers_pool_large: u32,
+    /// XL computers in each host's warm pool; off unless set.
+    #[macro_config_default(0)]
+    pub computers_pool_xl: u32,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -454,6 +464,15 @@ impl Config {
             self.computer_past_due_grace_days,
         )
         .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
+    }
+
+    /// How many warm-pool computers each fleet host keeps per size.
+    pub fn computer_pool(&self) -> hosted_runtimes::domain::pool::PoolTargets {
+        hosted_runtimes::domain::pool::PoolTargets {
+            standard: self.computers_pool_standard,
+            large: self.computers_pool_large,
+            xl: self.computers_pool_xl,
+        }
     }
 
     /// Load only the required settings for the explicitly selected fleet.

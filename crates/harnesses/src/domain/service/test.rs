@@ -1067,7 +1067,7 @@ const COMPUTER_ID: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(42));
 
 fn hosted_request() -> CreateHostedPairing {
     CreateHostedPairing {
-        team_id: TEAM_ID,
+        team_id: Some(TEAM_ID),
         name: "  Standard computer  ".to_owned(),
         created_by: caller(OWNER_ID),
         computer_id: COMPUTER_ID,

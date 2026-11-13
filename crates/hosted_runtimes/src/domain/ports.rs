@@ -166,6 +166,39 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
+    /// In one transaction under the host lock: unless the purchase key was
+    /// used before or the team already has a computer whose charge is
+    /// settling (Stripe purchases only), take an up, connected pool computer
+    /// of `purchase.size` and resources, created from its host's current
+    /// image, on a host with sold capacity for it (the purchase holds sold
+    /// units from now on). It gets the purchase's team, buyer, name, key and
+    /// funding, its harness becomes the team's, and the lifecycle's
+    /// [`Event::Claimed`] with `billing` queues its charge and the rest of
+    /// its handover. Any failure leaves the computer in the pool.
+    fn claim_pool_computer(
+        &self,
+        purchase: &NewReservation,
+        billing: crate::domain::lifecycle::ClaimBilling,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<crate::domain::models::Claim, Self::Err>> + Send;
+
+    /// The live pool computers on `host`, oldest first.
+    fn pool_computers(
+        &self,
+        host: HostId,
+    ) -> impl Future<Output = Result<Vec<Computer>, Self::Err>> + Send;
+
+    /// Under the host lock: insert a pool computer and queue its creation,
+    /// started, when its host has awake room for it and fewer than `target`
+    /// live pool computers of its size; `None` (nothing written) otherwise,
+    /// so concurrent passes never overfill.
+    fn add_pool_computer(
+        &self,
+        computer: crate::domain::models::NewPoolComputer,
+        target: u32,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
+
     /// Delete a reservation whose charge did not happen; false when it was already gone.
     fn delete_reservation(
         &self,
@@ -642,7 +675,9 @@ pub trait Harnesses: Send + Sync + 'static {
     /// Adapter failure type.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Create, or re-key, the team harness for a computer.
+    /// Create, or re-key, the harness for a computer: its team's, or for a
+    /// pool computer one owned by [`crate::domain::models::POOL_HARNESS_OWNER`]
+    /// with no team grant, which nobody can run agents on.
     fn create_hosted_pairing(
         &self,
         computer: &Computer,
@@ -664,6 +699,13 @@ pub trait Harnesses: Send + Sync + 'static {
     /// to it, so no agent is left on a machine that is gone; absent is fine.
     /// Safe to repeat: a retry still finds agents bound to a deleted harness.
     fn revoke(&self, computer: &Computer) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Drop macrod's connection for `harness_id` on whichever replica holds
+    /// it, so macrod dials again and loads what its new owner configured.
+    fn reconnect(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the
     /// buyer. Skips when an agent is already bound to the harness.

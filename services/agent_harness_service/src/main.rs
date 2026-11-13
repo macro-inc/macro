@@ -1377,6 +1377,7 @@ async fn run() -> anyhow::Result<()> {
             PgBotsRepo::new(pool.clone()),
             pool.clone(),
         )),
+        redis.clone(),
     )
     .await?;
     let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
@@ -1694,6 +1695,10 @@ async fn run() -> anyhow::Result<()> {
                     {
                         let runtimes = Arc::clone(&runtime_command_runtimes);
                         Arc::new(move |harness| runtimes.is_connected(harness))
+                    },
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        Arc::new(move |harness| runtimes.disconnect(harness))
                     },
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),

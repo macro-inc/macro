@@ -76,8 +76,9 @@ impl ClaudeSignIns for PgClaudeSignIns {
             .iter()
             .map(|login| login.computer_id.as_uuid())
             .collect::<Vec<_>>();
+        // A pool computer has no team, so nobody to tell.
         let teams = sqlx::query!(
-            "SELECT id, team_id FROM hosted_runtime WHERE id = ANY($1)",
+            r#"SELECT id, team_id AS "team_id!" FROM hosted_runtime WHERE id = ANY($1) AND team_id IS NOT NULL"#,
             &computer_ids,
         )
         .fetch_all(&self.pool)

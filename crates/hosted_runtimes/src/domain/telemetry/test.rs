@@ -150,7 +150,7 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
         Billing::Comped {
             reason: "telemetry".to_owned(),
         },
-        crate::domain::setup::SetupTimeline::started(now),
+        Some(crate::domain::setup::SetupTimeline::started(now)),
         None,
         Context {
             host,

@@ -160,11 +160,13 @@ pub enum HarnessPermission {
 #[derive(Debug, Clone)]
 pub struct CreateHostedPairing {
     /// Team the computer belongs to: its owner and admins own the harness
-    /// and its members use it.
-    pub team_id: Uuid,
+    /// and its members use it. `None` for a warm-pool computer no team owns
+    /// yet, whose harness nobody can use until a purchase takes the computer
+    /// ([`crate::outbound::pg_harness_repo::join_hosted_harness`]).
+    pub team_id: Option<Uuid>,
     /// Harness display name.
     pub name: String,
-    /// The team admin who bought the computer.
+    /// The team admin who bought the computer, or the pool's owner.
     pub created_by: MacroUserIdStr<'static>,
     /// The computer the harness runs on.
     pub computer_id: ComputerId,

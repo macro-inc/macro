@@ -21,7 +21,7 @@ pub use backoff::{BILLING_BACKOFF, Backoff, CAPACITY_BACKOFF, RESTART_BACKOFF, R
 mod capacity;
 use capacity::{power_on, wait_for_room};
 mod event;
-pub use event::{Effect, EffectWorker, Event, InstanceStatus, Rejected, TimerKind};
+pub use event::{ClaimBilling, Effect, EffectWorker, Event, InstanceStatus, Rejected, TimerKind};
 
 #[cfg(test)]
 mod test;
@@ -144,6 +144,11 @@ pub enum Billing {
         /// Why the computer is free.
         reason: String,
     },
+    /// In the warm pool: booted and waiting for a purchase; no team pays.
+    Pool,
+    /// Taken from the pool by a purchase whose charge has not settled; the
+    /// team uses it meanwhile, and a failed charge releases it.
+    Charging,
 }
 
 impl Billing {
@@ -154,7 +159,7 @@ impl Billing {
             | Self::PastDue {
                 subscription_item, ..
             } => Some(subscription_item),
-            Self::EndsAt { .. } | Self::Comped { .. } => None,
+            Self::EndsAt { .. } | Self::Comped { .. } | Self::Pool | Self::Charging => None,
         }
     }
 }
@@ -248,6 +253,16 @@ impl ComputerState {
             )
     }
 
+    /// Whether the computer waits in the warm pool, owned by no team.
+    pub fn in_pool(&self) -> bool {
+        self.billing == Billing::Pool
+    }
+
+    /// Whether a purchase can take the computer: in the pool, up and connected.
+    pub fn claimable(&self) -> bool {
+        self.in_pool() && self.phase == Phase::Running && self.macrod_connected
+    }
+
     /// Whether the computer still holds sold capacity on its host.
     pub fn is_live(&self) -> bool {
         self.phase != Phase::Destroying
@@ -289,18 +304,19 @@ pub struct Context {
     pub policy: BillingPolicy,
 }
 
-/// The first state of a computer whose purchase was just confirmed, with
-/// the effects that start provisioning it.
+/// The first state of a computer whose purchase was just confirmed (or of a
+/// pool computer, with [`Billing::Pool`] and no setup timeline), with the
+/// effects that start provisioning it.
 pub fn provision(
     billing: Billing,
-    setup: crate::domain::setup::SetupTimeline,
+    setup: Option<crate::domain::setup::SetupTimeline>,
     provision_traceparent: Option<String>,
     context: Context,
 ) -> (ComputerState, Vec<Effect>) {
     let start = context.host_has_room;
     let mut state = ComputerState {
         provision_traceparent,
-        setup: Some(setup),
+        setup,
         phase: Phase::Provisioning { start },
         billing,
         billing_changed_at: context.now,
@@ -347,9 +363,29 @@ pub fn transition(
             | Event::CancelAtPeriodEnd { .. }
             | Event::UndoCancel { .. }
             | Event::Restore { .. }
-            | Event::ReleaseNow => Err(Rejected::Released),
+            | Event::ReleaseNow
+            | Event::Claimed { .. } => Err(Rejected::Released),
             _ => Ok((next, effects)),
         };
+    }
+
+    // No team owns a pool computer, so no team request applies to it; and a
+    // computer whose charge is settling is released by the charge, not the team.
+    let team_request = matches!(
+        event,
+        Event::PowerOn
+            | Event::PowerOff
+            | Event::TeamRetry
+            | Event::CancelAtPeriodEnd { .. }
+            | Event::UndoCancel { .. }
+            | Event::Restore { .. }
+            | Event::ReleaseNow
+    );
+    if state.in_pool() && team_request {
+        return Err(Rejected::InPool);
+    }
+    if state.billing == Billing::Charging && matches!(event, Event::ReleaseNow) {
+        return Err(Rejected::PaymentPending);
     }
 
     match event {
@@ -571,6 +607,8 @@ pub fn transition(
             }
             Billing::Comped { .. } => end_billing(&mut next, &mut effects, host, now, policy),
             Billing::EndsAt { .. } => return Err(Rejected::AlreadyCanceled),
+            Billing::Pool => return Err(Rejected::InPool),
+            Billing::Charging => return Err(Rejected::PaymentPending),
         },
 
         Event::UndoCancel { subscription_item } => {
@@ -584,7 +622,10 @@ pub fn transition(
             restore_allowed(state, now)?;
             match billing {
                 Billing::Active { .. } | Billing::Comped { .. } => next.billing = billing.clone(),
-                Billing::PastDue { .. } | Billing::EndsAt { .. } => {
+                Billing::PastDue { .. }
+                | Billing::EndsAt { .. }
+                | Billing::Pool
+                | Billing::Charging => {
                     return Err(Rejected::InvalidRestore);
                 }
             }
@@ -655,7 +696,10 @@ pub fn transition(
                             subscription_item: subscription_item.clone(),
                         };
                     }
-                    Billing::EndsAt { .. } | Billing::Comped { .. } => {}
+                    Billing::EndsAt { .. }
+                    | Billing::Comped { .. }
+                    | Billing::Pool
+                    | Billing::Charging => {}
                 }
             }
         }
@@ -682,6 +726,50 @@ pub fn transition(
                 destroy(&mut next, &mut effects, host);
             }
         }
+
+        Event::Claimed { billing } => {
+            if !state.claimable() {
+                return Err(Rejected::NotAvailable);
+            }
+            next.billing = match billing {
+                ClaimBilling::Charge {
+                    price_id,
+                    extra_items,
+                } => {
+                    effects.push(Effect::Charge {
+                        price_id: price_id.clone(),
+                        extra_items: extra_items.clone(),
+                    });
+                    Billing::Charging
+                }
+                ClaimBilling::Comped { reason } => Billing::Comped {
+                    reason: reason.clone(),
+                },
+            };
+            effects.push(Effect::JoinTeam);
+        }
+
+        Event::ChargeSucceeded { subscription_item } => {
+            if state.billing == Billing::Charging {
+                next.billing = Billing::Active {
+                    subscription_item: subscription_item.clone(),
+                };
+            }
+        }
+
+        // Nothing was charged, so there is no item to remove.
+        Event::ChargeFailed => {
+            if state.billing == Billing::Charging {
+                next.billing = Billing::EndsAt { at: now };
+                destroy(&mut next, &mut effects, host);
+            }
+        }
+
+        Event::Drain => {
+            if state.in_pool() {
+                destroy(&mut next, &mut effects, host);
+            }
+        }
     }
 
     if !next.waiting_for_capacity() {
@@ -703,6 +791,8 @@ pub fn undo_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), Rej
         Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
             Err(Rejected::NotCanceled)
         }
+        Billing::Pool => Err(Rejected::InPool),
+        Billing::Charging => Err(Rejected::PaymentPending),
     }
 }
 
@@ -716,6 +806,8 @@ pub fn restore_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), 
         Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
             Err(Rejected::NotCanceled)
         }
+        Billing::Pool => Err(Rejected::InPool),
+        Billing::Charging => Err(Rejected::PaymentPending),
     }
 }
 

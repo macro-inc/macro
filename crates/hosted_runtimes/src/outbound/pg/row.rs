@@ -11,8 +11,8 @@ use crate::domain::ids::ComputerId;
 use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::HostId;
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerName, ComputerRecord, Funding, PurchaseKey,
-    Reservation, SanitizedReason,
+    Computer, ComputerDisplayMetadata, ComputerName, ComputerRecord, Funding, Ownership,
+    PurchaseKey, Reservation, SanitizedReason,
 };
 use crate::domain::size::{
     CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
@@ -20,7 +20,7 @@ use crate::domain::size::{
 
 pub(super) struct ComputerRow {
     pub(super) id: Uuid,
-    pub(super) team_id: Uuid,
+    pub(super) team_id: Option<Uuid>,
     pub(super) host_id: Uuid,
     pub(super) name: String,
     pub(super) size: ComputerSize,
@@ -32,7 +32,7 @@ pub(super) struct ComputerRow {
     pub(super) comp_reason: Option<String>,
     pub(super) state: serde_json::Value,
     pub(super) harness_id: Option<Uuid>,
-    pub(super) created_by: String,
+    pub(super) created_by: Option<String>,
     pub(super) created_at: DateTime<Utc>,
     pub(super) enrolled_at: Option<DateTime<Utc>>,
     pub(super) enrollment_generation: i64,
@@ -108,22 +108,39 @@ impl TryFrom<ComputerRow> for Computer {
     type Error = SanitizedReason;
 
     fn try_from(row: ComputerRow) -> Result<Self, Self::Error> {
+        let owner = match (row.team_id, row.created_by) {
+            (Some(team_id), Some(created_by)) => Some(Ownership {
+                team_id,
+                created_by: MacroUserIdStr::try_from(created_by)
+                    .map_err(|_| invalid_row("created_by must be a valid Macro user identifier"))?,
+                funding: funding(row.price_id, row.comp_reason)?,
+            }),
+            (None, None) if row.price_id.is_none() && row.comp_reason.is_none() => None,
+            _ => {
+                return Err(invalid_row(
+                    "team, buyer and funding must all be set, or all absent for a pool computer",
+                ));
+            }
+        };
+        let state: crate::domain::lifecycle::ComputerState = serde_json::from_value(row.state)
+            .map_err(|_| invalid_row("state must satisfy lifecycle field rules"))?;
+        if owner.is_none() != state.in_pool() {
+            return Err(invalid_row(
+                "state is in the pool exactly when the computer has no team",
+            ));
+        }
         Ok(Computer {
             id: ComputerId::new_from_uuid(row.id),
-            team_id: row.team_id,
+            owner,
             name: ComputerName::try_new(&row.name)
                 .map_err(|_| invalid_row("name must contain 1..=64 characters"))?,
             size: row.size,
             resources: resources(row.vcpus, row.memory_gib, row.disk_gib)?,
             catalog_entry: CatalogEntryId::try_new(row.catalog_entry)
                 .map_err(|_| invalid_row("catalog_entry must be a versioned catalog identifier"))?,
-            funding: funding(row.price_id, row.comp_reason)?,
             host: HostId::new(row.host_id),
-            state: serde_json::from_value(row.state)
-                .map_err(|_| invalid_row("state must satisfy lifecycle field rules"))?,
+            state,
             harness_id: row.harness_id.map(HarnessId::new_from_uuid),
-            created_by: MacroUserIdStr::try_from(row.created_by)
-                .map_err(|_| invalid_row("created_by must be a valid Macro user identifier"))?,
             created_at: row.created_at,
             enrolled_at: row.enrolled_at,
             setup_completed_at: row.setup_completed_at,
@@ -183,7 +200,7 @@ impl PgComputerRepo {
             disk_gib: i64::from(row.disk_gib),
             catalog_entry: row.catalog_entry.clone(),
             created_at: row.created_at,
-            purchased_by: row.created_by.clone(),
+            purchased_by: row.created_by.clone().unwrap_or_default(),
         };
         match Computer::try_from(row) {
             Ok(computer) => computer.into(),

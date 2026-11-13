@@ -7,9 +7,10 @@ use uuid::Uuid;
 
 use super::{Clock, ComputerError, ComputerService, computer_name, internal};
 use crate::domain::ids::ComputerId;
-use crate::domain::lifecycle::Billing as ComputerBilling;
+use crate::domain::lifecycle::{Billing as ComputerBilling, ClaimBilling};
 use crate::domain::models::{
-    Funding, NewReservation, Purchase, PurchaseBilling, PurchaseRequest, Reservation, Reserved,
+    Claim, Funding, NewReservation, Purchase, PurchaseBilling, PurchaseRequest, Reservation,
+    Reserved,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, ItemCharge,
@@ -88,25 +89,48 @@ impl<
         span.record("billing_kind", funding.kind());
 
         let now = self.clock.now();
+        let purchase = NewReservation {
+            id: ComputerId::new_from_uuid(Uuid::now_v7()),
+            team_id: request.team_id,
+            purchase_key: request.purchase_key,
+            name,
+            size: request.size,
+            resources: entry.resources,
+            catalog_entry: entry.id.clone(),
+            funding,
+            created_by: request.created_by,
+            extra_items: request.extra_items,
+            provision_traceparent: crate::domain::telemetry::traceparent(),
+        };
+
+        // A pool computer is already up and connected: the purchase takes it
+        // and returns, and its charge settles in the billing worker.
+        let claim_billing = match &purchase.funding {
+            Funding::Stripe { price_id } => ClaimBilling::Charge {
+                price_id: price_id.clone(),
+                extra_items: purchase.extra_items.clone(),
+            },
+            Funding::Comped { reason } => ClaimBilling::Comped {
+                reason: reason.clone(),
+            },
+        };
+        match self
+            .repo
+            .claim_pool_computer(&purchase, claim_billing, now)
+            .await
+            .map_err(internal)?
+        {
+            Claim::Taken(computer) => {
+                span.record("computer_id", tracing::field::display(computer.id));
+                span.record("outcome", "claimed");
+                return Ok(Purchase::Ready(computer.id));
+            }
+            Claim::Unavailable => {}
+        }
+
         let reserved = self
             .repo
-            .reserve(
-                NewReservation {
-                    id: ComputerId::new_from_uuid(Uuid::now_v7()),
-                    team_id: request.team_id,
-                    purchase_key: request.purchase_key,
-                    name,
-                    size: request.size,
-                    resources: entry.resources,
-                    catalog_entry: entry.id.clone(),
-                    funding,
-                    created_by: request.created_by,
-                    extra_items: request.extra_items,
-                    provision_traceparent: crate::domain::telemetry::traceparent(),
-                },
-                now,
-                now + RESERVATION_TTL,
-            )
+            .reserve(purchase, now, now + RESERVATION_TTL)
             .await;
         let reservation = match reserved {
             Ok(Reserved::New(reservation)) => reservation,
@@ -116,7 +140,7 @@ impl<
                 return Ok(Purchase::Confirming(reservation.id));
             }
             Ok(Reserved::Purchased(record)) => {
-                if record.team_id() != request.team_id
+                if record.team_id() != Some(request.team_id)
                     || record
                         .healthy()
                         .is_some_and(|computer| computer.size != request.size)

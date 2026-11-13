@@ -10,6 +10,7 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
         memory_gb: 31,
         reserve_gb: 7,
         oversell_factor: 3,
+        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
     })
     .await
     .unwrap();

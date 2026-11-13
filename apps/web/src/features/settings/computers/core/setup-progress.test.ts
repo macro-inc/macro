@@ -115,6 +115,27 @@ describe('setupStages', () => {
     ).toMatch(/^The host ran out of disk\. The computer could not be set up/);
   });
 
+  it('shows every stage up to the sign-in done for a purchase that took a computer already up, while its charge settles', () => {
+    const taken: ComputerStatus = {
+      ...computer,
+      status: 'ready',
+      billing: 'purchasing',
+      setup: undefined,
+    };
+    const stages = setupStages(taken, {
+      signIn: 'needed',
+      connected: true,
+      signedIn: false,
+    });
+    expect(stages.map((stage) => [stage.id, stage.state])).toEqual([
+      ['billing', 'done'],
+      ['creating', 'done'],
+      ['booting', 'done'],
+      ['connecting', 'done'],
+      ['sign_in', 'current'],
+    ]);
+  });
+
   it('makes the sign-in current once the computer is up, saying why it waits until connected', () => {
     const up: ComputerStatus = {
       ...computer,

@@ -83,12 +83,14 @@ impl PgComputerRepo {
         {
             return Ok(Reserved::Pending(pending));
         }
-        // Read holdings in a new statement after any host-lock wait.
+        // Read holdings in a new statement after any host-lock wait. Pool
+        // computers hold no sold units.
         let host = sqlx::query_scalar!(
             r#"
             WITH held AS (
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4) AS units
-                FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'
+                FROM hosted_runtime
+                WHERE (state->'phase'->>'phase') <> 'destroying' AND team_id IS NOT NULL
                 UNION ALL
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
                 FROM computer_reservation

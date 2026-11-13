@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE harnesses\n        SET name = $2, owner_user_id = $3, created_by = $3, updated_at = now()\n        WHERE id = (\n            SELECT id FROM harnesses\n            WHERE computer_id = $1 AND deleted_at IS NULL\n            FOR UPDATE\n        )\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f008dcf17373f851252ce50070478b0a06b6abb03a042461929b1135a7395a2e"
+}

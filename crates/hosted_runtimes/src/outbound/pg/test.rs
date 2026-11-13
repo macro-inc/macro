@@ -1,4 +1,5 @@
 use std::str::FromStr;
+mod pool;
 mod quarantine;
 mod redeploy;
 
@@ -136,6 +137,7 @@ async fn host(
         memory_gb,
         reserve_gb,
         oversell_factor,
+        image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
     })
     .await
     .unwrap()
@@ -286,7 +288,7 @@ async fn converting_a_reservation_inserts_the_computer_and_its_creation_once(poo
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(row.purchase_key, "buy-1");
+    assert_eq!(row.purchase_key.as_deref(), Some("buy-1"));
     assert!(row.awake);
     assert_eq!(row.enrollment_generation, 1);
 }
@@ -552,10 +554,10 @@ async fn a_comped_reservation_converts_with_its_reason(pool: PgPool) {
         .into_healthy()
         .unwrap();
     assert_eq!(
-        stored.funding,
-        Funding::Comped {
+        stored.funding(),
+        Some(&Funding::Comped {
             reason: "internal team".to_owned()
-        }
+        })
     );
     assert_eq!(
         stored.status(0, now(), policy()).comp_reason.as_deref(),
@@ -696,6 +698,7 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
             memory_gb: 32,
             reserve_gb: 8,
             oversell_factor: 2,
+            image: crate::domain::image::GuestImage::try_new("macro-box/test").unwrap(),
         })
         .await
         .unwrap();

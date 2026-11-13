@@ -10,7 +10,10 @@ its webhook feed from.
 Hosted computers register through trusted `create_hosted_pairing`: it creates
 an approved pairing with the buyer recorded as `owner` and a User (`edit`)
 grant for the computer's team. The recorded owner confers nothing on a
-computer: see `harness_access_level` below. Retries before
+computer: see `harness_access_level` below. A warm-pool computer's harness
+has no team (`team_id: None`) and is owned by the pool owner, so nobody can
+use it; `outbound::pg_harness_repo::join_hosted_harness` hands it to the team
+that bought it inside hosted_runtimes' claim transaction. Retries before
 claim rotate the secret; retries after claim revoke old tokens and re-key the
 same harness. Both preserve owner, grants, agent bindings, and computer identity.
 Claim and re-key serialize on the harness row. `revoke_hosted_harness`,

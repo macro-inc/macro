@@ -131,9 +131,12 @@ impl<
         let computer = self.team_computer(team_id, computer_id).await?;
         let at = match computer.state.billing {
             ComputerBilling::Active { .. } => self.billing.period_end(team_id).await?,
+            // The lifecycle refuses a pool or still-charging computer's cancel.
             ComputerBilling::PastDue { .. }
             | ComputerBilling::EndsAt { .. }
-            | ComputerBilling::Comped { .. } => self.clock.now(),
+            | ComputerBilling::Comped { .. }
+            | ComputerBilling::Pool
+            | ComputerBilling::Charging => self.clock.now(),
         };
         self.apply_for_team(team_id, computer_id, Event::CancelAtPeriodEnd { at })
             .await
@@ -187,7 +190,10 @@ impl<
             Readd::UndoCancel => undo_allowed(&computer.state, now)?,
             Readd::Restore => restore_allowed(&computer.state, now)?,
         }
-        let (event, charged) = match (&computer.funding, intent) {
+        let Some(funding) = computer.funding() else {
+            return Err(Rejected::InPool.into());
+        };
+        let (event, charged) = match (funding, intent) {
             (Funding::Comped { .. }, Readd::Restore) => {
                 // The comp is the team's now, not the one it was bought with.
                 let Some(reason) = self
@@ -217,7 +223,7 @@ impl<
                     Readd::Restore => ItemCharge::Prorated,
                 };
                 let subscription_item = self
-                    .readd_item(&computer, price_id, charge, intent.purpose())
+                    .readd_item(team_id, &computer, price_id, charge, intent.purpose())
                     .await?;
                 let event = match intent {
                     Readd::UndoCancel => Event::UndoCancel {
@@ -282,16 +288,13 @@ impl<
     /// key whose change definitely ended is skipped for the next.
     async fn readd_item(
         &self,
+        team_id: Uuid,
         computer: &crate::domain::models::Computer,
         price_id: &stripe::PriceId,
         charge: ItemCharge,
         purpose: &str,
     ) -> Result<SubscriptionItemId, ComputerError> {
-        if let Some(item) = self
-            .billing
-            .computer_item(computer.team_id, computer.id)
-            .await?
-        {
+        if let Some(item) = self.billing.computer_item(team_id, computer.id).await? {
             return Ok(item);
         }
         for attempt in 0..MAX_READD_ATTEMPTS {
@@ -302,7 +305,7 @@ impl<
                 None | Some(ChargeStatus::Pending) => {
                     return Ok(self
                         .billing
-                        .add_computer(computer.team_id, computer.id, price_id, &[], charge, &key)
+                        .add_computer(team_id, computer.id, price_id, &[], charge, &key)
                         .await?);
                 }
             }
@@ -459,7 +462,10 @@ impl<
         let Some(computer) = record.healthy() else {
             return Ok(());
         };
-        if computer.state.billing_changed_at > observed_at {
+        // A charge still settling may just have added this item; its effect decides.
+        if computer.state.billing_changed_at > observed_at
+            || computer.state.billing == ComputerBilling::Charging
+        {
             return Ok(());
         }
         let mut strays = strays.to_vec();
@@ -577,9 +583,19 @@ impl<
         use tracing::Instrument;
         let span = tracing::info_span!("computer.billing.effect", computer_id = %pending.computer_id, effect_id = pending.id, attempts = i64::from(pending.attempts), otel.status_code = tracing::field::Empty);
         async {
+            // A charge is never abandoned: it settles for good on its last
+            // attempt, and until that answers the computer stays unpaid.
+            let abandonable = !matches!(pending.effect, Effect::Charge { .. });
+            let done = match &pending.effect {
+                Effect::Charge {
+                    price_id,
+                    extra_items,
+                } => self.charge_claimed(&pending, price_id, extra_items).await,
+                _ => self.remove_billing_item(&pending).await,
+            };
             // Every failure, reading the computer included, is retried with
             // backoff and counts toward the abandonment alert.
-            match self.remove_billing_item(&pending).await {
+            match done {
                 Ok(()) => self
                     .repo
                     .complete_effect(pending.id)
@@ -592,7 +608,7 @@ impl<
                     super::super::telemetry::effect_failed("billing");
                     tracing::Span::current().record("otel.status_code", "ERROR");
                     let attempts = pending.attempts.saturating_add(1);
-                    if attempts >= MAX_BILLING_ATTEMPTS {
+                    if abandonable && attempts >= MAX_BILLING_ATTEMPTS {
                         // Alerting keys on this event; see the crate's AGENTS.md.
                         tracing::error!(computer_id = %pending.computer_id, effect_id = pending.id,
                             attempts, error = ?error, "computer billing item removal abandoned");
@@ -617,6 +633,75 @@ impl<
         }
         .instrument(span)
         .await
+    }
+
+    /// Charge a pool computer a purchase took, under its billing guard, with
+    /// the purchase's one idempotency key ([`crate::domain::models::charge_key`]),
+    /// so a retry replays the same change. The charge reaching the
+    /// subscription bills the computer on its item; a definite refusal
+    /// releases it (nothing was charged). From [`MAX_BILLING_ATTEMPTS`] on,
+    /// the add is settled for good instead of replayed: an item that reached
+    /// the subscription bills the computer, none releases it.
+    async fn charge_claimed(
+        &self,
+        pending: &PendingEffect,
+        price_id: &stripe::PriceId,
+        extra_items: &[crate::domain::models::SubscriptionItem],
+    ) -> Result<(), ComputerError> {
+        let _billing = self
+            .repo
+            .lock_billing(pending.computer_id)
+            .await
+            .map_err(internal)?;
+        let computer = self
+            .repo
+            .get(pending.computer_id)
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?
+            .into_healthy()
+            .map_err(|_| ComputerError::NeedsAttention)?;
+        super::super::telemetry::adopt(&tracing::Span::current(), &computer.state);
+        let Some(team_id) = computer.team_id() else {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "a pool computer has no purchase to charge"
+            )));
+        };
+        let key = crate::domain::models::charge_key(computer.id);
+
+        let outcome = if pending.attempts.saturating_add(1) >= MAX_BILLING_ATTEMPTS {
+            self.billing
+                .settle_computer_add(team_id, computer.id, &key)
+                .await
+        } else {
+            self.billing
+                .add_computer(
+                    team_id,
+                    computer.id,
+                    price_id,
+                    extra_items,
+                    ItemCharge::Prorated,
+                    &key,
+                )
+                .await
+                .map(Some)
+        };
+        let event = match outcome {
+            Ok(Some(subscription_item)) => Event::ChargeSucceeded { subscription_item },
+            Ok(None) => {
+                tracing::warn!(computer_id = %computer.id,
+                    "computer charge settled uncharged; releasing the computer");
+                Event::ChargeFailed
+            }
+            Err(error) if error.is_definite() => {
+                tracing::warn!(computer_id = %computer.id, error = ?error,
+                    "computer charge refused; releasing the computer");
+                Event::ChargeFailed
+            }
+            Err(error) => return Err(error.into()),
+        };
+        self.apply(computer.id, event).await?;
+        Ok(())
     }
 
     /// Remove the effect's item, deciding under the computer's billing guard
@@ -654,9 +739,14 @@ impl<
                 "an earlier attempt removed this item");
             return Ok(());
         };
+        let Some(team_id) = record.team_id() else {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "a pool computer has no billing item to remove"
+            )));
+        };
         match self
             .billing
-            .remove_computer(record.team_id(), subscription_item, &key)
+            .remove_computer(team_id, subscription_item, &key)
             .await
         {
             // A subscription that is gone took the item with it.

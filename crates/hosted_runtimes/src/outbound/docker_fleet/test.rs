@@ -318,6 +318,7 @@ async fn the_host_registers_with_its_configured_capacity() {
             memory_gb: 64,
             reserve_gb: 16,
             oversell_factor: 4,
+            image: GuestImage::try_new("macro-box:latest").unwrap(),
         }
     );
 }
