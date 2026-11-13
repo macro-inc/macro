@@ -58,6 +58,8 @@ export interface SyncDriverOptions {
   fetch?: typeof fetch;
   /** Received but unapplied bytes a run may hold (`SYNC_READ_AHEAD_BYTES`). */
   readAheadBytes?: number;
+  /** How long a run waits for the response or its next bytes (`SYNC_STALL_MS`). */
+  stallMs?: number;
   /**
    * Resolves on a later event-loop task. Engine tasks chain through
    * microtasks, so without it a run with buffered bytes would never let body
@@ -147,6 +149,36 @@ class CoalescedPublisher {
  */
 export const SYNC_READ_AHEAD_BYTES = 16 * 1024 * 1024;
 
+/**
+ * How long a run waits for the response, or for the next bytes of its body,
+ * before it gives the connection up as stalled. A connection that went silent
+ * (a dropped network path) never fails by itself. A healthy stream is silent
+ * for at most the server's page limit (45 s) plus one `waiting` interval
+ * (10 s). Same value as the native plugin's `STALL_TIMEOUT`.
+ */
+export const SYNC_STALL_MS = 90_000;
+
+/** `request`, or a `stalled` failure once it has taken longer than `ms`. */
+async function unlessStalled<T>(request: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stalled = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          Object.assign(new Error(`no data for ${ms} ms`), {
+            cacheSyncFailure: 'stalled',
+          })
+        ),
+      ms
+    );
+  });
+  try {
+    return await Promise.race([request, stalled]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** A later event-loop task, through a message to ourselves (no timer clamp). */
 function nextTaskViaMessage(): Promise<void> {
   return new Promise((resolve) => {
@@ -164,7 +196,7 @@ type ActiveRun = {
   finished: Promise<void>;
 };
 
-const SYNC_FAILURE_KINDS = ['busy', 'stream', 'aborted'] as const;
+const SYNC_FAILURE_KINDS = ['busy', 'stream', 'stalled', 'aborted'] as const;
 
 /** The failure kind the WASM engine marked on an error, if any. */
 function markedFailureKind(
@@ -205,7 +237,8 @@ const messageOf = (error: unknown): string =>
  * Reads a response body into a queue while the cache writes. Holds at most
  * `capacity` unapplied bytes, plus the one chunk read while waiting for room:
  * the consumer returns a chunk's bytes with `release` once its frames are
- * applied. Reading stops when the body ends, fails, or `close` is called.
+ * applied. Reading stops when the body ends, fails, sends nothing for
+ * `stallMs` while it is being read, or `close` is called.
  */
 class ReadAhead {
   private readonly chunks: Uint8Array[] = [];
@@ -219,7 +252,8 @@ class ReadAhead {
 
   constructor(
     private readonly reader: ReadableStreamDefaultReader<Uint8Array>,
-    private readonly capacity: number
+    private readonly capacity: number,
+    private readonly stallMs: number
   ) {
     this.pumped = this.pump();
   }
@@ -261,7 +295,8 @@ class ReadAhead {
           });
           continue;
         }
-        const chunk = await this.reader.read();
+        // Only a read counts as silence: a full buffer is the cache's wait.
+        const chunk = await unlessStalled(this.reader.read(), this.stallMs);
         if (chunk.done || this.closed) break;
         this.chunks.push(chunk.value);
         this.buffered += chunk.value.byteLength;
@@ -269,7 +304,8 @@ class ReadAhead {
       }
     } catch (error) {
       this.failure = Object.assign(new Error(messageOf(error)), {
-        cacheSyncFailure: 'stream',
+        cacheSyncFailure:
+          markedFailureKind(error) === 'stalled' ? 'stalled' : 'stream',
       });
     } finally {
       this.ended = true;
@@ -337,6 +373,12 @@ export class CacheSyncDriver {
       this.options.publishIntervalMs ?? SYNC_PUBLISH_INTERVAL_MS,
       this.options.now ?? (() => globalThis.performance?.now() ?? Date.now())
     );
+    const stallMs = this.options.stallMs ?? SYNC_STALL_MS;
+    // The connection closes on a stop and whenever the run ends, which is
+    // what gives up a request that never answered.
+    const connection = new AbortController();
+    const closeConnection = () => connection.abort();
+    signal.addEventListener('abort', closeConnection, { once: true });
     let began = false;
     let readAhead: ReadAhead | undefined;
     try {
@@ -346,18 +388,21 @@ export class CacheSyncDriver {
       began = true;
       if (signal.aborted) return await this.stopped(began, { kind: 'aborted' });
       const fetchImpl = this.options.fetch ?? globalThis.fetch.bind(globalThis);
-      const response = await network(
-        fetchImpl(args.url, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            ...args.headers,
-            'content-type': 'application/json',
-            accept: 'application/x-ndjson',
-          },
-          body,
-          signal,
-        })
+      const response = await unlessStalled(
+        network(
+          fetchImpl(args.url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              ...args.headers,
+              'content-type': 'application/json',
+              accept: 'application/x-ndjson',
+            },
+            body,
+            signal: connection.signal,
+          })
+        ),
+        stallMs
       );
       if (!response.ok) {
         await cancelQuietly(response.body ?? undefined);
@@ -374,7 +419,8 @@ export class CacheSyncDriver {
       }
       readAhead = new ReadAhead(
         response.body.getReader(),
-        this.options.readAheadBytes ?? SYNC_READ_AHEAD_BYTES
+        this.options.readAheadBytes ?? SYNC_READ_AHEAD_BYTES,
+        stallMs
       );
       for (;;) {
         const chunk = await readAhead.next();
@@ -403,11 +449,13 @@ export class CacheSyncDriver {
       if (signal.aborted) return await this.stopped(began, { kind: 'aborted' });
       // Close the connection first, so the server stops running pages.
       await readAhead?.close();
+      closeConnection();
       const failure = match(markedFailureKind(error))
         .returnType<SyncFailure>()
         .with('busy', () => ({ kind: 'busy' }))
         .with('aborted', () => ({ kind: 'aborted' }))
         .with('stream', () => ({ kind: 'stream', message: messageOf(error) }))
+        .with('stalled', () => ({ kind: 'stalled' }))
         .with(undefined, () => {
           this.options.reportEngineError(error);
           return { kind: 'write', message: messageOf(error) };
@@ -420,6 +468,8 @@ export class CacheSyncDriver {
       publisher.flush();
       // Every exit closes the connection (a no-op once the body ended).
       await readAhead?.close();
+      signal.removeEventListener('abort', closeConnection);
+      closeConnection();
     }
   }
 

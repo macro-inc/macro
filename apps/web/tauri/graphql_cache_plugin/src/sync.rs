@@ -46,6 +46,13 @@ pub(crate) const READ_AHEAD_BYTES: usize = 16 * 1024 * 1024;
 /// written before it.
 pub(crate) const PUBLISH_INTERVAL: Duration = Duration::from_millis(250);
 
+/// How long a run waits for the response, or for the next bytes of its body,
+/// before it gives the connection up as stalled: a connection that went
+/// silent (a dropped network path) never fails by itself. A healthy stream is
+/// silent for at most the server's page limit (45 s) plus one `waiting`
+/// interval (10 s). Same value as `SYNC_STALL_MS` in the browser driver.
+pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(90);
+
 /// The stream request: `POST url` with a JSON body.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SyncHttpRequest {
@@ -114,6 +121,8 @@ pub enum SyncFailure {
         /// Diagnostic.
         message: String,
     },
+    /// No response, or no response bytes, for [`STALL_TIMEOUT`].
+    Stalled,
     /// Writing a frame into the cache failed.
     Write {
         /// Diagnostic.
@@ -182,6 +191,9 @@ pub(crate) struct SyncRuns {
     read_ahead_bytes: usize,
     /// How often hydrated pages publish ([`PUBLISH_INTERVAL`]).
     publish_interval: Duration,
+    /// How long a run waits for the response or its next bytes
+    /// ([`STALL_TIMEOUT`]).
+    stall_timeout: Duration,
 }
 
 impl Default for SyncRuns {
@@ -191,6 +203,7 @@ impl Default for SyncRuns {
             active: Arc::default(),
             read_ahead_bytes: READ_AHEAD_BYTES,
             publish_interval: PUBLISH_INTERVAL,
+            stall_timeout: STALL_TIMEOUT,
         }
     }
 }
@@ -237,11 +250,13 @@ impl SyncRuns {
         let cancel = active.cancel.clone();
         let read_ahead_bytes = self.read_ahead_bytes;
         let publish_interval = self.publish_interval;
+        let stall_timeout = self.stall_timeout;
         tauri::async_runtime::spawn(active.tracker.track_future(async move {
             let stream = Stream {
                 opener: opener.as_ref(),
                 read_ahead_bytes,
                 publish_interval,
+                stall_timeout,
                 cancel: &cancel,
             };
             let outcome = drive(&engine, stream, &args, run, &hooks, publish).await;
@@ -346,6 +361,7 @@ struct Stream<'a> {
     opener: &'a dyn SyncStreamOpener,
     read_ahead_bytes: usize,
     publish_interval: Duration,
+    stall_timeout: Duration,
     cancel: &'a CancellationToken,
 }
 
@@ -425,6 +441,7 @@ async fn read_stream(
         opener,
         read_ahead_bytes,
         publish_interval,
+        stall_timeout,
         cancel,
     } = stream;
     let mut headers = args
@@ -446,9 +463,10 @@ async fn read_stream(
         body: run.request_body().to_string().into_bytes(),
     };
     let response = cancel
-        .run_until_cancelled(opener.open(request))
+        .run_until_cancelled(tokio::time::timeout(stall_timeout, opener.open(request)))
         .await
         .ok_or(SyncFailure::Aborted)?
+        .map_err(|_| SyncFailure::Stalled)?
         .map_err(stream_failure)?;
     if !(200..300).contains(&response.status) {
         return Err(SyncFailure::Http {
@@ -463,6 +481,7 @@ async fn read_stream(
         decoder,
         Arc::new(Semaphore::new(read_ahead_bytes.max(1))),
         read_ahead_bytes.max(1),
+        stall_timeout,
         reader_cancel.clone(),
         chunks_tx,
     ));
@@ -563,8 +582,8 @@ fn invalid_gzip(error: std::io::Error) -> SyncFailure {
     }
 }
 
-/// Reads and decodes the body until it ends, fails, or the run stops,
-/// acquiring each decoded chunk's size from `budget` (at most the whole
+/// Reads and decodes the body until it ends, fails, sends nothing for
+/// `stall_timeout` while it is being read, or the run stops, acquiring each decoded chunk's size from `budget` (at most the whole
 /// budget, so one chunk larger than the cap still passes). The budget
 /// therefore bounds unapplied decoded bytes to the cap plus the one chunk
 /// read while waiting for room.
@@ -573,13 +592,24 @@ async fn read_ahead(
     mut decoder: BodyDecoder,
     budget: Arc<Semaphore>,
     capacity: usize,
+    stall_timeout: Duration,
     cancel: CancellationToken,
     chunks: mpsc::UnboundedSender<Result<ReadChunk, SyncFailure>>,
 ) {
     loop {
-        let received = match cancel.run_until_cancelled(body.next_chunk()).await {
+        // Only a read counts as silence: waiting for room below is the
+        // cache's wait.
+        let read = tokio::time::timeout(stall_timeout, body.next_chunk());
+        let received = match cancel.run_until_cancelled(read).await {
             None => return,
-            Some(Ok(None)) => match decoder.finish() {
+            Some(Err(_)) => {
+                let _ = chunks.send(Err(SyncFailure::Stalled));
+                return;
+            }
+            Some(Ok(received)) => received,
+        };
+        let received = match received {
+            Ok(None) => match decoder.finish() {
                 Ok(rest) if rest.is_empty() => return,
                 Ok(rest) => (rest, true),
                 Err(failure) => {
@@ -587,11 +617,11 @@ async fn read_ahead(
                     return;
                 }
             },
-            Some(Err(error)) => {
+            Err(error) => {
                 let _ = chunks.send(Err(stream_failure(error)));
                 return;
             }
-            Some(Ok(Some(bytes))) => match decoder.decode(bytes) {
+            Ok(Some(bytes)) => match decoder.decode(bytes) {
                 Ok(decoded) => (decoded, false),
                 Err(failure) => {
                     let _ = chunks.send(Err(failure));

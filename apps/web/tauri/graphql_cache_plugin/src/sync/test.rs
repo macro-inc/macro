@@ -78,12 +78,17 @@ struct FakeOpener {
     bodies: BodyLog,
     /// `content-encoding` of every response.
     encoding: Option<String>,
+    /// The server never answers the request.
+    silent: bool,
 }
 
 #[async_trait]
 impl SyncStreamOpener for FakeOpener {
     async fn open(&self, request: SyncHttpRequest) -> Result<SyncHttpResponse, SyncHttpError> {
         self.requests.lock().unwrap().push(request);
+        if self.silent {
+            return std::future::pending().await;
+        }
         let (status, chunks) = self
             .responses
             .lock()
@@ -417,6 +422,79 @@ fn failures_keep_written_pages_and_report_progress() {
             .cloned()
     );
     assert_eq!(state[0].completed_at, None);
+}
+
+#[test]
+fn a_body_that_goes_silent_is_given_up_as_stalled_keeping_written_pages() {
+    let handle = engine();
+    let opener = Arc::new(FakeOpener::default());
+    let (reached_tx, _reached_rx) = oneshot::channel();
+    opener.responses.lock().unwrap().push_back((
+        200,
+        vec![
+            Chunk::Bytes(ndjson(&[soup_page("tasks", 0, &[1, 2], Some("c1"))])),
+            Chunk::Stall(reached_tx),
+        ],
+    ));
+    let mut runs = runs_with(&opener);
+    runs.stall_timeout = Duration::from_millis(50);
+    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+
+    let (_, publish) = recorder();
+    let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
+    assert_eq!(
+        serde_json::to_value(&outcome).unwrap()["failure"],
+        json!({"kind": "stalled"})
+    );
+    let SyncRunOutcome::Failed {
+        failure: SyncFailure::Stalled,
+        partial: Some(partial),
+    } = outcome
+    else {
+        panic!("expected a stalled stream, got {outcome:?}");
+    };
+    assert_eq!(partial.lanes[0].pages, 1);
+    // The connection is closed and the written page is the resume point.
+    assert_eq!(opener.bodies.dropped(), 1);
+    let state = block_on(handle.sync_lane_states()).unwrap();
+    assert_eq!(
+        state[0].next_variables,
+        json!({"input": {"continuation": {"cursor": "c1"}}})
+            .as_object()
+            .cloned()
+    );
+}
+
+#[test]
+fn a_request_that_never_answers_is_given_up_as_stalled() {
+    let handle = engine();
+    let opener = Arc::new(FakeOpener {
+        silent: true,
+        ..FakeOpener::default()
+    });
+    let mut runs = runs_with(&opener);
+    runs.stall_timeout = Duration::from_millis(50);
+    let plan = args(vec![lane("tasks", TASKS, json!({"kind": "hydrate"}))]);
+
+    let (_, publish) = recorder();
+    let outcome = block_on(runs.start(handle.downgrade(), plan.clone(), publish));
+    assert!(matches!(
+        outcome,
+        SyncRunOutcome::Failed {
+            failure: SyncFailure::Stalled,
+            ..
+        }
+    ));
+    // The slot is free: the next run starts instead of answering busy.
+    let (_, publish) = recorder();
+    let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
+    assert!(matches!(
+        outcome,
+        SyncRunOutcome::Failed {
+            failure: SyncFailure::Stalled,
+            ..
+        }
+    ));
 }
 
 #[test]

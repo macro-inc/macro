@@ -49,6 +49,9 @@ whose pages took the least time first.
   idle timeout) and fails its lane past it; a stream starts no page after
   `STREAM_DEADLINE` (5 minutes) and ends `deadline`, so one connection does
   not stay open for long. DSS also caps open streams per task (`stream.rs`).
+  The cache hosts give up a connection that is silent for 90 s
+  (`SYNC_STALL_MS`, `STALL_TIMEOUT`), so `PAGE_TIMEOUT` plus
+  `WAITING_INTERVAL` must stay well under that.
 - A page's turn is held only while the page executes, never while the reader
   takes the line, so a slow reader holds no slot. A stream waiting for its
   turn sends `waiting` every `WAITING_INTERVAL`; the loop drops that wait and

@@ -139,8 +139,15 @@ applies frames in order. While the cache writes, the host keeps reading the
 body into a bounded read-ahead buffer (16 MiB of received but unapplied bytes,
 plus one chunk), so the server computes later pages during writes; when the
 buffer is full the host stops reading and the server waits. Every exit (end,
-error, stop, park, suspend) closes the connection; saved state only reflects
-applied pages.
+error, stall, stop, park, suspend) closes the connection; saved state only
+reflects applied pages.
+
+A host gives a connection up as `stalled` when the response, or the next bytes
+of its body, take longer than 90 s (`SYNC_STALL_MS`, the native plugin's
+`STALL_TIMEOUT`): a network path that went silent never fails by itself. Only
+time spent reading counts, not time the host waits with a full buffer. A
+healthy stream is silent for at most a page's 45 s plus one `waiting` interval,
+so keep the limit above the server's `PAGE_TIMEOUT` + `WAITING_INTERVAL`.
 
 Lane kinds:
 

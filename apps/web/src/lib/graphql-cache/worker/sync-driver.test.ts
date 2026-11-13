@@ -135,6 +135,7 @@ function driver(
   options: {
     readAheadBytes?: number;
     publishIntervalMs?: number;
+    stallMs?: number;
     now?: () => number;
   } = {}
 ) {
@@ -407,6 +408,70 @@ describe('CacheSyncDriver', () => {
     expect(state.cancelled).toBe(true);
     expect(engine.syncAbort).toHaveBeenCalledOnce();
     expect(engine.syncFinish).not.toHaveBeenCalled();
+  });
+
+  it('gives up a body that goes silent as stalled, keeping written pages', async () => {
+    const engine = fakeEngine([1]);
+    const { stream, state } = pulledBody(['a\n'], { hang: true });
+    const { sync, published } = driver(
+      engine,
+      vi.fn(async () => new Response(stream)),
+      vi.fn(),
+      { stallMs: 20 }
+    );
+
+    await expect(sync.start(ARGS)).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'stalled' },
+      partial: { ...RESULT, reason: 'maxPages' },
+    });
+    expect(published).toEqual([HYDRATED]);
+    expect(state.cancelled).toBe(true);
+    expect(engine.syncAbort).toHaveBeenCalledOnce();
+  });
+
+  it('gives up a request that never answers as stalled and aborts it', async () => {
+    const engine = fakeEngine([]);
+    let requested: AbortSignal | undefined;
+    const reportEngineError = vi.fn();
+    const { sync } = driver(
+      engine,
+      vi.fn((_url, init) => {
+        requested = init?.signal ?? undefined;
+        return new Promise<Response>(() => {});
+      }),
+      reportEngineError,
+      { stallMs: 20 }
+    );
+
+    await expect(sync.start(ARGS)).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'stalled' },
+      partial: { ...RESULT, reason: 'maxPages' },
+    });
+    expect(requested?.aborted).toBe(true);
+    expect(reportEngineError).not.toHaveBeenCalled();
+  });
+
+  it('does not count a full read-ahead buffer as silence', async () => {
+    const engine = fakeEngine([1, 1]);
+    const { stream } = pulledBody(['a\n', 'b\n']);
+    // The first write outlasts the stall limit while the buffer is full.
+    engine.syncApplyNext.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return HYDRATED;
+    });
+    const { sync } = driver(
+      engine,
+      vi.fn(async () => new Response(stream)),
+      vi.fn(),
+      { stallMs: 20, readAheadBytes: 1 }
+    );
+
+    await expect(sync.start(ARGS)).resolves.toEqual({
+      ok: true,
+      result: RESULT,
+    });
   });
 
   it('closes the connection when stopped with bytes still buffered', async () => {

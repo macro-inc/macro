@@ -78,6 +78,11 @@ export type SyncFailure =
   | { kind: 'aborted' }
   | { kind: 'http'; status: number }
   | { kind: 'stream'; message: string }
+  /**
+   * The host gave the connection up: no response, or no response bytes, for
+   * its stall limit (90 s). A healthy stream is never silent that long.
+   */
+  | { kind: 'stalled' }
   | { kind: 'write'; message: string };
 
 export type SyncRunOutcome =
