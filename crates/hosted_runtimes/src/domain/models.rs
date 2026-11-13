@@ -377,10 +377,7 @@ impl Reservation {
                 Funding::Comped { reason } => Some(reason.clone()),
                 Funding::Stripe { .. } => None,
             },
-            setup: Some(SetupProgress::of(
-                SetupStep::Billing,
-                Some(self.created_at),
-            )),
+            setup: Some(SetupProgress::of(SetupStep::Billing, Some(self.created_at))),
             failure_reason: None,
             powered_on: true,
             cancels_at: None,
