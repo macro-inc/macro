@@ -521,7 +521,8 @@
           serviceName = "whatsapp-session-service";
           packageName = "whatsapp_session_service";
           binaries = [ "whatsapp_session_service" ];
-        }        {
+        }
+        {
           serviceName = "gitai-service";
           packageName = "gitai_service";
           binaries = [ "gitai_service" ];
