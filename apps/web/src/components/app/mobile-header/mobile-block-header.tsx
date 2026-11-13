@@ -16,6 +16,8 @@ import { MobileHeader } from './mobile-header';
 export function MobileBlockHeader(props: {
   id: string;
   name: string;
+  /** The name the title menu acts on, when it differs from the title. */
+  menuName?: string;
   iconType: EntityIconSelector;
   /** Replaces the entity icon, e.g. the chat's model. */
   icon?: JSX.Element;
@@ -60,7 +62,7 @@ export function MobileBlockHeader(props: {
       <BlockSplitFileMenu
         id={props.id}
         itemType={props.itemType ?? 'document'}
-        name={props.name}
+        name={props.menuName ?? props.name}
         ops={props.ops}
         tools={props.menuTools}
       />

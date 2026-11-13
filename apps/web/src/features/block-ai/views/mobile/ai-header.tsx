@@ -11,13 +11,15 @@ import { type AiHeaderProps, aiHeaderTools } from '../shared/ai-header-parts';
  */
 export function MobileAiHeader(props: AiHeaderProps) {
   const documentId = useBlockId();
+  const title = useBlockDocumentName();
   const name = useBlockDocumentName('Illustration');
   const { ops, actions } = aiHeaderTools(props);
 
   return (
     <MobileBlockHeader
       id={documentId}
-      name={name() ?? ''}
+      name={title() ?? ''}
+      menuName={name() ?? ''}
       iconType="ai"
       badges={<FileTypeChip />}
       menuTools={[actions.share]}

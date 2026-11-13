@@ -1,6 +1,3 @@
-import { reloadApp } from '@app/observability/reload';
-import { FigHeader } from './views/fig-header';
-import { MobileFigHeader } from './views/mobile/fig-header';
 /**
  * The `.fig` block: app chrome (header, file menu, sharing) around the
  * viewer, wired to the worker engine and document storage.
@@ -8,6 +5,7 @@ import { MobileFigHeader } from './views/mobile/fig-header';
 
 import { CommandState } from '@app/features/command';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { reloadApp } from '@app/observability/reload';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
@@ -64,8 +62,10 @@ import {
 } from './queries/fig-sync';
 import { createFontSource } from './queries/font-source';
 import { openFigEngine, prepareFigEngine } from './queries/prepare-engine';
+import { FigHeader } from './views/fig-header';
 import { FigViewer } from './views/fig-viewer';
 import { useMacroComments } from './views/macro-comments';
+import { MobileFigHeader } from './views/mobile/fig-header';
 
 /**
  * ⌘K on a design opens the command menu, which then offers the design

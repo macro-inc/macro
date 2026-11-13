@@ -1,6 +1,3 @@
-import { reloadApp } from '@app/observability/reload';
-import { MobilePsdHeader } from './views/mobile/psd-header';
-import { PsdHeader } from './views/psd-header';
 /**
  * The Photoshop block: app chrome (header, file menu, sharing) around the
  * editor, wired to the worker engine, live collaboration, and document
@@ -8,6 +5,7 @@ import { PsdHeader } from './views/psd-header';
  */
 
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { reloadApp } from '@app/observability/reload';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
@@ -53,7 +51,9 @@ import {
   initializePsdSync,
   psdSyncExists,
 } from './queries/psd-sync';
+import { MobilePsdHeader } from './views/mobile/psd-header';
 import { PsdEditor } from './views/psd-editor';
+import { PsdHeader } from './views/psd-header';
 
 interface Notice {
   message: string;

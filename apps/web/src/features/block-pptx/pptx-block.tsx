@@ -1,3 +1,8 @@
+/**
+ * The pptx block: app chrome (header, file menu, sharing) around the
+ * presentation editor, wired to the worker engine and document storage.
+ */
+
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';

@@ -14,13 +14,15 @@ import {
  */
 export function MobileFigHeader(props: FigHeaderProps) {
   const documentId = useBlockId();
+  const title = useBlockDocumentName();
   const name = useBlockDocumentName('Design');
   const { ops, actions } = figHeaderTools(props);
 
   return (
     <MobileBlockHeader
       id={documentId}
-      name={name() ?? ''}
+      name={title() ?? ''}
+      menuName={name() ?? ''}
       iconType="fig"
       badges={<FileTypeChip />}
       menuTools={[actions.share]}

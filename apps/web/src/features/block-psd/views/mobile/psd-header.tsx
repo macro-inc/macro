@@ -14,13 +14,15 @@ import {
  */
 export function MobilePsdHeader(props: PsdHeaderProps) {
   const documentId = useBlockId();
+  const title = useBlockDocumentName();
   const name = useBlockDocumentName('Image');
   const { ops, actions } = psdHeaderTools(props);
 
   return (
     <MobileBlockHeader
       id={documentId}
-      name={name() ?? ''}
+      name={title() ?? ''}
+      menuName={name() ?? ''}
       iconType="psd"
       badges={<FileTypeChip />}
       menuTools={[actions.share]}

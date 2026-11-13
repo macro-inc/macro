@@ -1,6 +1,3 @@
-import { reloadApp } from '@app/observability/reload';
-import { AiHeader } from './views/ai-header';
-import { MobileAiHeader } from './views/mobile/ai-header';
 /**
  * The `.ai` block: app chrome (header, file menu, sharing) around the
  * Illustrator editor, wired to the worker engine, document storage, and
@@ -9,6 +6,7 @@ import { MobileAiHeader } from './views/mobile/ai-header';
 
 import { createFontSource } from '@app/features/block-fig/queries/font-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { reloadApp } from '@app/observability/reload';
 import { AiEngine } from '@core/ai-engine/client';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -55,6 +53,8 @@ import {
   initializeDocumentSync,
 } from './queries/ai-sync';
 import { AiEditorView } from './views/ai-editor';
+import { AiHeader } from './views/ai-header';
+import { MobileAiHeader } from './views/mobile/ai-header';
 
 /** What the block shows while the engine reads the file. */
 function Opening(): JSX.Element {
