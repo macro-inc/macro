@@ -1,0 +1,21 @@
+docs/development/running-locally.md
+  s_c1146e8a8b951b::t_4ea45ae074c2e6 731
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_c1146e8a8b951b::t_a2d6f2b6f13202 625-628,630-636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "03277a99d4652ea4f7108a6257cbf56f70cb9265",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
