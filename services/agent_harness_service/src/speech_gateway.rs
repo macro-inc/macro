@@ -79,7 +79,8 @@ struct ProviderCredentials {
 /// The speech proxy and the voice catalog it serves admins from.
 pub(crate) struct SpeechGateway {
     brains: Arc<dyn BrainAuthenticator>,
-    /// `enable-agent-teammates` for the calling agent; off refuses with 403.
+    /// `enable-agent-teammates` for the calling agent's creator; off refuses
+    /// with 403.
     rollout: BrainRollout,
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<dyn UsageRecorder>,

@@ -17,6 +17,7 @@ use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 
 const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
 const AGENT_KEY: &str = "mak_agent";
+const CREATOR: &str = "macro|admin@macro.com";
 const TEAM: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
 
 /// Knows one agent key; `mak_down` fails the lookup.
@@ -36,17 +37,31 @@ impl BrainAuthenticator for OneAgent {
     }
 }
 
-/// Agent teammates on for [`AGENT`].
-fn agent_teammates_on() -> BrainRollout {
+/// Agent teammates on or off for [`CREATOR`], who invited [`AGENT`], and the
+/// other way round for the agent's own account.
+fn rollout_for_creator(on: bool) -> BrainRollout {
+    let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+    let creator = MacroUserIdStr::parse_from_str(CREATOR)
+        .unwrap()
+        .into_owned();
+    let mut creators = agent_credentials::FakeAgentCreators::default();
+    creators.set(agent.clone(), creator.clone());
     let mut flags = FakeFeatureFlags::default();
     flags.set(
-        MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
+        creator,
         Ok(FlagSnapshot::new([(
             agent_credentials::AGENT_TEAMMATES_FLAG.into(),
-            FlagValue::Boolean(true),
+            FlagValue::Boolean(on),
         )])),
     );
-    BrainRollout::new(flags)
+    flags.set(
+        agent,
+        Ok(FlagSnapshot::new([(
+            agent_credentials::AGENT_TEAMMATES_FLAG.into(),
+            FlagValue::Boolean(!on),
+        )])),
+    );
+    BrainRollout::new(creators, flags)
 }
 
 /// Admits everyone, counting.
@@ -82,7 +97,7 @@ fn gateway(
 ) -> SpeechGateway {
     SpeechGateway::new(
         Arc::new(OneAgent),
-        agent_teammates_on(),
+        rollout_for_creator(true),
         admission,
         recorder,
         LiveKitKeys {
@@ -153,11 +168,11 @@ async fn only_agent_keys_are_admitted() {
 }
 
 #[tokio::test]
-async fn an_agent_with_agent_teammates_off_is_refused_before_admission() {
+async fn an_agent_with_agent_teammates_off_for_its_creator_is_refused_before_admission() {
     let admission = Arc::new(CountingAdmission::default());
     let gateway = SpeechGateway::new(
         Arc::new(OneAgent),
-        BrainRollout::new(FakeFeatureFlags::default()),
+        rollout_for_creator(false),
         admission.clone(),
         Arc::new(Recorder::default()),
         LiveKitKeys {
