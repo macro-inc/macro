@@ -112,7 +112,13 @@ impl ReadIndex for MemoryReadIndex {
         &self,
         number: u64,
     ) -> Result<Option<CachedPullRequest>, Self::Err> {
-        Ok(self.cache.lock().unwrap().pull_requests.get(&number).cloned())
+        Ok(self
+            .cache
+            .lock()
+            .unwrap()
+            .pull_requests
+            .get(&number)
+            .cloned())
     }
 
     async fn cache_pull_request(&self, pull_request: &CachedPullRequest) -> Result<(), Self::Err> {

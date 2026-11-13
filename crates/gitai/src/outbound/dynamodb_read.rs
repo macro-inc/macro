@@ -309,7 +309,10 @@ impl ReadIndex for DynamoReadIndex {
         &self,
         number: u64,
     ) -> Result<Option<CachedPullRequest>, Self::Err> {
-        let Some(item) = self.get(key(pull_request_pk(number), PULL_REQUEST_SK)).await? else {
+        let Some(item) = self
+            .get(key(pull_request_pk(number), PULL_REQUEST_SK))
+            .await?
+        else {
             return Ok(None);
         };
         let row: PullRequestRow = serde_dynamo::from_item(item)?;
@@ -323,7 +326,11 @@ impl ReadIndex for DynamoReadIndex {
 
     #[tracing::instrument(name = "gitai.dynamodb.cache_pull_request", skip_all, fields(pr = pull_request.number), err)]
     async fn cache_pull_request(&self, pull_request: &CachedPullRequest) -> Result<(), Self::Err> {
-        let commits = pull_request.commits.iter().map(|sha| s(sha.clone())).collect();
+        let commits = pull_request
+            .commits
+            .iter()
+            .map(|sha| s(sha.clone()))
+            .collect();
         let mut item = key(pull_request_pk(pull_request.number), PULL_REQUEST_SK);
         item.insert("commits".to_owned(), AttributeValue::L(commits));
         item.insert("open".to_owned(), AttributeValue::Bool(pull_request.open));
@@ -360,7 +367,10 @@ impl ReadIndex for DynamoReadIndex {
     async fn cache_commit_link(&self, link: &CommitPullRequestLink) -> Result<(), Self::Err> {
         let mut item = key(commit_link_pk(&link.sha), COMMIT_LINK_SK);
         if let Some(number) = link.pr_number {
-            item.insert("pr_number".to_owned(), AttributeValue::N(number.to_string()));
+            item.insert(
+                "pr_number".to_owned(),
+                AttributeValue::N(number.to_string()),
+            );
         }
         item.insert(
             EXPIRES_AT.to_owned(),

@@ -239,10 +239,7 @@ impl GithubClient {
         &self,
         path: &str,
     ) -> Result<Option<T>, GithubError> {
-        let url = format!(
-            "{}/repos/{}/{}{path}",
-            self.base_url, self.owner, self.name
-        );
+        let url = format!("{}/repos/{}/{}{path}", self.base_url, self.owner, self.name);
         let response = self
             .request(self.http.get(url))
             .send()
@@ -286,8 +283,7 @@ impl GithubApi for GithubClient {
         let mut commits = Vec::new();
         for page in 1..=MAX_COMMIT_PAGES {
             let path = format!("/pulls/{number}/commits?per_page={COMMITS_PAGE_SIZE}&page={page}");
-            let body: Vec<PullRequestCommitBody> =
-                self.get_json(&path).await?.unwrap_or_default();
+            let body: Vec<PullRequestCommitBody> = self.get_json(&path).await?.unwrap_or_default();
             let full_page = body.len() == COMMITS_PAGE_SIZE;
             commits.extend(body.into_iter().map(|commit| commit.sha));
             if !full_page {

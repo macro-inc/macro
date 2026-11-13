@@ -33,9 +33,7 @@ impl CommitSha {
     pub fn parse(raw: &str) -> Result<Self, GitaiError> {
         let sha = raw.trim().to_ascii_lowercase();
         if !regex_is_match!("^[0-9a-f]{7,40}$", &sha) {
-            return Err(GitaiError::BadRequest(
-                "sha is not a commit id".to_owned(),
-            ));
+            return Err(GitaiError::BadRequest("sha is not a commit id".to_owned()));
         }
         Ok(Self(sha))
     }
@@ -60,9 +58,7 @@ impl SessionId {
     pub fn parse(raw: &str) -> Result<Self, GitaiError> {
         let valid = raw.len() <= MAX_SESSION_ID_LEN && regex_is_match!("^[A-Za-z0-9_-]+$", raw);
         if !valid {
-            return Err(GitaiError::BadRequest(
-                "session id is malformed".to_owned(),
-            ));
+            return Err(GitaiError::BadRequest("session id is malformed".to_owned()));
         }
         Ok(Self(raw.to_owned()))
     }

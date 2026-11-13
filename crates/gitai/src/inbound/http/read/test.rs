@@ -24,13 +24,19 @@ async fn get(harness: &ReadHarness, uri: &str, key: Option<&str>) -> (StatusCode
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
 }
 
 #[tokio::test]
 async fn commit_response_follows_the_contract() {
     let harness = ReadHarness::new().await;
-    let note = note("src/a.rs\n  s_aaaaaaaaaaaaaa::t_00000000000001 1-4\n", &[SESSION]);
+    let note = note(
+        "src/a.rs\n  s_aaaaaaaaaaaaaa::t_00000000000001 1-4\n",
+        &[SESSION],
+    );
     harness.upload(vec![committed(DIRECT, 4, 0, &note)]).await;
 
     let (status, body) = get(&harness, &format!("/v1/commits/{DIRECT}"), harness.key()).await;

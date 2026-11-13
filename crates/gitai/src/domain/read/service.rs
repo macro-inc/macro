@@ -27,8 +27,8 @@ use super::attestation::Attestations;
 use super::models::{
     Attribution, Blame, BlameQuery, BlameRange, CachedPullRequest, CommitPullRequestLink,
     CommitSession, CommitSha, EventsCursor, EventsPage, PullRequestRef, REPOSITORY, ResolvedVia,
-    SessionEntry, SessionId, SessionSummary, StoredCommit, StoredSession, Tokens,
-    TranscriptChunk, from_unix_seconds, micro_usd_to_usd,
+    SessionEntry, SessionId, SessionSummary, StoredCommit, StoredSession, Tokens, TranscriptChunk,
+    from_unix_seconds, micro_usd_to_usd,
 };
 use super::ports::{DeviceAuthenticator, GithubApi, GithubError, ReadIndex};
 use crate::domain::models::GitaiError;
@@ -316,8 +316,7 @@ impl<Auth: DeviceAuthenticator, Objects: ObjectStore, Index: ReadIndex, Github: 
             let sha = CommitSha::parse(&hunk.commit)?;
             let source = match self.resolve_commit(&sha).await? {
                 Some(resolution) => {
-                    let exact =
-                        resolution.via == ResolvedVia::Note && hunk.commit == blame.commit;
+                    let exact = resolution.via == ResolvedVia::Note && hunk.commit == blame.commit;
                     let notes = self.attestations(&resolution.stored).await?;
                     (exact, notes.into_iter().flatten().collect())
                 }
@@ -330,11 +329,23 @@ impl<Auth: DeviceAuthenticator, Objects: ObjectStore, Index: ReadIndex, Github: 
         let mut ranges = Vec::new();
         for hunk in hunks {
             let Some((exact, notes)) = sources.get(&hunk.commit) else {
-                ranges.push(blame_range(hunk.start, hunk.end, &hunk.commit, None, Vec::new()));
+                ranges.push(blame_range(
+                    hunk.start,
+                    hunk.end,
+                    &hunk.commit,
+                    None,
+                    Vec::new(),
+                ));
                 continue;
             };
             if *exact {
-                ranges.extend(exact_ranges(&query.path, &hunk.commit, hunk.start, hunk.end, notes));
+                ranges.extend(exact_ranges(
+                    &query.path,
+                    &hunk.commit,
+                    hunk.start,
+                    hunk.end,
+                    notes,
+                ));
                 continue;
             }
 

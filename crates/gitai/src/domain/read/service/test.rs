@@ -15,7 +15,10 @@ const SESSION_B: &str = "s_bbbbbbbbbbbbbb";
 
 /// A direct commit by session A (10 lines of src/a.rs), with its tokens.
 async fn with_direct_commit(harness: &ReadHarness) {
-    let note = note("src/a.rs\n  s_aaaaaaaaaaaaaa::t_00000000000001 1-10\n", &[SESSION_A]);
+    let note = note(
+        "src/a.rs\n  s_aaaaaaaaaaaaaa::t_00000000000001 1-10\n",
+        &[SESSION_A],
+    );
     harness
         .upload(vec![
             committed(DIRECT, 10, 2, &note),
@@ -27,8 +30,14 @@ async fn with_direct_commit(harness: &ReadHarness) {
 /// Two noted commits of pull request 42 (squash-merged as SQUASH): A wrote
 /// 3 lines of src/a.rs, B 5 lines of src/b.rs.
 async fn with_squashed_pull_request(harness: &ReadHarness) {
-    let first = note("src/a.rs\n  s_aaaaaaaaaaaaaa::t_00000000000002 1-3\n", &[SESSION_A]);
-    let second = note("src/b.rs\n  s_bbbbbbbbbbbbbb::t_00000000000003 4-8\n", &[SESSION_B]);
+    let first = note(
+        "src/a.rs\n  s_aaaaaaaaaaaaaa::t_00000000000002 1-3\n",
+        &[SESSION_A],
+    );
+    let second = note(
+        "src/b.rs\n  s_bbbbbbbbbbbbbb::t_00000000000003 4-8\n",
+        &[SESSION_B],
+    );
     harness
         .upload(vec![
             committed(FIRST_PR_COMMIT, 3, 0, &first),
@@ -37,10 +46,9 @@ async fn with_squashed_pull_request(harness: &ReadHarness) {
         ])
         .await;
     let mut script = harness.github.script.lock().unwrap();
-    script.commits.insert(
-        SQUASH.to_owned(),
-        "feat(gitai): read API (#42)".to_owned(),
-    );
+    script
+        .commits
+        .insert(SQUASH.to_owned(), "feat(gitai): read API (#42)".to_owned());
     script.pull_requests.insert(
         42,
         (
@@ -72,7 +80,10 @@ async fn a_noted_commit_answers_from_its_note() {
     assert_eq!(session.ai_lines, 10);
     assert_eq!(session.tool.as_deref(), Some("claude"));
     assert_eq!(session.author.as_deref(), Some("dev@example.com"));
-    assert_eq!(session.events_url, "/gitai/v1/sessions/s_aaaaaaaaaaaaaa/events");
+    assert_eq!(
+        session.events_url,
+        "/gitai/v1/sessions/s_aaaaaaaaaaaaaa/events"
+    );
     assert_eq!(harness.github.calls(), 0);
 }
 
@@ -111,7 +122,11 @@ async fn an_abbreviated_squash_sha_resolves_too() {
     let harness = ReadHarness::new().await;
     with_squashed_pull_request(&harness).await;
 
-    let attribution = harness.reader.commit(harness.key(), "5555555").await.unwrap();
+    let attribution = harness
+        .reader
+        .commit(harness.key(), "5555555")
+        .await
+        .unwrap();
 
     assert_eq!(attribution.sha.as_deref(), Some(SQUASH));
     assert_eq!(attribution.pr.map(|pr| pr.number), Some(42));
@@ -129,10 +144,17 @@ async fn commits_without_notes_are_unattributed() {
         ),
     );
 
-    let attribution = harness.reader.pull_request(harness.key(), 43).await.unwrap();
+    let attribution = harness
+        .reader
+        .pull_request(harness.key(), 43)
+        .await
+        .unwrap();
 
     assert_eq!(attribution.sha, None);
-    assert_eq!(attribution.unattributed_commits, vec![UNNOTED_PR_COMMIT.to_owned()]);
+    assert_eq!(
+        attribution.unattributed_commits,
+        vec![UNNOTED_PR_COMMIT.to_owned()]
+    );
     assert_eq!((attribution.ai_lines, attribution.human_lines), (3, 0));
     assert_eq!(attribution.ai_share, Some(1.0));
     assert_eq!(attribution.sessions.len(), 1);
@@ -157,7 +179,11 @@ async fn an_expired_pull_request_cache_asks_github_again() {
         },
     );
 
-    let attribution = harness.reader.pull_request(harness.key(), 42).await.unwrap();
+    let attribution = harness
+        .reader
+        .pull_request(harness.key(), 42)
+        .await
+        .unwrap();
 
     assert_eq!(attribution.commits.len(), 2);
 }
@@ -180,9 +206,18 @@ async fn unknown_commits_and_pull_requests_are_not_found() {
         .await;
     let pull_request = harness.reader.pull_request(harness.key(), 7).await;
 
-    assert!(matches!(unknown, Err(ReadError::Gitai(GitaiError::NotFound))));
-    assert!(matches!(without_pr, Err(ReadError::Gitai(GitaiError::NotFound))));
-    assert!(matches!(pull_request, Err(ReadError::Gitai(GitaiError::NotFound))));
+    assert!(matches!(
+        unknown,
+        Err(ReadError::Gitai(GitaiError::NotFound))
+    ));
+    assert!(matches!(
+        without_pr,
+        Err(ReadError::Gitai(GitaiError::NotFound))
+    ));
+    assert!(matches!(
+        pull_request,
+        Err(ReadError::Gitai(GitaiError::NotFound))
+    ));
 }
 
 #[tokio::test]
@@ -196,8 +231,14 @@ async fn reads_need_a_device_credential() {
         .session(Some(crate::fakes::SHARED_KEY), SESSION_A)
         .await;
 
-    assert!(matches!(anonymous, Err(ReadError::Gitai(GitaiError::Unauthorized))));
-    assert!(matches!(shared_key, Err(ReadError::Gitai(GitaiError::Unauthorized))));
+    assert!(matches!(
+        anonymous,
+        Err(ReadError::Gitai(GitaiError::Unauthorized))
+    ));
+    assert!(matches!(
+        shared_key,
+        Err(ReadError::Gitai(GitaiError::Unauthorized))
+    ));
 }
 
 #[tokio::test]
@@ -225,7 +266,11 @@ async fn session_entry_has_totals_and_commits() {
         ])
         .await;
 
-    let entry = harness.reader.session(harness.key(), SESSION_A).await.unwrap();
+    let entry = harness
+        .reader
+        .session(harness.key(), SESSION_A)
+        .await
+        .unwrap();
 
     assert_eq!(entry.event_count, 2);
     assert_eq!(entry.commits, vec![DIRECT.to_owned()]);
@@ -317,8 +362,14 @@ async fn session_events_reject_bad_cursors_and_cap_the_limit() {
         .session_events(harness.key(), SESSION_A, None, Some(100_000))
         .await;
 
-    assert!(matches!(bad_cursor, Err(ReadError::Gitai(GitaiError::BadRequest(_)))));
-    assert!(matches!(zero, Err(ReadError::Gitai(GitaiError::BadRequest(_)))));
+    assert!(matches!(
+        bad_cursor,
+        Err(ReadError::Gitai(GitaiError::BadRequest(_)))
+    ));
+    assert!(matches!(
+        zero,
+        Err(ReadError::Gitai(GitaiError::BadRequest(_)))
+    ));
     assert_eq!(huge.unwrap().events.len(), 1);
 }
 
@@ -449,7 +500,10 @@ async fn blame_of_a_missing_path_is_not_found() {
 
 #[test]
 fn reads_the_pull_request_from_a_squash_subject() {
-    assert_eq!(pull_request_in_subject("feat(x): thing (#10645)"), Some(10645));
+    assert_eq!(
+        pull_request_in_subject("feat(x): thing (#10645)"),
+        Some(10645)
+    );
     assert_eq!(pull_request_in_subject("Revert \"a (#1)\" (#2) "), Some(2));
     assert_eq!(pull_request_in_subject("fix: see #12 for details"), None);
     assert_eq!(pull_request_in_subject("fix: (#12) then more"), None);

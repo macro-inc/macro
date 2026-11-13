@@ -70,11 +70,11 @@ async fn run() -> Result<(), rootcause::Report> {
     let routes = gitai::inbound::http::router(service)
         .merge(read_router(reader))
         .layer(
-        ServiceBuilder::new()
-            .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-            .layer(macro_cors::cors_layer())
-            .layer(CompressionLayer::new().gzip(true)),
-    );
+            ServiceBuilder::new()
+                .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+                .layer(macro_cors::cors_layer())
+                .layer(CompressionLayer::new().gzip(true)),
+        );
     let app = Router::new()
         .merge(routes.clone())
         .nest(GATEWAY_PATH_PREFIX, routes);
