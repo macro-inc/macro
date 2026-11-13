@@ -43,6 +43,9 @@ depended-on crates in the backend.
 
 - Add an entity kind's access check: `src/domain/ports.rs`
   (`AccessRepository` method) → `src/domain/service.rs` → `src/outbound/pg_access_repo.rs`.
+  If its users are exactly its `entity_access` grants, also list it in
+  `GRANT_AUDIENCE_KINDS` (`src/domain/service.rs`) so bulk lookups group it; otherwise
+  it falls back to one lookup per entity.
 - Debug a specific grant: `cargo run -p entity_access --bin explain_access
   --features explain_binary`.
 

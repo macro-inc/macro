@@ -917,6 +917,23 @@ impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
     }
 }
 
+/// Kinds whose users, as [`EntityAccessService::get_users_by_entity`] resolves
+/// them, are exactly their `entity_access` grants, so one grouped lookup serves
+/// any number of them. A kind whose audience adds anyone else (email owners, CRM
+/// teams, channel members) must stay off this list; the grouped-audience
+/// equivalence test runs every kind listed here.
+pub(crate) const GRANT_AUDIENCE_KINDS: [EntityType; 9] = [
+    EntityType::Document,
+    EntityType::Chat,
+    EntityType::Project,
+    EntityType::AgentSession,
+    EntityType::Initiative,
+    EntityType::CrmPipeline,
+    EntityType::Database,
+    EntityType::ExternalChat,
+    EntityType::Form,
+];
+
 impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
     #[tracing::instrument(
         err(level = Level::DEBUG),
@@ -928,22 +945,9 @@ impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
         entity_type: EntityType,
         entity_ids: &[&str],
     ) -> Result<Vec<EntityAudience>, AccessError> {
-        // These kinds' users are exactly their `entity_access` grants, so one
-        // grouped lookup serves any number of them. Other kinds, and a single
-        // entity, whose lookup is cached, resolve one entity at a time.
-        let users_are_grants = matches!(
-            entity_type,
-            EntityType::Document
-                | EntityType::Chat
-                | EntityType::Project
-                | EntityType::AgentSession
-                | EntityType::Initiative
-                | EntityType::CrmPipeline
-                | EntityType::Database
-                | EntityType::ExternalChat
-                | EntityType::Form
-        );
-        if !users_are_grants || entity_ids.len() < 2 {
+        // Other kinds, and a single entity, whose lookup is cached, resolve one
+        // entity at a time.
+        if !GRANT_AUDIENCE_KINDS.contains(&entity_type) || entity_ids.len() < 2 {
             let mut audiences = Vec::with_capacity(entity_ids.len());
             for entity_id in entity_ids {
                 let users = self.get_users_by_entity(entity_id, entity_type).await?;
