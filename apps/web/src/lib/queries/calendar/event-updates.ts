@@ -37,6 +37,7 @@ export interface CalendarUpdate {
   release: () => void;
   status: 'pending' | 'saved' | 'failed';
   operationPending: boolean;
+  submittedRecurrenceId?: string;
 }
 
 interface UpdateRegistry {
@@ -456,6 +457,7 @@ export async function prepareCalendarUpdate(args: UpdateCalendarEventArgs) {
     throw new Error('Calendar account changed before saving');
   }
   if (args.scope !== 'this_event') return args;
+  entry.submittedRecurrenceId = args.recurrenceId ?? args.occurrenceKey;
   const key = args.occurrenceKey ?? args.recurrenceId;
   const basis = entry.state.timeBasis;
   const base =
@@ -487,12 +489,12 @@ export async function prepareCalendarUpdate(args: UpdateCalendarEventArgs) {
     base,
     entry.state.confirmedTime
   );
+  entry.submittedRecurrenceId =
+    projected.occurrence.recurrenceId ?? projected.occurrence.occurrenceKey;
   return {
     ...args,
-    recurrenceId:
-      projected.occurrence.recurrenceId ?? projected.occurrence.occurrenceKey,
-    occurrenceKey:
-      projected.occurrence.recurrenceId ?? projected.occurrence.occurrenceKey,
+    recurrenceId: entry.submittedRecurrenceId,
+    occurrenceKey: entry.submittedRecurrenceId,
   };
 }
 
@@ -628,6 +630,33 @@ function confirmsPatch(
   );
 }
 
+/** A series edit can regenerate a previously exceptional occurrence at a new address. */
+function isRegeneratedOccurrence(
+  actual: CalendarOccurrenceItem,
+  original: CalendarOccurrenceItem,
+  expected: CalendarOccurrenceItem
+) {
+  if (!sameTime(actual.event.time, expected.event.time)) return false;
+  // Prove the slot in both directions. A new master joined to stale cached
+  // occurrences is not sufficient. Independently moved exceptions do not
+  // change through the projector, so they cannot prove replacement.
+  const restored = projectCalendarOccurrenceTime(actual, original.event.time);
+  if (!sameOccurrence(restored, original)) return false;
+  if (
+    sameOccurrence(restored, actual) &&
+    sameTime(restored.occurrence.time, actual.occurrence.time)
+  )
+    return false;
+  const regenerated = projectCalendarOccurrenceTime(
+    restored,
+    actual.event.time
+  );
+  return (
+    sameOccurrence(regenerated, actual) &&
+    sameTime(regenerated.occurrence.time, actual.occurrence.time)
+  );
+}
+
 function readConfirmsUpdates(
   data: CalendarOccurrencesData,
   state: EventUpdates,
@@ -635,6 +664,7 @@ function readConfirmsUpdates(
   range?: CalendarOccurrenceQueryRange
 ) {
   const expected = project(snapshot.items, state, snapshot);
+  const confirmed = new Set<CalendarOccurrenceItem>();
   return expected.every((item, index) => {
     if (item.occurrence.isCancelled) return true;
     if (!inRange(item.occurrence.time, range)) {
@@ -652,10 +682,69 @@ function readConfirmsUpdates(
     const actual = data.items.find((candidate) =>
       sameOccurrence(candidate, item)
     );
-    return (
-      actual !== undefined &&
+    if (
+      actual &&
+      !confirmed.has(actual) &&
       writes.every((entry) => confirmsPatch(actual, item, entry.args))
+    ) {
+      confirmed.add(actual);
+      return true;
+    }
+    const lastSeriesTimeWrite = writes.findLast(
+      (entry) => entry.args.patch.time && entry.args.scope !== 'this_event'
     );
+    if (!lastSeriesTimeWrite) return false;
+    const lastTimeWrite = writes
+      .filter((entry) => entry.args.patch.time)
+      .at(-1);
+    const occurrenceWrite =
+      lastTimeWrite?.args.scope === 'this_event' ? lastTimeWrite : undefined;
+    // Regeneration replaces the previous exception, including its earlier
+    // occurrence-only fields. Series fields and subsequent edits still apply.
+    const seriesWriteIndex = writes.indexOf(lastSeriesTimeWrite);
+    const remainingWrites = writes.filter(
+      (entry, index) =>
+        entry.args.scope !== 'this_event' || index > seriesWriteIndex
+    );
+    const seriesExpected = remainingWrites.reduce(
+      (current, entry) => applyEventPatch(current, entry.args),
+      snapshot.items[index]
+    );
+    const replacements = data.items.filter((candidate) => {
+      if (confirmed.has(candidate)) return false;
+      if (occurrenceWrite) {
+        // A later single-occurrence save confirms the exact address sent to
+        // the provider, which can differ from the stable optimistic cache key.
+        if (!occurrenceWrite.submittedRecurrenceId) return false;
+        const submitted = {
+          ...seriesExpected,
+          occurrence: {
+            ...seriesExpected.occurrence,
+            recurrenceId: occurrenceWrite.submittedRecurrenceId,
+          },
+        };
+        if (!sameOccurrence(candidate, submitted)) return false;
+      } else if (
+        !isRegeneratedOccurrence(candidate, snapshot.items[index], item)
+      ) {
+        return false;
+      }
+      const regenerated = occurrenceWrite
+        ? seriesExpected
+        : {
+            ...seriesExpected,
+            occurrence: {
+              ...seriesExpected.occurrence,
+              time: candidate.occurrence.time,
+            },
+          };
+      return remainingWrites.every((entry) =>
+        confirmsPatch(candidate, regenerated, entry.args)
+      );
+    });
+    if (replacements.length !== 1) return false;
+    confirmed.add(replacements[0]);
+    return true;
   });
 }
 

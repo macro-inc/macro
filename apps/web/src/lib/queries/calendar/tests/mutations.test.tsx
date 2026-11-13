@@ -1621,6 +1621,194 @@ describe('useUpdateCalendarEventMutation', () => {
     ).toEqual(refreshed);
   });
 
+  it('confirms a later occurrence edit against the address sent after a series move', async () => {
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const seriesTime = {
+      kind: 'timed' as const,
+      startsAt: '2026-08-04T10:00:00Z',
+      endsAt: '2026-08-04T10:30:00Z',
+    };
+    await update.mutateAsync({
+      eventId: 'event-2',
+      scope: 'all',
+      patch: { time: seriesTime },
+    });
+    const occurrenceTime = {
+      kind: 'timed' as const,
+      startsAt: '2026-08-05T11:00:00Z',
+      endsAt: '2026-08-05T11:30:00Z',
+    };
+    await update.mutateAsync({
+      eventId: 'event-2',
+      scope: 'this_event',
+      occurrenceKey: '2026-08-05T09:00:00Z',
+      recurrenceId: '2026-08-05T09:00:00Z',
+      patch: { time: occurrenceTime },
+    });
+    expect(updateCalendarEventMock.mock.calls[1][1].recurrenceId).toBe(
+      '2026-08-05T10:00:00+00:00'
+    );
+    const original = recurringItem();
+    const fresh = {
+      syncStatus: 'ready' as const,
+      items: [
+        {
+          event: { ...original.event, time: seriesTime },
+          occurrence: {
+            ...original.occurrence,
+            occurrenceKey: '2026-08-05T10:00:00Z',
+            recurrenceId: '2026-08-05T10:00:00Z',
+            time: occurrenceTime,
+          },
+        },
+      ],
+    };
+    expect(
+      reconcileCalendarUpdateRead(
+        testQueryClient,
+        calendarKeys.occurrences('user', viewportA).queryKey,
+        fresh,
+        calendarUpdateReadRevision(testQueryClient),
+        viewportA
+      )
+    ).toEqual(fresh);
+  });
+
+  it.each([
+    { confirmException: true, retainException: false },
+    { confirmException: false, retainException: false },
+    { confirmException: true, retainException: true },
+    { confirmException: false, retainException: false, editTitle: true },
+    { confirmException: true, retainException: false, durationOnly: true },
+  ])(
+    'reconciles a series edit after this_event (%j)',
+    async ({
+      confirmException,
+      retainException,
+      editTitle = false,
+      durationOnly = false,
+    }) => {
+      const first = recurringItem();
+      const second = recurringItem();
+      second.occurrence = {
+        ...second.occurrence,
+        occurrenceKey: '2026-08-06T09:00:00Z',
+        recurrenceId: '2026-08-06T09:00:00Z',
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-06T09:00:00Z',
+          endsAt: '2026-08-06T09:30:00Z',
+        },
+      };
+      const key = calendarKeys.occurrences('user', viewportA).queryKey;
+      testQueryClient.setQueryData(key, {
+        items: [first, second],
+        syncStatus: 'ready',
+      });
+      updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+      const update = renderHook(() => useUpdateCalendarEventMutation());
+      const exceptionTime = {
+        kind: 'timed' as const,
+        startsAt: '2026-08-05T12:00:00Z',
+        endsAt: '2026-08-05T12:30:00Z',
+      };
+      await update.mutateAsync({
+        eventId: 'event-2',
+        scope: 'this_event',
+        occurrenceKey: first.occurrence.occurrenceKey,
+        recurrenceId: first.occurrence.recurrenceId ?? undefined,
+        patch: {
+          time: exceptionTime,
+          ...(editTitle ? { title: 'Instance title' } : {}),
+        },
+      });
+      const moved = {
+        ...first,
+        event: editTitle
+          ? { ...first.event, title: 'Instance title' }
+          : first.event,
+        occurrence: { ...first.occurrence, time: exceptionTime },
+      };
+      const confirmedException = {
+        items: [moved, second],
+        syncStatus: 'ready' as const,
+      };
+      if (confirmException) {
+        testQueryClient.setQueryData(
+          key,
+          reconcileCalendarUpdateRead(
+            testQueryClient,
+            key,
+            confirmedException,
+            calendarUpdateReadRevision(testQueryClient),
+            viewportA
+          )
+        );
+      }
+      const oldRevision = calendarUpdateReadRevision(testQueryClient);
+      const seriesTime = {
+        kind: 'timed' as const,
+        startsAt: durationOnly
+          ? '2026-08-04T09:00:00Z'
+          : '2026-08-04T10:00:00Z',
+        endsAt: durationOnly ? '2026-08-04T10:00:00Z' : '2026-08-04T10:30:00Z',
+      };
+      await update.mutateAsync({
+        eventId: 'event-2',
+        scope: 'all',
+        patch: { time: seriesTime },
+      });
+      const fresh = {
+        items: [retainException ? moved : first, second].map((item) =>
+          projectCalendarOccurrenceTime(item, seriesTime)
+        ),
+        syncStatus: 'ready' as const,
+      };
+      if (!retainException) {
+        const mixed = {
+          ...fresh,
+          items: confirmedException.items.map((item) => ({
+            ...item,
+            event: { ...item.event, time: seriesTime },
+          })),
+        };
+        for (const [data, revision] of [
+          [fresh, oldRevision],
+          [
+            { ...fresh, partial: true },
+            calendarUpdateReadRevision(testQueryClient),
+          ],
+          [mixed, calendarUpdateReadRevision(testQueryClient)],
+        ] as const) {
+          const unconfirmed = reconcileCalendarUpdateRead(
+            testQueryClient,
+            key,
+            data,
+            revision,
+            viewportA
+          );
+          expect(
+            unconfirmed.items.some(
+              (item) =>
+                item.occurrence.time.kind === 'timed' &&
+                item.occurrence.time.startsAt === exceptionTime.startsAt
+            )
+          ).toBe(true);
+        }
+      }
+      expect(
+        reconcileCalendarUpdateRead(
+          testQueryClient,
+          key,
+          fresh,
+          calendarUpdateReadRevision(testQueryClient),
+          viewportA
+        )
+      ).toEqual(fresh);
+    }
+  );
+
   it('retains a saved title through a stale post-write read', async () => {
     updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
     const update = renderHook(() => useUpdateCalendarEventMutation());

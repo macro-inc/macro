@@ -528,9 +528,11 @@ the start and duration changes relative to the series master, not the selected
 occurrence's date. Daily and weekly rules keep their weekdays and week boundaries
 in step with date moves. Existing time exceptions, ambiguous daylight-saving
 times, and repeat patterns that cannot be shifted safely offer only `This event`,
-with an explanation. A duration-only
-change can still apply to more complex series. The provider retains other
-individually edited exceptions; this operation does not rewrite them.
+with an explanation. A duration-only change can still apply to more complex
+series. The provider controls whether other individually edited exceptions are
+retained or regenerated. Confirmed regenerated occurrences replace their old
+local exceptions instead of appearing alongside them; stale or partial reads do
+not discard the pending projection.
 
 The update API does not support `This and following events` or a guest-notification
 choice. Neither control is offered. Read-only events, snapshots, restricted guests,
