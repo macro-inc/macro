@@ -710,3 +710,32 @@ async fn attaching_a_booking_link_follows_the_availability_rule() {
         Err(Error::CalendarUnavailable)
     ));
 }
+
+#[tokio::test]
+async fn a_calendar_listed_after_the_calendar_listing_counts_until_it_syncs() {
+    let unsynced = busy_for(&host(
+        vec![calendar(PRIMARY, "Host", true, true)],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, None),
+                freshness(COWORKER, None, Some(CalendarSyncFailure::Transient)),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Syncing,
+    ))
+    .await;
+    assert!(matches!(unsynced, Err(Error::CalendarUnavailable)));
+
+    let synced_since = busy_for(&host(
+        vec![calendar(PRIMARY, "Host", true, true)],
+        CalendarSyncHealth {
+            calendars: vec![synced(PRIMARY, None), synced(COWORKER, None)],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    ))
+    .await
+    .unwrap();
+    assert_eq!(synced_since.len(), 1, "its events still block their time");
+}

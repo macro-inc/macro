@@ -64,7 +64,8 @@ MacroDB migrations.
 - Availability, reschedule slots, the agent's booking tools, forms bookings and
   form attachment all gate on `macro_services/sync_health.rs`: only calendars
   with Busy on count, a transient failure serves stored events for
-  `STALE_AVAILABILITY_WINDOW` after the last good sync, and the creation
+  `STALE_AVAILABILITY_WINDOW` after the next sync was due (the last good sync,
+  or a day after it for a daily-synced Google system calendar), and the creation
   calendar refuses only a permanent or reauthorization failure. Change them
   together.
 

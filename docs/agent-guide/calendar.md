@@ -288,7 +288,8 @@ count as Busy in Settings → Calendar (every calendar unless turned off) and
 write invitations/Google Meet through the existing calendar service. A calendar
 whose sync is failing blocks booking only while it counts as Busy: a transient
 failure still offers slots around its stored events for 45 minutes after its last
-successful sync, and past that, or on a permanent or reconnect failure, the page
+successful sync (a day later for a Google holidays or birthdays calendar, which syncs
+daily), and past that, or on a permanent or reconnect failure, the page
 shows `Availability could not be loaded` while the host sees the calendar's sync
 error in Settings → Calendar and the calendar view. The logs `refusing booking
 availability` and `offering booking availability from a calendar whose sync is

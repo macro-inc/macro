@@ -135,17 +135,28 @@ impl HostCalendars<'_> {
             );
             refusal = Some(Refusal::InboxNotListed);
         }
-        for calendar in self
+        let listed = self
             .calendars
             .iter()
             .filter(|c| c.contributes_to_availability)
-        {
-            match calendar_use(self.freshness(calendar.id), now) {
+            .map(|c| (c.id, Some(c.email_link_id), self.freshness(c.id)));
+        // A calendar its inbox listed after the calendar listing was read has
+        // no Busy setting there, and every calendar counts until its owner
+        // turns Busy off.
+        let listed_later = self
+            .health
+            .calendars
+            .iter()
+            .filter(|f| !self.calendars.iter().any(|c| c.id == f.calendar_id))
+            .map(|f| (f.calendar_id, None, Some(f)));
+        for (calendar_id, email_link_id, freshness) in listed.chain(listed_later) {
+            let email_link_id = email_link_id.map(tracing::field::display);
+            match calendar_use(freshness, now) {
                 Use::Current => {}
                 Use::WithinWindow { stale_for } => {
                     tracing::info!(
-                        calendar_id = %calendar.id,
-                        email_link_id = %calendar.email_link_id,
+                        %calendar_id,
+                        email_link_id,
                         stale_seconds = stale_for.num_seconds(),
                         "offering booking availability from a calendar whose sync is failing"
                     );
@@ -153,8 +164,8 @@ impl HostCalendars<'_> {
                 }
                 Use::Refused(reason) => {
                     tracing::warn!(
-                        calendar_id = %calendar.id,
-                        email_link_id = %calendar.email_link_id,
+                        %calendar_id,
+                        email_link_id,
                         reason = reason.as_str(),
                         "refusing booking availability: a calendar that counts is not current"
                     );
