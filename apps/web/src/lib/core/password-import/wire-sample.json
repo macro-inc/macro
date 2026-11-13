@@ -6,8 +6,8 @@
       "itemsByKind": {
         "login": 5,
         "card": 1,
-        "note": 3,
-        "identity": 1,
+        "note": 4,
+        "identity": 3,
         "api": 1
       },
       "folders": 3,
@@ -237,6 +237,158 @@
             {
               "label": "Fingerprint",
               "value": "SHA256:synthetic"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000101",
+        "name": "Bank account",
+        "kind": "note",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Bank name",
+              "value": "Synthetic Bank"
+            },
+            {
+              "label": "Name on account",
+              "value": "Synthetic Holder"
+            },
+            {
+              "label": "Account type",
+              "value": "checking"
+            },
+            {
+              "label": "Account number",
+              "value": "000111222"
+            },
+            {
+              "label": "Routing number",
+              "value": "000000000"
+            },
+            {
+              "label": "PIN",
+              "value": "0000"
+            },
+            {
+              "label": "SWIFT code",
+              "value": "SYNTXX00"
+            },
+            {
+              "label": "IBAN",
+              "value": "XX00SYNTHETIC"
+            },
+            {
+              "label": "Phone",
+              "value": "555-0100"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000102",
+        "name": "Driver's license",
+        "kind": "identity",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "Synthetic Driver",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "License number",
+              "value": "D000000"
+            },
+            {
+              "label": "License class",
+              "value": "C"
+            },
+            {
+              "label": "Date of birth",
+              "value": "1990-01-02"
+            },
+            {
+              "label": "Issuing country",
+              "value": "XX"
+            },
+            {
+              "label": "Issuing state",
+              "value": "Synthetic State"
+            },
+            {
+              "label": "Issued on",
+              "value": "2020-01-02"
+            },
+            {
+              "label": "Expires",
+              "value": "2030-01-31"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000103",
+        "name": "Passport",
+        "kind": "identity",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "Synthetic Traveler",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Passport number",
+              "value": "P0000000"
+            },
+            {
+              "label": "Passport type",
+              "value": "P"
+            },
+            {
+              "label": "Nationality",
+              "value": "Synthetic"
+            },
+            {
+              "label": "Sex",
+              "value": "X"
+            },
+            {
+              "label": "Date of birth",
+              "value": "1990-01-02"
+            },
+            {
+              "label": "Place of birth",
+              "value": "Synthetic City"
+            },
+            {
+              "label": "Issuing country",
+              "value": "XX"
+            },
+            {
+              "label": "Issuing authority",
+              "value": "Synthetic Authority"
+            },
+            {
+              "label": "Issued on",
+              "value": "2020-01-02"
+            },
+            {
+              "label": "Expires",
+              "value": "2030-01-02"
             }
           ]
         },
