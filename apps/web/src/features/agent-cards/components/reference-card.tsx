@@ -18,6 +18,7 @@ export type LoadableType = Exclude<CardItemType, 'calendar_event'>;
 
 export const PREVIEW_TYPES: Record<LoadableType, ItemType> = {
   document: 'document',
+  database: 'database',
   email_thread: 'email',
   project: 'project',
   channel: 'channel',
@@ -27,6 +28,7 @@ export const PREVIEW_TYPES: Record<LoadableType, ItemType> = {
 };
 
 const FALLBACK_ICONS: Record<Exclude<LoadableType, 'document'>, string> = {
+  database: 'database',
   email_thread: 'email',
   project: 'project',
   channel: 'channel',
@@ -96,18 +98,17 @@ export function ReferenceCardView(props: {
 }
 
 /**
- * One workspace item, loaded with the viewer's own access. Before the item
- * loads, and for a viewer who cannot open it, the card names its kind and
- * says why it cannot be opened - never what is inside.
+ * One workspace item, loaded with the viewer's own access: what a card or a
+ * row shows of it. Before the item loads, and for a viewer who cannot open
+ * it, the title is its kind and the meta says why it cannot be opened -
+ * never what is inside.
  */
-export function ReferenceCard(props: {
-  type: LoadableType;
-  id: string;
-  fileType?: string | null;
-}) {
+export function useReferenceItem(
+  props: () => { type: LoadableType; id: string; fileType?: string | null }
+) {
   const data = useItemPreviewData(() => ({
-    id: props.id,
-    type: PREVIEW_TYPES[props.type],
+    id: props().id,
+    type: PREVIEW_TYPES[props().type],
   }));
   const preview = () => data.item();
   const accessible = () => {
@@ -118,22 +119,18 @@ export function ReferenceCard(props: {
     const item = preview();
     return item.loading ? undefined : item.access;
   };
-  const fileType = () => accessible()?.fileType ?? props.fileType ?? undefined;
-  const kind = () => itemKind(props.type, fileType());
+  const fileType = () =>
+    accessible()?.fileType ?? props().fileType ?? undefined;
+  const kind = () => itemKind(props().type, fileType());
   const title = () => (accessible() ? data.name() : undefined) || kind();
   const meta = () => {
     if (missing() === 'no_access') return `${kind()} · You don't have access`;
     if (missing() === 'does_not_exist') return `${kind()} · Deleted`;
-    const owner =
-      props.type === 'email_thread' ? accessible()?.owner : undefined;
+    const isEmail = props().type === 'email_thread';
+    const owner = isEmail ? accessible()?.owner : undefined;
     const updatedAt = accessible()?.updatedAt;
     const updated = updatedAt ? formatDate(updatedAt) : undefined;
-    return [
-      kind(),
-      owner,
-      updated &&
-        (props.type === 'email_thread' ? updated : `Updated ${updated}`),
-    ]
+    return [kind(), owner, updated && (isEmail ? updated : `Updated ${updated}`)]
       .filter(Boolean)
       .join(' · ');
   };
@@ -148,26 +145,40 @@ export function ReferenceCard(props: {
       event.shiftKey
     );
   };
+  const icon = (): EntityIconSelector =>
+    accessible()
+      ? data.targetType()
+      : fallbackIcon(props().type, props().fileType);
+  return {
+    title,
+    meta,
+    icon,
+    /** Opens the item; absent while it cannot be opened. */
+    open: () => (accessible() ? open : undefined),
+    muted: () => missing() === 'no_access' || missing() === 'does_not_exist',
+    deleted: () => missing() === 'does_not_exist',
+  };
+}
 
+/** One workspace item as a card; see {@link useReferenceItem}. */
+export function ReferenceCard(props: {
+  type: LoadableType;
+  id: string;
+  fileType?: string | null;
+}) {
+  const item = useReferenceItem(() => props);
   return (
     <ReferenceCardView
       tile={
         <Tile>
-          <EntityIcon
-            targetType={
-              accessible()
-                ? data.targetType()
-                : fallbackIcon(props.type, props.fileType)
-            }
-            size="sm"
-          />
+          <EntityIcon targetType={item.icon()} size="sm" />
         </Tile>
       }
-      title={title()}
-      meta={meta()}
-      onOpen={accessible() ? open : undefined}
-      muted={missing() === 'no_access' || missing() === 'does_not_exist'}
-      deleted={missing() === 'does_not_exist'}
+      title={item.title()}
+      meta={item.meta()}
+      onOpen={item.open()}
+      muted={item.muted()}
+      deleted={item.deleted()}
     />
   );
 }
