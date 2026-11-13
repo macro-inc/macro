@@ -135,7 +135,22 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.
     Each queued network attempt has a one-minute timeout, comfortably inside its
-    five-minute lease.
+    five-minute lease. A lease left unsettled does not have to run out. A runner
+    that cannot record an attempt's outcome gives its own lease back and
+    retries after a backoff of five seconds doubled for every earlier claim of
+    that head, up to the lease. An answer the server confirmed is kept by that
+    runner and applied again without another request; a failed attempt is sent
+    again, as it was before once the lease ran out. A runner whose page is gone
+    is detected by the Web Lock every runner holds (`queue-owners.ts`): another
+    page reads the lease that runner wrote down and gives it back once the
+    request can no longer be on the wire, ten seconds more than the request
+    timeout after the lease was recorded. Giving it back sooner would let a
+    write queued behind it reach the server first. That bound only holds where
+    a request ends with its page, so only hosts with `requestsEndWithPage` (the
+    browser worker host) hand leases over; the native HTTP client keeps a
+    request running after its webview is gone. Without Web Locks or storage, or
+    when the page went away before writing its lease down, the lease runs out
+    as before.
 
 ### Open questions
 
@@ -1455,8 +1470,9 @@ As in worker-host, only reads and initialization have the ten-second deadline:
 a read falls back to the network, and every request waits behind init. Writes,
 hydration, queue claims and settlements, deletes, invalidations, teardown and
 clear wait for the engine's answer. A timeout would report a failure for a
-commit that still lands, and callers act on it: the mutation queue runner holds
-later edits for its five-minute lease after an unconfirmed commit, and a failed
+commit that still lands, and callers act on it: the mutation queue runner backs
+off after an unconfirmed commit, for the whole five-minute lease when it cannot
+give the lease back, and a failed
 logout clear rotates the cache scope, which the running native engine refuses
 with `graphql cache scope mismatch`.
 

@@ -4394,7 +4394,7 @@ describe('normalizedCacheExchange', () => {
         { restoreWhilePending: true, committed: false },
         { restoreWhilePending: true, committed: true },
       ])(
-        'rechecks an uncertain commit without bypassing leases ($restoreWhilePending, $committed)',
+        'rechecks an uncertain commit without repeating its network call ($restoreWhilePending, $committed)',
         async ({ restoreWhilePending, committed }) => {
           const pendingCommit = deferred<CommitOptimisticWriteResult>();
           const commit = host.commitOptimisticWrite.bind(host);
@@ -4435,19 +4435,16 @@ describe('normalizedCacheExchange', () => {
               results.find((result) => result.operation.key === 1)!
             )
           ).toEqual({ kind: 'queued', transactionId: '1' });
-          // A runnable successor is sent immediately, but an unsettled head's
-          // existing lease must never be stolen or its network call duplicated.
+          // A runnable successor is sent immediately, but an unsettled head
+          // waits out its backoff and its network call is never duplicated.
           expect(forwarded).toHaveLength(committed ? 2 : 1);
           expect(host.commits).toHaveLength(committed ? 2 : 0);
           const claimsAfterRestore = claim.mock.calls.length;
+          // The runner gave its own lease back, so it retries persistence of
+          // the known server response after a short backoff instead of the
+          // lease time. A local cache failure must not repeat the server effect.
           await vi.advanceTimersByTimeAsync(30_000);
-          // Forget the stale five-minute local backoff even if no head could
-          // be claimed on restore; the durable queue still controls eligibility.
           expect(claim.mock.calls.length).toBeGreaterThan(claimsAfterRestore);
-          expect(forwarded).toHaveLength(committed ? 2 : 1);
-          // Once the old lease expires, retry persistence of the known server
-          // response. A local cache failure must not repeat the server effect.
-          await vi.advanceTimersByTimeAsync(300_000);
           expect(host.commits).toHaveLength(2);
           expect(forwarded).toHaveLength(2);
           expect(
@@ -4501,8 +4498,8 @@ describe('normalizedCacheExchange', () => {
         ops.next(makeMutationOp(1, optimistic));
         await vi.advanceTimersByTimeAsync(1);
         ops.next(makeMutationOp(2, optimistic));
-        // The confirmed head is reclaimed once its lease expires.
-        await vi.advanceTimersByTimeAsync(300_000);
+        // Its runner gives the lease back and claims the head again shortly.
+        await vi.advanceTimersByTimeAsync(5_000);
 
         expect(events).toEqual([
           'admit 1',

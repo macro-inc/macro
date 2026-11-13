@@ -141,6 +141,12 @@ export interface CacheHost {
   readonly clientId: string;
   /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
+  /**
+   * The page's own network stack sends this host's mutations, so a request
+   * ends when its page does. False where a native client sends them: a
+   * request there can outlive the page and still reach the server.
+   */
+  readonly requestsEndWithPage?: boolean;
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
