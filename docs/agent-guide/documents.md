@@ -918,6 +918,9 @@ with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
 A viewer can ask questions; editing still requires edit permission.
+On phones and tablets the header has neither Ask Macro nor Comments: Ask Macro
+is the first row of the title menu and asks about the whole workbook, without a
+range.
 
 In the local spreadsheet demo, Ask Macro first saves the entire workbook and
 waits for acknowledgement. A failed save leaves the draft editable and supports
