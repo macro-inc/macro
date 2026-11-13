@@ -162,5 +162,9 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
     before["root"]["$"]["documentMetadata"] =
         serde_json::json!({"version":10,"environmentTags":null});
     assert_eq!(after, before);
-    assert_eq!(session.version(), seeded.oplog_vv());
+    // Source's reopen of bare stored metadata writes the parsed environmentTags:null
+    // slot as one root map insert (table-reopen-b.json 0f0dba80), from the reader's peer.
+    let mut reopened = seeded.oplog_vv();
+    reopened.insert(77, 1);
+    assert_eq!(session.version(), reopened);
 }
