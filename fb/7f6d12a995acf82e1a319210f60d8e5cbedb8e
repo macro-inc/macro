@@ -1,0 +1,33 @@
+crates/email/src/domain/events/public.rs
+  s_6c441025453223::t_20cb4e1d09ffef 1-502
+crates/email/Cargo.toml
+  s_ee9924cdfec6a3::t_7ab1d2a8072b1e 52-53
+crates/email/src/domain/events.rs
+  s_ee9924cdfec6a3::t_d4e38eaed33847 30,34-35,46,68,85,537,545-643,648-650,652-662
+crates/email/src/domain/events/test.rs
+  s_ee9924cdfec6a3::t_260465522ae9b1 233-240,456,553-754
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fb7f6d12a995acf82e1a319210f60d8e5cbedb8e",
+  "prompts": {},
+  "sessions": {
+    "s_6c441025453223": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e3cf052-1aab-4a10-a528-0b9992b29113",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ee9924cdfec6a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a93da9861cf3a9985",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
