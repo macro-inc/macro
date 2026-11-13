@@ -9,6 +9,7 @@ agent_correlation = { path = "../agent_correlation" }
 async-trait = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
 feature_flags = { path = "../feature_flags" }
@@ -22,6 +23,7 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shown_text = { path = "../shown_text" }
+suggestions_db_utils = { path = "../suggestions_db_utils" }
 sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

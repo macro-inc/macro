@@ -5,10 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { RoutineSuggestionCard } from './routineSuggestionCard';
 
-export type GenerateRoutineSuggestionsParams = {
-  /**
-   * IANA time zone, e.g. `America/New_York`.
-   */
-  timezone: string;
-};
+export type SuggestRequestOneOfCard = null | RoutineSuggestionCard;

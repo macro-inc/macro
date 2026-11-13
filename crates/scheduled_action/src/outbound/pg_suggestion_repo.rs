@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -6,17 +6,15 @@ use routine_program::Surface;
 use serde_json::Value;
 use sqlx::PgPool;
 
-use crate::domain::suggestions::model::{
-    CheckedSuggestion, GenerationStatus, StoredGeneration, StoredPick, StoredSuggestion,
-};
-use crate::domain::suggestions::ports::{SuggestionRepo, SuggestionSession};
+use crate::domain::suggestions::model::{CheckedSuggestion, StoredPick, StoredSuggestion};
+use crate::domain::suggestions::ports::{Kept, SuggestionRepo};
 
 #[cfg(test)]
 mod test;
 
-/// PostgreSQL store for routine suggestions: one generation row per person,
-/// one row per suggestion session and per suggestion. A suggestion counts as
-/// saved while a routine points back to it through
+/// PostgreSQL store for routine suggestions: one row per suggestion, and a
+/// `suggestion_change` row for each one a session kept or retired. A
+/// suggestion counts as saved while a routine points back to it through
 /// `scheduled_action.suggestion_id`.
 pub struct PgSuggestionRepo {
     pool: PgPool,
@@ -45,173 +43,66 @@ fn surface_names(surfaces: &[Surface]) -> Result<Vec<String>> {
         .collect()
 }
 
-fn session(
-    session_id: Uuid,
-    user_id: String,
-    agent_id: String,
-    names: Vec<String>,
-    kept: Option<i64>,
-) -> Result<SuggestionSession> {
-    Ok(SuggestionSession {
-        session: session_id,
-        owner: MacroUserIdStr::try_from(user_id).context("a suggestion session's owner")?,
-        agent: bot_id::BotId::new_from_uuid(
-            agent_id.parse().context("a suggestion session's agent")?,
-        ),
-        surfaces: surfaces(names)?,
-        kept: kept.unwrap_or(0).try_into().unwrap_or(u32::MAX),
-    })
+/// One change a routines session made, for the change log.
+struct Change<'a> {
+    session: Uuid,
+    generation: Uuid,
+    action: &'static str,
+    new: Option<Value>,
+    reason: Option<&'a str>,
+    at: DateTime<Utc>,
+}
+
+async fn log(
+    conn: &mut sqlx::PgConnection,
+    user: &MacroUserIdStr<'_>,
+    suggestion: Uuid,
+    change: Change<'_>,
+) -> Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO suggestion_change
+             (id, user_id, generation_id, session_id, subject, subject_id, action,
+              new_value, reason, created_at)
+           VALUES ($1, $2, $3, $4, 'routine_suggestion', $5, $6, $7, $8, $9)"#,
+        Uuid::now_v7(),
+        user.as_ref(),
+        change.generation,
+        change.session,
+        suggestion,
+        change.action,
+        change.new,
+        change.reason,
+        change.at,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
 }
 
 impl SuggestionRepo for PgSuggestionRepo {
-    async fn generation(&self, user: &MacroUserIdStr<'_>) -> Result<Option<StoredGeneration>> {
-        let row = sqlx::query!(
-            r#"SELECT status, started_at, finished_at FROM routine_suggestion_generation WHERE user_id = $1"#,
+    async fn kept_by(&self, user: &MacroUserIdStr<'_>, session: Uuid) -> Result<u32> {
+        // By person first: their index bounds the scan to their suggestions.
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM routine_suggestion
+               WHERE user_id = $1 AND session_id = $2"#,
             user.as_ref(),
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        row.map(|row| {
-            Ok(StoredGeneration {
-                status: row.status.parse::<GenerationStatus>()?,
-                started_at: row.started_at,
-                finished_at: row.finished_at,
-            })
-        })
-        .transpose()
-    }
-
-    async fn begin(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        now: DateTime<Utc>,
-        stale_before: DateTime<Utc>,
-    ) -> Result<bool> {
-        let started = sqlx::query!(
-            r#"INSERT INTO routine_suggestion_generation (user_id, status, started_at)
-               VALUES ($1, 'generating', $2)
-               ON CONFLICT (user_id) DO UPDATE SET started_at = EXCLUDED.started_at, finished_at = NULL
-               WHERE routine_suggestion_generation.status = 'generating'
-                 AND routine_suggestion_generation.started_at < $3"#,
-            user.as_ref(),
-            now,
-            stale_before,
-        )
-        .execute(&self.pool)
-        .await?
-        .rows_affected();
-        Ok(started == 1)
-    }
-
-    async fn finish(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        ready: bool,
-        now: DateTime<Utc>,
-    ) -> Result<()> {
-        sqlx::query!(
-            r#"UPDATE routine_suggestion_generation SET status = $2, finished_at = $3 WHERE user_id = $1"#,
-            user.as_ref(),
-            if ready { "ready" } else { "failed" },
-            now,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn open_session(
-        &self,
-        session: Uuid,
-        user: &MacroUserIdStr<'_>,
-        agent: bot_id::BotId,
-        surfaces: &[Surface],
-        now: DateTime<Utc>,
-    ) -> Result<()> {
-        sqlx::query!(
-            r#"INSERT INTO routine_suggestion_session (session_id, user_id, agent_id, surfaces, opened_at)
-               VALUES ($1, $2, $3, $4, $5)"#,
             session,
-            user.as_ref(),
-            agent.as_uuid().to_string(),
-            &surface_names(surfaces)?,
-            now,
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        Ok(())
-    }
-
-    async fn session(&self, session_id: Uuid) -> Result<Option<SuggestionSession>> {
-        let row = sqlx::query!(
-            r#"SELECT s.session_id, s.user_id, s.agent_id, s.surfaces,
-                      (SELECT count(*) FROM routine_suggestion r WHERE r.session_id = s.session_id) AS kept
-               FROM routine_suggestion_session s
-               WHERE s.session_id = $1 AND s.closed_at IS NULL"#,
-            session_id,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        row.map(|row| {
-            session(
-                row.session_id,
-                row.user_id,
-                row.agent_id,
-                row.surfaces,
-                row.kept,
-            )
-        })
-        .transpose()
-    }
-
-    async fn close_session(&self, session_id: Uuid) -> Result<()> {
-        sqlx::query!(
-            r#"UPDATE routine_suggestion_session SET closed_at = now()
-               WHERE session_id = $1 AND closed_at IS NULL"#,
-            session_id,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn stale_sessions(
-        &self,
-        before: DateTime<Utc>,
-        limit: u16,
-    ) -> Result<Vec<SuggestionSession>> {
-        let rows = sqlx::query!(
-            r#"SELECT session_id, user_id, agent_id, surfaces
-               FROM routine_suggestion_session
-               WHERE closed_at IS NULL AND opened_at < $1
-               ORDER BY opened_at
-               LIMIT $2"#,
-            before,
-            i64::from(limit),
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        rows.into_iter()
-            .map(|row| {
-                session(
-                    row.session_id,
-                    row.user_id,
-                    row.agent_id,
-                    row.surfaces,
-                    None,
-                )
-            })
-            .collect()
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
     async fn add(
         &self,
         user: &MacroUserIdStr<'_>,
         session: Uuid,
+        generation: Uuid,
         suggestion: &CheckedSuggestion,
         now: DateTime<Utc>,
-    ) -> Result<Uuid> {
+    ) -> Result<Kept> {
         let id = Uuid::now_v7();
+        let mut tx = self.pool.begin().await?;
         let (catalog_key, knob_values, routine) = match &suggestion.pick {
             StoredPick::Catalog { key, knobs } => {
                 (Some(key.clone()), Value::Object(knobs.clone()), None)
@@ -237,15 +128,117 @@ impl SuggestionRepo for PgSuggestionRepo {
             suggestion.keep_probability,
             now,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
-        Ok(id)
+        log(
+            &mut tx,
+            user,
+            id,
+            Change {
+                session,
+                generation,
+                action: "created",
+                new: Some(serde_json::to_value(&suggestion.pick)?),
+                reason: Some(&suggestion.reason),
+                at: now,
+            },
+        )
+        .await?;
+        if let Some(card) = &suggestion.card {
+            let categories: Vec<String> = card
+                .categories
+                .iter()
+                .map(|category| category.as_ref().to_owned())
+                .collect();
+            let room = suggestions_db_utils::add_routine_card(
+                &mut tx,
+                &suggestions_db_utils::NewRoutineSuggestionCard {
+                    user: user.as_ref(),
+                    suggestion: id,
+                    title: &card.title,
+                    summary: &suggestion.reason,
+                    importance: i16::from(card.importance),
+                    categories: &categories,
+                    session,
+                    generation,
+                    at: now,
+                },
+                suggestions::domain::service::OPEN_LIMIT,
+                suggestions::domain::service::NEW_PER_GENERATION,
+            )
+            .await?;
+            match room {
+                suggestions_db_utils::Room::Fits => {}
+                // Dropping the transaction keeps nothing.
+                suggestions_db_utils::Room::OpenFull => return Ok(Kept::SuggestionsFull),
+                suggestions_db_utils::Room::GenerationFull => return Ok(Kept::NightFull),
+            }
+        }
+        tx.commit().await?;
+        Ok(Kept::Stored(id))
+    }
+
+    async fn retire(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        session: Uuid,
+        generation: Uuid,
+        reason: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool> {
+        let mut tx = self.pool.begin().await?;
+        let retired = sqlx::query!(
+            r#"UPDATE routine_suggestion SET retired_at = $3
+               WHERE id = $1 AND user_id = $2 AND dismissed_at IS NULL AND retired_at IS NULL"#,
+            id,
+            user.as_ref(),
+            now,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+        if retired {
+            log(
+                &mut tx,
+                user,
+                id,
+                Change {
+                    session,
+                    generation,
+                    action: "retired",
+                    new: None,
+                    reason: Some(reason),
+                    at: now,
+                },
+            )
+            .await?;
+            suggestions_db_utils::close_routine_card(
+                &mut tx,
+                id,
+                "retired",
+                Some(&suggestions_db_utils::SuggestionChange {
+                    generation,
+                    session,
+                    action: "retired",
+                    old: None,
+                    new: None,
+                    reason: Some(reason),
+                    at: now,
+                }),
+                now,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(retired)
     }
 
     async fn suggestions(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<StoredSuggestion>> {
         let rows = sqlx::query!(
             r#"SELECT id, surfaces, catalog_key, knob_values, routine, reason, keep_probability,
-                      dismissed_at IS NOT NULL AS "dismissed!", created_at
+                      dismissed_at, retired_at, created_at
                FROM routine_suggestion
                WHERE user_id = $1
                ORDER BY created_at, id"#,
@@ -271,7 +264,8 @@ impl SuggestionRepo for PgSuggestionRepo {
                     reason: row.reason,
                     keep_probability: row.keep_probability,
                     pick,
-                    dismissed: row.dismissed,
+                    dismissed_at: row.dismissed_at,
+                    retired_at: row.retired_at,
                     created_at: row.created_at,
                 })
             })
@@ -288,16 +282,23 @@ impl SuggestionRepo for PgSuggestionRepo {
     }
 
     async fn dismiss(&self, user: &MacroUserIdStr<'_>, id: Uuid) -> Result<bool> {
+        let mut tx = self.pool.begin().await?;
         let found = sqlx::query!(
             r#"UPDATE routine_suggestion SET dismissed_at = COALESCE(dismissed_at, now())
                WHERE id = $1 AND user_id = $2"#,
             id,
             user.as_ref(),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?
-        .rows_affected();
-        Ok(found == 1)
+        .rows_affected()
+            == 1;
+        if found {
+            suggestions_db_utils::close_routine_card(&mut tx, id, "dismissed", None, Utc::now())
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(found)
     }
 
     async fn dismiss_template(&self, user: &MacroUserIdStr<'_>, key: &str) -> Result<()> {

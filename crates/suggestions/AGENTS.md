@@ -14,8 +14,16 @@ scheduler's spec.
 - A generation session calls `review` (every suggestion, open or not, with limits),
   then `suggest` (add, or update the suggestion with the same `dedupKey`), `rewrite`
   and `retire`. Only the person's open `suggestions` session in
-  `suggestion_generation_session`, found from the request's code-mode
-  invocation (`RequestSessions`), may call them; others get 403.
+  `suggestion_generation_session` (`GenerationSessions`), found from the
+  request's code-mode invocation (`RequestSessions`), may call them; others
+  get 403. Reading the feed with `?timezone=` counts the person in for
+  nightly generations (`SuggestionAudience`).
+- A generation session ends by having each suggestion it wrote checked against its
+  cited items: its last programs call `macro.ai.structuredCompletion` (tool
+  free) on the model `SuggestionService::with_checker_model` names, which sees only
+  the suggestion and the items' text and lists what the items don't state; the
+  session rewrites those suggestions. This lives in the brief (`domain/prompt.md`),
+  not in code. The calls are the hidden session's, recorded non-billable.
 - Code only validates (`domain/check.rs`), stores and logs. Ranking, wording and
   when a suggestion stops mattering are the session's call; a refused write answers
   `{ ok: false, problems }` the session can act on. Keep it that way: no
@@ -34,14 +42,28 @@ scheduler's spec.
 
 - Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
   `suggestion_routine`, `suggestion_target`, and its `suggestion_change` rows.
-- Not here: generation runs and their sessions (they write
-  `suggestion_generation*`); routine suggestions → `crates/scheduled_action`.
+- Also: the vocabulary every generation's tools share (`GenerationTrigger`,
+  `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
+  `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
+  the suggestions session's brief (`domain/prompt.md`).
+- Not here: generation runs and their sessions → `crates/suggestion_generation`;
+  routine suggestions → `crates/scheduled_action`.
 
 ## Checks
 
 - `cargo test -p suggestions` (live DB, `SQLX_OFFLINE` unset).
 - After an API change: regenerate the scheduler's spec and clients (see the
   `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/suggestions`.
+
+- Routine suggestions: every drafted ("smart") routine suggestion has exactly one,
+  written with it by `macro.routines.suggest` through `crates/suggestions_db_utils`
+  in one transaction; catalog picks never have one. One a replica on the
+  previous release drafts during a deploy has none: every path that closes
+  a routine suggestion tolerates a missing one. Dismissing a routine suggestion
+  dismisses its suggestion through `RoutineSuggestionDismissal`; retiring its
+  suggestion retires it; saving a routine from the suggestion makes it done
+  with the routine as `produced`. Suggestions sessions never add, rewrite or retire
+  routine suggestions.
 
 ## Gotchas
 

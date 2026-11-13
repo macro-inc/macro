@@ -11,8 +11,8 @@ use model_entity::EntityType;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Category, Change, GenerationSession, NewKind, SessionKind, Suggestion, SuggestionContent,
-    SuggestionKind, SuggestionState, Target, TargetRole,
+    Category, Change, NewKind, Suggestion, SuggestionContent, SuggestionKind, SuggestionState,
+    Target, TargetRole,
 };
 use crate::domain::ports::{Limits, SuggestionRepo, Written};
 
@@ -294,44 +294,30 @@ fn category_names(categories: &[Category]) -> Vec<String> {
         .collect()
 }
 
-/// Serialize writes to one person's suggestions for the rest of the transaction,
-/// so limits hold under concurrent writes.
-async fn lock(conn: &mut PgConnection, user: &MacroUserIdStr<'_>) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        "SELECT pg_advisory_xact_lock(hashtextextended('suggestion:' || $1, 0))",
-        user.as_ref(),
-    )
-    .fetch_one(conn)
-    .await?;
-    Ok(())
-}
-
-/// Whether one more open suggestion stays within `limits`.
-async fn within(
+/// Whether one more open suggestion stays within `limits`, under the person's
+/// lock, which this takes.
+async fn locked_room(
     conn: &mut PgConnection,
     user: &MacroUserIdStr<'_>,
     generation: Uuid,
     limits: Limits,
 ) -> Result<Written, sqlx::Error> {
-    let counts = sqlx::query!(
-        r#"SELECT
-             (SELECT count(*) FROM suggestion
-              WHERE user_id = $1 AND state IN ('proposed', 'accepted')) AS "open!",
-             (SELECT count(*) FROM suggestion_change
-              WHERE generation_id = $2 AND subject = 'suggestion'
-                AND action IN ('created', 'restored')) AS "added!""#,
-        user.as_ref(),
-        generation,
+    suggestions_db_utils::lock_user(conn, user.as_ref()).await?;
+    Ok(
+        match suggestions_db_utils::room(
+            conn,
+            user.as_ref(),
+            generation,
+            limits.open,
+            limits.new_per_generation,
+        )
+        .await?
+        {
+            suggestions_db_utils::Room::Fits => Written::Applied,
+            suggestions_db_utils::Room::OpenFull => Written::OverOpenLimit,
+            suggestions_db_utils::Room::GenerationFull => Written::OverNewLimit,
+        },
     )
-    .fetch_one(conn)
-    .await?;
-    if counts.open >= i64::from(limits.open) {
-        return Ok(Written::OverOpenLimit);
-    }
-    if counts.added >= i64::from(limits.new_per_generation) {
-        return Ok(Written::OverNewLimit);
-    }
-    Ok(Written::Applied)
 }
 
 async fn insert_targets(
@@ -363,52 +349,37 @@ async fn log(
     suggestion: Uuid,
     change: &Change,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"INSERT INTO suggestion_change
-             (id, user_id, generation_id, session_id, subject, subject_id, action,
-              old_value, new_value, reason, created_at)
-           VALUES ($1, $2, $3, $4, 'suggestion', $5, $6, $7, $8, $9, $10)"#,
-        Uuid::now_v7(),
+    suggestions_db_utils::log_change(
+        conn,
         user.as_ref(),
-        change.generation,
-        change.session,
         suggestion,
-        change.action.as_ref(),
-        change.old,
-        change.new,
-        change.reason,
-        change.at,
+        &suggestions_db_utils::SuggestionChange {
+            generation: change.generation,
+            session: change.session,
+            action: change.action.as_ref(),
+            old: change.old.clone(),
+            new: change.new.clone(),
+            reason: change.reason.as_deref(),
+            at: change.at,
+        },
     )
-    .execute(conn)
-    .await?;
-    Ok(())
+    .await
 }
 
 impl SuggestionRepo for PgSuggestionRepo {
     type Err = PgSuggestionRepoError;
 
-    async fn generation_session(
-        &self,
-        session: Uuid,
-    ) -> Result<Option<GenerationSession>, Self::Err> {
-        let row = sqlx::query!(
-            r#"SELECT session_id, generation_id, user_id, kind
-               FROM suggestion_generation_session
-               WHERE session_id = $1 AND closed_at IS NULL"#,
+    async fn kept_by(&self, generation: Uuid, session: Uuid) -> Result<u32, Self::Err> {
+        // By generation first: its index bounds the scan to one generation.
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM suggestion_change
+               WHERE generation_id = $1 AND session_id = $2 AND subject = 'suggestion'"#,
+            generation,
             session,
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        row.map(|row| {
-            Ok(GenerationSession {
-                session: row.session_id,
-                generation: row.generation_id,
-                user: MacroUserIdStr::try_from(row.user_id)
-                    .map_err(|_| PgSuggestionRepoError::Decode("a session's user".to_owned()))?,
-                kind: parse::<SessionKind>(&row.kind)?,
-            })
-        })
-        .transpose()
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
     async fn shown(
@@ -475,10 +446,9 @@ impl SuggestionRepo for PgSuggestionRepo {
         change: &Change,
     ) -> Result<Written, Self::Err> {
         let mut tx = self.pool.begin().await?;
-        lock(&mut tx, user).await?;
-        let within = within(&mut tx, user, change.generation, limits).await?;
-        if within != Written::Applied {
-            return Ok(within);
+        let room = locked_room(&mut tx, user, change.generation, limits).await?;
+        if room != Written::Applied {
+            return Ok(room);
         }
         let kind_name = match kind {
             NewKind::Prompt { .. } => "prompt",
@@ -545,12 +515,13 @@ impl SuggestionRepo for PgSuggestionRepo {
         change: &Change,
     ) -> Result<Written, Self::Err> {
         let mut tx = self.pool.begin().await?;
-        lock(&mut tx, user).await?;
         if !from.is_open() && to.is_open() {
-            let within = within(&mut tx, user, change.generation, limits).await?;
-            if within != Written::Applied {
-                return Ok(within);
+            let room = locked_room(&mut tx, user, change.generation, limits).await?;
+            if room != Written::Applied {
+                return Ok(room);
             }
+        } else {
+            suggestions_db_utils::lock_user(&mut tx, user.as_ref()).await?;
         }
         let updated = sqlx::query!(
             r#"UPDATE suggestion

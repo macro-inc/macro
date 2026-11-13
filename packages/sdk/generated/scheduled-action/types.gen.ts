@@ -735,6 +735,16 @@ export type ExecutionResult = {
 };
 
 /**
+ * What starting a generation did.
+ */
+export type GenerationStarted = {
+    /**
+     * Whether a run started; false when one ran before or is running.
+     */
+    started: boolean;
+};
+
+/**
  * Where a person's suggestions are in being generated.
  */
 export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
@@ -883,6 +893,16 @@ export type PropertySelector = {
 };
 
 /**
+ * Retiring an open suggestion that no longer fits.
+ */
+export type RetireSuggestion = {
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
  * Retiring an open suggestion that no longer matters.
  */
 export type RetireSuggestionRequest = {
@@ -890,6 +910,31 @@ export type RetireSuggestionRequest = {
      * Why, for the change log.
      */
     reason: string;
+};
+
+/**
+ * Where one of the person's suggestions is, for a routines session
+ * managing them.
+ */
+export type ReviewedState = 'open' | 'dismissed' | 'retired' | 'saved';
+
+/**
+ * One suggestion AI made for the person, as a routines session reviews it.
+ */
+export type ReviewedSuggestion = SuggestedPick & {
+    /**
+     * When it was dismissed or retired.
+     */
+    closedAt?: string | null;
+    /**
+     * When it was suggested.
+     */
+    createdAt: string;
+    id: string;
+    keepProbability: number;
+    reason: string;
+    state: ReviewedState;
+    surfaces: Array<Surface>;
 };
 
 /**
@@ -1133,6 +1178,26 @@ export type RoutineSuggestion = SuggestedPick & {
      * Dismissing it in one dismisses it everywhere.
      */
     surfaces: Array<Surface>;
+};
+
+/**
+ * How a drafted routine suggestion shows in the person's Suggestions feed:
+ * every routine a session drafts is also one suggestion there, kept and
+ * closed with it.
+ */
+export type RoutineSuggestionCard = {
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * 0 to 100: how much the person would regret missing it this week.
+     */
+    importance: number;
+    /**
+     * What it does for the person, in a few words.
+     */
+    title: string;
 };
 
 /**
@@ -1485,6 +1550,7 @@ export type SuggestOutcome = {
  * What a suggestion session hands back through `macro.routines.suggest`.
  */
 export type SuggestRequest = {
+    card?: null | RoutineSuggestionCard;
     keepProbability: number;
     key: string;
     kind: 'catalog';
@@ -1494,6 +1560,10 @@ export type SuggestRequest = {
     reason: string;
     surfaces: Array<Surface>;
 } | {
+    /**
+     * How it shows in the person's Suggestions feed.
+     */
+    card: RoutineSuggestionCard;
     /**
      * What the session created for it, as `macro.routines.check` takes.
      */
@@ -1631,6 +1701,17 @@ export type SuggestionKind = {
      * The suggestion it shows.
      */
     routineSuggestionId: string;
+};
+
+/**
+ * Every suggestion AI made for the person, for a routines session.
+ */
+export type SuggestionReview = {
+    /**
+     * Suggestions this session may still hand back.
+     */
+    keptLeft: number;
+    suggestions: Array<ReviewedSuggestion>;
 };
 
 /**
@@ -2096,37 +2177,36 @@ export type SuggestRoutineResponses = {
 
 export type SuggestRoutineResponse = SuggestRoutineResponses[keyof SuggestRoutineResponses];
 
-export type GenerateRoutineSuggestionsData = {
+export type ReviewRoutineSuggestionsData = {
     body?: never;
     path?: never;
-    query: {
-        /**
-         * IANA time zone, e.g. `America/New_York`.
-         */
-        timezone: string;
-    };
-    url: '/scheduled-actions/suggestions/generate';
+    query?: never;
+    url: '/scheduled-actions/suggestions/review';
 };
 
-export type GenerateRoutineSuggestionsErrors = {
+export type ReviewRoutineSuggestionsErrors = {
     401: string;
     /**
-     * Routine suggestions are off for the caller
+     * Only a routines generation session may review
+     */
+    403: string;
+    /**
+     * Routine suggestions are off for the user
      */
     404: string;
     500: string;
 };
 
-export type GenerateRoutineSuggestionsError = GenerateRoutineSuggestionsErrors[keyof GenerateRoutineSuggestionsErrors];
+export type ReviewRoutineSuggestionsError = ReviewRoutineSuggestionsErrors[keyof ReviewRoutineSuggestionsErrors];
 
-export type GenerateRoutineSuggestionsResponses = {
+export type ReviewRoutineSuggestionsResponses = {
     /**
-     * The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing
+     * Every suggestion AI made for the user, open or not
      */
-    200: RoutineSuggestions;
+    200: SuggestionReview;
 };
 
-export type GenerateRoutineSuggestionsResponse = GenerateRoutineSuggestionsResponses[keyof GenerateRoutineSuggestionsResponses];
+export type ReviewRoutineSuggestionsResponse = ReviewRoutineSuggestionsResponses[keyof ReviewRoutineSuggestionsResponses];
 
 export type DismissRoutineSuggestionData = {
     body?: never;
@@ -2159,6 +2239,39 @@ export type DismissRoutineSuggestionResponses = {
 };
 
 export type DismissRoutineSuggestionResponse = DismissRoutineSuggestionResponses[keyof DismissRoutineSuggestionResponses];
+
+export type RetireRoutineSuggestionData = {
+    body: RetireSuggestion;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/suggestions/{id}/retire';
+};
+
+export type RetireRoutineSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a routines generation session may retire
+     */
+    403: string;
+    500: string;
+};
+
+export type RetireRoutineSuggestionError = RetireRoutineSuggestionErrors[keyof RetireRoutineSuggestionErrors];
+
+export type RetireRoutineSuggestionResponses = {
+    /**
+     * Whether the suggestion was retired, and why not when it wasn't
+     */
+    200: SuggestOutcome;
+};
+
+export type RetireRoutineSuggestionResponse = RetireRoutineSuggestionResponses[keyof RetireRoutineSuggestionResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;
@@ -2538,7 +2651,13 @@ export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTem
 export type ListSuggestionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * IANA time zone, e.g. `America/New_York`: nightly generations run in
+         * the reader's night.
+         */
+        timezone?: string;
+    };
     url: '/suggestions';
 };
 
@@ -2594,6 +2713,38 @@ export type AddSuggestionResponses = {
 
 export type AddSuggestionResponse = AddSuggestionResponses[keyof AddSuggestionResponses];
 
+export type StartSuggestionGenerationData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/generate';
+};
+
+export type StartSuggestionGenerationErrors = {
+    401: string;
+    /**
+     * Neither suggestions nor routine suggestions are on for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type StartSuggestionGenerationError = StartSuggestionGenerationErrors[keyof StartSuggestionGenerationErrors];
+
+export type StartSuggestionGenerationResponses = {
+    /**
+     * The caller's onboarding generation started in the background: their suggestions and routine suggestions, as each is on for them. Later calls start nothing
+     */
+    200: GenerationStarted;
+};
+
+export type StartSuggestionGenerationResponse = StartSuggestionGenerationResponses[keyof StartSuggestionGenerationResponses];
+
 export type ReviewSuggestionsData = {
     body?: never;
     path?: never;
@@ -2624,6 +2775,34 @@ export type ReviewSuggestionsResponses = {
 };
 
 export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
+
+export type RecordSuggestionsSeenData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/seen';
+};
+
+export type RecordSuggestionsSeenErrors = {
+    401: string;
+    500: string;
+};
+
+export type RecordSuggestionsSeenError = RecordSuggestionsSeenErrors[keyof RecordSuggestionsSeenErrors];
+
+export type RecordSuggestionsSeenResponses = {
+    /**
+     * Recorded: with suggestions on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes
+     */
+    204: void;
+};
+
+export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];
 
 export type RewriteSuggestionData = {
     body: RewriteSuggestion;
