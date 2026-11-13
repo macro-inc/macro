@@ -141,11 +141,45 @@ fn the_block_is_appended_once_and_replaced_in_place() {
     assert!(links.linked_in(&added));
     assert!(!links.linked_in("## Why\n\nBecause."));
 
-    let stale = format!("Intro\n\n{BLOCK_START}\nold\n{BLOCK_END}\n\nOutro");
+    // This session's earlier block, with a stale source, is replaced in place.
+    let stale = format!(
+        "Intro\n\n{BLOCK_START}\nMacro agent session: {}\nSource (task): old\n{BLOCK_END}\n\nOutro",
+        links.session_url
+    );
     assert_eq!(
         links.applied_to(&stale),
         format!("Intro\n\n{block}\n\nOutro")
     );
+}
+
+#[test]
+fn other_text_and_other_sessions_blocks_are_kept() {
+    let session = session_with(TriggerOrigin::TaskAssigned {
+        by: person(),
+        task: "task-1".into(),
+    });
+    let links = PullRequestBacklinks::for_session(&session, APP);
+    let block = links.block();
+    let other = format!(
+        "{BLOCK_START}\nMacro agent session: https://macro.com/app/agent/other\nSource (task): https://macro.com/app/task/task-0\n{BLOCK_END}"
+    );
+    let cases = [
+        // Another session's provenance stays beside this one.
+        format!("Intro\n\n{other}"),
+        // A marker quoted in prose, before another block, is not a block.
+        format!("Writes a `{BLOCK_START}` block.\n\nMore text.\n\n{other}"),
+        // A marker alone on a line with no end, then another start.
+        format!("{BLOCK_START}\nkept\n{other}"),
+        // An end before any start.
+        format!("{BLOCK_END}\nText"),
+    ];
+    for description in cases {
+        assert_eq!(
+            links.applied_to(&description),
+            format!("{}\n\n{block}\n", description.trim_end()),
+            "{description}"
+        );
+    }
 }
 
 #[test]

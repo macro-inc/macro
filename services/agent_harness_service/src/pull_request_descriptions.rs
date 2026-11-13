@@ -12,6 +12,7 @@ use agent_session::domain::pull_request_backlinks::{
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::LinkedGithubTokens;
 use reqwest::StatusCode;
+use tracing::Instrument;
 
 #[cfg(test)]
 mod test;
@@ -52,6 +53,7 @@ impl GithubPullRequestDescriptions {
         })
     }
 
+    #[tracing::instrument(name = "github.linked_token", skip_all, err)]
     async fn token(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -93,6 +95,7 @@ impl GithubPullRequestDescriptions {
             .await
             .map_err(|error| PullRequestDescriptionError::Upstream(error.to_string()))?;
         let status = response.status();
+        tracing::Span::current().record("http.response.status_code", status.as_u16());
         if status.is_success() {
             return Ok(response);
         }
@@ -121,16 +124,25 @@ impl PullRequestDescriptions for GithubPullRequestDescriptions {
         pull_request: &'a PullRequestNumber,
     ) -> Pin<Box<dyn Future<Output = Result<String, PullRequestDescriptionError>> + Send + 'a>>
     {
-        Box::pin(async move {
-            let token = self.token(owner).await?;
-            let response =
-                Self::send(self.request(reqwest::Method::GET, &token, pull_request)).await?;
-            let description: Description = response
-                .json()
-                .await
-                .map_err(|error| PullRequestDescriptionError::Upstream(error.to_string()))?;
-            Ok(description.body.unwrap_or_default())
-        })
+        let span = tracing::info_span!(
+            "github.pull_request.read_description",
+            github.repository = %format!("{}/{}", pull_request.owner, pull_request.repo),
+            github.pull_request = pull_request.number,
+            http.response.status_code = tracing::field::Empty,
+        );
+        Box::pin(
+            async move {
+                let token = self.token(owner).await?;
+                let response =
+                    Self::send(self.request(reqwest::Method::GET, &token, pull_request)).await?;
+                let description: Description = response
+                    .json()
+                    .await
+                    .map_err(|error| PullRequestDescriptionError::Upstream(error.to_string()))?;
+                Ok(description.body.unwrap_or_default())
+            }
+            .instrument(span),
+        )
     }
 
     fn write<'a>(
@@ -139,16 +151,25 @@ impl PullRequestDescriptions for GithubPullRequestDescriptions {
         pull_request: &'a PullRequestNumber,
         description: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<(), PullRequestDescriptionError>> + Send + 'a>> {
-        Box::pin(async move {
-            let token = self.token(owner).await?;
-            Self::send(
-                self.request(reqwest::Method::PATCH, &token, pull_request)
-                    .json(&Description {
-                        body: Some(description.to_owned()),
-                    }),
-            )
-            .await?;
-            Ok(())
-        })
+        let span = tracing::info_span!(
+            "github.pull_request.write_description",
+            github.repository = %format!("{}/{}", pull_request.owner, pull_request.repo),
+            github.pull_request = pull_request.number,
+            http.response.status_code = tracing::field::Empty,
+        );
+        Box::pin(
+            async move {
+                let token = self.token(owner).await?;
+                Self::send(
+                    self.request(reqwest::Method::PATCH, &token, pull_request)
+                        .json(&Description {
+                            body: Some(description.to_owned()),
+                        }),
+                )
+                .await?;
+                Ok(())
+            }
+            .instrument(span),
+        )
     }
 }

@@ -106,8 +106,9 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - PR titles and bodies, commits, review replies, comments, and docs describe
   only the code. Never name people, customers, their companies or products,
   places, or support channels and tickets; state any reason in general terms.
-  Id-only provenance links (agent session, triggering channel message, task, or
-  routine) are allowed and expected in agent PRs. See the `git` skill's Privacy
+  Agent PRs carry id-only provenance links (agent session, and the channel
+  message, task, or routine that started it) in the block `set_pull_request`
+  writes; that is allowed. See the `git` skill's Privacy
   section; CI's `PR Privacy Check` enforces it.
 - Never `git stash`; it's shared across sessions.
 - Memory is context, not authority; verify against code.

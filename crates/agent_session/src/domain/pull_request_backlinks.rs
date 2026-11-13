@@ -72,9 +72,11 @@ pub struct PullRequestBacklinks {
 }
 
 impl PullRequestBacklinks {
-    /// The links for `session`, from what its origin recorded. A session whose
-    /// origin names nothing linkable falls back to the task it was linked to,
-    /// the channel message that opened it, and finally its own prompt.
+    /// The links for `session`, from what its origin recorded: a session a
+    /// person prompted directly is its own source. A session whose origin
+    /// names nothing linkable (dispatched by a tool, or not recorded) falls
+    /// back to the task it was linked to, the channel message that opened it,
+    /// and finally its own prompt.
     #[must_use]
     pub fn for_session(session: &AgentSession, app_url: &str) -> Self {
         let app = app_url.trim_end_matches('/');
@@ -141,15 +143,14 @@ impl PullRequestBacklinks {
         description.contains(&self.session_url) && description.contains(&self.source.url)
     }
 
-    /// `description` with the block in it: replacing an earlier block, or
-    /// appended after the rest of the text.
+    /// `description` with this session's block in it. A block of this
+    /// session's (markers alone on their lines) is replaced in place; any
+    /// other text, including another session's block or a marker quoted in
+    /// prose, is kept, and the block is appended after it.
     #[must_use]
     pub fn applied_to(&self, description: &str) -> String {
         let block = self.block();
-        if let Some(start) = description.find(BLOCK_START)
-            && let Some(end) = description[start..].find(BLOCK_END)
-        {
-            let end = start + end + BLOCK_END.len();
+        if let Some((start, end)) = self.own_block(description) {
             return format!("{}{block}{}", &description[..start], &description[end..]);
         }
         let text = description.trim_end();
@@ -158,6 +159,37 @@ impl PullRequestBacklinks {
         } else {
             format!("{text}\n\n{block}\n")
         }
+    }
+
+    /// The byte range of the last block in `description` that links this
+    /// session, from the start of its opening marker line to the end of its
+    /// closing marker.
+    fn own_block(&self, description: &str) -> Option<(usize, usize)> {
+        let mut lines = Vec::new();
+        let mut offset = 0;
+        for line in description.split_inclusive('\n') {
+            lines.push((offset, line.trim_end_matches(['\r', '\n'])));
+            offset += line.len();
+        }
+        let mut found = None;
+        for (index, (start, line)) in lines.iter().enumerate() {
+            if *line != BLOCK_START {
+                continue;
+            }
+            let Some((end, end_line)) = lines[index + 1..]
+                .iter()
+                .find(|(_, line)| *line == BLOCK_END || *line == BLOCK_START)
+            else {
+                break;
+            };
+            if *end_line != BLOCK_END {
+                continue;
+            }
+            if description[*start..*end].contains(&self.session_url) {
+                found = Some((*start, end + BLOCK_END.len()));
+            }
+        }
+        found
     }
 }
 
