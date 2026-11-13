@@ -2657,3 +2657,38 @@ async fn a_revocation_just_before_an_event_excludes_the_user_from_matching() {
         vec![vec![user_id(kept)]]
     );
 }
+
+/// An event no webhook's filters name skips audience resolution entirely.
+#[tokio::test]
+async fn an_event_no_webhook_names_resolves_no_audience() {
+    struct NobodyWants;
+    impl crate::domain::ports::WebhookInterest for NobodyWants {
+        type Err = std::convert::Infallible;
+        async fn any_webhook_names(&self, event_name: &str) -> Result<bool, Self::Err> {
+            assert_eq!(event_name, "document.updated");
+            Ok(false)
+        }
+    }
+    let access = MockAccessService::with_users(vec![user_id("macro|reader@example.com")]);
+    let repository = MockRepository::new(Vec::new(), Vec::new());
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default())
+        .with_interest(Arc::new(NobodyWants));
+    let event = Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
+        document_id: DOCUMENT_ID.to_string(),
+        owner: Owner::User(user_id("macro|reader@example.com")),
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+        document_name: Some("renamed".to_string()),
+        previous_project_id: None,
+        project_id: None,
+        file_type: None,
+        share_permission_updated: false,
+    }));
+
+    service.ingest_document_event(event).await.unwrap();
+
+    assert!(lock(&access.calls).is_empty(), "no accessor lookup");
+    assert!(lock(&repository.state).match_calls.is_empty());
+}

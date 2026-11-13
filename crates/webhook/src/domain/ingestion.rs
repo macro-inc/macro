@@ -11,7 +11,7 @@ mod test;
 use crate::domain::{
     events::WebhookTopicEvent,
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
-    ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
+    ports::{WebhookEventEnqueuer, WebhookInterest, WebhookRepo, WebhookWorkspaceResolver},
 };
 use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
@@ -186,6 +186,7 @@ pub struct WebhookEventIngestionServiceImpl<
     P = NoPreview,
     T = Unconfigured,
     G = Unconfigured,
+    I = AlwaysInterested,
 > {
     entity_access_service: Arc<A>,
     repository: R,
@@ -193,9 +194,12 @@ pub struct WebhookEventIngestionServiceImpl<
     preview: Arc<P>,
     teams: Option<Arc<T>>,
     github: Option<Arc<G>>,
+    interest: Arc<I>,
 }
 
-impl<A, R: Clone, Q: Clone, P, T, G> Clone for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
+impl<A, R: Clone, Q: Clone, P, T, G, I> Clone
+    for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
+{
     fn clone(&self) -> Self {
         Self {
             entity_access_service: self.entity_access_service.clone(),
@@ -204,7 +208,21 @@ impl<A, R: Clone, Q: Clone, P, T, G> Clone for WebhookEventIngestionServiceImpl<
             preview: self.preview.clone(),
             teams: self.teams.clone(),
             github: self.github.clone(),
+            interest: self.interest.clone(),
         }
+    }
+}
+
+/// A [`WebhookInterest`] that assumes some webhook may want every event, so
+/// every audience is resolved.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AlwaysInterested;
+
+impl WebhookInterest for AlwaysInterested {
+    type Err = std::convert::Infallible;
+
+    async fn any_webhook_names(&self, _event_name: &str) -> Result<bool, Self::Err> {
+        Ok(true)
     }
 }
 
@@ -266,17 +284,18 @@ impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
             preview: Arc::new(NoPreview),
             teams: None,
             github: None,
+            interest: Arc::new(AlwaysInterested),
         }
     }
 }
 
-impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I> {
     /// Evaluate the `public-event-stream` flag for webhook owners with
     /// `preview`.
     pub fn with_preview_flag<P2>(
         self,
         preview: Arc<P2>,
-    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P2, T, G> {
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P2, T, G, I> {
         WebhookEventIngestionServiceImpl {
             entity_access_service: self.entity_access_service,
             repository: self.repository,
@@ -284,6 +303,7 @@ impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
             preview,
             teams: self.teams,
             github: self.github,
+            interest: self.interest,
         }
     }
 
@@ -293,7 +313,7 @@ impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
         self,
         teams: Arc<T2>,
         github: Arc<G2>,
-    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P, T2, G2> {
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P, T2, G2, I> {
         WebhookEventIngestionServiceImpl {
             entity_access_service: self.entity_access_service,
             repository: self.repository,
@@ -301,11 +321,29 @@ impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G> {
             preview: self.preview,
             teams: Some(teams),
             github: Some(github),
+            interest: self.interest,
+        }
+    }
+
+    /// Skip events no webhook's filters name, asking `interest` before any
+    /// audience is resolved.
+    pub fn with_interest<I2>(
+        self,
+        interest: Arc<I2>,
+    ) -> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I2> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            preview: self.preview,
+            teams: self.teams,
+            github: self.github,
+            interest,
         }
     }
 }
 
-impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G>
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
@@ -313,6 +351,7 @@ where
     P: PreviewFlag,
     T: TeamDirectory,
     G: GithubClaims,
+    I: WebhookInterest,
 {
     /// Resolve the users that currently have access to an entity, uncached.
     #[tracing::instrument(skip(self), err)]
@@ -593,7 +632,7 @@ impl WorkspaceAudience {
     }
 }
 
-impl<A, R, Q, P, T, G> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G>
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
@@ -601,6 +640,7 @@ where
     P: PreviewFlag,
     T: TeamDirectory,
     G: GithubClaims,
+    I: WebhookInterest,
 {
     /// Normalize one event and enqueue it for every matching webhook its
     /// audience reaches.
@@ -611,6 +651,16 @@ where
         let Some((normalized, audience, stage)) = normalize_staged(event)? else {
             return Ok(());
         };
+        // Resolving an audience costs access lookups; an event no webhook
+        // names anywhere cannot match, whoever its audience is.
+        let wanted = self
+            .interest
+            .any_webhook_names(&normalized.event_name)
+            .await
+            .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
+        if !wanted {
+            return Ok(());
+        }
         self.resolve_audience_and_enqueue(normalized, stage, &audience)
             .await
     }
@@ -712,8 +762,8 @@ where
     }
 }
 
-impl<A, R, Q, P, T, G> WebhookEventIngestionService
-    for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G>
+impl<A, R, Q, P, T, G, I> WebhookEventIngestionService
+    for WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
@@ -721,6 +771,7 @@ where
     P: PreviewFlag,
     T: TeamDirectory,
     G: GithubClaims,
+    I: WebhookInterest,
 {
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(

@@ -774,3 +774,62 @@ async fn list_matching_event_fetches_family_and_star_wildcards_with_their_ids(
     assert_eq!(webhook_ids(&doc_2), vec!["wh_family", "wh_star_doc_2"]);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn any_webhook_names_finds_exact_family_and_star_filters_of_live_webhooks(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::WebhookInterest as _;
+
+    insert_webhook_for_matching(
+        &pool,
+        "wh_exact",
+        USER_ID,
+        vec![webhook_filter(&["message.posted"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_family",
+        USER_ID,
+        vec![webhook_filter(&["document.*"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_paused_star",
+        USER_ID,
+        vec![webhook_filter(&["*"], None)],
+        WebhookStatus::Paused,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool.clone());
+
+    assert!(repo.any_webhook_names("message.posted").await?);
+    assert!(repo.any_webhook_names("document.updated").await?);
+    assert!(
+        !repo.any_webhook_names("channel.created").await?,
+        "only a paused * names it"
+    );
+
+    insert_webhook_for_matching(
+        &pool,
+        "wh_star",
+        USER_ID,
+        vec![webhook_filter(&["*"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    assert!(repo.any_webhook_names("channel.created").await?);
+    Ok(())
+}

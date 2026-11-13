@@ -86,6 +86,21 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
+/// Whether any webhook could want an event, before its audience is resolved.
+pub trait WebhookInterest: Send + Sync + 'static {
+    /// Error.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Whether any active, valid webhook has a filter naming `event_name`
+    /// exactly, by its family wildcard (`document.*`), or as `*`, in any
+    /// workspace. `false` means no webhook can match the event, so its
+    /// audience need not be resolved.
+    fn any_webhook_names(
+        &self,
+        event_name: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
 /// Resolver that expands people into personal and team webhook workspace ids.
 pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
     /// Resolver error.

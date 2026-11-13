@@ -1097,9 +1097,10 @@ async fn run_server() -> anyhow::Result<()> {
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
-            webhook_repository,
+            webhook_repository.clone(),
             webhook_event_queue.clone(),
         )
+        .with_interest(Arc::new(webhook_repository))
         .with_preview_flag(Arc::new(
             event_stream::outbound::preview_flag::FeatureFlagPreview::new(flags.clone()),
         ))
