@@ -9,7 +9,17 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Fetch the pinned advisory database
+      run: |
+        set -euo pipefail
+        db=target/advisory-dbs/advisory-db-3157b0e258782691
+        git init -q "$db"
+        git -C "$db" fetch -q --depth 1 https://github.com/rustsec/advisory-db "$(cat .github/advisory-db-rev)"
+        git -C "$db" checkout -q --detach FETCH_HEAD
+        echo "advisory-db at $(git -C "$db" log -1 --format='%h %cI')"
+      shell: bash
     - name: cargo deny
       uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
       with:
         manifest-path: Cargo.toml
+        command-arguments: '--disable-fetch'

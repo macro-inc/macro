@@ -63,8 +63,13 @@ feature-depth = 1
 # More documentation for the advisories section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
 [advisories]
-# The path where the advisory databases are cloned/fetched into
-#db-path = "$CARGO_HOME/advisory-dbs"
+# The path where the advisory databases are cloned/fetched into, relative to
+# the repository root. CI clones the advisory-db commit in
+# `.github/advisory-db-rev` here and runs `cargo deny check --disable-fetch`,
+# so a newly published advisory fails only the daily bump PR
+# (`advisory_db_bump.yml`), not every PR. A local `cargo deny check` fetches
+# the latest database into the same directory.
+db-path = "target/advisory-dbs"
 # The url(s) of the advisory databases to use
 #db-urls = ["https://github.com/rustsec/advisory-db"]
 # A list of advisory IDs to ignore. Note that ignored advisories will still
