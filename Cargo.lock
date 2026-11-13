@@ -18241,11 +18241,8 @@ name = "search_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "macro_tower_layers",
  "models_search",
  "reqwest 0.13.4",
- "thiserror 2.0.18",
- "tracing",
  "workspace-hack",
 ]
 
