@@ -290,3 +290,128 @@ fn contains_field(value: &Value, field: &str) -> bool {
         _ => false,
     }
 }
+
+mod exposure {
+    use super::*;
+    use macro_event_broker::exposure::{Audience, EntityType, Exposure, PublicEvent, Stage};
+
+    fn call_id() -> Uuid {
+        Uuid::parse_str(CALL_ID).unwrap()
+    }
+
+    fn channel_id() -> Uuid {
+        Uuid::parse_str(CHANNEL_ID).unwrap()
+    }
+
+    fn actor() -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()
+    }
+
+    fn public(event: &CallTopicEvent) -> PublicEvent<'_, CallRecordPublicEvent> {
+        match event.exposure().unwrap() {
+            Exposure::Public(public) => public,
+            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        }
+    }
+
+    fn deleted(channel_id: Option<Uuid>) -> CallTopicEvent {
+        CallTopicEvent::RecordDeleted(CallRecordDeletedMetadata {
+            call_id: call_id(),
+            channel_id,
+            actor_user_id: Some(actor()),
+        })
+    }
+
+    #[test]
+    fn record_updates_and_imports_reach_the_call_in_preview() {
+        let events = [
+            CallTopicEvent::RecordUpdated(CallRecordUpdatedMetadata {
+                call_id: call_id(),
+                channel_id: Some(channel_id()),
+                actor_user_id: Some(actor()),
+                custom_name: Some("Standup".to_owned()),
+                share_with_team: Some(true),
+            }),
+            CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+                call_id: call_id(),
+                owner: actor(),
+            }),
+        ];
+        for event in &events {
+            let public = public(event);
+            assert_eq!(
+                public.audience,
+                Audience::Entity {
+                    entity_type: EntityType::Call,
+                    entity_id: CALL_ID.to_owned(),
+                }
+            );
+            assert_eq!(public.entity.entity_id, CALL_ID);
+            assert_eq!(public.stage, Stage::Preview);
+            assert_eq!(
+                serde_json::to_value(public.payload.as_ref()).unwrap()["event_type"],
+                public.name
+            );
+        }
+    }
+
+    #[test]
+    fn record_updated_payload_names_what_changed_without_values() {
+        let event = CallTopicEvent::RecordUpdated(CallRecordUpdatedMetadata {
+            call_id: call_id(),
+            channel_id: None,
+            actor_user_id: Some(actor()),
+            custom_name: Some("Standup".to_owned()),
+            share_with_team: Some(false),
+        });
+        assert_eq!(
+            serde_json::to_value(public(&event).payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "call.record_updated",
+                "metadata": {
+                    "call_id": CALL_ID,
+                    "channel_id": null,
+                    "actor_user_id": "macro|owner@example.com",
+                    "changes": ["name", "team_sharing"],
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn a_deleted_record_reaches_its_channel_or_nobody() {
+        let event = deleted(Some(channel_id()));
+        let public = public(&event);
+        assert_eq!(
+            public.audience,
+            Audience::Entity {
+                entity_type: EntityType::Channel,
+                entity_id: CHANNEL_ID.to_owned(),
+            }
+        );
+        assert_eq!(public.entity.entity_type.as_str(), "call");
+        assert_eq!(
+            serde_json::to_value(public.payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "call.record_deleted",
+                "metadata": {
+                    "call_id": CALL_ID,
+                    "channel_id": CHANNEL_ID,
+                    "actor_user_id": "macro|owner@example.com",
+                },
+            })
+        );
+
+        assert!(matches!(
+            deleted(None).exposure().unwrap(),
+            Exposure::Internal(_)
+        ));
+    }
+
+    #[cfg(feature = "inbound")]
+    #[test]
+    fn public_payload_has_a_schema() {
+        use utoipa::ToSchema as _;
+        assert_eq!(CallRecordPublicEvent::name(), "CallRecordPublicEvent");
+    }
+}
