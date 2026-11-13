@@ -52,6 +52,8 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
             .system_prompt()
             .contains("present them with `execution.views.present`")
     );
+    // A routine's token carries no channel mention, so replies never schedule one.
+    assert!(!tools.system_prompt().contains("macro.routines.create"));
 }
 
 #[test]
