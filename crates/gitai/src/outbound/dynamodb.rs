@@ -3,6 +3,7 @@
 //! | Item | `pk` | `sk` | `gsi1pk` / `gsi1sk` |
 //! | --- | --- | --- | --- |
 //! | Device credential | `CREDENTIAL#<sha256 of secret>` | `CREDENTIAL` | `CREDENTIALS` / `<id>` |
+//! | Credential by id | `CREDENTIAL_ID#<id>` | `CREDENTIAL_ID` (`credential_pk`) | |
 //! | Commit | `COMMIT#<sha>` | `COMMIT` | |
 //! | Session | `SESSION#<session id>` | `SESSION` | `EXTERNAL_SESSION#<agent's id>` / `SESSION#<session id>` |
 //! | Transcript chunk | `SESSION#<session id>` | `CHUNK#<first ts, 10 digits>#<chunk id>` | |
@@ -34,6 +35,9 @@ const GSI1PK: &str = "gsi1pk";
 const GSI1SK: &str = "gsi1sk";
 
 const CREDENTIAL_SK: &str = "CREDENTIAL";
+const CREDENTIAL_ID_SK: &str = "CREDENTIAL_ID";
+/// The credential item a credential-by-id item points at.
+const CREDENTIAL_PK_ATTRIBUTE: &str = "credential_pk";
 const CREDENTIALS_GSI1PK: &str = "CREDENTIALS";
 const COMMIT_SK: &str = "COMMIT";
 const SESSION_SK: &str = "SESSION";
@@ -118,6 +122,10 @@ fn credential_pk(hash: &CredentialHash) -> String {
     format!("CREDENTIAL#{}", hash.as_str())
 }
 
+fn credential_id_pk(id: CredentialId) -> String {
+    format!("CREDENTIAL_ID#{id}")
+}
+
 fn session_pk(session_id: &str) -> String {
     format!("SESSION#{session_id}")
 }
@@ -136,29 +144,24 @@ impl DynamoIndex {
         Self { client, table }
     }
 
-    /// The table key of the credential with this id, from `gsi1`.
+    /// The table key of the credential with this id, read consistently from
+    /// its credential-by-id item, so a revoke right after a mint finds it.
     async fn credential_key(
         &self,
         id: CredentialId,
     ) -> Result<Option<AttributeValue>, DynamoIndexError> {
         let output = self
             .client
-            .query()
+            .get_item()
             .table_name(&self.table)
-            .index_name(GSI1)
-            .key_condition_expression("#gpk = :gpk AND #gsk = :gsk")
-            .expression_attribute_names("#gpk", GSI1PK)
-            .expression_attribute_names("#gsk", GSI1SK)
-            .expression_attribute_values(":gpk", s(CREDENTIALS_GSI1PK))
-            .expression_attribute_values(":gsk", s(id.to_string()))
+            .key(PK, s(credential_id_pk(id)))
+            .key(SK, s(CREDENTIAL_ID_SK))
+            .consistent_read(true)
             .send()
             .await?;
         Ok(output
-            .items
-            .unwrap_or_default()
-            .into_iter()
-            .next()
-            .and_then(|mut item| item.remove(PK)))
+            .item
+            .and_then(|mut item| item.remove(CREDENTIAL_PK_ATTRIBUTE)))
     }
 
     /// The update adding a token change to a session's counters; `None` when
@@ -253,11 +256,24 @@ impl IndexStore for DynamoIndex {
         item.insert(SK.to_owned(), s(CREDENTIAL_SK));
         item.insert(GSI1PK.to_owned(), s(CREDENTIALS_GSI1PK));
         item.insert(GSI1SK.to_owned(), s(credential.info.id.to_string()));
-        self.client
-            .put_item()
+        let credential_item = Put::builder()
             .table_name(&self.table)
             .set_item(Some(item))
             .condition_expression("attribute_not_exists(pk)")
+            .build()
+            .map_err(build_error)?;
+        let by_id = Put::builder()
+            .table_name(&self.table)
+            .item(PK, s(credential_id_pk(credential.info.id)))
+            .item(SK, s(CREDENTIAL_ID_SK))
+            .item(CREDENTIAL_PK_ATTRIBUTE, s(credential_pk(&credential.hash)))
+            .condition_expression("attribute_not_exists(pk)")
+            .build()
+            .map_err(build_error)?;
+        self.client
+            .transact_write_items()
+            .transact_items(TransactWriteItem::builder().put(credential_item).build())
+            .transact_items(TransactWriteItem::builder().put(by_id).build())
             .send()
             .await?;
         Ok(())
@@ -337,7 +353,7 @@ impl IndexStore for DynamoIndex {
             .await;
         match result {
             Ok(_) => Ok(true),
-            // Found through gsi1, so a false condition means already revoked.
+            // The credential exists, so a false condition means already revoked.
             Err(error) if is_condition_failure(&error) => Ok(true),
             Err(error) => Err(error.into()),
         }

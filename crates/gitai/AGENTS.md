@@ -100,6 +100,7 @@ Table (string `pk`/`sk`, GSI `gsi1` on `gsi1pk`/`gsi1sk`, TTL on
 | Item | `pk` | `sk` | `gsi1pk` / `gsi1sk` | Attributes |
 | --- | --- | --- | --- | --- |
 | Credential | `CREDENTIAL#<sha256>` | `CREDENTIAL` | `CREDENTIALS` / `<id>` | `id`, `email`, `hostname`, `created_at`, `last_used_at`, `revoked_at` |
+| Credential by id | `CREDENTIAL_ID#<id>` | `CREDENTIAL_ID` | | `credential_pk` (written with the credential in one transaction; revoke reads it consistently) |
 | Commit | `COMMIT#<sha>` | `COMMIT` | | `CommitRecord` fields (no note text), `session_ids` |
 | Session | `SESSION#<id>` | `SESSION` | `EXTERNAL_SESSION#<agent id>` / `SESSION#<id>` | `tool`, `model`, `repository`, `author`, `hostname`, `transcript_prefix`, `first_seen`, `last_seen`, `event_count`, `*_tokens`, `cost_micro_usd`, `commit_shas` (SS) |
 | Transcript chunk | `SESSION#<id>` | `CHUNK#<first ts>#<chunk id>` | | `s3_key`, `event_count`, `first_ts`, `last_ts` |
