@@ -69,3 +69,13 @@ function nextPeriod(bucket: SpendBucket, start: Date): Date {
 export function spendTotal(bars: readonly SpendBar[]): number {
   return bars.reduce((sum, bar) => sum + bar.costUsd, 0);
 }
+
+/** Pixels each bar needs for its label to stay readable. */
+const BAR_WIDTH_PX = 26;
+const MIN_BARS = 6;
+
+/** The latest bars that fit `width`, all of them when they do. */
+export function fittingBars(bars: SpendBar[], width: number): SpendBar[] {
+  const fit = Math.max(MIN_BARS, Math.floor(width / BAR_WIDTH_PX));
+  return bars.length > fit ? bars.slice(-fit) : bars;
+}

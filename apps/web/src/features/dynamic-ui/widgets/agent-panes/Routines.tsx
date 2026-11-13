@@ -107,7 +107,10 @@ function routineRow(routine: AgentRoutineSummary): RoutineRow {
     name: routine.name,
     description: next,
     createdAt: '',
-    when: next ?? '',
+    when:
+      routine.triggerKind === 'events'
+        ? t('dynamicUi.onEvents')
+        : t('dynamicUi.onSchedule'),
     whenKind,
     does: '',
     group: routine.triggerKind === 'events' ? 'activity' : 'schedule',

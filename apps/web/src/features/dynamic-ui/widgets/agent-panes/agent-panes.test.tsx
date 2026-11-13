@@ -167,6 +167,19 @@ describe('spend pane', () => {
     );
   });
 
+  it('never rounds a fraction of a cent down to nothing', async () => {
+    fixture.fetch.mockResolvedValue(
+      ok({
+        bucket: 'day',
+        from: '2026-11-12T00:00:00Z',
+        until: '2026-11-13T00:00:00Z',
+        buckets: [{ start: '2026-11-12T00:00:00Z', costUsd: 0.0009 }],
+      })
+    );
+    mount(() => <Spend agentId={AGENT} />);
+    expect(await screen.findByText('Under $0.01')).toBeTruthy();
+  });
+
   it('says No access for a viewer the server refuses', async () => {
     fixture.fetch.mockResolvedValue(notFound);
     mount(() => <Spend agentId={AGENT} bucket="week" />);

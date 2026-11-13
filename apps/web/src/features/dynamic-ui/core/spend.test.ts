@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { periodStart, spendBars, spendTotal } from './spend';
+import { fittingBars, periodStart, spendBars, spendTotal } from './spend';
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
@@ -55,5 +55,23 @@ describe('spendBars', () => {
     expect(spendBars('day', 'not a date', '2026-11-13T00:00:00Z', [])).toEqual(
       []
     );
+  });
+});
+
+describe('fittingBars', () => {
+  const bars = Array.from({ length: 30 }, (_, i) => ({
+    start: new Date(Date.UTC(2026, 9, 15 + i)),
+    costUsd: i,
+  }));
+
+  it('keeps the latest periods that fit a narrow pane', () => {
+    const shown = fittingBars(bars, 320);
+    expect(shown).toHaveLength(12);
+    expect(shown.at(-1)).toBe(bars.at(-1));
+  });
+
+  it('keeps every bar in a wide pane, and a few in the narrowest', () => {
+    expect(fittingBars(bars, 1200)).toHaveLength(30);
+    expect(fittingBars(bars, 60)).toHaveLength(6);
   });
 });

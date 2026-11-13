@@ -8,7 +8,12 @@ import { useQuery } from '@tanstack/solid-query';
 import { Tabs } from '@ui';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import { type SpendBar, spendBars, spendTotal } from '../../core/spend';
+import {
+  fittingBars,
+  type SpendBar,
+  spendBars,
+  spendTotal,
+} from '../../core/spend';
 import type { SpendBucket } from '../../generated/types';
 import { agentSpendQueryOptions } from '../../queries/agent-panes';
 import type { WidgetOf } from '../../view';
@@ -24,6 +29,7 @@ import {
 export type SpendProps = Omit<WidgetOf<'spend'>, 'type'>;
 
 const SERIES = 'Cost';
+const MIN_SHOWN_USD = 0.01;
 
 /**
  * An agent's AI cost as bars, one per day, week, month or year, drawn like a
@@ -115,6 +121,9 @@ function Chart(props: {
   const [element, setElement] = createSignal<HTMLElement>();
   const size = createElementSize(element);
   const width = () => Math.max(180, size.width || 320);
+  // A narrow pane (a phone, a small grid cell) shows the latest periods that
+  // fit, so every bar keeps a readable label.
+  const shown = createMemo(() => fittingBars(props.bars, width()));
   const money = () =>
     new Intl.NumberFormat(formatLocale(), {
       style: 'currency',
@@ -122,16 +131,24 @@ function Chart(props: {
       maximumFractionDigits: 2,
     });
   const label = (start: Date) => periodLabel(props.bucket, start);
+  // Agent spend is often fractions of a cent; never round a cost to $0.00.
+  const totalLabel = () => {
+    const total = spendTotal(shown());
+    return total > 0 && total < MIN_SHOWN_USD
+      ? t('dynamicUi.underCent', { value: money().format(MIN_SHOWN_USD) })
+      : money().format(total);
+  };
   const data = createMemo<QueryChartData>(() => ({
     mark: 'bar',
     config: { x: 'period', y: [SERIES] },
     stack: false,
     title: t('dynamicUi.spend'),
-    scale: 'category',
-    categories: props.bars.map((bar) => label(bar.start)),
+    // Periods read left to right, as columns.
+    scale: 'date',
+    categories: shown().map((bar) => label(bar.start)),
     series: [SERIES],
-    points: props.bars.map((bar) => ({
-      x: label(bar.start),
+    points: shown().map((bar) => ({
+      x: bar.start,
       label: label(bar.start),
       series: SERIES,
       value: bar.costUsd,
@@ -148,14 +165,12 @@ function Chart(props: {
             : 'text-2xl font-medium tabular-nums text-ink'
         }
       >
-        {money().format(spendTotal(props.bars))}
+        {totalLabel()}
       </div>
       <PlotChart
         data={data()}
         width={width()}
-        label={t('dynamicUi.spendChart', {
-          total: money().format(spendTotal(props.bars)),
-        })}
+        label={t('dynamicUi.spendChart', { total: totalLabel() })}
       />
     </div>
   );
