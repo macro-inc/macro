@@ -405,7 +405,7 @@ where
     async fn installation_workspaces(
         &self,
         installation_id: &str,
-    ) -> Result<Vec<String>, WebhookEventIngestionError> {
+    ) -> Result<(Vec<String>, Vec<String>), WebhookEventIngestionError> {
         let (Some(teams), Some(github)) = (&self.teams, &self.github) else {
             return Err(WebhookEventIngestionError::UnsupportedAudience(
                 "GitHub installation",
@@ -424,13 +424,14 @@ where
         candidates.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
         candidates.dedup();
 
-        let mut workspaces: Vec<String> = owners.teams.iter().map(ToString::to_string).collect();
         let claimants = github
             .claimants(&candidates, installation_id)
             .await
             .map_err(directory_error)?;
-        workspaces.extend(claimants.iter().map(ToString::to_string));
-        Ok(workspaces)
+        Ok((
+            claimants.iter().map(ToString::to_string).collect(),
+            owners.teams.iter().map(ToString::to_string).collect(),
+        ))
     }
 
     /// The explicit accessors whose access level is at least `min_level`:
@@ -472,6 +473,7 @@ where
         event: NormalizedWebhookEvent,
         stage: Stage,
         workspace_ids: Vec<String>,
+        claim_gates: &[ClaimGate],
     ) -> Result<(), WebhookEventIngestionError> {
         let candidates = self
             .repository
@@ -483,8 +485,45 @@ where
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
         let webhooks = self.admitted_webhooks(candidates, &event, stage).await;
+        let webhooks = self.claim_gated(webhooks, claim_gates).await?;
         tracing::Span::current().record("match_count", webhooks.len());
         self.enqueue_all(webhooks, event).await
+    }
+
+    /// Drop webhooks in an installation's owning team workspaces whose
+    /// creator holds no claim on it (one batched claim query per gate).
+    async fn claim_gated(
+        &self,
+        webhooks: Vec<crate::domain::models::Webhook>,
+        claim_gates: &[ClaimGate],
+    ) -> Result<Vec<crate::domain::models::Webhook>, WebhookEventIngestionError> {
+        let Some(github) = &self.github else {
+            return Ok(webhooks);
+        };
+        let mut admitted = webhooks;
+        for gate in claim_gates {
+            let creators: Vec<MacroUserIdStr<'static>> = admitted
+                .iter()
+                .filter(|webhook| gate.team_workspaces.contains(&webhook.workspace_id))
+                .filter_map(|webhook| {
+                    MacroUserIdStr::try_from(webhook.created_by_user_id.clone()).ok()
+                })
+                .collect();
+            if creators.is_empty() {
+                continue;
+            }
+            let claimants = github
+                .claimants(&creators, &gate.installation_id)
+                .await
+                .map_err(directory_error)?;
+            admitted.retain(|webhook| {
+                !gate.team_workspaces.contains(&webhook.workspace_id)
+                    || claimants
+                        .iter()
+                        .any(|claimant| claimant.as_ref() == webhook.created_by_user_id)
+            });
+        }
+        Ok(admitted)
     }
 
     /// The webhooks whose filters accept the event once the owner's flag is
@@ -684,6 +723,7 @@ where
         audience: &Audience,
     ) -> Result<(), WebhookEventIngestionError> {
         let mut workspaces = WorkspaceAudience::default();
+        let mut claim_gates = Vec::new();
         for member in audience_members(audience) {
             match member {
                 Audience::Entity {
@@ -736,9 +776,14 @@ where
                     }
                 }
                 Audience::GithubInstallation { installation_id } => {
-                    workspaces
-                        .exact
-                        .extend(self.installation_workspaces(installation_id).await?);
+                    let (claimant_workspaces, owning_teams) =
+                        self.installation_workspaces(installation_id).await?;
+                    workspaces.exact.extend(claimant_workspaces);
+                    workspaces.exact.extend(owning_teams.iter().cloned());
+                    claim_gates.push(ClaimGate {
+                        installation_id: installation_id.clone(),
+                        team_workspaces: owning_teams,
+                    });
                 }
                 Audience::Any(_) => {
                     return Err(WebhookEventIngestionError::UnsupportedAudience(
@@ -760,8 +805,16 @@ where
         workspace_ids.extend(workspaces.exact);
         tracing::Span::current().record("workspace_count", workspace_ids.len());
 
-        self.match_and_enqueue(event, stage, workspace_ids).await
+        self.match_and_enqueue(event, stage, workspace_ids, &claim_gates)
+            .await
     }
+}
+
+/// Webhooks in an installation's owning team workspaces reach the event only
+/// when their creator holds a claim on it, as on the stream.
+struct ClaimGate {
+    installation_id: String,
+    team_workspaces: Vec<String>,
 }
 
 impl<A, R, Q, P, T, G, I> WebhookEventIngestionService

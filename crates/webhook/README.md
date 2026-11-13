@@ -183,8 +183,8 @@ workspace; an admin-only team event (invites) matches only the personal
 workspaces of the team's current admins and owners, never the team workspace,
 whose webhook creator need not be an admin. A GitHub installation's events
 match the personal workspaces of the users who hold a claim on it (its user
-and team owners with a linked GitHub account, the rule routines use) plus the
-workspaces of the teams that own it.
+and team owners with a linked GitHub account, the rule routines use) and the
+webhooks of the owning teams' workspaces whose creator holds such a claim.
 
 ### Filter semantics
 

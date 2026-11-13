@@ -2617,6 +2617,48 @@ mod team_and_installation_audiences {
         );
     }
 
+    /// A team webhook gets an installation's events only if its creator holds
+    /// a claim (as on the stream), not merely because the team owns it.
+    #[tokio::test]
+    async fn an_owning_teams_webhook_needs_a_claimant_creator() {
+        let directories = Arc::new(Directories::default());
+        *lock(&directories.members) = vec![
+            (user_id(CLAIMANT), TeamRole::Member),
+            (user_id(MEMBER), TeamRole::Member),
+        ];
+        *lock(&directories.claimants) = vec![CLAIMANT.to_string()];
+        let mut by_claimant = webhook("wh_by_claimant", &TEAM.to_string());
+        by_claimant.created_by_user_id = CLAIMANT.to_string();
+        let mut by_member = webhook("wh_by_member", &TEAM.to_string());
+        by_member.created_by_user_id = MEMBER.to_string();
+        let repository = MockRepository::new(Vec::new(), vec![by_claimant, by_member]);
+        let enqueuer = MockEnqueuer::default();
+        let service = service(
+            MockAccessService::with_users(Vec::new()),
+            repository,
+            enqueuer.clone(),
+        )
+        .with_audience_directories(directories.clone(), directories.clone());
+
+        service
+            .resolve_audience_and_enqueue(
+                event("github_webhook.received"),
+                Stage::Stable,
+                &Audience::GithubInstallation {
+                    installation_id: INSTALLATION.to_string(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let enqueued: Vec<String> = lock(&enqueuer.state)
+            .attempted_messages
+            .iter()
+            .map(|message| message.webhook_id.clone())
+            .collect();
+        assert_eq!(enqueued, vec!["wh_by_claimant".to_string()]);
+    }
+
     #[tokio::test]
     async fn without_directories_these_audiences_stay_unsupported() {
         let service = service(
