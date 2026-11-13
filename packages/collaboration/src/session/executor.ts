@@ -533,9 +533,13 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     if (!(flags & (Flag.View | Flag.Io | Flag.NeedPeerIds | Flag.Error)))
       return;
     const out = decodeOutput(this.session.takeOutput());
-    // A follow-up failure reports only the View flag, so bind on View outputs as well.
+    // Healthy metadata echoes must reach the sink without another native call.
+    // Follow-up failures carry View without Error, so inspect their actual carrier.
     if (
-      flags & (Flag.View | Flag.Error) &&
+      (Boolean(flags & Flag.Error) ||
+        out.viewEffects.some(
+          (effect) => effect.kind === 6 && effect.code === 10
+        )) &&
       'takeCodeTokenFailure' in this.session
     )
       bindCodeTokenCauses(this.session, out.viewEffects);

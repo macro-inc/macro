@@ -109,7 +109,7 @@ function reportBindingBreak(
 
 /**
  * Take the latest call's recorded code tokenizer throws and put each original value on the
- * error effect of THIS decoded output that reported it. Call once per output, right after
+ * error effect of THIS decoded output that reported it. Call only for a failure carrier, right after
  * takeOutput and before any other session call: the next call retires untaken values.
  */
 export function bindCodeTokenCauses(

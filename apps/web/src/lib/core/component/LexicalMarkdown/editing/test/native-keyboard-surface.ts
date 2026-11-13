@@ -17,6 +17,10 @@ import {
   mountSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
+import {
+  type NativeCodeTokenProvider,
+  NativeEnterDispatcher,
+} from '@macro-inc/lexical-wasm-view/view/native-enter';
 import { NOOP_SPAN } from '@macro-inc/observability';
 import * as native from '../../../../document-session/wasm/document_session_wasm.js';
 
@@ -102,8 +106,17 @@ export function nativeKeyboardSurface(withCommands = true) {
 
 /** Public production mount, with only its existing host hook supplied by controls. */
 export function nativeAcknowledgementSurface(
-  beforeConsume?: (session: native.EditorSession, flags: number) => void
+  beforeConsume?: (session: native.EditorSession, flags: number) => void,
+  options?: {
+    codeTokens?: { provider: NativeCodeTokenProvider; profile: string };
+    primeEcho?: boolean;
+  }
 ) {
+  const provider = options?.codeTokens
+    ? NativeEnterDispatcher.forModule(native).fenceCodeTokenProvider(
+        options.codeTokens.provider
+      )
+    : undefined;
   const root = document.createElement('div');
   document.body.append(root);
   const owner = crypto.randomUUID();
@@ -148,7 +161,11 @@ export function nativeAcknowledgementSurface(
           }),
           now,
           wall,
-          'native-ack-controls'
+          'native-ack-controls',
+          undefined,
+          undefined,
+          provider,
+          options?.codeTokens?.profile
         );
         return actual;
       },
@@ -192,13 +209,15 @@ export function nativeAcknowledgementSurface(
   if (!leaf) throw new Error('Missing actual native text');
   // The first view edit establishes actual view ownership and may emit a real
   // selection Diff. Settle that genuine packet before testing logical-zero echoes.
-  for (const text of ['aa', 'a'])
-    runtime.port.textFromView({
-      key: leaf.key,
-      text,
-      anchorOffset: text.length,
-      focusOffset: text.length,
-    });
+  if (options?.primeEcho !== false) {
+    for (const text of ['aa', 'a'])
+      runtime.port.textFromView({
+        key: leaf.key,
+        text,
+        anchorOffset: text.length,
+        focusOffset: text.length,
+      });
+  }
 
   return {
     ...runtime,
