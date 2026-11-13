@@ -1,0 +1,51 @@
+tooling/xtask/crates/xtask_local/src/local/stack.rs
+  s_8c3721bf3caccf::t_38270172f0ca0a 412
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_8c3721bf3caccf::t_de3120c5727b31 300-302
+  s_8c3721bf3caccf::t_b72bf32a13a841 571-573
+  s_8c3721bf3caccf::t_e1b8a06502c308 18,303-315,325,328-329,333,574-590,594-623,629,631-632,635,640-641
+tooling/xtask/crates/xtask_local/src/local/computers/test.rs
+  s_8c3721bf3caccf::t_de3120c5727b31 505,507-509
+  s_8c3721bf3caccf::t_225bd3a0433d43 465-504,506,510
+docs/development/running-locally.md
+  s_8c3721bf3caccf::t_9fd5cc457ea3bc 724-733
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build/test.rs
+  s_8c3721bf3caccf::t_225bd3a0433d43 95-116
+  s_8c3721bf3caccf::t_2d94c1dec7693e 6,25,80,93-94
+nix/macro-box/AGENTS.md
+  s_8c3721bf3caccf::t_9fd5cc457ea3bc 47-55
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_8c3721bf3caccf::t_de3120c5727b31 1041
+  s_8c3721bf3caccf::t_37f08408628cc6 401,531,1023,1038-1040,1042-1045,1047-1058,1094-1115,1138,1161-1162
+  s_8c3721bf3caccf::t_38270172f0ca0a 672,693-701,709,716-725,736,751-754,762,770,877-880,888,925
+  s_8c3721bf3caccf::t_f2673368ef14d1 1000-1012
+  s_8c3721bf3caccf::t_b72bf32a13a841 961-962,969,986,1875
+tooling/xtask/crates/xtask_local/src/local/build.rs
+  s_8c3721bf3caccf::t_b72bf32a13a841 19,31-33,47-53
+tooling/xtask/crates/xtask_local/src/local/build/cargo_build.rs
+  s_bb9c9ff941d3b2::t_3ed6bf632cad93 14,49-58,63-64,204-212,215-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0c874d2c04970d967c3faac67139f0f299af1c30",
+  "prompts": {},
+  "sessions": {
+    "s_8c3721bf3caccf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fc28a7b-3361-4350-a707-88668366a4cb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_bb9c9ff941d3b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86f3133a-b6b1-496a-85f4-df4edc4be011",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
