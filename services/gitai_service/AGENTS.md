@@ -87,10 +87,10 @@ sets `GITAI_SHARED_KEY`.
 
 ## Gotchas
 
-- `.github/services-config.json` has `bootstrap_pending` until a person creates
-  the Doppler `dev`/`prd` values, deploys `doppler-projects`, sets
-  `doppler:dopplerToken` (secure) in both `Pulumi.<stack>.yaml` files of
-  `infra/stacks/gitai-service`, and runs the first deploy.
+- `.github/services-config.json` has `bootstrap_pending` until a person deploys
+  `doppler-projects`, sets the Doppler values, commits `doppler:dopplerToken`
+  (secure) in both `Pulumi.<stack>.yaml` files of `infra/stacks/gitai-service`,
+  and runs the first deploy; see the runbook.
 - The ALB forwards `/gitai/...` unchanged, so routes are mounted twice.
 
 ## Related
