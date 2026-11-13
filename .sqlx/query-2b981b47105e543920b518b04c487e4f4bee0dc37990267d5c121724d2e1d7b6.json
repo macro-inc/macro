@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE routine_suggestion SET retired_at = $3\n               WHERE id = $1 AND user_id = $2 AND dismissed_at IS NULL AND retired_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b981b47105e543920b518b04c487e4f4bee0dc37990267d5c121724d2e1d7b6"
+}
