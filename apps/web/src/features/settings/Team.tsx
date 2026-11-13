@@ -1,7 +1,10 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { enableAgentTeammates } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableMacroComputers,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -22,7 +25,16 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tabs, Tooltip } from '@ui';
+import type { TeamAgent } from '@service-auth/team-agents';
+import {
+  ActionDialogShell,
+  Button,
+  cn,
+  Dialog,
+  Panel,
+  Tabs,
+  Tooltip,
+} from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -42,6 +54,7 @@ import {
   TeamInviteLinkSection,
 } from './TeamInviteLinkSection';
 import { isTeamAdminOrOwner } from './teamMemberPermissions';
+import { AgentClaudeStep } from './views/agent-claude-step';
 import { InviteAgentPanel } from './views/invite-agent-panel';
 
 const emailSchema = z.string().email();
@@ -481,6 +494,14 @@ export function InviteToTeamDialog(props: {
   const [chosenKind, setChosenKind] = createSignal<InviteKind>('people');
   // A rollout or role change that revokes agents falls back to people.
   const kind = (): InviteKind => (canInviteAgents() ? chosenKind() : 'people');
+  // The agent just invited, whose new computer Bring your AI signs in to
+  // Claude. Claude sign-in sits behind the computers rollout.
+  const computersFlag = useFeatureFlag(enableMacroComputers);
+  const [invitedAgent, setInvitedAgent] = createSignal<TeamAgent>();
+  const agentInvited = (agent: TeamAgent) => {
+    if (computersFlag().enabled) setInvitedAgent(agent);
+    else close();
+  };
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
@@ -509,6 +530,7 @@ export function InviteToTeamDialog(props: {
     setInvites([EMPTY_INVITE]);
     setInviteErrors([]);
     setSent(undefined);
+    setInvitedAgent(undefined);
     setChosenKind('people');
     submission += 1;
     props.onClose();
@@ -554,83 +576,102 @@ export function InviteToTeamDialog(props: {
   );
 
   return (
-    <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
-      <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-        <Panel.Header class="px-3 gap-2">
-          <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          </Dialog.CloseButton>
-          <Dialog.Title as="span" class="text-base font-medium p-0 m-0">
-            <Show when={sent()} fallback="Invite to Team">
-              Let them know it's coming
-            </Show>
-          </Dialog.Title>
-        </Panel.Header>
-
-        <Show when={sent()}>
-          {(emails) => (
-            <InviteHeadsUpStep
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && close()}
+      class={invitedAgent() ? 'w-[min(440px,calc(100vw-16px))]' : undefined}
+    >
+      <Show when={invitedAgent()}>
+        {(agent) => (
+          <ActionDialogShell class="h-auto">
+            <AgentClaudeStep
               teamId={props.teamId}
-              emails={emails()}
+              agent={agent()}
               onDone={close}
             />
-          )}
-        </Show>
-        <Show when={!sent() && kind() === 'agent'}>
-          <InviteAgentPanel
-            teamId={props.teamId}
-            header={kindTabs()}
-            onCancel={close}
-            onInvited={close}
-          />
-        </Show>
-        <Show when={!sent() && kind() === 'people'}>
-          <Panel.Body>
-            <div class="flex flex-col gap-5 px-5 py-5">
-              {kindTabs()}
-              <TeamInviteLinkSection
-                teamId={props.teamId}
-                canManage={props.canManageLink}
-              />
-              <div class="h-px shrink-0 bg-edge-muted" />
-              <div class="flex flex-col gap-3">
-                <div class="text-sm font-medium text-ink">Invite by email</div>
-                <InviteEmailsInput
-                  invites={invites()}
-                  onChange={setInvites}
-                  errors={inviteErrors()}
-                  onErrorsChange={setInviteErrors}
-                />
-              </div>
-            </div>
-          </Panel.Body>
-          <Panel.Footer class="justify-end gap-2 px-4 py-3">
-            <Button
-              variant="ghost"
-              disabled={inviteToTeamMutation.isPending}
-              onClick={close}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
-              onClick={handleInvite}
-            >
-              <Show
-                when={inviteToTeamMutation.isPending}
-                fallback={
-                  invites().length > 1
-                    ? `Send ${invites().length} invites`
-                    : 'Send invite'
-                }
-              >
-                <SpinnerIcon class="size-4 animate-spin" />
+          </ActionDialogShell>
+        )}
+      </Show>
+      <Show when={!invitedAgent()}>
+        <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
+          <Panel.Header class="px-3 gap-2">
+            <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+              <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            </Dialog.CloseButton>
+            <Dialog.Title as="span" class="text-base font-medium p-0 m-0">
+              <Show when={sent()} fallback="Invite to Team">
+                Let them know it's coming
               </Show>
-            </Button>
-          </Panel.Footer>
-        </Show>
-      </Panel>
+            </Dialog.Title>
+          </Panel.Header>
+
+          <Show when={sent()}>
+            {(emails) => (
+              <InviteHeadsUpStep
+                teamId={props.teamId}
+                emails={emails()}
+                onDone={close}
+              />
+            )}
+          </Show>
+          <Show when={!sent() && kind() === 'agent'}>
+            <InviteAgentPanel
+              teamId={props.teamId}
+              header={kindTabs()}
+              onCancel={close}
+              onInvited={agentInvited}
+            />
+          </Show>
+          <Show when={!sent() && kind() === 'people'}>
+            <Panel.Body>
+              <div class="flex flex-col gap-5 px-5 py-5">
+                {kindTabs()}
+                <TeamInviteLinkSection
+                  teamId={props.teamId}
+                  canManage={props.canManageLink}
+                />
+                <div class="h-px shrink-0 bg-edge-muted" />
+                <div class="flex flex-col gap-3">
+                  <div class="text-sm font-medium text-ink">
+                    Invite by email
+                  </div>
+                  <InviteEmailsInput
+                    invites={invites()}
+                    onChange={setInvites}
+                    errors={inviteErrors()}
+                    onErrorsChange={setInviteErrors}
+                  />
+                </div>
+              </div>
+            </Panel.Body>
+            <Panel.Footer class="justify-end gap-2 px-4 py-3">
+              <Button
+                variant="ghost"
+                disabled={inviteToTeamMutation.isPending}
+                onClick={close}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
+                onClick={handleInvite}
+              >
+                <Show
+                  when={inviteToTeamMutation.isPending}
+                  fallback={
+                    invites().length > 1
+                      ? `Send ${invites().length} invites`
+                      : 'Send invite'
+                  }
+                >
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+            </Panel.Footer>
+          </Show>
+        </Panel>
+      </Show>
     </Dialog>
   );
 }
