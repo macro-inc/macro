@@ -9557,6 +9557,110 @@ export type EmailMessageSentMetadata = {
 };
 
 /**
+ * Email events delivered to the inbox owner's webhooks and event stream.
+ *
+ * Each variant has the same `event_type` tag and metadata as its
+ * [`EmailTopicEvent`] counterpart. Payloads carry header-level data only.
+ */
+export type EmailNotificationEvent = {
+    event_type: 'email.link_connected';
+    /**
+     * An inbox was connected.
+     */
+    metadata: EmailLinkConnectedMetadata;
+} | {
+    event_type: 'email.link_disconnected';
+    /**
+     * An inbox was disconnected.
+     */
+    metadata: EmailLinkDisconnectedMetadata;
+} | {
+    event_type: 'email.link_reauth_required';
+    /**
+     * An inbox's OAuth grant went dead and needs re-authentication.
+     */
+    metadata: EmailLinkReauthRequiredMetadata;
+} | {
+    event_type: 'email.message_received';
+    /**
+     * A new inbound message arrived outside spam and trash.
+     */
+    metadata: EmailMessageReceivedMetadata;
+} | {
+    event_type: 'email.message_draft_synced';
+    /**
+     * A draft was persisted or updated while syncing from the provider.
+     */
+    metadata: EmailMessageDraftSyncedMetadata;
+} | {
+    event_type: 'email.message_sent';
+    /**
+     * A message was accepted by the provider.
+     */
+    metadata: EmailMessageSentMetadata;
+} | {
+    event_type: 'email.message_deleted';
+    /**
+     * A message was permanently deleted.
+     */
+    metadata: EmailMessageDeletedMetadata;
+} | {
+    event_type: 'email.message_send_queued';
+    /**
+     * A send was committed and queued (undo window or scheduled send).
+     */
+    metadata: EmailMessageSendQueuedMetadata;
+} | {
+    event_type: 'email.message_send_cancelled';
+    /**
+     * A queued send was cancelled before reaching the provider.
+     */
+    metadata: EmailMessageSendCancelledMetadata;
+} | {
+    event_type: 'email.thread_archived';
+    /**
+     * A thread was archived or unarchived.
+     */
+    metadata: EmailThreadArchivedMetadata;
+} | {
+    event_type: 'email.thread_trashed';
+    /**
+     * A thread was trashed or restored.
+     */
+    metadata: EmailThreadTrashedMetadata;
+} | {
+    event_type: 'email.thread_read';
+    /**
+     * A thread was marked read or unread.
+     */
+    metadata: EmailThreadReadMetadata;
+} | {
+    event_type: 'email.thread_starred';
+    /**
+     * A thread was starred or unstarred.
+     */
+    metadata: EmailThreadStarredMetadata;
+} | {
+    event_type: 'email.thread_spam_changed';
+    /**
+     * A thread was marked or unmarked spam.
+     */
+    metadata: EmailThreadSpamChangedMetadata;
+} | {
+    event_type: 'email.thread_project_changed';
+    /**
+     * A thread was assigned to or removed from a project.
+     */
+    metadata: EmailThreadProjectChangedMetadata;
+} | {
+    event_type: 'email.thread_labels_updated';
+    /**
+     * A thread's user labels changed.
+     */
+    metadata: EmailThreadLabelsUpdatedMetadata;
+};
+
+/**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
@@ -9676,24 +9780,6 @@ export type EmailThreadArchivedMetadata = {
      * Where the change originated.
      */
     origin: EmailEventOrigin;
-    /**
-     * The Macro user who owns the link.
-     */
-    owner: MacroUserIdStr;
-    /**
-     * Macro's thread row id.
-     */
-    thread_id: string;
-};
-
-/**
- * Metadata for [`EmailTopicEvent::ThreadBackfilled`].
- */
-export type EmailThreadBackfilledMetadata = {
-    /**
-     * The link (inbox) containing the thread.
-     */
-    link_id: string;
     /**
      * The Macro user who owns the link.
      */
@@ -9877,179 +9963,6 @@ export type EmailThreadTrashedMetadata = {
      * New state: `true` = trashed, `false` = restored.
      */
     trashed: boolean;
-};
-
-/**
- * Why a set of threads was asked to be reindexed for search.
- */
-export type EmailThreadsReindexReason = 'provider_changed' | 'contacts_changed';
-
-/**
- * Metadata for [`EmailTopicEvent::ThreadsReindexRequested`].
- */
-export type EmailThreadsReindexRequestedMetadata = {
-    /**
-     * The link (inbox) containing the threads.
-     */
-    link_id: string;
-    /**
-     * The Macro user who owns the link.
-     */
-    owner: MacroUserIdStr;
-    /**
-     * Why the reindex was requested.
-     */
-    reason: EmailThreadsReindexReason;
-    /**
-     * Thread row ids to reindex. Producers must chunk to at most 50 ids.
-     */
-    thread_ids: Array<string>;
-};
-
-/**
- * Events that can be published to [`MacroEmailTopic`].
- */
-export type EmailTopicEvent = {
-    event_type: 'email.link_connected';
-    /**
-     * An inbox was connected. Emitted from the email-service init handler
-     * after the link row is upserted.
-     */
-    metadata: EmailLinkConnectedMetadata;
-} | {
-    event_type: 'email.link_disconnected';
-    /**
-     * An inbox was disconnected. Emitted from the link-manager worker's
-     * delete cascade after the link row is deleted.
-     */
-    metadata: EmailLinkDisconnectedMetadata;
-} | {
-    event_type: 'email.link_reauth_required';
-    /**
-     * An inbox's OAuth grant went dead. Emitted only on the false→true
-     * `needs_reauth` transition (edge-triggered).
-     */
-    metadata: EmailLinkReauthRequiredMetadata;
-} | {
-    event_type: 'email.message_received';
-    /**
-     * A new inbound message was persisted. Emitted from the inbox-sync
-     * worker for messages not seen before; never from the backfill worker.
-     * When a previously-unsynced thread is pulled in whole, only the
-     * message that triggered the sync is published — its historical
-     * siblings are persisted silently (they were not just received).
-     */
-    metadata: EmailMessageReceivedMetadata;
-} | {
-    event_type: 'email.message_draft_synced';
-    /**
-     * A draft was persisted or updated while syncing from the provider.
-     * Emitted on every synced draft update because draft bodies are mutable.
-     */
-    metadata: EmailMessageDraftSyncedMetadata;
-} | {
-    event_type: 'email.message_sent';
-    /**
-     * A message was accepted by the provider. Emitted from the scheduled
-     * send worker after the provider accepts (`origin = user_action`), or
-     * from the inbox-sync worker when a message sent from another client is
-     * first synced (`origin = provider_sync`).
-     */
-    metadata: EmailMessageSentMetadata;
-} | {
-    event_type: 'email.message_deleted';
-    /**
-     * A message was permanently deleted. Emitted from the inbox-sync worker
-     * after the delete transaction commits.
-     */
-    metadata: EmailMessageDeletedMetadata;
-} | {
-    event_type: 'email.message_send_queued';
-    /**
-     * A send was committed and queued (undo window or scheduled send).
-     * Emitted from the email domain service and the schedule handler.
-     * A completed send or cancellation may later publish `message_sent` or
-     * `message_send_cancelled` for the same message.
-     */
-    metadata: EmailMessageSendQueuedMetadata;
-} | {
-    event_type: 'email.message_send_cancelled';
-    /**
-     * A queued send was cancelled before reaching the provider. Emitted
-     * from the unschedule/undo handler and the trash path.
-     */
-    metadata: EmailMessageSendCancelledMetadata;
-} | {
-    event_type: 'email.thread_archived';
-    /**
-     * A thread was archived or unarchived. Emitted from the archive handler
-     * (`origin = user_action`) or the inbox-sync INBOX-label diff
-     * (`origin = provider_sync`).
-     */
-    metadata: EmailThreadArchivedMetadata;
-} | {
-    event_type: 'email.thread_trashed';
-    /**
-     * A thread was trashed or restored. Emitted from the email domain
-     * service's TRASH label path (`origin = user_action`) or the inbox-sync
-     * TRASH-label diff (`origin = provider_sync`).
-     */
-    metadata: EmailThreadTrashedMetadata;
-} | {
-    event_type: 'email.thread_read';
-    /**
-     * A thread was marked read or unread. Emitted from the seen handler and
-     * the email domain service's UNREAD label path (`origin = user_action`)
-     * or the inbox-sync UNREAD-label diff (`origin = provider_sync`).
-     */
-    metadata: EmailThreadReadMetadata;
-} | {
-    event_type: 'email.thread_starred';
-    /**
-     * A thread was starred or unstarred. Emitted from the email domain
-     * service's STARRED label path (`origin = user_action`) or the
-     * inbox-sync STARRED-label diff (`origin = provider_sync`).
-     */
-    metadata: EmailThreadStarredMetadata;
-} | {
-    event_type: 'email.thread_spam_changed';
-    /**
-     * A thread was marked or unmarked spam. Emitted from the inbox-sync
-     * SPAM-label diff (`origin = provider_sync`) or the domain label path
-     * (`origin = user_action`).
-     */
-    metadata: EmailThreadSpamChangedMetadata;
-} | {
-    event_type: 'email.thread_project_changed';
-    /**
-     * A thread was assigned to or removed from a project. Emitted from the
-     * email domain service's thread-project update.
-     */
-    metadata: EmailThreadProjectChangedMetadata;
-} | {
-    event_type: 'email.thread_labels_updated';
-    /**
-     * A thread's user labels changed. Emitted from the email domain
-     * service's label path (`origin = user_action`) or the inbox-sync label
-     * diff (`origin = provider_sync`). System labels are published as the
-     * semantic thread events instead.
-     */
-    metadata: EmailThreadLabelsUpdatedMetadata;
-} | {
-    event_type: 'email.thread_backfilled';
-    /**
-     * All messages of a backfilled thread are persisted and thread metadata
-     * is final. Emitted from the backfill worker's update-metadata step.
-     */
-    metadata: EmailThreadBackfilledMetadata;
-} | {
-    event_type: 'email.threads_reindex_requested';
-    /**
-     * A bounded batch of threads should be re-derived by read-back consumers
-     * (for example, the search index). Emitted from contact sync when contact
-     * names change. Producers must include at most 50 thread ids.
-     */
-    metadata: EmailThreadsReindexRequestedMetadata;
 };
 
 /**
@@ -23706,7 +23619,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | EmailTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | EmailNotificationEvent | AgentSessionLifecycleEvent | UserTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.

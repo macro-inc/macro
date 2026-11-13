@@ -43375,6 +43375,251 @@
           }
         }
       },
+      "EmailNotificationEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An inbox was connected.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_connected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkConnectedMetadata",
+                "description": "An inbox was connected."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An inbox was disconnected.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_disconnected"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkDisconnectedMetadata",
+                "description": "An inbox was disconnected."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An inbox's OAuth grant went dead and needs re-authentication.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.link_reauth_required"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailLinkReauthRequiredMetadata",
+                "description": "An inbox's OAuth grant went dead and needs re-authentication."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new inbound message arrived outside spam and trash.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_received"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageReceivedMetadata",
+                "description": "A new inbound message arrived outside spam and trash."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A draft was persisted or updated while syncing from the provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_draft_synced"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageDraftSyncedMetadata",
+                "description": "A draft was persisted or updated while syncing from the provider."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was accepted by the provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_sent"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSentMetadata",
+                "description": "A message was accepted by the provider."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was permanently deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageDeletedMetadata",
+                "description": "A message was permanently deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A send was committed and queued (undo window or scheduled send).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_send_queued"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSendQueuedMetadata",
+                "description": "A send was committed and queued (undo window or scheduled send)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A queued send was cancelled before reaching the provider.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.message_send_cancelled"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailMessageSendCancelledMetadata",
+                "description": "A queued send was cancelled before reaching the provider."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was archived or unarchived.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_archived"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadArchivedMetadata",
+                "description": "A thread was archived or unarchived."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was trashed or restored.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_trashed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadTrashedMetadata",
+                "description": "A thread was trashed or restored."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was marked read or unread.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_read"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadReadMetadata",
+                "description": "A thread was marked read or unread."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was starred or unstarred.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_starred"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadStarredMetadata",
+                "description": "A thread was starred or unstarred."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was marked or unmarked spam.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_spam_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadSpamChangedMetadata",
+                "description": "A thread was marked or unmarked spam."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread was assigned to or removed from a project.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_project_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadProjectChangedMetadata",
+                "description": "A thread was assigned to or removed from a project."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A thread's user labels changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["email.thread_labels_updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailThreadLabelsUpdatedMetadata",
+                "description": "A thread's user labels changed."
+              }
+            }
+          }
+        ],
+        "description": "Email events delivered to the inbox owner's webhooks and event stream.\n\nEach variant has the same `event_type` tag and metadata as its\n[`EmailTopicEvent`] counterpart. Payloads carry header-level data only."
+      },
       "EmailPrivacyChange": {
         "oneOf": [
           {
@@ -43553,27 +43798,6 @@
           "origin": {
             "$ref": "#/components/schemas/EmailEventOrigin",
             "description": "Where the change originated."
-          },
-          "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
-            "description": "The Macro user who owns the link."
-          },
-          "thread_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Macro's thread row id."
-          }
-        }
-      },
-      "EmailThreadBackfilledMetadata": {
-        "type": "object",
-        "description": "Metadata for [`EmailTopicEvent::ThreadBackfilled`].",
-        "required": ["link_id", "owner", "thread_id"],
-        "properties": {
-          "link_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The link (inbox) containing the thread."
           },
           "owner": {
             "$ref": "#/components/schemas/MacroUserIdStr",
@@ -43835,314 +44059,6 @@
             "description": "New state: `true` = trashed, `false` = restored."
           }
         }
-      },
-      "EmailThreadsReindexReason": {
-        "type": "string",
-        "description": "Why a set of threads was asked to be reindexed for search.",
-        "enum": ["provider_changed", "contacts_changed"]
-      },
-      "EmailThreadsReindexRequestedMetadata": {
-        "type": "object",
-        "description": "Metadata for [`EmailTopicEvent::ThreadsReindexRequested`].",
-        "required": ["link_id", "owner", "thread_ids", "reason"],
-        "properties": {
-          "link_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The link (inbox) containing the threads."
-          },
-          "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
-            "description": "The Macro user who owns the link."
-          },
-          "reason": {
-            "$ref": "#/components/schemas/EmailThreadsReindexReason",
-            "description": "Why the reindex was requested."
-          },
-          "thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Thread row ids to reindex. Producers must chunk to at most 50 ids."
-          }
-        }
-      },
-      "EmailTopicEvent": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "An inbox was connected. Emitted from the email-service init handler\nafter the link row is upserted.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.link_connected"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailLinkConnectedMetadata",
-                "description": "An inbox was connected. Emitted from the email-service init handler\nafter the link row is upserted."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "An inbox was disconnected. Emitted from the link-manager worker's\ndelete cascade after the link row is deleted.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.link_disconnected"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailLinkDisconnectedMetadata",
-                "description": "An inbox was disconnected. Emitted from the link-manager worker's\ndelete cascade after the link row is deleted."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "An inbox's OAuth grant went dead. Emitted only on the false→true\n`needs_reauth` transition (edge-triggered).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.link_reauth_required"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailLinkReauthRequiredMetadata",
-                "description": "An inbox's OAuth grant went dead. Emitted only on the false→true\n`needs_reauth` transition (edge-triggered)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A new inbound message was persisted. Emitted from the inbox-sync\nworker for messages not seen before; never from the backfill worker.\nWhen a previously-unsynced thread is pulled in whole, only the\nmessage that triggered the sync is published — its historical\nsiblings are persisted silently (they were not just received).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.message_received"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailMessageReceivedMetadata",
-                "description": "A new inbound message was persisted. Emitted from the inbox-sync\nworker for messages not seen before; never from the backfill worker.\nWhen a previously-unsynced thread is pulled in whole, only the\nmessage that triggered the sync is published — its historical\nsiblings are persisted silently (they were not just received)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A draft was persisted or updated while syncing from the provider.\nEmitted on every synced draft update because draft bodies are mutable.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.message_draft_synced"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailMessageDraftSyncedMetadata",
-                "description": "A draft was persisted or updated while syncing from the provider.\nEmitted on every synced draft update because draft bodies are mutable."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A message was accepted by the provider. Emitted from the scheduled\nsend worker after the provider accepts (`origin = user_action`), or\nfrom the inbox-sync worker when a message sent from another client is\nfirst synced (`origin = provider_sync`).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.message_sent"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailMessageSentMetadata",
-                "description": "A message was accepted by the provider. Emitted from the scheduled\nsend worker after the provider accepts (`origin = user_action`), or\nfrom the inbox-sync worker when a message sent from another client is\nfirst synced (`origin = provider_sync`)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A message was permanently deleted. Emitted from the inbox-sync worker\nafter the delete transaction commits.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.message_deleted"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailMessageDeletedMetadata",
-                "description": "A message was permanently deleted. Emitted from the inbox-sync worker\nafter the delete transaction commits."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A send was committed and queued (undo window or scheduled send).\nEmitted from the email domain service and the schedule handler.\nA completed send or cancellation may later publish `message_sent` or\n`message_send_cancelled` for the same message.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.message_send_queued"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailMessageSendQueuedMetadata",
-                "description": "A send was committed and queued (undo window or scheduled send).\nEmitted from the email domain service and the schedule handler.\nA completed send or cancellation may later publish `message_sent` or\n`message_send_cancelled` for the same message."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A queued send was cancelled before reaching the provider. Emitted\nfrom the unschedule/undo handler and the trash path.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.message_send_cancelled"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailMessageSendCancelledMetadata",
-                "description": "A queued send was cancelled before reaching the provider. Emitted\nfrom the unschedule/undo handler and the trash path."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread was archived or unarchived. Emitted from the archive handler\n(`origin = user_action`) or the inbox-sync INBOX-label diff\n(`origin = provider_sync`).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_archived"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadArchivedMetadata",
-                "description": "A thread was archived or unarchived. Emitted from the archive handler\n(`origin = user_action`) or the inbox-sync INBOX-label diff\n(`origin = provider_sync`)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread was trashed or restored. Emitted from the email domain\nservice's TRASH label path (`origin = user_action`) or the inbox-sync\nTRASH-label diff (`origin = provider_sync`).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_trashed"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadTrashedMetadata",
-                "description": "A thread was trashed or restored. Emitted from the email domain\nservice's TRASH label path (`origin = user_action`) or the inbox-sync\nTRASH-label diff (`origin = provider_sync`)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread was marked read or unread. Emitted from the seen handler and\nthe email domain service's UNREAD label path (`origin = user_action`)\nor the inbox-sync UNREAD-label diff (`origin = provider_sync`).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_read"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadReadMetadata",
-                "description": "A thread was marked read or unread. Emitted from the seen handler and\nthe email domain service's UNREAD label path (`origin = user_action`)\nor the inbox-sync UNREAD-label diff (`origin = provider_sync`)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread was starred or unstarred. Emitted from the email domain\nservice's STARRED label path (`origin = user_action`) or the\ninbox-sync STARRED-label diff (`origin = provider_sync`).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_starred"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadStarredMetadata",
-                "description": "A thread was starred or unstarred. Emitted from the email domain\nservice's STARRED label path (`origin = user_action`) or the\ninbox-sync STARRED-label diff (`origin = provider_sync`)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread was marked or unmarked spam. Emitted from the inbox-sync\nSPAM-label diff (`origin = provider_sync`) or the domain label path\n(`origin = user_action`).",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_spam_changed"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadSpamChangedMetadata",
-                "description": "A thread was marked or unmarked spam. Emitted from the inbox-sync\nSPAM-label diff (`origin = provider_sync`) or the domain label path\n(`origin = user_action`)."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread was assigned to or removed from a project. Emitted from the\nemail domain service's thread-project update.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_project_changed"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadProjectChangedMetadata",
-                "description": "A thread was assigned to or removed from a project. Emitted from the\nemail domain service's thread-project update."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A thread's user labels changed. Emitted from the email domain\nservice's label path (`origin = user_action`) or the inbox-sync label\ndiff (`origin = provider_sync`). System labels are published as the\nsemantic thread events instead.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_labels_updated"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadLabelsUpdatedMetadata",
-                "description": "A thread's user labels changed. Emitted from the email domain\nservice's label path (`origin = user_action`) or the inbox-sync label\ndiff (`origin = provider_sync`). System labels are published as the\nsemantic thread events instead."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "All messages of a backfilled thread are persisted and thread metadata\nis final. Emitted from the backfill worker's update-metadata step.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.thread_backfilled"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadBackfilledMetadata",
-                "description": "All messages of a backfilled thread are persisted and thread metadata\nis final. Emitted from the backfill worker's update-metadata step."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A bounded batch of threads should be re-derived by read-back consumers\n(for example, the search index). Emitted from contact sync when contact\nnames change. Producers must include at most 50 thread ids.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["email.threads_reindex_requested"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/EmailThreadsReindexRequestedMetadata",
-                "description": "A bounded batch of threads should be re-derived by read-back consumers\n(for example, the search index). Emitted from contact sync when contact\nnames change. Producers must include at most 50 thread ids."
-              }
-            }
-          }
-        ],
-        "description": "Events that can be published to [`MacroEmailTopic`]."
       },
       "EmptyResponse": {
         "type": "object",
@@ -65850,8 +65766,8 @@
             "description": "Message facts for channels and documents from the `macro.messages` topic."
           },
           {
-            "$ref": "#/components/schemas/EmailTopicEvent",
-            "description": "Email events from `macro.email`, including internal sync signals."
+            "$ref": "#/components/schemas/EmailNotificationEvent",
+            "description": "Public email events from the `macro.email_notifications` topic."
           },
           {
             "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
