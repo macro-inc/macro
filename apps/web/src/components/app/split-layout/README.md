@@ -38,6 +38,13 @@ and `TiledSplits`, including a document that keeps its reading position as the
 splits beside it close, with browser scroll anchoring off as in WebKit:
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 
+## Mobile header hosts
+
+Composable views suppress the shared desktop header. On touch devices, a mounted
+`MobileHeader` still needs the split header's left and right portal targets.
+Keep that header mounted while a mobile header owner exists, and remove it when
+the owner leaves without remounting the view.
+
 ## Native phone Back
 
 `MobileSplitContainer` shares `createMobileBackNavigation` between the header,
