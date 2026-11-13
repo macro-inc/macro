@@ -53,22 +53,32 @@ fn meta_enabled(meta: &syn::Meta, profile: Profile) -> bool {
     }
 }
 fn enabled(attrs: &[syn::Attribute], profile: Profile) -> bool {
+    for attr in attrs.iter().filter(|attr| attr.path().is_ident("cfg_attr")) {
+        let args = attr
+            .parse_args_with(Punctuated::<syn::Meta, Token![,]>::parse_terminated)
+            .expect("conditional attributes");
+        assert!(
+            !meta_enabled(args.first().expect("cfg_attr condition"), profile),
+            "classify active conditional export attributes before inventorying them"
+        );
+    }
     attrs
         .iter()
         .filter(|attr| attr.path().is_ident("cfg"))
         .all(|attr| meta_enabled(&attr.parse_args::<syn::Meta>().expect("cfg"), profile))
 }
+fn wasm_attribute(attr: &syn::Attribute) -> bool {
+    attr.path()
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "wasm_bindgen")
+}
 fn wasm(attrs: &[syn::Attribute]) -> bool {
-    attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("wasm_bindgen"))
+    attrs.iter().any(wasm_attribute)
 }
 fn exported_name(ident: &syn::Ident, attrs: &[syn::Attribute]) -> String {
     let mut name = ident.to_string();
-    for attr in attrs
-        .iter()
-        .filter(|attr| attr.path().is_ident("wasm_bindgen"))
-    {
+    for attr in attrs.iter().filter(|attr| wasm_attribute(attr)) {
         if !matches!(attr.meta, syn::Meta::List(_)) {
             continue;
         }
@@ -110,17 +120,34 @@ struct Exports {
     methods: BTreeMap<String, (bool, String)>,
     classes: BTreeSet<String>,
     functions: BTreeMap<String, String>,
+    development_only: BTreeSet<String>,
 }
-fn collect_file(path: &Path, module_dir: &Path, profile: Profile, exports: &mut Exports) {
+fn collect_file(
+    path: &Path,
+    module_dir: &Path,
+    profile: Profile,
+    development_only: bool,
+    exports: &mut Exports,
+) {
     let text = std::fs::read_to_string(path).expect("source");
     let file = syn::parse_file(&text).expect("parse actual source");
-    collect_items(&file.items, path, module_dir, profile, exports);
+    if enabled(&file.attrs, profile) {
+        collect_items(
+            &file.items,
+            path,
+            module_dir,
+            profile,
+            development_only || !enabled(&file.attrs, Profile::OrdinaryDefault),
+            exports,
+        );
+    }
 }
 fn collect_items(
     items: &[syn::Item],
     path: &Path,
     module_dir: &Path,
     profile: Profile,
+    development_only: bool,
     exports: &mut Exports,
 ) {
     for item in items {
@@ -129,14 +156,11 @@ fn collect_items(
                 let syn::Type::Path(target) = &*block.self_ty else {
                     continue;
                 };
-                if target
+                let editor_session = target
                     .path
                     .segments
                     .last()
-                    .is_none_or(|segment| segment.ident != "EditorSession")
-                {
-                    continue;
-                }
+                    .is_some_and(|segment| segment.ident == "EditorSession");
                 for item in &block.items {
                     let syn::ImplItem::Fn(method) = item else {
                         continue;
@@ -144,6 +168,17 @@ fn collect_items(
                     if !matches!(method.vis, syn::Visibility::Public(_))
                         || !enabled(&method.attrs, profile)
                     {
+                        continue;
+                    }
+                    if development_only
+                        || !enabled(&block.attrs, Profile::OrdinaryDefault)
+                        || !enabled(&method.attrs, Profile::OrdinaryDefault)
+                    {
+                        exports
+                            .development_only
+                            .insert(exported_name(&method.sig.ident, &method.attrs));
+                    }
+                    if !editor_session {
                         continue;
                     }
                     assert!(
@@ -167,6 +202,9 @@ fn collect_items(
                     && matches!(function.vis, syn::Visibility::Public(_)) =>
             {
                 let name = exported_name(&function.sig.ident, &function.attrs);
+                if development_only || !enabled(&function.attrs, Profile::OrdinaryDefault) {
+                    exports.development_only.insert(name.clone());
+                }
                 assert!(
                     exports
                         .functions
@@ -177,9 +215,43 @@ fn collect_items(
             }
             syn::Item::Struct(value) if enabled(&value.attrs, profile) && wasm(&value.attrs) => {
                 exports.classes.insert(value.ident.to_string());
+                if development_only || !enabled(&value.attrs, Profile::OrdinaryDefault) {
+                    exports
+                        .development_only
+                        .insert(exported_name(&value.ident, &value.attrs));
+                }
+                for field in &value.fields {
+                    if matches!(field.vis, syn::Visibility::Public(_))
+                        && enabled(&field.attrs, profile)
+                        && (development_only
+                            || !enabled(&value.attrs, Profile::OrdinaryDefault)
+                            || !enabled(&field.attrs, Profile::OrdinaryDefault))
+                    {
+                        let ident = field.ident.as_ref().expect("named wasm field");
+                        exports
+                            .development_only
+                            .insert(exported_name(ident, &field.attrs));
+                    }
+                }
             }
             syn::Item::Enum(value) if enabled(&value.attrs, profile) && wasm(&value.attrs) => {
                 exports.classes.insert(value.ident.to_string());
+                if development_only || !enabled(&value.attrs, Profile::OrdinaryDefault) {
+                    exports
+                        .development_only
+                        .insert(exported_name(&value.ident, &value.attrs));
+                }
+                for variant in &value.variants {
+                    if enabled(&variant.attrs, profile)
+                        && (development_only
+                            || !enabled(&value.attrs, Profile::OrdinaryDefault)
+                            || !enabled(&variant.attrs, Profile::OrdinaryDefault))
+                    {
+                        exports
+                            .development_only
+                            .insert(exported_name(&variant.ident, &variant.attrs));
+                    }
+                }
             }
             syn::Item::Mod(module) if enabled(&module.attrs, profile) => {
                 if let Some((_, items)) = &module.content {
@@ -188,6 +260,7 @@ fn collect_items(
                         path,
                         &module_dir.join(module.ident.to_string()),
                         profile,
+                        development_only || !enabled(&module.attrs, Profile::OrdinaryDefault),
                         exports,
                     );
                 } else {
@@ -221,7 +294,13 @@ fn collect_items(
                     } else {
                         source.with_extension("")
                     };
-                    collect_file(&source, &next_dir, profile, exports);
+                    collect_file(
+                        &source,
+                        &next_dir,
+                        profile,
+                        development_only || !enabled(&module.attrs, Profile::OrdinaryDefault),
+                        exports,
+                    );
                 }
             }
             _ => {}
@@ -231,7 +310,7 @@ fn collect_items(
 fn exports(profile: Profile) -> Exports {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut exports = Exports::default();
-    collect_file(&root.join("lib.rs"), &root, profile, &mut exports);
+    collect_file(&root.join("lib.rs"), &root, profile, false, &mut exports);
     exports
 }
 #[test]
@@ -327,4 +406,93 @@ fn issued_navigation_scope_exports_have_explicit_profile_and_names() {
             }
         }
     }
+}
+
+#[test]
+fn shipping_declarations_exclude_source_derived_development_exports() {
+    let names = exports(Profile::OrdinaryPreview).development_only;
+    assert!(
+        !names.is_empty(),
+        "development export inventory must be nonempty"
+    );
+    assert!(
+        names.contains("debugCodeTokenProviders"),
+        "known probe must be discovered"
+    );
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let declarations = std::fs::read_to_string(
+        root.join("../../../packages/collaboration/src/session/wasm.generated.d.ts"),
+    )
+    .expect("committed shipping declarations");
+    let identifiers: BTreeSet<_> = declarations
+        .split(|character: char| {
+            !character.is_alphanumeric() && character != '_' && character != '$'
+        })
+        .collect();
+    for name in names {
+        assert!(
+            !identifiers.contains(name.as_str()),
+            "shipping declarations expose development export {name}"
+        );
+    }
+}
+
+#[test]
+fn development_export_inventory_follows_module_and_member_cfg_and_names() {
+    let fixture = syn::parse_file(
+        r#"
+        #[cfg(feature = "dev-probes")]
+        mod probes {
+            #[wasm_bindgen::prelude::wasm_bindgen(js_name = renamedProbe)]
+            pub fn rust_name() {}
+            #[wasm_bindgen]
+            pub fn default_probe() {}
+            #[wasm_bindgen]
+            pub struct ProbeClass;
+        }
+        #[wasm_bindgen]
+        impl ShippingClass {
+            #[cfg(feature = "dev-probes")]
+            #[wasm_bindgen(js_name = renamedMethod)]
+            pub fn method(&self) {}
+            pub fn shipping_method(&self) {}
+        }
+    "#,
+    )
+    .expect("fixture source");
+    let mut actual = Exports::default();
+    collect_items(
+        &fixture.items,
+        Path::new("fixture.rs"),
+        Path::new("."),
+        Profile::OrdinaryPreview,
+        false,
+        &mut actual,
+    );
+    assert_eq!(
+        actual.development_only,
+        BTreeSet::from([
+            "renamedProbe".to_owned(),
+            "default_probe".to_owned(),
+            "ProbeClass".to_owned(),
+            "renamedMethod".to_owned(),
+        ])
+    );
+}
+
+#[test]
+fn conditional_attribute_inventory_ignores_disabled_conditions_and_refuses_active_ones() {
+    let disabled: syn::ItemStruct = syn::parse_quote! {
+        #[cfg_attr(test, derive(Clone, PartialEq))]
+        pub struct Shipping;
+    };
+    assert!(enabled(&disabled.attrs, Profile::OrdinaryPreview));
+    let active: syn::ItemFn = syn::parse_quote! {
+        #[cfg_attr(feature = "dev-probes", wasm_bindgen)]
+        pub fn new_probe() {}
+    };
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        enabled(&active.attrs, Profile::OrdinaryPreview)
+    }))
+    .is_err());
 }
