@@ -8,6 +8,7 @@ import type {
   ActivityErrorBody,
   ActivityReports,
   AddServerRequest,
+  AgentSpendResponse,
   BrowsePipedreamMcpCatalogParams,
   CallToolRequest,
   CallToolResponse,
@@ -35,6 +36,7 @@ import type {
   GenerateImageRequest,
   GenerateImageResponse,
   GenericErrorResponse,
+  GetAgentSpendHandlerParams,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
   GetChatPermissionsResponse,
@@ -169,6 +171,89 @@ export const readMyActivity = async (
     status: res.status,
     headers: res.headers,
   } as readMyActivityResponse;
+};
+
+/**
+ * @summary An agent account's AI spend, bucketed by UTC day (last 30 days), ISO week
+(last 26), month (last 12), or year (last 5). Readable by the agent itself
+and by owners and admins of a team it belongs to, behind the
+`enable-agent-dashboards` flag; anyone else gets 404.
+ */
+export type getAgentSpendHandlerResponse200 = {
+  data: AgentSpendResponse;
+  status: 200;
+};
+
+export type getAgentSpendHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type getAgentSpendHandlerResponse404 = {
+  data: ErrorBody;
+  status: 404;
+};
+
+export type getAgentSpendHandlerResponse500 = {
+  data: ErrorBody;
+  status: 500;
+};
+
+export type getAgentSpendHandlerResponseSuccess =
+  getAgentSpendHandlerResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSpendHandlerResponseError = (
+  | getAgentSpendHandlerResponse400
+  | getAgentSpendHandlerResponse404
+  | getAgentSpendHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSpendHandlerResponse =
+  | getAgentSpendHandlerResponseSuccess
+  | getAgentSpendHandlerResponseError;
+
+export const getGetAgentSpendHandlerUrl = (
+  agentId: string,
+  params?: GetAgentSpendHandlerParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/ai-cost/agents/${agentId}/spend?${stringifiedParams}`
+    : `/ai-cost/agents/${agentId}/spend`;
+};
+
+export const getAgentSpendHandler = async (
+  agentId: string,
+  params?: GetAgentSpendHandlerParams,
+  options?: RequestInit
+): Promise<getAgentSpendHandlerResponse> => {
+  const res = await fetch(getGetAgentSpendHandlerUrl(agentId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSpendHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSpendHandlerResponse;
 };
 
 /**
