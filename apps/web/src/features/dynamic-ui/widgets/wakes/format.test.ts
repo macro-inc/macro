@@ -2,10 +2,10 @@ import type { AgentWake, WakeTrace } from '@service-agent-harness/agent-wakes';
 import { describe, expect, it } from 'vitest';
 import {
   formatDuration,
+  heardTrace,
   LIVE_REFRESH_MS,
   LOST_AFTER_MS,
   LOST_REFRESH_MS,
-  heardTrace,
   traceIsLive,
   traceRefreshMs,
   wakeDuration,
