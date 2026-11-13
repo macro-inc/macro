@@ -1114,7 +1114,8 @@ describe('Quick Access source integration', () => {
       );
       await vi.waitFor(() => expect(list.items()).toHaveLength(1));
       expect(mocks.search).toHaveBeenCalledWith(
-        expect.objectContaining({ buckets: ['crm_company'], query })
+        expect.objectContaining({ buckets: ['crm_company'], query }),
+        expect.anything()
       );
       expect(list.items()[0]).toMatchObject({
         id: 'company-1',
@@ -1150,7 +1151,8 @@ describe('Quick Access source integration', () => {
     );
     await vi.waitFor(() => expect(list.items()).toHaveLength(1));
     expect(mocks.search).toHaveBeenCalledWith(
-      expect.objectContaining({ buckets: ['initiative'], query: 'launch' })
+      expect.objectContaining({ buckets: ['initiative'], query: 'launch' }),
+      expect.anything()
     );
     expect(list.items()[0]).toMatchObject({
       id: 'initiative-1',
@@ -1297,7 +1299,8 @@ describe('Quick Access source integration', () => {
     );
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
     expect(mocks.search).toHaveBeenCalledWith(
-      expect.objectContaining({ buckets: ['note'] })
+      expect.objectContaining({ buckets: ['note'] }),
+      expect.anything()
     );
     expect(list.items()).toEqual([]);
   });
@@ -1411,7 +1414,8 @@ describe('Quick Access source integration', () => {
       setCrmEnabled(true);
       await vi.waitFor(() => expect(list.items()).toHaveLength(1));
       expect(mocks.search).toHaveBeenLastCalledWith(
-        expect.objectContaining({ buckets })
+        expect.objectContaining({ buckets }),
+        expect.anything()
       );
       setCrmEnabled(false);
       await vi.waitFor(() => expect(list.items()).toEqual([]));
@@ -1498,7 +1502,8 @@ describe('Quick Access source integration', () => {
     expect(mocks.search).toHaveBeenCalledWith(
       expect.objectContaining({
         buckets: expect.arrayContaining(['initiative']),
-      })
+      }),
+      expect.anything()
     );
   });
 
@@ -1534,6 +1539,30 @@ describe('Quick Access source integration', () => {
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     expect(mocks.search).toHaveBeenCalledOnce();
     expect(mocks.search.mock.calls[0][0].buckets).toEqual(['channel', 'dm']);
+  });
+
+  it('leaves a disabled list idle through cache changes and searches once enabled', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    const list = setup((source) =>
+      source.useList({ buckets: ['note'], searchTerm: () => '', enabled })
+    );
+    const subscriptions = mocks.onCacheChanged.mock.calls.length;
+    vi.useFakeTimers();
+    for (let i = 0; i < 20; i++)
+      mocks.changed?.({ searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).not.toHaveBeenCalled();
+
+    mocks.search.mockResolvedValue(page(0, 1));
+    setEnabled(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.search).toHaveBeenCalledOnce();
+    expect(list.items()).toHaveLength(1);
+    expect(mocks.onCacheChanged).toHaveBeenCalledTimes(subscriptions + 1);
+
+    mocks.changed?.({ searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledTimes(2);
   });
 
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
@@ -1673,7 +1702,8 @@ describe('CRM contacts', () => {
     expect(list.items().map((item) => item.id)).toEqual(['contact-1']);
     await vi.waitFor(() =>
       expect(mocks.search).toHaveBeenCalledWith(
-        expect.objectContaining({ buckets: ['crm_contact'], query: 'wile@' })
+        expect.objectContaining({ buckets: ['crm_contact'], query: 'wile@' }),
+        expect.anything()
       )
     );
   });

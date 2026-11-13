@@ -156,6 +156,7 @@ export function createUserNameCache(options: {
   let sweepScheduled = false;
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  let expiryDueAt = 0;
 
   function state(entry: Entry): UserNameState {
     return entry.query.state.data ?? EMPTY;
@@ -175,8 +176,6 @@ export function createUserNameCache(options: {
     client.getQueryCache().remove(entry.query);
   }
   function trim() {
-    if (expiryTimer !== undefined) clearTimeout(expiryTimer);
-    expiryTimer = undefined;
     const now = Date.now();
     for (const [entry] of idle) {
       if (entry.pins) {
@@ -192,11 +191,33 @@ export function createUserNameCache(options: {
       remove(entry);
     }
     const oldest = idle.keys().next().value;
-    if (oldest)
-      expiryTimer = setTimeout(
-        trim,
-        Math.max(1, oldest.touched + USER_NAME_CACHE_LIMITS.idleMs - now)
-      );
+    const dueAt = oldest
+      ? oldest.touched + USER_NAME_CACHE_LIMITS.idleMs
+      : undefined;
+
+    // Reads call this constantly. A pending timer that is not overdue and fires
+    // no later than the oldest name is due stays: when it fires it trims and
+    // arms the next one.
+    if (
+      expiryTimer !== undefined &&
+      dueAt !== undefined &&
+      expiryDueAt > now &&
+      expiryDueAt <= dueAt
+    )
+      return;
+
+    if (expiryTimer !== undefined) clearTimeout(expiryTimer);
+    expiryTimer = undefined;
+    if (dueAt === undefined) return;
+
+    expiryDueAt = dueAt;
+    expiryTimer = setTimeout(
+      () => {
+        expiryTimer = undefined;
+        trim();
+      },
+      Math.max(1, dueAt - now)
+    );
   }
   function makeIdle(entry: Entry) {
     removeIdle(entry);

@@ -5,6 +5,13 @@ export type ClientOptions = {
 };
 
 /**
+ * Whose account an agent signs in to: the Postgres `agent_provider` enum of
+ * `provider_accounts.provider` and `harness_account_logins.provider`. New
+ * providers add a value there.
+ */
+export type AgentProvider = 'claude';
+
+/**
  * Someone named the recipient in a prompt to an agent session.
  */
 export type AgentSessionMentionedMetadata = AgentSessionNotificationRef & {
@@ -111,6 +118,39 @@ export type AgentSessionWaitingForInputMetadata = AgentSessionNotificationRef & 
      */
     turn: number;
 };
+
+/**
+ * The account a team's Macro computer signed an agent in to is about to
+ * stop working, or has. Sent to whoever signed it in and to the team's
+ * admins and owner, who can sign it in again from Settings → Machines.
+ */
+export type AgentSignInExpiryMetadata = {
+    /**
+     * The agent whose sign-in is running out.
+     */
+    agent: AgentProvider;
+    /**
+     * The computer's name when the notice was sent.
+     */
+    computerName: string;
+    /**
+     * When the sign-in expires or expired; absent when the agent rejected it.
+     */
+    expiresAt?: string | null;
+    /**
+     * The computer's harness, whose runtime row holds the sign-in.
+     */
+    harnessId: string;
+    /**
+     * How close the sign-in is to no longer working.
+     */
+    stage: AgentSignInExpiryStage;
+};
+
+/**
+ * How close a computer's agent sign-in is to no longer working.
+ */
+export type AgentSignInExpiryStage = 'expires_soon' | 'expires_today' | 'expired';
 
 export type AiResponseMetadata = {
     messageId: string;
@@ -463,6 +503,42 @@ export type CommentedOnDocumentMetadata = {
 export type CommonChannelMetadata = {
     channelName?: string;
     channelType: ChannelType;
+};
+
+/**
+ * A team's Macro computer finished first-time setup, or could not be set
+ * up. Sent to its buyer, who continues (or retries) from the setup flow.
+ */
+export type ComputerSetupMetadata = {
+    /**
+     * The computer that was set up.
+     */
+    computerId: string;
+    /**
+     * The computer's name when the notice was sent.
+     */
+    computerName: string;
+    /**
+     * The computer's harness, once macrod has connected.
+     */
+    harnessId?: string | null;
+    /**
+     * Ready, or why setup failed.
+     */
+    outcome: ComputerSetupOutcome;
+};
+
+/**
+ * How a computer's first setup ended.
+ */
+export type ComputerSetupOutcome = {
+    kind: 'ready';
+} | {
+    /**
+     * Why, in the words the computer's status shows.
+     */
+    failureReason: string;
+    kind: 'failed';
 };
 
 /**
@@ -1332,6 +1408,20 @@ export type NotifEvent = {
      */
     content: RoutineRunFinishedMetadata;
     tag: 'routine_run_finished';
+} | {
+    /**
+     * An agent's sign-in on one of the team's Macro computers is about
+     * to expire, expired, or was rejected.
+     */
+    content: AgentSignInExpiryMetadata;
+    tag: 'agent_sign_in_expiry';
+} | {
+    /**
+     * A Macro computer the user bought finished first-time setup, or
+     * could not be set up.
+     */
+    content: ComputerSetupMetadata;
+    tag: 'computer_setup';
 } | {
     /**
      * A runtime's owner removed the user's access to it, and agents of

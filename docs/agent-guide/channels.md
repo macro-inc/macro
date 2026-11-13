@@ -380,7 +380,7 @@ not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
 A session transcript shows each tool call as a collapsible row (consecutive calls
-fold into a `Called N tools` group; click it to see the rows). A tool reached over
+fold into a `Used N tools` group; click it to see the rows). A tool reached over
 an MCP server - Macro's own (`ReadContent`) from a Cursor, Claude, or
 Codex session, or a third-party server (`ask_question`) - is titled by
 the tool's own name, without a server or workspace label, never by the harness's dispatcher
@@ -1063,7 +1063,7 @@ in place until the result arrives.
 
 ## Chat navigation rail
 
-With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list (except phones, which show no tutorials).
+With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch devices show no tutorials.
 
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.
@@ -1491,6 +1491,19 @@ channel show **Conversation unavailable** with **Retry**, never permanent loadin
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 
+Channel rows also show how many unread `channel_mention` notifications the viewer
+has there, thread replies included, from a second filtered edge (`unreadMentions`,
+limit 10, shown as **9+** above nine). The edge reads notification state, so a
+mention clears when it is marked seen: opening the channel clears top-level
+mentions, and a thread mention stays counted until its thread is read. On desktop
+the count replaces the row's unread dot, including Favorites; on phones the list
+row keeps its leading dot and puts the count under the timestamp, and pinned
+favorites show the count in place of the dot. Rows from other projections, and
+the REST list, show no count. To check, have another account mention you in a
+channel you are not viewing: the row shows **1** without a reload, and opening the
+channel clears it. Then mention yourself in a thread reply, open the channel
+without the thread, and the count should stay.
+
 A backend-free cache regression runs on desktop and phone viewports:
 `bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
 It uses the production normalized exchange, query adapter, and detail state with a
@@ -1575,9 +1588,9 @@ indicators live on conversation rows; the separate `Live` list is only for
 standalone quick calls. See [Calls](calls.md) for controls and sharing semantics.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
-panel. Guest chat is turned off for now: a guest in a quick or scheduled call
-sees only the participants list, with the **Chat** tab disabled, and cannot read
-or send messages. Each call session has one persistent message thread;
+panel. Guests in quick and scheduled calls use that same chat without signing
+in, while they are connected to the call; see [Calls](calls.md) for what a guest
+can do and see. Each call session has one persistent message thread;
 signed-in participants use the
 shared message composer, attachments, reactions, and message actions. The `@`
 menu offers Macro and available owned and team agents. Mention an agent and send
@@ -1659,35 +1672,36 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. On narrow desktop panes, the tabs
-collapse from text labels to icons. Standalone mobile channels
+`Invite` and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. `Ask Macro` lives in the channel
+title menu (the `...` after the name, or the split title's menu) on every
+platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
 recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
-already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
-`...` drawer instead. Clicking the radio input can time out — click the adjacent label text
+already @mentioned as context (see ai-chat.md). On mobile the title menu is a
+drawer. Clicking the radio input can time out — click the adjacent label text
 instead.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. An ellipsis follows the name — after the breadcrumb where
+`Invite` buttons. An ellipsis follows the name — after the breadcrumb where
 the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,
 `Remove channel picture` (only when the channel has one),
 `Favorite`/`Unfavorite`, `Mute notifications`/`Unmute notifications`,
-`Remind me`, `Copy Link`, `Copy ID`. A channel can therefore be favorited or
-given a picture without finding its row, from Chat and from every view that
+`Remind me`, `Copy Link`, `Copy ID`, then `Ask Macro`. A channel can
+therefore be favorited or given a picture without finding its row, from Chat and from every view that
 opens one inline. The menu appears once the conversation itself has loaded,
 reusing a cached conversation without another activation fetch. Opening the
 conversation still refreshes its unread notifications. The split's own title
-`...` menu offers the same picture actions.
+`...` menu offers the same picture actions and `Ask Macro`.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

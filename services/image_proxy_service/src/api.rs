@@ -8,6 +8,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod context;
 mod health;
+mod logos;
 pub(crate) mod proxy;
 pub(crate) mod swagger;
 
@@ -60,5 +61,7 @@ fn app(state: ApiContext) -> Router {
 }
 
 fn api_router() -> Router<ApiContext> {
-    Router::new().nest("/proxy", proxy::router())
+    Router::new()
+        .nest("/proxy", proxy::router())
+        .merge(logos::router())
 }
