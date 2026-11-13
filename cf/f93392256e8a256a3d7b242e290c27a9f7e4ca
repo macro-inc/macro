@@ -1,0 +1,33 @@
+apps/web/src/features/block-canvas/views/transitions/play-transition.ts
+  s_39eee246ac6b4a::t_adbbdcd20503e5 1-128
+apps/web/src/features/block-canvas/views/artifact-frame.tsx
+  s_39eee246ac6b4a::t_6e991796363fa2 33-34,159
+apps/web/src/features/block-canvas/views/transitions/canvas-flight.tsx
+  s_39eee246ac6b4a::t_bf18faf5c99e0d 38-41
+  s_39eee246ac6b4a::t_5c7680e499692e 1-37,42-113
+apps/web/src/features/block-canvas/views/artifact-presentation.tsx
+  s_39eee246ac6b4a::t_d1cebf6369e958 6,8-9,11-12,19,90-98
+apps/web/src/features/block-canvas/views/transitions/slide-stage.tsx
+  s_39eee246ac6b4a::t_faa411a8c6b610 1,3-17,19-80,82-185,187-269,271-275,277-346,351-370,373-374,376-378
+  s_39eee246ac6b4a::t_00a60ca6a5184d 2,18,81,186,270,276,347-350,371-372,375
+apps/web/src/features/block-canvas/canvas-next.tsx
+  s_39eee246ac6b4a::t_63b9d61a25882c 15,17,32,101-132,134-141,178
+apps/web/src/features/block-canvas/context/presentation.ts
+  s_39eee246ac6b4a::t_6d1a428546d85c 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cff93392256e8a256a3d7b242e290c27a9f7e4ca",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
