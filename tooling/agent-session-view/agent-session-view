@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""Render a Macro agent session as a self-contained, interactive HTML page.
+
+Reads agent_session + agent_session_log read-only. For prod it goes through the
+read replica over an SSM port-forward (opened and closed by this script); for
+dev it connects to the dev database directly.
+
+usage:
+  agent-session-view <session-id> [--env prod|dev] [--out PATH] [--save-json PATH] [--serve PORT [--bind HOST]]
+  agent-session-view --from-json EXPORT.json [--out PATH] [--serve PORT [--bind HOST]]
+
+--markdown writes <id>.md (a dense summary for agents) and <id>.full.md (the
+uncut code and results) instead of the HTML page.
+
+Frame times come from each log row's id, a UUIDv7 minted when the frame was
+appended; created_at is when its batch was written, up to 1.5 s later.
+--datadog adds the session's execute_tool and chat_streaming spans (true tool
+durations, result sizes, one row per model call); it needs DD_API_KEY and
+DD_APP_KEY.
+"""
+import argparse
+import contextlib
+import datetime
+import http.server
+import json
+import os
+import pathlib
+import re
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.parse
+
+import datadog_spans
+import markdown_export
+
+HERE = pathlib.Path(__file__).resolve().parent
+TEMPLATE = HERE / "template.html"
+DEFAULT_OUT_DIR = pathlib.Path.home() / ".cache" / "agent-session-view"
+UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+# Looked up by name, so no endpoint or instance id lives in this public repo.
+REPLICA_INSTANCE = "macro-db-prod-read-replica"
+# The in-VPC box the SSM port-forward goes through (the replica has no public route).
+TUNNEL_INSTANCE_NAME = "gab-opensearch-tunnel"
+NIX_PACKAGES = {
+    "psql": "nixpkgs#postgresql",
+    "doppler": "nixpkgs#doppler",
+    "session-manager-plugin": "nixpkgs#ssm-session-manager-plugin",
+    "aws": "nixpkgs#awscli2",
+}
+
+QUERY = """
+select json_build_object(
+  'session', (select row_to_json(s) from (
+      select id, name, model, owner_id, bot_id, harness, status, created_at, modified_at
+      from agent_session where id = :'id') s),
+  'frames', coalesce((
+      select json_agg(json_build_object(
+          'id', id, 'stored_at', created_at, 'direction', direction, 'user_id', user_id,
+          'content', content)
+        order by created_at, id)
+      from agent_session_log where agent_session_id = :'id'), '[]'::json))
+"""
+
+
+# Prompted sessions in a time range, filtered on their own columns first so
+# only the candidates' logs are read for the duration and tool-call filters.
+# (`for_warming` stays set on a warm session after it is claimed.)
+FIND_QUERY = """
+with candidates as (
+  select id, created_at from agent_session
+  where created_at >= :'since'::timestamptz and created_at < :'until'::timestamptz
+    and (:'owner' = '' or owner_id = :'owner')
+    and (:'model' = '' or model ilike '%' || :'model' || '%')
+    and (:'routines' = 'on' or source <> 'routine')
+), stats as (
+  select candidates.id, candidates.created_at,
+    extract(epoch from max(log.created_at) - min(log.created_at)) as seconds,
+    count(*) filter (where log.content->'params'->'update'->>'sessionUpdate' = 'tool_call') as tool_calls,
+    count(*) filter (where log.content->>'method' = 'session/prompt') as prompts
+  from candidates join agent_session_log log on log.agent_session_id = candidates.id
+  group by candidates.id, candidates.created_at
+)
+select coalesce(json_agg(json_build_object('id', id) order by created_at desc), '[]'::json)
+from (
+  select id, created_at from stats
+  where prompts > 0 and seconds >= :min_seconds and tool_calls >= :min_tools
+  order by created_at desc limit :limit
+) matches
+"""
+
+
+def ensure_tools(env):
+    needed = ["psql", "doppler"] + (["session-manager-plugin", "aws"] if env == "prod" else [])
+    missing = [tool for tool in needed if shutil.which(tool) is None]
+    if not missing:
+        return
+    if os.environ.get("AGENT_SESSION_VIEW_IN_NIX"):
+        sys.exit(f"missing tools even inside nix shell: {missing}")
+    os.environ["AGENT_SESSION_VIEW_IN_NIX"] = "1"
+    packages = [NIX_PACKAGES[tool] for tool in missing]
+    os.execvp("nix", ["nix", "shell", *packages, "--command", sys.executable, *sys.argv])
+
+
+def doppler_secret(project, config, name):
+    return subprocess.run(
+        ["doppler", "secrets", "get", name, "--project", project, "--config", config, "--plain"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def aws_text(*args):
+    return subprocess.run(
+        ["aws", *args, "--output", "text"], check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def replica_host():
+    return aws_text(
+        "rds", "describe-db-instances", "--db-instance-identifier", REPLICA_INSTANCE,
+        "--query", "DBInstances[0].Endpoint.Address",
+    )
+
+
+def tunnel_instance_id():
+    instance = aws_text(
+        "ec2", "describe-instances",
+        "--filters", f"Name=tag:Name,Values={TUNNEL_INSTANCE_NAME}", "Name=instance-state-name,Values=running",
+        "--query", "Reservations[0].Instances[0].InstanceId",
+    )
+    if not instance or instance == "None":
+        sys.exit(f"no running {TUNNEL_INSTANCE_NAME} instance to tunnel through")
+    return instance
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def wait_for_port(port, process, timeout=45):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if process.poll() is not None:
+            sys.exit(f"SSM tunnel exited early:\n{process.stdout.read() if process.stdout else ''}")
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return
+        except OSError:
+            time.sleep(0.5)
+    sys.exit("timed out waiting for the SSM tunnel")
+
+
+def with_host(url, host, port):
+    parsed = urllib.parse.urlparse(url)
+    netloc = f"{parsed.username}:{parsed.password}@{host}:{port}"
+    return parsed._replace(netloc=netloc, query="sslmode=require").geturl()
+
+
+def without_password(url):
+    """The URL with its password taken out, and the password: psql reads it
+    from PGPASSWORD, so it never shows in the process list."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.password is None:
+        return url, None
+    netloc = parsed.netloc.rsplit("@", 1)[1]
+    user = urllib.parse.quote(urllib.parse.unquote(parsed.username or ""), safe="")
+    return parsed._replace(netloc=f"{user}@{netloc}").geturl(), urllib.parse.unquote(parsed.password)
+
+
+def psql_json(url, sql, **variables):
+    url, password = without_password(url)
+    args = ["psql", url, "-At", "-X", "-v", "ON_ERROR_STOP=1"]
+    for name, value in variables.items():
+        args += ["-v", f"{name}={value}"]
+    result = subprocess.run(
+        [*args, "-f", "-"], input=sql, capture_output=True, text=True,
+        env={
+            **os.environ,
+            "PGOPTIONS": "-c default_transaction_read_only=on",
+            **({"PGPASSWORD": password} if password is not None else {}),
+        },
+    )
+    if result.returncode != 0:
+        sys.exit(f"query failed: {result.stderr.strip()}")
+    return json.loads(result.stdout)
+
+
+def appended_at(log_id):
+    """When a frame was appended: the millisecond timestamp in its UUIDv7 id."""
+    millis = int(log_id.replace("-", "")[:12], 16)
+    return datetime.datetime.fromtimestamp(millis / 1000, datetime.timezone.utc).isoformat()
+
+
+def query_session(url, session_id, with_spans=False):
+    export = psql_json(url, QUERY, id=session_id)
+    if not export["session"]:
+        sys.exit(f"no agent session {session_id}")
+    for frame in export["frames"]:
+        frame["t"] = appended_at(frame["id"])
+    if with_spans:
+        export["spans"] = session_spans(export)
+    return export
+
+
+def postgres_time(value):
+    """A Postgres timestamptz as JSON renders it. Postgres trims trailing zeros
+    from the fraction, which `fromisoformat` before Python 3.11 rejects, so the
+    fraction is padded to six digits first."""
+    value = re.sub(r"\.(\d{1,6})", lambda match: "." + match.group(1).ljust(6, "0"), value, count=1)
+    return datetime.datetime.fromisoformat(re.sub(r"([+-]\d\d)$", r"\1:00", value.replace("Z", "+00:00")))
+
+
+def session_spans(export):
+    """The session's spans, over its log's time range with a margin each side."""
+    margin = datetime.timedelta(minutes=5)
+    times = [datetime.datetime.fromisoformat(frame["t"]) for frame in export["frames"]]
+    created = postgres_time(export["session"]["created_at"])
+    since = min([created, *times]) - margin
+    until = max([created, *times]) + margin
+    try:
+        return datadog_spans.fetch(export["session"]["id"], since.isoformat(), until.isoformat())
+    except datadog_spans.MissingCredentials as error:
+        sys.exit(str(error))
+
+
+@contextlib.contextmanager
+def database(env):
+    """A read-only connection URL, with the prod tunnel open while it is in use."""
+    ensure_tools(env)
+    if env == "dev":
+        yield doppler_secret("agent-harness-service", "dev", "DATABASE_URL")
+        return
+    port = free_port()
+    print(f"opening SSM tunnel to the prod read replica on :{port}…", file=sys.stderr)
+    tunnel = subprocess.Popen(
+        ["aws", "ssm", "start-session", "--target", tunnel_instance_id(),
+         "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
+         "--parameters", json.dumps({"host": [replica_host()], "portNumber": ["5432"], "localPortNumber": [str(port)]})],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        # Its own process group, so closing it also stops the
+        # session-manager-plugin child that holds the port-forward.
+        start_new_session=True,
+    )
+    try:
+        wait_for_port(port, tunnel)
+        yield with_host(doppler_secret("global_databases", "prd", "DATABASE_URL_READONLY"), "127.0.0.1", port)
+    finally:
+        close_tunnel(tunnel)
+
+
+def close_tunnel(tunnel):
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(tunnel.pid, signal.SIGTERM)
+    try:
+        tunnel.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(tunnel.pid, signal.SIGKILL)
+        tunnel.wait()
+
+
+def find_sessions(url, args):
+    """Sessions matching the batch filters, newest first."""
+    return psql_json(
+        url, FIND_QUERY,
+        since=args.since, until=args.until, owner=args.owner or "", model=args.model or "",
+        routines="on" if args.include_routines else "off",
+        min_seconds=args.min_seconds, min_tools=args.min_tools, limit=args.limit,
+    )
+
+
+def export_batch(url, args):
+    """Write each matching session's markdown and an index.md beside them."""
+    out_dir = args.out or DEFAULT_OUT_DIR / "batch"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    found = find_sessions(url, args)
+    rows = []
+    for number, match in enumerate(found, 1):
+        print(f"[{number}/{len(found)}] {match['id']}", file=sys.stderr)
+        export = query_session(url, match["id"], args.datadog)
+        summary, full = markdown_export.render(export)
+        (out_dir / f"{match['id']}.md").write_text(summary)
+        (out_dir / f"{match['id']}.full.md").write_text(full)
+        rows.append(markdown_export.index_row(export))
+    (out_dir / "index.md").write_text(markdown_export.index(rows, vars(args)))
+    return out_dir / "index.md"
+
+
+def normalize(export):
+    """Accept this tool's export, or the ad-hoc {id,name,model,created,frames:[{t,dir,c}]} shape."""
+    if "session" in export:
+        return export
+    session = {key: export.get(key) for key in ("id", "name", "model")}
+    session["created_at"] = export.get("created")
+    frames = [
+        {"t": frame["t"], "direction": frame.get("dir"), "user_id": None, "content": frame["c"]}
+        for frame in export.get("frames") or []
+    ]
+    return {"session": session, "frames": frames}
+
+
+def render(export):
+    # Every `<` as \u003c, so no `</script>` or `<!--` in the session ends or
+    # changes the script element it is inlined in.
+    payload = json.dumps(export, ensure_ascii=False).replace("<", "\\u003c")
+    return TEMPLATE.read_text().replace("__SESSION_JSON__", payload)
+
+
+def serve(path, port, bind):
+    """Serve the output directory, unauthenticated: loopback unless `bind` says otherwise."""
+    directory = str(path.parent)
+    handler = lambda *args: http.server.SimpleHTTPRequestHandler(*args, directory=directory)
+    server = http.server.ThreadingHTTPServer((bind, port), handler)
+    host = socket.gethostname() if bind in ("0.0.0.0", "::", "") else bind
+    print(f"serving http://{host}:{server.server_address[1]}/{path.name} (ctrl-c to stop)", file=sys.stderr)
+    server.serve_forever()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("session_id", nargs="?")
+    parser.add_argument("--env", choices=["prod", "dev"], default="prod")
+    parser.add_argument("--from-json", type=pathlib.Path)
+    parser.add_argument("--save-json", type=pathlib.Path)
+    parser.add_argument("--out", type=pathlib.Path)
+    parser.add_argument("--serve", type=int, metavar="PORT")
+    parser.add_argument(
+        "--bind", default="127.0.0.1", metavar="HOST",
+        help="address --serve listens on (default 127.0.0.1); 0.0.0.0 or this machine's "
+        "tailnet IP to open the page from another machine",
+    )
+    parser.add_argument("--markdown", action="store_true")
+    parser.add_argument("--datadog", action="store_true", help="merge tool and model-call spans")
+    batch = parser.add_argument_group("batch export (--query): markdown for every matching session")
+    batch.add_argument("--query", action="store_true")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    batch.add_argument("--since", default=(now - datetime.timedelta(days=7)).isoformat(), help="default 7 days ago")
+    batch.add_argument("--until", default=now.isoformat())
+    batch.add_argument("--owner", help="owner_id, e.g. macro|user@example.com")
+    batch.add_argument("--model", help="substring of the model id")
+    batch.add_argument("--include-routines", action="store_true")
+    batch.add_argument("--min-seconds", type=int, default=0, help="first to last frame")
+    batch.add_argument("--min-tools", type=int, default=0)
+    batch.add_argument("--limit", type=int, default=20)
+    args = parser.parse_args()
+
+    if args.query:
+        with database(args.env) as url:
+            print(export_batch(url, args))
+        return
+    if args.from_json:
+        export = normalize(json.loads(args.from_json.read_text()))
+    elif args.session_id and UUID.match(args.session_id):
+        with database(args.env) as url:
+            export = query_session(url, args.session_id, args.datadog)
+    else:
+        parser.error("pass an agent session id (uuid), --from-json, or --query")
+
+    if args.save_json:
+        args.save_json.write_text(json.dumps(export, ensure_ascii=False))
+    suffix = ".md" if args.markdown else ".html"
+    out = args.out or DEFAULT_OUT_DIR / f"{export['session']['id']}{suffix}"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if args.markdown:
+        summary, full = markdown_export.render(export)
+        out.write_text(summary)
+        out.with_suffix(".full.md").write_text(full)
+    else:
+        out.write_text(render(export))
+    print(out)
+    if args.serve:
+        serve(out, args.serve, args.bind)
+
+
+if __name__ == "__main__":
+    main()

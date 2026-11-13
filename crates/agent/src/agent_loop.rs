@@ -7,6 +7,7 @@ use crate::model::router::{ModelRouter, ProviderAgent};
 use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
+use crate::system_prompt::{PromptSection, SystemPrompt};
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::{DynToolSetAdapter, provider_definition};
 use crate::tool_result_limit::ToolResultLimit;
@@ -24,94 +25,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 200;
-
-/// A session's system prompt, optionally split where the part every session
-/// of the agent repeats byte for byte ends, with an optional tail that
-/// changes every turn.
-///
-/// Anthropic caches the shared part apart from the per-session rest
-/// (instructions, memory), so a session reads the shared part back even when
-/// its rest is new. The turn's part comes last, after anything the loop adds
-/// (the model id, connected integrations), so a change to it costs only what
-/// follows it. Other providers receive the parts joined.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SystemPrompt {
-    shared: Option<String>,
-    rest: String,
-    turn: String,
-}
-
-impl SystemPrompt {
-    /// A prompt whose leading `shared` part is the same for every session of
-    /// the agent and whose `rest` is the session's own.
-    pub fn split(shared: impl Into<String>, rest: impl Into<String>) -> Self {
-        Self {
-            shared: Some(shared.into()),
-            rest: rest.into(),
-            turn: String::new(),
-        }
-    }
-
-    /// This prompt with `turn`, the part only this turn sends, at its end.
-    #[must_use]
-    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
-        self.turn = turn.into();
-        self
-    }
-
-    /// The shared part, when the prompt is split.
-    pub fn shared(&self) -> Option<&str> {
-        self.shared.as_deref()
-    }
-
-    /// Everything after the shared part: the session's own, then the turn's.
-    pub fn rest(&self) -> String {
-        format!("{}{}", self.rest, self.turn)
-    }
-
-    /// The whole prompt as one string.
-    pub(crate) fn joined(&self) -> String {
-        self.to_string()
-    }
-
-    fn push_str(&mut self, text: &str) {
-        self.rest.push_str(text);
-    }
-}
-
-impl std::fmt::Display for SystemPrompt {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            formatter,
-            "{}{}{}",
-            self.shared.as_deref().unwrap_or_default(),
-            self.rest,
-            self.turn
-        )
-    }
-}
-
-impl From<String> for SystemPrompt {
-    fn from(rest: String) -> Self {
-        Self {
-            shared: None,
-            rest,
-            turn: String::new(),
-        }
-    }
-}
-
-impl From<&String> for SystemPrompt {
-    fn from(rest: &String) -> Self {
-        rest.clone().into()
-    }
-}
-
-impl From<&str> for SystemPrompt {
-    fn from(rest: &str) -> Self {
-        rest.to_owned().into()
-    }
-}
 
 /// Factory for creating per-request agent sessions.
 ///
@@ -486,18 +399,23 @@ impl AgentLoop {
         // newly released model doesn't recognize its own id and may fall back
         // to identifying as a predecessor — tell it to trust the id.
         let mut system_prompt = system_prompt.into();
-        system_prompt.push_str(&format!(
-            "\n\nYou are the {} model. If this model id is unfamiliar, \
-             that is because it was released after your training data cutoff — trust \
-             this id over your training data when identifying yourself.",
-            self.model
-        ));
+        system_prompt.push(
+            PromptSection::ModelId,
+            &format!(
+                "\n\nYou are the {} model. If this model id is unfamiliar, \
+                 that is because it was released after your training data cutoff — trust \
+                 this id over your training data when identifying yourself.",
+                self.model
+            ),
+        );
         // Tell the model which connected integrations it can reach via tool
         // search. The prompt text lives in the `prompt` crate; the toolset names
         // are the dynamic data injected here. Omitted when nothing is connected.
         if let Some(section) = prompt::connected_toolsets::render(&searchable_toolset_names) {
-            system_prompt.push_str("\n\n");
-            system_prompt.push_str(&section);
+            system_prompt.push(
+                PromptSection::ConnectedIntegrations,
+                &format!("\n\n{section}"),
+            );
         }
 
         // Session-scoped GenAI telemetry: the conversation id ties the spans of
@@ -511,6 +429,7 @@ impl AgentLoop {
             ContentPolicy::from_env(),
             self.genai_telemetry,
         );
+        telemetry.set_prompt(&system_prompt, &tool_search.catalog);
         let agent = build(
             handle,
             &system_prompt,
@@ -688,6 +607,7 @@ impl Session {
                 gen_ai.provider.name = self.telemetry.provider_name(),
                 gen_ai.request.model = self.telemetry.model_name(),
                 agent.stream.items = tracing::field::Empty,
+                agent.stream.model_calls = tracing::field::Empty,
                 agent.stream.first_chunk_ms = tracing::field::Empty,
                 agent.stream.first_chunk_kind = tracing::field::Empty,
                 agent.stream.trailing_silence_ms = tracing::field::Empty,
@@ -698,6 +618,7 @@ impl Session {
                 agent.name = %self.telemetry.agent_name(),
                 agent.model = self.telemetry.model_name(),
                 agent.stream.items = tracing::field::Empty,
+                agent.stream.model_calls = tracing::field::Empty,
                 agent.stream.first_chunk_ms = tracing::field::Empty,
                 agent.stream.first_chunk_kind = tracing::field::Empty,
                 agent.stream.trailing_silence_ms = tracing::field::Empty,

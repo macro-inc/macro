@@ -171,6 +171,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'agent-harness-task-memory',
     'agent-runtime-reattach-dials',
     'agent-runtime-reattach-sessions',
+    'agent-tool-failures',
     'ai-editing-provider-account-unavailable',
     'ai-fireworks-spend-nearing-cap',
     'ai-fireworks-spend-reached-cap',

@@ -18,6 +18,7 @@ import './synthetics';
 
 // Declared here first.
 import './goalert';
+import { agentSessionsDashboard } from './monitors/agent-sessions';
 import './monitors/ai-editing';
 import './monitors/ai-providers';
 import './monitors/calls';
@@ -40,3 +41,4 @@ import { webPerformanceDashboard } from './dashboards/web-performance';
 export const notificationRetentionDashboardUrl =
   notificationRetentionDashboard.url;
 export const webPerformanceDashboardUrl = webPerformanceDashboard.url;
+export const agentSessionsDashboardUrl = agentSessionsDashboard.url;

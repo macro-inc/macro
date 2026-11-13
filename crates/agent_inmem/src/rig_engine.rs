@@ -23,7 +23,9 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
+use agent::{
+    AgentError, AgentLoop, PromptSection, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
+};
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{DeferredToolSet, ToolServiceContext};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
@@ -1012,41 +1014,53 @@ fn system_prompt(
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
-    let mut shared = String::new();
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
-    shared.push_str(&tools_prompt.to_string());
-    let mut rest = String::new();
+    let mut prompt = SystemPrompt::default();
+    prompt.push_shared(
+        PromptSection::Preamble,
+        &prompt::agent_session::PROMPT.to_string(),
+    );
+    prompt.push_shared(PromptSection::MacroPrompt, &tools_prompt.to_string());
     if let Some(identity) = identity {
-        rest.push('\n');
-        rest.push_str(&prompt::agent_identity::render(
-            &identity.name,
-            &identity.handle,
-        ));
+        prompt.push(
+            PromptSection::Identity,
+            &format!(
+                "\n{}",
+                prompt::agent_identity::render(&identity.name, &identity.handle)
+            ),
+        );
     }
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
     if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        rest.push_str("\n<session_instructions>\n");
-        rest.push_str(instructions);
-        rest.push_str("\n</session_instructions>");
+        prompt.push(
+            PromptSection::SessionInstructions,
+            &format!("\n<session_instructions>\n{instructions}\n</session_instructions>"),
+        );
     }
-    rest.push_str(&format!(
-        "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
-         long, its earlier part is summarized to keep it within your context. To find the exact \
-         words of anything said earlier, summarized or not, run ContentSearch with \
-         agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
-    ));
+    prompt.push(
+        PromptSection::SessionNote,
+        &format!(
+            "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
+             long, its earlier part is summarized to keep it within your context. To find the exact \
+             words of anything said earlier, summarized or not, run ContentSearch with \
+             agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+        ),
+    );
     if delivery == ReplyDelivery::Whole {
-        rest.push('\n');
-        rest.push_str(opener::NOT_OPENED);
+        prompt.push(
+            PromptSection::OpenerNote,
+            &format!("\n{}", opener::NOT_OPENED),
+        );
     }
     if let Some(memory) = user_memory {
-        rest.push_str("\n<user_memory>\n");
-        rest.push_str(memory);
-        rest.push_str("\n</user_memory>");
+        prompt.push(
+            PromptSection::Memory,
+            &format!("\n<user_memory>\n{memory}\n</user_memory>"),
+        );
     }
-    SystemPrompt::split(shared, rest).with_turn(sdk_docs)
+    prompt.push_turn(PromptSection::SdkDocs, sdk_docs);
+    prompt
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.

@@ -81,13 +81,41 @@ a tool call, but excludes usage and tool-result events.
 In-memory prompt spans record what the turn said: `agent.turn.stop_reason`
 (`end_turn`, `cancelled`, `error`), `agent.turn.text_chars`,
 `agent.turn.tool_calls`, and `agent.turn.replied`, which is false when no text
-followed the last tool call. Such a turn also logs `the turn ended without a
+followed the last tool call. They also count `agent.turn.tool_failures`
+(errored calls, plus `ExecuteCode` programs that did not succeed),
+`agent.turn.code_executions` and `agent.turn.code_failures`, and time
+`agent.turn.compaction_wait_ms`, spent waiting on a conversation summary before
+the turn could run. The child `agent.turn` span counts the turn's model
+round-trips in `agent.stream.model_calls`. A turn that did not reply also logs `the turn ended without a
 reply after its last tool call`; query `@agent.turn.replied:false` to find them.
 Then read the turn's last `chat_streaming` span: `gen_ai.response.finish_reasons`
 carries the provider's own stop reason (`end_turn`, `refusal`, `max_tokens`,
 `max_output_tokens`, `SAFETY`, ...), which Rig does not record for streamed
 calls. Each `execute_tool` span carries `macro.genai.tool.result_bytes`, whatever
 the content policy, so a result large enough to crowd the context shows there.
+
+### What went into a model call
+
+Every `chat_streaming` span records the size of each part of its request, never
+the content: `macro.genai.prompt.<section>.bytes` and `.hash` for each system
+prompt section (`preamble`, `macro_prompt`, `identity`, `session_instructions`,
+`session_note`, `opener_note`, `memory`, `model_id`, `connected_integrations`,
+`sdk_docs`), `macro.genai.prompt.tools.{eager,loaded}.{count,bytes,hash}`
+for the tool schemas offered upfront and those loaded by tool search, and
+`macro.genai.prompt.{messages,history.bytes,tool_results.count,tool_results.bytes}`
+for the conversation. When `gen_ai.usage.cache_read.input_tokens` drops between
+two calls of a session, the section or tool hash that changed is what broke the
+cache.
+
+### How long a step took
+
+Each in-process `execute_tool` span records `macro.genai.tool.result_bytes` and
+`macro.genai.tool.result_cut`, true when the model read only the result's
+beginning. For timings from the log, read each frame's time from its `id`, a
+UUIDv7 minted when the frame was appended, not from `created_at`: streamed
+frames are written in batches up to 1.5 s apart (`LOG_FLUSH_INTERVAL`), and a
+batch's `created_at` is when it was written, so a tool call and its result in
+one batch read 0 ms apart.
 
 ### From the send click to the first painted text
 
