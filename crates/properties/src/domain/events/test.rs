@@ -89,6 +89,9 @@ fn topic_events(
             PropertyTopicEvent::OptionCreated(PropertyOptionCreatedMetadata {
                 option_id: uuid(OPTION_ID),
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+                owner: Some(PropertyOwner::Team {
+                    team_id: uuid(TEAM_ID),
+                }),
                 actor_user_id: actor_user_id.clone(),
                 value: PropertyOptionValue::String("High".to_string()),
                 color: Some("#FF0000".to_string()),
@@ -99,6 +102,10 @@ fn topic_events(
                 "metadata": {
                     "option_id": OPTION_ID,
                     "property_definition_id": PROPERTY_DEFINITION_ID,
+                    "owner": {
+                        "scope": "team",
+                        "team_id": TEAM_ID
+                    },
                     "actor_user_id": actor_json.clone(),
                     "value": {
                         "type": "string",
@@ -113,6 +120,9 @@ fn topic_events(
             PropertyTopicEvent::OptionUpdated(PropertyOptionUpdatedMetadata {
                 option_id: uuid(OPTION_ID),
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+                owner: Some(PropertyOwner::Team {
+                    team_id: uuid(TEAM_ID),
+                }),
                 actor_user_id: actor_user_id.clone(),
                 value: PropertyOptionValue::Number(42.5),
                 color: None,
@@ -123,6 +133,10 @@ fn topic_events(
                 "metadata": {
                     "option_id": OPTION_ID,
                     "property_definition_id": PROPERTY_DEFINITION_ID,
+                    "owner": {
+                        "scope": "team",
+                        "team_id": TEAM_ID
+                    },
                     "actor_user_id": actor_json.clone(),
                     "value": {
                         "type": "number",
@@ -137,6 +151,7 @@ fn topic_events(
             PropertyTopicEvent::OptionDeleted(PropertyOptionDeletedMetadata {
                 option_id: uuid(OPTION_ID),
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+                owner: None,
                 actor_user_id: actor_user_id.clone(),
                 value: PropertyOptionValue::String("Retired".to_string()),
             }),
@@ -519,5 +534,214 @@ mod exposure {
         for event in [PropertyTopicEvent::EntityPropertyUpdated(select), removed] {
             assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
         }
+    }
+}
+
+mod definition_exposure {
+    use super::*;
+    use macro_event_broker::exposure::{
+        Audience, EntityRef, EntityType as MacroEntityType, Exposure, MinTeamRole,
+        PublicEntityType, PublicEvent, Stage,
+    };
+
+    fn public(event: &PropertyTopicEvent) -> PublicEvent<'_, PropertyPublicEvent> {
+        match event.exposure().unwrap() {
+            Exposure::Public(public) => public,
+            Exposure::Internal(reason) => panic!("expected public, got {reason}"),
+        }
+    }
+
+    fn created(owner: PropertyOwner) -> PropertyTopicEvent {
+        PropertyTopicEvent::Created(PropertyCreatedMetadata {
+            property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+            actor_user_id: Some(user_id("macro|creator@example.com")),
+            owner,
+            display_name: "Priority".to_string(),
+            data_type: DataType::SelectString,
+            is_multi_select: false,
+            specific_entity_type: None,
+            created_at: timestamp(CREATED_AT),
+        })
+    }
+
+    fn option_deleted(owner: Option<PropertyOwner>) -> PropertyTopicEvent {
+        PropertyTopicEvent::OptionDeleted(PropertyOptionDeletedMetadata {
+            option_id: uuid(OPTION_ID),
+            property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+            owner,
+            actor_user_id: Some(user_id("macro|creator@example.com")),
+            value: PropertyOptionValue::String("Retired".to_string()),
+        })
+    }
+
+    #[test]
+    fn the_definition_owner_decides_the_audience() {
+        let team_id = uuid(TEAM_ID);
+        let cases = [
+            (
+                PropertyOwner::User {
+                    user_id: "macro|owner@example.com".to_string(),
+                },
+                Audience::Owner {
+                    user_id: user_id("macro|owner@example.com"),
+                },
+            ),
+            (
+                PropertyOwner::Team { team_id },
+                Audience::Team {
+                    team_id,
+                    min_role: MinTeamRole::Member,
+                },
+            ),
+            (
+                PropertyOwner::Database {
+                    database_id: team_id,
+                },
+                Audience::Entity {
+                    entity_type: MacroEntityType::Database,
+                    entity_id: TEAM_ID.to_string(),
+                },
+            ),
+        ];
+        for (owner, audience) in cases {
+            for event in [created(owner.clone()), option_deleted(Some(owner))] {
+                let public = public(&event);
+                assert_eq!(public.audience, audience, "{}", public.name);
+                assert_eq!(public.stage, Stage::Preview);
+                assert_eq!(
+                    public.entity,
+                    EntityRef::new(PublicEntityType::Property, PROPERTY_DEFINITION_ID)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn system_definitions_and_options_without_an_owner_stay_internal() {
+        for event in [
+            created(PropertyOwner::System),
+            option_deleted(Some(PropertyOwner::System)),
+            option_deleted(None),
+        ] {
+            assert!(matches!(event.exposure().unwrap(), Exposure::Internal(_)));
+        }
+    }
+
+    #[test]
+    fn a_malformed_user_owner_is_rejected() {
+        let event = created(PropertyOwner::User {
+            user_id: "not-a-user".to_string(),
+        });
+        assert!(event.exposure().is_err());
+    }
+
+    #[test]
+    fn every_definition_and_option_variant_is_public_under_its_own_name() {
+        for (event, wire) in topic_events(Some(user_id("macro|actor@example.com"))) {
+            let name = wire["event_type"].as_str().unwrap();
+            if !(name.starts_with("property.") || name.starts_with("property_option.")) {
+                continue;
+            }
+            let expected_public = name != "property_option.deleted";
+            match event.exposure().unwrap() {
+                Exposure::Public(public) => {
+                    assert!(expected_public, "{name}");
+                    assert_eq!(public.name, name);
+                    assert_eq!(
+                        serde_json::to_value(public.payload.as_ref()).unwrap()["event_type"],
+                        name
+                    );
+                }
+                // The deleted-option fixture predates owners on options.
+                Exposure::Internal(_) => assert!(!expected_public, "{name}"),
+            }
+        }
+    }
+
+    #[test]
+    fn public_bodies_are_thin() {
+        assert_eq!(
+            serde_json::to_value(
+                public(&created(PropertyOwner::Team {
+                    team_id: uuid(TEAM_ID)
+                }))
+                .payload
+                .as_ref()
+            )
+            .unwrap(),
+            json!({
+                "event_type": "property.created",
+                "metadata": {
+                    "property_definition_id": PROPERTY_DEFINITION_ID,
+                    "owner": { "scope": "team", "team_id": TEAM_ID },
+                    "display_name": "Priority",
+                    "data_type": "SELECT_STRING",
+                    "is_multi_select": false,
+                    "actor": "macro|creator@example.com",
+                    "created_at": CREATED_AT
+                }
+            })
+        );
+        let option = PropertyTopicEvent::OptionUpdated(PropertyOptionUpdatedMetadata {
+            option_id: uuid(OPTION_ID),
+            property_definition_id: uuid(PROPERTY_DEFINITION_ID),
+            owner: Some(PropertyOwner::Team {
+                team_id: uuid(TEAM_ID),
+            }),
+            actor_user_id: None,
+            value: PropertyOptionValue::String("High".to_string()),
+            color: Some("#FF0000".to_string()),
+            display_order: 3,
+        });
+        assert_eq!(
+            serde_json::to_value(public(&option).payload.as_ref()).unwrap(),
+            json!({
+                "event_type": "property_option.updated",
+                "metadata": {
+                    "option_id": OPTION_ID,
+                    "property_definition_id": PROPERTY_DEFINITION_ID,
+                    "actor": null,
+                    "value": { "type": "string", "value": "High" },
+                    "color": "#FF0000",
+                    "display_order": 3
+                }
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(
+                public(&option_deleted(Some(PropertyOwner::Team {
+                    team_id: uuid(TEAM_ID)
+                })))
+                .payload
+                .as_ref()
+            )
+            .unwrap(),
+            json!({
+                "event_type": "property_option.deleted",
+                "metadata": {
+                    "option_id": OPTION_ID,
+                    "property_definition_id": PROPERTY_DEFINITION_ID,
+                    "actor": "macro|creator@example.com"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn option_events_without_an_owner_still_decode() {
+        let event: PropertyTopicEvent = serde_json::from_value(json!({
+            "event_type": "property_option.deleted",
+            "metadata": {
+                "option_id": OPTION_ID,
+                "property_definition_id": PROPERTY_DEFINITION_ID,
+                "actor_user_id": null,
+                "value": { "type": "string", "value": "Retired" }
+            }
+        }))
+        .unwrap();
+        let PropertyTopicEvent::OptionDeleted(metadata) = event else {
+            panic!("expected property_option.deleted");
+        };
+        assert_eq!(metadata.owner, None);
     }
 }

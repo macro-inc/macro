@@ -101,4 +101,19 @@ pub enum PropertyPublicEvent {
     /// Every property value on an entity was removed.
     #[serde(rename = "entity_properties.cleared")]
     EntityPropertiesCleared(PublicEntityPropertiesCleared),
+    /// A property definition was created.
+    #[serde(rename = "property.created")]
+    PropertyCreated(super::definitions::PublicPropertyCreated),
+    /// A property definition was deleted.
+    #[serde(rename = "property.deleted")]
+    PropertyDeleted(super::definitions::PublicPropertyDeleted),
+    /// An option was added to a property definition.
+    #[serde(rename = "property_option.created")]
+    OptionCreated(super::definitions::PublicPropertyOption),
+    /// A property option changed.
+    #[serde(rename = "property_option.updated")]
+    OptionUpdated(super::definitions::PublicPropertyOption),
+    /// A property option was deleted.
+    #[serde(rename = "property_option.deleted")]
+    OptionDeleted(super::definitions::PublicPropertyOptionDeleted),
 }

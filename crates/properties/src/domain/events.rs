@@ -3,6 +3,7 @@
 //! Property definition and option events are keyed by property definition id.
 //! Entity property events are keyed by entity id to preserve per-entity ordering.
 
+pub mod definitions;
 pub mod public;
 #[cfg(test)]
 mod test;
@@ -64,6 +65,10 @@ pub struct PropertyOptionCreatedMetadata {
     pub option_id: Uuid,
     /// Identifier of the option's property definition.
     pub property_definition_id: Uuid,
+    /// Scope that owns the option's property definition. Absent on events
+    /// published before options carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<PropertyOwner>,
     /// Authenticated user who created the option, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Selectable option value.
@@ -81,6 +86,10 @@ pub struct PropertyOptionUpdatedMetadata {
     pub option_id: Uuid,
     /// Identifier of the option's property definition.
     pub property_definition_id: Uuid,
+    /// Scope that owns the option's property definition. Absent on events
+    /// published before options carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<PropertyOwner>,
     /// Authenticated user who updated the option, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Full option value after the update.
@@ -98,6 +107,10 @@ pub struct PropertyOptionDeletedMetadata {
     pub option_id: Uuid,
     /// Identifier of the option's property definition.
     pub property_definition_id: Uuid,
+    /// Scope that owns the option's property definition. Absent on events
+    /// published before options carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<PropertyOwner>,
     /// Authenticated user who deleted the option, or `None` for a system operation.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// Option value at deletion time.
@@ -304,18 +317,11 @@ impl TopicEvent for PropertyTopicEvent {
                     }),
                 )
             }
-            Self::Created(_) | Self::Deleted(_) => {
-                return Ok(Exposure::pending(
-                    PendingPhase::TeamFamilies,
-                    "property definitions: Team or Owner from PropertyOwner; its Database variant needs Entity(Database) and its System variant has no audience",
-                ));
-            }
-            Self::OptionCreated(_) | Self::OptionUpdated(_) | Self::OptionDeleted(_) => {
-                return Ok(Exposure::pending(
-                    PendingPhase::TeamFamilies,
-                    "property options carry only property_definition_id, not the PropertyOwner; the producer must add the owner before a Team or Owner rule can be declared",
-                ));
-            }
+            Self::Created(_)
+            | Self::Deleted(_)
+            | Self::OptionCreated(_)
+            | Self::OptionUpdated(_)
+            | Self::OptionDeleted(_) => return definitions::exposure(self),
         };
         Ok(Exposure::Public(PublicEvent {
             name,

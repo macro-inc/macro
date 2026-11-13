@@ -1222,6 +1222,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
             PropertyTopicEvent::OptionCreated(PropertyOptionCreatedMetadata {
                 option_id: PROPERTY_OPTION_ID,
                 property_definition_id: PROPERTY_DEFINITION_ID,
+                owner: None,
                 actor_user_id: actor_user_id.clone(),
                 value: PropertyOptionValue::String("Open".to_string()),
                 color: None,
@@ -1236,6 +1237,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
             PropertyTopicEvent::OptionUpdated(PropertyOptionUpdatedMetadata {
                 option_id: PROPERTY_OPTION_ID,
                 property_definition_id: PROPERTY_DEFINITION_ID,
+                owner: None,
                 actor_user_id: actor_user_id.clone(),
                 value: PropertyOptionValue::String("Done".to_string()),
                 color: Some("#ffffff".to_string()),
@@ -1250,6 +1252,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
             PropertyTopicEvent::OptionDeleted(PropertyOptionDeletedMetadata {
                 option_id: PROPERTY_OPTION_ID,
                 property_definition_id: PROPERTY_DEFINITION_ID,
+                owner: None,
                 actor_user_id: actor_user_id.clone(),
                 value: PropertyOptionValue::String("Done".to_string()),
             }),
