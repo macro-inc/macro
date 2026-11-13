@@ -1,0 +1,25 @@
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_c1146e8a8b951b::t_7a1527af21b875 940-941,947,973-1018
+tooling/xtask/crates/xtask_local/src/local/computers.rs
+  s_c1146e8a8b951b::t_c76f681da3e2b0 315,557-560,571,575,580,603-609,611-612,615-618,620
+tooling/just/xtask.just
+  s_c1146e8a8b951b::t_d4b03e53258185 8-13
+nix/macro-box/macro-box.nix
+  s_c1146e8a8b951b::t_6d99a275d2e4df 52-67,80-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "21061fba18fd75f2a02cecb9ccfe2171424b91b2",
+  "prompts": {},
+  "sessions": {
+    "s_c1146e8a8b951b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5b165f5-8ce8-4aa3-a98b-0d5cf2f39514",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
