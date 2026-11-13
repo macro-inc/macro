@@ -440,6 +440,7 @@ export function ComputerSetupSteps(props: {
         {(id) => (
           <ClaudeSignInFlow
             harnessId={id()}
+            entry="computer_setup"
             header={header()}
             title={t('computers.signInToClaude')}
             onSignedIn={() => fireAndForget(signedIn(), 'computer-setup')}

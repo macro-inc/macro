@@ -253,7 +253,18 @@ model goes out as `voice`. Owners and admins change a voice later with the
 row's waveform button (**Change voice**): **Save voice** calls
 `PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
 agent's repository and applies from its next call; a failed save keeps the
-pick for retry. Owners and admins remove an agent with its trash button and a
+pick for retry. With `enable-macro-computers` on as well, **Invite agent**
+continues to **Bring your AI to <name>**, the computer setup's Claude sign-in
+for the agent's new computer: **Preparing sign-in…** until its macrod connects
+(the agent list and `/harnesses` polls find the computer's runtime by
+`computer_id`), then **Open claude.ai** and the pasted code. **Skip, use Macro
+credits** (or **Use Macro credits instead**) closes it and the agent keeps
+Macro credits. Later, owners and admins see the agent's Claude under its job
+description: **Claude: Macro credits · Sign in to Claude** (offered only while
+the computer is connected), **Claude: your plan · Use Macro credits** (a
+confirmation, then sign-out), or **Claude sign-in expired · Sign in to
+Claude**. The sign-in spans carry `claude.sign_in.entry`
+(`team_agent_invite`, `team_agent_row`). Owners and admins remove an agent with its trash button and a
 confirmation; that releases its computer and deletes its account. On phones the
 dialog and confirmation are sheets and rows stay touch rows. Backend-free check:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`

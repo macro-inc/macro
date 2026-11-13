@@ -91,7 +91,12 @@ const SILENT_WAV = Buffer.from(
 async function scriptAuthService(
   page: Page,
   provisioningReads = 2,
-  options: { agents?: Agent[]; failedVoiceSaves?: number } = {}
+  options: {
+    agents?: Agent[];
+    failedVoiceSaves?: number;
+    /** Whether macrod on a new agent's computer has connected. */
+    computerConnected?: boolean;
+  } = {}
 ) {
   const backend = {
     agents: [...(options.agents ?? [])],
@@ -102,6 +107,14 @@ async function scriptAuthService(
     voiceSaves: [] as unknown[],
     failedVoiceSaves: options.failedVoiceSaves ?? 0,
     samples: [] as string[],
+    computerConnected: options.computerConnected ?? false,
+    // The agent computer's Claude: its mode, and the sign-in calls it saw.
+    claude: { mode: 'macro_credits' } as {
+      mode: 'macro_credits' | 'own_account';
+      account?: { signedInAt: string; signedInBy: string };
+    },
+    claudeCalls: [] as string[],
+    claudeCodes: [] as string[],
   };
   const members = () => [
     { user_id: OWNER, role: 'owner', team_id: 'team-1', plan: 'premium' },
@@ -141,6 +154,8 @@ async function scriptAuthService(
           backend.reads > provisioningReads
         )
           agent.status = 'running';
+        // The purchase confirms after the invite answers.
+        agent.computerId ??= `computer-${agent.name.toLowerCase()}`;
       }
       return json(200, { agents: backend.agents });
     }
@@ -223,6 +238,67 @@ async function scriptAuthService(
     return json(404, { message: 'not scripted' });
   });
 
+  // The agent harness and its runtime list: registered last, so tried first.
+  await page.route('**/harnesses**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const json = (status: number, body: unknown) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    // macrod enrolls each agent's computer as a runtime its admins own.
+    if (path.endsWith('/harnesses') && request.method() === 'GET')
+      return json(
+        200,
+        backend.agents.map((agent) => ({
+          id: `harness-${agent.name.toLowerCase()}`,
+          kind: 'macrod',
+          name: agent.name,
+          owner: { type: 'user', user_id: agent.userId },
+          access: 'owner',
+          shared_team_ids: [],
+          allow_permission_bypass: false,
+          created_by: agent.userId,
+          created_at: agent.createdAt,
+          updated_at: agent.createdAt,
+          connected: backend.computerConnected,
+          last_connected_at: null,
+          computer_id: `computer-${agent.name.toLowerCase()}`,
+          claude_mode: backend.claude.mode,
+        }))
+      );
+
+    const claude = path.match(
+      /\/harnesses\/([^/]+)\/(claude-sign-in(?:\/complete)?|claude-sign-out|claude-mode)$/
+    );
+    if (claude) {
+      const action = claude[2] ?? '';
+      backend.claudeCalls.push(
+        `${decodeURIComponent(claude[1] ?? '')} ${action}`
+      );
+      if (action === 'claude-mode') return json(200, backend.claude);
+      if (action === 'claude-sign-in')
+        return json(200, {
+          url: 'https://claude.com/cai/oauth/authorize?state=scripted',
+        });
+      if (action === 'claude-sign-in/complete') {
+        backend.claudeCodes.push(request.postDataJSON().code);
+        backend.claude = {
+          mode: 'own_account',
+          account: { signedInAt: '2026-11-13T09:00:00Z', signedInBy: OWNER },
+        };
+        return json(200, { signedIn: true });
+      }
+      backend.claude = { mode: 'macro_credits' };
+      return json(200, backend.claude);
+    }
+
+    return route.fallback();
+  });
+
   return backend;
 }
 
@@ -273,7 +349,20 @@ test('an admin invites an agent teammate and sees it come up', async ({
   await screenshot(page, testInfo, 'invite-agent');
 
   await invite.click();
+  // Bring your AI waits for the new computer; the admin keeps credits.
+  await expect(
+    dialog.getByRole('heading', { name: 'Bring your AI to Ada' })
+  ).toBeVisible();
+  await expect(dialog.getByRole('status')).toContainText('Preparing sign-in');
+  await screenshot(page, testInfo, 'bring-your-ai-waiting');
+  // Its row shows its Claude, with nothing to sign in on until it connects.
+  const claudeLine = page.locator('[data-agent-claude]');
+  await expect(claudeLine).toContainText('Claude: Macro credits');
+  await expect(claudeLine.getByRole('button')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Skip, use Macro credits' }).click();
   await expect(dialog).toBeHidden();
+  // Nothing started a sign-in, and a computer on credits has no login to read.
+  expect(backend.claudeCalls).toEqual([]);
   expect(backend.created).toEqual([
     {
       name: 'Ada',
@@ -305,4 +394,78 @@ test('an admin invites an agent teammate and sees it come up', async ({
   await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(agentRow).toHaveCount(0);
   expect(backend.removed).toEqual(['macro|ada@agents.macro.invalid']);
+});
+
+test("an admin signs the new agent's computer in to the team's Claude plan", async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 0, {
+    computerConnected: true,
+  });
+  await page
+    .context()
+    .route('https://claude.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '' })
+    );
+  await page.goto('/');
+  await expect(
+    page.getByText('maya@example.com', { exact: false }).first()
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByText('Agent', { exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
+  await dialog
+    .getByRole('textbox', { name: 'Job description' })
+    .fill('Triage new support emails and draft replies for review.');
+  await dialog
+    .getByRole('textbox', { name: 'Personality' })
+    .fill('Warm and concise. Asks before guessing.');
+  await dialog.getByRole('button', { name: /^Invite agent/ }).click();
+
+  // Once the purchase confirms and macrod connects, the sign-in opens.
+  const open = dialog.getByRole('link', { name: 'Open claude.ai' });
+  await expect(open).toBeVisible({ timeout: 15_000 });
+  await expect(open).toHaveAttribute(
+    'href',
+    'https://claude.com/cai/oauth/authorize?state=scripted'
+  );
+  await expect(
+    dialog.getByRole('button', { name: 'Use Macro credits instead' })
+  ).toBeVisible();
+  await screenshot(page, testInfo, 'bring-your-ai-open');
+
+  const claudeTab = page.context().waitForEvent('page');
+  await open.click();
+  await (await claudeTab).close();
+  await dialog
+    .getByRole('textbox', { name: 'Paste the code Claude showed you' })
+    .fill(' code-123 ');
+  await screenshot(page, testInfo, 'bring-your-ai-code');
+  await dialog.getByRole('button', { name: 'Complete sign-in' }).click();
+  await expect(dialog).toBeHidden();
+  expect(backend.claudeCodes).toEqual(['code-123']);
+  expect(backend.claudeCalls).toContain('harness-ada claude-sign-in');
+
+  // The row shows the plan and offers the way back to credits.
+  const agentRow = page.locator('[data-member-kind="agent"]');
+  const claude = agentRow.locator('[data-agent-claude]');
+  await expect(claude).toContainText('Claude: your plan');
+  await screenshot(page, testInfo, 'row-signed-in');
+
+  await claude.getByRole('button', { name: 'Use Macro credits' }).click();
+  const confirm = page.getByRole('dialog');
+  await expect(confirm).toContainText('Switch Ada to Macro credits?');
+  await confirm.getByRole('button', { name: 'Use Macro credits' }).click();
+  await expect(claude).toContainText('Claude: Macro credits');
+  expect(backend.claudeCalls).toContain('harness-ada claude-sign-out');
+  await screenshot(page, testInfo, 'row-credits');
+
+  // Signing in later starts from the row.
+  await claude.getByRole('button', { name: 'Sign in to Claude' }).click();
+  await expect(
+    page.getByRole('dialog').getByRole('link', { name: 'Open claude.ai' })
+  ).toBeVisible();
+  await screenshot(page, testInfo, 'row-sign-in');
 });

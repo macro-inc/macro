@@ -5,7 +5,7 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import WaveformIcon from '@icon/system/regular/waveform.svg';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { Button, Tooltip } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { TeamAgentStatusLabel } from './team-agent-status';
 
 /**
@@ -19,6 +19,8 @@ export function TeamAgentRow(props: {
   onRemove: () => void;
   /** Opens Change voice; left out for viewers who can't change it. */
   onChangeVoice?: () => void;
+  /** Which Claude its computer runs on, for viewers who manage it. */
+  claude?: JSX.Element;
 }) {
   return (
     <div
@@ -39,6 +41,7 @@ export function TeamAgentRow(props: {
           <div class="text-xs text-ink-muted truncate">
             {props.agent.jobDescription}
           </div>
+          {props.claude}
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
