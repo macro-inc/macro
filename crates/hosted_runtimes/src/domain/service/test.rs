@@ -311,6 +311,7 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
             power_on_requested: false,
             capacity_wait: None,
             retried_by_team: false,
+            failure: None,
         },
         harness_id: None,
         created_by: admin(),
@@ -419,6 +420,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             step: crate::domain::models::SetupStep::Creating,
             position: 1,
             total: 4,
+            step_started_at: Some(now()),
         })
     );
     assert_eq!(

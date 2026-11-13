@@ -25,6 +25,13 @@ mounted by authentication_service.
   host): it paged, and `OperatorRetry` restarts it.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
+  A failed fleet effect retries with backoff up to `MAX_EFFECT_ATTEMPTS`, except
+  a `FleetError::is_permanent` one (Incus refused the request as invalid), which
+  fails the computer at once (`EffectFailed`, shown to the team as Failed).
+  A give-up stores a `lifecycle::Failure` kind; `ComputerStatus.failureReason`
+  is its fixed user-safe sentence, and the raw error stays in the logs and the
+  operator page. `setup.stepStartedAt` is when the current setup step began
+  (null for Booting, which records no start).
 - Keep literal purchase resources in the versioned `domain::size::current_catalog`.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
   reserves sold units on a host; starting checks awake units (`Context::host_has_room`).
@@ -289,7 +296,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Data disk**: every computer has one, created with the guest and deleted
   by `Fleet::destroy` after the instance (Incus keeps custom volumes). Incus:
   block volume `<instance>-data` in the configured pool, disk device `data`
-  in the instance create request, so no instance exists without it; the guest
+  in the instance create request, so no instance exists without it. The
+  instance sets `migration.stateful=false`: Incus attaches extra disks to a
+  stateful VM only from a shared pool, and stop is always a cold shutdown. The guest
   mounts it at `/home` and keeps `/var/lib/macrod` there. Docker: named
   volumes `macro-computer-<id>-home` (`/home`) and `-macrod`
   (`/var/lib/macrod`). Create and destroy are idempotent and leave no volume

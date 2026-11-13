@@ -52,10 +52,14 @@ impl FleetAttachmentSource for StaticFleetAttachment {
     }
 }
 
-/// Classifies a fleet failure that requires replacing a lost guest.
+/// Classifies a fleet failure: a lost guest is replaced, a permanent
+/// failure fails the computer at once, anything else is retried.
 pub trait FleetError: std::error::Error + Send + Sync + 'static {
     /// True only when the addressed instance no longer exists.
     fn is_missing(&self) -> bool;
+    /// True when retrying the same request cannot succeed, such as a
+    /// request the fleet rejected as invalid.
+    fn is_permanent(&self) -> bool;
 }
 
 /// An effect waiting in the outbox.
