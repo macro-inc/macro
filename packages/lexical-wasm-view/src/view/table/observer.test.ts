@@ -104,10 +104,19 @@ test.each([8, 256])(
         observer.refresh(new Set([row]));
         expect(lookups.mock.calls.length).toBeLessThan(10);
         expect(attributes.mock.calls).toHaveLength(0);
+        // Selecting and clearing a few cells writes classes on those cells only,
+        // never a whole-table repaint.
+        const classAdds = vi.spyOn(DOMTokenList.prototype, 'add');
+        const classRemoves = vi.spyOn(DOMTokenList.prototype, 'remove');
         observer.select(grid[0][0].key, grid[1][1].key);
         expect(attributes.mock.calls).toHaveLength(0);
         observer.clear();
         expect(attributes.mock.calls).toHaveLength(3);
+        expect(
+          classAdds.mock.calls.length + classRemoves.mock.calls.length
+        ).toBeLessThan(20);
+        classAdds.mockRestore();
+        classRemoves.mockRestore();
       } finally {
         lookups.mockRestore();
         attributes.mockRestore();

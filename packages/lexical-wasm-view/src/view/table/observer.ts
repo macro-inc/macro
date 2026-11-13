@@ -81,6 +81,8 @@ export class TableObserver {
    * (Source TableNode.isSelected outside $updateTableTableSelection).
    */
   private included = false;
+  /** Whether every cell currently carries the included cell class. */
+  private includedPainted = false;
   constructor(
     readonly view: EditorView,
     readonly key: number,
@@ -360,7 +362,7 @@ export class TableObserver {
       cell.element.setAttribute('aria-selected', 'true');
     }
     this.selected = selected;
-    this.paintIncluded();
+    this.paintIncluded(changed);
   }
   /**
    * Source $syncTableSelectionState on SELECTION_CHANGE: while the table is in
@@ -373,17 +375,29 @@ export class TableObserver {
     this.included = included;
     this.paintIncluded();
   }
-  private paintIncluded(): void {
+  /**
+   * Touches every cell only when inclusion flips; otherwise only the cells a
+   * refresh rebuilt (`changed`), so ordinary edits stay row-local.
+   */
+  private paintIncluded(changed?: ReadonlySet<number>): void {
     if (this.selected.size || this.included)
       this.table.classList.add(...this.selectedTableClasses);
     else this.table.classList.remove(...this.selectedTableClasses);
-    for (const [key, cell] of this.cells) {
-      if (getTableElement(cell.element) !== this.table) continue;
+    const keys: Iterable<number> =
+      this.included !== this.includedPainted
+        ? this.cells.keys()
+        : this.included && changed
+          ? changed
+          : [];
+    for (const key of keys) {
+      const cell = this.cells.get(key);
+      if (!cell || getTableElement(cell.element) !== this.table) continue;
       if (this.included)
         cell.element.classList.add(...this.selectedCellClasses);
       else if (!this.selected.has(key))
         cell.element.classList.remove(...this.selectedCellClasses);
     }
+    this.includedPainted = this.included;
   }
   /** The browser text drag must yield once this gesture owns a table range. */
   preserveDragSelection(dom: Selection): boolean {
