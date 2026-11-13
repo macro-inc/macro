@@ -183,8 +183,15 @@ const instance = new aws.ec2.Instance(
     rootBlockDevice: { volumeType: 'gp3', volumeSize: 8, encrypted: true },
     tags: { ...tags, Name: `${BASE_NAME}-${stack}` },
   },
-  // A newer AMI should not replace a running gateway on every preview.
-  { ignoreChanges: ['ami'], dependsOn: [elasticIp] }
+  {
+    // A newer AMI should not replace a running gateway on every preview. The
+    // source/dest check belongs to the interface (it conflicts with
+    // primaryNetworkInterface here), and the instance reads it back from there.
+    ignoreChanges: ['ami', 'sourceDestCheck', 'rootBlockDevice.tags'],
+    dependsOn: [elasticIp],
+    // The replacement needs the interface the old instance holds.
+    deleteBeforeReplace: true,
+  }
 );
 
 // --- Routes -------------------------------------------------------------------

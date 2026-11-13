@@ -19,6 +19,8 @@ let
   # declared again here.
   dataDisk = {
     macro.box.dataDisk = "/dev/disk/by-id/virtio-data";
+    # No Incus here; do not wait the full minute for its socket.
+    systemd.services.macrod-enroll.environment.MACRO_INCUS_SOCKET_WAIT = "3";
     virtualisation.fileSystems."/home" = {
       device = "/dev/disk/by-id/virtio-data";
       fsType = "ext4";
@@ -82,6 +84,19 @@ pkgs.testers.runNixOSTest {
         machine.succeed("[ $(systemctl show macrod.service --property=User --value) = macro ]")
         machine.succeed("[ $(systemctl show macrod.service --property=Restart --value) = always ]")
         machine.succeed("[ $(systemctl show macrod.service --property=WorkingDirectory --value) = /home/macro/work ]")
+
+    with subtest("an enrollment that succeeds late still starts macrod"):
+        machine.succeed("[ $(systemctl show macrod.service --property=ConditionResult --value) = no ]")
+        assert "macrod-enroll.service" not in machine.succeed("systemctl show macrod.service --property=Requires --value")
+        # The next retry succeeds, as one does once the socket shows up.
+        machine.succeed(
+            "mkdir -p /run/systemd/system/macrod-enroll.service.d && "
+            + "printf '[Service]\\nExecStartPre=\\nExecStart=\\nExecStart=/bin/sh -c \"printf x > /var/lib/macrod/enrolled\"\\n' "
+            + "> /run/systemd/system/macrod-enroll.service.d/late.conf && systemctl daemon-reload"
+        )
+        machine.wait_for_unit("macrod-enroll.service")
+        machine.wait_until_succeeds("[ -n \"$(systemctl show macrod.service --property=InvocationID --value)\" ]")
+        machine.succeed("rm -r /run/systemd/system/macrod-enroll.service.d && systemctl daemon-reload")
 
     with subtest("Claude Code's ACP adapter needs no install"):
         environment = machine.succeed("systemctl show macrod-enroll.service --property=Environment --value").strip()

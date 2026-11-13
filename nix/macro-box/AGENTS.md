@@ -58,15 +58,21 @@ PID 1 (for the dev-only DockerFleet).
   (`incus`, or `file:<path>`). The marker `/var/lib/macrod/enrolled` holds
   `<computer id>\n<generation>`; a newer generation re-enrolls, and no source
   with a marker means already enrolled. `check-enrollment-source` runs first:
-  it fails with a reason when there is no source and no marker, and passes
-  when the marker exists, leaving the decision to `macrod enroll`. Enroll
+  it waits up to 60 s (`MACRO_INCUS_SOCKET_WAIT`) for `/dev/incus/sock`,
+  which incus-agent creates a few seconds after it starts, then fails with a
+  reason when there is no source and no marker, and passes when the marker
+  exists, leaving the decision to `macrod enroll`. Enroll
   writes only `macrod.toml` (owned by `macro`), the credential and the
   marker; it installs no units (`/etc/systemd/system` is read-only on
-  NixOS). It restarts on failure every 10 s with no start limit, and
-  `OnSuccess=` starts macrod once a retry succeeds.
+  NixOS). It restarts on failure every 10 s with no start limit, and its
+  `ExecStartPost` starts macrod, so a retry that succeeds after boot still
+  does. `OnSuccess=` would never fire: with `RemainAfterExit` the unit stays
+  active.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`, after
-  `macrod-enroll.service`. It restarts after 1 s, backing off to 30 s, and
+  `macrod-enroll.service`, which it `Wants` (not `Requires`, so a failed first
+  attempt does not fail it) and whose marker it needs
+  (`ConditionPathExists`). It restarts after 1 s, backing off to 30 s, and
   never hits a start limit.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
   `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
@@ -158,7 +164,8 @@ The control plane, per computer:
   the `macro-box` profile, so nothing is signed.
 - `systemd-networkd-wait-online` waits for any link (30 s cap), not all.
 - The kernel command line has `quiet`; `ttyS0` stays the recovery console.
-- `check-enrollment-source` gives the Incus socket 2 s.
+- `check-enrollment-source` waits up to 60 s for the Incus socket to appear,
+  then gives the request 2 s.
 - To measure, boot `disk.qcow2` under QEMU with OVMF and read
   `systemd-analyze` from the serial console.
 - Not done: a UKI as `\EFI\BOOT\BOOTX64.EFI` (skips systemd-boot) or
@@ -167,7 +174,8 @@ The control plane, per computer:
 ## Checks
 
 - `nix build .#checks.x86_64-linux.macro-box` boots `_guest.nix` in a NixOS
-  test VM: enrollment fails with its reason, macrod's ordering and user,
+  test VM: enrollment fails with its reason, macrod's ordering and user, a
+  late enrollment still starts macrod,
   `macrod detect-agents` reports Claude Code with nothing to install, the
   tools are on macro's PATH, a downloaded glibc binary runs through nix-ld,
   and Xvnc and Chromium's CDP port come up. A second image then boots from

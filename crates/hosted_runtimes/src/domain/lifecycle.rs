@@ -192,6 +192,40 @@ pub struct ComputerState {
     /// logged, not paged. Absent in rows written before it existed.
     #[serde(default)]
     pub retried_by_team: bool,
+    /// Why the computer last gave up; cleared by a retry. Absent in rows
+    /// written before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<Failure>,
+}
+
+/// Why a computer gave up, in terms the team may see. The full error
+/// stays in the logs and the operator page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Failure {
+    /// The fleet could not create the guest.
+    Create,
+    /// The fleet could not start, stop or restart the guest.
+    Power,
+    /// The guest crashed [`MAX_CRASHES`] times inside [`CRASH_WINDOW`].
+    KeptCrashing,
+    /// The computer's host became unavailable.
+    HostLost,
+    /// No enrollment generation is left to recreate the guest with.
+    SetupExhausted,
+}
+
+impl Failure {
+    /// The sentence the team sees.
+    pub fn reason(self) -> &'static str {
+        match self {
+            Self::Create => "The computer couldn't be created on the host.",
+            Self::Power => "The host couldn't start or stop the computer.",
+            Self::KeptCrashing => "The computer kept crashing.",
+            Self::HostLost => "The computer's host stopped responding.",
+            Self::SetupExhausted => "The computer couldn't be set up again.",
+        }
+    }
 }
 
 impl ComputerState {
@@ -277,6 +311,7 @@ pub fn provision(
         power_on_requested: !start,
         capacity_wait: None,
         retried_by_team: false,
+        failure: None,
     };
     let mut effects = Vec::new();
     schedule_create(
@@ -475,6 +510,7 @@ pub fn transition(
                 return Err(Rejected::NotFailed);
             };
             next.recent_crashes.clear();
+            next.failure = None;
             next.retried_by_team = matches!(event, Event::TeamRetry);
             if state.power == Power::On {
                 if context.host_has_room {
@@ -494,13 +530,18 @@ pub fn transition(
 
         Event::HostLost => {
             if !gave_up(&state.phase) {
-                give_up(&mut next, &mut effects, "host lost".to_owned());
+                give_up(
+                    &mut next,
+                    &mut effects,
+                    Failure::HostLost,
+                    "host lost".to_owned(),
+                );
             }
         }
 
-        Event::EffectFailed { reason } => {
+        Event::EffectFailed { failure, reason } => {
             if !gave_up(&state.phase) {
-                give_up(&mut next, &mut effects, reason.clone());
+                give_up(&mut next, &mut effects, *failure, reason.clone());
             }
         }
 
@@ -709,6 +750,7 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, now: DateTime<Utc>
         give_up(
             next,
             effects,
+            Failure::KeptCrashing,
             format!(
                 "{crashes} crashes in {} minutes",
                 CRASH_WINDOW.num_minutes()
@@ -734,7 +776,8 @@ fn gave_up(phase: &Phase) -> bool {
 }
 
 /// Stop restarting and page an operator; [`Event::OperatorRetry`] resumes.
-fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, reason: String) {
+fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, failure: Failure, reason: String) {
+    next.failure = Some(failure);
     next.phase = Phase::Crashed {
         restarts: u8::try_from(next.recent_crashes.len()).unwrap_or(u8::MAX),
         retry: None,
@@ -808,6 +851,11 @@ fn schedule_create(
             start,
             generation,
         }),
-        None => give_up(state, effects, "enrollment generation exhausted".to_owned()),
+        None => give_up(
+            state,
+            effects,
+            Failure::SetupExhausted,
+            "enrollment generation exhausted".to_owned(),
+        ),
     }
 }

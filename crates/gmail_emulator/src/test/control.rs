@@ -158,4 +158,154 @@ async fn the_example_seed_file_starts_an_emulator() {
             ("carol@example.com".to_string(), 0, 0),
         ]
     );
+
+    let calendars: Vec<(String, usize)> = emulator
+        .calendars(ADA)
+        .unwrap()
+        .into_iter()
+        .map(|calendar| (calendar.summary, calendar.events))
+        .collect();
+    assert_eq!(
+        calendars,
+        vec![
+            ("Ada Example".to_string(), 3),
+            ("Holidays".to_string(), 1),
+            ("Team".to_string(), 1),
+        ]
+    );
+    // Bob holds his own event and the standup Ada invited him to.
+    assert_eq!(emulator.calendars(BOB).unwrap()[0].events, 2);
+}
+
+#[tokio::test]
+async fn the_control_api_puts_events_on_a_calendar_and_reports_what_it_holds() {
+    let emulator = GmailEmulator::start(Seed::default()).await.unwrap();
+    let http = reqwest::Client::new();
+    let control = format!("{}/_emulator", emulator.base_url());
+    let seed = r#"
+mailboxes:
+  - email: ada@example.com
+    calendars:
+      - summary: Ada
+        time_zone: Europe/Paris
+        events:
+          - id: lunch
+            summary: Lunch
+            start: { dateTime: "2026-11-12T12:00:00+01:00" }
+            end: { dateTime: "2026-11-12T13:00:00+01:00" }
+            attendees: [{ email: grace@example.com }]
+"#;
+    let seeded = http
+        .post(format!("{control}/seed"))
+        .body(seed)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(seeded.status().as_u16(), 200);
+    let primary = format!("{control}/mailboxes/ada@example.com/calendars/primary");
+    let json = |response: reqwest::Response| async move {
+        let status = response.status().as_u16();
+        (status, response.json::<serde_json::Value>().await.unwrap())
+    };
+
+    let added = http
+        .post(format!("{control}/mailboxes/ada@example.com/calendars"))
+        .json(&serde_json::json!({ "secondary": true, "summary": "Side project" }))
+        .send()
+        .await
+        .unwrap();
+    let (_, added) = json(added).await;
+    assert!(
+        added["id"]
+            .as_str()
+            .unwrap()
+            .ends_with("@group.calendar.google.com")
+    );
+    let (_, calendars) = json(
+        http.get(format!("{control}/mailboxes/ada@example.com/calendars"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(calendars[0]["time_zone"], "Europe/Paris");
+    assert_eq!(calendars[1]["summary"], "Side project");
+
+    let dinner = serde_json::json!({
+        "summary": "Dinner",
+        "start": { "dateTime": "2026-11-12T19:00:00+01:00" },
+        "end": { "dateTime": "2026-11-12T21:00:00+01:00" },
+    });
+    let (_, dinner) = json(
+        http.post(format!("{primary}/events"))
+            .json(&dinner)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    let dinner_id = dinner["id"].as_str().unwrap();
+    let (status, _) = json(
+        http.patch(format!("{primary}/events/{dinner_id}"))
+            .json(&serde_json::json!({ "location": "Chez Ada" }))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (_, answered) = json(
+        http.post(format!("{primary}/events/lunch/responses"))
+            .json(&serde_json::json!({ "attendee": "grace@example.com", "response": "accepted" }))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(answered["attendees"][0]["responseStatus"], "accepted");
+    let deleted = http
+        .delete(format!("{primary}/events/lunch"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status().as_u16(), 200);
+
+    let (_, events) = json(http.get(format!("{primary}/events")).send().await.unwrap()).await;
+    let held: Vec<(&str, &str)> = events
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| {
+            (
+                event["summary"].as_str().unwrap(),
+                event["status"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(held, vec![("Dinner", "confirmed"), ("Lunch", "cancelled")]);
+    // Times are shown in the calendar's zone, as Google answers them.
+    assert_eq!(events[0]["start"]["dateTime"], "2026-11-12T19:00:00+01:00");
+    assert_eq!(events[0]["location"], "Chez Ada");
+
+    let unknown = http
+        .get(format!(
+            "{control}/mailboxes/ada@example.com/calendars/nope/events"
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unknown.status().as_u16(), 404);
+    let invalid = http
+        .post(format!("{primary}/events"))
+        .json(&serde_json::json!({ "summary": "No time" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invalid.status().as_u16(), 400);
+    let expired = http
+        .post(format!("{primary}/sync-tokens/expire"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(expired.status().as_u16(), 200);
 }

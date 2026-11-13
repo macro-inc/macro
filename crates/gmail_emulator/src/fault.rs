@@ -126,12 +126,48 @@ pub enum Route {
     /// People API `otherContacts.list`
     #[strum(serialize = "otherContacts.list")]
     OtherContactsList,
+    /// Calendar API `calendarList.list`
+    #[strum(serialize = "calendarList.list")]
+    CalendarListList,
+    /// Calendar API `events.list`
+    #[strum(serialize = "events.list")]
+    EventsList,
+    /// Calendar API `events.get`
+    #[strum(serialize = "events.get")]
+    EventsGet,
+    /// Calendar API `events.instances`
+    #[strum(serialize = "events.instances")]
+    EventsInstances,
+    /// Calendar API `events.insert`
+    #[strum(serialize = "events.insert")]
+    EventsInsert,
+    /// Calendar API `events.import`
+    #[strum(serialize = "events.import")]
+    EventsImport,
+    /// Calendar API `events.patch`
+    #[strum(serialize = "events.patch")]
+    EventsPatch,
+    /// Calendar API `events.delete`
+    #[strum(serialize = "events.delete")]
+    EventsDelete,
+    /// Calendar API `events.watch`
+    #[strum(serialize = "events.watch")]
+    EventsWatch,
+    /// Calendar API `channels.stop`
+    #[strum(serialize = "channels.stop")]
+    ChannelsStop,
     /// The OAuth token endpoint
     #[strum(serialize = "oauth.token")]
     OauthToken,
     /// The OAuth token-info endpoint
     #[strum(serialize = "oauth.tokeninfo")]
     OauthTokenInfo,
+    /// The OAuth authorization endpoint: the sign-in page and its form
+    #[strum(serialize = "oauth.authorize")]
+    OauthAuthorize,
+    /// The OpenID Connect userinfo endpoint
+    #[strum(serialize = "oauth.userinfo")]
+    OauthUserInfo,
 }
 
 impl TryFrom<String> for Route {
@@ -151,7 +187,8 @@ impl From<Route> for String {
 }
 
 impl Route {
-    /// The quota units Gmail charges for the method.
+    /// The quota units Google charges for the method. A Calendar request
+    /// costs one.
     pub(crate) fn quota_units(self) -> u32 {
         match self {
             Self::GetProfile
@@ -163,8 +200,20 @@ impl Route {
             | Self::PeopleGet
             | Self::ConnectionsList
             | Self::OtherContactsList
+            | Self::CalendarListList
+            | Self::EventsList
+            | Self::EventsGet
+            | Self::EventsInstances
+            | Self::EventsInsert
+            | Self::EventsImport
+            | Self::EventsPatch
+            | Self::EventsDelete
+            | Self::EventsWatch
+            | Self::ChannelsStop
             | Self::OauthToken
-            | Self::OauthTokenInfo => 1,
+            | Self::OauthTokenInfo
+            | Self::OauthAuthorize
+            | Self::OauthUserInfo => 1,
             Self::HistoryList => 2,
             Self::MessagesList
             | Self::MessagesGet
@@ -214,6 +263,15 @@ pub enum FaultError {
     Forbidden,
     /// 404, as for a missing message or an expired history id.
     NotFound,
+    /// 403 `insufficientPermissions`: the token lacks the scope.
+    InsufficientPermissions,
+    /// 403 `quotaExceeded`: the Calendar usage limits.
+    UsageLimits,
+    /// 410 `fullSyncRequired`: the Calendar sync token is no longer valid.
+    Gone,
+    /// 412 `conditionNotMet`, which Calendar also answers when no
+    /// precondition was sent.
+    PreconditionFailed,
 }
 
 /// A failure to inject. A request matches when both `mailbox` and `route`

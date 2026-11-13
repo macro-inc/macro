@@ -35,7 +35,7 @@ export function channelsByIdsQueryArgs(
   };
 }
 
-/** Keep each channel list's bounded unread projection current, including cached rows. */
+/** Keep each channel list's bounded unread and mention projections current, including cached rows. */
 export function registerChannelListNotificationRefresh(
   query: SoupAstItemsQuery
 ) {
@@ -51,7 +51,10 @@ export function registerChannelListNotificationRefresh(
         : (query.data?.entities ?? [])
             .filter(isChannelEntity)
             .flatMap((channel) =>
-              (channel.unreadNotifications ?? []).map(({ id }) => id)
+              [
+                ...(channel.unreadNotifications ?? []),
+                ...(channel.unreadMentions ?? []),
+              ].map(({ id }) => id)
             ),
     },
   }));

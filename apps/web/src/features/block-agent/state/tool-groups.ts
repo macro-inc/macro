@@ -1,18 +1,19 @@
 /**
  * Where a message's parts fold for display: consecutive ordinary tool calls
  * and their thinking blocks share a group, everything else stays visible.
- * The group starts with the first call so receiving another call does not
- * replace the first call's host in the middle of its animation.
+ * The group starts at the run's first part, a thought before its first call
+ * included, so receiving another call does not replace the first call's host
+ * in the middle of its animation.
  * Subagents and user tools stay outside groups so delegated work and user
  * interactions remain visible regardless of the surrounding tool traffic.
  * Tools with their own answer or session view always break the run, including
  * while their arguments are still arriving.
  *
- * A thought at the tail of a run stays out of the group only when the run
- * closes the message: that row is the current (or last) reasoning, and
- * burying it in "Used N tools" is what made a live Cursor turn look
- * finished. Mid-message, a trailing thought belongs to its run — prose
- * follows it, so nothing live is being hidden.
+ * Thoughts after a run's last call belong to the run, at the tail of the
+ * message too: the run's live line says `Thinking` while the tail thought
+ * streams, so the turn never looks finished, and a settled turn reads as one
+ * row however it ended. A run of thoughts alone has no call to fold and
+ * stays visible.
  *
  * Segments are half-open index ranges into the parts array, so a grouped call
  * keeps its position for the tool render context.
@@ -83,17 +84,15 @@ export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
     }
 
     let end = start;
-    let lastCallEnd = start;
+    let calls = false;
     while (isGroupable(parts[end])) {
-      if (parts[end].kind === 'tool_use') lastCallEnd = end + 1;
+      if (parts[end].kind === 'tool_use') calls = true;
       end += 1;
     }
-    if (lastCallEnd > start) {
-      const groupEnd = end === parts.length ? lastCallEnd : end;
-      segments.push({ kind: 'tools', start, end: groupEnd });
-      start = groupEnd;
+    if (calls) {
+      segments.push({ kind: 'tools', start, end });
+      start = end;
     }
-    // At the message tail, every thought after the last call remains visible.
     // Thought-only runs never become groups: a group needs an actual call.
     while (start < end) {
       segments.push({ kind: 'part', start, end: start + 1 });
@@ -101,6 +100,40 @@ export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
     }
   }
   return segments;
+}
+
+/**
+ * The one run an open turn is in, by its position in `segments`, or -1: the
+ * last run, when it closes the message or only the person's answer to one of
+ * its calls (a permission, an approval, a question) follows it. An earlier
+ * run is history even if the log left one of its calls running, so a turn
+ * never shows two runs working at once.
+ */
+export function liveToolSegment(
+  parts: readonly MessagePart[],
+  segments: readonly PartSegment[]
+): number {
+  const index = segments.findLastIndex((segment) => segment.kind === 'tools');
+  const run = segments[index];
+  if (!run) return -1;
+  const waiting = parts
+    .slice(run.end)
+    .every(
+      (part) =>
+        part.kind === 'permission' ||
+        part.kind === 'tool_approval' ||
+        part.kind === 'elicitation'
+    );
+  if (!waiting) return -1;
+  if (run.end === parts.length) return index;
+  const callOut = parts
+    .slice(run.start, run.end)
+    .some(
+      (part) =>
+        part.kind === 'tool_use' &&
+        (part.status === 'pending' || part.status === 'running')
+    );
+  return callOut ? index : -1;
 }
 
 /** Only Macro's session-authenticated internal server may select this view. */
