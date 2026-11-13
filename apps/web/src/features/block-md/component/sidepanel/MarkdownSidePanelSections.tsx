@@ -25,7 +25,7 @@ import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
@@ -71,7 +71,9 @@ export function MarkdownSidePanelSections() {
     <>
       <SidePanel.HeaderActions>
         <div class="flex shrink-0 items-center gap-1">
-          <Show when={isTask() && !isMobile()}>
+          {/* Touch headers match at every width: the task's header on a
+              phone has no room for it, so no touch header shows it. */}
+          <Show when={isTask() && !isTouchDevice()}>
             <DispatchAgentButton showPrimaryLabel />
           </Show>
           <HeaderActionGroup label="Actions">

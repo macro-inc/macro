@@ -141,6 +141,9 @@ read their code, and follow that pattern rather than inventing a new one.
 - Safe areas come from the `--safe-*` CSS variables (e.g.
   `bottom-[var(--safe-bottom,0px)]`); `getSafeAreaInset` only when JS needs
   the number. Never measure insets yourself.
+- A view's touch header is the same at every width; only a narrow detail adds
+  Back. Gate header islands on `isTouchDevice()`, never `isMobile()`, and show a
+  detail beside a list through `SplitHeaderScope` so it reuses its own header.
 - Wrap split-header contributions in `HeaderIsland` (the touch header
   ignores taps outside islands). Bottom chrome goes through `FloatRegion` or
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
