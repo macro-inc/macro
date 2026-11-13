@@ -147,6 +147,14 @@ export const PasswordsRouteView = lazyNamed(
   () => import('@app/features/passwords/route-views'),
   'PasswordsRouteView'
 );
+export const ContractsRouteView = lazyNamed(
+  () => import('@app/features/contracts/route-views'),
+  'ContractsRouteView'
+);
+export const ContractSigningRoutePage = lazyNamed(
+  () => import('./pages'),
+  'ContractSigningRoutePage'
+);
 export const NotFound = lazy(
   () => import('@core/component/AccessErrorViews/NotFound')
 );
@@ -197,4 +205,5 @@ export const OTHER_APP_VIEWS = [
   ExternalRouteView,
   ExternalChatRouteView,
   PasswordsRouteView,
+  ContractsRouteView,
 ];

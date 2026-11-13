@@ -12,6 +12,7 @@ import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
 import computers from './en/computers';
+import contracts from './en/contracts';
 import create from './en/create';
 import crm from './en/crm';
 import emailThread from './en/email-thread';
@@ -58,6 +59,7 @@ export default {
   common,
   computers,
   create,
+  contracts,
   crm,
   emailThread,
   emailViews,

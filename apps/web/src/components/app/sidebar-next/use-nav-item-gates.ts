@@ -5,6 +5,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
   enableCalendarScheduling,
+  enableContracts,
   enableCrm,
   enablePasswords,
   enableTasksReviews,
@@ -30,6 +31,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const passwords = useFeatureFlag(enablePasswords);
   const team = useCurrentTeamQuery(() => passwords().enabled);
   const external = useFeatureFlag(enableWhatsappLinked);
+  const contracts = useFeatureFlag(enableContracts);
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
@@ -44,6 +46,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showPasswords:
       passwords().enabled && team.isSuccess && Boolean(team.data?.team),
     showExternal: external().enabled,
+    showContracts: contracts().enabled,
     prefs: prefs(),
   }));
 }

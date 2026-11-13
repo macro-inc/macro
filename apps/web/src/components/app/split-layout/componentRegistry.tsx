@@ -36,6 +36,10 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const ContractsRouteView = lazyNamed(
+  () => import('@app/features/contracts/route-views'),
+  'ContractsRouteView'
+);
 const PasswordsRouteView = lazyNamed(
   () => import('@app/features/passwords/route-views'),
   'PasswordsRouteView'
@@ -333,6 +337,11 @@ registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
   'passwords',
   () => <PasswordsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'contracts',
+  () => <ContractsRouteView />,
   () => composableLayout()
 );
 registerComponent(

@@ -10,6 +10,7 @@ export const DEFAULT_HIDDEN_IDS = [
   'reviews',
   'booking-links',
   'activity',
+  'contracts',
 ] as const;
 
 export type SidebarPrefs = {
@@ -20,7 +21,7 @@ export type SidebarPrefs = {
 };
 
 type StoredPrefs = {
-  version?: 1 | 2;
+  version?: 1 | 2 | 3;
   hidden?: string[];
   order?: string[];
 };
@@ -45,6 +46,10 @@ function loadPrefs(): SidebarPrefs {
       // Activity joined the rail after version 1; start it in More.
       if ((parsed.version ?? 0) < 2 && !hidden.includes('activity')) {
         hidden.push('activity');
+      }
+      // Contracts joined after version 2; it starts in More as well.
+      if ((parsed.version ?? 0) < 3 && !hidden.includes('contracts')) {
+        hidden.push('contracts');
       }
       return {
         hidden: new Set(hidden),
@@ -74,7 +79,7 @@ function loadPrefs(): SidebarPrefs {
 function savePrefs(prefs: SidebarPrefs): void {
   try {
     const payload: StoredPrefs = {
-      version: 2,
+      version: 3,
       hidden: [...prefs.hidden].filter((id) => id !== 'home'),
       order: prefs.order,
     };

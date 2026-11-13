@@ -25,6 +25,7 @@ verified live against a local stack (`just run_local`, which needs no terminal: 
 | [calls.md](calls.md) | Calls, call links, guests, and sharing |
 | [crm.md](crm.md) | Customers (CRM) |
 | [passwords.md](passwords.md) | Team vault, inline editing, sharing and recent sign-in |
+| [contracts.md](contracts.md) | Contracts: packet databases, new packet flow, field placement, signing page, certificate |
 | [pull-requests.md](pull-requests.md) | Pull request review |
 | [activity.md](activity.md) | Activity |
 | [notifications.md](notifications.md) | Notifications |

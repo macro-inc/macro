@@ -51,6 +51,7 @@ function Modal() {
         showReviews: true,
         showActivity: true,
         showPasswords: false,
+        showContracts: false,
         showExternal: true,
         get prefs() {
           return prefs();
@@ -169,7 +170,7 @@ describe('sidebar customization drag sorting', () => {
     ).toBe(true);
     const stored = JSON.parse(localStorage.getItem('macro:sidebar:prefs')!);
     expect(stored.order).toEqual(['tasks', 'mail']);
-    expect(stored.hidden).toEqual(['reviews', 'activity']);
+    expect(stored.hidden).toEqual(['reviews', 'activity', 'contracts']);
   });
 
   it('keeps Activity hidden for version 1 preferences until explicitly enabled', async () => {
@@ -201,6 +202,6 @@ describe('sidebar customization drag sorting', () => {
     ).toBe(true);
     expect(
       JSON.parse(localStorage.getItem('macro:sidebar:prefs')!).hidden
-    ).toEqual(['reviews']);
+    ).toEqual(['reviews', 'contracts']);
   });
 });

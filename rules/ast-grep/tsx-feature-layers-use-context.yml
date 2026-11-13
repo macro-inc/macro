@@ -111,6 +111,11 @@ files:
   - apps/web/src/features/usage/components/**
   - apps/web/src/features/usage/views/**
   - apps/web/src/features/usage/context/**
+  - apps/web/src/features/contracts/context/**
+  - apps/web/src/features/contracts/queries/**
+  - apps/web/src/features/contracts/primitives/**
+  - apps/web/src/features/contracts/components/**
+  - apps/web/src/features/contracts/views/**
   - apps/web/src/features/crm/queries/**
   - apps/web/src/features/crm/primitives/**
   - apps/web/src/features/crm/components/**

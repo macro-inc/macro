@@ -49,6 +49,8 @@ import {
   ChannelDetailRouteView,
   ChannelsRouteView,
   CompaniesRouteView,
+  ContractSigningRoutePage,
+  ContractsRouteView,
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
@@ -111,6 +113,8 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  contractSigningRoute,
+  contractsRoute,
   crmItemRoute,
   crmPipelineItemRoute,
   crmPipelineRecordFileItemRoute,
@@ -239,6 +243,10 @@ export function appRouteElements(): JSX.Element {
         <Route
           definition={bookingReceiptRoute}
           component={BookingReceiptRoutePage}
+        />
+        <Route
+          definition={contractSigningRoute}
+          component={ContractSigningRoutePage}
         />
       </Route>
       <Route
@@ -374,6 +382,7 @@ export function appRouteElements(): JSX.Element {
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route definition={passwordsRoute} component={PasswordsRouteView} />
+        <Route definition={contractsRoute} component={ContractsRouteView} />
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}
