@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT send_time, sent, processing, actor_id, agent_correlation_id, delivery_claim_id,\n                  delivery_started_at, delivery_message_id, delivery_status, approved_attachments,\n                  (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'\n                   AND (CASE WHEN processing THEN\n                        COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()\n                        ELSE delivery_lease_expires_at IS NULL OR delivery_lease_expires_at <= NOW() END)) AS \"available!\"\n           FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+  "query": "SELECT send_time, sent, processing, actor_id, agent_correlation_id, delivery_claim_id,\n                  delivery_started_at, delivery_message_id, delivery_status,\n                  delivery_absent_lookups, delivery_resends, approved_attachments,\n                  (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'\n                   AND (CASE WHEN processing THEN\n                        COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()\n                        ELSE delivery_lease_expires_at IS NULL OR delivery_lease_expires_at <= NOW() END)) AS \"available!\"\n           FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -50,11 +50,21 @@
       },
       {
         "ordinal": 9,
+        "name": "delivery_absent_lookups",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "delivery_resends",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 11,
         "name": "approved_attachments",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "available!",
         "type_info": "Bool"
       }
@@ -77,8 +87,10 @@
       true,
       false,
       false,
+      false,
+      false,
       null
     ]
   },
-  "hash": "137fa5249eb860f87f14f6b891dfc0ab2f1210f5afb6fe5cdb89e564893a07da"
+  "hash": "e3ecf85047c2709b3027ef129da18f207c9260b9f5eb41294689793b3d8ef035"
 }

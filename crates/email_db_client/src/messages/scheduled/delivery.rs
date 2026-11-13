@@ -12,6 +12,8 @@ pub struct ScheduleFacts {
     pub delivery_started_at: Option<chrono::DateTime<chrono::Utc>>,
     pub delivery_message_id: Option<String>,
     pub delivery_status: String,
+    pub delivery_absent_lookups: i16,
+    pub delivery_resends: i16,
     pub approved_attachments: serde_json::Value,
     pub available: bool,
 }
@@ -62,7 +64,8 @@ pub async fn schedule_facts(
 ) -> anyhow::Result<Option<ScheduleFacts>> {
     let row = sqlx::query!(
         r#"SELECT send_time, sent, processing, actor_id, agent_correlation_id, delivery_claim_id,
-                  delivery_started_at, delivery_message_id, delivery_status, approved_attachments,
+                  delivery_started_at, delivery_message_id, delivery_status,
+                  delivery_absent_lookups, delivery_resends, approved_attachments,
                   (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'
                    AND (CASE WHEN processing THEN
                         COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()
@@ -79,6 +82,8 @@ pub async fn schedule_facts(
         delivery_started_at: row.delivery_started_at,
         delivery_message_id: row.delivery_message_id,
         delivery_status: row.delivery_status,
+        delivery_absent_lookups: row.delivery_absent_lookups,
+        delivery_resends: row.delivery_resends,
         approved_attachments: row.approved_attachments,
         available: row.available,
     }))
@@ -186,6 +191,61 @@ pub async fn pause_delivery(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Execute the fenced statement that records a lookup which found no sent
+/// copy, keeping the delivery unconfirmed until the next lookup is due.
+pub async fn record_absent_lookup(
+    pool: &PgPool,
+    message_id: Uuid,
+    link_id: Uuid,
+    token: Uuid,
+    retry_seconds: i32,
+) -> anyhow::Result<u64> {
+    let changed = sqlx::query!(
+        r#"UPDATE email_scheduled_messages SET processing = true,
+           delivery_status = 'unconfirmed',
+           delivery_absent_lookups = delivery_absent_lookups + 1,
+           delivery_lease_expires_at = NOW() + make_interval(secs => $4), updated_at = NOW()
+           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3 AND NOT sent
+             AND delivery_status <> 'failed'"#,
+        message_id,
+        link_id,
+        token,
+        f64::from(retry_seconds),
+    )
+    .execute(pool)
+    .await?;
+    Ok(changed.rows_affected())
+}
+
+/// Execute the fenced statement that hands a delivery whose lookups found no
+/// sent copy back to sending, keeping its Message-ID and counting the resend.
+/// The statement itself enforces the domain's limits
+/// (`ABSENT_LOOKUPS_BEFORE_RESEND`, `MAX_AUTOMATIC_RESENDS`): an earlier lookup
+/// was recorded absent, and the delivery was never resent.
+pub async fn release_for_resend(
+    pool: &PgPool,
+    message_id: Uuid,
+    link_id: Uuid,
+    token: Uuid,
+) -> anyhow::Result<u64> {
+    let changed = sqlx::query!(
+        r#"UPDATE email_scheduled_messages SET processing = true,
+           delivery_status = 'ready', delivery_started_at = NULL,
+           delivery_absent_lookups = 0, delivery_resends = delivery_resends + 1,
+           delivery_lease_expires_at = NOW(), updated_at = NOW()
+           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3 AND processing
+             AND NOT sent AND delivery_status <> 'failed' AND delivery_message_id IS NOT NULL
+             AND delivery_lease_expires_at > NOW()
+             AND delivery_absent_lookups >= 1 AND delivery_resends < 1"#,
+        message_id,
+        link_id,
+        token,
+    )
+    .execute(pool)
+    .await?;
+    Ok(changed.rows_affected())
 }
 
 /// Execute the ownership-fenced completion statement.

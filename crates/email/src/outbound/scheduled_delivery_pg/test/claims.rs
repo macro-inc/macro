@@ -331,3 +331,101 @@ async fn pre_upgrade_unfenced_clear_cannot_reopen_failed_delivery(
     assert_eq!(state(&pool).await?, before);
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("get_process_scheduled_messages")
+    )
+)]
+async fn a_delivery_lookups_never_found_is_sent_again_under_its_message_id(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let first = claim(&pool).await?;
+    assert!(begin_submission(&pool, &first, 300).await?);
+    pause_delivery(&pool, &first, true, 300).await?;
+
+    // Each lookup is a claim of its own, once the previous one's delay ran out.
+    expire(&pool).await?;
+    let lookup = claim(&pool).await?;
+    assert!(lookup.requires_reconciliation);
+    assert_eq!(lookup.lookups.absent_lookups, 0);
+    record_absent_lookup(&pool, &lookup, 300).await?;
+    let (link, message) = identity();
+    assert!(claim_delivery(&pool, link, message, 300).await?.is_none());
+    expire(&pool).await?;
+    let second = claim(&pool).await?;
+    assert_eq!(second.lookups.absent_lookups, 1);
+    assert!(release_for_resend(&pool, &second).await?);
+
+    let resend = claim(&pool).await?;
+    assert!(!resend.requires_reconciliation);
+    assert_eq!(resend.message_id_header, first.message_id_header);
+    assert_eq!(resend.lookups.absent_lookups, 0);
+    assert_eq!(resend.lookups.resends, 1);
+    assert!(begin_submission(&pool, &resend, 300).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("get_process_scheduled_messages")
+    )
+)]
+async fn a_stale_or_expired_lookup_cannot_send_again(pool: PgPool) -> anyhow::Result<()> {
+    let first = claim(&pool).await?;
+    assert!(begin_submission(&pool, &first, 300).await?);
+    pause_delivery(&pool, &first, true, 300).await?;
+    expire(&pool).await?;
+    let stale = claim(&pool).await?;
+    expire(&pool).await?;
+    let current = claim(&pool).await?;
+
+    assert!(!release_for_resend(&pool, &stale).await?);
+    expire(&pool).await?;
+    assert!(!release_for_resend(&pool, &current).await?);
+    let after = state(&pool).await?;
+    assert!(after.started);
+    assert_eq!(after.status, "unconfirmed");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("get_process_scheduled_messages")
+    )
+)]
+async fn the_database_refuses_a_second_resend_or_one_before_any_lookup_missed(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let first = claim(&pool).await?;
+    assert!(begin_submission(&pool, &first, 300).await?);
+    pause_delivery(&pool, &first, true, 300).await?;
+
+    // No absent lookup recorded yet: the statement refuses on its own.
+    expire(&pool).await?;
+    let early = claim(&pool).await?;
+    assert!(!release_for_resend(&pool, &early).await?);
+    record_absent_lookup(&pool, &early, 300).await?;
+    expire(&pool).await?;
+    let second = claim(&pool).await?;
+    assert!(release_for_resend(&pool, &second).await?);
+
+    // The resend fails as uncertain too; however many lookups miss after
+    // that, the statement never hands it back to sending again.
+    let resend = claim(&pool).await?;
+    assert!(begin_submission(&pool, &resend, 300).await?);
+    pause_delivery(&pool, &resend, true, 300).await?;
+    for _ in 0..2 {
+        expire(&pool).await?;
+        let lookup = claim(&pool).await?;
+        assert!(!release_for_resend(&pool, &lookup).await?);
+        record_absent_lookup(&pool, &lookup, 300).await?;
+    }
+    Ok(())
+}

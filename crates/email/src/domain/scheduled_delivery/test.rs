@@ -11,6 +11,8 @@ enum Call {
     Reconcile,
     Complete,
     Release,
+    AbsentLookup,
+    ReleaseForResend,
     Pause(DeliveryPause),
 }
 
@@ -36,6 +38,7 @@ enum ReconcileResult {
     Found,
     Missing,
     Error,
+    Unsearchable,
 }
 
 struct Fake {
@@ -44,6 +47,8 @@ struct Fake {
     prepare_result: PrepareResult,
     submit_result: SubmitResult,
     reconcile_result: ReconcileResult,
+    lookups: LookupHistory,
+    resend_result: bool,
     begin_result: bool,
     complete_error: bool,
 }
@@ -56,6 +61,8 @@ impl Default for Fake {
             prepare_result: PrepareResult::Ready,
             submit_result: SubmitResult::Sent,
             reconcile_result: ReconcileResult::Found,
+            lookups: LookupHistory::default(),
+            resend_result: true,
             begin_result: true,
             complete_error: false,
         }
@@ -79,7 +86,26 @@ impl ScheduledDeliveryRepo for Fake {
 
     async fn try_claim(&self, _: Uuid, _: Uuid) -> anyhow::Result<Option<ClaimedDelivery<()>>> {
         self.record(Call::Claim);
-        Ok(self.mode.map(|mode| ClaimedDelivery { claim: (), mode }))
+        // Once released for a resend, the delivery is claimed for sending.
+        let released = self.calls.lock().unwrap().contains(&Call::ReleaseForResend);
+        let mode = if released {
+            Some(DeliveryMode::Send)
+        } else {
+            self.mode
+        };
+        Ok(mode.map(|mode| ClaimedDelivery {
+            claim: (),
+            mode,
+            lookups: self.lookups,
+        }))
+    }
+    async fn record_absent_lookup(&self, _: &()) -> anyhow::Result<()> {
+        self.record(Call::AbsentLookup);
+        Ok(())
+    }
+    async fn release_for_resend(&self, _: &()) -> anyhow::Result<bool> {
+        self.record(Call::ReleaseForResend);
+        Ok(self.resend_result)
     }
     async fn begin_send(&self, _: &()) -> anyhow::Result<bool> {
         self.record(Call::Begin);
@@ -125,11 +151,12 @@ impl ScheduledMessageSender<(), ()> for Fake {
             }
         }
     }
-    async fn reconcile(&self, _: &()) -> anyhow::Result<Option<()>> {
+    async fn reconcile(&self, _: &()) -> anyhow::Result<SentLookup<()>> {
         self.record(Call::Reconcile);
         match self.reconcile_result {
-            ReconcileResult::Found => Ok(Some(())),
-            ReconcileResult::Missing => Ok(None),
+            ReconcileResult::Found => Ok(SentLookup::Found(())),
+            ReconcileResult::Missing => Ok(SentLookup::Absent),
+            ReconcileResult::Unsearchable => Ok(SentLookup::Unsearchable),
             ReconcileResult::Error => anyhow::bail!("provider search unavailable"),
         }
     }
@@ -270,11 +297,12 @@ async fn failed_completion_does_not_release_a_successful_provider_submission() {
 }
 
 #[tokio::test]
-async fn reconciliation_only_records_delivery_or_keeps_outcome_unconfirmed() {
+async fn reconciliation_records_delivery_or_keeps_the_outcome_unconfirmed() {
     for (reconcile_result, last_call, should_error) in [
         (ReconcileResult::Found, Call::Complete, false),
+        (ReconcileResult::Missing, Call::AbsentLookup, false),
         (
-            ReconcileResult::Missing,
+            ReconcileResult::Unsearchable,
             Call::Pause(DeliveryPause::Unconfirmed),
             false,
         ),
@@ -296,4 +324,129 @@ async fn reconciliation_only_records_delivery_or_keeps_outcome_unconfirmed() {
             [Call::Deletion, Call::Claim, Call::Reconcile, last_call]
         );
     }
+}
+
+#[tokio::test]
+async fn a_send_gmail_never_received_is_sent_again_once_lookups_confirm_it() {
+    let fake = Fake {
+        mode: Some(DeliveryMode::Reconcile),
+        reconcile_result: ReconcileResult::Missing,
+        lookups: LookupHistory {
+            absent_lookups: ABSENT_LOOKUPS_BEFORE_RESEND - 1,
+            resends: 0,
+        },
+        ..Default::default()
+    };
+    deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil())
+        .await
+        .unwrap();
+    assert_eq!(
+        *fake.calls.lock().unwrap(),
+        [
+            Call::Deletion,
+            Call::Claim,
+            Call::Reconcile,
+            Call::ReleaseForResend,
+            Call::Claim,
+            Call::Prepare,
+            Call::Begin,
+            Call::Submit,
+            Call::Complete
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_send_gmail_may_have_received_is_never_sent_again() {
+    for reconcile_result in [
+        ReconcileResult::Found,
+        ReconcileResult::Unsearchable,
+        ReconcileResult::Error,
+    ] {
+        let fake = Fake {
+            mode: Some(DeliveryMode::Reconcile),
+            reconcile_result,
+            lookups: LookupHistory {
+                absent_lookups: ABSENT_LOOKUPS_BEFORE_RESEND,
+                resends: 0,
+            },
+            ..Default::default()
+        };
+        let _ = deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil()).await;
+        let calls = fake.calls.lock().unwrap();
+        assert!(!calls.contains(&Call::ReleaseForResend), "{calls:?}");
+        assert!(!calls.contains(&Call::Submit), "{calls:?}");
+    }
+}
+
+#[tokio::test]
+async fn one_lookup_that_finds_nothing_waits_for_the_next() {
+    let fake = Fake {
+        mode: Some(DeliveryMode::Reconcile),
+        reconcile_result: ReconcileResult::Missing,
+        ..Default::default()
+    };
+    deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil())
+        .await
+        .unwrap();
+    assert_eq!(
+        *fake.calls.lock().unwrap(),
+        [
+            Call::Deletion,
+            Call::Claim,
+            Call::Reconcile,
+            Call::AbsentLookup
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_message_already_sent_again_is_not_sent_a_third_time() {
+    let fake = Fake {
+        mode: Some(DeliveryMode::Reconcile),
+        reconcile_result: ReconcileResult::Missing,
+        lookups: LookupHistory {
+            absent_lookups: ABSENT_LOOKUPS_BEFORE_RESEND,
+            resends: MAX_AUTOMATIC_RESENDS,
+        },
+        ..Default::default()
+    };
+    deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil())
+        .await
+        .unwrap();
+    assert_eq!(
+        *fake.calls.lock().unwrap(),
+        [
+            Call::Deletion,
+            Call::Claim,
+            Call::Reconcile,
+            Call::AbsentLookup
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_worker_that_lost_its_claim_during_the_lookup_never_sends_again() {
+    let fake = Fake {
+        mode: Some(DeliveryMode::Reconcile),
+        reconcile_result: ReconcileResult::Missing,
+        lookups: LookupHistory {
+            absent_lookups: ABSENT_LOOKUPS_BEFORE_RESEND - 1,
+            resends: 0,
+        },
+        resend_result: false,
+        ..Default::default()
+    };
+    deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil())
+        .await
+        .unwrap();
+    assert_eq!(
+        *fake.calls.lock().unwrap(),
+        [
+            Call::Deletion,
+            Call::Claim,
+            Call::Reconcile,
+            Call::ReleaseForResend
+        ]
+    );
 }

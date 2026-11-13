@@ -1189,10 +1189,12 @@ If an approved attachment is no longer available before delivery, the send stops
 with a failure so the draft can be restored and reviewed. It must never silently
 send a smaller attachment set. An interrupted worker can retry preparation, but
 after submission may have begun it only checks Gmail for the original Message-ID.
-An unresolved outcome shows **Delivery unconfirmed** with **Check status**; it
-remains locked and is never automatically resent. A confirmed Gmail match marks
-the original attempt delivered. A definite preparation failure or provider
-rejection allows cancellation and draft restoration.
+If two lookups five minutes apart both find no sent copy, it sends once more
+under the same Message-ID; it never resends a second time. Any other unresolved
+outcome shows **Delivery unconfirmed** with **Check status** and stays locked.
+A confirmed Gmail match marks the original attempt delivered. A definite
+preparation failure or provider rejection allows cancellation and draft
+restoration.
 
 When Gmail sync imports a delivered message before recovery completes, recovery
 keeps the Gmail-synced conversation and the original local message ID. Links to

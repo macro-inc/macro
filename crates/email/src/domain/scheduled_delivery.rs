@@ -1,5 +1,6 @@
-//! Fenced delivery and recovery. An uncertain provider submission is reconciled,
-//! never automatically repeated. No database lock spans provider work.
+//! Fenced delivery and recovery. An uncertain provider submission is reconciled
+//! by looking it up, and repeated only after lookups spaced past the provider's
+//! search delay keep finding no sent copy. No database lock spans provider work.
 
 use std::time::Instant;
 use uuid::Uuid;
@@ -44,6 +45,15 @@ where
 pub const DELIVERY_LEASE_SECONDS: i32 = 300;
 /// Failed lookups and negative searches may be retried without resending mail.
 pub const RECONCILIATION_DELAY_SECONDS: i32 = 300;
+/// Consecutive lookups that must find no sent copy before an uncertain send is
+/// submitted again. The first runs a reconciliation delay after the
+/// submission and the next another delay later, so a send is repeated only
+/// after Gmail's search, which usually shows a sent message within seconds,
+/// has missed it twice over ten minutes.
+pub const ABSENT_LOOKUPS_BEFORE_RESEND: u16 = 2;
+/// Automatic resends of one message. Bounds the copies a search that never
+/// finds a sent message could cause.
+pub const MAX_AUTOMATIC_RESENDS: u16 = 1;
 /// Back off failures that occurred before any provider submission.
 pub const PREPARATION_RETRY_SECONDS: i32 = 60;
 
@@ -62,6 +72,27 @@ pub struct ClaimedDelivery<C> {
     pub claim: C,
     /// Whether this invocation may send or must reconcile an earlier send.
     pub mode: DeliveryMode,
+    /// What earlier lookups found.
+    pub lookups: LookupHistory,
+}
+
+/// What lookups found since the last submission, and earlier resends.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LookupHistory {
+    /// Lookups that found no sent copy since the last submission.
+    pub absent_lookups: u16,
+    /// Submissions repeated after lookups found no sent copy.
+    pub resends: u16,
+}
+
+/// What a lookup of an earlier submission found.
+pub enum SentLookup<Sent> {
+    /// The provider holds the sent message.
+    Found(Sent),
+    /// The provider was searched for the message's identity and holds no copy.
+    Absent,
+    /// The submission has no identity to search for, so nothing can be learned.
+    Unsearchable,
 }
 
 /// Recoverable states that stop automatic provider submission.
@@ -126,6 +157,18 @@ pub trait ScheduledDeliveryRepo: Sync {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
     /// Release preparation that never submitted, with a retry delay.
     fn release(&self, claim: &Self::Claim) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Count a lookup that found no sent copy and keep the outcome unconfirmed
+    /// until the next lookup is due.
+    fn record_absent_lookup(
+        &self,
+        claim: &Self::Claim,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Return the delivery to sending under the same Message-ID while this
+    /// claim still owns it; whether it did.
+    fn release_for_resend(
+        &self,
+        claim: &Self::Claim,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
     /// Persist a failure or uncertain outcome without granting permission to resend.
     fn pause(
         &self,
@@ -150,12 +193,15 @@ pub trait ScheduledMessageSender<Claim, Sent>: Sync {
         prepared: Self::Prepared,
     ) -> impl Future<Output = Result<Sent, SubmissionError>> + Send;
     /// Find a previously submitted message by its persisted Message-ID.
-    fn reconcile(&self, claim: &Claim)
-    -> impl Future<Output = anyhow::Result<Option<Sent>>> + Send;
+    fn reconcile(
+        &self,
+        claim: &Claim,
+    ) -> impl Future<Output = anyhow::Result<SentLookup<Sent>>> + Send;
 }
 
 /// Deliver or reconcile one queue item. No failure after the submission boundary
-/// can release delivery authority for another automatic send.
+/// releases delivery authority for another automatic send; only lookups that
+/// keep finding no sent copy do.
 #[tracing::instrument(skip(repo, sender), fields(phase = tracing::field::Empty, mode = tracing::field::Empty), err)]
 pub async fn deliver_scheduled<R, S>(
     repo: &R,
@@ -170,48 +216,112 @@ where
     tracing::Span::current().record("phase", "deferred_deletion");
     repo.reconcile_deletion(link_id, message_id).await?;
     tracing::Span::current().record("phase", "claim");
-    let Some(ClaimedDelivery { claim, mode }) = repo.try_claim(link_id, message_id).await? else {
+    let Some(ClaimedDelivery {
+        claim,
+        mode,
+        lookups,
+    }) = repo.try_claim(link_id, message_id).await?
+    else {
         return Ok(());
     };
     tracing::Span::current().record("mode", tracing::field::debug(mode));
-    if mode == DeliveryMode::Reconcile {
-        tracing::Span::current().record("phase", "reconcile");
-        let started = Instant::now();
-        return match sender.reconcile(&claim).await {
-            Ok(Some(sent)) => {
-                tracing::info!(
-                    event = "email_send.reconciliation",
-                    outcome = "found",
-                    duration_ms = started.elapsed().as_millis() as u64,
-                    "prior provider submission found"
-                );
-                tracing::Span::current().record("phase", "complete");
-                repo.complete(&claim, sent).await
-            }
-            Ok(None) => {
-                tracing::info!(
-                    event = "email_send.reconciliation",
-                    outcome = "not_found",
-                    retry_delay_secs = RECONCILIATION_DELAY_SECONDS,
-                    duration_ms = started.elapsed().as_millis() as u64,
-                    "delivery remains unconfirmed"
-                );
-                tracing::Span::current().record("phase", "pause");
-                repo.pause(&claim, DeliveryPause::Unconfirmed).await
-            }
-            Err(error) => {
-                tracing::warn!(
-                    event = "email_send.reconciliation",
-                    outcome = "error",
-                    retry_delay_secs = RECONCILIATION_DELAY_SECONDS,
-                    duration_ms = started.elapsed().as_millis() as u64,
-                    "provider lookup failed; delivery remains unconfirmed"
-                );
-                repo.pause(&claim, DeliveryPause::Unconfirmed).await?;
-                Err(error)
-            }
-        };
+    if mode == DeliveryMode::Send {
+        return send_claimed(repo, sender, claim).await;
     }
+    if !reconcile_claimed(repo, sender, &claim, lookups).await? {
+        return Ok(());
+    }
+
+    // The released delivery is claimed again for sending, as any worker would.
+    tracing::Span::current().record("phase", "claim");
+    match repo.try_claim(link_id, message_id).await? {
+        Some(ClaimedDelivery {
+            claim,
+            mode: DeliveryMode::Send,
+            ..
+        }) => send_claimed(repo, sender, claim).await,
+        _ => Ok(()),
+    }
+}
+
+/// Look up an earlier submission. Whether the delivery was handed back to
+/// sending because enough lookups found no sent copy.
+async fn reconcile_claimed<R, S>(
+    repo: &R,
+    sender: &S,
+    claim: &R::Claim,
+    lookups: LookupHistory,
+) -> anyhow::Result<bool>
+where
+    R: ScheduledDeliveryRepo,
+    S: ScheduledMessageSender<R::Claim, R::Sent>,
+{
+    tracing::Span::current().record("phase", "reconcile");
+    let started = Instant::now();
+    match sender.reconcile(claim).await {
+        Ok(SentLookup::Found(sent)) => {
+            tracing::info!(
+                event = "email_send.reconciliation",
+                outcome = "found",
+                duration_ms = started.elapsed().as_millis() as u64,
+                "prior provider submission found"
+            );
+            tracing::Span::current().record("phase", "complete");
+            repo.complete(claim, sent).await?;
+            Ok(false)
+        }
+        Ok(SentLookup::Absent) => {
+            let absent_lookups = lookups.absent_lookups + 1;
+            let resend = absent_lookups >= ABSENT_LOOKUPS_BEFORE_RESEND
+                && lookups.resends < MAX_AUTOMATIC_RESENDS;
+            tracing::info!(
+                event = "email_send.reconciliation",
+                outcome = "not_found",
+                absent_lookups,
+                resend,
+                retry_delay_secs = RECONCILIATION_DELAY_SECONDS,
+                duration_ms = started.elapsed().as_millis() as u64,
+                "no sent copy found"
+            );
+            if resend {
+                tracing::Span::current().record("phase", "release_for_resend");
+                return repo.release_for_resend(claim).await;
+            }
+            tracing::Span::current().record("phase", "pause");
+            repo.record_absent_lookup(claim).await?;
+            Ok(false)
+        }
+        Ok(SentLookup::Unsearchable) => {
+            tracing::info!(
+                event = "email_send.reconciliation",
+                outcome = "unsearchable",
+                duration_ms = started.elapsed().as_millis() as u64,
+                "delivery has no identity to look up; it remains unconfirmed"
+            );
+            tracing::Span::current().record("phase", "pause");
+            repo.pause(claim, DeliveryPause::Unconfirmed).await?;
+            Ok(false)
+        }
+        Err(error) => {
+            tracing::warn!(
+                event = "email_send.reconciliation",
+                outcome = "error",
+                retry_delay_secs = RECONCILIATION_DELAY_SECONDS,
+                duration_ms = started.elapsed().as_millis() as u64,
+                "provider lookup failed; delivery remains unconfirmed"
+            );
+            repo.pause(claim, DeliveryPause::Unconfirmed).await?;
+            Err(error)
+        }
+    }
+}
+
+/// Prepare and submit a delivery claimed for sending.
+async fn send_claimed<R, S>(repo: &R, sender: &S, claim: R::Claim) -> anyhow::Result<()>
+where
+    R: ScheduledDeliveryRepo,
+    S: ScheduledMessageSender<R::Claim, R::Sent>,
+{
     tracing::Span::current().record("phase", "prepare");
     let started = Instant::now();
     let prepared = match sender.prepare(&claim).await {

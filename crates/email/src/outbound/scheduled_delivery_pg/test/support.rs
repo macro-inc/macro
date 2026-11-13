@@ -25,6 +25,16 @@ pub async fn release_preparation(
 ) -> anyhow::Result<()> {
     state::release_preparation(pool, claim, retry).await
 }
+pub async fn record_absent_lookup(
+    pool: &PgPool,
+    claim: &DeliveryClaim,
+    retry: i32,
+) -> anyhow::Result<()> {
+    state::record_absent_lookup(pool, claim, retry).await
+}
+pub async fn release_for_resend(pool: &PgPool, claim: &DeliveryClaim) -> anyhow::Result<bool> {
+    state::release_for_resend(pool, claim).await
+}
 pub async fn pause_delivery(
     pool: &PgPool,
     claim: &DeliveryClaim,

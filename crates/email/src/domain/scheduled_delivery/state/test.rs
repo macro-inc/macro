@@ -35,6 +35,8 @@ impl Fake {
                 delivery_started_at: None,
                 delivery_message_id: None,
                 delivery_status: "ready".into(),
+                delivery_absent_lookups: 1,
+                delivery_resends: 0,
                 approved_attachments: serde_json::json!(["file"]),
                 available: true,
             })),
@@ -143,6 +145,16 @@ impl DeliveryTransitions for Fake {
     async fn release_preparation(&self, claim: &DeliveryClaim, retry: i32) -> anyhow::Result<()> {
         assert_eq!((claim.schedule.message_id, retry), (MESSAGE, 60));
         self.step("release")
+    }
+    async fn record_absent_lookup(&self, claim: &DeliveryClaim, retry: i32) -> anyhow::Result<u64> {
+        assert_eq!((claim.schedule.message_id, retry), (MESSAGE, 300));
+        self.step("absent")?;
+        Ok(self.count)
+    }
+    async fn release_for_resend(&self, claim: &DeliveryClaim) -> anyhow::Result<u64> {
+        assert_eq!(claim.schedule.message_id, MESSAGE);
+        self.step("resend")?;
+        Ok(self.count)
     }
     async fn pause_delivery(
         &self,
