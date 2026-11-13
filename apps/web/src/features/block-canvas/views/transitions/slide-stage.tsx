@@ -73,25 +73,43 @@ export function SlideStage(props: {
   const [running, setRunning] = createSignal<string>();
   const [flight, setFlight] = createSignal<Flight>();
   const [flightShown, setFlightShown] = createSignal(false);
+  /** Frame counts of the last transition that played, for inspection. */
+  const [lastFrames, setLastFrames] = createSignal<FrameStats>();
   const elements = new Map<string, HTMLDivElement>();
-  const loads = new Map<string, () => void>();
+  /** Resolvers waiting on each slide's first load. */
+  const loadWaiters = new Map<string, Set<() => void>>();
   const loaded = new Set<string>();
   let active: ActiveTransition | undefined;
 
   const slide = (id: string) => props.slides.find((item) => item.id === id);
   const target = () => layers().at(-1);
 
-  /** Resolves once the slide's frame has loaded, or after `LOAD_WAIT_MS`. */
+  /** Resolves once the slide's frame has loaded, after `LOAD_WAIT_MS`, or
+   * when the transition waiting on it ends. */
   const whenLoaded = (id: string) =>
     new Promise<void>((resolve) => {
       if (loaded.has(id)) return resolve();
-      loads.set(id, resolve);
-      setTimeout(resolve, LOAD_WAIT_MS);
+
+      const waiters = loadWaiters.get(id) ?? new Set<() => void>();
+      const done = () => {
+        clearTimeout(timer);
+        waiters.delete(done);
+        resolve();
+      };
+      const timer = setTimeout(done, LOAD_WAIT_MS);
+      waiters.add(done);
+      loadWaiters.set(id, waiters);
     });
+  const resolveWaiters = (id?: string) => {
+    const ids = id === undefined ? [...loadWaiters.keys()] : [id];
+    for (const each of ids) {
+      for (const done of [...(loadWaiters.get(each) ?? [])]) done();
+      loadWaiters.delete(each);
+    }
+  };
   const markLoaded = (id: string) => {
     loaded.add(id);
-    loads.get(id)?.();
-    loads.delete(id);
+    resolveWaiters(id);
   };
 
   createEffect(
@@ -160,6 +178,10 @@ export function SlideStage(props: {
         'transition.surface': props.surface,
       },
     });
+    // The span lasts as long as the transition, but the join window closes
+    // now: clicks, views and edits during the animation start their own traces.
+    const releaseSpan = interaction.hold();
+    interaction.end();
     const startedAt = performance.now();
     let playingAt: number | undefined;
     let stopFrames: (() => FrameStats) | undefined;
@@ -181,6 +203,7 @@ export function SlideStage(props: {
       setRunning(undefined);
       for (const animation of animations) animation.cancel();
       restore();
+      resolveWaiters();
 
       const stats = stopFrames?.();
       const span = interaction.span;
@@ -194,12 +217,13 @@ export function SlideStage(props: {
           'transition.played_ms',
           Math.round(performance.now() - playingAt)
         );
+      setLastFrames(stats);
       if (stats) {
         span.setAttr('transition.frames', stats.frames);
         span.setAttr('transition.dropped_frames', stats.droppedFrames);
         span.setAttr('transition.max_frame_gap_ms', stats.maxFrameGapMs);
       }
-      interaction.end();
+      releaseSpan();
       props.onSettled?.(outcome);
     };
     active = { finish };
@@ -208,7 +232,13 @@ export function SlideStage(props: {
     setHiddenId(to.id);
     setLayers([from.id, to.id]);
 
-    const begin = (created: Animation[], undo: () => void) => {
+    /** Plays the created animations to the end, then waits for
+     * `beforeComplete` while their last frame holds. */
+    const begin = (
+      created: Animation[],
+      undo: () => void,
+      beforeComplete?: () => Promise<void>
+    ) => {
       if (done) {
         for (const animation of created) animation.cancel();
         undo();
@@ -219,7 +249,18 @@ export function SlideStage(props: {
       playingAt = performance.now();
       stopFrames = watchFrames();
       setHiddenId(undefined);
-      fireAndAwait(created, finish);
+      fireAndForget(settle(), 'canvas-slide-transition');
+
+      async function settle() {
+        const result = await ResultAsync.fromPromise(
+          animationsFinished(created),
+          () => 'cancelled' as const
+        );
+        if (result.isErr()) return finish('cancelled');
+
+        await beforeComplete?.();
+        finish('completed');
+      }
     };
 
     if (isCanvasKind(transition.kind)) {
@@ -252,14 +293,16 @@ export function SlideStage(props: {
         onReady: (flightLayers) => {
           if (done) return;
           // The flight's first frame matches the outgoing slide, so it can
-          // cover the stage before the live next slide has loaded.
+          // cover the stage before the live next slide has loaded. Its last
+          // frame holds until that slide has, so the swap never shows a blank.
           begin(
             animateCamera({
               ...flightLayers,
               transforms,
               durationMs: transition.durationMs,
             }),
-            () => {}
+            () => {},
+            () => whenLoaded(to.id)
           );
           setFlightShown(true);
         },
@@ -301,6 +344,8 @@ export function SlideStage(props: {
       data-canvas-slide-stage
       data-canvas-transition={running()}
       data-canvas-transition-state={running() ? 'running' : 'idle'}
+      data-canvas-transition-frames={lastFrames()?.frames}
+      data-canvas-transition-dropped-frames={lastFrames()?.droppedFrames}
     >
       <For each={layers()}>
         {(id) => (
@@ -354,19 +399,4 @@ export function SlideStage(props: {
       </Show>
     </div>
   );
-}
-
-function fireAndAwait(
-  animations: readonly Animation[],
-  finish: (outcome: TransitionOutcome) => void
-) {
-  fireAndForget(settle(), 'canvas-slide-transition');
-
-  async function settle() {
-    const result = await ResultAsync.fromPromise(
-      animationsFinished(animations),
-      () => 'cancelled' as const
-    );
-    finish(result.isOk() ? 'completed' : 'cancelled');
-  }
 }

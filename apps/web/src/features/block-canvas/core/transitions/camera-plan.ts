@@ -35,8 +35,11 @@ export type CameraPlan = Readonly<{
   views: readonly View[];
   /** World rectangle the world layer must draw; the camera never leaves it. */
   region: Bounds;
-  /** Screen pixels per world unit the world layer is drawn at. Never above a
-   * view's zoom, so the animation only scales the layer up. */
+  /** Screen pixels per world unit the world layer is drawn at: at most the
+   * smallest view zoom, so the animation only scales the layer up, and small
+   * enough that the layer stays within `MAX_LAYER_PX`. The editor's
+   * `MIN_SCALE` floor wins over both, for canvases over a million world units
+   * across. */
   baseScale: number;
   /** Stage rectangles of the two slides at the start and end, which match how
    * present mode shows each slide. */
@@ -97,7 +100,7 @@ export function cameraPlan(input: {
     height: covered.height + pad * 2,
   };
   const minZoom = Math.min(...views.map((view) => view.zoom));
-  // The editor drawing the layer clamps its camera to these scales.
+  // The editor drawing the layer clamps its camera to MIN_SCALE..MAX_SCALE.
   const baseScale = Math.max(
     MIN_SCALE,
     Math.min(

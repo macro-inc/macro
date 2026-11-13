@@ -9,7 +9,10 @@ export type ClassicKind = Exclude<
   'none'
 >;
 
-/** A keyframe for one slide layer. Only compositor-friendly properties. */
+/** A keyframe for one slide layer. Most kinds animate only transform and
+ * opacity, which the compositor runs off the main thread. Wipe, split and iris
+ * animate `clip-path`, and dissolve (the outgoing slide's blur) and cube (its
+ * shading) animate `filter`; browsers may repaint those each frame. */
 export type LayerKeyframe = Readonly<{
   offset?: number;
   opacity?: number;
@@ -93,17 +96,15 @@ function forwardKeyframes(
       incomingOnTop: true,
     }))
     .with('dissolve', () => ({
+      // Only the outgoing slide blurs, and only a little: blurring both
+      // full-screen layers costs a repaint of each every frame.
       outgoing: [
-        { opacity: 1, filter: 'blur(0px) saturate(1)' },
-        { opacity: 0, filter: 'blur(10px) saturate(1.4)' },
+        { opacity: 1, filter: 'blur(0px)' },
+        { opacity: 0, filter: 'blur(6px)' },
       ],
       incoming: [
-        {
-          opacity: 0,
-          filter: 'blur(10px) saturate(1.4)',
-          transform: 'scale(1.02)',
-        },
-        { opacity: 1, filter: 'blur(0px) saturate(1)', transform: 'scale(1)' },
+        { opacity: 0, transform: 'scale(1.03)' },
+        { opacity: 1, transform: 'scale(1)' },
       ],
       incomingOnTop: true,
     }))
