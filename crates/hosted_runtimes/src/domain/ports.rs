@@ -16,8 +16,8 @@ use crate::domain::enrollment::{
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::{
-    Billing as ComputerBilling, BillingPolicy, Effect, EffectWorker, Event, HostId, Rejected,
-    SetupOutcome, SubscriptionItemId, TimerKind,
+    BillingPolicy, Effect, EffectWorker, Event, HostId, Rejected, SetupOutcome, SubscriptionItemId,
+    TimerKind,
 };
 use crate::domain::models::{
     BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
@@ -100,6 +100,10 @@ pub enum ReserveError<Err> {
     /// No host that can run the size awake has enough sale capacity.
     #[error("no host has room for this size")]
     SoldOut,
+    /// The team has a charged purchase (a reservation, or a computer still
+    /// [`crate::domain::lifecycle::Billing::Charging`]) that is not paid yet.
+    #[error("the team has an unpaid computer")]
+    UnpaidComputer,
     /// Reservation storage failed.
     #[error(transparent)]
     Storage(Err),
@@ -144,7 +148,8 @@ pub trait ComputerRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self::BillingGuard, Self::Err>> + Send;
 
     /// Under the host lock: return what `reservation.purchase_key` already
-    /// led to, or hold the purchase's units until `expires_at` on the host,
+    /// led to, refuse a charged purchase while the team has an unpaid one
+    /// ([`ReserveError::UnpaidComputer`]), or hold the purchase's units until `expires_at` on the host,
     /// among those whose awake capacity fits them, with the most sold
     /// capacity left (sold capacity minus live computers and
     /// reservations, expired or not: an expired one may still settle as
@@ -156,13 +161,13 @@ pub trait ComputerRepo: Send + Sync + 'static {
         expires_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<Reserved, ReserveError<Self::Err>>> + Send;
 
-    /// In one transaction: delete the reservation, insert its computer with
-    /// `billing`, starting provisioning, and enqueue its creation. `None`
-    /// when the reservation is gone (another worker converted or deleted it).
+    /// In one transaction: delete the reservation, insert its computer
+    /// (comped, or charging with its charge enqueued beside its creation)
+    /// and start provisioning it. `None` when the reservation is gone
+    /// (another worker converted or deleted it).
     fn convert_reservation(
         &self,
         reservation_id: ComputerId,
-        billing: ComputerBilling,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 

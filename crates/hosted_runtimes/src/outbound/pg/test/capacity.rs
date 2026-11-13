@@ -61,8 +61,11 @@ async fn concurrent_purchases_share_the_sold_unit_limit(pool: PgPool) {
         let repo = repo.clone();
         let barrier = barrier.clone();
         purchases.push(tokio::spawn(async move {
-            // Three units each against nine sold units.
-            let mut request = standard(id);
+            // Three units each against nine sold units, one team each.
+            let mut request = NewReservation {
+                team_id: Uuid::from_u128(id),
+                ..standard(id)
+            };
             request.resources.memory_gib = crate::domain::size::MemoryGib::new(24);
             barrier.wait().await;
             repo.reserve(request, now(), now() + Duration::minutes(15))
@@ -87,19 +90,35 @@ async fn allocation_counts_what_reserve_counts(pool: PgPool) {
     // 24 GB: 3 awake units, sold 3x.
     let host = host(&repo, "capacity-test", 24, 0, 3).await;
 
-    // Awaiting its charge.
-    reserve(&repo, standard(1)).await;
+    // Another team's purchase, not converted yet.
+    reserve(
+        &repo,
+        NewReservation {
+            team_id: Uuid::from_u128(1),
+            ..standard(1)
+        },
+    )
+    .await;
     // Bought.
     bought(&repo, 2).await;
     // Bought and two units.
     let mut large = standard(3);
     large.resources.memory_gib = MemoryGib::new(16);
     let large = reserve(&repo, large).await;
-    repo.convert_reservation(large.id, active(3), now())
+    repo.convert_reservation(large.id, now())
         .await
         .unwrap()
         .unwrap();
-    // Charge never landed.
+    changed(
+        &repo,
+        large.id,
+        Event::ChargeSucceeded {
+            subscription_item: "si_3".parse().unwrap(),
+        },
+        now(),
+    )
+    .await;
+    // Never converted.
     let refused = reserve(&repo, standard(4)).await;
     assert!(repo.delete_reservation(refused.id).await.unwrap());
     // Released.

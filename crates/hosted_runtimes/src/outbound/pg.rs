@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::domain::ids::ComputerId;
 use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::{
-    Billing, BillingPolicy, ComputerState, Context, Effect, EffectWorker, Event, HostId, TimerKind,
+    BillingPolicy, ComputerState, Context, Effect, EffectWorker, Event, HostId, TimerKind,
     provision, transition,
 };
 use crate::domain::models::{
@@ -195,11 +195,10 @@ impl ComputerRepo for PgComputerRepo {
         self.insert_reservation(reservation, now, expires_at).await
     }
 
-    #[tracing::instrument(skip(self, billing), err)]
+    #[tracing::instrument(skip(self), err)]
     async fn convert_reservation(
         &self,
         reservation_id: ComputerId,
-        billing: Billing,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
         let mut tx = self.pool.begin().await?;
@@ -233,7 +232,7 @@ impl ComputerRepo for PgComputerRepo {
         )
         .await?;
         let (mut state, effects) = provision(
-            billing,
+            reservation.payment(),
             crate::domain::setup::SetupTimeline::started(reservation.created_at),
             reservation.provision_traceparent.clone(),
             Context {

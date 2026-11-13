@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT EXISTS (\n                    SELECT 1 FROM hosted_runtime\n                    WHERE team_id = $1 AND (state->'billing'->>'billing') = 'charging'\n                ) OR EXISTS (\n                    SELECT 1 FROM computer_reservation\n                    WHERE team_id = $1 AND price_id IS NOT NULL\n                ) AS \"unpaid!\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unpaid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c2c45850dadaf2c15a304ac9f5d35676fe22b7f291e6cf7df2bc9744b6f766a5"
+}

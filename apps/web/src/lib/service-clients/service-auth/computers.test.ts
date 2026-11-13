@@ -85,6 +85,19 @@ describe('purchase errors', () => {
       'TEAM_ON_TRIAL'
     );
   });
+
+  it('tells a team still paying for its last computer apart from other conflicts by the 409 code', async () => {
+    fetchWithToken.mockResolvedValue(ok({}));
+    await computersClient.purchase({ purchaseKey: 'key', size: 'standard' });
+    const handler = fetchWithToken.mock.calls[0][1].errorResponseHandler;
+
+    expect(
+      (await handler(response(409, { code: 'unpaid_computer' }))).code
+    ).toBe('UNPAID_COMPUTER');
+    expect((await handler(response(409, { message: 'sold out' }))).code).toBe(
+      'PURCHASE_CONFLICT'
+    );
+  });
 });
 
 describe('deadline', () => {

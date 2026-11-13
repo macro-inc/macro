@@ -72,7 +72,8 @@ access, webhook reconciliation and billing workers remain independent of attachm
   bills ONE item at a price of its own, copied from
   `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` (chosen by
   the subscription's interval) and tagged with `computer_id` metadata; the
-  purchase's Stripe idempotency key is `computer-add:{reservation id}`.
+  purchase's Stripe idempotency key is `computer-add:{computer id}`, sent by
+  the `Charge` billing effect while the computer is created.
   Prices are `ComputerPrices` (`src/domain/computer_billing.rs`), not seat
   plans. Replay durable item-change receipts before applying changes;
   `settle_computer_add` ends an unknown outcome for good (fencing a charge

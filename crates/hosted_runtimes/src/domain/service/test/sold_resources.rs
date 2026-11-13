@@ -30,6 +30,7 @@ async fn catalog_changes_only_apply_to_new_purchases() {
         .await
         .unwrap()
         .computer_id();
+    service.run_billing_effects().await.unwrap();
     let service = service.with_catalog(vec![CatalogEntry {
         id: CatalogEntryId::try_new("standard@2026-12".to_owned()).unwrap(),
         size: ComputerSize::Standard,
@@ -109,12 +110,14 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         .await
         .unwrap()
         .computer_id();
+    service.run_billing_effects().await.unwrap();
     service.billing.quote_price = Some(stripe::PriceId::from_str("price_new").unwrap());
     let new = service
         .purchase(standard_purchase("buy-dialog-2"))
         .await
         .unwrap()
         .computer_id();
+    service.run_billing_effects().await.unwrap();
     let items: Vec<ObservedItem> = service
         .billing
         .items

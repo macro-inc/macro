@@ -16,8 +16,8 @@ use crate::domain::lifecycle::{
     Billing, BillingPolicy, Context, Effect, EffectWorker, Event, HostId, provision, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration,
-    NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
+    Computer, ComputerDisplayMetadata, ComputerRecord, Funding, Host, HostAllocation,
+    HostRegistration, NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
 };
 use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
@@ -99,6 +99,9 @@ pub struct FakeRepo {
     pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
+    /// While set, converting a reservation fails as storage would, so the
+    /// purchase answers Confirming and leaves its reservation.
+    pub convert_fails: AtomicBool,
     /// `get` calls so far.
     pub gets: AtomicUsize,
     /// The 1-based `get` calls that fail as if no connection could be had.
@@ -229,6 +232,19 @@ impl ComputerRepo for FakeRepo {
         if units > self.awake_units() || self.live_units() + units > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
+        if matches!(reservation.funding, Funding::Stripe { .. }) {
+            let charging = self.computers.lock().unwrap().values().any(|computer| {
+                computer.team_id == reservation.team_id
+                    && computer.state.billing == Billing::Charging
+            });
+            let reserved = self.reservations.lock().unwrap().values().any(|held| {
+                held.team_id == reservation.team_id
+                    && matches!(held.funding, Funding::Stripe { .. })
+            });
+            if charging || reserved {
+                return Err(ReserveError::UnpaidComputer);
+            }
+        }
         let held = Reservation {
             id: reservation.id,
             team_id: reservation.team_id,
@@ -259,15 +275,17 @@ impl ComputerRepo for FakeRepo {
     async fn convert_reservation(
         &self,
         reservation_id: ComputerId,
-        billing: Billing,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.convert_fails.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
         let Some(reservation) = self.reservations.lock().unwrap().remove(&reservation_id) else {
             return Ok(None);
         };
         let (mut state, effects) = provision(
-            billing,
+            reservation.payment(),
             crate::domain::setup::SetupTimeline::started(reservation.created_at),
             reservation.provision_traceparent.clone(),
             Context {

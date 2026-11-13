@@ -17,6 +17,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{ChargeStatus, ItemCharge, StaticFleetAttachment};
 
+mod charging;
 mod comped;
 mod quarantine;
 mod rollout;
@@ -300,7 +301,8 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
         },
         BillingState::Active { .. }
         | BillingState::PastDue { .. }
-        | BillingState::EndsAt { .. } => Funding::Stripe {
+        | BillingState::EndsAt { .. }
+        | BillingState::Charging => Funding::Stripe {
             price_id: stripe::PriceId::from_str("price_standard").unwrap(),
         },
     };
@@ -367,280 +369,6 @@ fn effects_of(repo: &FakeRepo, computer_id: ComputerId) -> Vec<Effect> {
 }
 
 #[tokio::test]
-async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions() {
-    let service = service_with(
-        FakeRepo {
-            sold_units: 9,
-            ..FakeRepo::default()
-        },
-        FakeBilling::default(),
-    );
-
-    let purchase = service
-        .purchase(PurchaseRequest {
-            billing: PurchaseBilling::Stripe,
-            purchase_key: key("buy-dialog-1"),
-            team_id: TEAM,
-            created_by: admin(),
-            size: ComputerSize::Standard,
-            name: Some("Ada".to_owned()),
-            extra_items: vec![SubscriptionItem {
-                price_id: stripe::PriceId::from_str("price_agent_seat").unwrap(),
-                quantity: 1,
-            }],
-        })
-        .await
-        .unwrap();
-    let Purchase::Ready(computer_id) = purchase else {
-        panic!("expected a ready purchase, got {purchase:?}");
-    };
-
-    assert_eq!(
-        *service.billing.adds.lock().unwrap(),
-        vec![AddRequest {
-            computer_id,
-            price_id: stripe::PriceId::from_str("price_standard").unwrap(),
-            extra_items: vec![SubscriptionItem {
-                price_id: stripe::PriceId::from_str("price_agent_seat").unwrap(),
-                quantity: 1,
-            }],
-            charge: ItemCharge::Prorated,
-            key: format!("computer-add:{computer_id}"),
-        }]
-    );
-    let stored = service
-        .repo
-        .get(computer_id)
-        .await
-        .unwrap()
-        .unwrap()
-        .into_healthy()
-        .unwrap();
-    assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
-    assert_eq!(
-        stored.funding,
-        Funding::Stripe {
-            price_id: stripe::PriceId::from_str("price_standard").unwrap()
-        }
-    );
-    assert_eq!(
-        stored.state.billing,
-        BillingState::Active {
-            subscription_item: item("si_1"),
-        }
-    );
-    assert!(service.repo.reservations.lock().unwrap().is_empty());
-    let status = service.status(TEAM, computer_id).await.unwrap();
-    assert_eq!(status.name.as_str(), "Ada");
-    assert_eq!(status.status, ComputerStatusKind::SettingUp);
-    assert_eq!(status.billing, Some(BillingStatus::Active));
-    assert_eq!(
-        status.setup,
-        Some(crate::domain::models::SetupProgress {
-            step: crate::domain::models::SetupStep::Creating,
-            position: 2,
-            total: 5,
-            step_started_at: Some(now()),
-        })
-    );
-    assert_eq!(
-        effects_of(&service.repo, computer_id),
-        vec![Effect::Create {
-            host: HOST,
-            start: true,
-            generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
-        }]
-    );
-}
-
-/// Edge case (a): a purchase whose charge outcome is unknown answers
-/// "confirming", and buying again with the same key never charges twice or
-/// buys a second computer, before or after the confirm worker settles it.
-#[tokio::test]
-async fn a_retried_purchase_with_the_same_key_never_charges_twice() {
-    let clock = MovingClock::new();
-    let service = ComputerService::new(
-        FakeRepo {
-            sold_units: 9,
-            ..FakeRepo::default()
-        },
-        FakeBilling {
-            lose_response: AtomicBool::new(true),
-            ..FakeBilling::default()
-        },
-        clock.clone(),
-        StaticFleetAttachment(FleetAttachment::Attached),
-    );
-
-    let first = service
-        .purchase(standard_purchase("buy-dialog-1"))
-        .await
-        .unwrap();
-    let Purchase::Confirming(computer_id) = first else {
-        panic!("expected a confirming purchase, got {first:?}");
-    };
-    let status = service.status(TEAM, computer_id).await.unwrap();
-    assert_eq!(status.status, ComputerStatusKind::Purchasing);
-    assert_eq!(status.billing, Some(BillingStatus::Purchasing));
-
-    // Buy again from the same dialog: the same reservation, no new charge.
-    let again = service
-        .purchase(standard_purchase("buy-dialog-1"))
-        .await
-        .unwrap();
-    assert_eq!(again, Purchase::Confirming(computer_id));
-    assert_eq!(service.billing.adds.lock().unwrap().len(), 1);
-
-    // The worker replays the same idempotent update and converts.
-    service.billing.lose_response.store(false, Ordering::SeqCst);
-    clock.advance(CONFIRM_DELAY);
-    assert_eq!(service.confirm_reservations().await.unwrap(), 1);
-
-    let after = service
-        .purchase(standard_purchase("buy-dialog-1"))
-        .await
-        .unwrap();
-    assert_eq!(after, Purchase::Ready(computer_id));
-    assert_eq!(
-        service.billing.charges(),
-        vec![format!("computer-add:{computer_id}")]
-    );
-    assert_eq!(
-        service
-            .billing
-            .adds
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|add| add.key.clone())
-            .collect::<Vec<_>>(),
-        vec![
-            format!("computer-add:{computer_id}"),
-            format!("computer-add:{computer_id}"),
-        ]
-    );
-    assert_eq!(service.list(TEAM).await.unwrap().len(), 1);
-    assert_eq!(
-        service.status(TEAM, computer_id).await.unwrap().billing,
-        Some(BillingStatus::Active)
-    );
-}
-
-/// Edge case (a): an error shown to the buyer always means nothing was
-/// charged, and the next purchase from the dialog charges afresh.
-#[tokio::test]
-async fn a_declined_purchase_drops_the_reservation_and_charges_nothing() {
-    let service = service_with(
-        FakeRepo {
-            sold_units: 9,
-            ..FakeRepo::default()
-        },
-        FakeBilling {
-            decline: true,
-            ..FakeBilling::default()
-        },
-    );
-
-    let result = service.purchase(standard_purchase("buy-dialog-1")).await;
-
-    assert!(matches!(
-        result,
-        Err(ComputerError::Billing(BillingError::PaymentFailed))
-    ));
-    assert!(service.billing.charges().is_empty());
-    assert!(service.repo.reservations.lock().unwrap().is_empty());
-    assert!(service.repo.computers.lock().unwrap().is_empty());
-    assert!(service.list(TEAM).await.unwrap().is_empty());
-    assert_eq!(service.confirm_reservations().await.unwrap(), 0);
-}
-
-#[tokio::test]
-async fn an_expired_reservation_whose_charge_never_landed_is_deleted_uncharged() {
-    let clock = MovingClock::new();
-    let service = ComputerService::new(
-        FakeRepo {
-            sold_units: 9,
-            ..FakeRepo::default()
-        },
-        FakeBilling {
-            provider_error: AtomicBool::new(true),
-            ..FakeBilling::default()
-        },
-        clock.clone(),
-        StaticFleetAttachment(FleetAttachment::Attached),
-    );
-    let Purchase::Confirming(computer_id) = service
-        .purchase(standard_purchase("buy-dialog-1"))
-        .await
-        .unwrap()
-    else {
-        panic!("expected a confirming purchase");
-    };
-
-    clock.advance(CONFIRM_DELAY);
-    assert_eq!(service.confirm_reservations().await.unwrap(), 0);
-    assert_eq!(service.repo.reservations.lock().unwrap().len(), 1);
-
-    clock.advance(RESERVATION_TTL);
-    assert_eq!(service.confirm_reservations().await.unwrap(), 1);
-
-    assert!(service.repo.reservations.lock().unwrap().is_empty());
-    assert!(service.repo.computers.lock().unwrap().is_empty());
-    assert_eq!(
-        *service.billing.settled.lock().unwrap(),
-        vec![format!("computer-add:{computer_id}")]
-    );
-    assert!(service.billing.charges().is_empty());
-    assert!(matches!(
-        service.status(TEAM, computer_id).await,
-        Err(ComputerError::NotFound)
-    ));
-}
-
-#[tokio::test]
-async fn an_expired_reservation_whose_charge_landed_becomes_the_computer() {
-    let clock = MovingClock::new();
-    let service = ComputerService::new(
-        FakeRepo {
-            sold_units: 9,
-            ..FakeRepo::default()
-        },
-        FakeBilling {
-            lose_response: AtomicBool::new(true),
-            ..FakeBilling::default()
-        },
-        clock.clone(),
-        StaticFleetAttachment(FleetAttachment::Attached),
-    );
-    let Purchase::Confirming(computer_id) = service
-        .purchase(standard_purchase("buy-dialog-1"))
-        .await
-        .unwrap()
-    else {
-        panic!("expected a confirming purchase");
-    };
-
-    clock.advance(RESERVATION_TTL);
-    assert_eq!(service.confirm_reservations().await.unwrap(), 1);
-
-    let computer = service
-        .repo
-        .get(computer_id)
-        .await
-        .unwrap()
-        .unwrap()
-        .into_healthy()
-        .unwrap();
-    assert_eq!(
-        computer.state.billing,
-        BillingState::Active {
-            subscription_item: item("si_1"),
-        }
-    );
-    assert_eq!(service.billing.charges().len(), 1);
-}
-
-#[tokio::test]
 async fn a_used_purchase_key_from_another_team_is_a_conflict() {
     let service = service_with(
         FakeRepo {
@@ -665,7 +393,8 @@ async fn a_used_purchase_key_from_another_team_is_a_conflict() {
         other_team,
         Err(ComputerError::PurchaseKeyConflict)
     ));
-    assert_eq!(service.billing.charges().len(), 1);
+    assert!(service.list(Uuid::from_u128(2)).await.unwrap().is_empty());
+    assert_eq!(service.list(TEAM).await.unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -706,12 +435,10 @@ async fn requests_on_a_purchase_being_confirmed_are_not_purchased() {
     let service = service_with(
         FakeRepo {
             sold_units: 9,
+            convert_fails: AtomicBool::new(true),
             ..FakeRepo::default()
         },
-        FakeBilling {
-            provider_error: AtomicBool::new(true),
-            ..FakeBilling::default()
-        },
+        FakeBilling::default(),
     );
     let Purchase::Confirming(computer_id) = service
         .purchase(standard_purchase("buy-dialog-1"))
@@ -1323,10 +1050,8 @@ async fn deleting_a_team_releases_its_running_computer_and_leaves_no_billing() {
             },
         ),
     );
-    let billing = FakeBilling {
-        provider_error: AtomicBool::new(true),
-        ..FakeBilling::default()
-    };
+    repo.convert_fails.store(true, Ordering::SeqCst);
+    let billing = FakeBilling::default();
     billing
         .items
         .lock()

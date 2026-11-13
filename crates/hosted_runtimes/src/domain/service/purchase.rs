@@ -1,26 +1,24 @@
-//! Purchases: a reservation holds capacity while the charge is confirmed;
-//! a definite success converts it into a computer, a definite refusal
-//! deletes it, and an unknown outcome leaves it to the confirm worker.
+//! Purchases: a reservation holds capacity under the purchase key and is
+//! converted into a computer at once. A charged purchase provisions while
+//! its charge settles in the billing worker (`Effect::Charge`); a refused
+//! charge releases the computer.
 
 use chrono::Duration;
 use uuid::Uuid;
 
 use super::{Clock, ComputerError, ComputerService, computer_name, internal};
 use crate::domain::ids::ComputerId;
-use crate::domain::lifecycle::Billing as ComputerBilling;
 use crate::domain::models::{
     Funding, NewReservation, Purchase, PurchaseBilling, PurchaseRequest, Reservation, Reserved,
 };
 use crate::domain::ports::{
-    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, ItemCharge,
-    ReserveError,
+    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, ReserveError,
 };
 
-/// How long a reservation holds capacity while its charge is confirmed;
-/// after this the confirm worker settles it for good.
+/// How long a reservation holds capacity before it is converted.
 pub const RESERVATION_TTL: Duration = Duration::minutes(15);
-/// How old a reservation is before the confirm worker replays its charge,
-/// so it does not race the purchase request that made it.
+/// How old a reservation is before the confirm worker converts it, so it
+/// does not race the purchase request that made it.
 pub const CONFIRM_DELAY: Duration = Duration::minutes(2);
 /// Reservations the confirm worker settles per pass.
 const CONFIRM_BATCH: u32 = 16;
@@ -45,12 +43,14 @@ impl<
         self.purchase(request).await
     }
 
-    /// Reserve units, then confirm a comp or charge the computer's own item
-    /// (plus `extra_items`) in one subscription update. A retry with the same
-    /// purchase key returns what the first attempt led to, so it never
-    /// charges twice or buys a second computer. An error always means
-    /// nothing was charged; an unknown charge outcome, or a charge whose
-    /// conversion failed, is [`Purchase::Confirming`].
+    /// Reserve units and convert them into a provisioning computer at once;
+    /// a charged one is charged beside its creation (its own item plus
+    /// `extra_items`, in one subscription update keyed by the computer id).
+    /// A retry with the same purchase key returns what the first attempt led
+    /// to, so it never charges twice or buys a second computer. A team buys
+    /// one charged computer at a time: another while one is unpaid is
+    /// [`ComputerError::UnpaidComputer`]. An error always means nothing was
+    /// bought; a conversion that failed is [`Purchase::Confirming`].
     #[tracing::instrument(
         skip(self, request),
         fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, outcome),
@@ -127,69 +127,34 @@ impl<
                 return Ok(Purchase::Ready(record.id()));
             }
             Err(ReserveError::SoldOut) => return Err(ComputerError::SoldOut(request.size)),
+            Err(ReserveError::UnpaidComputer) => return Err(ComputerError::UnpaidComputer),
             Err(ReserveError::Storage(error)) => return Err(internal(error)),
         };
         span.record("computer_id", tracing::field::display(reservation.id));
 
-        let outcome = match &reservation.funding {
-            Funding::Comped { reason } => Ok(ComputerBilling::Comped {
-                reason: reason.clone(),
-            }),
-            Funding::Stripe { price_id } => self
-                .billing
-                .add_computer(
-                    reservation.team_id,
-                    reservation.id,
-                    price_id,
-                    &reservation.extra_items,
-                    ItemCharge::Prorated,
-                    &reservation.charge_key(),
-                )
-                .await
-                .map(|subscription_item| ComputerBilling::Active { subscription_item }),
-        };
-        match outcome {
-            Ok(billing) => match self.convert(&reservation, billing).await {
-                Ok(()) => {
-                    span.record("outcome", "ready");
-                    Ok(Purchase::Ready(reservation.id))
-                }
-                // Charged: never an error, or a new attempt would buy again.
-                // The confirm worker replays the charge (a no-op) and converts.
-                Err(error) => {
-                    tracing::error!(computer_id = %reservation.id, error = ?error,
-                        "computer charged but not converted; confirming later");
-                    span.record("outcome", "confirming");
-                    Ok(Purchase::Confirming(reservation.id))
-                }
-            },
-            Err(error) if error.is_definite() => {
-                self.repo
-                    .delete_reservation(reservation.id)
-                    .await
-                    .map_err(internal)?;
-                span.record("outcome", "refused");
-                Err(error.into())
+        // Provision at once: the charge runs beside creation in the billing
+        // worker (`Effect::Charge`), and a refused one releases the computer.
+        match self.convert(&reservation).await {
+            Ok(()) => {
+                span.record("outcome", "ready");
+                Ok(Purchase::Ready(reservation.id))
             }
+            // The confirm worker converts it on a later pass.
             Err(error) => {
-                tracing::warn!(computer_id = %reservation.id, error = ?error,
-                    "computer charge outcome unknown; confirming later");
+                tracing::error!(computer_id = %reservation.id, error = ?error,
+                    "computer reserved but not converted; confirming later");
                 span.record("outcome", "confirming");
                 Ok(Purchase::Confirming(reservation.id))
             }
         }
     }
 
-    /// Convert a reservation whose charge succeeded. Another worker may have
+    /// Convert a reservation into its computer. Another worker may have
     /// converted it already, which is the same outcome.
-    async fn convert(
-        &self,
-        reservation: &Reservation,
-        billing: ComputerBilling,
-    ) -> Result<(), ComputerError> {
+    async fn convert(&self, reservation: &Reservation) -> Result<(), ComputerError> {
         let converted = self
             .repo
-            .convert_reservation(reservation.id, billing, self.clock.now())
+            .convert_reservation(reservation.id, self.clock.now())
             .await
             .map_err(internal)?;
         if converted.is_none()
@@ -201,16 +166,15 @@ impl<
                 .is_none()
         {
             return Err(ComputerError::Internal(rootcause::report!(
-                "a charged reservation disappeared without becoming a computer"
+                "a reservation disappeared without becoming a computer"
             )));
         }
         Ok(())
     }
 
-    /// Settle purchases whose request did not: replay each charge with its
-    /// original idempotency key until the reservation expires, then give up
-    /// on the charge for good, converting only if the subscription carries
-    /// the computer's item. Returns how many reservations were settled.
+    /// Convert reservations whose purchase request did not (it failed or
+    /// was dropped between reserving and converting). Returns how many were
+    /// converted.
     #[tracing::instrument(skip(self), err)]
     pub async fn confirm_reservations(&self) -> Result<usize, ComputerError> {
         let now = self.clock.now();
@@ -219,96 +183,17 @@ impl<
             .reservations_created_before(now - CONFIRM_DELAY, CONFIRM_BATCH)
             .await
             .map_err(internal)?;
-        let mut settled = 0;
+        let mut converted = 0;
         for reservation in due {
-            match self.confirm_reservation(&reservation, now).await {
-                Ok(true) => settled += 1,
-                Ok(false) => {}
+            match self.convert(&reservation).await {
+                Ok(()) => converted += 1,
                 Err(error) => {
                     tracing::warn!(computer_id = %reservation.id, error = ?error,
-                        "computer purchase not confirmed yet");
+                        "computer purchase not converted yet");
                 }
             }
         }
-        Ok(settled)
-    }
-
-    #[tracing::instrument(skip(self, reservation), fields(computer_id = %reservation.id, expired), err)]
-    async fn confirm_reservation(
-        &self,
-        reservation: &Reservation,
-        now: chrono::DateTime<chrono::Utc>,
-    ) -> Result<bool, ComputerError> {
-        let expired = now >= reservation.expires_at;
-        tracing::Span::current().record("expired", expired);
-        let price_id = match &reservation.funding {
-            Funding::Comped { reason } => {
-                self.convert(
-                    reservation,
-                    ComputerBilling::Comped {
-                        reason: reason.clone(),
-                    },
-                )
-                .await?;
-                return Ok(true);
-            }
-            Funding::Stripe { price_id } => price_id,
-        };
-        if expired {
-            let settled = self
-                .billing
-                .settle_computer_add(
-                    reservation.team_id,
-                    reservation.id,
-                    &reservation.charge_key(),
-                )
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(computer_id = %reservation.id, error = ?error,
-                        "computer payment unresolved");
-                })?;
-            match settled {
-                Some(subscription_item) => {
-                    self.convert(reservation, ComputerBilling::Active { subscription_item })
-                        .await?;
-                }
-                None => {
-                    tracing::info!(computer_id = %reservation.id,
-                        "computer purchase expired uncharged");
-                    self.repo
-                        .delete_reservation(reservation.id)
-                        .await
-                        .map_err(internal)?;
-                }
-            }
-            return Ok(true);
-        }
-        match self
-            .billing
-            .add_computer(
-                reservation.team_id,
-                reservation.id,
-                price_id,
-                &reservation.extra_items,
-                ItemCharge::Prorated,
-                &reservation.charge_key(),
-            )
-            .await
-        {
-            Ok(subscription_item) => {
-                self.convert(reservation, ComputerBilling::Active { subscription_item })
-                    .await?;
-                Ok(true)
-            }
-            Err(error) if error.is_definite() => {
-                self.repo
-                    .delete_reservation(reservation.id)
-                    .await
-                    .map_err(internal)?;
-                Ok(true)
-            }
-            Err(error) => Err(error.into()),
-        }
+        Ok(converted)
     }
 }
 

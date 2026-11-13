@@ -104,6 +104,7 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
         })
         .await
         .unwrap();
+    service.run_billing_effects().await.unwrap();
     assert!(matches!(
         service
             .repo

@@ -100,6 +100,7 @@ async fn existing_computer_with_flag_off() -> (
         .await
         .unwrap()
         .computer_id();
+    service.run_billing_effects().await.unwrap();
     (service, id)
 }
 
