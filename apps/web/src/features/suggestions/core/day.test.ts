@@ -30,13 +30,26 @@ it('moves an event that would overlap its neighbour onto the second row', () => 
     [
       event('a', '09:00', '10:00'),
       event('b', '09:30', '10:00'),
-      event('c', '12:00', '13:00'),
+      event('c', '13:00', '14:00'),
     ],
     new Date('2026-11-09T07:00:00')
   );
 
   expect(strip.chips.map((chip) => chip.lane)).toEqual([0, 1, 0]);
   expect(strip.now).toBeUndefined();
+});
+
+it('keeps two late events, both drawn at the strip’s right edge, on different rows', () => {
+  const strip = layoutDay(
+    [event('late', '17:00', '18:00'), event('later', '19:00', '19:30')],
+    new Date('2026-11-09T07:00:00')
+  );
+
+  // Each is drawn where its full width still fits, so they share a position.
+  expect(strip.chips.map((chip) => [chip.left, chip.lane])).toEqual([
+    [72, 0],
+    [72, 1],
+  ]);
 });
 
 it('leaves out events outside working hours and clamps one that started earlier', () => {

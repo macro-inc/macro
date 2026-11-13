@@ -1,6 +1,6 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { For, Show } from 'solid-js';
-import type { DayEvent, DayStrip } from '../core/day';
+import { CHIP_MAX_WIDTH, type DayEvent, type DayStrip } from '../core/day';
 
 function hourLabel(hour: number) {
   const time = new Date();
@@ -16,6 +16,8 @@ function hourLabel(hour: number) {
 export function TodayTimeline(props: {
   date: Date;
   strip: DayStrip;
+  /** The calendar couldn't be read: say so instead of an empty day. */
+  failed?: boolean;
   onOpen(event: DayEvent): void;
 }) {
   const span = () =>
@@ -34,10 +36,17 @@ export function TodayTimeline(props: {
         </span>
       </h2>
       <Show
-        when={props.strip.chips.length > 0}
+        when={!props.failed && props.strip.chips.length > 0}
         fallback={
-          <p class="mt-3 px-1 text-sm text-ink-extra-muted">
-            {t('suggestions.todayEmpty')}
+          <p
+            class="mt-3 px-1 text-sm text-ink-extra-muted"
+            role={props.failed ? 'alert' : undefined}
+          >
+            {t(
+              props.failed
+                ? 'suggestions.todayFailed'
+                : 'suggestions.todayEmpty'
+            )}
           </p>
         }
       >
@@ -76,9 +85,10 @@ export function TodayTimeline(props: {
             <For each={props.strip.chips}>
               {(chip) => (
                 <li
-                  class="absolute max-w-[28%]"
+                  class="absolute"
                   style={{
-                    left: `min(${chip.left}%, 72%)`,
+                    left: `${chip.left}%`,
+                    'max-width': `${CHIP_MAX_WIDTH}%`,
                     top: `${1.75 + chip.lane * 2.5}rem`,
                   }}
                 >

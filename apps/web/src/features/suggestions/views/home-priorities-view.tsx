@@ -13,7 +13,7 @@ import type { Suggestion } from '../core/suggestion';
  */
 export function HomePrioritiesView(props: {
   /** Undefined without a calendar. */
-  today?: { date: Date; strip: DayStrip };
+  today?: { date: Date; strip: DayStrip; failed?: boolean };
   priorities: Suggestion[];
   onOpenEvent(event: DayEvent): void;
   onOpenSuggestion(suggestion: Suggestion): void;
@@ -26,6 +26,7 @@ export function HomePrioritiesView(props: {
           <TodayTimeline
             date={today.date}
             strip={today.strip}
+            failed={today.failed}
             onOpen={props.onOpenEvent}
           />
         )}

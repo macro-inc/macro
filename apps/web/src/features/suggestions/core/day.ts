@@ -10,7 +10,7 @@ export type DayEvent = {
 /** An event placed on the working-hours strip. */
 export type DayChip = {
   event: DayEvent;
-  /** Where it starts across the strip, 0 to 100. */
+  /** Where it is drawn across the strip, 0 to 100: its start, kept on the strip. */
   left: number;
   /** Which of the strip's rows it sits on, so neighbours don't overlap. */
   lane: number;
@@ -28,8 +28,10 @@ export type DayStrip = {
 
 export const WORKING_HOURS = { start: 8, end: 20 };
 
-/** A chip's width as a share of the strip, for spacing neighbours apart. */
-const CHIP_SPAN = 14;
+/** The widest a chip is drawn, as a share of the strip. */
+export const CHIP_MAX_WIDTH = 28;
+/** The furthest right a chip starts, so its full width stays on the strip. */
+const CHIP_MAX_LEFT = 100 - CHIP_MAX_WIDTH;
 const LANES = 3;
 
 /**
@@ -56,11 +58,16 @@ export function layoutDay(events: DayEvent[], now: Date): DayStrip {
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
 
   for (const event of sorted) {
-    const left = Math.max(0, across(Date.parse(event.start)));
+    // Lanes are given by where chips are drawn and how wide they can be, so
+    // two never cover each other.
+    const left = Math.min(
+      CHIP_MAX_LEFT,
+      Math.max(0, across(Date.parse(event.start)))
+    );
     const free = laneEnds.findIndex((end) => end <= left);
     // Every row taken: share the row that frees up first.
     const lane = free === -1 ? laneEnds.indexOf(Math.min(...laneEnds)) : free;
-    laneEnds[lane] = left + CHIP_SPAN;
+    laneEnds[lane] = left + CHIP_MAX_WIDTH;
     chips.push({
       event,
       left,

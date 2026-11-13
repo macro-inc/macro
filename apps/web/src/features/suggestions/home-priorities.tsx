@@ -1,5 +1,6 @@
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { useNavigate } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
@@ -32,8 +33,12 @@ function useToday() {
 
     return createCalendarOccurrenceQueryRange(start, end);
   });
+  // Calendars the person hid on the calendar page stay hidden here.
+  const [preferences] = useCalendarPreferences();
   const data = useCalendarOccurrenceData({
     range,
+    isSourceVisible: (sourceId) =>
+      !preferences.hiddenSourceIds.includes(sourceId),
     queryOptions: () => ({ enabled: calendar() }),
   });
 
@@ -44,7 +49,13 @@ function useToday() {
       .visibleEvents()
       .filter((event) => !event.allDay && !event.isCancelled);
 
-    return { date: now(), strip: layoutDay(events, now()), events };
+    return {
+      date: now(),
+      strip: layoutDay(events, now()),
+      events,
+      // A failed read is not an empty day.
+      failed: data.occurrencesQuery.isError,
+    };
   });
 
   return today;
