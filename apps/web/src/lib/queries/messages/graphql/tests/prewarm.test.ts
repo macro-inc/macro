@@ -343,6 +343,22 @@ describe('warming a channel', () => {
     expect(writtenIds()).toEqual({ channelId: 'b', seq: 3, ids: ['m2'] });
   });
 
+  it('cancels a page read that never answers', async () => {
+    const realSetTimeout = setTimeout;
+    vi.stubGlobal('setTimeout', (callback: () => void) =>
+      realSetTimeout(callback, 0)
+    );
+    knownChannels({ a: daysAgo(1) });
+    mocks.readCachedLatestPage.mockResolvedValue(undefined);
+    mocks.fetchLatestChannelPage.mockReturnValue(new Promise(() => {}));
+    await maintain();
+    const signal = mocks.fetchLatestChannelPage.mock.calls[0]?.[1] as
+      | AbortSignal
+      | undefined;
+    expect(signal?.aborted).toBe(true);
+    expect(mocks.writeCachedLatestPage).not.toHaveBeenCalled();
+  });
+
   it('neither reads nor writes when the cache cannot read the page', async () => {
     knownChannels({ a: daysAgo(1) });
     mocks.readCachedLatestPage.mockRejectedValue(new Error('engine busy'));
