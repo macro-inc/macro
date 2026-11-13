@@ -71,8 +71,8 @@ export function outcome(
 
 /**
  * One of the user's suggestions: a prompt to run, a note about specific items, or a
- * routine suggestion. List-sourced only, from `macro.suggestions.review()`, so this
- * wraps the record the caller already has.
+ * routine suggestion. List-sourced only, from `macro.suggestions.list()` or
+ * `macro.suggestions.review()`, so this wraps the record the caller already has.
  *
  * @mcp-exclude Suggestions are written by hidden generation sessions and acted on in the app, not over MCP.
  */
@@ -193,6 +193,37 @@ export class Suggestion {
     if (this.record.kind !== 'entity') return undefined;
     const partId = this.record.draft?.partId;
     return partId ? EmailDraft.byId(this.client, partId) : undefined;
+  }
+
+  /**
+   * Mark this suggestion as taken up for the user. Only the user starts a
+   * background prompt suggestion's run, from the app: accepting one here only
+   * takes it on (`state` becomes `accepted`, no run), so tell the user it is
+   * ready for them to run. Any other suggestion becomes done, so do what it
+   * suggests yourself. Fails with 409 when the suggestion changed since it was
+   * read: read it again. For the user's own agent; a generation session
+   * gets a 403.
+   */
+  async accept(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.acceptSuggestion({
+        path: { id: this.id },
+        body: { updatedAt: this.record.updatedAt },
+      }),
+    );
+  }
+
+  /**
+   * The user doesn't want this open suggestion; a routine suggestion's routine
+   * suggestion is dismissed with it. For the user's own agent; a generation
+   * session gets a 403.
+   */
+  async dismiss(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.dismissSuggestion({
+        path: { id: this.id },
+      }),
+    );
   }
 
   /**

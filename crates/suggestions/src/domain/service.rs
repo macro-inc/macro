@@ -1,5 +1,5 @@
-//! The suggestions service: the person's feed and the tools hidden generation
-//! sessions write it with.
+//! The suggestions service: the person's feed, which they and their own agent
+//! read and act on, and the tools hidden generation sessions write it with.
 //!
 //! Code here only validates and stores. Which suggestions exist, how they are
 //! worded and ranked, and when one stops mattering are all decided by the
@@ -22,8 +22,8 @@ use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
     KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunMode, RunProgress,
     RunSettled, RunStartError, SessionKind, SessionReadError, SessionState, StoredRun, Suggestion,
-    SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind, SuggestionRun,
-    SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
+    SuggestionCaller, SuggestionContent, SuggestionError, SuggestionFeed, SuggestionKind,
+    SuggestionRun, SuggestionState, SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 use super::ports::{
     GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, RunSessions,
@@ -374,6 +374,36 @@ where
         Ok(session)
     }
 
+    /// Admit the person, or an agent acting for them, to their feed. A
+    /// generation session is refused: it is hidden, and manages the feed
+    /// only through its own tools. Records the caller's kind on the span.
+    async fn admit(&self, caller: SuggestionCaller) -> Result<(), SuggestionError> {
+        tracing::Span::current().record("suggestions.caller", caller.as_ref());
+        let SuggestionCaller::Agent {
+            correlation: Some(correlation),
+        } = caller
+        else {
+            return Ok(());
+        };
+        let session = self
+            .request_sessions
+            .session_of(correlation)
+            .await
+            .map_err(SuggestionError::Internal)?;
+        let Some(session) = session else {
+            return Ok(());
+        };
+        let generation = self
+            .generation_sessions
+            .open_session(session)
+            .await
+            .map_err(SuggestionError::Internal)?;
+        if generation.is_some() {
+            return Err(SuggestionError::Generating);
+        }
+        Ok(())
+    }
+
     /// Items in `targets` the person can't open, as problems.
     async fn inaccessible(
         &self,
@@ -487,6 +517,7 @@ where
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(name = "suggestions.feed", skip_all, fields(
+        suggestions.caller = tracing::field::Empty,
         suggestions.open = tracing::field::Empty,
         suggestions.done = tracing::field::Empty,
         suggestions.hidden = tracing::field::Empty,
@@ -494,9 +525,11 @@ where
     async fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
         timezone: Option<chrono_tz::Tz>,
     ) -> Result<SuggestionFeed, SuggestionError> {
         self.require_flag(user).await?;
+        self.admit(caller).await?;
         if let Some(timezone) = timezone {
             // Reading the feed counts the person in for nightly generations;
             // a failure here never fails the read.
@@ -565,14 +598,19 @@ where
             .map_err(SuggestionError::internal)
     }
 
-    #[tracing::instrument(name = "suggestions.accept", skip_all, fields(suggestion.id = %id), err)]
+    #[tracing::instrument(name = "suggestions.accept", skip_all, fields(
+        suggestion.id = %id,
+        suggestions.caller = tracing::field::Empty,
+    ), err)]
     async fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
         id: Uuid,
         accept: Accept,
     ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
+        self.admit(caller).await?;
         let suggestion = self
             .repo
             .suggestion(user, id)
@@ -587,7 +625,7 @@ where
         {
             // Only the person, in the app, starts a run: anyone acting for
             // them at most takes the suggestion on, for them to run.
-            if !accept.by_person {
+            if !(accept.by_person && caller == SuggestionCaller::User) {
                 if suggestion.state == SuggestionState::Accepted {
                     return Ok(());
                 }
@@ -726,13 +764,18 @@ where
         Ok(settled)
     }
 
-    #[tracing::instrument(name = "suggestions.dismiss", skip_all, fields(suggestion.id = %id), err)]
+    #[tracing::instrument(name = "suggestions.dismiss", skip_all, fields(
+        suggestion.id = %id,
+        suggestions.caller = tracing::field::Empty,
+    ), err)]
     async fn dismiss(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
         id: Uuid,
     ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
+        self.admit(caller).await?;
         let suggestion = self
             .repo
             .suggestion(user, id)

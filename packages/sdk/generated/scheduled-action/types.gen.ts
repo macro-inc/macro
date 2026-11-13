@@ -2748,6 +2748,10 @@ export type ListSuggestionsData = {
 export type ListSuggestionsErrors = {
     401: string;
     /**
+     * A generation session may not read the feed
+     */
+    403: string;
+    /**
      * Suggestions are off for the caller
      */
     404: string;
@@ -2941,6 +2945,10 @@ export type AcceptSuggestionErrors = {
     400: string;
     401: string;
     /**
+     * A generation session may not accept
+     */
+    403: string;
+    /**
      * No open or done suggestion with this id for the caller, or suggestions are off
      */
     404: string;
@@ -2976,6 +2984,10 @@ export type DismissSuggestionData = {
 
 export type DismissSuggestionErrors = {
     401: string;
+    /**
+     * A generation session may not dismiss
+     */
+    403: string;
     /**
      * No open suggestion with this id for the caller, or suggestions are off
      */

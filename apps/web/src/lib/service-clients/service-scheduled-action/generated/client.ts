@@ -1967,7 +1967,7 @@ export const activateScheduledActionTemplate = async (
 };
 
 /**
- * @summary The caller's feed.
+ * @summary The caller's feed, for them or their own agent.
  */
 export type listSuggestionsResponse200 = {
   data: SuggestionFeed;
@@ -1977,6 +1977,11 @@ export type listSuggestionsResponse200 = {
 export type listSuggestionsResponse401 = {
   data: string;
   status: 401;
+};
+
+export type listSuggestionsResponse403 = {
+  data: string;
+  status: 403;
 };
 
 export type listSuggestionsResponse404 = {
@@ -1994,6 +1999,7 @@ export type listSuggestionsResponseSuccess = listSuggestionsResponse200 & {
 };
 export type listSuggestionsResponseError = (
   | listSuggestionsResponse401
+  | listSuggestionsResponse403
   | listSuggestionsResponse404
   | listSuggestionsResponse500
 ) & {
@@ -2408,9 +2414,10 @@ export const rewriteSuggestion = async (
 };
 
 /**
- * @summary The caller acts on a suggestion: a background prompt suggestion is taken on; any
-other is done once they act on it (open its item, the composer, the
-routine), and shows in the feed's `done`.
+ * @summary The caller, or someone acting for them, acts on a suggestion: a background
+prompt suggestion starts its run when the person accepts it in the app (anyone
+else only takes it on); any other is done once they act on it (open its
+item, the composer, the routine), and shows in the feed's `done`.
  */
 export type acceptSuggestionResponse204 = {
   data: void;
@@ -2425,6 +2432,11 @@ export type acceptSuggestionResponse400 = {
 export type acceptSuggestionResponse401 = {
   data: string;
   status: 401;
+};
+
+export type acceptSuggestionResponse403 = {
+  data: string;
+  status: 403;
 };
 
 export type acceptSuggestionResponse404 = {
@@ -2448,6 +2460,7 @@ export type acceptSuggestionResponseSuccess = acceptSuggestionResponse204 & {
 export type acceptSuggestionResponseError = (
   | acceptSuggestionResponse400
   | acceptSuggestionResponse401
+  | acceptSuggestionResponse403
   | acceptSuggestionResponse404
   | acceptSuggestionResponse409
   | acceptSuggestionResponse500
@@ -2486,7 +2499,7 @@ export const acceptSuggestion = async (
 };
 
 /**
- * @summary The caller isn't interested in an open suggestion.
+ * @summary The caller, or their own agent, isn't interested in an open suggestion.
  */
 export type dismissSuggestionResponse204 = {
   data: void;
@@ -2496,6 +2509,11 @@ export type dismissSuggestionResponse204 = {
 export type dismissSuggestionResponse401 = {
   data: string;
   status: 401;
+};
+
+export type dismissSuggestionResponse403 = {
+  data: string;
+  status: 403;
 };
 
 export type dismissSuggestionResponse404 = {
@@ -2513,6 +2531,7 @@ export type dismissSuggestionResponseSuccess = dismissSuggestionResponse204 & {
 };
 export type dismissSuggestionResponseError = (
   | dismissSuggestionResponse401
+  | dismissSuggestionResponse403
   | dismissSuggestionResponse404
   | dismissSuggestionResponse500
 ) & {

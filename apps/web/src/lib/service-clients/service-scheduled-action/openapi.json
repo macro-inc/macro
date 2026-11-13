@@ -1887,7 +1887,7 @@
     "/suggestions": {
       "get": {
         "tags": ["suggestions"],
-        "summary": "The caller's feed.",
+        "summary": "The caller's feed, for them or their own agent.",
         "operationId": "list_suggestions",
         "parameters": [
           {
@@ -1913,6 +1913,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not read the feed",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2276,7 +2286,7 @@
     "/suggestions/{id}/accept": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller acts on a suggestion: a background prompt suggestion is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
+        "summary": "The caller, or someone acting for them, acts on a suggestion: a background\nprompt suggestion starts its run when the person accepts it in the app (anyone\nelse only takes it on); any other is done once they act on it (open its\nitem, the composer, the routine), and shows in the feed's `done`.",
         "operationId": "accept_suggestion",
         "parameters": [
           {
@@ -2323,6 +2333,16 @@
               }
             }
           },
+          "403": {
+            "description": "A generation session may not accept",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No open or done suggestion with this id for the caller, or suggestions are off",
             "content": {
@@ -2359,7 +2379,7 @@
     "/suggestions/{id}/dismiss": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller isn't interested in an open suggestion.",
+        "summary": "The caller, or their own agent, isn't interested in an open suggestion.",
         "operationId": "dismiss_suggestion",
         "parameters": [
           {
@@ -2378,6 +2398,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not dismiss",
             "content": {
               "text/plain": {
                 "schema": {
