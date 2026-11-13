@@ -1,0 +1,66 @@
+packages/sdk/src/utils/verbs.ts
+  s_5c39db1fb3cbbf::t_e28e738daa954a 94
+packages/sdk/src/entities/users/user.ts
+  s_5c39db1fb3cbbf::t_e28e738daa954a 3-6,12,18-51,199-231
+  s_1656893481611a::t_7abebf4ecf9638 232-233
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_5c39db1fb3cbbf::t_1a68683c11f7b0 5,84-85
+  s_1656893481611a::t_3ce760ba83d1e5 86-87
+packages/sdk/tests/users.test.ts
+  s_5c39db1fb3cbbf::t_e28e738daa954a 86-151
+packages/sdk/src/macro.ts
+  s_5c39db1fb3cbbf::t_e28e738daa954a 587-592
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_5c39db1fb3cbbf::t_1a68683c11f7b0 104-136,796-804,1489-1493,1598-1628
+  s_1656893481611a::t_4792a10db3796e 1629
+packages/sdk/specs/scheduled-action.json
+  s_5c39db1fb3cbbf::t_1a68683c11f7b0 222-280,2063-2119,3366-3383,4597-4601
+packages/sdk/generated/scheduled-action/index.ts
+  s_5c39db1fb3cbbf::t_1a68683c11f7b0 4
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_1656893481611a::t_e4986add9adb2f 11,253-310
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutine.ts
+  s_5c39db1fb3cbbf::t_ba39717d8efca6 1-27
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutineLastRun.ts
+  s_5c39db1fb3cbbf::t_ce72a90588f75a 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutineNextRunAt.ts
+  s_5c39db1fb3cbbf::t_fdefb1fd894970 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutines.ts
+  s_5c39db1fb3cbbf::t_924da4ab93510e 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_1656893481611a::t_36204ca3a1f9a9 29-32,141,266
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/lastRun.ts
+  s_5c39db1fb3cbbf::t_43e77288bcf856 1-16
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/triggerKind.ts
+  s_5c39db1fb3cbbf::t_8fd189203628e7 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_1656893481611a::t_dc37100597c478 222-280,2063-2119,3366-3383,4597-4601
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_1656893481611a::t_0f5a695a43505b 102
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_1656893481611a::t_faf7645ea050ce 807
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f458683d6a1f4d9711347e624721f33ec862fabd",
+  "prompts": {},
+  "sessions": {
+    "s_1656893481611a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b222a84f-15df-400c-9f06-1a0c64e2aa0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_5c39db1fb3cbbf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "695e6956-4111-49a3-adbb-3de40ed0fd29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
