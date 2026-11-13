@@ -308,9 +308,11 @@ across instances) debugging containers:
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
   `--traces jaeger|datadog`, or disable with `--traces off`. A running
-  collector is reused as-is and never recreated, so other stacks keep their
-  network attachments to it; to pick up a changed compose definition, run
-  `docker rm -f macro-lgtm-1` and start a stack again.
+  collector is reused as-is, so other stacks keep their network attachments to
+  it; to pick up a changed compose definition, run `docker rm -f macro-lgtm-1`
+  and start a stack again. It is recreated only to start or stop copying to the
+  hosted Grafana ([`services = true`](#your-stacks-telemetry-in-grafana-opt-in)),
+  and then gets the running stacks' attachments back.
 - **Agent browser** (opt-in via `--with-chrome`): Chromium with the DevTools
   protocol on http://localhost:9222, for agents driving the app (the
   `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /
@@ -742,7 +744,9 @@ doesn't exist, the first run writes it (mode 0600) from your own `doppler login`
 reading only `LOCAL_TELEMETRY_TOKEN` from the `observability` project's `lcl`
 config. That value is never downloaded with the `local` project's secrets, so it
 never reaches a generated env file, a container or a child process's
-environment. If Doppler can't provide it (logged out, offline, no access), the run
+environment; with [`services = true`](#your-stacks-telemetry-in-grafana-opt-in)
+a copy goes to the forwarder container as a file. If Doppler can't provide it
+(logged out, offline, no access), the run
 carries on, records nothing, prints one hint once, and tries again after an hour.
 A provisioned token that the endpoint rejects is fetched again once. To edit a
 provisioned file, delete its `provisioned = true` line so it is never replaced.
@@ -770,3 +774,40 @@ dropped after a week.
 
 To try it without the hosted stack, run a throwaway Loki and point the file at
 it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
+
+### Your stacks' telemetry in Grafana (opt-in)
+
+To see your local stacks' own traces, logs and metrics in the hosted Grafana,
+next to dev's, add `services = true` to the same settings file. It applies to
+every stack on the machine, from every worktree and instance:
+
+```toml
+# ~/.config/macro/local-telemetry.toml   ($XDG_CONFIG_HOME/macro/ if set)
+services = true
+# machine = "build-box"  # the name it is sent under; default: the hostname up to its first dot
+```
+
+The file needs a token (provisioned or your own), and a provisioned file keeps
+both lines when its token is replaced. The next bring-up with the default
+`--traces lgtm` starts a `grafana-forwarder` container (Grafana Alloy,
+`docker/grafana-forwarder/`) and recreates the lgtm collector so it copies
+everything it receives there; stacks that are already running are sent from then
+on, but carry their instance name only after their next bring-up. The summary
+links the `Macro run_local` dashboard filtered to your machine: its last row
+shows bring-ups, stacks, traces, error logs and logs by machine.
+
+**What is sent.** Everything your services send to the local collector, which
+includes request attributes, log messages and error text from your local data;
+the forwarder drops the collector's own telemetry. It keeps every trace that has
+an error and a tenth of the others (by trace id, so a kept trace is whole), and
+all logs and metrics. Everything is tagged `host.name` = the machine name,
+`deployment.environment` = `local` (which keeps it off dev's dashboards and
+alerts) and, per stack, `macro.local.instance`; your run events gain
+`host_name`. A machine running about ten stacks sends under one request a
+second.
+
+**Turning it off.** Delete the line or set `services = false`: the next
+bring-up removes the forwarder and its copy of the token and recreates the
+collector without the copy. `MACRO_LOCAL_TELEMETRY=off` and `CI` keep a run
+from changing the forwarder either way. The token is copied, mode 0600, to
+`~/.local/state/macro/local-telemetry/forwarder/`, which the container mounts.
