@@ -12,6 +12,7 @@
 //! adopt them later.
 use lexical_model::*;
 use lexical_rich_nodes::heading::HeadingTagType;
+use lexical_rich_nodes::list::ListType;
 
 mod nodes;
 mod text;
@@ -119,6 +120,120 @@ pub(crate) enum Indent {
     Level(u32),
 }
 
+/// Source `NodeSpec` block kinds this applier builds (`Doc.buildNode`).
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(tag = "block", rename_all = "camelCase")]
+enum WireBlockSpec {
+    Paragraph {
+        text: Option<String>,
+    },
+    Heading {
+        level: f64,
+        text: Option<String>,
+    },
+    Quote {
+        text: Option<String>,
+    },
+    Code {
+        language: Option<String>,
+        text: Option<String>,
+    },
+    List {
+        list: WireListKind,
+        items: Vec<String>,
+    },
+    Table {
+        rows: Vec<Vec<String>>,
+    },
+    Divider {},
+    Equation {
+        tex: String,
+        inline: Option<bool>,
+    },
+}
+
+/// The block kinds `WireBlockSpec` decodes; other Source kinds (cards, HTML,
+/// database queries, media) belong to later phases and are refused.
+const SUPPORTED_BLOCKS: [&str; 8] = [
+    "paragraph",
+    "heading",
+    "quote",
+    "code",
+    "list",
+    "table",
+    "divider",
+    "equation",
+];
+
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WireListKind {
+    Bullet,
+    Number,
+    Check,
+}
+
+/// A block `insertNode` builds, validated.
+#[derive(Clone, Debug)]
+pub(crate) enum InsertSpec {
+    Paragraph(Option<String>),
+    Heading(HeadingTagType, Option<String>),
+    Quote(Option<String>),
+    Code {
+        language: Option<String>,
+        text: Option<String>,
+    },
+    List {
+        list: ListType,
+        items: Vec<String>,
+    },
+    Table(Vec<Vec<String>>),
+    Divider,
+    Equation {
+        tex: String,
+        inline: bool,
+    },
+}
+
+/// Source `insertNode`'s spec: an inline spec throws ("insertNode requires a
+/// block spec"); a block kind this applier does not build, or a spec that does
+/// not match its kind, is refused as unsupported (Source would build an
+/// invalid node from a malformed spec).
+fn insert_spec(spec: serde_json::Value) -> Result<InsertSpec, AiOpRefusal> {
+    if spec.get("inline").is_some() {
+        return Err(AiOpRefusal::WrongTarget);
+    }
+    if !spec
+        .get("block")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|block| SUPPORTED_BLOCKS.contains(&block))
+    {
+        return Err(AiOpRefusal::UnsupportedOp);
+    }
+    let spec: WireBlockSpec =
+        serde_json::from_value(spec).map_err(|_| AiOpRefusal::UnsupportedOp)?;
+    Ok(match spec {
+        WireBlockSpec::Paragraph { text } => InsertSpec::Paragraph(text),
+        WireBlockSpec::Heading { level, text } => InsertSpec::Heading(heading_tag(level)?, text),
+        WireBlockSpec::Quote { text } => InsertSpec::Quote(text),
+        WireBlockSpec::Code { language, text } => InsertSpec::Code { language, text },
+        WireBlockSpec::List { list, items } => InsertSpec::List {
+            list: match list {
+                WireListKind::Bullet => ListType::Bullet,
+                WireListKind::Number => ListType::Number,
+                WireListKind::Check => ListType::Check,
+            },
+            items,
+        },
+        WireBlockSpec::Table { rows } => InsertSpec::Table(rows),
+        WireBlockSpec::Divider {} => InsertSpec::Divider,
+        WireBlockSpec::Equation { tex, inline } => InsertSpec::Equation {
+            tex,
+            inline: inline.unwrap_or(false),
+        },
+    })
+}
+
 /// The wire shape of the `DocumentOp`s this applier implements.
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -180,10 +295,16 @@ enum WireOp {
         nodes: Vec<String>,
         separator: String,
     },
+    InsertNode {
+        #[serde(rename = "ref")]
+        reference: String,
+        spec: serde_json::Value,
+        at: WirePosition,
+    },
 }
 
 /// Kinds `WireOp` decodes; any other Source kind is refused as unsupported.
-const SUPPORTED_KINDS: [&str; 13] = [
+const SUPPORTED_KINDS: [&str; 14] = [
     "insertText",
     "removeText",
     "setText",
@@ -197,6 +318,7 @@ const SUPPORTED_KINDS: [&str; 13] = [
     "setBlockType",
     "setIndent",
     "mergeBlocks",
+    "insertNode",
 ];
 
 /// A validated op: offsets and lengths are safe integers (UTF-16 units).
@@ -256,6 +378,12 @@ pub(crate) enum AiOp {
     MergeBlocks {
         nodes: Vec<String>,
         separator: String,
+    },
+    InsertNode {
+        /// The op's ref, which becomes the inserted node's id.
+        reference: String,
+        spec: InsertSpec,
+        at: Position,
     },
 }
 
@@ -416,6 +544,15 @@ fn validate(op: WireOp) -> Result<AiOp, AiOpRefusal> {
             },
         },
         WireOp::MergeBlocks { nodes, separator } => AiOp::MergeBlocks { nodes, separator },
+        WireOp::InsertNode {
+            reference,
+            spec,
+            at,
+        } => AiOp::InsertNode {
+            reference,
+            spec: insert_spec(spec)?,
+            at: at.into(),
+        },
     })
 }
 
@@ -630,6 +767,11 @@ pub(crate) fn plan(tx: &Transaction<'_>, op: &AiOp) -> OpResult<Vec<text::Write>
         AiOp::SetBlockType { node, block } => nodes::set_block_type(tx, node, block),
         AiOp::SetIndent { node, indent } => nodes::set_indent(tx, node, *indent),
         AiOp::MergeBlocks { nodes, separator } => nodes::merge_blocks(tx, nodes, separator),
+        AiOp::InsertNode {
+            reference,
+            spec,
+            at,
+        } => nodes::insert_node(tx, reference, spec, at),
     }
 }
 

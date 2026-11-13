@@ -8105,5 +8105,895 @@
     },
     "failedAt": null,
     "refs": []
+  },
+  {
+    "name": "insertNode paragraph after a middle list item",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "three",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000004"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000005"
+                },
+                "value": 3
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000006"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000007"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertNode",
+        "ref": "ref-split",
+        "spec": {
+          "block": "paragraph",
+          "text": "Between"
+        },
+        "at": {
+          "after": "s0000003"
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "<new0>"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Between",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "<new1>"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "ref-split"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "three",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000004"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000005"
+                },
+                "value": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000006"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000007"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": [
+      "ref-split"
+    ]
+  },
+  {
+    "name": "insertNode paragraph before a list item",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertNode",
+        "ref": "ref-before-item",
+        "spec": {
+          "block": "paragraph",
+          "text": "Inside"
+        },
+        "at": {
+          "before": "s0000003"
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000000"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000001"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Inside",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "<new0>"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "id": "ref-before-item"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "s0000002"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "s0000003"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "s0000004"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000005"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": [
+      "ref-before-item"
+    ]
+  },
+  {
+    "name": "insertNode table with all-empty cells",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertNode",
+        "ref": "ref-empty-table",
+        "spec": {
+          "block": "table",
+          "rows": [
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ]
+          ]
+        },
+        "at": {
+          "after": "s0000001"
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "paragraph",
+                        "version": 1,
+                        "$": {
+                          "id": "<new0>"
+                        },
+                        "textFormat": 0,
+                        "textStyle": ""
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablecell",
+                    "version": 1,
+                    "$": {
+                      "id": "<new1>"
+                    },
+                    "backgroundColor": null,
+                    "colSpan": 1,
+                    "headerState": 1,
+                    "rowSpan": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "paragraph",
+                        "version": 1,
+                        "$": {
+                          "id": "<new2>"
+                        },
+                        "textFormat": 0,
+                        "textStyle": ""
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablecell",
+                    "version": 1,
+                    "$": {
+                      "id": "<new3>"
+                    },
+                    "backgroundColor": null,
+                    "colSpan": 1,
+                    "headerState": 1,
+                    "rowSpan": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "tablerow",
+                "version": 1,
+                "$": {
+                  "id": "<new4>"
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "paragraph",
+                        "version": 1,
+                        "$": {
+                          "id": "<new5>"
+                        },
+                        "textFormat": 0,
+                        "textStyle": ""
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablecell",
+                    "version": 1,
+                    "$": {
+                      "id": "<new6>"
+                    },
+                    "backgroundColor": null,
+                    "colSpan": 1,
+                    "headerState": 0,
+                    "rowSpan": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "paragraph",
+                        "version": 1,
+                        "$": {
+                          "id": "<new7>"
+                        },
+                        "textFormat": 0,
+                        "textStyle": ""
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablecell",
+                    "version": 1,
+                    "$": {
+                      "id": "<new8>"
+                    },
+                    "backgroundColor": null,
+                    "colSpan": 1,
+                    "headerState": 0,
+                    "rowSpan": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "tablerow",
+                "version": 1,
+                "$": {
+                  "id": "<new9>"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "table",
+            "version": 1,
+            "$": {
+              "id": "ref-empty-table"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": [
+      "ref-empty-table"
+    ]
+  },
+  {
+    "name": "insertNode list with an empty item",
+    "seed": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "ops": [
+      {
+        "kind": "insertNode",
+        "ref": "ref-empty-item",
+        "spec": {
+          "block": "list",
+          "list": "bullet",
+          "items": [
+            "",
+            "two"
+          ]
+        },
+        "at": {
+          "after": "s0000001"
+        }
+      }
+    ],
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Alpha",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "s0000000"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "s0000001"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "<new0>"
+                },
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "<new1>"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "<new2>"
+                },
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "ref-empty-item"
+            },
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "s0000002"
+        }
+      }
+    },
+    "failedAt": null,
+    "refs": [
+      "ref-empty-item"
+    ]
   }
 ]

@@ -4,7 +4,7 @@
 //!
 //! Each op is planned against a read-only transaction and returns its writes,
 //! so a refusal is decided before the handler touches selection, tags or nodes.
-use super::{AiOpRefusal, BlockType, OpResult, Scope, block_by_id, by_id, text_block};
+use super::{AiOpRefusal, BlockType, InsertSpec, OpResult, Scope, block_by_id, by_id, text_block};
 use lexical_model::*;
 
 /// One planned model write, executed in order by [`execute`].
@@ -37,6 +37,12 @@ pub(crate) enum Write {
     },
     /// Set a list item's indent (Lexical `ListItemNode.setIndent`).
     SetIndent { key: NodeKey, indent: u32 },
+    /// Source `insertNode`: build `spec`, place it, and give it `id`.
+    Insert {
+        spec: InsertSpec,
+        to: Place,
+        id: Option<String>,
+    },
     /// Source `$mergeBlocks`: each of `rest`, in order, appends a `separator`
     /// run and its children into `first` when it is an element, then goes.
     MergeInto {
@@ -87,20 +93,33 @@ pub(crate) fn execute(tx: &mut Transaction<'_>, writes: Vec<Write>) -> Result<()
             }
             Write::Move { key, to } => {
                 tx.remove(key, false)?;
-                match to {
-                    Place::After(anchor) => {
-                        tx.insert_after(anchor, key, false)?;
+                place(tx, key, to)?;
+            }
+            Write::Insert { spec, to, id } => {
+                let mut key = build(tx, spec)?;
+                // Source wraps a structurally inline block (an equation) in a
+                // paragraph so it stands as its own block.
+                if tx.view().is_inline(key) {
+                    let paragraph = tx.create(Paragraph {})?.key();
+                    tx.append(paragraph, &[key])?;
+                    key = paragraph;
+                }
+                place(tx, key, to)?;
+                if let Some(id) = id {
+                    let id = lexical_node_id::LexicalNodeId::try_new(id)
+                        .map_err(|_| Error::Invariant("group-c.ai-op ref is empty"))?;
+                    crate::node_ids::set_id(tx, key, Some(id))?;
+                }
+                // Source assignRef then runs $updateAllNodeIds: a whole-doc
+                // depth-first idToNodeKeyMap.set, so the last holder of a
+                // duplicated id owns it and the transform regenerates the rest.
+                // It also mints ids for id-less nodes anywhere in the doc;
+                // native leaves that to the transform (dirty nodes only), which
+                // is unreachable while load assigns every node an id.
+                for record in lexical_rich_nodes::utils::dfs(tx.view(), None, None) {
+                    if let Some(id) = crate::node_ids::get_id(tx.view(), record.node)? {
+                        crate::node_ids::claim_id(tx, id.as_str(), record.node)?;
                     }
-                    Place::Before(anchor) => {
-                        tx.insert_before(anchor, key, false)?;
-                    }
-                    Place::RootEnd => tx.append(NodeKey::ROOT, &[key])?,
-                    Place::RootStart => match tx.view().first_child(NodeKey::ROOT) {
-                        Some(first) => {
-                            tx.insert_before(first, key, false)?;
-                        }
-                        None => tx.append(NodeKey::ROOT, &[key])?,
-                    },
                 }
             }
             Write::SetFormat { key, format } => {
@@ -159,6 +178,119 @@ pub(crate) fn execute(tx: &mut Transaction<'_>, writes: Vec<Write>) -> Result<()
         }
     }
     Ok(())
+}
+
+/// Source `Doc.place`, through the node's own insertion hooks (a list item
+/// target splits its list, as Lexical's does).
+fn place(tx: &mut Transaction<'_>, key: NodeKey, to: Place) -> Result<(), Error> {
+    match to {
+        Place::After(anchor) => {
+            tx.insert_after(anchor, key, false)?;
+        }
+        Place::Before(anchor) => {
+            tx.insert_before(anchor, key, false)?;
+        }
+        Place::RootEnd => tx.append(NodeKey::ROOT, &[key])?,
+        Place::RootStart => match tx.view().first_child(NodeKey::ROOT) {
+            Some(first) => {
+                tx.insert_before(first, key, false)?;
+            }
+            None => tx.append(NodeKey::ROOT, &[key])?,
+        },
+    }
+    Ok(())
+}
+
+/// Append a plain text node to `parent`.
+fn append_run(tx: &mut Transaction<'_>, parent: NodeKey, text: &str) -> Result<(), Error> {
+    let run = tx.create_text(text)?;
+    tx.append(parent, &[run.key()])
+}
+
+/// Source `withText`: a text run only for non-empty text.
+fn with_text(
+    tx: &mut Transaction<'_>,
+    block: NodeKey,
+    text: Option<&str>,
+) -> Result<NodeKey, Error> {
+    if let Some(text) = text.filter(|text| !text.is_empty()) {
+        append_run(tx, block, text)?;
+    }
+    Ok(block)
+}
+
+/// Source `Doc.buildNode` for the block kinds this applier builds.
+fn build(tx: &mut Transaction<'_>, spec: InsertSpec) -> Result<NodeKey, Error> {
+    // Rich-node constructors only wrap a model error.
+    let rich = |lexical_rich_nodes::Error::Model(error)| error;
+    Ok(match spec {
+        InsertSpec::Paragraph(text) => {
+            let block = tx.create(Paragraph {})?.key();
+            with_text(tx, block, text.as_deref())?
+        }
+        InsertSpec::Heading(tag, text) => {
+            let block = lexical_rich_nodes::heading::create_heading_node(tx, tag)
+                .map_err(rich)?
+                .key();
+            with_text(tx, block, text.as_deref())?
+        }
+        InsertSpec::Quote(text) => {
+            let block = lexical_rich_nodes::quote::create_quote_node(tx)
+                .map_err(rich)?
+                .key();
+            with_text(tx, block, text.as_deref())?
+        }
+        InsertSpec::Code { language, text } => {
+            let block = lexical_rich_nodes::code::create_code_node(tx, language.as_deref(), None)
+                .map_err(rich)?
+                .key();
+            with_text(tx, block, text.as_deref())?
+        }
+        InsertSpec::List { list, items } => {
+            let check = list == lexical_rich_nodes::list::ListType::Check;
+            let node = lexical_rich_nodes::list::create_list_node(tx, list, 1)?.key();
+            for item in items {
+                // Source gives check-list items an unchecked box, others none.
+                let li =
+                    lexical_rich_nodes::list::create_list_item_node(tx, check.then_some(false))?
+                        .key();
+                append_run(tx, li, &item)?;
+                tx.append(node, &[li])?;
+            }
+            node
+        }
+        InsertSpec::Table(rows) => {
+            use lexical_rich_nodes::table::{
+                TableCellHeaderState, TableCellNode, TableNode, TableRowNode,
+            };
+            let table = tx.create(TableNode::default())?.key();
+            for (index, cells) in rows.into_iter().enumerate() {
+                let row = tx.create(TableRowNode::default())?.key();
+                // Source `tables.$table`: the first row is the header row.
+                let header = if index == 0 {
+                    TableCellHeaderState::ROW
+                } else {
+                    TableCellHeaderState::NO_STATUS
+                };
+                for content in cells {
+                    let cell = tx.create(TableCellNode::new(header, 1, None))?.key();
+                    let paragraph = tx.create(Paragraph {})?.key();
+                    append_run(tx, paragraph, &content)?;
+                    tx.append(cell, &[paragraph])?;
+                    tx.append(row, &[cell])?;
+                }
+                tx.append(table, &[row])?;
+            }
+            table
+        }
+        InsertSpec::Divider => tx
+            .create(crate::nodes::HorizontalRuleNode::default())?
+            .key(),
+        InsertSpec::Equation { tex, inline } => {
+            crate::nodes::create_equation_node(tx, crate::nodes::Maybe::Value(tex), Some(inline))?
+                .key()
+        }
+    })
 }
 
 /// One text node's content as UTF-16 code units.

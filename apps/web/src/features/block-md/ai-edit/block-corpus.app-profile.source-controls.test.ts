@@ -94,6 +94,8 @@ type AppEntry = {
   /** Ops Source reported to telemetry and skipped; later ops still applied. */
   refused: number[];
   refs: string[];
+  /** Source's own load of `state`, only where it differs from `state`. */
+  reloaded?: SerializedEditorState;
 };
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -284,6 +286,8 @@ async function generate(
     // Stored once, then loaded again as the native replay will load it.
     const stored = await replay({ ...entry, ops: [] });
     const run = await replay({ ...entry, seed: stored.seed });
+    // Loading the resulting state again: recorded only where it changes.
+    const again = await replay({ ...entry, seed: run.state, ops: [] });
     app.push({
       name: entry.name,
       seed: stored.seed,
@@ -292,6 +296,9 @@ async function generate(
       state: run.state,
       refused: run.refused,
       refs: run.refs,
+      ...(JSON.stringify(again.seed) === JSON.stringify(run.state)
+        ? {}
+        : { reloaded: again.seed }),
     });
   }
   const json = `${JSON.stringify(app, null, 2)}\n`;
@@ -378,6 +385,10 @@ test('the native block-op corpus is the app Source profile of the headless cases
       '.root.children: length 2 -> 3',
       '.root.children[1].colWidths: app-only [120,120]',
     ],
+    'insertNode table with all-empty cells': [
+      '.root.children: length 2 -> 3',
+      '.root.children[1].colWidths: app-only [120,120]',
+    ],
     'setBlockType paragraph to code with a language': [
       '.root.children: length 1 -> 2',
     ],
@@ -416,7 +427,7 @@ test('the app Source editor loads its oracle states as recorded', async () => {
       for (const [label, from, expected] of [
         ['seed', entry.seed, entry.loaded],
         ['loaded', entry.loaded, entry.loaded],
-        ['state', entry.state, entry.state],
+        ['state', entry.state, entry.reloaded ?? entry.state],
       ] as const) {
         const reloaded = await replay({
           name: entry.name,
@@ -435,4 +446,15 @@ test('the app Source editor loads its oracle states as recorded', async () => {
       }
   }
   expect(changed).toEqual([]);
+  // One Source state the app editor itself does not keep: a paragraph placed
+  // before a list item stays a direct child of the list (LexicalNode
+  // insertBefore links it without the list's splice), and only a reload's
+  // transforms wrap it in a list item. Native targets the state as left and,
+  // on load, Source's reload of it.
+  const unstable = ['text.app.json', 'blocks.app.json'].flatMap((name) =>
+    (JSON.parse(readFileSync(resolve(CORPUS_DIR, name), 'utf8')) as AppEntry[])
+      .filter((entry) => entry.reloaded)
+      .map((entry) => entry.name)
+  );
+  expect(unstable).toEqual(['insertNode paragraph before a list item']);
 });

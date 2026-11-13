@@ -579,6 +579,63 @@ export const BLOCK_CASES: readonly BlockCase[] = [
       { kind: 'setBlockType', node: block(0), block: 'quote' },
     ],
   },
+  // Placing at a list item: ListItemNode.insertAfter splits the list for a
+  // non-item; there is no insertBefore override.
+  {
+    name: 'insertNode paragraph after a middle list item',
+    markdown: '- one\n- two\n- three',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-split',
+        spec: { block: 'paragraph', text: 'Between' },
+        at: { after: [0, 1] },
+      },
+    ],
+  },
+  {
+    name: 'insertNode paragraph before a list item',
+    markdown: '- one\n- two',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-before-item',
+        spec: { block: 'paragraph', text: 'Inside' },
+        at: { before: [0, 1] },
+      },
+    ],
+  },
+  // Empty content: DocumentEditor.buildTable inserts empty cells first.
+  {
+    name: 'insertNode table with all-empty cells',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-empty-table',
+        spec: {
+          block: 'table',
+          rows: [
+            ['', ''],
+            ['', ''],
+          ],
+        },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode list with an empty item',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-empty-item',
+        spec: { block: 'list', list: 'bullet', items: ['', 'two'] },
+        at: { after: block(0) },
+      },
+    ],
+  },
 ];
 
 /** Durable id of a seed node by top-level index or child path. */

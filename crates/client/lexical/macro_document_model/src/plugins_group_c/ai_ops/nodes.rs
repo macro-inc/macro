@@ -1,9 +1,9 @@
 //! Source Doc node ops: `removeNode`, `moveNode`, `formatNode`,
 //! `clearNodeFormat` (phase B1a) and `setBlockType`, `setIndent`, `mergeBlocks`
-//! (phase B1b). Planned against a read-only transaction like the text
+//! (phase B1b), and `insertNode` (phase B1c). Planned against a read-only transaction like the text
 //! ops, so a refusal is decided before any write.
 use super::text::{Place, Write};
-use super::{AiOpRefusal, BlockType, Indent, OpResult, Position, by_id, text_block};
+use super::{AiOpRefusal, BlockType, Indent, InsertSpec, OpResult, Position, by_id, text_block};
 use lexical_model::*;
 use lexical_rich_nodes::list::ListItemNode;
 use lexical_rich_nodes::list::item::get_indent;
@@ -242,5 +242,29 @@ pub(super) fn merge_blocks(
         first,
         rest: rest.to_vec(),
         separator: separator.to_owned(),
+    }]))
+}
+
+/// Source `insertNode`: build the spec's block, place it like `moveNode`
+/// places (`Doc.place`), and make the op's ref its id (`assignRef`); its
+/// descendants take fresh ids, as `$updateAllNodeIds` gives them.
+pub(super) fn insert_node(
+    tx: &Transaction<'_>,
+    reference: &str,
+    spec: &InsertSpec,
+    at: &Position,
+) -> OpResult<Vec<Write>> {
+    let to = match at {
+        Position::After(id) => Place::After(resolve!(anchor(tx, id))),
+        Position::Before(id) => Place::Before(resolve!(anchor(tx, id))),
+        Position::AppendToRoot => Place::RootEnd,
+        Position::PrependToRoot => Place::RootStart,
+    };
+    Ok(Ok(vec![Write::Insert {
+        spec: spec.clone(),
+        to,
+        // An empty ref leaves the node to take a fresh id, as `$setId(node, '')`
+        // followed by `$updateAllNodeIds` does.
+        id: (!reference.is_empty()).then(|| reference.to_owned()),
     }]))
 }

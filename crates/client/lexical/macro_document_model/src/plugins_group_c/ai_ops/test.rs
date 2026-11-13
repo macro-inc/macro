@@ -600,6 +600,9 @@ struct BlockEntry {
     /// Ops Source reported and skipped; the ops after each still applied.
     refused: Vec<usize>,
     refs: Vec<String>,
+    /// Source's own load of `state`, recorded only where it differs.
+    #[serde(default)]
+    reloaded: Option<Value>,
 }
 
 fn block_editor() -> Editor {
@@ -797,23 +800,108 @@ fn id_list(value: &Value, ids: &mut Vec<String>) {
     }
 }
 
+/// Known parity gap (board E15, phase L list load normalization): reloading Source's
+/// un-normalized paragraph-in-list state, Source's list transform renumbers the
+/// wrapped items and native keeps their values. Native's current values are
+/// asserted, so the phase L fix flips this pin. (entry, native, Source)
+const KNOWN_RELOAD_VALUES: &[(&str, &[i64], &[i64])] = &[(
+    "insertNode paragraph before a list item",
+    &[1, 1, 2],
+    &[1, 2, 3],
+)];
+
+/// Every listitem `value` in document order.
+fn listitem_values(value: &Value) -> Vec<i64> {
+    let mut values = Vec::new();
+    fn walk(value: &Value, values: &mut Vec<i64>) {
+        match value {
+            Value::Array(items) => items.iter().for_each(|item| walk(item, values)),
+            Value::Object(map) => {
+                if map.get("type") == Some(&Value::String("listitem".into()))
+                    && let Some(number) = map.get("value").and_then(Value::as_i64)
+                {
+                    values.push(number);
+                }
+                map.iter()
+                    .filter(|(key, _)| *key != "$")
+                    .for_each(|(_, child)| walk(child, values));
+            }
+            _ => {}
+        }
+    }
+    walk(value, &mut values);
+    values
+}
+
+/// Overwrite listitem `value`s in document order.
+fn set_listitem_values(value: &mut Value, numbers: &mut dyn Iterator<Item = i64>) {
+    match value {
+        Value::Array(items) => items
+            .iter_mut()
+            .for_each(|item| set_listitem_values(item, numbers)),
+        Value::Object(map) => {
+            if map.get("type") == Some(&Value::String("listitem".into()))
+                && map.contains_key("value")
+                && let Some(number) = numbers.next()
+            {
+                map.insert("value".into(), Value::from(number));
+            }
+            map.iter_mut()
+                .filter(|(key, _)| *key != "$")
+                .for_each(|(_, child)| set_listitem_values(child, numbers));
+        }
+        _ => {}
+    }
+}
+
 /// Oracle control: the raw Source JSON must survive a native import and export
 /// unchanged, or the parity comparison below would compare a native projection.
 #[test]
 fn native_import_matches_the_app_source_load() {
     let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    for (name, ..) in KNOWN_RELOAD_VALUES {
+        assert!(
+            corpus
+                .iter()
+                .any(|entry| entry.name == *name && entry.reloaded.is_some()),
+            "known reload difference {name} no longer reloads differently"
+        );
+    }
     let mut deltas = Vec::new();
     for entry in &corpus {
         // Native loads a stored state the way the app's Source editor does.
         for (label, raw, expected) in [
             ("seed", &entry.seed, &entry.loaded),
             ("loaded", &entry.loaded, &entry.loaded),
-            ("state", &entry.state, &entry.state),
+            (
+                "state",
+                &entry.state,
+                entry.reloaded.as_ref().unwrap_or(&entry.state),
+            ),
         ] {
             let mut editor = block_editor();
             load(&mut editor, raw);
-            let exported = export(&editor);
-            if &exported != expected {
+            let mut exported = export(&editor);
+            let mut expected = expected.clone();
+            if label == "state" && entry.reloaded.is_some() {
+                // Ids both sides mint while reloading compare one to one; the
+                // stored ids and op refs stay verbatim.
+                let mut stored = Vec::new();
+                id_list(raw, &mut stored);
+                let kept: HashSet<String> = stored.into_iter().collect();
+                exported = minted_bijection(&exported, &kept);
+                expected = minted_bijection(&expected, &kept);
+                if let Some((native, source)) = KNOWN_RELOAD_VALUES
+                    .iter()
+                    .find(|(name, ..)| *name == entry.name)
+                    .map(|(_, native, source)| (native, source))
+                {
+                    assert_eq!(listitem_values(&exported), *native, "{}", entry.name);
+                    assert_eq!(listitem_values(&expected), *source, "{}", entry.name);
+                    set_listitem_values(&mut exported, &mut source.iter().copied());
+                }
+            }
+            if exported != expected {
                 deltas.push(format!(
                     "{} [{label}]\n  source {expected}\n  native {exported}",
                     entry.name
@@ -1250,4 +1338,105 @@ fn a_negative_indent_is_an_invalid_number() {
             "invocation": 7
         })]
     );
+}
+
+/// insertNode specs the corpus reaches only by refusal index: their typed
+/// causes, and an empty ref leaving the node a fresh id.
+#[test]
+fn insert_node_spec_refusals_and_an_empty_ref() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let entry = corpus
+        .iter()
+        .find(|entry| entry.name == "insertNode paragraph after the first block")
+        .expect("two-paragraph seed");
+    let insert = |spec: Value, reference: &str| {
+        serde_json::json!({
+            "kind": "insertNode",
+            "ref": reference,
+            "spec": spec,
+            "at": {"after": "s0000001"},
+        })
+    };
+    for (spec, cause) in [
+        // Source: "insertNode requires a block spec".
+        (
+            serde_json::json!({"inline":"linebreak"}),
+            serde_json::json!({"cause":"wrongTarget"}),
+        ),
+        // Block kinds of later phases.
+        (
+            serde_json::json!({"block":"image","srcType":"url","url":"u"}),
+            serde_json::json!({"cause":"unsupportedOp"}),
+        ),
+        (
+            serde_json::json!({"block":"html-render","html":"<b>"}),
+            serde_json::json!({"cause":"unsupportedOp"}),
+        ),
+        // A spec that does not match its kind.
+        (
+            serde_json::json!({"block":"paragraph","text":5}),
+            serde_json::json!({"cause":"unsupportedOp"}),
+        ),
+        (
+            serde_json::json!({"block":"heading","text":"t"}),
+            serde_json::json!({"cause":"unsupportedOp"}),
+        ),
+        // A heading level the native model cannot represent.
+        (
+            serde_json::json!({"block":"heading","level":7,"text":"t"}),
+            serde_json::json!({"cause":"invalidNumber","field":"level","problem":"outOfRange"}),
+        ),
+    ] {
+        let mut native = block_editor();
+        load(&mut native, &entry.loaded);
+        let before = export(&native);
+        let op = insert(spec, "ref-x");
+        let (handled, commit) = native.dispatch(&op_command(&op, 7)).expect("dispatch");
+        assert_eq!(handled, Handled::No, "{op}");
+        assert_eq!(export(&native), before, "{op}");
+        let mut expected = cause;
+        expected["invocation"] = serde_json::json!(7);
+        assert_eq!(refusals(&commit), vec![expected], "{op}");
+    }
+    // An empty ref: the node is inserted and takes a fresh, non-empty id.
+    let mut native = block_editor();
+    load(&mut native, &entry.loaded);
+    let op = insert(serde_json::json!({"block":"paragraph","text":"x"}), "");
+    let (handled, _) = native.dispatch(&op_command(&op, 7)).expect("dispatch");
+    assert_eq!(handled, Handled::Yes);
+    let view = native.state().view();
+    let inserted = view
+        .next_sibling(view.first_child(NodeKey::ROOT).expect("first"))
+        .expect("inserted");
+    let id = crate::node_ids::get_id(view, inserted).expect("id");
+    assert!(id.is_some_and(|id| !id.as_str().is_empty()));
+}
+
+/// Lexical `$copyNode` keeps the node's state, its durable id included, which
+/// is why a list split leaves two lists holding one id until the id plugin
+/// settles it. Native `copy_node` must do the same.
+#[test]
+fn copy_node_keeps_the_durable_id() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let entry = corpus
+        .iter()
+        .find(|entry| entry.name == "insertNode paragraph after a middle list item")
+        .expect("list seed");
+    let mut native = block_editor();
+    load(&mut native, &entry.loaded);
+    let mut ids = None;
+    native
+        .update(|tx| {
+            let list = tx.view().first_child(NodeKey::ROOT).expect("list");
+            let copy = tx.copy_node(list, false)?;
+            ids = Some((
+                crate::node_ids::get_id(tx.view(), list)?.map(|id| id.to_string()),
+                crate::node_ids::get_id(tx.view(), copy)?.map(|id| id.to_string()),
+            ));
+            Ok(())
+        })
+        .expect("copy");
+    let (original, copied) = ids.expect("ids read");
+    assert!(original.is_some());
+    assert_eq!(copied, original);
 }
