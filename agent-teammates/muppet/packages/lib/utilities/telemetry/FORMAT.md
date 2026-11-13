@@ -2,7 +2,8 @@
 
 Every muppet system that opts in records each agent invocation (a "wake") as
 the same record, defined in `record.ts`. A sink writes it somewhere:
-`jsonlSink` as it is (one JSON object a line), `macroTelemetry` as OpenTelemetry.
+`jsonlSink` as it is (one JSON object a line), `macroTelemetry` as OpenTelemetry,
+`macroSink` to the agent account's wakes in Macro, with the wake's trace.
 The record is the source of truth; everything else is a copy of it.
 
 A wake is recorded up to three times, each time with all that is known so
@@ -131,6 +132,103 @@ Ours, for what the conventions have no name for:
 | `muppet.outcome.name`, `.source`, `.check`, `.reported`, `.observed`, `.summary`                  | `outcome`                |
 | `muppet.effects`                                                                                  | each effect as `kind:id` |
 | `muppet.usage.cost_usd`, `muppet.usage.turns`                                                     | `usage`                  |
+
+## To Macro, with the wake's trace
+
+`macroSink` (`wakes.ts`) sends every record, unchanged, to the agent account
+muppet runs as (`agent`, that account's Macro user id), and the wake's model
+session as a trace. The library makes no requests: the agent hands in a
+`WakeClient`: with `@macro-inc/sdk` once muppet's pinned version has
+`User.recordWake` (a handle per wake is only handed out by recording it, and a
+wake's trace always follows its first record):
+
+```ts
+const me = await macro.users.me();
+const wakes = new Map<string, AgentWake>();
+const client: WakeClient = {
+	recordWake: async (record) => {
+		wakes.set(record.wake, await me.recordWake(record));
+	},
+	uploadTrace: async (wake, trace) => {
+		await wakes.get(wake)?.uploadTrace(trace);
+	},
+};
+```
+
+or, until then, a fetch (see `wakes.ts`).
+
+- `POST /agents/{agent}/wakes`: the record, as above, at each phase.
+- `PUT /agents/{agent}/wakes/{wake}/trace`: the trace, at most 10 MiB of
+  JSON; each replaces the last. Sent from the `session` record on, every
+  `intervalMs` (60 seconds) while it changed, and once more at `end`, with
+  `live: false`; nothing after that.
+
+No call is waited on longer than `timeoutMs` (10 seconds), and failures are
+dropped: a slow or down Macro costs records and traces, never the wake or the
+other sinks.
+
+### The trace
+
+Built by `utilities/traces` from the session's transcript, which the agent
+reads (`transcript(session)`, parsed JSON Lines) and the library only parses:
+Claude Code's transcript or Codex's rollout, told apart by their lines.
+
+```jsonc
+{
+	"v": 1,
+	"source": "claude", // claude | codex
+	"sessionId": "8e9d…",
+	"startedAt": "2026-11-11T09:00:00.000Z", // the first transcript line's time
+	"endedAt": "2026-11-11T09:01:30.000Z", // the last line's time
+	"live": false, // still being written
+	"model": "claude-opus-5-5",
+	"title": "Fix failing test", // Claude Code's title for the session
+	"costUsd": 0.42,
+	"spans": [
+		// what was said to the session: the prompt, a person typing, a hook's context
+		{ "kind": "user", "at": "…", "text": "…" },
+		// one model response
+		{
+			"kind": "turn",
+			"index": 0,
+			"at": "…",
+			"end": "…",
+			"model": "…",
+			"text": "…",
+			"thinking": "…",
+			"tokens": {
+				"input": 100,
+				"output": 20,
+				"cacheRead": 5000,
+				"cacheWrite": 300
+			}
+		},
+		// a tool call; `end` and `result` are absent while it runs
+		{
+			"kind": "tool",
+			"id": "toolu_1",
+			"turn": 0,
+			"at": "…",
+			"end": "…",
+			"name": "Bash",
+			"input": {},
+			"result": "…",
+			"error": false
+		}
+	]
+}
+```
+
+- Redacted before it leaves: the agent's credential values exactly (8
+  characters or more, longest first), then anything shaped like a credential
+  (private keys; GitHub, Anthropic, OpenAI, Google, Slack and AWS tokens; JWTs;
+  `Bearer`/`Basic` values; `password=`; secret URL parameters; one-time codes
+  in prose; secret-looking JSON keys, in tool inputs and in text).
+- Each text is cut at 200,000 characters. A trace whose JSON is still over
+  10 MiB loses tool results and thinking past 20,000, then 2,000 characters,
+  then every text and tool input past 2,000, then its oldest spans (the
+  prompt stays), replaced by a `user` span saying how many went. A cut says
+  so in its text.
 
 ## Parents
 

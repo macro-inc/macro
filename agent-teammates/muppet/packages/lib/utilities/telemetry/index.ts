@@ -2,7 +2,9 @@
  * Wake telemetry: for every time a system wakes its agent, a record of what
  * triggered it and what came of it, in one format whatever the system (see
  * `record.ts`), sent wherever the system says: Macro's telemetry framework
- * (`macroTelemetry`), a JSON Lines file (`jsonlSink`), or a sink of its own.
+ * (`macroTelemetry`), the agent account's wakes in Macro, with each wake's
+ * model session as a trace (`macroSink`), a JSON Lines file (`jsonlSink`), or
+ * a sink of its own.
  *
  * It is opt-in. A system that wants it builds one `wakeTelemetry` with its
  * name and its closed set of outcomes, wraps its agent with
@@ -63,6 +65,7 @@ export {
 export { attributes, line, namespace } from "./attributes.ts";
 export type { MacroSpan, MacroTelemetry } from "./framework.ts";
 export { macroTelemetry } from "./macro.ts";
+export { macroSink, type WakeClient, type WakeTraces } from "./wakes.ts";
 export {
 	type Classified,
 	type Effect,
