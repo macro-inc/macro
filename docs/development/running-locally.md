@@ -727,8 +727,8 @@ enabled = false
 ```
 
 It is also off when `CI` is set (`MACRO_LOCAL_TELEMETRY=on` overrides that).
-Opted out, nothing is written or sent, and the next bring-up stops sending
-[your stacks' telemetry](#your-stacks-telemetry-in-grafana-opt-in).
+Opted out, nothing is written or sent, and the next `--traces lgtm` bring-up
+stops sending [your stacks' telemetry](#your-stacks-telemetry-in-grafana-opt-in).
 
 **What is sent.** Each bring-up, `rebuild`, `restart-frontend`, `stop`, `r`/`f`
 hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
@@ -809,7 +809,9 @@ alerts) and, per stack, `macro.local.instance`; your run events gain
 second.
 
 **Turning it off.** Delete the line, set `services = false`, or turn local
-telemetry off (`MACRO_LOCAL_TELEMETRY=off`, `CI`): the next bring-up removes
-the forwarder, recreates the collector without the copy, and then removes the
+telemetry off (`MACRO_LOCAL_TELEMETRY=off`, `CI`): the next bring-up with
+`--traces lgtm` removes the forwarder, recreates the collector without the copy, and then removes the
 forwarder's copy of the token, which is kept mode 0600 in
-`~/.local/state/macro/local-telemetry/forwarder/` and mounted read-only.
+`~/.local/state/macro/local-telemetry/forwarder/` and mounted read-only. A
+settings file that can't be used (invalid, unreadable, or `services = true`
+without a token) leaves the forwarder as it is, with a warning.

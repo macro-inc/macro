@@ -56,9 +56,9 @@ pub(super) struct Forwarder {
 
 impl Forwarder {
     /// Read the settings, or `None` when this run has nothing to do: forwarding
-    /// is off and no earlier run left it on. Off includes `MACRO_LOCAL_TELEMETRY`
-    /// and `CI` turning telemetry off, and a setting that can't be used, which is
-    /// reported.
+    /// is off and no earlier run left it on, or the settings can't be used,
+    /// which leaves the machine as it is rather than switching on a typo. Off
+    /// includes `MACRO_LOCAL_TELEMETRY` and `CI` turning telemetry off.
     pub(super) fn from_settings(stage: &Stage) -> Option<Self> {
         let (forwarder, problem) = Self::from_paths(&Paths::for_user()?);
         if let Some(error) = problem {
@@ -71,15 +71,15 @@ impl Forwarder {
 
     /// [`Self::from_settings`] for `paths`, with the problem to report.
     fn from_paths(paths: &Paths) -> (Option<Self>, Option<ForwardingError>) {
-        let (forwarding, problem) = match Forwarding::load(paths) {
-            Ok(forwarding) => (forwarding, None),
+        let forwarding = match Forwarding::load(paths) {
+            Ok(forwarding) => forwarding,
             // The recorder already reports a settings file it can't read.
-            Err(ForwardingError::Config(_)) => (None, None),
-            Err(error) => (None, Some(error)),
+            Err(ForwardingError::Config(_)) => return (None, None),
+            Err(error) => return (None, Some(error)),
         };
         let dir = paths.forwarder_dir();
         let forwarder = (forwarding.is_some() || dir.exists()).then_some(Self { forwarding, dir });
-        (forwarder, problem)
+        (forwarder, None)
     }
 
     /// The copy endpoint the lgtm collector should have: empty for none.
@@ -134,7 +134,10 @@ impl Forwarder {
     /// `container` no longer copies to the forwarder; until then the directory
     /// makes the next run try again.
     pub(super) fn settle(&self, stage: &Stage, container: &str) {
-        if self.forwarding.is_none() && !stage.is_dry_run() && !lgtm_differs(container, "") {
+        if self.forwarding.is_none()
+            && !stage.is_dry_run()
+            && lgtm_copy(container).is_some_and(|endpoint| endpoint.is_empty())
+        {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
@@ -143,6 +146,12 @@ impl Forwarder {
 /// Whether the running lgtm collector `container` copies to an endpoint other
 /// than `wanted` (empty: none).
 pub(super) fn lgtm_differs(container: &str, wanted: &str) -> bool {
+    lgtm_copy(container).is_some_and(|endpoint| endpoint != wanted)
+}
+
+/// The copy endpoint of the lgtm collector `container` (empty: none), or
+/// `None` when Docker can't say.
+fn lgtm_copy(container: &str) -> Option<String> {
     Command::new("docker")
         .args([
             "inspect",
@@ -153,7 +162,7 @@ pub(super) fn lgtm_differs(container: &str, wanted: &str) -> bool {
         .output()
         .ok()
         .filter(|out| out.status.success())
-        .is_some_and(|out| export_endpoint(&String::from_utf8_lossy(&out.stdout)) != wanted)
+        .map(|out| export_endpoint(&String::from_utf8_lossy(&out.stdout)).to_owned())
 }
 
 /// Recreate the lgtm collector `container` with copy endpoint `endpoint`. Its

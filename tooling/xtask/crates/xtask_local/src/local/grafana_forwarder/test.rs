@@ -88,15 +88,20 @@ fn a_forwarder_left_on_is_turned_off_by_the_settings_or_the_switch() {
 }
 
 #[test]
-fn services_without_a_token_are_reported_and_count_as_off() {
+fn unusable_settings_leave_a_running_forwarder_alone() {
     let dir = tempfile::tempdir().expect("tempdir");
     let paths = settings(
         dir.path(),
         "endpoint = \"https://otlp.example.com\"\nservices = true\n",
     );
+    std::fs::create_dir_all(paths.forwarder_dir()).expect("mkdir");
     let (forwarder, problem) = Forwarder::from_paths(&paths);
     assert!(forwarder.is_none());
     assert!(matches!(problem, Some(ForwardingError::NoToken { .. })));
+
+    let typo = settings(dir.path(), "services = tru\n");
+    let (forwarder, problem) = Forwarder::from_paths(&typo);
+    assert!(forwarder.is_none() && problem.is_none());
 }
 
 #[test]
