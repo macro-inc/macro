@@ -197,6 +197,7 @@ async fn a_change_through_the_organizing_calendar_shows_before_google_carries_it
     calendar.wait_until_synced(ada.email()).await?;
 
     stack.gmail().hold_event_copies();
+    let pushed = stack.google_calendar_pushes(ada.email());
     let renamed = calendar
         .patch(
             &format!("/events/{event_id}"),
@@ -216,22 +217,19 @@ async fn a_change_through_the_organizing_calendar_shows_before_google_carries_it
     let shown = calendar.occurrences().await?;
     assert_eq!(titles(&shown), ["Team, renamed"], "{shown:?}");
 
+    // The round the change's own push starts ends first, so the next push
+    // is not dropped.
+    stack
+        .wait_for_google_calendar_push(ada.email(), pushed)
+        .await?;
+    calendar.wait_until_synced(ada.email()).await?;
+
     // Google carries the change; the sync it starts keeps the new content.
-    let listings = || {
-        let requests = stack.gmail().requests();
-        requests
-            .iter()
-            .filter(|request| request.route == Some(Route::EventsList))
-            .count()
-    };
-    let before = listings();
+    let pushed = stack.google_calendar_pushes(ada.email());
     stack.gmail().release_event_copies();
-    eventually(
-        "the sync Google's change starts",
-        DEFAULT_TIMEOUT,
-        async || Ok((listings() > before).then_some(())),
-    )
-    .await?;
+    stack
+        .wait_for_google_calendar_push(ada.email(), pushed)
+        .await?;
     calendar.wait_until_synced(ada.email()).await?;
     let shown = calendar.occurrences().await?;
     assert_eq!(titles(&shown), ["Team, renamed"], "{shown:?}");

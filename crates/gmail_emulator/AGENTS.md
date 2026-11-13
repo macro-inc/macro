@@ -176,7 +176,9 @@ a local stack, without Google accounts.
   `sendUpdates`, ACLs and calendars shared between users (each user's list
   holds its own calendars), free/busy, `updatedMin` and `q` on `events.list`,
   `singleEvents` with a sync token, and the `_R` ids of a split series.
-  A change reaches a guest's copy at once unless copies are held back.
+  A change reaches a guest's copy at once unless copies are held back; a
+  hold carries changes to one copy of a meeting, not a merge of changes made
+  to two of its copies.
 - Three answers are the emulator's reading, not checked against Google:
   patching a deleted event answers 400, `events.instances` of an event that
   does not repeat answers the event itself, and a guest's forbidden change

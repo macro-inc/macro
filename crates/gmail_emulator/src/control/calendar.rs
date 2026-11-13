@@ -164,6 +164,11 @@ impl GmailEmulator {
     /// Holds changes to meetings back from their other copies, as Google
     /// does for some seconds: until [`Self::release_event_copies`] a change
     /// shows only on the calendar it was made on.
+    ///
+    /// A release copies each changed event whole, in the order of the
+    /// changes. So change one copy of a meeting per hold: when two copies of
+    /// the same meeting change while held, the first copy replayed
+    /// overwrites the other's change.
     pub fn hold_event_copies(&self) {
         self.with_state(|state| state.hold_copies());
     }
