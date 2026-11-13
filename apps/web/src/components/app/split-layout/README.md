@@ -45,7 +45,8 @@ Android system Back, and edge-swipe completion. When the current entry is a
 project's Tasks section and its previous entry is the same project's Overview,
 Back traverses the route history before closing a pane. Other entries and
 tablets retain pane-stack navigation. Route swipes keep the current pane still
-until completion because there is no second pane to reveal.
+until completion because there is no second pane to reveal. Clear the swipe
+transform before route Back, even when the route changes during a pane drag.
 
 ## Opt-in view restoration
 

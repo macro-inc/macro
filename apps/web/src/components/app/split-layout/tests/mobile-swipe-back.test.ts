@@ -50,8 +50,8 @@ function setup(inPane: boolean, paneBack = true) {
     target,
     routeBack,
     closePane,
-    expire: () => {
-      available = false;
+    setInPaneBackAvailable: (next: boolean) => {
+      available = next;
     },
   };
 }
@@ -86,10 +86,23 @@ describe('native in-pane swipe Back', () => {
     const test = setup(true);
     fireEvent.touchStart(test.target, { touches: [{ clientX: 8 }] });
     fireEvent.touchMove(test.target, { touches: [{ clientX: 250 }] });
-    test.expire();
+    test.setInPaneBackAvailable(false);
     fireEvent.touchEnd(test.target);
     expect(test.routeBack).not.toHaveBeenCalled();
     expect(test.closePane).not.toHaveBeenCalled();
+  });
+
+  it('clears a pane drag when route Back becomes available before release', () => {
+    const test = setup(false);
+    fireEvent.touchStart(test.target, { touches: [{ clientX: 8 }] });
+    fireEvent.touchMove(test.target, { touches: [{ clientX: 250 }] });
+    test.setInPaneBackAvailable(true);
+    fireEvent.touchEnd(test.target);
+    expect(test.routeBack).toHaveBeenCalledOnce();
+    expect(test.closePane).not.toHaveBeenCalled();
+    expect(test.gesture.styleForSlot(true).transform).toBe('translateX(0px)');
+    expect(test.gesture.isDragging()).toBe(false);
+    expect(test.gesture.isAnimatingOut()).toBe(false);
   });
 
   it('retains the animated pane closure outside in-pane navigation', () => {

@@ -71,6 +71,8 @@ export function createMobileSwipeBackGesture(
   function trigger() {
     if (!options.canStart() || isAnimatingOut()) return;
     if (options.inPaneBack?.canGoBack()) {
+      // A route change can expose this step while a pane drag is active.
+      reset();
       options.inPaneBack.goBack();
       return;
     }
