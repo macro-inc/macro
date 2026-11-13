@@ -435,10 +435,13 @@ impl GenerationRepo for PgGenerationRepo {
         next_run: Option<DateTime<Utc>>,
         now: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
+        // A run cut short records its outcome while the tick that started it
+        // may not have yet: the tick's older write must not undo the retry.
         sqlx::query!(
             r#"UPDATE suggestion_audience
                SET next_run_at = $2, last_outcome = $3, last_outcome_at = $4
-               WHERE user_id = $1"#,
+               WHERE user_id = $1
+                 AND (last_outcome_at IS NULL OR last_outcome_at <= $4)"#,
             user.as_ref(),
             next_run,
             outcome.as_ref(),

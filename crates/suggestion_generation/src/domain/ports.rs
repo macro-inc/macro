@@ -137,7 +137,8 @@ pub trait GenerationRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// What became of the person due a nightly run, at `now`: they are next
-    /// due at `next_run`, or out of the rotation until seen again.
+    /// due at `next_run`, or out of the rotation until seen again. An outcome
+    /// older than the one stored changes nothing.
     fn record_nightly(
         &self,
         user: &MacroUserIdStr<'_>,

@@ -888,6 +888,48 @@ async fn a_person_is_due_while_in_the_rotation(pool: PgPool) {
     assert_eq!(due[0].timezone, chrono_tz::Europe::London);
 }
 
+/// A run cut short records its outcome before the tick that started it does:
+/// the tick's older outcome changes nothing, so the person stays due at once.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_older_nightly_outcome_never_replaces_a_newer_one(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool.clone());
+    let tick = Utc::now();
+    repo.see(&owner(), "Asia/Tokyo", tick, tick).await.unwrap();
+    let cut = tick + TimeDelta::seconds(5);
+    repo.record_nightly(&owner(), NightlyOutcome::CutShort, Some(cut), cut)
+        .await
+        .unwrap();
+    let tomorrow = tick + TimeDelta::days(1);
+    repo.record_nightly(&owner(), NightlyOutcome::Started, Some(tomorrow), tick)
+        .await
+        .unwrap();
+    let stored = sqlx::query!(
+        "SELECT next_run_at, last_outcome, last_outcome_at FROM suggestion_audience WHERE user_id = $1",
+        OWNER
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored.last_outcome.as_deref(), Some("cut_short"));
+    assert_eq!(
+        stored.last_outcome_at.map(|at| at.timestamp_micros()),
+        Some(cut.timestamp_micros())
+    );
+    assert_eq!(
+        stored.next_run_at.map(|at| at.timestamp_micros()),
+        Some(cut.timestamp_micros())
+    );
+    assert_eq!(repo.due(cut, 10).await.unwrap().len(), 1);
+
+    // The next tick's outcome is newer, and lands.
+    let next = cut + TimeDelta::minutes(5);
+    repo.record_nightly(&owner(), NightlyOutcome::Started, Some(tomorrow), next)
+        .await
+        .unwrap();
+    assert!(repo.due(next, 10).await.unwrap().is_empty());
+}
+
 /// The routines cadence is kept for anyone: someone out of the rotation gets
 /// a row outside it, and someone in it keeps their next run.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
