@@ -867,6 +867,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   seconds (close 4499, retried). A phone can wake to a socket that reads open but
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
+- The page that owns the cache engine keeps the engine's compiled WebAssembly
+  and hands it to each new engine worker (`worker/compiled-engine.ts`), keyed by
+  the asset it was compiled from: the browser compiles the engine's functions
+  lazily in every new worker, which cost more than reopening the database on
+  each tab return. The exchange has its own port, so a failure only costs the
+  shortcut; never put the module in the activation message.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.

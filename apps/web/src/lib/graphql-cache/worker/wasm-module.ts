@@ -51,6 +51,7 @@ import type {
   WriteResult,
 } from '../protocol';
 import { workerCacheTelemetry } from '../telemetry-relay';
+import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
@@ -281,6 +282,14 @@ export interface CacheWasmModule {
 }
 
 let modulePromise: Promise<CacheWasmModule> | undefined;
+let compiledEngineExchange: CompiledEngineExchange | undefined;
+
+/** Set before the first load; the worker then reuses and reports through it. */
+export function useCompiledEngineExchange(
+  exchange: CompiledEngineExchange
+): void {
+  compiledEngineExchange = exchange;
+}
 let wasmMemory: WebAssembly.Memory | undefined;
 
 /** Returns the combined module's current unshared linear-memory allocation. */
@@ -303,97 +312,124 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
       // analyzable, so vite emits exactly one lazy hashed binary. Explicit
       // fetch/compile keeps download, compile, and instantiate separately observable.
       const wasmUrl = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
-      const downloadStartedAt = now();
-      let bytes: ArrayBuffer;
-      try {
-        const response = await fetch(wasmUrl);
-        if (!response.ok) {
-          throw new Error(
-            `cache WASM download returned HTTP ${response.status}`
-          );
-        }
-        bytes = await response.arrayBuffer();
-        telemetry.record({
-          name: 'graphql_cache.wasm_download',
-          operationCategory: 'initialization',
-          outcome: 'success',
-          errorCode: 'none',
-          durationMs: now() - downloadStartedAt,
-          bytes: bytes.byteLength,
-        });
-      } catch (error) {
-        telemetry.record({
-          name: 'graphql_cache.wasm_download',
-          operationCategory: 'initialization',
-          outcome: 'error',
-          errorCode: 'wasm-download',
-          durationMs: now() - downloadStartedAt,
-        });
-        throw error;
-      }
-
-      const compileStartedAt = now();
-      let compiled: WebAssembly.Module;
-      try {
-        compiled = await WebAssembly.compile(bytes);
-        telemetry.record({
-          name: 'graphql_cache.wasm_compile',
-          operationCategory: 'initialization',
-          outcome: 'success',
-          errorCode: 'none',
-          durationMs: now() - compileStartedAt,
-        });
-      } catch (error) {
-        telemetry.record({
-          name: 'graphql_cache.wasm_compile',
-          operationCategory: 'initialization',
-          outcome: 'error',
-          errorCode: 'wasm-compile',
-          durationMs: now() - compileStartedAt,
-        });
-        throw error;
-      }
-
-      const instantiateStartedAt = now();
-      try {
-        const exports = (await mod.default({ module_or_path: compiled })) as {
-          memory?: WebAssembly.Memory;
-        };
-        if (!(exports.memory instanceof WebAssembly.Memory)) {
-          throw new Error('cache WASM did not export its linear memory');
-        }
-        const { default: schemaSdl } = await import(
-          '../../../../../../static_assets/schema.graphql?raw'
-        );
-        mod.configureCacheSchema(schemaSdl);
-        wasmMemory = exports.memory;
-        mod.setSlowQueryCallback?.((queryFingerprint, durationMs, success) => {
+      const compileFresh = async (): Promise<WebAssembly.Module> => {
+        const downloadStartedAt = now();
+        let bytes: ArrayBuffer;
+        try {
+          const response = await fetch(wasmUrl);
+          if (!response.ok) {
+            throw new Error(
+              `cache WASM download returned HTTP ${response.status}`
+            );
+          }
+          bytes = await response.arrayBuffer();
           telemetry.record({
-            name: 'graphql_cache.slow_query',
-            operationCategory: 'storage',
-            queryFingerprint,
-            durationMs,
-            outcome: success ? 'success' : 'error',
+            name: 'graphql_cache.wasm_download',
+            operationCategory: 'initialization',
+            outcome: 'success',
+            errorCode: 'none',
+            durationMs: now() - downloadStartedAt,
+            bytes: bytes.byteLength,
           });
-        });
-        telemetry.record({
-          name: 'graphql_cache.wasm_instantiate',
-          operationCategory: 'initialization',
-          outcome: 'success',
-          errorCode: 'none',
-          durationMs: now() - instantiateStartedAt,
-        });
-        return mod;
-      } catch (error) {
-        telemetry.record({
-          name: 'graphql_cache.wasm_instantiate',
-          operationCategory: 'initialization',
-          outcome: 'error',
-          errorCode: 'wasm-instantiate',
-          durationMs: now() - instantiateStartedAt,
-        });
-        throw error;
+        } catch (error) {
+          telemetry.record({
+            name: 'graphql_cache.wasm_download',
+            operationCategory: 'initialization',
+            outcome: 'error',
+            errorCode: 'wasm-download',
+            durationMs: now() - downloadStartedAt,
+          });
+          throw error;
+        }
+
+        const compileStartedAt = now();
+        try {
+          const compiled = await WebAssembly.compile(bytes);
+          telemetry.record({
+            name: 'graphql_cache.wasm_compile',
+            operationCategory: 'initialization',
+            outcome: 'success',
+            errorCode: 'none',
+            durationMs: now() - compileStartedAt,
+          });
+          return compiled;
+        } catch (error) {
+          telemetry.record({
+            name: 'graphql_cache.wasm_compile',
+            operationCategory: 'initialization',
+            outcome: 'error',
+            errorCode: 'wasm-compile',
+            durationMs: now() - compileStartedAt,
+          });
+          throw error;
+        }
+      };
+
+      const instantiate = async (
+        compiled: WebAssembly.Module
+      ): Promise<CacheWasmModule> => {
+        const instantiateStartedAt = now();
+        try {
+          const exports = (await mod.default({ module_or_path: compiled })) as {
+            memory?: WebAssembly.Memory;
+          };
+          if (!(exports.memory instanceof WebAssembly.Memory)) {
+            throw new Error('cache WASM did not export its linear memory');
+          }
+          const { default: schemaSdl } = await import(
+            '../../../../../../static_assets/schema.graphql?raw'
+          );
+          mod.configureCacheSchema(schemaSdl);
+          wasmMemory = exports.memory;
+          mod.setSlowQueryCallback?.(
+            (queryFingerprint, durationMs, success) => {
+              telemetry.record({
+                name: 'graphql_cache.slow_query',
+                operationCategory: 'storage',
+                queryFingerprint,
+                durationMs,
+                outcome: success ? 'success' : 'error',
+              });
+            }
+          );
+          telemetry.record({
+            name: 'graphql_cache.wasm_instantiate',
+            operationCategory: 'initialization',
+            outcome: 'success',
+            errorCode: 'none',
+            durationMs: now() - instantiateStartedAt,
+          });
+          return mod;
+        } catch (error) {
+          telemetry.record({
+            name: 'graphql_cache.wasm_instantiate',
+            operationCategory: 'initialization',
+            outcome: 'error',
+            errorCode: 'wasm-instantiate',
+            durationMs: now() - instantiateStartedAt,
+          });
+          throw error;
+        }
+      };
+
+      // A module the owner page kept from an earlier engine worker skips
+      // the download and arrives with its functions already compiled. It
+      // only counts for the asset this worker would have loaded itself.
+      const offered = await compiledEngineExchange?.offered;
+      if (offered?.assetUrl === wasmUrl.href) {
+        try {
+          return await instantiate(offered.module);
+        } catch {
+          // Load it the ordinary way instead.
+        }
       }
+
+      const compiled = await compileFresh();
+      compiledEngineExchange?.report({
+        assetUrl: wasmUrl.href,
+        module: compiled,
+      });
+      return instantiate(compiled);
     })();
     modulePromise = initialization;
     void initialization.catch(() => {

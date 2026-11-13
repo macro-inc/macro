@@ -209,6 +209,14 @@ One Rust core engine, two hosts:
   free, with native Turso filesystem storage instead of webview storage. The
   wasm/worker path is **browser-only**.
 
+Each tab return starts a new engine worker. The owner page keeps the engine's
+compiled `WebAssembly.Module` and passes it to the next worker, which then skips
+the download and, more importantly, the browser's lazy recompilation of every
+function on first call. The module is keyed by the asset URL it was compiled
+from and travels on a port of its own (`worker/compiled-engine.ts`); it cannot
+pass through the coordinator, which is a different agent cluster. If the module
+cannot be passed or instantiated, the worker loads the engine as before.
+
 ### 4.2 Multi-consumer strategy (browser only)
 
 **Decision: Turso-backed persistence over OPFS, with one coordinated engine

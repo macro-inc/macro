@@ -13,6 +13,7 @@ import {
   isolateCacheTelemetry,
 } from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
+import { compiledEngineFromPage } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CleanupToPageEnvelope,
@@ -43,6 +44,7 @@ import {
   type CacheWasmModule,
   cacheWasmLinearMemoryBytes,
   loadCacheWasm,
+  useCompiledEngineExchange,
 } from './wasm-module';
 import { CacheWorkerCore, type CacheWorkerCoreOptions } from './worker-core';
 
@@ -602,13 +604,15 @@ export function installCacheEngineWorker(
     options.scope ?? (self as unknown as DedicatedWorkerScopeLike);
   let activated = false;
   workerScope.onmessage = (event: MessageEvent<unknown>) => {
-    const directPort = event.ports[0];
-    if (event.ports.length !== 1 || !directPort || activated) {
+    // The page may add a second port to exchange the compiled engine on.
+    const [directPort, compiledEnginePort] = event.ports;
+    if (event.ports.length > 2 || !directPort || activated) {
       for (const port of event.ports) port.close();
       return;
     }
     const cleanup = validatePageToCleanupEnvelope(event.data);
     if (cleanup.ok) {
+      compiledEnginePort?.close();
       activated = true;
       removeStaleDatabases(
         cleanup.value,
@@ -621,9 +625,13 @@ export function installCacheEngineWorker(
     const parsed = validatePageToEngineEnvelope(event.data);
     if (!parsed.ok) {
       directPort.close();
+      compiledEnginePort?.close();
       return;
     }
     activated = true;
+    if (compiledEnginePort) {
+      useCompiledEngineExchange(compiledEngineFromPage(compiledEnginePort));
+    }
     activate(parsed.value, directPort, workerScope, options).catch(
       reportEngineTaskFailure
     );
