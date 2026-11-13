@@ -30,6 +30,10 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/graphql_email/**"),
     xtask_paths::repo_glob!("crates/gmail_*/**"),
     xtask_paths::repo_glob!("crates/outlook_*/**"),
+    xtask_paths::repo_glob!("services/search_processing_service/**"),
+    xtask_paths::repo_glob!("crates/opensearch_client/**"),
+    xtask_paths::repo_glob!("infra/stacks/opensearch/helpers/**"),
+    xtask_paths::repo_glob!("infra/local/opensearch/**"),
     xtask_paths::repo_glob!("crates/macro_db_client/migrations/**"),
     xtask_paths::repo_glob!(".config/nextest.toml"),
     xtask_paths::repo_glob!(".github/workflows/email_e2e.yml"),
@@ -82,8 +86,8 @@ fn concurrency() -> Concurrency {
     .cancel_in_progress(true)
 }
 
-/// Build the two services and run the scenarios against Postgres, Redis, an
-/// SQS-compatible server and a Kafka broker.
+/// Build the services and run the scenarios against Postgres, Redis, an
+/// SQS-compatible server, a Kafka broker and OpenSearch.
 fn suite() -> Job {
     Job::default()
         .name("Email end-to-end")
@@ -99,11 +103,13 @@ fn suite() -> Job {
         .add_env(("EMAIL_E2E_REDIS_URL", "redis://127.0.0.1:6379"))
         .add_env(("EMAIL_E2E_SQS_URL", "http://127.0.0.1:9324"))
         .add_env(("EMAIL_E2E_KAFKA_BROKERS", "127.0.0.1:9092"))
+        .add_env(("EMAIL_E2E_OPENSEARCH_URL", "http://127.0.0.1:9200"))
         .add_service("postgres", code_check_cloud_storage::postgres_service())
         .add_service("redis", code_check_cloud_storage::redis_service())
         .add_service("sqs", sqs_service())
         .add_service("kafka", kafka_service())
         .add_step(steps::checkout(false, false))
+        .add_step(start_opensearch())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
@@ -112,6 +118,7 @@ fn suite() -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(raise_connection_limit())
         .add_step(code_check_cloud_storage::configure_postgres())
+        .add_step(create_search_indices())
         .add_step(run_suite())
         .add_step(known_bugs())
         .add_step(upload_logs())
@@ -157,6 +164,17 @@ fn kafka_service() -> Container {
              localhost:9092 > /dev/null 2>&1\" --health-interval 2s --health-start-period 60s \
              --health-timeout 10s --health-retries 20",
         )
+}
+
+/// OpenSearch for the search scenarios. Not a service container: the image
+/// is built from the local stack's Dockerfile, which adds a plugin. Started
+/// first, so it is up by the time the services are built.
+fn start_opensearch() -> Step<Run> {
+    Step::new("start opensearch").run(include_str!("scripts/email_e2e_opensearch.sh"))
+}
+
+fn create_search_indices() -> Step<Run> {
+    Step::new("create the search indices").run(include_str!("scripts/email_e2e_search_indices.sh"))
 }
 
 /// Room for every scenario's connection pools.

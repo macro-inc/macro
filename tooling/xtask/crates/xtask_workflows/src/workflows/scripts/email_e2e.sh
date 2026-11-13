@@ -14,6 +14,8 @@ cargo build "${flags[@]}" -p email_scheduled_handler
 # The service behind the GraphQL API, for the scenarios that send the way
 # the web composer does.
 cargo test --no-run "${flags[@]}" -p document_storage_service --test service_binary_builds
+# The search indexer, without the PDF text extraction the scenarios do not use.
+cargo build "${flags[@]}" -p search_processing_service --bin search_processing_service --features no_pdf
 
 started=$(date +%s)
 cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"

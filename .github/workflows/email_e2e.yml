@@ -38,6 +38,7 @@ jobs:
       EMAIL_E2E_REDIS_URL: redis://127.0.0.1:6379
       EMAIL_E2E_SQS_URL: http://127.0.0.1:9324
       EMAIL_E2E_KAFKA_BROKERS: '127.0.0.1:9092'
+      EMAIL_E2E_OPENSEARCH_URL: http://127.0.0.1:9200
     timeout-minutes: 45
     services:
       postgres:
@@ -82,6 +83,17 @@ jobs:
       with:
         clean: 'false'
         persist-credentials: 'false'
+    - name: start opensearch
+      run: |
+        set -euo pipefail
+
+        # The local stack's OpenSearch image: the engine version of the deployed
+        # domain, with the analysis plugin the index mappings need.
+        docker build --quiet --tag email-e2e-opensearch infra/local/opensearch
+        docker run --detach --name email-e2e-opensearch --publish 9200:9200 \
+          --env discovery.type=single-node \
+          --env OPENSEARCH_JAVA_OPTS="-Xms1g -Xmx1g" \
+          email-e2e-opensearch
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -228,6 +240,25 @@ jobs:
           sleep 1
         done
         docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: create the search indices
+      run: |
+        set -euo pipefail
+
+        for _ in $(seq 1 120); do
+          curl --fail --silent --output /dev/null "$EMAIL_E2E_OPENSEARCH_URL" && break
+          sleep 1
+        done
+        curl --fail --silent --show-error --output /dev/null "$EMAIL_E2E_OPENSEARCH_URL" \
+          || { docker logs --tail 50 email-e2e-opensearch; exit 1; }
+
+        # The indices and aliases search reads, from the same script the local stack
+        # and the deployed domain are set up with. The cluster has no security
+        # plugin, so the credentials only have to be present.
+        cd infra/stacks/opensearch/helpers
+        bun install --frozen-lockfile
+        ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL="$EMAIL_E2E_OPENSEARCH_URL" \
+          OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin \
+          bun run scripts/create_indices.ts
     - name: run the email end-to-end suite
       run: |
         set -euo pipefail
@@ -246,6 +277,8 @@ jobs:
         # The service behind the GraphQL API, for the scenarios that send the way
         # the web composer does.
         cargo test --no-run "${flags[@]}" -p document_storage_service --test service_binary_builds
+        # The search indexer, without the PDF text extraction the scenarios do not use.
+        cargo build "${flags[@]}" -p search_processing_service --bin search_processing_service --features no_pdf
 
         started=$(date +%s)
         cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"
