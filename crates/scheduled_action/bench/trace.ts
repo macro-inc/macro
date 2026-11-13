@@ -124,8 +124,14 @@ export async function sessionSpans(
   for (let attempt = 0; attempt < 10; attempt++) {
     const found = await fetch(`${at.tempo}/api/search?${search}`).catch(() => undefined);
     const { traces = [] } = found?.ok ? ((await found.json()) as { traces?: { traceID: string }[] }) : {};
-    const all = [...spans];
-    for (const { traceID } of traces) all.push(...(await trace(at, traceID)));
+    // Each trace once (Tempo's search drops leading zeros), the message's own
+    // included; a fetch that comes back empty keeps what was read before.
+    const byTrace = new Map([[traceId.replace(/^0+/, ''), spans]]);
+    for (const { traceID } of traces) {
+      const fetched = await trace(at, traceID);
+      if (fetched.length) byTrace.set(traceID.replace(/^0+/, ''), fetched);
+    }
+    const all = [...byTrace.values()].flat();
     if (chats(all).length) return all;
     await Bun.sleep(3000);
   }
@@ -228,6 +234,8 @@ export function breakdown(
   }
   const interval = (span: Span): Interval => [span.start, span.end];
   const busy = [...chats, ...toolSpans];
+  // A bare turn with nothing traced is missing telemetry, not all setup.
+  if (window && !busy.length) return undefined;
   // Setup ends at the first traced work (a model call, unless that call is
   // missing from the trace); with nothing traced, the whole span is setup.
   const firstBusy = busy.length ? Math.min(...busy.map((span) => span.start)) : draft.end;
