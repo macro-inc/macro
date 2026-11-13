@@ -1,6 +1,6 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import { createInboxFilters } from './inbox-filters';
+import { createInboxFilters, createInboxLane } from './inbox-filters';
 
 const memoryStorage = () => {
   let saved: string | null = null;
@@ -36,9 +36,41 @@ describe('createInboxFilters', () => {
       expect(filters.scope().unreadOnly).toBe(true);
       filters.setShown('email', false);
       expect(filters.scope()).toEqual({
+        lane: 'signal',
         rowTypes: filters.rowTypes(),
         unreadOnly: true,
       });
+      dispose();
+    });
+  });
+
+  it('reads the lane the reader chose, and starts in Signal on the next visit', () => {
+    createRoot((dispose) => {
+      const storage = memoryStorage();
+      const filters = createInboxFilters(storage);
+      expect(filters.scope().lane).toBe('signal');
+
+      filters.setLane('noise');
+      expect(filters.scope().lane).toBe('noise');
+      // Other choices are saved while in Noise; the lane is not.
+      filters.setStatus('unread');
+      const next = createInboxFilters(storage);
+      expect(next.filters().status).toBe('unread');
+      expect(next.scope().lane).toBe('signal');
+      dispose();
+    });
+  });
+
+  it('opens in the lane a linked row belongs to', () => {
+    createRoot((dispose) => {
+      const lane = createInboxLane();
+      lane.setLane('noise');
+      const filters = createInboxFilters(memoryStorage(), lane);
+      expect(filters.scope().lane).toBe('noise');
+
+      filters.setLane('signal');
+      expect(lane.lane()).toBe('signal');
+      expect(filters.filters().lane).toBe('signal');
       dispose();
     });
   });

@@ -26,6 +26,9 @@ fragment NotificationInboxEntryFields on NotificationInboxEntry {
 		count
 		notifications(limit: 20) {
 			...SoupNotificationFields
+			# The cache keeps a noise notification out of its entity's unread
+			# state. Only inbox documents can return noise, so only they select it.
+			lane
 		}
 	}
 }

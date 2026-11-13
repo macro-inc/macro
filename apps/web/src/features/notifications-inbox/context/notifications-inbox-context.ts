@@ -1,7 +1,7 @@
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
 import { type Accessor, createContext, useContext } from 'solid-js';
-import type { InboxClear } from '../core/inbox-filters';
+import type { InboxClear, InboxLane } from '../core/inbox-filters';
 import type { InboxRow, InboxRowType } from '../core/inbox-row';
 
 /**
@@ -19,6 +19,8 @@ export type NotificationInboxRow = InboxRow<InboxRowContent>;
 
 /** Which rows a feed shows; with no row types it shows and reads nothing. */
 export type InboxScope = {
+  /** The lane the feed reads; Signal when left out. */
+  lane?: InboxLane;
   rowTypes: readonly InboxRowType[];
   /**
    * Only unread rows. The server filters, so pages and live changes cover

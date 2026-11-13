@@ -33,14 +33,15 @@ export function traceInboxRows<T>(
 }
 
 /**
- * Run a clear in its own span, recording what it takes (kinds, unread only,
- * since a time) and how many rows it cleared, never their content.
+ * Run a clear in its own span, recording what it takes (lane, kinds, unread
+ * only, since a time) and how many rows it cleared, never their content.
  */
 export function traceInboxClear<T extends { count: number }>(
   clear: InboxClear,
   operation: () => Promise<T>
 ): Promise<T> {
   return Telemetry.span('notifications_inbox.clear', async (span) => {
+    span.setAttr('inbox.clear_lane', clear.lane);
     span.setAttr('inbox.clear_row_types', clear.rowTypes.join(','));
     span.setAttr('inbox.clear_unread_only', clear.unreadOnly);
     span.setAttr('inbox.clear_since', clear.since !== undefined);

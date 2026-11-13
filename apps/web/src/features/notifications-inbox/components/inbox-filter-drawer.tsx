@@ -1,7 +1,8 @@
 import { MobileFilterDrawer } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { Accordion } from '@kobalte/core/accordion';
-import { For } from 'solid-js';
+import { ToggleSwitch } from '@ui';
+import { For, Show } from 'solid-js';
 import type { InboxCategory } from '../core/inbox-filters';
 import { INBOX_FILTER_GROUPS } from './inbox-filter-groups';
 
@@ -11,6 +12,11 @@ export function InboxFilterDrawer(props: {
   activeCount: number;
   onShownChange: (category: InboxCategory, shown: boolean) => void;
   onReset: () => void;
+  /**
+   * Only unread rows, as a switch above the kinds. Given once the pills are
+   * lanes and no longer hold Unread.
+   */
+  unreadOnly?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
   return (
     <MobileFilterDrawer
@@ -19,6 +25,18 @@ export function InboxFilterDrawer(props: {
       activeCount={props.activeCount}
       onClear={props.onReset}
     >
+      <Show when={props.unreadOnly}>
+        {(unreadOnly) => (
+          <ToggleSwitch
+            size="md"
+            class="mb-3 flex min-h-11 w-full flex-row-reverse justify-between px-3 text-base text-ink"
+            labelClass="min-w-0 flex-1"
+            label={t('notificationsInbox.unreadOnly')}
+            checked={unreadOnly().checked}
+            onChange={unreadOnly().onChange}
+          />
+        )}
+      </Show>
       <Accordion multiple collapsible defaultValue={['type']}>
         <div class="flex flex-col">
           <For each={INBOX_FILTER_GROUPS}>

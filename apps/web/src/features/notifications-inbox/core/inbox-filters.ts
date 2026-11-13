@@ -67,16 +67,28 @@ export const rowCategory = (type: InboxRowType): InboxCategory =>
     )
     .exhaustive();
 
+/**
+ * The lane a reader looks at: Signal is what reached them, Noise is what their
+ * stacks captured.
+ */
+export type InboxLane = 'signal' | 'noise';
+
+/** Lanes in tab order. */
+export const INBOX_LANES: readonly InboxLane[] = ['signal', 'noise'];
+
 /** Which rows a reader wants: by read state, and the categories they hide. */
 export type InboxStatus = 'all' | 'unread';
 
 export type InboxFilters = {
+  /** Never saved: every visit starts in Signal. */
+  lane: InboxLane;
   status: InboxStatus;
   /** Hidden rather than shown, so a category added later starts visible. */
   hiddenCategories: readonly InboxCategory[];
 };
 
 export const DEFAULT_INBOX_FILTERS: InboxFilters = {
+  lane: 'signal',
   status: 'all',
   hiddenCategories: [],
 };
@@ -89,11 +101,12 @@ export function rowTypesFor(filters: InboxFilters): InboxRowType[] {
 }
 
 /**
- * Which rows a clear takes: those of these types, only unread ones when
- * `unreadOnly`, and only those whose newest notification arrived at or after
- * `since` (epoch milliseconds) when it is set.
+ * Which rows a clear takes: those of these types in this lane, only unread
+ * ones when `unreadOnly`, and only those whose newest notification arrived at
+ * or after `since` (epoch milliseconds) when it is set.
  */
 export type InboxClear = {
+  lane: InboxLane;
   rowTypes: readonly InboxRowType[];
   unreadOnly: boolean;
   since?: number;
@@ -106,20 +119,22 @@ export type InboxClearChoice =
   | { kind: 'category'; category: InboxCategory };
 
 /**
- * The clear a choice makes under the reader's filters: never a kind the
- * filters hide, only unread rows under Unread, and today from local
- * midnight, as the list's today sections are.
+ * The clear a choice makes under the reader's filters: the lane they look at,
+ * never a kind the filters hide, only unread rows under Unread, and today
+ * from local midnight, as the list's today sections are.
  */
 export function clearFor(
   choice: InboxClearChoice,
   filters: InboxFilters,
   now: Date
 ): InboxClear {
+  const { lane } = filters;
   const shown = rowTypesFor(filters);
   const unreadOnly = filters.status === 'unread';
   return match(choice)
     .returnType<InboxClear>()
     .with({ kind: 'today' }, () => ({
+      lane,
       rowTypes: shown,
       unreadOnly,
       since: new Date(
@@ -128,8 +143,9 @@ export function clearFor(
         now.getDate()
       ).getTime(),
     }))
-    .with({ kind: 'all' }, () => ({ rowTypes: shown, unreadOnly }))
+    .with({ kind: 'all' }, () => ({ lane, rowTypes: shown, unreadOnly }))
     .with({ kind: 'category' }, ({ category }) => ({
+      lane,
       rowTypes: shown.filter((type) => rowCategory(type) === category),
       unreadOnly,
     }))
@@ -162,6 +178,33 @@ const isStatus = (value: unknown): value is InboxStatus =>
 const isCategory = (value: unknown): value is InboxCategory =>
   INBOX_CATEGORIES.some((category) => category === value);
 
+/**
+ * The lane a row id names. The server marks a noise row's id, so a link to one
+ * opens in the lane that lists it.
+ */
+export function laneOfRowId(rowId: string): InboxLane {
+  return rowId.includes('#noise#') ? 'noise' : 'signal';
+}
+
+/**
+ * The lane a visit shows: the one the reader chose there, else the lane of
+ * the row it shows, else Signal.
+ */
+export function laneOfVisit(
+  chosen: InboxLane | undefined,
+  shownRowId: string
+): InboxLane {
+  return chosen ?? laneOfRowId(shownRowId);
+}
+
+/** What is kept between visits: the read state and hidden kinds, not the lane. */
+export function serializeInboxFilters(filters: InboxFilters): string {
+  return JSON.stringify({
+    status: filters.status,
+    hiddenCategories: filters.hiddenCategories,
+  });
+}
+
 /** Read saved filters, keeping only what this build understands. */
 export function parseInboxFilters(raw: string | null): InboxFilters {
   if (!raw) return DEFAULT_INBOX_FILTERS;
@@ -175,6 +218,7 @@ export function parseInboxFilters(raw: string | null): InboxFilters {
   const status = 'status' in value ? value.status : undefined;
   const hidden = 'hiddenCategories' in value ? value.hiddenCategories : [];
   return {
+    lane: DEFAULT_INBOX_FILTERS.lane,
     status: isStatus(status) ? status : 'all',
     hiddenCategories: Array.isArray(hidden) ? hidden.filter(isCategory) : [],
   };

@@ -19,7 +19,12 @@ import type { ApiUserNotification } from './generated/schemas/apiUserNotificatio
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
 import { EntityType } from './generated/schemas/entityType';
 import type { GetNotificationTypePreferencesResponse } from './generated/schemas/getNotificationTypePreferencesResponse';
+import type { NewNotificationStack } from './generated/schemas/newNotificationStack';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
+import type { NotificationStack } from './generated/schemas/notificationStack';
+import type { NotificationStackChanges } from './generated/schemas/notificationStackChanges';
+import type { NotificationStackOrder } from './generated/schemas/notificationStackOrder';
+import type { NotificationStacks } from './generated/schemas/notificationStacks';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 
 const notificationHost: string = SERVER_HOSTS['notification-service'];
@@ -273,6 +278,39 @@ export const notificationServiceClient = {
         method: 'GET',
       })
     ).map((result) => ({ data: result }));
+  },
+  /** The caller's notification stacks, in the order they are tried. */
+  async listNotificationStacks() {
+    return notificationFetch<NotificationStacks>('/notification_stacks', {
+      method: 'GET',
+    });
+  },
+  async createNotificationStack(stack: NewNotificationStack) {
+    return notificationFetch<NotificationStack>('/notification_stacks', {
+      method: 'POST',
+      body: JSON.stringify(stack),
+    });
+  },
+  /** A field left out of `changes` keeps its value. */
+  async updateNotificationStack(id: string, changes: NotificationStackChanges) {
+    return notificationFetch<NotificationStack>(
+      `/notification_stacks/${encodeURIComponent(id)}`,
+      { method: 'PATCH', body: JSON.stringify(changes) }
+    );
+  },
+  async deleteNotificationStack(id: string) {
+    return notificationFetch<{}>(
+      `/notification_stacks/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    );
+  },
+  /** `ids` names every one of the caller's stacks, first tried first. */
+  async reorderNotificationStacks(ids: readonly string[]) {
+    const body: NotificationStackOrder = { ids: [...ids] };
+    return notificationFetch<NotificationStacks>('/notification_stacks/order', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
   },
   async unsubscribeItems(
     items: readonly UserUnsubscribe[],

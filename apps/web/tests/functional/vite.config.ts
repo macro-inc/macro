@@ -48,6 +48,10 @@ export default defineConfig(async (environment) => {
             'optimistic-mutations/index.html'
           ),
           whatsappLinked: resolve(directory, 'whatsapp-linked/index.html'),
+          notificationsInbox: resolve(
+            directory,
+            'notifications-inbox/index.html'
+          ),
         },
       },
     },

@@ -54,6 +54,12 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 ## Gotchas
 
+- A notification with `lane: NOISE` contributes nothing to its parent's
+  `notification_unseen` / `notification_seen` facts, in both the per-notification
+  edits and a parent's snapshot. Only the Noise inbox returns noise and its
+  documents select `lane`; a record without one is signal. Without this, opening
+  the Noise inbox would mark its channels and documents unread in every locally
+  filtered list. The rule ships to native apps only with a native release.
 - Mail pages reconcile server membership through the generic predicate engine;
   retain unknown projections with their supplied sort values, exclude confirmed
   nonmembers, and keep continuation cursors on the original indexed window.

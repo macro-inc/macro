@@ -3,34 +3,41 @@ import {
   SettingsRow,
   SettingsSection,
 } from '@app/features/settings/primitives';
+import { formatLocale, t } from '@app/lib/i18n';
 import { Button, ToggleSwitch } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import {
   deviceTimeZone,
   type QuietHours,
-  WEEKDAY_NAMES,
   WEEKDAYS,
   type Weekday,
 } from '../core/quiet-hours';
 
 function formatClock(minutes: number): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(formatLocale(), {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60));
 }
 
+/** A weekday's name in the interface language; 2001 began on a Monday. */
+function weekdayName(day: Weekday, width: 'long' | 'short'): string {
+  return new Intl.DateTimeFormat(formatLocale(), { weekday: width }).format(
+    new Date(2001, 0, 1 + WEEKDAYS.indexOf(day))
+  );
+}
+
 function scheduleSummary(quiet: QuietHours): string {
-  if (quiet.days.length === 0) return 'Pick at least one day.';
+  if (quiet.days.length === 0) return t('notificationSounds.quietNoDays');
   if (quiet.startMinutes === quiet.endMinutes) {
-    return 'Start and end match, so nothing is silenced.';
+    return t('notificationSounds.quietSameTimes');
   }
   const start = formatClock(quiet.startMinutes);
   const end = formatClock(quiet.endMinutes);
   if (quiet.startMinutes > quiet.endMinutes) {
-    return `From ${start} to ${end}, including overnight.`;
+    return t('notificationSounds.quietOvernight', { start, end });
   }
-  return `From ${start} to ${end}.`;
+  return t('notificationSounds.quietRange', { start, end });
 }
 
 /** Quarter hours, plus a saved time that is not on that grid. */
@@ -68,7 +75,7 @@ export function QuietHoursSection(props: {
   const summary = () =>
     props.quietHours.enabled
       ? scheduleSummary(props.quietHours)
-      : 'Off until you turn them on.';
+      : t('notificationSounds.quietOff');
 
   const setEnabled = (enabled: boolean) => {
     if (enabled && !props.quietHours.timeZone) {
@@ -89,24 +96,32 @@ export function QuietHoursSection(props: {
 
   return (
     <SettingsSection
-      title="Quiet hours"
-      description="Silence notification sounds and desktop notifications during these hours. Inbox items still arrive, and incoming calls still ring. Saved on this device."
+      title={t('notificationSounds.quietTitle')}
+      target="Quiet hours"
+      description={t('notificationSounds.quietDescription')}
     >
       <SettingsCard>
-        <SettingsRow label="Quiet hours" description={summary()}>
+        <SettingsRow
+          label={t('notificationSounds.quietTitle')}
+          description={summary()}
+        >
           <ToggleSwitch
             size="md"
-            label="Quiet hours"
+            label={t('notificationSounds.quietTitle')}
             labelClass="sr-only"
             checked={props.quietHours.enabled}
             onChange={setEnabled}
           />
         </SettingsRow>
         <Show when={props.quietHours.enabled}>
-          <SettingsRow stackOnNarrow label="Days" align="start">
+          <SettingsRow
+            stackOnNarrow
+            label={t('notificationSounds.days')}
+            align="start"
+          >
             <div
               role="group"
-              aria-label="Days"
+              aria-label={t('notificationSounds.days')}
               class="flex max-w-full flex-wrap gap-1.5 @[460px]:justify-end"
             >
               <For each={WEEKDAYS}>
@@ -115,19 +130,19 @@ export function QuietHoursSection(props: {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    aria-label={WEEKDAY_NAMES[day]}
+                    aria-label={weekdayName(day, 'long')}
                     aria-pressed={props.quietHours.days.includes(day)}
                     onClick={() => toggleDay(day)}
                   >
-                    {WEEKDAY_NAMES[day].slice(0, 3)}
+                    {weekdayName(day, 'short')}
                   </Button>
                 )}
               </For>
             </div>
           </SettingsRow>
-          <SettingsRow stackOnNarrow label="From">
+          <SettingsRow stackOnNarrow label={t('notificationSounds.from')}>
             <select
-              aria-label="Quiet hours start"
+              aria-label={t('notificationSounds.quietStart')}
               class="settings-input w-36"
               value={String(props.quietHours.startMinutes)}
               onChange={(event) => {
@@ -141,9 +156,9 @@ export function QuietHoursSection(props: {
               </For>
             </select>
           </SettingsRow>
-          <SettingsRow stackOnNarrow label="Until">
+          <SettingsRow stackOnNarrow label={t('notificationSounds.until')}>
             <select
-              aria-label="Quiet hours end"
+              aria-label={t('notificationSounds.quietEnd')}
               class="settings-input w-36"
               value={String(props.quietHours.endMinutes)}
               onChange={(event) => {
@@ -157,10 +172,10 @@ export function QuietHoursSection(props: {
               </For>
             </select>
           </SettingsRow>
-          <SettingsRow stackOnNarrow label="Time zone">
+          <SettingsRow stackOnNarrow label={t('notificationSounds.timeZone')}>
             {/* Native menu: the zone list is hundreds of rows. */}
             <select
-              aria-label="Time zone"
+              aria-label={t('notificationSounds.timeZone')}
               class="settings-input min-w-0 w-full @[460px]:w-72"
               value={props.quietHours.timeZone || deviceTimeZone()}
               onChange={(event) =>

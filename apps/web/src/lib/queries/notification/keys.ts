@@ -17,4 +17,5 @@ export const notificationKeys = createQueryKeys('notification', {
   }),
   unsubscribes: null,
   preferences: null,
+  stacks: null,
 });

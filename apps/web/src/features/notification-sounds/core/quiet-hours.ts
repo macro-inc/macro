@@ -11,16 +11,6 @@ export const WEEKDAYS = [
 
 export type Weekday = (typeof WEEKDAYS)[number];
 
-export const WEEKDAY_NAMES: Record<Weekday, string> = {
-  mon: 'Monday',
-  tue: 'Tuesday',
-  wed: 'Wednesday',
-  thu: 'Thursday',
-  fri: 'Friday',
-  sat: 'Saturday',
-  sun: 'Sunday',
-};
-
 const MINUTES_IN_DAY = 24 * 60;
 
 /**

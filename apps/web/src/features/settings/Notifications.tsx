@@ -1,8 +1,13 @@
 import { NotificationSoundSettingsView } from '@app/features/notification-sounds/views/NotificationSoundSettingsView';
+import { NotificationStacksSection } from '@app/features/notification-stacks/notification-stacks';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { inEnglish, t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
+import {
+  enableMacroComputers,
+  enableNotificationStacks,
+} from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -41,6 +46,7 @@ export function Notifications() {
   const setTypeEnabled = useSetNotificationTypeEnabledMutation();
   const mutedEntitiesQuery = useMutedEntitiesQuery({ limit: 100 });
   const unmuteItem = useUnmuteItemMutation();
+  const stacks = useFeatureFlag(enableNotificationStacks);
   const prefsReady = () =>
     !preferencesQuery.isError && queryReadyGate(preferencesQuery);
   const mutedEntities = () =>
@@ -72,7 +78,7 @@ export function Notifications() {
       }
     } catch (error) {
       console.error('Could not update notification permission', error);
-      toast.failure('Could not update notifications. Try again.');
+      toast.failure(t('settingsNotifications.pushUpdateFailed'));
     } finally {
       setPushPending(false);
     }
@@ -82,7 +88,7 @@ export function Notifications() {
     try {
       await setTypeEnabled.mutateAsync({ type, enabled });
     } catch {
-      toast.failure('Could not update notification preference');
+      toast.failure(t('settingsNotifications.preferenceUpdateFailed'));
     }
   };
 
@@ -90,45 +96,53 @@ export function Notifications() {
     try {
       await unmuteItem.mutateAsync(item);
     } catch {
-      toast.failure('Could not unmute item');
+      toast.failure(t('settingsNotifications.unmuteFailed'));
     }
   };
 
-  const pushLabel = isNativeMobilePlatform()
-    ? 'Mobile notifications'
-    : 'Desktop notifications';
-  const pushDescription = isNativeMobilePlatform()
-    ? 'Receive push notifications on this device'
-    : 'Receive notifications on this browser or desktop app';
+  const pushLabel = () =>
+    isNativeMobilePlatform()
+      ? t('settingsNotifications.mobilePush')
+      : t('settingsNotifications.desktopPush');
+  const pushDescription = () =>
+    isNativeMobilePlatform()
+      ? t('settingsNotifications.mobilePushDescription')
+      : t('settingsNotifications.desktopPushDescription');
 
   return (
     <SettingsPage
-      title="Notifications"
-      description="Choose when you'll be notified. Inbox items always arrive unless you mute a type or an item."
+      title={t('settingsNotifications.title')}
+      description={t('settingsNotifications.description')}
     >
-      <SettingsSection title="Delivery">
+      {/* Section targets stay English: settings search points at them. */}
+      <SettingsSection
+        title={t('settingsNotifications.delivery')}
+        target="Delivery"
+      >
         <SettingsCard>
           <SettingsRow
-            label="Inbox"
-            description="Always on for types you have not muted"
+            label={t('settingsNotifications.inbox')}
+            description={t('settingsNotifications.inboxDescription')}
           >
-            <span class="text-sm text-ink-muted">Always on</span>
+            <span class="text-sm text-ink-muted">
+              {t('settingsNotifications.alwaysOn')}
+            </span>
           </SettingsRow>
           <Show
             when={platformSettings.isSupported && platformSettings}
             fallback={
-              <SettingsRow label={pushLabel} description={pushDescription}>
+              <SettingsRow label={pushLabel()} description={pushDescription()}>
                 <span class="text-sm text-ink-muted">
-                  Not supported on this device
+                  {t('settingsNotifications.pushUnsupported')}
                 </span>
               </SettingsRow>
             }
           >
             {(settings) => (
-              <SettingsRow label={pushLabel} description={pushDescription}>
+              <SettingsRow label={pushLabel()} description={pushDescription()}>
                 <ToggleSwitch
                   size="md"
-                  label={pushLabel}
+                  label={pushLabel()}
                   labelClass="sr-only"
                   checked={settings().isEnabled()}
                   disabled={pushPending()}
@@ -140,8 +154,9 @@ export function Notifications() {
             )}
           </Show>
           <SettingsRow
-            label="Email digest"
-            description="A periodic email of unread notifications. Inbox items are unchanged."
+            label={t('settingsNotifications.emailDigest')}
+            target="Email digest"
+            description={t('settingsNotifications.emailDigestDescription')}
           >
             <ToggleSwitch
               size="md"
@@ -159,7 +174,10 @@ export function Notifications() {
 
       <For each={NOTIFICATION_EVENT_GROUPS}>
         {(group) => (
-          <SettingsSection title={group.label}>
+          <SettingsSection
+            title={group.label}
+            target={inEnglish(() => group.label)}
+          >
             <SettingsCard>
               <For
                 each={group.events.filter(
@@ -185,13 +203,18 @@ export function Notifications() {
         )}
       </For>
 
+      <Show when={stacks().enabled}>
+        <NotificationStacksSection />
+      </Show>
+
       <SettingsSection
-        title="Snoozed items"
-        description="Notifications pause until the time you choose. Items stay visible in your inbox."
+        title={t('settingsNotifications.snoozedTitle')}
+        target="Snoozed items"
+        description={t('settingsNotifications.snoozedDescription')}
       >
         <SettingsCard>
           <Show when={mutedEntitiesQuery.isError}>
-            <SettingsRow label="Could not load snoozed items">
+            <SettingsRow label={t('settingsNotifications.snoozedLoadFailed')}>
               <button
                 type="button"
                 onClick={() =>
@@ -201,7 +224,7 @@ export function Notifications() {
                   )
                 }
               >
-                Retry
+                {t('settingsNotifications.retry')}
               </button>
             </SettingsRow>
           </Show>
@@ -211,7 +234,9 @@ export function Notifications() {
             }
             fallback={
               !mutedEntitiesQuery.isError && (
-                <SettingsRow label="Loading snoozed items…" />
+                <SettingsRow
+                  label={t('settingsNotifications.snoozedLoading')}
+                />
               )
             }
           >
@@ -219,8 +244,10 @@ export function Notifications() {
               when={snoozedEntities().length > 0}
               fallback={
                 <SettingsRow
-                  label="Nothing snoozed"
-                  description="Right-click an item or use the command menu and choose Snooze notifications."
+                  label={t('settingsNotifications.snoozedEmpty')}
+                  description={t(
+                    'settingsNotifications.snoozedEmptyDescription'
+                  )}
                 />
               }
             >
@@ -244,16 +271,17 @@ export function Notifications() {
       </SettingsSection>
 
       <SettingsSection
-        title="Muted items"
-        description="These items will not send you notifications."
+        title={t('settingsNotifications.mutedTitle')}
+        target="Muted items"
+        description={t('settingsNotifications.mutedDescription')}
       >
         <SettingsCard>
           <Show
             when={permanentlyMutedEntities().length > 0}
             fallback={
               <SettingsRow
-                label="Nothing muted"
-                description="Items you mute stop sending notifications."
+                label={t('settingsNotifications.mutedEmpty')}
+                description={t('settingsNotifications.mutedEmptyDescription')}
               />
             }
           >

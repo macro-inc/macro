@@ -13,8 +13,6 @@ export type NotificationSoundCategoryId =
 
 export type NotificationSoundCategory = {
   id: NotificationSoundCategoryId;
-  label: string;
-  description: string;
   defaultEnabled: boolean;
   defaultSound: NotificationSoundId;
 };
@@ -24,57 +22,41 @@ export const NOTIFICATION_SOUND_CATEGORIES: readonly NotificationSoundCategory[]
   [
     {
       id: 'messages',
-      label: 'Messages',
-      description: 'New messages in channels and direct messages',
       defaultEnabled: true,
       defaultSound: 'knock',
     },
     {
       id: 'mentions',
-      label: 'Mentions',
-      description: 'When someone mentions you anywhere',
       defaultEnabled: true,
       defaultSound: 'ding',
     },
     {
       id: 'replies',
-      label: 'Thread replies',
-      description: 'Replies in threads and comment threads you are part of',
       defaultEnabled: true,
       defaultSound: 'pop',
     },
     {
       id: 'email',
-      label: 'Email',
-      description: 'When a new email arrives',
       defaultEnabled: false,
       defaultSound: 'pluck',
     },
     {
       id: 'meetings',
-      label: 'Meetings & reminders',
-      description: 'Event reminders, requests to join, and your reminders',
       defaultEnabled: true,
       defaultSound: 'chime',
     },
     {
       id: 'tasks',
-      label: 'Tasks',
-      description: 'When a task is assigned to you',
       defaultEnabled: true,
       defaultSound: 'bloom',
     },
     {
       id: 'agents',
-      label: 'AI & agents',
-      description: 'AI replies, and agents that finish or need an answer',
       defaultEnabled: false,
       defaultSound: 'ping',
     },
     {
       id: 'other',
-      label: 'Everything else',
-      description: 'Comments, reactions, sharing, GitHub, and invites',
       defaultEnabled: false,
       defaultSound: 'pop',
     },

@@ -71,21 +71,27 @@ import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
 import { InboxSenderAvatar } from '../components/inbox-sender-avatar';
 import {
+  InboxLanePills,
+  InboxLaneTabs,
   InboxStatusPills,
   InboxStatusTabs,
+  InboxUnreadToggle,
 } from '../components/inbox-status-tabs';
 import { NotificationRow } from '../components/notification-row';
 import { NotificationStackItem } from '../components/notification-stack-item';
 import { RowActionButtons } from '../components/row-action-buttons';
 import { NotificationsCalendarPaneProvider } from '../context/notifications-calendar-context';
 import {
+  type InboxScope,
   type NotificationInboxRow,
   useNotificationsInboxContext,
 } from '../context/notifications-inbox-context';
 import {
   clearFor,
   clearIncludes,
+  INBOX_LANES,
   type InboxClearChoice,
+  type InboxLane,
   type InboxStatus,
 } from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
@@ -104,7 +110,10 @@ import {
   isInboxRow,
   isInboxStackItem,
 } from '../primitives/inbox-date-headers';
-import { createInboxFilters } from '../primitives/inbox-filters';
+import {
+  createInboxFilters,
+  type InboxLaneLocation,
+} from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
 import {
   createInboxSelection,
@@ -132,8 +141,15 @@ export type NotificationsViewProps = {
   ) => void;
   /** Open the settings that decide which notifications are delivered. */
   onOpenSettings: () => void;
+  /**
+   * Whether the Noise lane is offered. The tabs then switch between Signal
+   * and Noise, and Unread becomes a toggle.
+   */
+  lanes: Accessor<boolean>;
   /** Where the shown row is kept, so opening one is a history entry. */
   shownRow: InboxShownRowLocation;
+  /** Where the lane is kept, so Back from an opened row returns to it. */
+  lane: InboxLaneLocation;
   /** Calendar events show in the content area through the view's calendar route. */
   calendarPreview: {
     /**
@@ -153,6 +169,8 @@ export type NotificationsViewProps = {
 /** Distance from the end of the list, in pixels, that loads the next page. */
 const LOAD_MORE_DISTANCE_PX = 300;
 const INBOX_STATUSES: readonly InboxStatus[] = ['all', 'unread'];
+const isInboxLane = (tab: InboxLane | InboxStatus): tab is InboxLane =>
+  tab === 'signal' || tab === 'noise';
 /** Frames a visible row is held in place after a live change above it. */
 const ANCHOR_HOLD_FRAMES = 12;
 
@@ -248,7 +266,9 @@ function ListStatus(props: { children: JSX.Element }) {
  * per thing that needs the viewer, newest first under Home's date dividers.
  * Several notifications about one thing show as a stack; its button, or the
  * right arrow, unfolds them below the row, and each opens at its own location.
- * All and Unread switch the list, and the choice is kept between visits.
+ * All and Unread switch the list, and the choice is kept between visits. With
+ * lanes, the tabs are Signal and Noise (what the reader's stacks captured),
+ * Unread is a toggle, and every visit starts in Signal.
  * `j`/`k` move through rows and unfolded notifications (and follow in an open
  * preview), Enter previews, `e` marks the focused row done. Touch shows the list
  * alone: a tap opens the row or notification in place, a stack's button unfolds
@@ -258,8 +278,15 @@ export function NotificationsView(props: NotificationsViewProps) {
   const panel = useSplitPanelOrThrow();
   const context = useNotificationsInboxContext();
   const { pushUndo } = useMutationUndoContext();
-  const filters = createInboxFilters(context.filterStorage);
-  const feed = context.createFeed(filters.scope);
+  const filters = createInboxFilters(context.filterStorage, props.lane);
+  // Without lanes the reader only ever sees Signal.
+  const lane = (): InboxLane =>
+    props.lanes() ? filters.filters().lane : 'signal';
+  const scope = (): InboxScope => ({ ...filters.scope(), lane: lane() });
+  const unreadOnly = () => filters.filters().status === 'unread';
+  const setUnreadOnly = (unread: boolean) =>
+    filters.setStatus(unread ? 'unread' : 'all');
+  const feed = context.createFeed(scope);
   const inbox = createInboxList(feed, {
     pushUndo: (entry) => pushUndo(entry),
     announceDone: (count, undo) => {
@@ -307,12 +334,18 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
 
-  useViewTabHotkeys({
+  useViewTabHotkeys<InboxLane | InboxStatus>({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () => INBOX_STATUSES,
-    activeId: () => filters.filters().status,
-    setActiveId: filters.setStatus,
+    ids: () => (props.lanes() ? INBOX_LANES : INBOX_STATUSES),
+    activeId: () => (props.lanes() ? lane() : filters.filters().status),
+    setActiveId: (tab) => {
+      if (isInboxLane(tab)) {
+        filters.setLane(tab);
+      } else {
+        filters.setStatus(tab);
+      }
+    },
   });
 
   const [filterOpen, setFilterOpen] = createSignal(false);
@@ -547,7 +580,11 @@ export function NotificationsView(props: NotificationsViewProps) {
    * clear takes closes, as the list leaves it.
    */
   const clear = (choice: InboxClearChoice) => {
-    const request = clearFor(choice, filters.filters(), new Date());
+    const request = clearFor(
+      choice,
+      { ...filters.filters(), lane: lane() },
+      new Date()
+    );
     const shown = selection.selected();
     if (shown && clearIncludes(request, shown)) closePreview();
     fireAndForget(inbox.clear(request), 'notifications-inbox');
@@ -877,6 +914,20 @@ export function NotificationsView(props: NotificationsViewProps) {
           </Button>
         </ListStatus>
       </Match>
+      <Match when={view().t === 'empty' && lane() === 'noise' && !unreadOnly()}>
+        <div class="min-h-0 flex-1 overflow-y-auto touch:pt-(--mobile-content-inset-top)">
+          <EmptyStatePanel
+            centered
+            graphic={EmptyStateInboxTrayGraphic}
+            title={t('notificationsInbox.noiseEmptyTitle')}
+            description={t('notificationsInbox.noiseEmptyDescription')}
+            primaryAction={{
+              label: t('notificationsInbox.manageStacks'),
+              onClick: () => props.onOpenSettings(),
+            }}
+          />
+        </div>
+      </Match>
       <Match when={view().t === 'empty'}>
         <div class="min-h-0 flex-1 overflow-y-auto touch:pt-(--mobile-content-inset-top)">
           <EmptyStatePanel
@@ -971,20 +1022,55 @@ export function NotificationsView(props: NotificationsViewProps) {
           }}
         >
           <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex shrink-0 flex-col px-(--mobile-chrome-gutter) pt-[calc(var(--safe-top,0px)+0.5rem)]">
-            <InboxStatusPills
-              status={filters.filters().status}
-              onChange={filters.setStatus}
-              leading={
-                <>
-                  <InboxFilterDrawer {...filterControls} />
-                  <InboxClearDrawer
-                    unreadOnly={filters.filters().status === 'unread'}
-                    isShown={filters.isShown}
-                    onClear={clear}
-                  />
-                </>
+            <Show
+              when={props.lanes()}
+              fallback={
+                <InboxStatusPills
+                  status={filters.filters().status}
+                  onChange={filters.setStatus}
+                  leading={
+                    <>
+                      <InboxFilterDrawer {...filterControls} />
+                      <InboxClearDrawer
+                        unreadOnly={unreadOnly()}
+                        isShown={filters.isShown}
+                        onClear={clear}
+                      />
+                    </>
+                  }
+                />
               }
-            />
+            >
+              <InboxLanePills
+                lane={lane()}
+                onChange={filters.setLane}
+                leading={
+                  <>
+                    {/* The pills are lanes, so the drawer holds Unread. */}
+                    <InboxFilterDrawer
+                      isShown={filters.isShown}
+                      activeCount={
+                        filters.activeCount() + (unreadOnly() ? 1 : 0)
+                      }
+                      onShownChange={filters.setShown}
+                      onReset={() => {
+                        filters.reset();
+                        setUnreadOnly(false);
+                      }}
+                      unreadOnly={{
+                        checked: unreadOnly(),
+                        onChange: setUnreadOnly,
+                      }}
+                    />
+                    <InboxClearDrawer
+                      unreadOnly={unreadOnly()}
+                      isShown={filters.isShown}
+                      onClear={clear}
+                    />
+                  </>
+                }
+              />
+            </Show>
           </header>
           <PullToRefresh
             scrollContainer={() => viewport() ?? listFrame()}
@@ -1049,6 +1135,12 @@ export function NotificationsView(props: NotificationsViewProps) {
                   <ListHeader
                     actions={
                       <>
+                        <Show when={props.lanes()}>
+                          <InboxUnreadToggle
+                            unreadOnly={unreadOnly()}
+                            onChange={setUnreadOnly}
+                          />
+                        </Show>
                         <div class="relative">
                           <InboxFilterMenu
                             open={filterOpen()}
@@ -1057,7 +1149,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                           />
                         </div>
                         <InboxClearMenu
-                          unreadOnly={filters.filters().status === 'unread'}
+                          unreadOnly={unreadOnly()}
                           isShown={filters.isShown}
                           onClear={clear}
                         />
@@ -1074,10 +1166,17 @@ export function NotificationsView(props: NotificationsViewProps) {
                     }
                   />
                   <div class="shrink-0 px-3 pb-1">
-                    <InboxStatusTabs
-                      status={filters.filters().status}
-                      onChange={filters.setStatus}
-                    />
+                    <Show
+                      when={props.lanes()}
+                      fallback={
+                        <InboxStatusTabs
+                          status={filters.filters().status}
+                          onChange={filters.setStatus}
+                        />
+                      }
+                    >
+                      <InboxLaneTabs lane={lane()} onChange={filters.setLane} />
+                    </Show>
                   </div>
                   <div
                     ref={listRoot}

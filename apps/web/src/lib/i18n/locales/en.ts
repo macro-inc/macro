@@ -21,6 +21,8 @@ import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
 import nav from './en/nav';
+import notificationSounds from './en/notification-sounds';
+import notificationStacks from './en/notification-stacks';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
@@ -30,6 +32,7 @@ import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
+import settingsNotifications from './en/settings-notifications';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
 import tabs from './en/tabs';
@@ -64,6 +67,8 @@ export default {
   markdownEditor,
   mobile,
   nav,
+  notificationSounds,
+  notificationStacks,
   notificationsInbox,
   passwords,
   routineDrafts,
@@ -73,6 +78,7 @@ export default {
   settingsLanguage,
   settingsMobileApp,
   settingsNav,
+  settingsNotifications,
   splitMenu,
   subRoutines,
   tabs,

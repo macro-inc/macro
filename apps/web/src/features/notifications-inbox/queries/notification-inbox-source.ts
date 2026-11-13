@@ -319,6 +319,7 @@ export function createNotificationInboxSource(
     setDone((current) => markRows(current, hidden));
     const input = {
       scope: encodeInboxScope({
+        lane: request.lane,
         rowTypes: request.rowTypes,
         unreadOnly: request.unreadOnly,
       }),

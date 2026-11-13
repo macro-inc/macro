@@ -1,25 +1,44 @@
-import { createSignal } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import {
   activeFilterCount,
   DEFAULT_INBOX_FILTERS,
   type InboxCategory,
   type InboxFilters,
+  type InboxLane,
   type InboxStatus,
   parseInboxFilters,
   rowTypesFor,
+  serializeInboxFilters,
 } from '../core/inbox-filters';
 
-/** The reader's inbox filters, kept in `storage` between visits. */
-export function createInboxFilters(storage: {
-  read: () => string | null;
-  write: (value: string) => void;
-}) {
-  const [filters, setFilters] = createSignal<InboxFilters>(
-    parseInboxFilters(storage.read())
-  );
+/** Where the lane is kept, such as the view's URL. */
+export type InboxLaneLocation = {
+  lane: Accessor<InboxLane>;
+  setLane: (lane: InboxLane) => void;
+};
+
+/** A lane kept for as long as its owner lives, starting in Signal. */
+export function createInboxLane(): InboxLaneLocation {
+  const [lane, setLane] = createSignal<InboxLane>('signal');
+  return { lane, setLane };
+}
+
+/**
+ * The reader's inbox filters. The read state and hidden kinds are kept in
+ * `storage` between visits; the lane lives in `lane`, never in storage.
+ */
+export function createInboxFilters(
+  storage: {
+    read: () => string | null;
+    write: (value: string) => void;
+  },
+  lane: InboxLaneLocation = createInboxLane()
+) {
+  const [saved, setSaved] = createSignal(parseInboxFilters(storage.read()));
+  const filters = (): InboxFilters => ({ ...saved(), lane: lane.lane() });
   const save = (next: InboxFilters) => {
-    setFilters(next);
-    storage.write(JSON.stringify(next));
+    setSaved(next);
+    storage.write(serializeInboxFilters(next));
   };
 
   return {
@@ -30,11 +49,16 @@ export function createInboxFilters(storage: {
       !filters().hiddenCategories.includes(category),
     /** Every category is hidden, so nothing can show. */
     showsNothing: () => rowTypesFor(filters()).length === 0,
-    /** The rows the feed reads: these kinds, and only unread ones under Unread. */
+    /**
+     * The rows the feed reads: this lane, these kinds, and only unread ones
+     * under Unread.
+     */
     scope: () => ({
+      lane: filters().lane,
       rowTypes: rowTypesFor(filters()),
       unreadOnly: filters().status === 'unread',
     }),
+    setLane: lane.setLane,
     setStatus: (status: InboxStatus) => save({ ...filters(), status }),
     setShown: (category: InboxCategory, shown: boolean) => {
       const hidden = filters().hiddenCategories.filter(

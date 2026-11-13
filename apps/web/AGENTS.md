@@ -306,6 +306,15 @@ meter on every row except on phones, with the direction in its label while
 importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
+The Notifications inbox's lanes have a backend-free desktop/phone regression
+over the real `NotificationsView`, a fixture feed, and the app's split layout
+and router: Signal and Noise list their own rows, Unread narrows a lane from
+the header toggle and from the phone filter drawer, an empty Noise lane offers
+Manage stacks, and without lanes there is no Noise tab or pill:
+`just test-functional notifications-inbox.spec.ts`.
+Its fixture implements `NotificationsInboxContext` by hand; give it any member
+the view starts to read.
+
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
 blank slate, a plain composer bound to the call discussion, explicit quote replies
@@ -1544,6 +1553,9 @@ on mobile; retain power controls and polling while waiting.
 
 - Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
+- A noise-lane notification counts as unread nowhere outside the Noise tab. The server withholds it from push, badges and every reader but the `lane: NOISE` inbox, and the client cache skips it when it derives an entity's unread state; select `lane` on any new query that can return noise notifications, and never feed Noise rows into sounds, OS alerts, the favicon or rail dots.
+- Notification stacks (`features/notification-stacks`, flag `enable-notification-stacks`) are edited in Settings → Notifications and from a channel's **Add to stack…**; menus open the dialog through `open-add-to-stack.ts`, which loads the feature on first use. The editor shows one capture rule plus the mention and reply releases; a stack with other rules is not editable there, only switchable and deletable.
+- The Notifications settings page is translated. The event catalog's labels are getters over `t()`; read them where they render, and inside `inEnglish` for settings search and `target`s, which stay English.
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 - Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
 

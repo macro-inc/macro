@@ -1,3 +1,4 @@
+import { inEnglish } from '@app/lib/i18n';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import type {
   SettingsTabGroup,
@@ -55,14 +56,17 @@ const SETTINGS: Setting[] = [
     keywords: 'keyboard hotkeys select read unread delete preview',
   },
 
-  ...NOTIFICATION_EVENT_GROUPS.flatMap((group) =>
-    group.events.map((event) => ({
-      tab: 'Notifications' as const,
-      title: `${event.label} · ${group.label}`,
-      target: group.label,
-      keywords: `${group.label} ${event.description}`,
-      macroComputers: event.macroComputers,
-    }))
+  // The index is English, like the section targets it points at.
+  ...inEnglish(() =>
+    NOTIFICATION_EVENT_GROUPS.flatMap((group) =>
+      group.events.map((event) => ({
+        tab: 'Notifications' as const,
+        title: `${event.label} · ${group.label}`,
+        target: group.label,
+        keywords: `${group.label} ${event.description}`,
+        macroComputers: event.macroComputers,
+      }))
+    )
   ),
   {
     tab: 'Email',

@@ -1,3 +1,6 @@
+import { type TranslationKey, t } from '@app/lib/i18n';
+import { match } from 'ts-pattern';
+
 /**
  * Event types the notification service lets a user disable.
  * Keep this list aligned with `BLOCKABLE_NOTIFICATIONS` in
@@ -20,233 +23,220 @@ export type NotificationEventGroupId =
   | 'ai'
   | 'github';
 
+/**
+ * `label` and `description` are in the interface language: read them where
+ * they render, or inside `inEnglish` for a value that must not change with it.
+ */
 export type NotificationEventDefinition = {
   type: string;
-  label: string;
-  description: string;
+  readonly label: string;
+  readonly description: string;
   /** Shown only with `enable-macro-computers` on. */
-  macroComputers?: true;
+  readonly macroComputers?: true;
 };
 
 export type NotificationEventGroup = {
   id: NotificationEventGroupId;
-  label: string;
+  readonly label: string;
   events: readonly NotificationEventDefinition[];
 };
 
+const event = (
+  type: string,
+  label: TranslationKey,
+  description: TranslationKey,
+  options: { macroComputers?: true } = {}
+): NotificationEventDefinition => ({
+  type,
+  ...options,
+  get label() {
+    return t(label);
+  },
+  get description() {
+    return t(description);
+  },
+});
+
+const group = (
+  id: NotificationEventGroupId,
+  label: TranslationKey,
+  events: readonly NotificationEventDefinition[]
+): NotificationEventGroup => ({
+  id,
+  get label() {
+    return t(label);
+  },
+  events,
+});
+
 export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
-  {
-    id: 'sharing',
-    label: 'Sharing',
-    events: [
-      {
-        type: 'entity_access_requested',
-        label: 'Permission requests',
-        description: 'Requests for more access to items you manage',
-      },
-      {
-        type: 'entity_access_granted',
-        label: 'Access granted',
-        description: 'When a permission request is approved',
-      },
-    ],
-  },
-  {
-    id: 'channels',
-    label: 'Channels',
-    events: [
-      {
-        type: 'channel_message_send',
-        label: 'New messages',
-        description: 'Messages in channels you belong to',
-      },
-      {
-        type: 'channel_mention',
-        label: 'Mentions',
-        description: 'When someone mentions you in a channel',
-      },
-      {
-        type: 'channel_message_reply',
-        label: 'Thread replies',
-        description: 'Replies in threads you are part of',
-      },
-      {
-        type: 'channel_message_reaction',
-        label: 'Message reactions',
-        description: 'When someone reacts to one of your messages',
-      },
-      {
-        type: 'channel_access_requested',
-        label: 'Requests to join',
-        description: 'When someone asks to join a channel you belong to',
-      },
-    ],
-  },
-  {
-    id: 'documents',
-    label: 'Documents',
-    events: [
-      {
-        type: 'document_mention',
-        label: 'Document mentions',
-        description: 'When a document is mentioned in a channel',
-      },
-      {
-        type: 'mentioned_in_document_comment',
-        label: 'Comment mentions',
-        description: 'When you are mentioned in a document comment',
-      },
-      {
-        type: 'replied_to_document_comment_thread',
-        label: 'Comment replies',
-        description: 'Replies on comment threads you are part of',
-      },
-      {
-        type: 'commented_on_document',
-        label: 'New comments',
-        description: 'Comments on documents you own',
-      },
-    ],
-  },
-  {
-    id: 'projects',
-    label: 'Projects',
-    events: [
-      {
-        type: 'initiative_discussion',
-        label: 'Discussion',
-        description:
-          'Mentions, replies, and comments on projects you own or are assigned to',
-      },
-    ],
-  },
-  {
-    id: 'crm',
-    label: 'Companies & contacts',
-    events: [
-      {
-        type: 'crm_discussion',
-        label: 'Discussion',
-        description:
-          'Mentions, replies, and comments on companies you own and their contacts',
-      },
-    ],
-  },
-  {
-    id: 'tasks',
-    label: 'Tasks',
-    events: [
-      {
-        type: 'task_assigned',
-        label: 'Assignments',
-        description: 'When a task is assigned to you',
-      },
-    ],
-  },
-  {
-    id: 'calendar',
-    label: 'Calendar',
-    events: [
-      {
-        type: 'calendar_event_reminder',
-        label: 'Event reminders',
-        description: 'When a calendar event is about to start',
-      },
-      {
-        type: 'calendar_event_join_request',
-        label: 'Requests to join',
-        description:
-          'When someone asks to be added to an event you shared in a channel',
-      },
-    ],
-  },
-  {
-    id: 'email',
-    label: 'Email',
-    events: [
-      {
-        type: 'new_email',
-        label: 'New email',
-        description: 'When a new email arrives',
-      },
-    ],
-  },
-  {
-    id: 'ai',
-    label: 'AI',
-    events: [
-      {
-        type: 'ai_response',
-        label: 'AI replies',
-        description: 'When an AI chat responds',
-      },
-      {
-        type: 'agent_session_settled',
-        label: 'Agent finished',
-        description: 'When an agent session you took part in finishes a turn',
-      },
-      {
-        type: 'agent_session_waiting_for_input',
-        label: 'Agent needs an answer',
-        description: 'When your agent stops to ask you something',
-      },
-      {
-        type: 'agent_session_mentioned',
-        label: 'Agent session mentions',
-        description: 'When someone mentions you in an agent session',
-      },
-      {
-        type: 'routine_run_finished',
-        label: 'Routine runs',
-        description: 'When one of your routines finishes or fails a run',
-      },
-      {
-        type: 'agent_sign_in_expiry',
-        label: 'Computer agent sign-ins',
-        description:
-          "When an agent sign-in on your team's computer is about to expire",
-        macroComputers: true,
-      },
-      {
-        type: 'computer_setup',
-        label: 'Computer setup',
-        description:
-          'When a computer you bought is ready, or could not be set up',
-        macroComputers: true,
-      },
-    ],
-  },
-  {
-    id: 'github',
-    label: 'GitHub',
-    events: [
-      {
-        type: 'github_pr_status_changed',
-        label: 'PR status',
-        description: 'When a pull request changes lifecycle state',
-      },
-      {
-        type: 'github_review_requested',
-        label: 'Review requested',
-        description: 'When your review is requested',
-      },
-      {
-        type: 'github_pr_comment',
-        label: 'PR comments',
-        description: 'When someone comments on a pull request',
-      },
-      {
-        type: 'github_pr_mention',
-        label: 'PR mentions',
-        description: 'When you are mentioned on a pull request',
-      },
-      {
-        type: 'github_pr_review',
-        label: 'PR reviews',
-        description: 'When a review is submitted on your pull request',
-      },
-    ],
-  },
+  group('sharing', 'settingsNotifications.groupSharing', [
+    event(
+      'entity_access_requested',
+      'settingsNotifications.eventEntityAccessRequested',
+      'settingsNotifications.eventEntityAccessRequestedDescription'
+    ),
+    event(
+      'entity_access_granted',
+      'settingsNotifications.eventEntityAccessGranted',
+      'settingsNotifications.eventEntityAccessGrantedDescription'
+    ),
+  ]),
+  group('channels', 'settingsNotifications.groupChannels', [
+    event(
+      'channel_message_send',
+      'settingsNotifications.eventChannelMessageSend',
+      'settingsNotifications.eventChannelMessageSendDescription'
+    ),
+    event(
+      'channel_mention',
+      'settingsNotifications.eventChannelMention',
+      'settingsNotifications.eventChannelMentionDescription'
+    ),
+    event(
+      'channel_message_reply',
+      'settingsNotifications.eventChannelMessageReply',
+      'settingsNotifications.eventChannelMessageReplyDescription'
+    ),
+    event(
+      'channel_message_reaction',
+      'settingsNotifications.eventChannelMessageReaction',
+      'settingsNotifications.eventChannelMessageReactionDescription'
+    ),
+    event(
+      'channel_access_requested',
+      'settingsNotifications.eventChannelAccessRequested',
+      'settingsNotifications.eventChannelAccessRequestedDescription'
+    ),
+  ]),
+  group('documents', 'settingsNotifications.groupDocuments', [
+    event(
+      'document_mention',
+      'settingsNotifications.eventDocumentMention',
+      'settingsNotifications.eventDocumentMentionDescription'
+    ),
+    event(
+      'mentioned_in_document_comment',
+      'settingsNotifications.eventMentionedInDocumentComment',
+      'settingsNotifications.eventMentionedInDocumentCommentDescription'
+    ),
+    event(
+      'replied_to_document_comment_thread',
+      'settingsNotifications.eventRepliedToDocumentCommentThread',
+      'settingsNotifications.eventRepliedToDocumentCommentThreadDescription'
+    ),
+    event(
+      'commented_on_document',
+      'settingsNotifications.eventCommentedOnDocument',
+      'settingsNotifications.eventCommentedOnDocumentDescription'
+    ),
+  ]),
+  group('projects', 'settingsNotifications.groupProjects', [
+    event(
+      'initiative_discussion',
+      'settingsNotifications.eventInitiativeDiscussion',
+      'settingsNotifications.eventInitiativeDiscussionDescription'
+    ),
+  ]),
+  group('crm', 'settingsNotifications.groupCrm', [
+    event(
+      'crm_discussion',
+      'settingsNotifications.eventCrmDiscussion',
+      'settingsNotifications.eventCrmDiscussionDescription'
+    ),
+  ]),
+  group('tasks', 'settingsNotifications.groupTasks', [
+    event(
+      'task_assigned',
+      'settingsNotifications.eventTaskAssigned',
+      'settingsNotifications.eventTaskAssignedDescription'
+    ),
+  ]),
+  group('calendar', 'settingsNotifications.groupCalendar', [
+    event(
+      'calendar_event_reminder',
+      'settingsNotifications.eventCalendarEventReminder',
+      'settingsNotifications.eventCalendarEventReminderDescription'
+    ),
+    event(
+      'calendar_event_join_request',
+      'settingsNotifications.eventCalendarEventJoinRequest',
+      'settingsNotifications.eventCalendarEventJoinRequestDescription'
+    ),
+  ]),
+  group('email', 'settingsNotifications.groupEmail', [
+    event(
+      'new_email',
+      'settingsNotifications.eventNewEmail',
+      'settingsNotifications.eventNewEmailDescription'
+    ),
+  ]),
+  group('ai', 'settingsNotifications.groupAi', [
+    event(
+      'ai_response',
+      'settingsNotifications.eventAiResponse',
+      'settingsNotifications.eventAiResponseDescription'
+    ),
+    event(
+      'agent_session_settled',
+      'settingsNotifications.eventAgentSessionSettled',
+      'settingsNotifications.eventAgentSessionSettledDescription'
+    ),
+    event(
+      'agent_session_waiting_for_input',
+      'settingsNotifications.eventAgentSessionWaitingForInput',
+      'settingsNotifications.eventAgentSessionWaitingForInputDescription'
+    ),
+    event(
+      'agent_session_mentioned',
+      'settingsNotifications.eventAgentSessionMentioned',
+      'settingsNotifications.eventAgentSessionMentionedDescription'
+    ),
+    event(
+      'routine_run_finished',
+      'settingsNotifications.eventRoutineRunFinished',
+      'settingsNotifications.eventRoutineRunFinishedDescription'
+    ),
+    event(
+      'agent_sign_in_expiry',
+      'settingsNotifications.eventAgentSignInExpiry',
+      'settingsNotifications.eventAgentSignInExpiryDescription',
+      { macroComputers: true }
+    ),
+    event(
+      'computer_setup',
+      'settingsNotifications.eventComputerSetup',
+      'settingsNotifications.eventComputerSetupDescription',
+      { macroComputers: true }
+    ),
+  ]),
+  group('github', 'settingsNotifications.groupGithub', [
+    event(
+      'github_pr_status_changed',
+      'settingsNotifications.eventGithubPrStatusChanged',
+      'settingsNotifications.eventGithubPrStatusChangedDescription'
+    ),
+    event(
+      'github_review_requested',
+      'settingsNotifications.eventGithubReviewRequested',
+      'settingsNotifications.eventGithubReviewRequestedDescription'
+    ),
+    event(
+      'github_pr_comment',
+      'settingsNotifications.eventGithubPrComment',
+      'settingsNotifications.eventGithubPrCommentDescription'
+    ),
+    event(
+      'github_pr_mention',
+      'settingsNotifications.eventGithubPrMention',
+      'settingsNotifications.eventGithubPrMentionDescription'
+    ),
+    event(
+      'github_pr_review',
+      'settingsNotifications.eventGithubPrReview',
+      'settingsNotifications.eventGithubPrReviewDescription'
+    ),
+  ]),
 ];
 
 export const BLOCKABLE_NOTIFICATION_EVENT_TYPES: readonly string[] =
@@ -254,25 +244,26 @@ export const BLOCKABLE_NOTIFICATION_EVENT_TYPES: readonly string[] =
     group.events.map((event) => event.type)
   );
 
-export const MUTED_ENTITY_TYPE_LABELS: Record<string, string> = {
-  calendar_event: 'Calendar event',
-  call: 'Call',
-  channel: 'Channel',
-  channel_message: 'Thread',
-  chat: 'Chat',
-  document: 'Document',
-  email: 'Email',
-  email_thread: 'Email',
-  foreign: 'GitHub',
-  foreign_entity: 'GitHub',
-  project: 'Folder',
-  initiative: 'Project',
-  crm_company: 'Company',
-  crm_contact: 'Contact',
-  reminder: 'Reminder',
-  team: 'Team',
-};
-
+/** What kind of item a muted item is, shown when its own name is unknown. */
 export function mutedEntityTypeLabel(itemType: string): string {
-  return MUTED_ENTITY_TYPE_LABELS[itemType] ?? itemType.replace(/_/g, ' ');
+  return match(itemType)
+    .with('calendar_event', () =>
+      t('settingsNotifications.entityCalendarEvent')
+    )
+    .with('call', () => t('settingsNotifications.entityCall'))
+    .with('channel', () => t('settingsNotifications.entityChannel'))
+    .with('channel_message', () => t('settingsNotifications.entityThread'))
+    .with('chat', () => t('settingsNotifications.entityChat'))
+    .with('document', () => t('settingsNotifications.entityDocument'))
+    .with('email', 'email_thread', () => t('settingsNotifications.entityEmail'))
+    .with('foreign', 'foreign_entity', () =>
+      t('settingsNotifications.entityGithub')
+    )
+    .with('project', () => t('settingsNotifications.entityFolder'))
+    .with('initiative', () => t('settingsNotifications.entityProject'))
+    .with('crm_company', () => t('settingsNotifications.entityCompany'))
+    .with('crm_contact', () => t('settingsNotifications.entityContact'))
+    .with('reminder', () => t('settingsNotifications.entityReminder'))
+    .with('team', () => t('settingsNotifications.entityTeam'))
+    .otherwise(() => itemType.replace(/_/g, ' '));
 }

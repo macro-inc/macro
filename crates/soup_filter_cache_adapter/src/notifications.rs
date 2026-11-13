@@ -20,6 +20,12 @@ mod test;
 /// for the Soup partitions this adapter projects.
 const NOTIFICATION_TYPE_FIELDS: [&str; 2] = ["targetEntityType", "entityType"];
 
+/// The lane of a notification a stack captured. Noise is listed in the Noise
+/// inbox and counts toward nothing else, so it never contributes to its
+/// parent's notification state. A notification without a lane is signal: only
+/// the Noise inbox returns noise, and its documents always select the lane.
+const NOISE_LANE: &str = "NOISE";
+
 /// Resolve edge and child aliases from the actual selection, not arbitrary payload fields.
 pub(super) fn selected_snapshot(
     schema: &cache_core::meta::Schema,
@@ -139,6 +145,9 @@ fn snapshot_facts(
             .and_then(serde_json::Value::as_str)
             .ok_or(())?;
         if primary_id != id || primary_type != entity_type {
+            continue;
+        }
+        if notification.get("lane").and_then(serde_json::Value::as_str) == Some(NOISE_LANE) {
             continue;
         }
         let notification_id = uuid::Uuid::parse_str(
@@ -358,7 +367,13 @@ pub async fn notification_projection_updates<S: Storage>(
                 Some(CacheValue::String(state)) => state.as_str(),
                 _ => "",
             };
-            mutations.push(change(key, partition, id, Some(state)));
+            // The merged record carries the lane a state-only patch omits.
+            let noise = matches!(
+                record.fields.get("lane"),
+                Some(CacheValue::String(lane)) if lane == NOISE_LANE
+            );
+            let contribution = if noise { None } else { Some(state) };
+            mutations.push(change(key, partition, id, contribution));
         }
     }
     retain_complete_parents(storage, mutations).await
