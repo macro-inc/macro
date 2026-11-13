@@ -252,6 +252,8 @@ fn name_queries_order_on_the_name_column_without_a_property_join() {
     assert!(candidates.contains("lower($9::text)"));
     assert!(!candidates.contains("ep_sort"));
     assert!(details.contains("lower(\"name\") ASC NULLS LAST"));
-    assert_eq!(first_document_id_slot(sort, false), 10);
-    assert_eq!(first_document_id_slot(sort, true), 12);
+    assert_eq!(source_ids_slot(sort, false), 10);
+    assert_eq!(first_document_id_slot(sort, false), 11);
+    assert_eq!(source_ids_slot(sort, true), 12);
+    assert_eq!(first_document_id_slot(sort, true), 13);
 }
