@@ -297,6 +297,7 @@ export * from './suggestionDraftAllOfPreview';
 export * from './suggestionFeed';
 export * from './suggestionFeedDone';
 export * from './suggestionFrom';
+export * from './suggestionGenerationStatus';
 export * from './suggestionKind';
 export * from './suggestionKindOneOf';
 export * from './suggestionKindOneOfFour';

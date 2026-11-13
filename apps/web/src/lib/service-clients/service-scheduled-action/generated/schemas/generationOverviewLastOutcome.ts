@@ -5,6 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { GenerationStatus } from './generationStatus';
+import type { SuggestionGenerationStatus } from './suggestionGenerationStatus';
 
-export type GenerationOverviewLastOutcome = null | GenerationStatus;
+export type GenerationOverviewLastOutcome = null | SuggestionGenerationStatus;

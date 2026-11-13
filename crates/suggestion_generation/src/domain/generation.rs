@@ -47,6 +47,9 @@ pub const NIGHTLY_EVERY: TimeDelta = TimeDelta::hours(20);
 )]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
+// Named apart from the routine suggestions' `GenerationStatus`: the
+// scheduler's spec merges both, and one name holds one schema.
+#[schema(as = SuggestionGenerationStatus)]
 pub enum GenerationStatus {
     /// Its sessions are running.
     Generating,

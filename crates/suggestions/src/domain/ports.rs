@@ -342,9 +342,9 @@ pub trait GenerationSessions: Send + Sync + 'static {
         session: Uuid,
     ) -> Result<Option<GenerationSession>, rootcause::Report>;
 
-    /// Whether `session` is a generation's and not yet deleted: open, or
-    /// ended and being cleaned up. Code it still runs keeps a generation
-    /// session's scope, and the feed refuses it.
+    /// Whether `session` is a generation's and not deleted: open, ended and
+    /// being cleaned up, or abandoned (deleting it failed). Code it still
+    /// runs keeps a generation session's scope, and the feed refuses it.
     async fn undeleted(&self, session: Uuid) -> Result<bool, rootcause::Report>;
 }
 

@@ -106,8 +106,8 @@ async fn insert_session(
     sqlx::query!(
         r#"INSERT INTO suggestion_generation_session
              (session_id, generation_id, user_id, agent_id, kind, opened_at,
-              cleanup, ending, ended_at, cleanup_at)
-           VALUES ($1, $2, $3, $4, 'suggestions', $5, $6, $7, $8, $8)"#,
+              cleanup, ending, ended_at, cleanup_at, closed_at)
+           VALUES ($1, $2, $3, $4, 'suggestions', $5, $6, $7, $8, $8, $8)"#,
         session,
         generation,
         user,
@@ -128,11 +128,12 @@ struct StoredSession {
     ending: Option<SessionEnding>,
     attempts: i16,
     cleanup_at: Option<DateTime<Utc>>,
+    closed_at: Option<DateTime<Utc>>,
 }
 
 async fn stored_session(pool: &PgPool, session: Uuid) -> StoredSession {
     let row = sqlx::query!(
-        r#"SELECT cleanup, ending, cleanup_attempts, cleanup_at
+        r#"SELECT cleanup, ending, cleanup_attempts, cleanup_at, closed_at
            FROM suggestion_generation_session WHERE session_id = $1"#,
         session
     )
@@ -144,6 +145,7 @@ async fn stored_session(pool: &PgPool, session: Uuid) -> StoredSession {
         ending: row.ending.map(|ending| ending.parse().unwrap()),
         attempts: row.cleanup_attempts,
         cleanup_at: row.cleanup_at,
+        closed_at: row.closed_at,
     }
 }
 
@@ -521,6 +523,18 @@ async fn session_cleanup_follows_the_table(pool: PgPool) {
                 before.ending
             };
             assert_eq!(after.ending, ending, "{state:?} {event:?}");
+            // Leaving open sets `closed_at`, which the previous release
+            // reads; nothing else touches it.
+            let closed_at = if moved && event == CleanupEvent::Ended {
+                Some(later.timestamp_micros())
+            } else {
+                before.closed_at.map(|at| at.timestamp_micros())
+            };
+            assert_eq!(
+                after.closed_at.map(|at| at.timestamp_micros()),
+                closed_at,
+                "{state:?} {event:?}"
+            );
         }
     }
     for ending in SessionEnding::iter() {
@@ -695,11 +709,17 @@ async fn the_sweep_ends_sessions_left_open(pool: PgPool) {
         assert_eq!(stored.cleanup, expected.unwrap_or(state), "{state:?}");
         if expected.is_ok() {
             assert_eq!(stored.ending, Some(SessionEnding::Interrupted));
+            assert_eq!(
+                stored.closed_at.map(|at| at.timestamp_micros()),
+                Some(now.timestamp_micros())
+            );
         }
     }
     assert!(ended.contains(&overdue));
     assert!(!ended.contains(&live));
-    assert_eq!(stored_session(&pool, live).await.cleanup, Cleanup::Open);
+    let live_stored = stored_session(&pool, live).await;
+    assert_eq!(live_stored.cleanup, Cleanup::Open);
+    assert_eq!(live_stored.closed_at, None);
     assert!(
         swept
             .iter()
@@ -886,6 +906,48 @@ async fn a_person_is_due_while_in_the_rotation(pool: PgPool) {
     assert!(repo.due(back, 10).await.unwrap().is_empty());
     let due = repo.due(moved, 10).await.unwrap();
     assert_eq!(due[0].timezone, chrono_tz::Europe::London);
+}
+
+/// A run cut short records its outcome before the tick that started it does:
+/// the tick's older outcome changes nothing, so the person stays due at once.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_older_nightly_outcome_never_replaces_a_newer_one(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool.clone());
+    let tick = Utc::now();
+    repo.see(&owner(), "Asia/Tokyo", tick, tick).await.unwrap();
+    let cut = tick + TimeDelta::seconds(5);
+    repo.record_nightly(&owner(), NightlyOutcome::CutShort, Some(cut), cut)
+        .await
+        .unwrap();
+    let tomorrow = tick + TimeDelta::days(1);
+    repo.record_nightly(&owner(), NightlyOutcome::Started, Some(tomorrow), tick)
+        .await
+        .unwrap();
+    let stored = sqlx::query!(
+        "SELECT next_run_at, last_outcome, last_outcome_at FROM suggestion_audience WHERE user_id = $1",
+        OWNER
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored.last_outcome.as_deref(), Some("cut_short"));
+    assert_eq!(
+        stored.last_outcome_at.map(|at| at.timestamp_micros()),
+        Some(cut.timestamp_micros())
+    );
+    assert_eq!(
+        stored.next_run_at.map(|at| at.timestamp_micros()),
+        Some(cut.timestamp_micros())
+    );
+    assert_eq!(repo.due(cut, 10).await.unwrap().len(), 1);
+
+    // The next tick's outcome is newer, and lands.
+    let next = cut + TimeDelta::minutes(5);
+    repo.record_nightly(&owner(), NightlyOutcome::Started, Some(tomorrow), next)
+        .await
+        .unwrap();
+    assert!(repo.due(next, 10).await.unwrap().is_empty());
 }
 
 /// The routines cadence is kept for anyone: someone out of the rotation gets

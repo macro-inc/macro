@@ -62,10 +62,10 @@ scheduling runtime.
   `MAX_ATTEMPTS`; a nightly one cut short is due again at once.
 - Generation sessions are scoped where their code-mode credential is minted
   (`agent_correlation::scope::SessionScope::Generation`, decided by the
-  harness's `SessionScopes`) until their row is deleted: every service refuses
-  their requests other than reads, their own tools and email drafts, and the
-  native tool gate their non-code tools. A new session tool route goes on the
-  scope's list.
+  harness's `SessionScopes`) until they are deleted (an abandoned one keeps
+  it): every service refuses their requests other than reads, their own tools
+  and email drafts, and the native tool gate their non-code tools. A new
+  session tool route goes on the scope's list.
 - Traces: an onboarding or manual generation is a child of the request that
   started it; a nightly one is its own root span linked to the tick. Its trace
   id is kept on `suggestion_generation.trace_id` and recorded as
@@ -91,9 +91,10 @@ scheduling runtime.
   or waiting on a permission or question nobody will answer) | `timed_out` |
   `delivery_unknown` | `cancelled` | `interrupted`, stored as it leaves `open`;
   cleanup goes `open` → `stopping` → `deleted` | `abandoned`, a failed delete
-  staying `stopping` for the sweep. Only `open` takes tools; `open` and
-  `stopping` keep the narrow scope. What a session did is named by kind:
-  `Work::FeedChanges` or `Work::RoutinesSuggested`.
+  staying `stopping` for the sweep. Only `open` takes tools; every state but
+  `deleted` keeps the narrow scope, since an `abandoned` session may still
+  exist. What a session did is named by kind: `Work::FeedChanges` or
+  `Work::RoutinesSuggested`.
 - Nightly (`nightly.rs`): `decide` maps a due person to start, wait (no room:
   the tick stops), miss (night over), drop (inactive or unpaid: `next_run_at`
   cleared until seen again) or retry (plan unreadable: `NIGHTLY_RETRY`).
@@ -129,6 +130,10 @@ scheduling runtime.
 - A status, cleanup state or nightly outcome named in SQL must match its
   domain table: partial-index scans spell states as literals, PK-addressed
   writes bind `sources()`. Change both, and the DB test says so if you don't.
+- `suggestion_generation_session.closed_at` is written, never read: the
+  previous release tells an open session by a NULL `closed_at`, so every write
+  that moves a session out of `open` sets it too. Once no deployed code reads
+  it, stop writing it, then drop it and its index in a later change.
 - At onboarding a routines session that suggested nothing is retried once;
   never otherwise, where suggesting nothing is a fine answer.
 - `routine_suggestions.generated`/`.surface` logs feed a Datadog dashboard;
