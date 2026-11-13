@@ -112,6 +112,7 @@ export function createPredicateQuery<T extends object>(options: {
       });
       setStatus('loading');
 
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
       const run = async () => {
         if (running || !active) return;
         running = true;
@@ -147,6 +148,14 @@ export function createPredicateQuery<T extends object>(options: {
               if (latest !== undefined && BigInt(revision) < BigInt(latest)) {
                 staleReads += 1;
                 if (staleReads >= MAX_STALE_READS) {
+                  // Preserve an invalidation that arrived during this read, but
+                  // yield before starting another bounded attempt.
+                  if (pending) {
+                    retryTimer = setTimeout(() => {
+                      retryTimer = undefined;
+                      deferral.request();
+                    }, 0);
+                  }
                   pending = false;
                   throw new Error(
                     'Cache predicate repeatedly returned a stale revision'
@@ -234,7 +243,10 @@ export function createPredicateQuery<T extends object>(options: {
               );
               outcome = 'success';
             } catch (cause) {
-              if (!active || epoch !== observedEpoch) continue;
+              if (!active || epoch !== observedEpoch) {
+                staleReads = 0;
+                continue;
+              }
               outcome = 'error';
               setError(() => cause);
               setStatus('error');
@@ -257,6 +269,8 @@ export function createPredicateQuery<T extends object>(options: {
         }
       };
       const refresh = () => {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
         if (unsupported) return;
         pending = true;
         if (!running) runPromise = run();
@@ -286,6 +300,7 @@ export function createPredicateQuery<T extends object>(options: {
       refresh();
       onCleanup(() => {
         active = false;
+        clearTimeout(retryTimer);
         deferral.dispose();
         unsubscribeChanges();
         unsubscribeGeneration();

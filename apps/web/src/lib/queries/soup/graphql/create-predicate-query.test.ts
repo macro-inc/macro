@@ -81,6 +81,7 @@ function setup(onRead: () => void = () => {}) {
   const requests: Array<{
     args: EntityFilterCacheArgs;
     resolve: (value: EntityFilterCacheResult) => void;
+    reject: (cause: Error) => void;
   }> = [];
   const host: CacheHost = {
     ...createNoopCacheHost(),
@@ -100,7 +101,9 @@ function setup(onRead: () => void = () => {}) {
       onRead();
       return args.liveQuery?.release
         ? Promise.resolve({ kind: 'unsupported' })
-        : new Promise((resolve) => requests.push({ args, resolve }));
+        : new Promise((resolve, reject) =>
+            requests.push({ args, resolve, reject })
+          );
     },
   };
   const state = createRoot((dispose) => {
@@ -200,6 +203,54 @@ it('stops stale-read retries without publishing stale rows and recovers on the n
   expect(state.query.status()).toBe('ready');
   expect(state.query.error()).toBeUndefined();
   expect(state.query.data()?.revision).toBe('3');
+});
+
+it('defers a cache change received during the last stale read instead of dropping it', async () => {
+  vi.useFakeTimers();
+  try {
+    const state = setup();
+    state.change('2');
+    for (let index = 0; index < 2; index++) {
+      state.requests[index].resolve(snapshot());
+      await flush();
+    }
+    state.change('3');
+    state.requests[2].resolve(snapshot());
+    await flush();
+    expect(state.query.status()).toBe('error');
+    expect(state.requests).toHaveLength(3);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.requests).toHaveLength(4);
+    state.requests[3].resolve({ ...snapshot(), revision: revision('3') });
+    await flush();
+    expect(state.query.status()).toBe('ready');
+    expect(state.query.data()?.revision).toBe('3');
+    state.dispose();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('resets the stale-read budget when an old-generation request rejects', async () => {
+  const state = setup();
+  state.change('2');
+  for (let index = 0; index < 2; index++) {
+    state.requests[index].resolve(snapshot());
+    await flush();
+  }
+  state.generations.forEach((callback) => callback({ storage: 'reset' }));
+  state.requests[2].reject(new Error('old generation closed'));
+  await flush();
+  state.change('2');
+  state.requests[3].resolve(snapshot());
+  await flush();
+  expect(state.query.status()).toBe('loading');
+  expect(state.requests).toHaveLength(5);
+  state.requests[4].resolve({ ...snapshot(), revision: revision('2') });
+  await flush();
+  expect(state.query.status()).toBe('ready');
+  expect(state.query.data()?.revision).toBe('2');
 });
 
 it('discards in-flight work on query changes and disposal', async () => {
