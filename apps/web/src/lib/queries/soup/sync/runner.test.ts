@@ -481,6 +481,75 @@ describe('runCacheSync', () => {
     await Effect.runPromise(Fiber.interrupt(fiber));
   });
 
+  const failing = { ok: false, failure: { kind: 'http', status: 500 } };
+  /** Past a stream's five retries (2 + 4 + 8 + 16 + 32 s). */
+  const PAST_RETRIES_MS = 63_000;
+  let consoleWarn: MockInstance;
+
+  beforeEach(() => {
+    // The middle of the spread: pauses of exactly 60 s, then 120 s.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.mocked(Math.random).mockRestore();
+    consoleWarn.mockRestore();
+  });
+
+  it('runs again once the pause after a stop runs out, resuming as often as it takes', async () => {
+    runSyncPass.mockResolvedValue(failing);
+    const fiber = await start(runCacheSync('user-1', asHost(fakeHost()), true));
+    await vi.advanceTimersByTimeAsync(PAST_RETRIES_MS);
+    expect(runSyncPass).toHaveBeenCalledTimes(6);
+    await vi.advanceTimersByTimeAsync(58_000);
+    expect(runSyncPass).toHaveBeenCalledTimes(6);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(runSyncPass).toHaveBeenCalledTimes(7);
+    await vi.advanceTimersByTimeAsync(PAST_RETRIES_MS);
+    expect(runSyncPass).toHaveBeenCalledTimes(12);
+    runSyncPass.mockResolvedValue(complete);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await Effect.runPromise(Fiber.join(fiber));
+
+    expect(
+      passSpans().map((span) => [
+        span.attributes['cache.sync_pass'],
+        span.attributes['cache.sync_outcome'],
+        span.attributes['cache.sync_resumes'],
+        span.attributes['cache.sync_resumed_by'],
+      ])
+    ).toEqual([
+      ['first', 'http', 0, undefined],
+      ['first', 'http', 1, 'timer'],
+      ['first', 'complete', 2, 'timer'],
+      ['second', 'complete', 2, 'timer'],
+    ]);
+  });
+
+  it('runs again at once when the device comes back online', async () => {
+    runSyncPass.mockResolvedValue(failing);
+    const fiber = await start(runCacheSync('user-1', asHost(fakeHost()), true));
+    await vi.advanceTimersByTimeAsync(PAST_RETRIES_MS);
+    runSyncPass.mockResolvedValue(complete);
+    window.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(0);
+    await Effect.runPromise(Fiber.join(fiber));
+    expect(passSpans().at(-1)?.attributes).toMatchObject({
+      'cache.sync_resumes': 1,
+      'cache.sync_resumed_by': 'online',
+    });
+  });
+
+  it('stops waiting to resume when interrupted', async () => {
+    runSyncPass.mockResolvedValue(failing);
+    const fiber = await start(runCacheSync('user-1', asHost(fakeHost()), true));
+    await vi.advanceTimersByTimeAsync(PAST_RETRIES_MS);
+    await Effect.runPromise(Fiber.interrupt(fiber));
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(runSyncPass).toHaveBeenCalledTimes(6);
+  });
+
   it('pages without the sync methods or with the streamed sync off', async () => {
     const {
       syncStart: _start,

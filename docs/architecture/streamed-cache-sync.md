@@ -238,6 +238,14 @@ A stream that fails is retried five times with backoff; a busy server (409,
 429 or 503) is instead asked again every 30 s for as long as it stays busy,
 without spending those retries.
 
+A sync whose stream used up its retries stops and waits
+(`sync/resume.ts`), then runs again from the state saved in the cache, as
+often as it takes: when the device comes back online, when the app returns to
+the foreground, or after a pause of 1 minute, doubled per stop in a row up to
+5 minutes and spread by a fifth either way. The pause covers a server that was
+unreachable while the device stayed online, which raises no event. Only
+`unsupported` ends the streamed sync.
+
 ### Telemetry
 
 `apps/web/src/lib/queries/soup/sync/telemetry.ts` traces the sync.
@@ -252,7 +260,10 @@ without spending those retries.
 - Each pass is a `graphql_cache.sync.pass` span recorded when the pass ends,
   from its first stream to its outcome: `complete`, `interrupted` (the app
   stopped it: another tab took over, or the user, flag or cache changed) or
-  the failure it gave up on. It carries the pass's streams, busy answers
+  the failure it gave up on (`stalled` for a connection that went silent). A
+  run that follows a stop carries `cache.sync_resumes`, the stops before it,
+  and `cache.sync_resumed_by` (`online`, `foreground` or `timer`). It carries
+  the pass's streams, busy answers
   (409, 429, 503), failed streams, bytes, pages, items, write time and failed
   lanes. A tab closed mid-pass records no pass span; its stream spans remain.
 - `cache.sync_session` is the same on every span of one sync run and links a

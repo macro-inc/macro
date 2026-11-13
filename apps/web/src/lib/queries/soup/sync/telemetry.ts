@@ -7,7 +7,8 @@
  * app's request to the last page the cache wrote. A pass is recorded when it
  * ends as one `graphql_cache.sync.pass` span, from its first stream to its
  * outcome. `cache.sync_session` is the same on every span of one sync run and
- * links a pass to its streams.
+ * links a pass to its streams. A run that follows a stop (`sync/resume.ts`)
+ * says so on its passes: how many stops came before it and what woke it.
  *
  * Attributes are counts, durations and fixed classes. Lane errors and failure
  * messages never leave this module. A failure to record never reaches the
@@ -17,6 +18,7 @@ import type { SyncFailure, SyncRunOutcome } from '@graphql-cache/sync-protocol';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { isServerBusy } from './host';
 import type { SyncPass } from './lanes';
+import type { SyncResume } from './resume';
 
 /**
  * How a pass ended: `complete`, stopped by the app (`interrupted`: another
@@ -52,8 +54,15 @@ const PASS_ENDED_NORMALLY: readonly SyncPassOutcome[] = [
   'unsupported',
 ];
 
-/** Starts tracing one pass of the sync run `session`. */
-export function traceSyncPass(session: string, pass: SyncPass): SyncPassTrace {
+/**
+ * Starts tracing one pass of the sync run `session`; `resumed` when the run
+ * follows a stop.
+ */
+export function traceSyncPass(
+  session: string,
+  pass: SyncPass,
+  resumed?: SyncResume
+): SyncPassTrace {
   const startedAt = Date.now();
   const totals: PassTotals = {
     streams: 0,
@@ -100,6 +109,8 @@ export function traceSyncPass(session: string, pass: SyncPass): SyncPassTrace {
         span.setAttr('cache.sync_session', session);
         span.setAttr('cache.sync_pass', pass);
         span.setAttr('cache.sync_outcome', outcome);
+        span.setAttr('cache.sync_resumes', resumed?.count ?? 0);
+        if (resumed) span.setAttr('cache.sync_resumed_by', resumed.by);
         span.setAttr('cache.sync_streams', totals.streams);
         span.setAttr('cache.sync_busy_streams', totals.busyStreams);
         span.setAttr('cache.sync_failed_streams', totals.failedStreams);

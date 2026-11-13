@@ -62,6 +62,11 @@ import {
   SECOND_PASS_STREAM,
 } from './sync/host';
 import type { SyncPass } from './sync/lanes';
+import {
+  type SyncResume,
+  syncResumePauseMs,
+  waitToResumeSync,
+} from './sync/resume';
 import type { SyncPassOptions } from './sync/run';
 import {
   type SyncPassOutcome,
@@ -730,6 +735,10 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   );
 });
 
+/**
+ * Retries of a failing stream before the sync stops; it then waits to run
+ * again (`sync/resume.ts`).
+ */
 const SYNC_RETRY_COUNT = 5;
 const SYNC_RETRY_SCHEDULE = Schedule.exponential('2 seconds');
 /** How long to wait before asking a busy server again (its `Retry-After`). */
@@ -852,10 +861,11 @@ function syncPassOutcome(
 const traceSyncPassRun = (
   session: string,
   pass: SyncPass,
+  resumed: SyncResume | undefined,
   run: (trace: SyncPassTrace) => Effect.Effect<void, SyncFailure>
 ) =>
   Effect.suspend(() => {
-    const trace = traceSyncPass(session, pass);
+    const trace = traceSyncPass(session, pass, resumed);
     return run(trace).pipe(
       Effect.onExit((exit) =>
         Effect.sync(() => trace.end(syncPassOutcome(exit)))
@@ -936,26 +946,64 @@ const runSecondPass = Effect.fn('runSecondPass')(function* (
  * The streamed cache sync: the first pass, then the second. A lane that fails
  * (the server's `laneError`) does not stop the others: each pass re-runs it,
  * from its saved state, until it has failed `SYNC_LANE_FAILURES` times. Each
- * pass and each of its streams is traced (`sync/telemetry.ts`).
+ * pass and each of its streams is traced (`sync/telemetry.ts`). It fails with
+ * the failure a stream gave up on; `resumed` says this run follows such a stop.
  */
 export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
-  host: StreamedSyncHost
+  host: StreamedSyncHost,
+  resumed?: SyncResume
 ) {
   const calendar = isFeatureEnabled(enableGraphqlCalendar);
   const session = crypto.randomUUID();
-  yield* traceSyncPassRun(session, 'first', (trace) =>
+  yield* traceSyncPassRun(session, 'first', resumed, (trace) =>
     runFirstPass(host, calendar, trace)
   );
-  yield* traceSyncPassRun(session, 'second', (trace) =>
+  yield* traceSyncPassRun(session, 'second', resumed, (trace) =>
     runSecondPass(host, calendar, trace)
   );
 });
 
 /**
+ * The streamed sync, run again each time it stops: after a stream used up its
+ * retries it waits for the device to come back online, the app to return to
+ * the foreground, or a pause (`sync/resume.ts`), then resumes from the state
+ * saved in the cache. Fails only with `unsupported`.
+ */
+const runStreamedSyncUntilDone = (host: StreamedSyncHost) =>
+  Effect.suspend(() => {
+    let resumed: SyncResume | undefined;
+    const waitToResume = (failure: SyncFailure) =>
+      Effect.suspend(() => {
+        const count = (resumed?.count ?? 0) + 1;
+        console.warn('[graphql-soup-sync] stopped after retries; waiting', {
+          failure: failure.kind,
+          stops: count,
+        });
+        return Effect.promise((signal) =>
+          waitToResumeSync(syncResumePauseMs(count), signal)
+        ).pipe(
+          Effect.map((by) => {
+            resumed = { count, by };
+          })
+        );
+      });
+    return Effect.suspend(() => runStreamedSync(host, resumed)).pipe(
+      Effect.tapError((failure) =>
+        failure.kind === 'unsupported' ? Effect.void : waitToResume(failure)
+      ),
+      Effect.retry({
+        while: (failure: SyncFailure) => failure.kind !== 'unsupported',
+      })
+    );
+  });
+
+/**
  * Keeps the cache synced: through the streamed sync when `streamed` is on and
  * the host can stream, otherwise through the paged backfill. A host that
  * reports it cannot stream (an older native build) falls back to the paged
- * backfill too.
+ * backfill too. A streamed sync that stops after its retries runs again once
+ * the device is back online, the app is back in the foreground, or a pause
+ * ran out.
  */
 export function runCacheSync(
   userId: string,
@@ -964,18 +1012,7 @@ export function runCacheSync(
 ): Effect.Effect<void> {
   const paged = runSoupBackfills(userId, host).pipe(Effect.ignore);
   if (!streamed || !isSyncHost(host)) return paged;
-  return runStreamedSync(host).pipe(
-    Effect.catchIf(
-      (failure: SyncFailure) => failure.kind === 'unsupported',
-      () => paged,
-      (failure) =>
-        Effect.sync(() =>
-          console.warn('[graphql-soup-sync] stopped after retries', {
-            failure: failure.kind,
-          })
-        )
-    )
-  );
+  return runStreamedSyncUntilDone(host).pipe(Effect.catch(() => paged));
 }
 
 const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
