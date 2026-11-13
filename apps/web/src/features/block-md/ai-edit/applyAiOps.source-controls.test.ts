@@ -28,6 +28,7 @@ import {
   $getRoot,
   $getSelection,
   $isParagraphNode,
+  $isRangeSelection,
   $isTextNode,
   $setSelection,
   CLEAR_HISTORY_COMMAND,
@@ -599,6 +600,60 @@ describe('Source applyAiOps controls', () => {
       { gap: 399, undo1: seed, undo2: seed },
       { gap: 400, undo1: first, undo2: seed },
       { gap: 500, undo1: first, undo2: seed },
+    ]);
+  });
+
+  it('typing undo follows the wall clock', async () => {
+    // Source has one clock for history: Date.now (getMergeAction and Loro's
+    // mergeInterval). Two typed characters 100 ms or 10 s apart on it.
+    const rows: { gap: number; undo1: string }[] = [];
+    const start = new Date('2026-01-01T00:00:00.000Z').getTime();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (const gap of [100, 10_000]) {
+        vi.setSystemTime(start);
+        const r = await rig(SEED);
+        r.editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if (!$isTextNode(text)) throw new Error('expected text');
+            text.select(text.getTextContentSize(), text.getTextContentSize());
+          },
+          { discrete: true }
+        );
+        await r.settle();
+        const type = (character: string) =>
+          r.editor.update(
+            () => {
+              const selection = $getSelection();
+              if (!$isRangeSelection(selection))
+                throw new Error('expected a caret');
+              selection.insertText(character);
+            },
+            { discrete: true }
+          );
+        vi.setSystemTime(start + 1_000);
+        type('a');
+        await r.settle();
+        vi.setSystemTime(start + 1_000 + gap);
+        type('b');
+        await r.settle();
+        expect(r.editor.read(() => $getRoot().getTextContent())).toBe(
+          'Alpha beta gammaab\n\nSecond line'
+        );
+        r.editor.dispatchCommand(UNDO_COMMAND, undefined);
+        await r.settle();
+        rows.push({
+          gap,
+          undo1: r.editor.read(() => $getRoot().getTextContent()),
+        });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(rows).toEqual([
+      { gap: 100, undo1: SEED },
+      { gap: 10_000, undo1: 'Alpha beta gammaa\n\nSecond line' },
     ]);
   });
 

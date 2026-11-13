@@ -915,3 +915,61 @@ fn deleting_a_table_row_undoes_the_open_document_edit_boundary()
     }
     Ok(())
 }
+
+/// Source groups typing for undo by `Date.now` alone (registerLoroHistory's
+/// getMergeAction and Loro's mergeInterval both read it), so only the wall
+/// clock decides; the host's monotonic clock must not.
+/// Source rows: apps/web applyAiOps.source-controls.test.ts ('typing undo
+/// follows the wall clock').
+#[test]
+fn typing_history_groups_by_the_wall_clock_like_source() {
+    let at = |mono: u64, wall: i64| Now {
+        mono: doc_sync_core::Millis(mono),
+        wall: doc_sync_core::UnixMillis(wall),
+    };
+    let mut rows = Vec::new();
+    for (mono_gap, wall_gap) in [(100, 100), (100, 10_000), (10_000, 100)] {
+        let (mut surface, doc, mut view) = fresh_application_history();
+        for (character, time) in [
+            ("a", at(1_000, 1_000)),
+            ("b", at(1_000 + mono_gap, 1_000 + wall_gap)),
+        ] {
+            surface
+                .apply(
+                    &doc,
+                    Input::Command {
+                        command: Command::InsertText(character.into()),
+                        selection: ViewSelection::KeepModel,
+                    },
+                    time,
+                    Access::Edit,
+                    &mut view,
+                )
+                .expect("type");
+        }
+        assert_eq!(&*surface.state().root_text_content(), "ab");
+        surface
+            .apply(
+                &doc,
+                Input::Undo,
+                at(50_000, 50_000),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("undo");
+        rows.push((
+            mono_gap,
+            wall_gap,
+            surface.state().root_text_content().to_string(),
+        ));
+    }
+    // One undo removes both characters when merged, only "b" when split.
+    assert_eq!(
+        rows,
+        vec![
+            (100, 100, String::new()),
+            (100, 10_000, "a".to_string()),
+            (10_000, 100, String::new()),
+        ]
+    );
+}
