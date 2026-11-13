@@ -405,9 +405,7 @@ export function ComputerSetupSteps(props: {
           >
             <Spinner size="sm" decorative />
             {t('computers.preparingSignInStatus', {
-              stage: (
-                currentStage()?.label ?? t('computers.computerStarting')
-              ).toLowerCase(),
+              stage: currentStage()?.label ?? t('computers.computerStarting'),
               elapsed: elapsed() ?? '0:00',
             })}
           </p>

@@ -256,6 +256,14 @@ Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
+Wrapped and multi-line text cells have backend-free regressions in a plain
+database and a CRM pipeline: Shift+Enter and Alt+Enter add lines without leaving
+the row, a trailing new line takes the caret, arrows move through wrapped lines
+before leaving the cell, the closed cell shows every line, and the editor keeps
+the value's weight and line height:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts multiline.browser.e2e.ts`
+and `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts editor.browser.e2e.ts`.
+
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
 It uses the real records view with a local source and picker to exercise opening,
@@ -952,7 +960,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
-  operation rows only; never show the program or code-mode wording.
+  operation rows only; never show the program or code-mode wording. A live
+  tool group's header is the shared `ActivityLine` (`block-agent/ui`), the one
+  a channel reply's open run uses; never add a second working line or a
+  scrolling peek window beside it. `activity.browser.e2e.ts` in
+  `block-agent/browser-test` replays a long run and checks it shows one live
+  line, then one settled row.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
@@ -1034,9 +1047,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
   bump its checkpoint version when changing the hydration input contract.
-- Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device. Include
-  off-page favorites in unread presence without adding them to section counts.
+- Refresh the channel list's bounded unread and mention edges when opening a
+  conversation, including an empty unread result after a read on another
+  device. Include off-page favorites in unread presence without adding them to
+  section counts; mention counts include thread replies, the unread dot does not.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a

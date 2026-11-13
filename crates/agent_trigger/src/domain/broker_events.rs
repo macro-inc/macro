@@ -121,6 +121,11 @@ pub struct AgentSessionRequestedEvent {
     /// events from producers that predate it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// Who the bot's runtime authenticates as (its harness's owner), so its
+    /// event stream receives a request any teammate made. Absent on events
+    /// from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_user: Option<String>,
 }
 
 /// A message in a channel where an agent persona converses. The session

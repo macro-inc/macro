@@ -351,8 +351,9 @@ Left nav (feature and platform gates still apply):
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
-date card in the desktop app. Build date is when the running JavaScript was
-built, not when it was installed on the computer. Bundle date is when the active
+date card in the desktop app. Build date is when the installed native binary
+was built (from `get_native_build_time`), not when it was installed or when the
+running JavaScript was built, so OTA updates don't change it. Bundle date is when the active
 OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
 the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
@@ -849,8 +850,8 @@ purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progres
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
-charge is still being confirmed (`purchasing`) reads `Setting up · Creating the
-computer (1 of 3)`. Then the billing state: `Payment past due` while the team
+charge is still being confirmed (`purchasing`, or the API's billing setup
+step) reads `Setting up · Updating billing… · 0:12`. Then the billing state: `Payment past due` while the team
 subscription is past due, `Cancels <date>` while a cancellation is pending
 (`billing: ending`), or `Kept until <date>` once billing has ended and the disk
 is retained (`billing: ended`). The list polls every 3 seconds while any
@@ -928,12 +929,13 @@ To buy one as a team admin:
    straight to **Configure agent**.
 
 While the computer provisions, a **Setup progress** list under the step bar
-follows the same phases the row shows (Creating the computer, Starting up,
-Connecting to Macro, Sign in to Claude; the same four on every step, the
-sign-in struck through "Not needed" once Macro's Claude is chosen): done
-stages carry a check, the current one a spinner and how
-long it has taken (`0:42`, counted from when the step was first seen, the
-first from the purchase), and a stuck one says why (waiting for capacity, or
+follows the same phases the row shows (Updating billing…, Creating the
+computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
+on every step, the sign-in struck through "Not needed" once Macro's Claude is
+chosen): done stages carry a check, the current one a spinner and how long it
+has taken (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
+else from when the step was first seen here, the billing wait from the
+purchase), and a stuck one says why (waiting for capacity, or
 `failed` with "The computer could not be set up…" and **Retry setup**, which is
 `POST .../retry`; a server `failureReason`, once the API sends one, is shown
 before that copy). No control in the flow is disabled without a line beside it
@@ -951,7 +953,7 @@ Claude, then setup-complete.
 - **Your Claude account** goes to **Bring your AI**, titled **Sign in to
   Claude**. The sign-in link is minted by harnessd inside the computer, so
   nothing of it can start before the computer connects: until then the step
-  explains that, shows a live status line ("Preparing sign-in… starting up ·
+  explains that, shows a live status line ("Preparing sign-in… Starting up ·
   0:42") instead of a greyed button, lists the sign-in as a later stage that
   unlocks by itself, and offers only **Close** and **Use Macro credits
   instead**. Once connected, **Open claude.ai** appears and the tab title

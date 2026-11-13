@@ -1,3 +1,4 @@
+import { BackgroundWorkIndicator } from '@core/component/BackgroundWork/BackgroundWorkIndicator';
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
 import { Toast } from '@kobalte/core/toast';
@@ -40,7 +41,7 @@ export function ToastRegion() {
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
-        capped at one visible card. Ordinary notices form an expandable three-card stack. Upload progress sits nearest the corner.
+        capped at one visible card. Ordinary notices form an expandable three-card stack. Upload progress, then background work, sit nearest the corner.
       */}
       <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
@@ -75,6 +76,7 @@ export function ToastRegion() {
         </Toast.Region>
         <Show when={!isMobile()}>
           <UploadProgressIndicator />
+          <BackgroundWorkIndicator align="end" />
         </Show>
       </div>
 
@@ -146,6 +148,7 @@ export function ToastRegion() {
             <div class="flex justify-center">
               <UploadProgressIndicator />
             </div>
+            <BackgroundWorkIndicator align="center" />
           </Show>
         </MobileToastStack>
       </div>
