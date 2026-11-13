@@ -12,7 +12,10 @@ import {
   packetFilterLabel,
 } from '../components/contracts-sidebar';
 import { PacketTable } from '../components/packet-table';
-import { useContractsContext } from '../context/contracts-context';
+import {
+  type DocumentSource,
+  useContractsContext,
+} from '../context/contracts-context';
 import type { Packet } from '../core/packet';
 import { allRows, databaseRows, matchesFilter } from '../core/packet-row';
 import { CertificateDialog } from './certificate-dialog';
@@ -36,7 +39,10 @@ type Overlay =
  * The Contracts module on desktop: databases of packets on the left, the
  * selected database as a table, and the packet drawer beside it.
  */
-export function ContractsWorkspace() {
+export function ContractsWorkspace(props: {
+  /** The host's way to choose documents the sender already has. */
+  documentSource?: DocumentSource;
+}) {
   const context = useContractsContext();
   const [scope, setScope] = createSignal<ContractsScope>({
     t: 'database',
@@ -246,6 +252,7 @@ export function ContractsWorkspace() {
       <Switch>
         <Match when={overlay()?.t === 'new-packet'}>
           <NewPacketDialog
+            documentSource={props.documentSource}
             databaseId={homeDatabaseId()}
             onClose={() => setOverlay(undefined)}
             onCreated={(created) => {

@@ -5,16 +5,42 @@ import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import { ImperativeDialogHost } from '@ui';
+import { Button, ImperativeDialogHost } from '@ui';
 import { render } from 'solid-js/web';
-import { ContractsProvider } from '../context/contracts-context';
+import {
+  ContractsProvider,
+  type DocumentSource,
+} from '../context/contracts-context';
 import { ContractsWorkspace } from '../views/contracts-workspace';
 import { applyFixtureTheme, createFixtureContracts } from './fixture-contracts';
+import dpaUrl from './fixtures/data-processing-addendum.pdf?url';
 import { seedDemoPackets } from './seed';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing fixture root');
+
+/**
+ * Stands in for the host's Drive picker: one press hands over a document the
+ * sender already has, and a second offers one that is not a PDF.
+ */
+const FixtureDocumentSource: DocumentSource = (props) => {
+  async function choose() {
+    const bytes = await (await fetch(dpaUrl)).arrayBuffer();
+    props.onFile(new File([bytes], 'Data Processing Addendum.pdf'));
+    props.onFile(new File(['# Notes'], 'Meeting notes.md'));
+  }
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      disabled={props.disabled}
+      onClick={() => fireAndForget(choose(), 'contracts.fixture')}
+    >
+      Choose from Drive
+    </Button>
+  );
+};
 
 function Fixture() {
   const data = createFixtureContracts().context(() => ({
@@ -38,7 +64,7 @@ function Fixture() {
       }}
     >
       <div class="relative h-dvh bg-panel text-ink">
-        <ContractsWorkspace />
+        <ContractsWorkspace documentSource={FixtureDocumentSource} />
         <ImperativeDialogHost />
         <FloatRegionHost />
         <ToastRegion />

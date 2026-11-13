@@ -90,6 +90,12 @@ export default {
   voidBody:
     'Every signing link stops working and signatures collected so far no longer count. This cannot be undone.',
   actionFailed: 'That didn’t work. Try again.',
+  chooseFromDrive: 'Choose from Drive',
+  driveHint:
+    'Pick PDFs you already have in Macro. Other formats can’t be signed yet.',
+  driveSearch: 'Search your documents…',
+  driveEmpty: 'No documents found',
+  driveAdd: { one: 'Add {{count}} document', other: 'Add {{count}} documents' },
   downloadPdf: 'Download PDF',
   pdfDownloaded: 'PDF downloaded',
   pdfFailed: 'The PDF could not be made. Try again.',

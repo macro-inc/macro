@@ -13,6 +13,7 @@ import {
   ContractsProvider,
   type Viewer,
 } from './context/contracts-context';
+import { DriveDocumentSource } from './drive-document-source';
 import { ContractsWorkspace } from './views/contracts-workspace';
 import { MobileContractsWorkspace } from './views/mobile/contracts-workspace';
 
@@ -40,7 +41,10 @@ function AccountContracts(props: { userId: string }) {
 
   return (
     <ContractsProvider value={context}>
-      <Show when={isTouchDevice()} fallback={<ContractsWorkspace />}>
+      <Show
+        when={isTouchDevice()}
+        fallback={<ContractsWorkspace documentSource={DriveDocumentSource} />}
+      >
         <MobileContractsWorkspace />
       </Show>
     </ContractsProvider>

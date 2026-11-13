@@ -16,10 +16,14 @@ import {
   ToggleSwitch,
 } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { toneVars } from '../components/tone';
-import { useContractsContext } from '../context/contracts-context';
-import type { Packet, RecipientRole } from '../core/packet';
+import {
+  type DocumentSource,
+  useContractsContext,
+} from '../context/contracts-context';
+import type { Packet, PacketDocument, RecipientRole } from '../core/packet';
 import {
   createPacketDraft,
   type DraftProblem,
@@ -79,6 +83,8 @@ export function NewPacketDialog(props: {
   databaseId: string;
   onClose: () => void;
   onCreated: (packet: Packet) => void;
+  /** Offered beside Upload PDF where the host has documents to choose from. */
+  documentSource?: DocumentSource;
 }) {
   const context = useContractsContext();
   const draft = createPacketDraft({
@@ -94,29 +100,39 @@ export function NewPacketDialog(props: {
     closed = true;
   });
 
+  /** Store one file as a document of the packet, or say why it cannot be. */
+  async function addFile(file: File, source: PacketDocument['source']) {
+    const imported = await context.importDocument(file, source);
+    if (imported.isOk() && closed) {
+      // The dialog closed while this file was being stored: nothing will
+      // use it, so it is not kept.
+      await context.discardDocument(imported.value.id);
+      return;
+    }
+    if (imported.isOk()) {
+      draft.addDocument(imported.value);
+      return;
+    }
+    toast.failure(
+      imported.error.kind === 'not_pdf'
+        ? t('contracts.onlyPdfNamed', { name: file.name })
+        : t('contracts.documentUnreadableNamed', { name: file.name })
+    );
+  }
+
   async function addFiles(files: FileList | null) {
     if (!files) return;
     setImporting(true);
-    for (const file of Array.from(files)) {
-      const imported = await context.importDocument(file);
-      if (imported.isOk() && closed) {
-        // The dialog closed while this file was being stored: nothing will
-        // use it, so it is not kept.
-        await context.discardDocument(imported.value.id);
-        continue;
-      }
-      if (imported.isOk()) {
-        draft.addDocument(imported.value);
-        continue;
-      }
-      toast.failure(
-        imported.error.kind === 'not_pdf'
-          ? t('contracts.onlyPdfNamed', { name: file.name })
-          : t('contracts.documentUnreadableNamed', { name: file.name })
-      );
-    }
+    for (const file of Array.from(files)) await addFile(file, 'upload');
     setImporting(false);
     fileInput.value = '';
+  }
+
+  /** A document chosen from where the sender already keeps it. */
+  async function addFromSource(file: File) {
+    setImporting(true);
+    await addFile(file, 'drive');
+    setImporting(false);
   }
 
   /** A document taken out of the packet is not kept in storage. */
@@ -214,15 +230,36 @@ export function NewPacketDialog(props: {
                 title={t('contracts.documents')}
                 hint={t('contracts.documentsHint')}
                 aside={
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    loading={importing()}
-                    onClick={() => fileInput.click()}
-                  >
-                    <UploadIcon class="size-3.5" />
-                    {t('contracts.uploadPdf')}
-                  </Button>
+                  <span class="flex items-center gap-1.5">
+                    <Show when={props.documentSource}>
+                      {(source) => (
+                        <Dynamic
+                          component={source()}
+                          disabled={importing()}
+                          onFile={(file: File) =>
+                            fireAndForget(
+                              addFromSource(file),
+                              'contracts.import-document'
+                            )
+                          }
+                          onUnavailable={(name: string) =>
+                            toast.failure(
+                              t('contracts.documentUnreadableNamed', { name })
+                            )
+                          }
+                        />
+                      )}
+                    </Show>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={importing()}
+                      onClick={() => fileInput.click()}
+                    >
+                      <UploadIcon class="size-3.5" />
+                      {t('contracts.uploadPdf')}
+                    </Button>
+                  </span>
                 }
               >
                 <input

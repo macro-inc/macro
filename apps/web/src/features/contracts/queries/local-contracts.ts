@@ -409,6 +409,7 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
 
   function storePdf(
     file: File,
+    source: PacketDocument['source'],
     bytes: ArrayBuffer,
     pdf: PdfDocument
   ): ResultAsync<PacketDocument, DocumentError> {
@@ -430,13 +431,16 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
           id,
           name: file.name.replace(/\.pdf$/i, ''),
           pageCount: pdf.pageCount,
-          source: 'upload',
+          source,
           sha256,
         };
       });
   }
 
-  function importPdf(file: File): ResultAsync<PacketDocument, DocumentError> {
+  function importPdf(
+    file: File,
+    source: PacketDocument['source']
+  ): ResultAsync<PacketDocument, DocumentError> {
     return ResultAsync.fromPromise(file.arrayBuffer(), unreadable).andThen(
       (bytes) => {
         const header = new TextDecoder().decode(
@@ -446,7 +450,7 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
           return errAsync<PacketDocument, DocumentError>({ kind: 'not_pdf' });
         }
         return ResultAsync.fromPromise(deps.openPdf(bytes), unreadable).andThen(
-          (pdf) => storePdf(file, bytes, pdf)
+          (pdf) => storePdf(file, source, bytes, pdf)
         );
       }
     );
@@ -473,11 +477,11 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
           });
         }),
 
-      importDocument: (file) =>
+      importDocument: (file, source = 'upload') =>
         traced(
           'contracts.document.import',
-          { 'document.size_bytes': file.size },
-          () => importPdf(file)
+          { 'document.size_bytes': file.size, 'document.source': source },
+          () => importPdf(file, source)
         ),
       openDocument,
       // Inside the lock, so it runs after a packet that is being stored with

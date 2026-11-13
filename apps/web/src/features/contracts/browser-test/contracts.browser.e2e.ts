@@ -306,6 +306,24 @@ test.describe('contracts', () => {
     await expect(page.getByText('No packets here yet')).toBeVisible();
   });
 
+  test('a document the sender already has joins a new packet', async ({
+    page,
+  }) => {
+    await page.goto(`${FIXTURE}/workspace.html?now=${NOW}`, {
+      waitUntil: 'networkidle',
+    });
+    await page.getByRole('button', { name: 'New packet' }).first().click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Choose from Drive' }).click();
+
+    // The PDF is added; the note beside it is refused by name.
+    await expect(
+      dialog.getByText('Data Processing Addendum', { exact: true })
+    ).toBeVisible();
+    await expect(page.getByText('Meeting notes.md is not a PDF')).toBeVisible();
+    await expect(dialog.getByText('Meeting notes')).toHaveCount(0);
+  });
+
   test('a signed packet downloads as one PDF with its certificate', async ({
     page,
   }) => {

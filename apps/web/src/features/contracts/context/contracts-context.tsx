@@ -1,5 +1,10 @@
 import type { ResultAsync } from 'neverthrow';
-import { type Accessor, createContext, useContext } from 'solid-js';
+import {
+  type Accessor,
+  type Component,
+  createContext,
+  useContext,
+} from 'solid-js';
 import type { CertificateSheet } from '../core/certificate-sheet';
 import type { ContractDatabase } from '../core/database';
 import type { DraftInput, PacketError, SigningInput } from '../core/lifecycle';
@@ -75,8 +80,14 @@ export type ContractsContext = {
   packets: Accessor<readonly Packet[]>;
 
   createDatabase(name: string): ResultAsync<ContractDatabase, ContractsError>;
-  /** Store a PDF and describe it. Other formats are refused. */
-  importDocument(file: File): ResultAsync<PacketDocument, DocumentError>;
+  /**
+   * Store a PDF and describe it. Other formats are refused. `source` says
+   * where the sender got it; an upload unless told otherwise.
+   */
+  importDocument(
+    file: File,
+    source?: PacketDocument['source']
+  ): ResultAsync<PacketDocument, DocumentError>;
   openDocument(documentId: string): ResultAsync<PdfDocument, DocumentError>;
   /** Forget an imported document that no packet ended up using. */
   discardDocument(documentId: string): ResultAsync<void, never>;
@@ -126,6 +137,17 @@ export type ContractsContext = {
   /** Show a signing link to the viewer, who is one of its signers. */
   openSigning(token: string): void;
 };
+
+/**
+ * A host's control for choosing documents the sender already keeps
+ * somewhere, such as Drive. It renders its own button and picker, hands
+ * each chosen document over as a file, and names one it could not fetch.
+ */
+export type DocumentSource = Component<{
+  disabled: boolean;
+  onFile: (file: File) => void;
+  onUnavailable: (name: string) => void;
+}>;
 
 /** The packets and documents themselves, without the host's capabilities. */
 export type ContractsData = Omit<

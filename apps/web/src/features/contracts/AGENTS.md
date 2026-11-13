@@ -33,6 +33,9 @@ link from the packet drawer.
 - `context/contracts-context.tsx`: what the views need from a host.
 - `contracts.tsx` / `signing.tsx`: production wiring for `/contracts` and
   `/sign/:token`.
+- `drive-document-source.tsx`: the app's Choose from Drive control, passed
+  to the workspace as its `documentSource`. It is the only file here that
+  reaches Drive; the fixture passes a stand-in.
 
 ## Scope
 

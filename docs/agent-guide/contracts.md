@@ -64,8 +64,9 @@ viewer it shows **Sign now**.
 
 **New** (sidebar or header) opens a three-step flow.
 
-1. **Set up**: a title, one or more PDFs (**Upload PDF**; other formats are
-   refused), and recipients with a name, an email and a role (Needs to sign,
+1. **Set up**: a title, one or more PDFs (**Upload PDF**, or **Choose from
+   Drive** to pick documents already in Macro; other formats are refused by
+   name), and recipients with a name, an email and a role (Needs to sign,
    Receives a copy). **I am also a signer** adds the viewer as the last
    signer. **Set signing order** on means each signer is invited after the one
    before them has signed; off invites everyone at once. Lives in, Expires
