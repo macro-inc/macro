@@ -307,6 +307,8 @@ type TestHarness = AgentHarnessService<
 #[derive(Clone, Default)]
 struct MirrorBindings {
     facts: Arc<Mutex<Option<crate::domain::model::RuntimeAccessFacts>>>,
+    /// Listed sessions resolved as dormant.
+    dormant: Vec<AgentSessionId>,
 }
 
 impl crate::domain::ports::HarnessBindings for MirrorBindings {
@@ -327,11 +329,15 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
         &self,
         _harness: harness_id::HarnessId,
         acp_sessions: &[agent_client_protocol::schema::v1::SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
-        Ok(acp_sessions
+    ) -> anyhow::Result<crate::domain::model::ListedSessions> {
+        let (dormant, live): (Vec<AgentSessionId>, Vec<AgentSessionId>) = acp_sessions
             .iter()
             .filter_map(|acp| acp.to_string().parse().ok())
-            .collect())
+            .partition(|session| self.dormant.contains(session));
+        Ok(crate::domain::model::ListedSessions {
+            live,
+            dormant: dormant.len(),
+        })
     }
 }
 

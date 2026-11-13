@@ -1504,12 +1504,15 @@ impl SessionViewAccess for NoInheritedSessionAccess {
 
 /// Trusted runtime reconciliation reads, separate from user-authorized session reads.
 pub trait RuntimeSessionLookup: Send + Sync {
-    /// Resolve reported ACP sessions restricted to the supplied agents.
+    /// Resolve reported ACP sessions restricted to the supplied agents,
+    /// skipping archived ones and marking those with no activity since
+    /// `dormant_before` and nothing waiting on them as dormant.
     fn sessions_for_bots(
         &self,
         bots: &[BotId],
         sessions: &[SessionId],
-    ) -> impl Future<Output = std::result::Result<Vec<AgentSessionId>, Self::Err>> + Send;
+        dormant_before: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = std::result::Result<Vec<RuntimeSession>, Self::Err>> + Send;
     /// Persistence failure.
     type Err: std::error::Error + Send + Sync + 'static;
 }

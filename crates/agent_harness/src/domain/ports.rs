@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::domain::model::{PermissionPolicyConfig, RuntimeAccessFacts};
+use crate::domain::model::{ListedSessions, PermissionPolicyConfig, RuntimeAccessFacts};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
@@ -114,13 +114,15 @@ pub trait HarnessBindings: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<RuntimeAccessFacts>>> + Send;
 
     /// The sessions holding one of `acp_sessions` whose bot is bound to
-    /// `harness` now. Scoping by binding is the authorization: a runtime
-    /// naming another harness's ACP sessions reattaches nothing.
+    /// `harness` now, split into live and dormant ones in one query. Scoping
+    /// by binding is the authorization: a runtime naming another harness's
+    /// ACP sessions reattaches nothing. Archived sessions are left out: a
+    /// runtime that keeps listing them never brings them back.
     fn sessions_on_harness(
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<ListedSessions>> + Send;
 }
 
 /// Loads facts for the domain to resolve a bot's permission policy.
@@ -469,7 +471,7 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<ListedSessions>> + Send;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at
