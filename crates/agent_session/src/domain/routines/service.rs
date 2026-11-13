@@ -231,8 +231,14 @@ where
         command: PromptRoutineSession,
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
         let action = command.action;
-        self.owned_session(&action).await?;
-        if command.prompt.trim().is_empty() {
+        let session = self.owned_session(&action).await?;
+        // An effort change takes the session's first turn. Only a draft's
+        // background session may ask for one: a routine run's prompt must
+        // stay its first turn, and a runtime that is given the session's
+        // instructions with its first prompt would go without them.
+        if command.prompt.trim().is_empty()
+            || (command.reasoning_effort.is_some() && !session.is_background())
+        {
             return Err(RoutineSessionError::InvalidCommand);
         }
         let log = self
@@ -260,9 +266,10 @@ where
         }
         if let Some(value) = command.reasoning_effort {
             // Delivered ahead of the prompt on the session's command queue,
-            // so its turn runs at it. Best effort: a refusal is the
-            // runtime's answer, and the prompt runs at the default.
-            self.controls
+            // so its turn runs at it. Best effort: if it is refused or can't
+            // be delivered, the prompt runs at the default.
+            let _ = self
+                .controls
                 .control_event(
                     action.session_id,
                     ControlEvent {
@@ -277,7 +284,9 @@ where
                     },
                 )
                 .await
-                .map_err(session_error)?;
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "routine session effort not delivered");
+                });
         }
         // A history check is a guard against known replays, not an exactly-once
         // transaction. Never retry this call after a lost or failed response.

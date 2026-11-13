@@ -90,11 +90,14 @@ pub struct PromptRoutineSession {
     pub context: Option<trigger_context::TriggerContext>,
     /// A value of the session's `reasoning_effort` option, such as `none`
     /// for no thinking, sent ahead of the prompt on the session's command
-    /// queue without waiting for the runtime to confirm it. A model that
-    /// doesn't offer it refuses it, and the prompt runs at its default.
-    /// Omitted keeps the default. For the in-process agent only: the change
-    /// takes the session's first turn, so a runtime that is given the
-    /// session's instructions with its first prompt would not get them.
+    /// queue without waiting for the runtime to confirm it. Best effort: if
+    /// the model doesn't offer it or it can't be delivered, the prompt runs
+    /// at its default. Omitted keeps the default. Only a draft's background
+    /// session (`AgentSession::is_background`) may carry one, and any other
+    /// session refuses the prompt as invalid: the change takes the session's
+    /// first turn, which a routine run's prompt must keep. It is meant for
+    /// the in-process agent; a runtime given the session's instructions with
+    /// its first prompt would go without them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
 }

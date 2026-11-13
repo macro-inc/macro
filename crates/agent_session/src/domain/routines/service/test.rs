@@ -110,6 +110,8 @@ impl ExternalSessionRequester for Openings {
 struct Controls {
     events: Arc<Mutex<Vec<ControlEvent>>>,
     fail: Arc<Mutex<bool>>,
+    /// Fail only setting changes, so a prompt behind one still goes through.
+    fail_settings: Arc<Mutex<bool>>,
     queued: Arc<Mutex<Vec<QueuedControl>>>,
 }
 
@@ -120,8 +122,9 @@ impl AgentSessionNotificationRecipient for Controls {
         event: ControlEvent,
     ) -> SessionResult<AcceptedControl> {
         let action_id = event.action_id.unwrap();
+        let setting = matches!(event.action, AgentAction::SetConfigOption(_));
         self.events.lock().unwrap().push(event);
-        if *self.fail.lock().unwrap() {
+        if *self.fail.lock().unwrap() || (setting && *self.fail_settings.lock().unwrap()) {
             return Err(AgentSessionError::RuntimeUnavailable("ambiguous failure"));
         }
         Ok(AcceptedControl {
@@ -510,19 +513,37 @@ async fn prompt_and_cancel_only_emit_attributed_prompt_and_stop_controls() {
     assert_eq!(events[1].actor, Some(action.owner));
 }
 
+/// A draft's session: the person's own, hidden, opened at their request.
+fn background_session(fx: &Fixture) -> RoutineSessionAction {
+    let mut session = test_agent_session(AgentSessionId::new());
+    session.owner_id = fx.session.owner_id.clone();
+    session.bot_id = fx.session.bot_id;
+    session.visibility = SessionVisibility::Hidden;
+    session.origin = trigger_context::TriggerOrigin::Requested {
+        by: fx.action().owner,
+    };
+    assert!(session.is_background());
+    fx.repo.insert_session(session.clone());
+    RoutineSessionAction {
+        session_id: session.id,
+        ..fx.action()
+    }
+}
+
+fn effort_prompt(action: &RoutineSessionAction) -> PromptRoutineSession {
+    PromptRoutineSession {
+        action: action.clone(),
+        prompt: "draft".into(),
+        context: None,
+        reasoning_effort: Some("none".into()),
+    }
+}
+
 #[tokio::test]
 async fn an_effort_is_set_ahead_of_the_prompt_it_comes_with() {
     let fx = Fixture::new(true);
-    let action = fx.action();
-    fx.service
-        .prompt(PromptRoutineSession {
-            action: action.clone(),
-            prompt: "draft".into(),
-            context: None,
-            reasoning_effort: Some("none".into()),
-        })
-        .await
-        .unwrap();
+    let action = background_session(&fx);
+    fx.service.prompt(effort_prompt(&action)).await.unwrap();
     let events = fx.controls.events.lock().unwrap();
     assert_eq!(events.len(), 2);
     assert_eq!(
@@ -536,6 +557,33 @@ async fn an_effort_is_set_ahead_of_the_prompt_it_comes_with() {
     assert_eq!(events[0].actor, Some(action.owner.clone()));
     assert_eq!(events[1].action, AgentAction::prompt("draft"));
     assert_eq!(events[1].action_id, Some(action.action_id));
+}
+
+/// The change would take a routine run's first turn, so only a draft's
+/// background session may ask for an effort.
+#[tokio::test]
+async fn only_a_background_session_takes_an_effort() {
+    let fx = Fixture::new(true);
+    assert!(!fx.session.is_background());
+    assert_eq!(
+        fx.service
+            .prompt(effort_prompt(&fx.action()))
+            .await
+            .unwrap_err(),
+        RoutineSessionError::InvalidCommand
+    );
+    assert!(fx.controls.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_effort_that_cant_be_delivered_leaves_the_prompt_at_its_default() {
+    let fx = Fixture::new(true);
+    let action = background_session(&fx);
+    *fx.controls.fail_settings.lock().unwrap() = true;
+    fx.service.prompt(effort_prompt(&action)).await.unwrap();
+    let events = fx.controls.events.lock().unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].action, AgentAction::prompt("draft"));
 }
 
 #[tokio::test]

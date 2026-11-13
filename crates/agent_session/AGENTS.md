@@ -176,11 +176,13 @@ skips the turn before any model call; unset or unreadable, summaries run.
   `routine`) or a draft's background session, and refuses any other;
   `activity` returns content-free counts (tool calls, turns). A `prompt`
   with a `reasoning_effort` sends it as a `reasoning_effort` config change
-  ahead of the prompt on the session's command queue, best effort: a model
-  that doesn't offer the value refuses it and the turn runs at its default.
-  Only for the in-process agent (drafts): the change takes the first turn,
-  so another runtime's first prompt would go without the session's
-  instructions. `turns` counts prompts, not controls.
+  ahead of the prompt on the session's command queue, best effort: if the
+  model doesn't offer the value or it can't be delivered, the turn runs at
+  its default. Only a background session (a draft's) may carry one; any
+  other prompt with an effort is refused as invalid, because the change
+  takes the first turn, which a routine run's prompt keeps (notifications
+  key on it) and where other runtimes get the session's instructions.
+  `turns` counts prompts, not controls.
 - A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
   is work the owner asked for that runs out of sight: source `user`, origin
   `requested` by the owner, `hidden`, opened from no message. A routine
