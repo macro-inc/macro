@@ -204,10 +204,10 @@ export default {
     one: '{{count}} item looks like one you already have.',
     other: '{{count}} items look like ones you already have.',
   },
-  importDuplicatesPartial: {
-    other:
-      'Items you already have were looked for among the first {{count}} items in this vault only.',
-  },
+  importDuplicatesCapped:
+    'This vault is large, so some items you already have may not be recognized.',
+  importDuplicatesUnchecked:
+    "Couldn't check this vault for items you already have, so copies may be imported.",
   importSkipDuplicates: 'Skip items I already have',
   importAllPresent:
     'Everything in this file is already in the vault. Turn off Skip items I already have to import copies anyway.',
@@ -215,8 +215,8 @@ export default {
   importDestinationChange: 'Change',
   importNewFolder: 'New folder “{{name}}”',
   importRoot: 'Passwords (no folder)',
+  importAccess: 'Who can see them',
   importPrivate: 'Keep imported items private to me',
-  importSkippedTitle: 'Not imported',
   importShowSkipped: 'Show items',
   importDroppedTitle: 'Not carried over',
   importUnnamed: 'Unnamed item',
@@ -228,26 +228,21 @@ export default {
   importSkip_unsupported_category: 'Unsupported type',
   importSkip_too_large: 'Too large',
   importSkip_malformed: 'Unreadable',
-  importDropped_attachment: {
-    one: '{{count}} attachment',
-    other: '{{count}} attachments',
-  },
-  importDropped_passkey: {
-    one: '{{count}} passkey',
-    other: '{{count}} passkeys',
-  },
-  importDropped_password_history: {
-    one: '{{count}} previous password',
-    other: '{{count}} previous passwords',
-  },
-  importDropped_totp_non_default: {
-    one: '{{count}} verification code kept as a field',
-    other: '{{count}} verification codes kept as fields',
-  },
-  importDropped_extra_field: {
-    one: '{{count}} unsupported field',
-    other: '{{count}} unsupported fields',
-  },
+  importNotCarriedFiles: 'Files and attachments',
+  importNotCarriedSkip_trashed: 'Items in the trash',
+  importNotCarriedSkip_archived: 'Archived items',
+  importNotCarriedSkip_attachment: 'File items',
+  importNotCarriedSkip_passkey: 'Passkey-only items',
+  importNotCarriedSkip_shared_collection: 'Shared organization items',
+  importNotCarriedSkip_unsupported_category: 'Items of an unsupported type',
+  importNotCarriedSkip_too_large: 'Items too large to import',
+  importNotCarriedSkip_malformed: 'Unreadable items',
+  importNotCarried_attachment: 'Attachments',
+  importNotCarried_passkey: 'Passkeys',
+  importNotCarried_password_history: 'Previous passwords',
+  importNotCarried_totp_non_default:
+    'Extra verification codes (kept as fields)',
+  importNotCarried_extra_field: 'Unsupported fields',
   importTooManyFolders:
     'This import would bring the team to {{total}} folders; the limit is {{limit}}. Import into an existing folder or remove folders first.',
   importTooDeep:
@@ -257,6 +252,14 @@ export default {
     other: 'Import {{count}} items',
   },
   importProgress: 'Importing {{done}} of {{total}}…',
+  importStay:
+    'Keep this page open. {{estimate}} If you leave, import the same file again in this tab to finish.',
+  importUnderAMinute: 'This should take under a minute.',
+  importTakesMinutes: 'This may take a few minutes.',
+  importMinutesLeft: {
+    one: 'About {{count}} minute left.',
+    other: 'About {{count}} minutes left.',
+  },
   importDone: 'Import finished',
   importCreated: { one: '{{count}} imported', other: '{{count}} imported' },
   importAlreadyPresent: {
@@ -267,13 +270,16 @@ export default {
   importFailedCount: { one: '{{count}} failed', other: '{{count}} failed' },
   importRetryHint: 'Import the same file again to retry the items that failed.',
   importFailureUnreachable: "Couldn't reach the server ({{count}})",
-  importFailureServerError: "Server error: couldn't save to the vault ({{count}})",
+  importFailureServerError:
+    "Server error: couldn't save to the vault ({{count}})",
   importFailureBusy: 'The vault was busy ({{count}})',
-  importFailureFolderMissing: 'Their folder was deleted during the import ({{count}})',
+  importFailureFolderMissing:
+    'Their folder was deleted during the import ({{count}})',
   importFailureInvalid: "The vault didn't accept them ({{count}})",
   importFailureRefused: 'Not allowed in this vault ({{count}})',
   importFailureNoAnswer: 'No answer from the server ({{count}})',
-  importFailureAccountChanged: 'Your account changed during the import ({{count}})',
+  importFailureAccountChanged:
+    'Your account changed during the import ({{count}})',
   importOpenFolder: 'Open folder',
   importAnother: 'Import another file',
   importClose: 'Done',

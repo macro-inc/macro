@@ -250,6 +250,9 @@ export function planBatches<Item extends ImportCandidate>(
   return batches;
 }
 
+/** How far an import's duplicates were checked against the vault. */
+export type DuplicateCheck = 'complete' | 'capped' | 'unavailable';
+
 /** Why items failed to import, as the result screen groups them. */
 export type ImportFailureReason =
   | 'unreachable'

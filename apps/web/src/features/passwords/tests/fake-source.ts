@@ -30,6 +30,8 @@ export type FakeImportScript = {
   failRequests?: number;
   /** Names of each duplicate-match request, in order. */
   matchRequests?: string[][];
+  /** Duplicate-match requests fail, as when the vault cannot be reached. */
+  failMatches?: boolean;
   /**
    * Requests whose items are created but whose answer is lost: the vault did
    * the work, the client sees a retryable failure.
@@ -56,6 +58,7 @@ export function createFakePasswordSource(
     },
     async matchNames(names) {
       script.matchRequests?.push([...names]);
+      if (script.failMatches) return err('failed');
       // As the vault does: lower(name) against names the client normalized.
       const wanted = new Set(names);
       return ok(items.filter((item) => wanted.has(item.name.toLowerCase())));

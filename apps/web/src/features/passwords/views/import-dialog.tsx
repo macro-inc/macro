@@ -2,8 +2,8 @@ import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg';
-import { Button, Dialog, Panel } from '@ui';
-import { Match, onCleanup, Show, Switch } from 'solid-js';
+import { Button, Dialog, Panel, Spinner } from '@ui';
+import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import {
   ImportFilePicker,
   ImportPreviewStep,
@@ -33,10 +33,18 @@ export function ImportDialog(props: {
   });
   onCleanup(controller.close);
   const step = controller.step;
-  const busy = () => {
-    const current = step().step;
-    return current === 'parsing' || current === 'importing';
-  };
+  // Closing mid-import would drop the batches not yet sent.
+  const importing = () => step().step === 'importing';
+  // Leaving the page mid-import stops it: ask first, only while it runs.
+  createEffect(() => {
+    if (!importing()) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    onCleanup(() => window.removeEventListener('beforeunload', warn));
+  });
   return (
     <Dialog
       open
@@ -44,31 +52,32 @@ export function ImportDialog(props: {
       position="center"
       class="w-[36rem] max-w-[calc(100vw-2rem)] mobile:w-full mobile:max-w-none"
       onOpenChange={(open) => {
-        if (!open && !busy()) props.onClose();
+        if (!open && !importing()) props.onClose();
       }}
     >
       <Panel
         depth={2}
-        class="flex max-h-[min(44rem,calc(var(--dvh,1dvh)*100-4rem))] flex-col rounded-xl mobile:h-full mobile:max-h-none mobile:rounded-none mobile:pt-(--safe-top,0px)"
+        class="max-h-[min(44rem,calc(var(--dvh,1dvh)*100-4rem))] rounded-xl text-ink mobile:h-full mobile:max-h-none mobile:rounded-none mobile:pt-(--safe-top,0px)"
         data-passwords-import
       >
-        <Panel.Header class="flex items-center gap-2 px-6">
-          <Dialog.Title class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+        <Panel.Header class="gap-1 px-2">
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('passwords.cancel')}
+            disabled={importing()}
+          >
+            <XIcon class="pointer-events-none size-3.5 shrink-0 touch:size-6" />
+          </Dialog.CloseButton>
+          <Dialog.Title
+            as="span"
+            class="m-0 min-w-0 truncate p-0 text-sm font-medium"
+          >
             {t('passwords.importTitle')}
           </Dialog.Title>
-          <Show when={!busy()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('passwords.cancel')}
-              tooltip={t('passwords.cancel')}
-              onClick={props.onClose}
-            >
-              <XIcon class="size-4" />
-            </Button>
-          </Show>
         </Panel.Header>
-        <Panel.Body class="min-h-0 flex-1 overflow-auto p-6 font-sans">
+        <Panel.Body scroll class="p-3 font-sans">
           <Switch>
             <Match when={step().step === 'choose'}>
               <ImportFilePicker
@@ -79,9 +88,16 @@ export function ImportDialog(props: {
               />
             </Match>
             <Match when={step().step === 'parsing'}>
-              <p class="text-sm text-ink-muted" aria-live="polite">
-                {t('passwords.importReading')}
-              </p>
+              <div
+                class="flex min-h-40 flex-col items-center justify-center gap-3"
+                aria-live="polite"
+                data-passwords-import-reading
+              >
+                <Spinner decorative />
+                <p class="text-sm text-ink-muted">
+                  {t('passwords.importReading')}
+                </p>
+              </div>
             </Match>
             <Match when={step().step === 'preview'}>
               <Show when={controller.preview()}>
@@ -114,23 +130,22 @@ export function ImportDialog(props: {
           </Switch>
         </Panel.Body>
         <Show when={step().step === 'preview' || step().step === 'result'}>
-          <div class="flex flex-wrap items-center justify-end gap-2 border-t border-edge-muted px-6 py-3 mobile:pb-[calc(var(--safe-bottom,0px)+0.75rem)]">
+          <Panel.Footer class="flex-wrap justify-end gap-1 py-2 mobile:pb-[calc(var(--safe-bottom,0px)+0.5rem)]">
             <Switch>
               <Match when={step().step === 'preview'}>
-                <Button variant="ghost" size="sm" onClick={controller.reset}>
+                <Button variant="ghost" onClick={controller.reset}>
                   {t('passwords.importChooseAnother')}
                 </Button>
                 <Show
                   when={controller.sendCount() > 0}
                   fallback={
-                    <Button variant="primary" size="sm" onClick={props.onClose}>
+                    <Button variant="primary" onClick={props.onClose}>
                       {t('passwords.importClose')}
                     </Button>
                   }
                 >
                   <Button
                     variant="primary"
-                    size="sm"
                     disabled={
                       controller.folderCheck()?.tooMany ||
                       controller.folderCheck()?.tooDeep
@@ -148,21 +163,13 @@ export function ImportDialog(props: {
               <Match when={controller.result()}>
                 {(result) => (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={controller.reset}
-                    >
+                    <Button variant="ghost" onClick={controller.reset}>
                       {t('passwords.importAnother')}
                     </Button>
                     <Show
                       when={result().targetFolderId}
                       fallback={
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={props.onClose}
-                        >
+                        <Button variant="primary" onClick={props.onClose}>
                           {t('passwords.importClose')}
                         </Button>
                       }
@@ -170,7 +177,6 @@ export function ImportDialog(props: {
                       {(folderId) => (
                         <Button
                           variant="primary"
-                          size="sm"
                           onClick={() => props.onOpenFolder(folderId())}
                         >
                           {t('passwords.importOpenFolder')}
@@ -181,7 +187,7 @@ export function ImportDialog(props: {
                 )}
               </Match>
             </Switch>
-          </div>
+          </Panel.Footer>
         </Show>
       </Panel>
     </Dialog>

@@ -25,7 +25,6 @@ import {
   type ImportTally,
   MAX_FOLDER_DEPTH,
   MAX_TEAM_FOLDERS,
-  VAULT_LIST_CAP,
 } from '../core/import';
 import { folderPath, type PasswordFolder } from '../core/types';
 import { KIND_ICONS } from './kind-icon';
@@ -132,7 +131,7 @@ export function ImportFilePicker(props: {
 
 function Section(props: { title: string; children: JSX.Element }) {
   return (
-    <section class="flex flex-col gap-1.5">
+    <section class="flex flex-col gap-2">
       <h3 class="text-xs font-medium text-ink-muted">{props.title}</h3>
       {props.children}
     </section>
@@ -212,8 +211,35 @@ export function ImportPreviewStep(props: {
       ImportDroppedPart,
       number,
     ][];
+  /**
+   * Everything left behind, one line each: whole items by reason, then parts
+   * of imported items. Skipped file items and attachments on imported items
+   * share one line.
+   */
+  const notCarried = () => {
+    const files =
+      (props.preview.summary.skippedByReason.attachment ?? 0) +
+      (props.preview.summary.droppedByPart.attachment ?? 0);
+    return [
+      ...(files > 0
+        ? [{ label: t('passwords.importNotCarriedFiles'), count: files }]
+        : []),
+      ...skippedReasons()
+        .filter(([reason]) => reason !== 'attachment')
+        .map(([reason, count]) => ({
+          label: t(`passwords.importNotCarriedSkip_${reason}`),
+          count,
+        })),
+      ...dropped()
+        .filter(([part]) => part !== 'attachment')
+        .map(([part, count]) => ({
+          label: t(`passwords.importNotCarried_${part}`),
+          count,
+        })),
+    ];
+  };
   return (
-    <div class="flex flex-col gap-4" data-passwords-import-preview>
+    <div class="flex flex-col gap-5" data-passwords-import-preview>
       <p class="text-sm">
         <span class="font-medium">
           {t(`passwords.importSource_${props.preview.format}`)}
@@ -249,9 +275,11 @@ export function ImportPreviewStep(props: {
           <FolderList folders={props.preview.folders} />
         </Section>
       </Show>
-      <Show when={props.preview.duplicatesPartial}>
-        <p class="text-sm text-ink-muted">
-          {t('passwords.importDuplicatesPartial', { count: VAULT_LIST_CAP })}
+      <Show when={props.preview.duplicateCheck !== 'complete'}>
+        <p class="text-sm text-ink-muted" data-passwords-import-duplicate-check>
+          {props.preview.duplicateCheck === 'capped'
+            ? t('passwords.importDuplicatesCapped')
+            : t('passwords.importDuplicatesUnchecked')}
         </p>
       </Show>
       <Show when={props.preview.duplicates > 0}>
@@ -282,56 +310,47 @@ export function ImportPreviewStep(props: {
           </Show>
         </div>
       </Show>
-      <Show when={props.preview.skipped.length > 0}>
-        <Section title={t('passwords.importSkippedTitle')}>
-          <ul class="flex flex-col text-sm">
-            <For each={skippedReasons()}>
-              {([reason, count]) => (
+      <Show when={notCarried().length > 0}>
+        <Section title={t('passwords.importDroppedTitle')}>
+          <ul
+            class="flex flex-col gap-0.5 text-sm"
+            data-passwords-import-not-carried
+          >
+            <For each={notCarried()}>
+              {(line) => (
                 <li class="flex justify-between gap-2">
-                  <span>{skipReasonText(reason)}</span>
-                  <span class="text-ink-muted">{count}</span>
+                  <span>{line.label}</span>
+                  <span class="shrink-0 text-ink-muted">{line.count}</span>
                 </li>
               )}
             </For>
           </ul>
-          <details class="text-sm">
-            <summary class="text-ink-muted">
-              {t('passwords.importShowSkipped')}
-            </summary>
-            <ul class="mt-1 flex max-h-40 flex-col overflow-auto">
-              <For each={props.preview.skipped.slice(0, LIST_LIMIT)}>
-                {(skipped) => (
-                  <li class="flex min-w-0 justify-between gap-2">
-                    <span class="truncate">
-                      {skipped.name ?? t('passwords.importUnnamed')}
-                    </span>
-                    <span class="shrink-0 text-ink-muted">
-                      {skipReasonText(skipped.reason)}
-                    </span>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </details>
+          <Show when={props.preview.skipped.length > 0}>
+            <details class="text-sm">
+              <summary class="cursor-default text-ink-muted">
+                {t('passwords.importShowSkipped')}
+              </summary>
+              <ul class="mt-1 flex max-h-40 flex-col overflow-auto">
+                <For each={props.preview.skipped.slice(0, LIST_LIMIT)}>
+                  {(skipped) => (
+                    <li class="flex min-w-0 justify-between gap-2">
+                      <span class="truncate">
+                        {skipped.name ?? t('passwords.importUnnamed')}
+                      </span>
+                      <span class="shrink-0 text-ink-muted">
+                        {skipReasonText(skipped.reason)}
+                      </span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </details>
+          </Show>
         </Section>
       </Show>
-      <Show when={dropped().length > 0}>
-        <Section title={t('passwords.importDroppedTitle')}>
-          <ul class="flex flex-col text-sm">
-            <For each={dropped()}>
-              {([part, count]) => (
-                <li>{t(`passwords.importDropped_${part}`, { count })}</li>
-              )}
-            </For>
-          </ul>
-        </Section>
-      </Show>
-      <div class="flex flex-col gap-2 border-t border-edge-muted pt-4">
-        <span class="text-xs font-medium text-ink-muted">
-          {t('passwords.importDestination')}
-        </span>
-        <div class="flex flex-wrap items-center gap-2">
-          <p class="flex min-w-0 basis-full items-start gap-1.5 text-sm">
+      <Section title={t('passwords.importDestination')}>
+        <div class="flex min-w-0 items-center gap-2">
+          <p class="flex min-w-0 flex-1 items-start gap-1.5 text-sm">
             <FolderIcon class="mt-0.5 size-4 shrink-0" />
             <span class="min-w-0 break-words" data-passwords-import-target>
               {destinationLabel(
@@ -345,6 +364,7 @@ export function ImportPreviewStep(props: {
             <Dropdown.Trigger
               variant="secondary"
               size="sm"
+              class="shrink-0"
               disabled={props.preview.resumed}
               aria-label={t('passwords.importDestinationChange')}
             >
@@ -374,45 +394,66 @@ export function ImportPreviewStep(props: {
               </For>
             </Dropdown.Content>
           </Dropdown>
-          <Checkbox
-            checked={props.makePrivate}
-            onChange={props.onPrivate}
-            disabled={props.preview.resumed}
-          >
-            <Checkbox.Control />
-            <Checkbox.Label class="flex items-center gap-1.5">
-              <Show
-                when={props.makePrivate}
-                fallback={<UsersIcon class="size-4 shrink-0" />}
-              >
-                <LockIcon class="size-4 shrink-0" />
-              </Show>
-              {t('passwords.importPrivate')}
-            </Checkbox.Label>
-          </Checkbox>
         </div>
-        <Show when={props.folderCheck?.tooMany}>
-          <p role="alert" class="text-sm text-failure-ink">
-            {t('passwords.importTooManyFolders', {
-              total: props.folderCheck?.total ?? 0,
-              limit: MAX_TEAM_FOLDERS,
-            })}
-          </p>
-        </Show>
-        <Show when={props.folderCheck?.tooDeep}>
-          <p role="alert" class="text-sm text-failure-ink">
-            {t('passwords.importTooDeep', {
-              depth: props.folderCheck?.depth ?? 0,
-              limit: MAX_FOLDER_DEPTH,
-            })}
-          </p>
-        </Show>
-      </div>
+      </Section>
+      <Section title={t('passwords.importAccess')}>
+        <Checkbox
+          checked={props.makePrivate}
+          onChange={props.onPrivate}
+          disabled={props.preview.resumed}
+        >
+          <Checkbox.Control />
+          <Checkbox.Label class="flex items-center gap-1.5">
+            <Show
+              when={props.makePrivate}
+              fallback={<UsersIcon class="size-4 shrink-0" />}
+            >
+              <LockIcon class="size-4 shrink-0" />
+            </Show>
+            {t('passwords.importPrivate')}
+          </Checkbox.Label>
+        </Checkbox>
+      </Section>
+      <Show when={props.folderCheck?.tooMany}>
+        <p role="alert" class="text-sm text-failure-ink">
+          {t('passwords.importTooManyFolders', {
+            total: props.folderCheck?.total ?? 0,
+            limit: MAX_TEAM_FOLDERS,
+          })}
+        </p>
+      </Show>
+      <Show when={props.folderCheck?.tooDeep}>
+        <p role="alert" class="text-sm text-failure-ink">
+          {t('passwords.importTooDeep', {
+            depth: props.folderCheck?.depth ?? 0,
+            limit: MAX_FOLDER_DEPTH,
+          })}
+        </p>
+      </Show>
     </div>
   );
 }
 
+/** Minutes left at the rate so far, once a batch has landed. */
+function minutesLeft(done: number, total: number, elapsedMs: number) {
+  if (done === 0) return undefined;
+  return Math.ceil(((elapsedMs / done) * (total - done)) / 60_000);
+}
+
 export function ImportProgressStep(props: { done: number; total: number }) {
+  const started = Date.now();
+  const percent = () =>
+    props.total > 0 ? Math.round((props.done / props.total) * 100) : 0;
+  const estimate = () => {
+    const minutes = minutesLeft(props.done, props.total, Date.now() - started);
+    if (minutes === undefined)
+      return props.total > 2000
+        ? t('passwords.importTakesMinutes')
+        : t('passwords.importUnderAMinute');
+    return minutes <= 1
+      ? t('passwords.importUnderAMinute')
+      : t('passwords.importMinutesLeft', { count: minutes });
+  };
   return (
     <div class="flex flex-col gap-2" aria-live="polite">
       <p class="text-sm">
@@ -421,11 +462,22 @@ export function ImportProgressStep(props: { done: number; total: number }) {
           total: props.total,
         })}
       </p>
-      <progress
-        class="h-1.5 w-full overflow-hidden rounded-full accent-accent"
-        max={Math.max(props.total, 1)}
-        value={props.done}
-      />
+      <div
+        role="progressbar"
+        aria-label={t('passwords.importTitle')}
+        aria-valuemin={0}
+        aria-valuemax={props.total}
+        aria-valuenow={props.done}
+        class="h-1.5 w-full overflow-hidden rounded-full bg-edge-muted"
+      >
+        <div
+          class="h-full rounded-full bg-accent transition-[width] motion-reduce:transition-none"
+          style={{ width: `${percent()}%` }}
+        />
+      </div>
+      <p class="text-xs text-ink-muted" data-passwords-import-stay>
+        {t('passwords.importStay', { estimate: estimate() })}
+      </p>
     </div>
   );
 }

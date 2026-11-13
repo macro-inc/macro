@@ -3,6 +3,7 @@ import type { PasswordItemMetadata } from '@service-storage/generated/schemas/pa
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
 import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ImportBatchBody } from '../context/passwords-context';
 import { createPasswordSource } from '../queries/source';
 
 const mocks = vi.hoisted(() => ({
@@ -489,10 +490,16 @@ it('tells an unreachable vault from a server error and a rejected batch', async 
     private: false,
     folders: [],
     items: [],
-  } as const;
+  } satisfies ImportBatchBody;
   const answers = [
-    [new Response('', { status: 502 }), { retryable: true, reason: 'unreachable' }],
-    [new Response('', { status: 500 }), { retryable: true, reason: 'server_error' }],
+    [
+      new Response('', { status: 502 }),
+      { retryable: true, reason: 'unreachable' },
+    ],
+    [
+      new Response('', { status: 500 }),
+      { retryable: true, reason: 'server_error' },
+    ],
     [
       new Response(JSON.stringify({ code: PasswordErrorCode.forbidden }), {
         status: 403,

@@ -7,7 +7,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ImportBatchBody } from '../context/passwords-context';
 import {
   type PasswordSource,
@@ -22,7 +22,20 @@ import { ImportDialog } from '../views/import-dialog';
 import { createFakePasswordSource } from './fake-source';
 import { createMemoryImportResume, FIXTURE_SCOPE } from './fixture-scope';
 
+// The dialog body scrolls through `Scroll`, which jsdom cannot measure.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+  );
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanup();
   vi.restoreAllMocks();
 });
@@ -156,7 +169,7 @@ it('previews an export, skips what the vault already has, and imports the rest',
   expect(screen.getByText('Work')).toBeTruthy();
   expect(screen.getAllByText('In the trash').length).toBeGreaterThan(0);
   expect(screen.getByText('Old login')).toBeTruthy();
-  expect(screen.getByText('2 previous passwords')).toBeTruthy();
+  expect(screen.getByText('Previous passwords')).toBeTruthy();
   expect(
     screen.getByText('1 item looks like one you already have.')
   ).toBeTruthy();
@@ -451,7 +464,9 @@ it('matches names in the vault, in a request body, when its list is capped', asy
   expect(matchRequests).toEqual([
     ['fixture mail', 'fixture wiki', 'fixture note'],
   ]);
-  expect(screen.queryByText(/first 500/)).toBeNull();
+  expect(
+    document.querySelector('[data-passwords-import-duplicate-check]')
+  ).toBeNull();
 });
 
 it('starts over when the folder a continued import used is gone', async () => {
@@ -639,6 +654,48 @@ it('matches names in the vault while its list is unavailable', async () => {
   expect(matchRequests).toHaveLength(1);
 });
 
+it('says duplicates went unchecked when the vault could not be asked', async () => {
+  const source = createFakePasswordSource([], { failMatches: true });
+  render(() => (
+    <PasswordsProvider
+      value={{
+        scope: FIXTURE_SCOPE,
+        source,
+        recipients: () => [],
+        recipientsLoading: () => false,
+        recipientsError: () => false,
+        writeClipboard: async () => {},
+        parseExport: async () => PARSED,
+        importResume: createMemoryImportResume(),
+      }}
+    >
+      <ImportDialog
+        items={() => undefined}
+        folders={() => []}
+        refresh={async () => {}}
+        onOpenFolder={() => {}}
+        onClose={() => {}}
+      />
+    </PasswordsProvider>
+  ));
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText(
+    "Couldn't check this vault for items you already have, so copies may be imported."
+  );
+});
+
+it('says nothing about duplicate checks for a small vault', async () => {
+  mount(createFakePasswordSource(), PARSED);
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText('Bitwarden JSON');
+  expect(
+    document.querySelector('[data-passwords-import-duplicate-check]')
+  ).toBeNull();
+});
+
 const vaultFolders = (count: number): Folder[] =>
   Array.from({ length: count }, (_, index) => ({
     id: `vault-folder-${index}`,
@@ -694,4 +751,30 @@ it('says the server could not be reached when no batch got through', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Import 2 items' }));
   await screen.findByText('2 failed', undefined, { timeout: 5000 });
   expect(screen.getByText("Couldn't reach the server (2)")).toBeTruthy();
+});
+
+it('puts skipped file items and dropped attachments on one Not carried over line', async () => {
+  mount(createFakePasswordSource(), {
+    ...PARSED,
+    export: {
+      ...EXPORT,
+      summary: {
+        ...EXPORT.summary,
+        skippedByReason: { trashed: 1, attachment: 1 },
+        droppedByPart: { password_history: 2, attachment: 1 },
+      },
+    },
+  });
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText('Not carried over');
+  const lines = [
+    ...document.querySelectorAll('[data-passwords-import-not-carried] li'),
+  ].map((line) => line.textContent);
+  expect(lines).toEqual([
+    'Files and attachments2',
+    'Items in the trash1',
+    'Previous passwords2',
+  ]);
+  expect(screen.queryByText('Not imported')).toBeNull();
 });

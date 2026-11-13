@@ -14,7 +14,11 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
-import type { ImportFailureReason, ImportTarget } from '../core/import';
+import type {
+  DuplicateCheck,
+  ImportFailureReason,
+  ImportTarget,
+} from '../core/import';
 import type {
   PasswordActivity,
   PasswordDraft,
@@ -121,8 +125,12 @@ export type ImportPreview = {
   skipped: ParsedImport['skipped'];
   dropped: ParsedImport['dropped'];
   duplicates: number;
-  /** Duplicates were checked only against the first items the vault listed. */
-  duplicatesPartial: boolean;
+  /**
+   * How far duplicates were checked: against the whole vault, a capped
+   * answer that may leave some out, or not at all because the vault could
+   * not be asked.
+   */
+  duplicateCheck: DuplicateCheck;
   /** An earlier, unfinished import of this file is being continued. */
   resumed: boolean;
   /** An earlier import of this file was dropped: the folder it used is gone. */

@@ -78,27 +78,37 @@ compiled to wasm (`crates/password_import_wasm`, built by
 terminated after it answers; the raw file is never uploaded or stored. An
 unreadable or encrypted file shows the reason in place.
 
-The preview shows the format, counts per kind, the source folder tree, items
-not imported with their reasons, parts not carried over (attachments,
-passkeys, previous passwords, unusual verification codes), and how many items
+The dialog is a `Panel` with a header close button (disabled only while
+items are being sent), like the invite and customize-sidebar dialogs; reading
+the file shows a spinner. The preview shows the format, counts per kind, the
+source folder tree, one Not carried over section (whole items left out by
+reason, parts of imported items such as passkeys and previous passwords, and
+one Files and attachments line for both file items and attachments; Show
+items lists the left-out items by name), and how many items
 look like ones the vault has (same kind, name ignoring case, website host).
 Skip items I already have is on by default; when it would leave nothing to
 import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
 500-item cap, or still loading or failed, the export's distinct names are matched in the vault with
 `POST …/items/match` (names trimmed and lower-cased once on the client, in
 the body, never a URL; at most 500 names and 192 KiB per request, metadata
-only); if a request fails or an answer is capped, the preview says
-duplicates were checked against the first 500. Import into shows the full destination and a Change menu: a new folder
+only); if a request fails the preview says the vault could not be checked
+for duplicates, and if an answer is capped it says some may not be
+recognized. Import into shows the full destination with a Change menu beside it: a new folder
 "Imported from <source> <date>" (default; numbered " (2)", " (3)"… when a root
 folder already has that name, except when continuing an import, which reuses
 its folder), an existing folder, or the root; source folders nest under it. Keep imported
-items private to me leaves out the team grant. The 500-folder team limit and
+items private to me, under Who can see them, leaves out the team grant. The 500-folder team limit and
 the 8-level depth limit are checked here and block the import.
 
 Import sends batches of at most 25 items and 3.5 MiB, one at a time, to
 `POST /passwords/teams/{team}/imports/{importId}/items`; items the vault
-answers busy are resent after a backoff. The result counts imported, already
-present, skipped and failed items and offers Open folder. The import id is
+answers busy are resent after a backoff. While sending, a progress bar, an
+estimate from the rate so far, and a note to keep the page open (or import
+the same file again in this tab to finish) show, and leaving the page asks
+first. The result counts imported, already present, skipped and failed items,
+lists the failed ones by reason (couldn't reach the server, which includes a
+gateway's 502-504, server error, busy, folder deleted, not accepted, not
+allowed, no answer, account changed) and offers Open folder. The import id is
 kept in sessionStorage under a hash of the viewer and the file's contents
 (hashed in the worker), with the destination, privacy and the source keys of
 items that may be unfinished: failed with an item id, or verification-code

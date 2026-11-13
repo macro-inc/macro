@@ -69,9 +69,6 @@ function failure(codes: readonly string[]): PasswordFailure {
 /** The viewer changed: the request was dropped and must not be retried. */
 const SCOPE_CHANGED = 'SCOPE_CHANGED';
 
-/** A gateway answering for a service it could not reach: 502, 503, 504. */
-const SERVER_UNREACHABLE = 'SERVER_UNREACHABLE';
-
 /**
  * Why a batch request failed, and whether to send it again: no answer, a busy
  * vault (after the request's own busy retries) or a server error are worth
@@ -79,8 +76,7 @@ const SERVER_UNREACHABLE = 'SERVER_UNREACHABLE';
  */
 function importFailure(codes: readonly string[]): ImportRequestFailure {
   const has = (code: string) => codes.includes(code);
-  if (has('NETWORK_ERROR') || has(SERVER_UNREACHABLE))
-    return { retryable: true, reason: 'unreachable' };
+  if (has('NETWORK_ERROR')) return { retryable: true, reason: 'unreachable' };
   if (has(PasswordErrorCode.vault_busy))
     return { retryable: true, reason: 'busy' };
   if (has('SERVER_ERROR') || has(PasswordErrorCode.vault_unavailable))
@@ -115,7 +111,7 @@ export function createPasswordSource(
   ): PasswordResult<T> {
     return (await requestCodes<T>(path, method, body)).mapErr(failure);
   }
-  /** `request`, keeping the error codes: network, `SERVER_UNREACHABLE` (502-504), `SERVER_ERROR` (other 5xx), or the vault's. */
+  /** `request`, keeping the error codes: `NETWORK_ERROR` (no answer, or a gateway's 502-504), `SERVER_ERROR` (other 5xx), or the vault's. */
   async function requestCodes<T extends object>(
     path: string,
     method: string,
@@ -140,8 +136,9 @@ export function createPasswordSource(
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
+              // A gateway that could not reach the service: no answer, as offline.
               if ([502, 503, 504].includes(response.status))
-                return { code: SERVER_UNREACHABLE, message: 'Unreachable' };
+                return { code: 'NETWORK_ERROR', message: 'Unreachable' };
               if (response.status >= 500)
                 return { code: 'SERVER_ERROR', message: 'Server error' };
               const fallback = statusError(response.status);

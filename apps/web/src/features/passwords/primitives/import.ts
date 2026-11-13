@@ -26,6 +26,7 @@ import {
   candidateNames,
   checkFolders,
   chunkNames,
+  type DuplicateCheck,
   duplicateKeys,
   foldersFor,
   type ImportFailureReason,
@@ -116,7 +117,12 @@ function itemFailureReason(
     .with('vault_unavailable', undefined, () => 'server_error' as const)
     .with('folder_missing', () => 'folder_missing' as const)
     .with('invalid_request', () => 'invalid' as const)
-    .with('not_found', 'forbidden', 'version_conflict', () => 'refused' as const)
+    .with(
+      'not_found',
+      'forbidden',
+      'version_conflict',
+      () => 'refused' as const
+    )
     .exhaustive(() => 'server_error' as const);
 }
 
@@ -192,9 +198,7 @@ export async function sendImport(
       );
       for (
         let attempt = 1;
-        result.isErr() &&
-        result.error.retryable &&
-        attempt < BATCH_ATTEMPTS;
+        result.isErr() && result.error.retryable && attempt < BATCH_ATTEMPTS;
         attempt++
       ) {
         await wait(RETRY_BACKOFF_MS * 2 ** (attempt - 1));
@@ -323,15 +327,17 @@ export function createPasswordImport(props: {
    * only), in requests of at most `MATCH_NAMES` names and `MATCH_BYTES` sent
    * in the body.
    */
-  async function knownItems(items: ParsedImportItem[]) {
+  async function knownItems(
+    items: ParsedImportItem[]
+  ): Promise<{ items: PasswordItem[]; check: DuplicateCheck }> {
     const available = props.items();
     if (available && available.length < VAULT_LIST_CAP)
-      return { items: available, partial: false };
+      return { items: available, check: 'complete' };
     // A capped or unavailable list: match every name in the vault itself.
     const loaded = available ?? [];
     const names = candidateNames(items);
     const found = new Map(loaded.map((item) => [item.id, item]));
-    let partial = false;
+    let check: DuplicateCheck = 'complete';
     await Telemetry.span('passwords.import.duplicates', async (span) => {
       span.setAttr('passwords.import.names', names.length);
       let requests = 0;
@@ -339,17 +345,18 @@ export function createPasswordImport(props: {
         requests++;
         const result = await span.run(() => source.matchNames(chunk));
         if (result.isErr()) {
-          partial = true;
+          check = 'unavailable';
           continue;
         }
         // A capped answer may leave out a match.
-        if (result.value.length >= MATCH_NAMES) partial = true;
+        if (result.value.length >= MATCH_NAMES && check === 'complete')
+          check = 'capped';
         for (const item of result.value) found.set(item.id, item);
       }
       span.setAttr('passwords.import.requests', requests);
-      span.setAttr('passwords.import.partial', partial);
+      span.setAttr('passwords.import.duplicate_check', check);
     });
-    return { items: [...found.values()], partial };
+    return { items: [...found.values()], check };
   }
 
   /**
@@ -437,7 +444,7 @@ export function createPasswordImport(props: {
         skipped: parsed.skipped,
         dropped: parsed.dropped,
         duplicates: duplicates.size,
-        duplicatesPartial: known.partial,
+        duplicateCheck: known.check,
         resumed: entry === earlier,
         restarted: folderGone,
         newFolderName: newFolderName(
