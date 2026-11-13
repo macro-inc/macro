@@ -9,6 +9,6 @@
 | <a id="property-400"></a> `400` | `unknown` | Invalid target |
 | <a id="property-401"></a> `401` | `unknown` | Unauthenticated |
 | <a id="property-403"></a> `403` | `unknown` | Harness is not visible to caller |
-| <a id="property-409"></a> `409` | [`CredentialRejectedResponse`](CredentialRejectedResponse.md) | Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body) |
+| <a id="property-409"></a> `409` | [`CredentialRejectedResponse`](CredentialRejectedResponse.md) | Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON) |
 | <a id="property-502"></a> `502` | `unknown` | Provider probe failed |
 | <a id="property-504"></a> `504` | `unknown` | Macrod probe timed out |

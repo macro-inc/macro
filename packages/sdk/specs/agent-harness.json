@@ -46,11 +46,16 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)",
+            "description": "Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CredentialRejectedResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -402,11 +407,16 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)",
+            "description": "Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CredentialRejectedResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }

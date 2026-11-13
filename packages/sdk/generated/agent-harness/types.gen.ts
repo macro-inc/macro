@@ -2477,7 +2477,7 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)
+     * Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)
      */
     409: CredentialRejectedResponse;
     /**
@@ -2704,7 +2704,7 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)
+     * Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)
      */
     409: CredentialRejectedResponse;
     /**

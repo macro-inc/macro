@@ -214,7 +214,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod runtime or Cursor account is not connected, or the provider refused the connected credential (JSON body)", body = CredentialRejectedResponse),
+        (status = 409, description = "Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)", content((CredentialRejectedResponse = "application/json"), (String = "text/plain"))),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )
