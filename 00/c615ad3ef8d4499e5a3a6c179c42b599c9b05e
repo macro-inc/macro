@@ -1,0 +1,19 @@
+crates/dashboards/src/inbound/axum_router.rs
+  s_c6fe7b7c1d36f7::t_264c132a4567bd 101,105,190-191,198,448,473,484,512
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "00c615ad3ef8d4499e5a3a6c179c42b599c9b05e",
+  "prompts": {},
+  "sessions": {
+    "s_c6fe7b7c1d36f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f19286b0-b7da-47aa-a4fd-2c557b041377",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
