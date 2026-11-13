@@ -1,0 +1,47 @@
+packages/sdk/generated/storage/types.gen.ts
+  s_061418458d8623::t_fdd19fbeca9e4c 1477,24670-24672,25050-25052
+apps/web/src/lib/service-clients/service-storage/generated/schemas/audienceClass.ts
+  s_061418458d8623::t_fd97b5463441c8 25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItem.ts
+  s_566949b96aabd0::t_66be77f4b2b793 19-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilter.ts
+  s_566949b96aabd0::t_7094ab9ed15c30 19-21
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_061418458d8623::t_3da8503b7d67d1 39545,83960,84024,84086,84157,84212
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_877cfccae63665::t_7b2b62004fc1a9 31177,67619,68292
+packages/sdk/specs/storage.json
+  s_061418458d8623::t_40500ca4a8ec74 31177,65708-65713,67619,68292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bde5791894c326d89420d7d2e4337ce2b1ea9512",
+  "prompts": {},
+  "sessions": {
+    "s_061418458d8623": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "809ca561-a68d-4d17-a61d-130dd232a19a",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_566949b96aabd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cf7ecf1-c75e-4236-a82c-0eb762650a3d",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_877cfccae63665": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f7342dac-5ffc-44f3-9d96-6de7de836cd0",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
