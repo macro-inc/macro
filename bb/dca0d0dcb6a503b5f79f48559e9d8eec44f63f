@@ -1,0 +1,57 @@
+crates/activity/src/domain/activity_range/test.rs
+  s_471e2069ef160b::t_439252acbc9b60 74
+crates/activity/src/outbound/pg_activity_repo/team_feed.rs
+  s_471e2069ef160b::t_439252acbc9b60 78,84,101
+crates/initiative/src/domain/personal_activity.rs
+  s_471e2069ef160b::t_439252acbc9b60 116,123
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_471e2069ef160b::t_439252acbc9b60 285,289-297
+apps/web/src/features/activity/queries/feed-query.ts
+  s_471e2069ef160b::t_bcddf741aa4a04 19-20,24-25,28,36-38,42-46,58-60
+  s_471e2069ef160b::t_8881777529ab09 29-31
+crates/graphql_activity/src/loaders.rs
+  s_471e2069ef160b::t_439252acbc9b60 84,88,138,250,255
+crates/activity/src/domain/ports.rs
+  s_471e2069ef160b::t_439252acbc9b60 194-195,199
+crates/activity/src/domain/service/test.rs
+  s_471e2069ef160b::t_439252acbc9b60 38
+crates/activity/src/outbound/pg_activity_repo/team_feed.sql
+  s_471e2069ef160b::t_439252acbc9b60 6-7,31
+crates/complete_graph/src/schema/test.rs
+  s_471e2069ef160b::t_439252acbc9b60 1008
+  s_471e2069ef160b::t_0f38adc2825bfb 1019
+crates/activity/src/outbound/pg_activity_repo/test/teammate_feed.rs
+  s_471e2069ef160b::t_0f38adc2825bfb 279,298-316,318,388
+crates/graphql_activity/src/feed.rs
+  s_471e2069ef160b::t_0f38adc2825bfb 56-59,121-134
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_471e2069ef160b::t_1ad12f94a3e2e2 66-98
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_fcbfa0c2313f05::t_4b9d43e02ad05c 8-13
+static_assets/schema.graphql
+  s_fcbfa0c2313f05::t_87dc4d0f0df171 18-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bbdca0d0dcb6a503b5f79f48559e9d8eec44f63f",
+  "prompts": {},
+  "sessions": {
+    "s_471e2069ef160b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae591ca2-a46b-438d-9342-5bfaf81ffb1e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fcbfa0c2313f05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cd3e24-bdf7-4816-9508-4779aa06bda2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
