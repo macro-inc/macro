@@ -8,6 +8,7 @@ version = "0.1.0"
 toolset = ["inbound", "dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:bot_id", "dep:schemars"]
 default = ["ports", "postgres"]
 inbound = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:macro_authorization",
   "dep:model-error-response",
@@ -28,7 +29,7 @@ postgres = [
 ]
 
 [dependencies]
-agent_correlation = { path = "../agent_correlation" }
+agent_correlation = { path = "../agent_correlation", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
