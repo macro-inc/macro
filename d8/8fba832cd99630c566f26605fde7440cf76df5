@@ -1,0 +1,19 @@
+crates/gitai/AGENTS.md
+  s_e003e6a508b15c::t_a5553df0d23c0a 12-20,29-66,69-100,107-110,114-115,120-122,125-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d88fba832cd99630c566f26605fde7440cf76df5",
+  "prompts": {},
+  "sessions": {
+    "s_e003e6a508b15c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a82c37e1-00f7-4ac9-9bb5-e0f8d2293a0e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
