@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE chain AS (\n            SELECT id, \"parentId\", \"userId\" FROM \"Project\" WHERE id = $1\n            UNION\n            SELECT p.id, p.\"parentId\", p.\"userId\"\n            FROM \"Project\" p\n            JOIN chain c ON p.id = c.\"parentId\"\n        )\n        SELECT id AS \"id!\", \"userId\" AS \"user_id!\" FROM chain\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "16fae19de1c337d545266bfe9769fe6ab2168f82df89734b1d0e4ec7e877b9fe"
+}
