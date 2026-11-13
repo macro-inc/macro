@@ -806,8 +806,11 @@ delete, attach, insert image, format, schedule, and send. Touch compose uses its
 header toolbar, which has no insert image button. **Insert image** opens an
 image-only picker and inlines the chosen images at the cursor, uploading and
 sized like pasted ones; a video chosen there is ignored.
-`R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
-or the latest message when none is selected. `F` opens a forward and focuses To.
+On desktop, the bottom of a thread shows **Reply** (`R`), **Reply all**
+(`Shift+R`), and **Forward** (`F`) pills, each with its key. `R` replies to the
+sender only, `Shift+R` replies to everyone, and Enter on a focused message opens
+reply-all; each targets the selected message, or the latest message when none
+is selected. `F` opens a forward and focuses To.
 A new email also focuses To once it mounts, unless the user already moved to
 another field: with the CPU throttled, click Subject right after opening compose
 and type; every character must stay in Subject.

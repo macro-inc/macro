@@ -9,7 +9,7 @@ export function registerEmailHotkeys(
 ) {
   if (handlers.replyAllToFocusedMessage) {
     registerHotkey({
-      hotkey: 'opt+r',
+      hotkey: 'shift+r',
       scopeId: scopeId,
       description: 'Reply all to message',
       keyDownHandler: handlers.replyAllToFocusedMessage,

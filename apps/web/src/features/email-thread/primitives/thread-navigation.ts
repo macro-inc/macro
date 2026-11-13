@@ -628,7 +628,7 @@ export function createThreadNavigation(
 
   onMount(() =>
     host.registerKeyboard?.({
-      replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
+      replyToFocusedMessage: () => openHotkeyTarget('reply'),
       replyAllToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       canActOnSender: context.canActOnSender,
