@@ -3,12 +3,15 @@
 -- scheduled_action.suggestion_id), then dismissed, then retired, else open.
 -- Then leave at most one open catalog pick per person and catalog key, for the
 -- unique index the next migration builds, and move every suggestion card to
--- the state its routine suggestion now gives it. Then validate the check the
--- previous migration added; validating takes only a SHARE UPDATE EXCLUSIVE
--- lock.
+-- the state its routine suggestion now gives it. The check the previous
+-- migration added is validated in its own migration
+-- (20261113095436_validate_routine_suggestion_state).
 --
--- routine_suggestion is small (at most a few dozen rows per person with
--- routine suggestions), so the updates run in place. The saved backfill reads
+-- routine_suggestion is small: it dates from 20261109001500 and is written
+-- only for people with enable-routine-suggestions on, at most a few dozen rows
+-- each, so the updates run in place in one pass each (about 150 ms for 150k
+-- open catalog picks locally, the largest). Batch them instead if it ever
+-- holds hundreds of thousands of rows. The saved backfill reads
 -- scheduled_action once, as a join; it has no index on suggestion_id.
 SET LOCAL lock_timeout = '5s';
 
@@ -56,5 +59,3 @@ FROM (
     JOIN routine_suggestion s ON s.id = r.routine_suggestion_id
 ) c
 WHERE i.id = c.suggestion_id AND i.state <> c.state;
-
-ALTER TABLE routine_suggestion VALIDATE CONSTRAINT routine_suggestion_state_check;

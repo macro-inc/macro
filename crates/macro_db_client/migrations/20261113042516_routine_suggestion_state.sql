@@ -5,9 +5,10 @@
 -- only writer, and moves the suggestion card with it. `dismissed_at` and
 -- `retired_at` stay as the times it was dismissed and retired.
 --
--- The next migration backfills existing rows and validates the check. A
--- constant default adds the column without rewriting the table, and the check
--- is added NOT VALID, so this file only holds the ALTER's lock briefly.
+-- The next migration backfills existing rows, and 20261113095436 validates
+-- the check. A constant default adds the column without rewriting the table,
+-- and the check is added NOT VALID, so this file only holds the ALTER's lock
+-- briefly.
 --
 -- The previous release never sets `state`: a row it inserts is `open`, and a
 -- row it dismisses during the deploy window keeps `open` with `dismissed_at`
