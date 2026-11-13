@@ -8159,6 +8159,7 @@ dependencies = [
  "macro_user_id",
  "messages",
  "model-error-response",
+ "model_owner",
  "notification",
  "opentelemetry",
  "projects",

@@ -3,27 +3,113 @@
 //! Appended to the public event log with the event (or alone, for internal
 //! events) so every process evicts them before delivering anything after.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::{Invalidation, LogRecord};
 use crate::domain::normalize::{NormalizeError, normalize};
 use crate::topics::LogMacroEvent;
 use bots::domain::events::BotTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
+use chat::domain::events::ChatTopicEvent;
+use databases::domain::events::DatabaseTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
 use event_exposure::EntityType;
+use forms::domain::events::FormTopicEvent;
+use initiative::domain::events::InitiativeTopicEvent;
 use macro_event_broker::MacroEvent as _;
+use projects::domain::events::ProjectTopicEvent;
 use teams::domain::events::TeamTopicEvent;
 
 /// The access facts `event` changes.
 pub fn invalidations(event: &LogMacroEvent) -> Vec<Invalidation> {
     match event {
+        // Sharing an entity with a channel (`shareWithChannel`, a message
+        // reference) publishes no event, and the producers' share flags miss
+        // it, so every structural event of a shareable entity evicts it: the
+        // next event about it, such as a rename after a share, is resolved
+        // against current access. High-frequency events (interactions,
+        // content saves, table writes, responses, chat messages) do not
+        // evict; their entity's cache lapses in 5 s at most.
         LogMacroEvent::DocumentMacroEvent(event) => match &event.event().event {
-            DocumentTopicEvent::Updated(metadata) if metadata.share_permission_updated => {
-                vec![Invalidation::Entity {
-                    entity_type: EntityType::Document,
-                    entity_id: metadata.document_id.clone(),
-                }]
+            DocumentTopicEvent::Created(metadata) => {
+                entity(EntityType::Document, &metadata.document_id)
             }
-            _ => Vec::new(),
+            DocumentTopicEvent::Updated(metadata) => {
+                entity(EntityType::Document, &metadata.document_id)
+            }
+            DocumentTopicEvent::Copied(metadata) => {
+                entity(EntityType::Document, &metadata.document_id)
+            }
+            DocumentTopicEvent::Deleted(_)
+            | DocumentTopicEvent::ContentUploaded(_)
+            | DocumentTopicEvent::SyncContentUpdated(_)
+            | DocumentTopicEvent::Purged(_)
+            | DocumentTopicEvent::Interaction(_) => Vec::new(),
+        },
+        LogMacroEvent::ProjectMacroEvent(event) => match &event.event().event {
+            ProjectTopicEvent::Created(metadata) => {
+                entity(EntityType::Project, &metadata.project_id)
+            }
+            ProjectTopicEvent::Updated(metadata) => {
+                entity(EntityType::Project, &metadata.project_id)
+            }
+            ProjectTopicEvent::Restored(metadata) => {
+                entity(EntityType::Project, &metadata.project_id)
+            }
+            ProjectTopicEvent::Uploaded(metadata) => {
+                entity(EntityType::Project, &metadata.root_project_id)
+            }
+            ProjectTopicEvent::Deleted(_) | ProjectTopicEvent::PermanentlyDeleted(_) => Vec::new(),
+        },
+        LogMacroEvent::ChatMacroEvent(event) => match &event.event().event {
+            ChatTopicEvent::Created(metadata) => entity(EntityType::Chat, &metadata.chat_id),
+            ChatTopicEvent::Updated(metadata) => entity(EntityType::Chat, &metadata.chat_id),
+            ChatTopicEvent::Restored(metadata) => entity(EntityType::Chat, &metadata.chat_id),
+            ChatTopicEvent::Copied(metadata) => entity(EntityType::Chat, &metadata.chat_id),
+            ChatTopicEvent::Deleted(_)
+            | ChatTopicEvent::PermanentlyDeleted(_)
+            | ChatTopicEvent::MessageSent(_)
+            | ChatTopicEvent::MessageDeleted(_) => Vec::new(),
+        },
+        LogMacroEvent::DatabaseMacroEvent(event) => match &event.event().event {
+            DatabaseTopicEvent::Created(metadata) => {
+                entity(EntityType::Database, metadata.database_id)
+            }
+            DatabaseTopicEvent::Renamed(metadata) => {
+                entity(EntityType::Database, metadata.database_id)
+            }
+            DatabaseTopicEvent::Restored(metadata) => {
+                entity(EntityType::Database, metadata.database_id)
+            }
+            DatabaseTopicEvent::SharingChanged(metadata) => {
+                entity(EntityType::Database, metadata.database_id)
+            }
+            DatabaseTopicEvent::AppearanceChanged { database_id, .. } => {
+                entity(EntityType::Database, database_id)
+            }
+            DatabaseTopicEvent::Trashed(_)
+            | DatabaseTopicEvent::Purged(_)
+            | DatabaseTopicEvent::TablesChanged(_) => Vec::new(),
+        },
+        LogMacroEvent::FormMacroEvent(event) => match &event.event().event {
+            FormTopicEvent::Created(metadata) => entity(EntityType::Form, metadata.form_id),
+            FormTopicEvent::Renamed(metadata) => entity(EntityType::Form, metadata.form_id),
+            FormTopicEvent::Restored(metadata) => entity(EntityType::Form, metadata.form_id),
+            FormTopicEvent::SharingChanged(metadata) => entity(EntityType::Form, metadata.form_id),
+            FormTopicEvent::AppearanceChanged { form_id, .. } => entity(EntityType::Form, form_id),
+            FormTopicEvent::Trashed(_)
+            | FormTopicEvent::Purged(_)
+            | FormTopicEvent::ResponseSubmitted(_) => Vec::new(),
+        },
+        LogMacroEvent::InitiativeMacroEvent(event) => match &event.event().event {
+            InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
+                entity(EntityType::Initiative, change.initiative_id)
+            }
+            InitiativeTopicEvent::AppearanceChanged { change, .. } => {
+                entity(EntityType::Initiative, change.initiative_id)
+            }
+            InitiativeTopicEvent::Purged { .. } => Vec::new(),
         },
         LogMacroEvent::ChannelMacroEvent(event) => match &event.event().event {
             ChannelTopicEvent::ParticipantAdded(metadata) => channel(metadata.channel_id),
@@ -70,11 +156,6 @@ pub fn invalidations(event: &LogMacroEvent) -> Vec<Invalidation> {
         | LogMacroEvent::AgentSessionMacroEvent(_)
         | LogMacroEvent::AgentSessionLifecycleMacroEvent(_)
         | LogMacroEvent::UserMacroEvent(_)
-        | LogMacroEvent::ProjectMacroEvent(_)
-        | LogMacroEvent::ChatMacroEvent(_)
-        | LogMacroEvent::DatabaseMacroEvent(_)
-        | LogMacroEvent::FormMacroEvent(_)
-        | LogMacroEvent::InitiativeMacroEvent(_)
         | LogMacroEvent::PropertyMacroEvent(_)
         | LogMacroEvent::CallMacroEvent(_)
         | LogMacroEvent::GithubPullRequestMacroEvent(_)
@@ -85,6 +166,13 @@ pub fn invalidations(event: &LogMacroEvent) -> Vec<Invalidation> {
         | LogMacroEvent::MentionMacroEvent(_)
         | LogMacroEvent::GithubWebhookMacroEvent(_) => Vec::new(),
     }
+}
+
+fn entity(entity_type: EntityType, entity_id: impl ToString) -> Vec<Invalidation> {
+    vec![Invalidation::Entity {
+        entity_type,
+        entity_id: entity_id.to_string(),
+    }]
 }
 
 fn channel(channel_id: impl ToString) -> Vec<Invalidation> {

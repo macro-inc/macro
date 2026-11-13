@@ -70,6 +70,12 @@ event (`lagged`, `revoked`, `reset`).
 
 ## Gotchas
 
+- Sharing with a channel publishes no event, so every structural event of a
+  shareable entity (document/project/chat create, update, copy, restore;
+  database/form/initiative create, rename, restore, sharing, appearance)
+  evicts it in `domain/invalidations.rs`. A share followed only by
+  high-frequency events (interactions, saves, table writes) reaches new
+  members within the 5 s cache.
 - Access adapters must not cache: `entity_access`'s 10 s wrappers are
   bypassed (`get_users_by_entity_uncached`, `is_accessor`) so eviction on a
   logged revocation is exact.
