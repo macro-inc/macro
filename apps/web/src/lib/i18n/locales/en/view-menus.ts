@@ -52,6 +52,8 @@ export default {
   sortDateCreated: 'Date created',
   sortTitle: 'Title',
   sortName: 'Name',
+  sortAToZ: 'A to Z',
+  sortZToA: 'Z to A',
 
   // Group options
   groupNone: 'None',
