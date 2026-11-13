@@ -52,6 +52,11 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
+        // One native solid-js per worker. Inlined, it loads a second copy
+        // through every library that imports it but is not inlined (such as
+        // @solid-primitives/trigger under @solid-primitives/map), and again
+        // after each vi.resetModules().
+        external: [/[\\/]node_modules[\\/]solid-js[\\/]/],
         inline: [
           'solid-transition-group',
           '@solid-primitives/refs',
