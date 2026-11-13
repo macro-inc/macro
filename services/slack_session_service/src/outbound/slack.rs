@@ -147,7 +147,12 @@ impl SlackSession for SlackClient {
                     cursor: cursor.take(),
                 })
                 .await?;
-            conversations.extend(page.channels);
+            // `users.conversations` lists only the caller's conversations
+            // and leaves `is_member` out of them.
+            conversations.extend(page.channels.into_iter().map(|mut conversation| {
+                conversation.is_member = true;
+                conversation
+            }));
             match page
                 .response_metadata
                 .next_cursor

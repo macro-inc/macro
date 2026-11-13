@@ -271,8 +271,13 @@ fn users_conversations(state: &State, fields: &Fields, caller: &Caller) -> Value
             "public_channel"
         };
         if types.contains(&kind)
-            && let Some(info) = state.conversation_for(id, &caller.user_id)
+            && let Some(mut info) = state.conversation_for(id, &caller.user_id)
         {
+            // Real Slack leaves `is_member` out here: every listed
+            // conversation is one the caller is in.
+            if let Some(object) = info.as_object_mut() {
+                object.remove("is_member");
+            }
             channels.push(info);
         }
     }
