@@ -42,5 +42,6 @@ tracing = { workspace = true, features = ["release_max_level_info"] }
 wasm-opt = ["-Oz"]
 
 [dev-dependencies]
+document_session = { workspace = true, features = ["conformance"] }
 syn.workspace = true
 sync_protocol.workspace = true
