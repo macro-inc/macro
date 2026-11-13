@@ -1,0 +1,34 @@
+tooling/xtask/crates/xtask_local/src/local/inventory/test.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 6,10
+tooling/xtask/crates/xtask_local/src/local/inventory.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 293-303
+  s_9b1603f4fd6889::t_4d8eeb432adc2a 292
+tooling/xtask/crates/xtask_local/src/local/localstack.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 273-320
+tooling/xtask/crates/xtask_ports/src/layout.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 126-127
+tooling/xtask/crates/xtask_local/src/local/resources.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 35-36,329-338,355-358
+docker/docker-compose.yml
+  s_9b1603f4fd6889::t_4414b7df2ae890 256-278
+tooling/xtask/crates/xtask_local/src/local/proxy/test.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 185-186,189-190,198-200
+tooling/xtask/crates/xtask_local/src/local/local_env.rs
+  s_9b1603f4fd6889::t_3cdb70a86b8d2c 368-372,715-717
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "825d31d7165b5dce15eafcda9c09ec1998317578",
+  "prompts": {},
+  "sessions": {
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
