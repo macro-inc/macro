@@ -104,6 +104,7 @@ const postReads = new Set([
   'properties.getBulkEntityProperties',
   // Checks a routine as saving would, and saves nothing.
   'scheduled-action.checkScheduledAction',
+  'search.searchNames',
   'search.simpleUnifiedSearch',
   'search.unifiedSearch',
   'storage.getBatchCallRecordPreview',
