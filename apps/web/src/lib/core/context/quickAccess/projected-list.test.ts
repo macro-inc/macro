@@ -57,6 +57,64 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('keeps the listed rows when a cache revision replays the same search result', async () => {
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['a', 'b']))
+      .mockResolvedValueOnce(page(['a', 'b']))
+      .mockResolvedValueOnce(page(['a', 'c']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(2));
+    const listed = list.items();
+
+    setRevision(1);
+    await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toBe(listed);
+
+    setRevision(2);
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual([
+        'GraphqlSoupDocument:a',
+        'GraphqlSoupDocument:c',
+      ])
+    );
+    expect(list.items()[0]).toBe(listed[0]);
+  });
+
+  it('publishes a new list after a load-more that found no new row', async () => {
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['a', 'b'], true))
+      .mockResolvedValue(page(['a', 'b']));
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision: () => 0,
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(2));
+    const listed = list.items();
+
+    await list.loadMore();
+
+    expect(list.items()).not.toBe(listed);
+    expect(list.items().map((item) => item.id)).toEqual([
+      'GraphqlSoupDocument:a',
+      'GraphqlSoupDocument:b',
+    ]);
+  });
+
   it('distinguishes a failed initial read from a successful empty retry', async () => {
     const [revision, setRevision] = createSignal(0);
     const error = new Error('Cache unavailable');
