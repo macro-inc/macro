@@ -428,6 +428,8 @@ export function FormatTools(props: FormatToolsProps) {
       });
     } else lastFocusedEditor()?.focus();
   };
+  const linkLabel = () =>
+    selection()?.hasLinks ? 'Remove Link' : 'Insert Link';
 
   function handleLink(e?: MouseEvent | KeyboardEvent) {
     e?.preventDefault();
@@ -794,6 +796,7 @@ export function FormatTools(props: FormatToolsProps) {
         <Dropdown.Trigger
           variant="ghost"
           size={buttonSize()}
+          aria-label="More formatting"
           tooltip="More formatting"
           disabled={buttonIsDisabled()}
           tabIndex={-1}
@@ -928,7 +931,8 @@ export function FormatTools(props: FormatToolsProps) {
                   handleLink(e);
                 }
               }}
-              tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
+              aria-label={linkLabel()}
+              tooltip={linkLabel()}
               disabled={buttonIsDisabled()}
             >
               <Dynamic
@@ -1084,7 +1088,8 @@ export function FormatTools(props: FormatToolsProps) {
               size="icon-sm"
               onPointerDown={(e: PointerEvent) => e.preventDefault()}
               onClick={handleLink}
-              tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
+              aria-label={linkLabel()}
+              tooltip={linkLabel()}
               disabled={buttonIsDisabled()}
             >
               <Dynamic
@@ -1109,6 +1114,7 @@ export function FormatTools(props: FormatToolsProps) {
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
+                aria-label="More"
                 tooltip="More"
                 disabled={buttonIsDisabled()}
                 tabIndex={-1}
