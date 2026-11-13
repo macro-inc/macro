@@ -91,6 +91,25 @@ const status = (error: unknown): unknown =>
 		? error.status
 		: undefined;
 
+/** Macro's answer for a dashboard whose current view it cannot read. */
+const unreadable = 422;
+
+/**
+ * Whether the agent has a home dashboard. One whose current view Macro cannot
+ * read (it answers 422) still exists, and the agent repairs it by saving a new
+ * view, so it counts.
+ */
+const hasHome = async (
+	macro: Awaited<ReturnType<Needs["macro"]>>,
+): Promise<boolean> => {
+	try {
+		return (await macro.me.homeDashboard()) !== undefined;
+	} catch (error) {
+		if (status(error) === unreadable) return true;
+		throw error;
+	}
+};
+
 /** What making the home dashboard came to. */
 export type Ensured =
 	| { readonly kind: "created" | "existing" }
@@ -121,7 +140,7 @@ const reusePending = async (
 /**
  * Makes sure the agent has a home dashboard: once, on its first run, it
  * creates the default and makes it its home. An agent that already has one
- * keeps it. While dashboards are off for the agent's account (the server
+ * keeps it, even one whose current view Macro cannot read. While dashboards are off for the agent's account (the server
  * answers 404), nothing is written, so a later run tries again. A default
  * created by a run that failed before making it the home is reused.
  */
@@ -132,7 +151,7 @@ export const ensureHomeDashboard = async (context: Needs): Promise<Ensured> => {
 	const pending = context.join(memory, pendingFile);
 	const macro = await context.macro();
 	try {
-		if ((await macro.me.homeDashboard()) === undefined) {
+		if (!(await hasHome(macro))) {
 			let dashboard = await reusePending(context, macro, pending);
 			if (dashboard === undefined) {
 				const me = await macro.users.me();
