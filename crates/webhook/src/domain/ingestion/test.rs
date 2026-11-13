@@ -21,9 +21,8 @@ use channels::domain::{
 };
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
-    DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
-    DocumentDeletedMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentPurgedMetadata, DocumentUpdatedMetadata,
 };
 use entity_access::domain::models::{
     AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
@@ -662,39 +661,15 @@ fn document_event_cases() -> Vec<EventCase> {
     ]
 }
 
-fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicEvent>)> {
-    vec![
-        (
-            "document.content_uploaded",
-            Event::new(DocumentTopicEvent::ContentUploaded(
-                DocumentContentUploadedMetadata {
-                    document_id: DOCUMENT_ID.to_string(),
-                    owner: Owner::User(user_id("macro|owner@example.com")),
-                    file_type: "pdf".parse().expect("valid file type"),
-                    document_version_id: Some("convert".to_string()),
-                },
-            )),
-        ),
-        (
-            "document.sync_content_updated",
-            Event::new(DocumentTopicEvent::SyncContentUpdated(
-                DocumentSyncContentUpdatedMetadata {
-                    editors: Vec::new(),
-                    document_id: DOCUMENT_ID.to_string(),
-                    file_type: "md".parse().expect("valid file type"),
-                    document_version_id: None,
-                    actor: None,
-                    on_behalf_of: None,
-                },
-            )),
-        ),
-        (
-            "document.purged",
-            Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
-                document_id: DOCUMENT_ID.to_string(),
-            })),
-        ),
-    ]
+/// Document events that stay internal: the content events became preview
+/// public events (`document.content_changed`), a purge has no audience left.
+fn internal_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicEvent>)> {
+    vec![(
+        "document.purged",
+        Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        })),
+    )]
 }
 
 fn channel_event_cases() -> Vec<EventCase> {
@@ -1083,7 +1058,7 @@ async fn normalizes_and_matches_all_fifteen_event_variants() {
 }
 
 #[tokio::test]
-async fn search_only_document_events_skip_webhook_delivery() {
+async fn internal_document_events_skip_webhook_delivery() {
     let access = MockAccessService {
         users: vec![user_id(PERSONAL_WORKSPACE_ID)],
         failure: Some(AccessFailure::Internal),
@@ -1103,7 +1078,7 @@ async fn search_only_document_events_skip_webhook_delivery() {
     let enqueuer = MockEnqueuer::default();
     let service = service(access.clone(), repository.clone(), enqueuer.clone());
 
-    for (event_name, event) in search_only_document_event_cases() {
+    for (event_name, event) in internal_document_event_cases() {
         assert!(
             normalize(&event)
                 .unwrap_or_else(|error| panic!("{event_name} normalization failed: {error}"))

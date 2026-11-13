@@ -12,7 +12,7 @@ mod test;
 use agent_session::domain::events::AgentSessionLifecycleEvent;
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
-use documents::domain::events::DocumentTopicEvent;
+use documents::domain::events::{DocumentPublicEvent, DocumentTopicEvent};
 use event_exposure::Stage;
 use messages::outbound::broker::MessageTopicEvent;
 use serde::Serialize;
@@ -135,12 +135,14 @@ macro_rules! public_event_registry {
 public_event_registry! {
     union {
         /// Document lifecycle events from the `macro.documents` topic.
-        Document(DocumentTopicEvent => DocumentTopicEvent) {
+        Document(DocumentTopicEvent => DocumentPublicEvent) {
             "document.created": ["document"], [Entity], Stable;
             "document.updated": ["document"], [Entity], Stable;
             "document.deleted": ["document"], [Entity], Stable;
             "document.copied": ["document"], [Entity], Stable;
             "document.interaction": ["document"], [Entity], Stable;
+            "document.content_changed": ["document"], [Entity], Preview;
+            "document.appearance_changed": ["document"], [Entity], Preview;
         }
         /// Channel lifecycle events from the `macro.channels` topic.
         Channel(ChannelTopicEvent => ChannelTopicEvent) {
