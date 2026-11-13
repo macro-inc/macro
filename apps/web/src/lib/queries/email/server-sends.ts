@@ -142,8 +142,9 @@ function createServerSendObserver(accountId: string) {
     const first = localSends === undefined;
     localSends = count;
     // The sign-in read is already under way, and showing a hidden tab reads.
+    // A read already in flight may predate the change, so one more follows it.
     if ((!first || count !== 0) && document.visibilityState === 'visible')
-      wake();
+      fireAndForget(refresh(), 'email-server-sends');
   }
   const journalChanged = () =>
     fireAndForget(readLocalSends(), 'email-server-sends');

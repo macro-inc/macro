@@ -306,3 +306,26 @@ it('retries an unreadable journal and settles once it reads', async () => {
   await vi.advanceTimersByTimeAsync(59_000);
   expect(reads()).toBeLessThanOrEqual(settled + 1);
 });
+
+it('reads again after a read that was in flight when a send was queued', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const slow = Promise.withResolvers<PendingEmailSendsQuery['user']>();
+  vi.mocked(readPendingEmailSends).mockImplementationOnce(() => slow.promise);
+  const stale = refreshServerEmailSends();
+  await vi.advanceTimersByTimeAsync(0);
+  const inFlight = reads();
+  vi.mocked(readEmailSendIntents).mockResolvedValue([
+    {} as Awaited<ReturnType<typeof readEmailSendIntents>>[number],
+  ]);
+  vi.mocked(readPendingEmailSends).mockResolvedValue(withStatus('ACCEPTED'));
+  journalChanged();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reads()).toBe(inFlight);
+  slow.resolve(nothingPending);
+  await stale;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reads()).toBe(inFlight + 1);
+  expect(serverEmailSends()).toHaveLength(1);
+});
