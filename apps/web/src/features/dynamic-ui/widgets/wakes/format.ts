@@ -82,10 +82,7 @@ export function wakesRefreshMs(
 }
 
 /** How often a trace is re-read: often while live, rarely once a live one goes quiet, else never. */
-export function traceRefreshMs(
-  heard: HeardTrace,
-  now: number
-): number | false {
+export function traceRefreshMs(heard: HeardTrace, now: number): number | false {
   if (traceIsLive(heard, now)) return LIVE_REFRESH_MS;
   return heard.trace.live ? LOST_REFRESH_MS : false;
 }

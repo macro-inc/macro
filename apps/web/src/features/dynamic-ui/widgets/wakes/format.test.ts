@@ -169,9 +169,9 @@ describe('a live trace in a long silent step', () => {
     expect(waterfall(heard, now).rows[0]?.running).toBe(true);
     expect(traceRefreshMs(heard, now)).toBe(LIVE_REFRESH_MS);
     // Without the row, the trace's own last moment is all there is.
-    expect(traceIsLive({ trace, heardAt: traceHeardAt(trace, null) }, now)).toBe(
-      false
-    );
+    expect(
+      traceIsLive({ trace, heardAt: traceHeardAt(trace, null) }, now)
+    ).toBe(false);
     // Once the wake goes lost, so does the trace.
     const lost = now + LOST_AFTER_MS + 1;
     expect(wakeState(row, lost)).toBe('lost');
