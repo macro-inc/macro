@@ -1322,6 +1322,334 @@ fn guard_set_state_without_root_metadata_deletes_it_unreachable_from_the_app()
     Ok(())
 }
 
+/// Table-field capture (C) (table-fields-C.json 61b52218, G turn 20261113T184801Z): the
+/// first OFF load of a create-route table, whose four table keys and cell widths are stored
+/// as null, sends U1 (search text, then deletes of the null keys the editor leaves
+/// undefined) and U2 (trailing paragraph, resizer colWidths, documentMetadata). Fixture:
+/// Source's received snapshot bytes.
+#[test]
+fn first_load_of_a_null_shaped_table_matches_source_load_ops()
+-> Result<(), Box<dyn std::error::Error>> {
+    // RemoteInitialSync snapshot from table-fields-C.json (frame 76a3b836), SHA-256
+    // 068385486dcf504fa2b211ea5d9b04ac3d1bf779ca2925e5e0c9df771e68ee97.
+    let (surface, doc, per_commit) =
+        open_stored(include_bytes!("testdata/table-null-shape-received.loro"))?;
+    let u1 = vec![
+        map_op("insert", "searchText"),
+        map_op("delete", "width"),
+        map_op("delete", "width"),
+        map_op("delete", "width"),
+        map_op("delete", "width"),
+        map_op("insert", "searchText"),
+        map_op("delete", "frozenColumnCount"),
+        map_op("delete", "frozenRowCount"),
+        map_op("delete", "rowStriping"),
+    ];
+    let u2 = vec![
+        (
+            "MovableList".to_owned(),
+            "insert".to_owned(),
+            "-".to_owned(),
+        ),
+        map_op("insert", "children"),
+        map_op("insert", "direction"),
+        map_op("insert", "format"),
+        map_op("insert", "indent"),
+        map_op("insert", "type"),
+        map_op("insert", "version"),
+        map_op("insert", "$"),
+        map_op("insert", "id"),
+        map_op("insert", "searchText"),
+        map_op("insert", "textFormat"),
+        map_op("insert", "textStyle"),
+        map_op("insert", "colWidths"),
+        ("List".to_owned(), "insert".to_owned(), "-".to_owned()),
+        map_op("insert", "documentMetadata"),
+        map_op("insert", "version"),
+    ];
+    // Pins the commit split and each commit's op multiset; op order inside an update is a
+    // named difference (new-container field order), the stored state is identical.
+    let sorted = |mut ops: Vec<OpShape>| {
+        ops.sort();
+        ops
+    };
+    let native: Vec<_> = per_commit.into_iter().map(sorted).collect();
+    assert_eq!(
+        native,
+        [sorted(u1), sorted(u2)],
+        "load commits vs Source U1, U2"
+    );
+    let root = stored_root(&doc);
+    let table = &root["children"][1];
+    assert_eq!(table["colWidths"], json!([120, 120]));
+    for key in ["frozenColumnCount", "frozenRowCount", "rowStriping"] {
+        assert!(table.get(key).is_none(), "{key} stays stored after load");
+    }
+    let cell = &table["children"][0]["children"][0];
+    assert!(
+        cell.get("width").is_none(),
+        "cell width stays stored after load"
+    );
+    assert_eq!(cell["backgroundColor"], serde_json::Value::Null);
+    assert_eq!(root["children"].as_array().map(Vec::len), Some(3));
+    assert!(surface.history().can_undo);
+    Ok(())
+}
+
+/// A writable surface, its document and the op shapes of each local commit its open made.
+type Opened = (EditorSurface, loro::LoroDoc, Vec<Vec<OpShape>>);
+
+/// Open the captured received snapshot `snapshot` for editing with the search-text policy
+/// and return the surface, the document and the op shapes of each local commit the open made.
+fn open_stored(snapshot: &[u8]) -> Result<Opened, Box<dyn std::error::Error>> {
+    use std::sync::Mutex;
+    let doc = lexical_loro::new_doc(50)?;
+    doc.import(snapshot)?;
+    let base = snapshot.to_vec();
+    let commits = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let captured = commits.clone();
+    let subscription = doc.subscribe_local_update(Box::new(move |bytes| {
+        if let Ok(mut commits) = captured.lock() {
+            commits.push(bytes.clone());
+        }
+        true
+    }));
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    drop(subscription);
+    let replay = lexical_loro::new_doc(81)?;
+    replay.import(&base)?;
+    let mut per_commit = Vec::new();
+    for commit in commits.lock().map_err(|_| "commit capture lock")?.iter() {
+        let before = replay.oplog_vv();
+        replay.import(commit)?;
+        per_commit.push(op_shapes(&serde_json::to_value(
+            replay.export_json_updates(&before, &replay.oplog_vv())?,
+        )?));
+    }
+    Ok((surface, doc, per_commit))
+}
+
+/// Table reopen capture (b) (table-reopen-b.json 0f0dba80): reopening a keyless, normalized
+/// document sends one update with only root environmentTags:null and no table-node op;
+/// history then has an undo item. Fixture: Source's received snapshot bytes.
+#[test]
+fn reopening_a_keyless_normalized_table_sends_only_the_null_metadata_slot()
+-> Result<(), Box<dyn std::error::Error>> {
+    // RemoteInitialSync snapshot from table-reopen-b.json (frame d7dc61da), SHA-256
+    // f60b590a08550c51d2584f971258860a56c3f2e8b1a51310d63fd8ec0d804555.
+    let (surface, _doc, per_commit) = open_stored(include_bytes!(
+        "testdata/table-keyless-reopen-received.loro"
+    ))?;
+    assert_eq!(per_commit, [vec![map_op("insert", "environmentTags")]]);
+    assert!(surface.history().can_undo);
+    assert!(!surface.history().can_redo);
+    Ok(())
+}
+
+/// Undo of the first load restores the stored nulls in Loro; Source's Mirror holds them
+/// again, so the next local edit deletes them again (t1yn condition 2).
+#[test]
+fn an_edit_after_undoing_the_first_table_load_deletes_the_restored_nulls()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let (mut surface, doc, _) =
+        open_stored(include_bytes!("testdata/table-null-shape-received.loro"))?;
+    local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::Undo,
+            selection: ViewSelection::KeepModel,
+        },
+        1000,
+    )?;
+    let restored = stored_root(&doc);
+    assert_eq!(
+        restored["children"][1]["frozenRowCount"],
+        serde_json::Value::Null
+    );
+    assert!(
+        restored["children"][1].get("frozenRowCount").is_some(),
+        "undo restored the null"
+    );
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let text = surface.state().view().first_child(paragraph).expect("text");
+    let point = Point::text(text, Utf16Offset(5));
+    let edit = local_input(
+        &mut surface,
+        &doc,
+        Input::Command {
+            command: Command::InsertText("!".into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        2000,
+    )?;
+    for key in [
+        "frozenColumnCount",
+        "frozenRowCount",
+        "rowStriping",
+        "width",
+    ] {
+        assert!(
+            edit.contains(&map_op("delete", key)),
+            "missing delete {key}: {edit:?}"
+        );
+    }
+    let table = &stored_root(&doc)["children"][1];
+    assert!(table.get("frozenRowCount").is_none());
+    Ok(())
+}
+
+/// Source stored-field control (apps/web .../collaboration/storedFieldSync.test.ts, real
+/// Lexical nodes and loro-mirror): each snapshot stores one field on every node of a type;
+/// Source loads it and types once. Native must write the same ops for that field by its
+/// first local edit (Source has no load write here, native folds its load refresh in).
+#[test]
+fn stored_fields_are_rewritten_like_source_at_the_first_local_sync()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/testdata/source-stored-field-sync");
+    let cases: Vec<serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(dir.join("cases.json"))?)?;
+    assert_eq!(cases.len(), 32);
+    let mut mismatches = Vec::new();
+    for case in &cases {
+        let name = case["name"].as_str().ok_or("case name")?;
+        let field = case["field"].as_str().ok_or("case field")?;
+        let file = case["file"].as_str().ok_or("case file")?;
+        let source = case["source"].as_str().ok_or("case verdict")?;
+        let snapshot = std::fs::read(dir.join(file))?;
+        let stored = lexical_loro::new_doc(82)?;
+        stored.import(&snapshot)?;
+        let (mut surface, doc, _) = match open_stored(&snapshot) {
+            Ok(opened) => opened,
+            Err(error) => {
+                mismatches.push(format!(
+                    "{name}: source {source}, native open failed: {error}"
+                ));
+                continue;
+            }
+        };
+        if let Err(error) = type_text(&mut surface, &doc, "!", 1000) {
+            mismatches.push(format!(
+                "{name}: source {source}, native edit failed: {error}"
+            ));
+            continue;
+        }
+        let updates =
+            serde_json::to_value(doc.export_json_updates(&stored.oplog_vv(), &doc.oplog_vv())?)?;
+        let mut actions: Vec<String> = updates["changes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|change| change["ops"].as_array().cloned().unwrap_or_default())
+            .filter(|op| op["content"]["key"] == field)
+            .map(|op| match op["content"]["type"].as_str() {
+                Some("delete") => "delete".to_owned(),
+                _ => format!("write {}", op["content"]["value"]),
+            })
+            .collect();
+        actions.sort();
+        actions.dedup();
+        let native = if actions.is_empty() {
+            "keep".to_owned()
+        } else {
+            actions.join(", ")
+        };
+        if native != source {
+            mismatches.push(format!("{name}: source {source}, native {native}"));
+        }
+    }
+    assert!(mismatches.is_empty(), "{mismatches:#?}");
+    Ok(())
+}
+
+/// Remote-table capture (table-remote.redecoded.json 40ec3d83): peer B's open writes the
+/// parsed environmentTags:null slot; peer A, whose live metadata lacks it, deletes it at its
+/// next keystroke; B, whose live metadata holds it, re-inserts it at its next keystroke.
+#[test]
+fn environment_tags_null_round_trips_across_two_peers_like_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut a, a_doc) = open_stale_document()?;
+    assert_eq!(
+        stored_root(&a_doc)["$"]["documentMetadata"],
+        json!({"version": 10})
+    );
+    let b_doc = lexical_loro::new_doc(60)?;
+    b_doc.import(&a_doc.export(loro::ExportMode::Snapshot)?)?;
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let at = |ms: u32| Now {
+        mono: Millis(u64::from(ms)),
+        wall: UnixMillis(i64::from(ms)),
+    };
+    let mut b = <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 60, at(0))?;
+    let b_opened = b_doc.oplog_vv();
+    Surface::init(&mut b, &b_doc, at(0), Access::Edit, &mut Vec::new())?;
+    let b_open = op_shapes(&serde_json::to_value(
+        b_doc.export_json_updates(&b_opened, &b_doc.oplog_vv())?,
+    )?);
+    assert_eq!(b_open, [map_op("insert", "environmentTags")], "B's open");
+
+    let a_before = a_doc.oplog_vv();
+    a_doc.import(&b_doc.export(loro::ExportMode::updates(&a_before))?)?;
+    Surface::remote(&mut a, &a_doc, at(1000), Access::Edit, &mut Vec::new())?;
+    type_text(&mut a, &a_doc, "a", 2000)?;
+    let a_typed = a_doc.oplog_vv();
+    let a_ops = {
+        let after_remote = {
+            let mut vv = a_before.clone();
+            vv.merge(&b_doc.oplog_vv());
+            vv
+        };
+        op_shapes(&serde_json::to_value(
+            a_doc.export_json_updates(&after_remote, &a_typed)?,
+        )?)
+    };
+    assert!(
+        a_ops.contains(&map_op("delete", "environmentTags")),
+        "A's keystroke deletes B's null slot: {a_ops:?}"
+    );
+
+    let b_before = b_doc.oplog_vv();
+    b_doc.import(&a_doc.export(loro::ExportMode::updates(&b_before))?)?;
+    Surface::remote(&mut b, &b_doc, at(3000), Access::Edit, &mut Vec::new())?;
+    let b_synced = b_doc.oplog_vv();
+    type_text(&mut b, &b_doc, "b", 4000)?;
+    let b_ops = op_shapes(&serde_json::to_value(
+        b_doc.export_json_updates(&b_synced, &b_doc.oplog_vv())?,
+    )?);
+    assert!(
+        b_ops.contains(&map_op("insert", "environmentTags")),
+        "B's keystroke re-inserts its null slot: {b_ops:?}"
+    );
+    Ok(())
+}
+
 /// Source's writeStateToLoro skips read-only editors; load normalisation never reaches Loro.
 #[test]
 fn read_and_comment_only_opens_write_no_load_normalisation()
