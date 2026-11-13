@@ -397,7 +397,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::clone(&hand_backs),
             DraftAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
-                guide: routine_program::WRITING,
+                guide: routine_program::ROUTINE_RULES,
             },
         )
         .with_session_creations(Arc::new(ActivityCreations(
@@ -471,7 +471,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         routine_flags.clone(),
         SuggestionAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
-            guide: routine_program::WRITING,
+            guide: routine_program::ROUTINE_RULES,
             model: chat::domain::models::FREE_MODEL.to_owned(),
         },
         lifecycle.workers.clone(),

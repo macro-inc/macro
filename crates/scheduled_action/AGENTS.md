@@ -47,8 +47,9 @@ each run.
   tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
   the session admits and bills its turns as agent session usage. One
   prompt, the brief (`brief`): how to write a routine (`DraftAgent::guide`,
-  `routine_program::WRITING`, which the Compose Routines skill also carries,
-  so the rules live there, not here), `STEP_CONTEXT`, the catalog's code
+  `routine_program::ROUTINE_RULES`, plus `CODE_STEPS` when code steps can be
+  written: the text the Compose Routines skill also carries, so the rules live
+  there, not here), `STEP_CONTEXT`, the catalog's code
   routines as examples, and only what is particular to drafting: find names
   with one `macro.search.names` call, leave out an item it can't
   match exactly, and hand the routine back by checking it with `macro.routines.check`
@@ -87,7 +88,8 @@ each run.
   `SESSION_TIMEOUT` (240 s), handing back catalog picks first, then drafts.
   A prompt whose delivery is unknown ends the session like a failure, so it
   gets the one retry. Each brief (`suggestions/prompt.rs`) holds
-  `routine_program::WRITING`, the catalog for its surfaces, what was dismissed, and the
+  `routine_program::ROUTINE_RULES` (with `CODE_STEPS` when code steps can be
+  written), the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags (angle
   brackets in the data are swapped so it can't close them). A session hands
   back each suggestion through `macro.routines.suggest`

@@ -2,7 +2,7 @@
 //! and apps as untrusted data.
 
 use chrono::{SecondsFormat, Utc};
-use routine_program::{CATALOG, CatalogRoutine, STEP_CONTEXT, Surface};
+use routine_program::{CATALOG, CODE_STEPS, CatalogRoutine, STEP_CONTEXT, Surface};
 use serde_json::{Value, json};
 
 use super::decode::line;
@@ -41,7 +41,8 @@ pub struct BriefData<'a> {
     pub agent_model: &'a str,
     /// Whether code steps can be written.
     pub code: bool,
-    /// How to write a routine: `routine_program::WRITING`.
+    /// How to write a routine: `routine_program::ROUTINE_RULES`. The brief adds
+    /// the code-step contract when code steps can be written.
     pub guide: &'a str,
 }
 
@@ -60,7 +61,7 @@ pub fn brief(data: &BriefData<'_>) -> String {
     let timezone = data.timezone;
     let steps = if data.code {
         format!(
-            "An Ask AI step is `{{type: 'agent', model: '{model}', instructions}}`.\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```"
+            "An Ask AI step is `{{type: 'agent', model: '{model}', instructions}}`.\n\n{CODE_STEPS}\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```"
         )
     } else {
         format!(
