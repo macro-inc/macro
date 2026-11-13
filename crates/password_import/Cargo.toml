@@ -8,11 +8,12 @@ version = "0.1.0"
 # Serialize the parsed export (including revealed secret values) for the
 # browser adapter that hands it to JavaScript. Off by default so nothing else
 # can serialize a `Secret` by accident.
-serde = []
+reveal-secrets = []
 
 [dependencies]
 chrono = { workspace = true }
 csv = { workspace = true }
+csv-core = { workspace = true }
 nom = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }
@@ -24,7 +25,7 @@ zip-inflate = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 # The golden tests snapshot the parsed export through the adapter's serializer.
-password_import = { path = ".", features = ["serde"] }
+password_import = { path = ".", features = ["reveal-secrets"] }
 proptest = { workspace = true }
 # Snapshot key order: the workspace test build enables it anyway.
 serde_json = { workspace = true, features = ["preserve_order"] }

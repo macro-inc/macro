@@ -1,9 +1,9 @@
 /// Why a whole file can't be imported. Carries positions and nothing from
 /// the file's content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "reveal-secrets", derive(serde::Serialize))]
 #[cfg_attr(
-    feature = "serde",
+    feature = "reveal-secrets",
     serde(
         tag = "code",
         rename_all = "snake_case",
@@ -29,8 +29,8 @@ pub enum ImportError {
     /// An archive entry name with `..`, an absolute path or a backslash.
     #[error("the archive has an unsafe entry name")]
     PathTraversal,
-    /// Not a readable zip archive, or `export.data` is encrypted or uses an
-    /// unsupported compression method.
+    /// Not a readable zip archive: entry names repeat, or `export.data` is
+    /// encrypted or uses an unsupported compression method.
     #[error("the archive is not a readable zip file")]
     InvalidZip,
     /// A zip archive without `export.data`.

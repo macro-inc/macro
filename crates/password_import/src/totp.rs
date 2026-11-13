@@ -2,9 +2,7 @@
 use zeroize::Zeroizing;
 
 use crate::model::{Secret, TotpSeed};
-
-/// The vault's TOTP key limit.
-const MAX_SEED_BYTES: usize = 1024;
+use crate::vault;
 
 /// The seed when `raw` is a valid secret with default parameters (SHA1, 6
 /// digits, 30 s); `None` means the caller keeps `raw` as a concealed field.
@@ -65,7 +63,7 @@ fn normalize_base32(raw: &str) -> Option<TotpSeed> {
     seed.truncate(unpadded_len);
 
     let valid = !seed.is_empty()
-        && seed.len() <= MAX_SEED_BYTES
+        && seed.len() <= vault::MAX_TOTP_SEED_BYTES
         && seed
             .bytes()
             .all(|byte| matches!(byte, b'A'..=b'Z' | b'2'..=b'7'));

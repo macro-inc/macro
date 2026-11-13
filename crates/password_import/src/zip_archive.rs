@@ -3,6 +3,7 @@ use std::io::{Cursor, Read};
 
 use zeroize::Zeroizing;
 use zip_inflate::ZipArchive;
+use zip_inflate::read::ZipReadOptions;
 use zip_inflate::result::ZipError;
 
 use crate::error::ImportError;
@@ -12,18 +13,23 @@ pub(crate) const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
 pub(crate) const EXPORT_DATA: &str = "export.data";
 
 const END_OF_CENTRAL_DIRECTORY: &[u8] = b"PK\x05\x06";
-/// The fixed end-of-central-directory record plus the longest comment.
-const END_RECORD_SEARCH_BYTES: usize = 22 + u16::MAX as usize;
+/// The end-of-central-directory record without its comment.
+const END_RECORD_FIXED_BYTES: usize = 22;
+/// The fixed record plus the longest comment.
+const END_RECORD_SEARCH_BYTES: usize = END_RECORD_FIXED_BYTES + u16::MAX as usize;
 /// Offset of "total entries" within the end-of-central-directory record.
 const TOTAL_ENTRIES_OFFSET: usize = 10;
 /// The total-entries value that defers to a zip64 record.
 const ZIP64_ENTRY_COUNT: u16 = u16::MAX;
 
-/// Inflate `export.data`, bounded by `limits` while reading.
-pub(crate) fn read_export_data(
-    bytes: &[u8],
+type Archive<'a> = ZipArchive<Cursor<&'a [u8]>>;
+
+/// Open a `.1pux` archive and check it without inflating anything: entry
+/// count, entry names, and exactly one `export.data`.
+pub(crate) fn open_checked<'a>(
+    bytes: &'a [u8],
     limits: &Limits,
-) -> Result<Zeroizing<Vec<u8>>, ImportError> {
+) -> Result<Archive<'a>, ImportError> {
     // Reject a huge entry count before the zip reader allocates per entry.
     // A zip64 count is checked once the reader has parsed it.
     if let Some(count) = declared_entry_count(bytes)
@@ -34,6 +40,7 @@ pub(crate) fn read_export_data(
     }
 
     let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| ImportError::InvalidZip)?;
+    // Duplicate names are refused below, so this is every central-directory entry.
     if archive.len() > limits.max_zip_entries {
         return Err(ImportError::TooManyEntries);
     }
@@ -45,11 +52,26 @@ pub(crate) fn read_export_data(
         }
     }
 
-    let entry = match archive.by_name(EXPORT_DATA) {
-        Ok(entry) => entry,
+    // Header consistency refuses duplicate names anywhere in the archive, so
+    // the `export.data` read here is the only one, and the count above is real.
+    match archive.by_name_with_options(EXPORT_DATA, consistent()) {
+        Ok(_) => {}
         Err(ZipError::FileNotFound) => return Err(ImportError::MissingExportData),
         Err(_) => return Err(ImportError::InvalidZip),
-    };
+    }
+
+    Ok(archive)
+}
+
+/// Inflate `export.data`, bounded by `limits` while reading.
+pub(crate) fn read_export_data(
+    bytes: &[u8],
+    limits: &Limits,
+) -> Result<Zeroizing<Vec<u8>>, ImportError> {
+    let mut archive = open_checked(bytes, limits)?;
+    let entry = archive
+        .by_name_with_options(EXPORT_DATA, consistent())
+        .map_err(|_| ImportError::InvalidZip)?;
 
     // The header's size is a hint only; `take` enforces the real bound.
     let capacity = entry.size().min(limits.max_decompressed_bytes);
@@ -66,6 +88,10 @@ pub(crate) fn read_export_data(
     }
 
     Ok(data)
+}
+
+fn consistent() -> ZipReadOptions<'static> {
+    ZipReadOptions::new().enforce_header_consistency(true)
 }
 
 /// Total entries from the end-of-central-directory record, if one is found.

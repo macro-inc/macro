@@ -1,10 +1,16 @@
-//! Bitwarden unencrypted JSON: `{ encrypted, folders, items }`.
+//! Bitwarden unencrypted JSON: `{ encrypted, folders: [{id, name}], items }`.
+//! Items have `type` 1–5 (login, note, card, identity, SSH key), `login`,
+//! `card`, `identity`, `sshKey`, `fields: [{name, value, type 0–3}]`,
+//! `organizationId`, `collectionIds`, `deletedDate`, `archivedDate`,
+//! `passwordHistory` and `attachments`. Folder names nest with `/`.
+//! `encrypted: true` fails with `EncryptedBitwarden`.
 use std::collections::HashMap;
 
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 use serde_json::value::RawValue;
 
+use crate::bounded::{Bounded, Count};
 use crate::draft::{self, Draft, Parts};
 use crate::error::ImportError;
 use crate::model::{DroppedPart, FolderPath, ItemKind, Limits, Secret, SkipReason, SourceKey};
@@ -15,9 +21,17 @@ pub(crate) struct Envelope {
     pub(crate) items: Option<IgnoredAny>,
 }
 
+/// Whether the export is encrypted, and its list sizes, counted before
+/// anything is kept.
+#[derive(Deserialize)]
+struct Shape {
+    encrypted: Option<bool>,
+    folders: Option<Count<IgnoredAny>>,
+    items: Option<Count<IgnoredAny>>,
+}
+
 #[derive(Deserialize)]
 struct Export<'a> {
-    encrypted: Option<bool>,
     folders: Option<Vec<Folder>>,
     #[serde(borrow)]
     items: Option<Vec<&'a RawValue>>,
@@ -29,10 +43,51 @@ struct Folder {
     name: Option<String>,
 }
 
-/// Item ids only, to name an item whose full shape didn't parse.
-#[derive(Deserialize)]
-struct ItemId {
-    id: Option<String>,
+/// Bitwarden's cipher types.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ItemType {
+    Login,
+    SecureNote,
+    Card,
+    Identity,
+    SshKey,
+    Unknown,
+}
+
+impl From<u8> for ItemType {
+    fn from(value: u8) -> Self {
+        match value {
+            1 => Self::Login,
+            2 => Self::SecureNote,
+            3 => Self::Card,
+            4 => Self::Identity,
+            5 => Self::SshKey,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Bitwarden's custom field types.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FieldType {
+    Text,
+    Hidden,
+    Boolean,
+    /// Points at another field of the item; no value of its own.
+    Linked,
+    Unknown,
+}
+
+impl From<u8> for FieldType {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::Text,
+            1 => Self::Hidden,
+            2 => Self::Boolean,
+            3 => Self::Linked,
+            _ => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -47,7 +102,8 @@ struct Item {
     name: Option<String>,
     notes: Option<Secret>,
     favorite: Option<bool>,
-    fields: Option<Vec<Field>>,
+    #[serde(default)]
+    fields: Bounded<Field>,
     login: Option<Login>,
     card: Option<Card>,
     identity: Option<Identity>,
@@ -69,7 +125,8 @@ struct Field {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Login {
-    uris: Option<Vec<Uri>>,
+    #[serde(default)]
+    uris: Bounded<Uri>,
     username: Option<Secret>,
     password: Option<Secret>,
     totp: Option<Secret>,
@@ -123,26 +180,25 @@ struct SshKey {
     key_fingerprint: Option<Secret>,
 }
 
-const LOGIN: u8 = 1;
-const SECURE_NOTE: u8 = 2;
-const CARD: u8 = 3;
-const IDENTITY: u8 = 4;
-const SSH_KEY: u8 = 5;
-
-const FIELD_HIDDEN: u8 = 1;
-const FIELD_LINKED: u8 = 3;
-
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
-    let export: Export<'_> =
-        serde_json::from_slice(bytes).map_err(|error| ImportError::json(&error))?;
-    if export.encrypted == Some(true) {
+    let bytes = crate::strip_byte_order_mark(bytes);
+    // Count first: two bytes of `[0,0,...]` would otherwise become a kept
+    // entry each, before any limit applied.
+    let shape: Shape = serde_json::from_slice(bytes).map_err(|error| ImportError::json(&error))?;
+    if shape.encrypted == Some(true) {
         return Err(ImportError::EncryptedBitwarden);
     }
-
-    let items = export.items.ok_or(ImportError::UnsupportedVersion)?;
-    if items.len() > limits.max_items {
+    let entries = [shape.folders, shape.items]
+        .into_iter()
+        .flatten()
+        .fold(0, |total: usize, count| total.saturating_add(count.total));
+    if entries > limits.max_items {
         return Err(ImportError::TooManyItems);
     }
+
+    let export: Export<'_> =
+        serde_json::from_slice(bytes).map_err(|error| ImportError::json(&error))?;
+    let items = export.items.ok_or(ImportError::UnsupportedVersion)?;
 
     let folders: HashMap<String, String> = export
         .folders
@@ -155,14 +211,11 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     for (index, raw) in items.iter().enumerate() {
         match serde_json::from_str::<Item>(raw.get()) {
             Ok(item) => add_item(&mut parts, item, index, &folders),
-            Err(_) => {
-                let key = serde_json::from_str::<ItemId>(raw.get())
-                    .ok()
-                    .and_then(|item| item.id)
-                    .and_then(|id| SourceKey::from_source_id(&id))
-                    .unwrap_or_else(|| SourceKey::from_item_index(index));
-                parts.skip(Some(key), None, SkipReason::Malformed);
-            }
+            Err(_) => parts.skip(
+                Some(SourceKey::of_malformed(raw, index)),
+                None,
+                SkipReason::Malformed,
+            ),
         }
     }
 
@@ -170,11 +223,7 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
 }
 
 fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<String, String>) {
-    let key = item
-        .id
-        .as_deref()
-        .and_then(SourceKey::from_source_id)
-        .unwrap_or_else(|| SourceKey::from_item_index(index));
+    let key = SourceKey::from_source_id_or_index(item.id.as_deref(), index);
     let name = item.name.as_deref();
 
     if item.deleted_date.is_some() {
@@ -192,13 +241,15 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
         return parts.skip(Some(key), name, SkipReason::SharedCollection);
     }
 
-    let kind = match item.item_type {
-        Some(LOGIN) => ItemKind::Login,
-        Some(SECURE_NOTE) => ItemKind::Note,
-        Some(CARD) => ItemKind::Card,
-        Some(IDENTITY) => ItemKind::Identity,
-        Some(SSH_KEY) => ItemKind::Api,
-        _ => return parts.skip(Some(key), name, SkipReason::UnsupportedCategory),
+    let kind = match item.item_type.map_or(ItemType::Unknown, ItemType::from) {
+        ItemType::Login => ItemKind::Login,
+        ItemType::SecureNote => ItemKind::Note,
+        ItemType::Card => ItemKind::Card,
+        ItemType::Identity => ItemKind::Identity,
+        ItemType::SshKey => ItemKind::Api,
+        ItemType::Unknown => {
+            return parts.skip(Some(key), name, SkipReason::UnsupportedCategory);
+        }
     };
 
     let mut draft = Draft::new(key, kind);
@@ -206,10 +257,10 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
     draft.set_favorite(item.favorite == Some(true));
     if let Some(folder) = item.folder_id.and_then(|id| folders.get(&id)) {
         // Bitwarden nests folders by name: `Work/Clients`.
-        draft.set_folder(FolderPath::new(folder.split('/')));
+        draft.set_folder(FolderPath::parse(folder.split('/')));
     }
     if let Some(notes) = item.notes {
-        draft.notes(notes);
+        draft.set_notes(notes);
     }
 
     match kind {
@@ -236,15 +287,22 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
         ItemKind::Note | ItemKind::VerificationCode => {}
     }
 
-    for field in item.fields.unwrap_or_default() {
-        if field.field_type == Some(FIELD_LINKED) {
-            draft.drop_part(DroppedPart::ExtraField, 1);
-            continue;
-        }
+    if item.fields.overflowed {
+        draft.mark_too_large();
+    }
+    for field in item.fields.entries {
+        let field_type = field.field_type.map_or(FieldType::Text, FieldType::from);
+        let concealed = match field_type {
+            FieldType::Linked => {
+                draft.drop_part(DroppedPart::ExtraField, 1);
+                continue;
+            }
+            FieldType::Hidden => true,
+            FieldType::Text | FieldType::Boolean | FieldType::Unknown => false,
+        };
 
         let label = field.name.as_deref().unwrap_or_default();
-        let concealed = field.field_type == Some(FIELD_HIDDEN);
-        draft.field(label, field.value.unwrap_or_default(), concealed);
+        draft.add_field(label, field.value.unwrap_or_default(), concealed);
     }
 
     let history = item.password_history.map_or(0, |history| history.len());
@@ -256,20 +314,23 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
 }
 
 fn add_login(draft: &mut Draft, login: Login) {
-    for uri in login.uris.unwrap_or_default() {
+    if login.uris.overflowed {
+        draft.mark_too_large();
+    }
+    for uri in login.uris.entries {
         if let Some(uri) = uri.uri {
             draft.add_url(&uri);
         }
     }
 
     if let Some(username) = login.username {
-        draft.username(username, "Username");
+        draft.add_username(username);
     }
     if let Some(password) = login.password {
-        draft.password(password, "Password");
+        draft.add_password(password);
     }
     if let Some(totp) = login.totp {
-        draft.one_time_password(totp);
+        draft.add_one_time_password(totp);
     }
 
     let passkeys = login.fido2_credentials.map_or(0, |passkeys| passkeys.len());
@@ -278,10 +339,10 @@ fn add_login(draft: &mut Draft, login: Login) {
 
 fn add_card(draft: &mut Draft, card: Card) {
     if let Some(cardholder) = card.cardholder_name {
-        draft.username(cardholder, "Cardholder name");
+        draft.add_username_labeled(cardholder, "Cardholder name");
     }
     if let Some(number) = card.number {
-        draft.password(number, "Number");
+        draft.add_password_labeled(number, "Number");
     }
 
     let month = card.exp_month.unwrap_or_default();
@@ -293,18 +354,18 @@ fn add_card(draft: &mut Draft, card: Card) {
         month
     };
     let expires = Secret::join([month.expose_secret(), year.expose_secret()], "/");
-    draft.field(draft::EXPIRES, expires, false);
+    draft.add_field(draft::EXPIRES, expires, false);
 
     if let Some(code) = card.code {
-        draft.field(draft::SECURITY_CODE, code, true);
+        draft.add_field(draft::SECURITY_CODE, code, true);
     }
     if let Some(brand) = card.brand {
-        draft.field("Brand", brand, false);
+        draft.add_field("Brand", brand, false);
     }
 }
 
 fn add_identity(draft: &mut Draft, identity: Identity) {
-    let full_name = Secret::join(
+    draft.add_full_name(
         [
             &identity.first_name,
             &identity.middle_name,
@@ -313,15 +374,13 @@ fn add_identity(draft: &mut Draft, identity: Identity) {
         .into_iter()
         .flatten()
         .map(Secret::expose_secret),
-        " ",
     );
-    draft.username(full_name, "Name");
 
     if let Some(email) = identity.email {
-        draft.field(draft::EMAIL, email, false);
+        draft.add_field(draft::EMAIL, email, false);
     }
     if let Some(phone) = identity.phone {
-        draft.field(draft::PHONE, phone, false);
+        draft.add_field(draft::PHONE, phone, false);
     }
 
     let address = [
@@ -333,11 +392,8 @@ fn add_identity(draft: &mut Draft, identity: Identity) {
         &identity.postal_code,
         &identity.country,
     ];
-    let address = Secret::join(
-        address.into_iter().flatten().map(Secret::expose_secret),
-        ", ",
-    );
-    draft.field(draft::ADDRESS, address, false);
+    let address = draft::address_text(address.into_iter().flatten().map(Secret::expose_secret));
+    draft.add_field(draft::ADDRESS, address, false);
 
     let rest = [
         ("Title", identity.title, false),
@@ -349,19 +405,16 @@ fn add_identity(draft: &mut Draft, identity: Identity) {
     ];
     for (label, value, concealed) in rest {
         if let Some(value) = value {
-            draft.field(label, value, concealed);
+            draft.add_field(label, value, concealed);
         }
     }
 }
 
 fn add_ssh_key(draft: &mut Draft, key: SshKey) {
-    if let Some(private_key) = key.private_key {
-        draft.password(private_key, "Private key");
-    }
-    if let Some(public_key) = key.public_key {
-        draft.username(public_key, "Public key");
-    }
-    if let Some(fingerprint) = key.key_fingerprint {
-        draft.field("Fingerprint", fingerprint, false);
-    }
+    draft.add_ssh_key(
+        key.private_key,
+        "Private key",
+        key.public_key,
+        key.key_fingerprint,
+    );
 }

@@ -31,7 +31,7 @@ fn mutate(original: &[u8], edits: &[(usize, u8, u8)], truncate_to: usize) -> Vec
 }
 
 fn parse_every_format(bytes: &[u8]) {
-    let _ = detect(bytes);
+    let _ = detect(bytes, &Limits::default());
     for format in FORMATS {
         if let Ok(export) = parse(bytes, format, &Limits::default()) {
             let _ = export.summary();

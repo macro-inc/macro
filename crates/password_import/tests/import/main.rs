@@ -3,4 +3,5 @@ mod golden;
 mod limits;
 mod properties;
 mod redaction;
+mod security;
 mod support;
