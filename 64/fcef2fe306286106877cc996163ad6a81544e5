@@ -1,0 +1,21 @@
+apps/web/src/lib/queries/notification/notification-soup.ts
+  s_699e95788b47ad::t_cd95a2373f40d4 44-46
+apps/web/src/lib/service-clients/service-storage/graphql-favorites.ts
+  s_699e95788b47ad::t_cd95a2373f40d4 53-54,86-91,105-107,177-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "64fcef2fe306286106877cc996163ad6a81544e5",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
