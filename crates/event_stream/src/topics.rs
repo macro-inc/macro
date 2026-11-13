@@ -13,17 +13,23 @@ use crate::domain::webhook_lifecycle::WebhookMacroEvent;
 use agent_session::domain::events::AgentSessionLifecycleMacroEvent;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use bots::domain::events::BotMacroEvent;
+use call::domain::events::CallMacroEvent;
 use call::domain::notification_events::CallNotificationMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
+use chat::domain::events::ChatMacroEvent;
+use databases::domain::events::DatabaseMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
+use forms::domain::events::FormMacroEvent;
+use github_pull_requests::broker::GithubPullRequestMacroEvent;
+use initiative::domain::events::InitiativeMacroEvent;
 use macro_event_topics::{
     MacroActivityTopic, MacroAgentSessionLogTopic, MacroBotsTopic, MacroCalendarTopic,
-    MacroCallsTopic, MacroChatsTopic, MacroDatabasesTopic, MacroEmailTopic, MacroExampleTopic,
-    MacroFormsTopic, MacroGithubPullRequestsTopic, MacroGithubWebhooksTopic, MacroInitiativesTopic,
-    MacroMentionsTopic, MacroNotificationsTopic, MacroProjectsTopic, MacroPropertiesTopic,
-    MacroSoupRealtimeTopic, MacroTeamsTopic, Topic,
+    MacroEmailTopic, MacroExampleTopic, MacroGithubWebhooksTopic, MacroMentionsTopic,
+    MacroNotificationsTopic, MacroSoupRealtimeTopic, MacroTeamsTopic, Topic,
 };
 use messages::outbound::broker::MessageMacroEvent;
+use projects::domain::events::ProjectMacroEvent;
+use properties::domain::events::PropertyMacroEvent;
 use teams::domain::events::TeamMacroEvent;
 use user_events::UserMacroEvent;
 
@@ -36,6 +42,14 @@ macro_event_broker::declare_topics!(
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,
     UserMacroEvent,
+    ProjectMacroEvent,
+    ChatMacroEvent,
+    DatabaseMacroEvent,
+    FormMacroEvent,
+    InitiativeMacroEvent,
+    PropertyMacroEvent,
+    CallMacroEvent,
+    GithubPullRequestMacroEvent,
 );
 
 macro_event_broker::declare_topics!(
@@ -47,6 +61,14 @@ macro_event_broker::declare_topics!(
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,
     UserMacroEvent,
+    ProjectMacroEvent,
+    ChatMacroEvent,
+    DatabaseMacroEvent,
+    FormMacroEvent,
+    InitiativeMacroEvent,
+    PropertyMacroEvent,
+    CallMacroEvent,
+    GithubPullRequestMacroEvent,
     TeamMacroEvent,
     BotMacroEvent,
 );
@@ -66,22 +88,14 @@ pub const ACCESS_CHANGE_TOPICS: &[&str] = &[MacroTeamsTopic::TOPIC_STR, MacroBot
 pub const INTERNAL_TOPICS: &[&str] = &[
     MacroExampleTopic::TOPIC_STR,
     MacroBotsTopic::TOPIC_STR,
-    MacroCallsTopic::TOPIC_STR,
-    MacroGithubPullRequestsTopic::TOPIC_STR,
     MacroGithubWebhooksTopic::TOPIC_STR,
     MacroSoupRealtimeTopic::TOPIC_STR,
-    MacroProjectsTopic::TOPIC_STR,
-    MacroInitiativesTopic::TOPIC_STR,
-    MacroPropertiesTopic::TOPIC_STR,
     MacroTeamsTopic::TOPIC_STR,
     MacroEmailTopic::TOPIC_STR,
     MacroMentionsTopic::TOPIC_STR,
     MacroNotificationsTopic::TOPIC_STR,
     MacroActivityTopic::TOPIC_STR,
-    MacroChatsTopic::TOPIC_STR,
     MacroCalendarTopic::TOPIC_STR,
     // Retired; no event type exists in this repository any more.
     MacroAgentSessionLogTopic::TOPIC_STR,
-    MacroDatabasesTopic::TOPIC_STR,
-    MacroFormsTopic::TOPIC_STR,
 ];

@@ -20,7 +20,12 @@ schema = [
   "call/inbound",
   "channels/schema",
   "documents/schema",
+  "forms/inbound",
+  "github_pull_requests/schema",
+  "initiative/inbound",
   "messages/schema",
+  "projects/axum",
+  "properties/inbound",
   "user_events/schema",
 ]
 
@@ -44,6 +49,13 @@ agent_trigger = { path = "../agent_trigger" }
 bots = { path = "../bots", default-features = false }
 call = { path = "../call", default-features = false }
 channels = { path = "../channels", default-features = false }
+chat = { path = "../chat", default-features = false }
+databases = { path = "../databases", default-features = false }
+forms = { path = "../forms", default-features = false }
+github_pull_requests = { path = "../github_pull_requests", default-features = false }
+initiative = { path = "../initiative", default-features = false }
+projects = { path = "../projects", default-features = false }
+properties = { path = "../properties", default-features = false }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false }

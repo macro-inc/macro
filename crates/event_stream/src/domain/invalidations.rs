@@ -69,7 +69,15 @@ pub fn invalidations(event: &LogMacroEvent) -> Vec<Invalidation> {
         | LogMacroEvent::WebhookMacroEvent(_)
         | LogMacroEvent::AgentSessionMacroEvent(_)
         | LogMacroEvent::AgentSessionLifecycleMacroEvent(_)
-        | LogMacroEvent::UserMacroEvent(_) => Vec::new(),
+        | LogMacroEvent::UserMacroEvent(_)
+        | LogMacroEvent::ProjectMacroEvent(_)
+        | LogMacroEvent::ChatMacroEvent(_)
+        | LogMacroEvent::DatabaseMacroEvent(_)
+        | LogMacroEvent::FormMacroEvent(_)
+        | LogMacroEvent::InitiativeMacroEvent(_)
+        | LogMacroEvent::PropertyMacroEvent(_)
+        | LogMacroEvent::CallMacroEvent(_)
+        | LogMacroEvent::GithubPullRequestMacroEvent(_) => Vec::new(),
     }
 }
 
@@ -92,6 +100,14 @@ pub fn log_record(event: &LogMacroEvent) -> Result<Option<LogRecord>, NormalizeE
         LogMacroEvent::AgentSessionMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::AgentSessionLifecycleMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::UserMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::ProjectMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::ChatMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::DatabaseMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::FormMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::InitiativeMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::PropertyMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::CallMacroEvent(event) => normalize(event.event())?,
+        LogMacroEvent::GithubPullRequestMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::TeamMacroEvent(event) => normalize(event.event())?,
         LogMacroEvent::BotMacroEvent(event) => normalize(event.event())?,
     };

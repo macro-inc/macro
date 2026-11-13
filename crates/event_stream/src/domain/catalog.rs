@@ -10,11 +10,19 @@
 mod test;
 
 use agent_session::domain::events::AgentSessionLifecycleEvent;
+use call::domain::events::{CallRecordPublicEvent, CallTopicEvent};
 use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
+use chat::domain::events::{ChatPublicEvent, ChatTopicEvent};
+use databases::domain::events::{DatabasePublicEvent, DatabaseTopicEvent};
 use documents::domain::events::{DocumentPublicEvent, DocumentTopicEvent};
 use event_exposure::Stage;
+use forms::domain::events::{FormPublicEvent, FormTopicEvent};
+use github_pull_requests::broker::{GithubPullRequestPublicEvent, GithubPullRequestTopicEvent};
+use initiative::domain::events::{InitiativePublicEvent, InitiativeTopicEvent};
 use messages::outbound::broker::MessageTopicEvent;
+use projects::domain::events::{ProjectPublicEvent, ProjectTopicEvent};
+use properties::domain::events::{PropertyPublicEvent, PropertyTopicEvent};
 use serde::Serialize;
 use user_events::UserTopicEvent;
 
@@ -129,6 +137,7 @@ macro_rules! public_event_registry {
             const fn is_public_payload<T: macro_event_broker::TopicEvent<PublicPayload = P>, P>() {}
             $( is_public_payload::<$topic, $payload>(); )+
         };
+
     };
 }
 
@@ -194,6 +203,67 @@ public_event_registry! {
         /// User profile events from the `macro.users` topic.
         User(UserTopicEvent => UserTopicEvent) {
             "user.picture_changed": ["user"], [ContactsOf, TeamsOf], Stable;
+        }
+        /// Project lifecycle events from the `macro.projects` topic.
+        Project(ProjectTopicEvent => ProjectPublicEvent) {
+            "project.created": ["project"], [Entity], Preview;
+            "project.updated": ["project"], [Entity], Preview;
+            "project.deleted": ["project"], [Entity], Preview;
+            "project.restored": ["project"], [Entity], Preview;
+            "project.permanently_deleted": ["project"], [Owner], Preview;
+            "project.uploaded": ["project"], [Entity], Preview;
+        }
+        /// AI chat events from the `macro.chats` topic.
+        Chat(ChatTopicEvent => ChatPublicEvent) {
+            "chat.created": ["chat"], [Entity], Preview;
+            "chat.updated": ["chat"], [Entity], Preview;
+            "chat.deleted": ["chat"], [Entity], Preview;
+            "chat.restored": ["chat"], [Entity], Preview;
+            "chat.copied": ["chat"], [Entity], Preview;
+            "chat.message_sent": ["chat"], [Entity], Preview;
+            "chat.message_deleted": ["chat"], [Entity], Preview;
+        }
+        /// Database events from the `macro.databases` topic.
+        Database(DatabaseTopicEvent => DatabasePublicEvent) {
+            "database.created": ["database"], [Entity], Preview;
+            "database.renamed": ["database"], [Entity], Preview;
+            "database.trashed": ["database"], [Entity], Preview;
+            "database.restored": ["database"], [Entity], Preview;
+            "database.tables_changed": ["database"], [Entity], Preview;
+            "database.sharing_changed": ["database"], [Entity], Preview;
+            "database.appearance_changed": ["database"], [Entity], Preview;
+        }
+        /// Form events from the `macro.forms` topic.
+        Form(FormTopicEvent => FormPublicEvent) {
+            "form.created": ["form"], [Entity], Preview;
+            "form.renamed": ["form"], [Entity], Preview;
+            "form.trashed": ["form"], [Entity], Preview;
+            "form.restored": ["form"], [Entity], Preview;
+            "form.sharing_changed": ["form"], [Entity], Preview;
+            "form.response_submitted": ["form"], [EntityAtLeast], Preview;
+            "form.appearance_changed": ["form"], [Entity], Preview;
+        }
+        /// Initiative events from the `macro.initiatives` topic.
+        Initiative(InitiativeTopicEvent => InitiativePublicEvent) {
+            "initiative.created": ["initiative"], [Entity], Preview;
+            "initiative.updated": ["initiative"], [Entity], Preview;
+            "initiative.appearance_changed": ["initiative"], [Entity], Preview;
+            "initiative.purged": ["initiative"], [Snapshot], Preview;
+        }
+        /// Entity property value events from the `macro.properties` topic.
+        Property(PropertyTopicEvent => PropertyPublicEvent) {
+            "entity_property.updated": ["call", "channel", "chat", "crm_company", "crm_contact", "database_row", "document", "initiative", "project", "email_thread"], [Entity], Preview;
+            "entity_properties.cleared": ["call", "channel", "chat", "crm_company", "crm_contact", "database_row", "document", "initiative", "project", "email_thread"], [Entity], Preview;
+        }
+        /// Call record events from the `macro.calls` topic.
+        CallRecord(CallTopicEvent => CallRecordPublicEvent) {
+            "call.record_updated": ["call"], [Entity], Preview;
+            "call.record_deleted": ["call"], [Entity], Preview;
+            "call.record_imported": ["call"], [Entity], Preview;
+        }
+        /// Pull request events from the `macro.github_pull_requests` topic.
+        GithubPullRequest(GithubPullRequestTopicEvent => GithubPullRequestPublicEvent) {
+            "github_pull_request.updated": ["github_pull_request"], [Entity], Preview;
         }
     }
     outside_union {
