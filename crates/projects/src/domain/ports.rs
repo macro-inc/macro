@@ -23,7 +23,7 @@ use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData,
+    UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
@@ -201,6 +201,12 @@ pub trait BulkUploadRequestPort: Send + Sync + 'static {
         &self,
         upload_request_id: &str,
     ) -> impl Future<Output = anyhow::Result<BulkUploadRequestDocuments>> + Send;
+
+    /// Find a bulk-upload request, or `None` when none has this id.
+    fn find_bulk_upload_request(
+        &self,
+        upload_request_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<BulkUploadRequest>>> + Send;
 }
 
 /// Port for generating project-upload destinations.
@@ -369,6 +375,13 @@ impl BulkUploadRequestPort for UnavailableBulkUploadRequestPort {
     ) -> anyhow::Result<BulkUploadRequestDocuments> {
         anyhow::bail!("bulk-upload requests are not available in this host")
     }
+
+    async fn find_bulk_upload_request(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        anyhow::bail!("bulk-upload requests are not available in this host")
+    }
 }
 
 /// Unwired content-hash counter for hosts that expose project operations
@@ -526,6 +539,13 @@ pub trait ProjectService: Send + Sync + 'static {
         actor: MacroUserIdStr<'static>,
         args: UploadExtractFolderRequest,
     ) -> impl Future<Output = Result<UploadExtractFolderResponseData, ProjectError>> + Send;
+
+    /// Where the caller's own archive extraction request stands.
+    fn get_upload_extract_status(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        upload_request_id: &str,
+    ) -> impl Future<Output = Result<UploadExtractStatusResponseData, ProjectError>> + Send;
 
     /// Finalize the uploaded state of a project tree.
     fn mark_projects_uploaded(

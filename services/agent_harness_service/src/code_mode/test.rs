@@ -255,6 +255,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "scheduled-action.retireRoutineSuggestion",
         "scheduled-action.suggestRoutine",
         "scheduled-action.draftRoutine",
+        "scheduled-action.startRoutineDraftJob",
+        "scheduled-action.discardRoutineDraftJob",
         "scheduled-action.deleteScheduledAction",
         // Detaching only moves the owner's own sub-routine to their list.
         "scheduled-action.detachScheduledAction",
@@ -305,6 +307,10 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "email.updateThreadProject",
         "email.updateThreadState",
         "storage.setCrmContactEmail",
+        "storage.addCrmContactEmail",
+        "storage.removeCrmContactEmail",
+        // Deleting a message in a call's guest chat, like a channel message.
+        "storage.guestCallChatDeleteMessage",
         "storage.setEmailSync",
         // Channel sections only arrange the person's own sidebar.
         "storage.createChannelSection",

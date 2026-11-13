@@ -295,6 +295,34 @@ export type CheckRoutineRequest = {
 };
 
 /**
+ * A routine the session handed back, as a person watching reads it: never
+ * its code.
+ */
+export type CheckSummary = {
+    /**
+     * How many checks the session made so far, this one included.
+     */
+    checks: number;
+    name: string;
+    /**
+     * Whether it passed.
+     */
+    ok: boolean;
+    /**
+     * How many problems it has, its code's included.
+     */
+    problems: number;
+    /**
+     * Its steps, in order.
+     */
+    steps: Array<StepTitle>;
+    /**
+     * When it would run.
+     */
+    trigger: ActionTrigger;
+};
+
+/**
  * A code step that doesn't type-check.
  */
 export type CheckedStepProblems = {
@@ -432,6 +460,18 @@ export type Draft = (DraftedRoutine & {
 };
 
 /**
+ * What a job was asked to draft, as its owner reads it back: the kind of
+ * request and the words they typed, nothing it was sent with them.
+ */
+export type DraftAsked = {
+    /**
+     * The words they typed: the description, or the change asked for.
+     */
+    description: string;
+    kind: DraftKind;
+};
+
+/**
  * What the drafter may write. It looks up the items the person's words
  * name itself, with their access.
  */
@@ -477,6 +517,54 @@ export type DraftCreated = {
 };
 
 /**
+ * A background draft, as its owner reads it.
+ */
+export type DraftJob = DraftJobState & {
+    createdAt: string;
+    /**
+     * Its id: its hidden session's.
+     */
+    id: string;
+    progress: DraftJobProgress;
+    request: DraftAsked;
+};
+
+/**
+ * How far a draft has got: its latest stage, and what it reported on the
+ * way.
+ */
+export type DraftJobProgress = {
+    check?: null | CheckSummary;
+    /**
+     * How many items the words name were found; absent before they were
+     * looked up.
+     */
+    found?: number | null;
+    stage: DraftStage;
+};
+
+/**
+ * Where a background draft is.
+ */
+export type DraftJobState = {
+    state: 'drafting';
+} | {
+    draft: Draft;
+    finishedAt: string;
+    state: 'ready';
+} | {
+    created: Array<DraftCreated>;
+    finishedAt: string;
+    message: string;
+    state: 'failed';
+};
+
+/**
+ * What kind of draft was asked for.
+ */
+export type DraftKind = 'routine' | 'add_step' | 'change_step';
+
+/**
  * What to draft.
  */
 export type DraftRequest = {
@@ -501,6 +589,25 @@ export type DraftRoutineRequest = {
     context: DraftContext;
     draft: DraftRequest;
 };
+
+/**
+ * The stage a draft is at.
+ */
+export type DraftStage = 'started' | 'found' | 'writing' | 'checked' | 'fixing';
+
+/**
+ * How a background draft is going, for its owner's open apps.
+ */
+export type DraftUpdate = {
+    draftId: string;
+    progress: DraftJobProgress;
+    state: DraftUpdateState;
+};
+
+/**
+ * Where a background draft is now; `removed` once cancelled or discarded.
+ */
+export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
 
 /**
  * A drafted routine.
@@ -1389,6 +1496,21 @@ export type ShareRoutineTemplate = {
 };
 
 /**
+ * A background draft to start: what the blocking route takes, and the id
+ * the client made for this start.
+ */
+export type StartDraftJobRequest = {
+    /**
+     * Made by the client, once per start. Sent again with it (as when the
+     * connection drops before the answer), the start answers with the job
+     * it began, starting nothing, until that job is discarded.
+     */
+    clientId: string;
+    context: DraftContext;
+    draft: DraftRequest;
+};
+
+/**
  * Names a step's output: a lowercase letter, then up to 31 lowercase
  * letters, digits or underscores.
  */
@@ -1408,6 +1530,17 @@ export type StepProblem = {
      */
     index: number;
     problems: Array<string>;
+};
+
+/**
+ * A step of a routine handed back.
+ */
+export type StepTitle = {
+    kind: StepKind;
+    /**
+     * Its title; empty when it has none.
+     */
+    title: string;
 };
 
 /**
@@ -1911,6 +2044,129 @@ export type CheckScheduledActionResponses = {
 };
 
 export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
+
+export type ListRoutineDraftJobsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/draft-jobs';
+};
+
+export type ListRoutineDraftJobsErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListRoutineDraftJobsError = ListRoutineDraftJobsErrors[keyof ListRoutineDraftJobsErrors];
+
+export type ListRoutineDraftJobsResponses = {
+    /**
+     * The caller's drafts that are drafting, or finished and not yet discarded, newest first
+     */
+    200: Array<DraftJob>;
+};
+
+export type ListRoutineDraftJobsResponse = ListRoutineDraftJobsResponses[keyof ListRoutineDraftJobsResponses];
+
+export type StartRoutineDraftJobData = {
+    body: StartDraftJobRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/draft-jobs';
+};
+
+export type StartRoutineDraftJobErrors = {
+    400: string;
+    401: string;
+    /**
+     * AI usage limit reached
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Too many drafts are drafting already
+     */
+    409: string;
+    500: string;
+    /**
+     * AI usage validation unavailable
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type StartRoutineDraftJobError = StartRoutineDraftJobErrors[keyof StartRoutineDraftJobErrors];
+
+export type StartRoutineDraftJobResponses = {
+    /**
+     * Drafting in the background; read it, or follow `routine_draft_update` messages, until it is ready or failed. A request that can't be drafted at all comes back failed. Sent again with the same `clientId`, the job that start began, as it is now
+     */
+    202: DraftJob;
+};
+
+export type StartRoutineDraftJobResponse = StartRoutineDraftJobResponses[keyof StartRoutineDraftJobResponses];
+
+export type DiscardRoutineDraftJobData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the draft
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/draft-jobs/{id}';
+};
+
+export type DiscardRoutineDraftJobErrors = {
+    401: string;
+    /**
+     * No such draft of the caller's
+     */
+    404: string;
+    500: string;
+};
+
+export type DiscardRoutineDraftJobError = DiscardRoutineDraftJobErrors[keyof DiscardRoutineDraftJobErrors];
+
+export type DiscardRoutineDraftJobResponses = {
+    /**
+     * Cancelled while drafting, or discarded once finished
+     */
+    204: void;
+};
+
+export type DiscardRoutineDraftJobResponse = DiscardRoutineDraftJobResponses[keyof DiscardRoutineDraftJobResponses];
+
+export type GetRoutineDraftJobData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the draft
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/draft-jobs/{id}';
+};
+
+export type GetRoutineDraftJobErrors = {
+    401: string;
+    /**
+     * No such draft of the caller's
+     */
+    404: string;
+    500: string;
+};
+
+export type GetRoutineDraftJobError = GetRoutineDraftJobErrors[keyof GetRoutineDraftJobErrors];
+
+export type GetRoutineDraftJobResponses = {
+    /**
+     * The draft, with its routine or step when ready, or why it failed
+     */
+    200: DraftJob;
+};
+
+export type GetRoutineDraftJobResponse = GetRoutineDraftJobResponses[keyof GetRoutineDraftJobResponses];
 
 export type DraftRoutineData = {
     body: DraftRoutineRequest;

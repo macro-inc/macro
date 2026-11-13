@@ -1,0 +1,21 @@
+/* The email view's header, as the app draws it: pill tabs and round controls. */
+.mail-view-bar { display: flex; flex: none; align-items: center; gap: 8px; height: 52px; padding: 0 12px; }
+.mail-view-tabs { display: flex; padding: 2px; border-radius: 999px; background: var(--color-surface-2); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--color-content-0) 5%, transparent); }
+.mail-view-tabs button { height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--color-ink-muted); font: 500 14px/20px 'Inter Variable', Inter, sans-serif; }
+.mail-view-tabs button[aria-pressed=true] { background: color-mix(in oklch, var(--color-content-0) 10%, transparent); color: var(--color-ink); }
+.mail-view-tabs button:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 1px; }
+
+.mail-view-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; color: var(--color-ink-muted); }
+.mail-view-controls > span { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; height: 32px; box-sizing: border-box; border-radius: 999px; background: var(--color-surface-2); font: 500 14px/20px 'Inter Variable', Inter, sans-serif; }
+.mail-view-controls svg { width: 16px; height: 16px; }
+.mail-view-new { padding: 0 12px; color: var(--color-ink); }
+/* Connected inboxes: an account photo with the next account's initial over its edge. */
+.mail-view-inboxes { gap: 0 !important; padding: 0 8px; }
+.mail-view-inboxes img, .mail-view-inboxes i { width: 18px; height: 18px; border-radius: 50%; }
+.mail-view-inboxes img { object-fit: cover; }
+.mail-view-inboxes i { display: grid; place-items: center; margin-left: -5px; background: var(--color-ink-muted); color: var(--color-surface, #000); font-size: 10px; font-style: normal; font-weight: 600; }
+
+/* A narrow inbox keeps the tabs and search. */
+@container mail-list (max-width: 540px) {
+  .mail-view-controls > :not(:last-child) { display: none; }
+}

@@ -44,8 +44,8 @@
 .feature-page-footer a { color: var(--color-ink-subtle); font-size: 12px; text-decoration: none; }
 @media (max-width: 699px) {
   .feature-page-hero { padding: 120px 0 64px; }
-  .feature-page-hero h1 { font-size: clamp(34px, 8vw, 44px); }
-  .feature-page-hero > p:not(.feature-page-eyebrow) { font-size: 14px; max-width: 330px; }
+  .feature-page-hero h1 { font-size: clamp(38px, 11vw, 46px); line-height: 1.08; }
+  .feature-page-hero > p:not(.feature-page-eyebrow) { font-size: 14px; max-width: 100%; text-wrap: pretty; }
   .feature-page-section { padding: 56px 0 24px; }
   .feature-page-section .homepage-feature-heading { margin-bottom: 32px; }
   .feature-page-reading { padding: 48px 0; margin-top: 40px; font-size: 14px; }

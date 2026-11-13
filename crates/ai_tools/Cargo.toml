@@ -25,7 +25,7 @@ ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
 initiative_description = { path = "../initiative_description" }
-activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
+activity = { path = "../activity", default-features = false, features = ["json_schema", "outbound", "reads"] }
 agent = { path = "../agent" }
 agent_session = { path = "../agent_session", features = ["ai_tools"] }
 ai_usage = { path = "../ai_usage" }

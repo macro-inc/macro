@@ -1,0 +1,267 @@
+//! The subject's own activity in a time range, newest first and capped, with
+//! property changes resolved for the subject as viewer. `GET /activity` serves
+//! it, for the SDK.
+
+use std::{collections::HashMap, num::NonZeroU32};
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use serde_json::Value;
+
+use super::{
+    models::{Action, ActivityRecord, RecordedAction},
+    ports::{ActivityPropertyMetadata, ActivityReads},
+    service::ActivityReadService,
+};
+use macro_user_id::user_id::MacroUserIdStr;
+
+const MAX_ACTIVITY_RESULTS: u32 = 100;
+
+/// One activity action returned to the AI.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "json_schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ToolActivityAction {
+    /// The entity was created.
+    Created,
+    /// The entity's content or metadata was edited.
+    Edited,
+    /// The entity was opened.
+    Opened,
+    /// The entity was soft-deleted.
+    Deleted,
+    /// A message was sent in the entity.
+    Messaged,
+    /// An email message was sent on the thread.
+    Sent,
+    /// Someone submitted a response to the entity (form).
+    Responded,
+    /// A property value changed on the entity.
+    PropertyChanged {
+        /// The property definition id.
+        property: String,
+        /// The property definition's human-readable display name, when it is
+        /// still visible to the caller.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        property_name: Option<String>,
+        /// The property's canonical data type, including `tag` for tag sets.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        property_type: Option<String>,
+        /// The previous value, when known.
+        from: Option<Value>,
+        /// Previous select/tag option ids resolved to display labels.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        from_labels: Option<Vec<String>>,
+        /// The new value, or `None` when cleared.
+        to: Option<Value>,
+        /// New select/tag option ids resolved to display labels.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        to_labels: Option<Vec<String>>,
+    },
+    /// A principal was added to the entity.
+    ParticipantAdded {
+        /// The added principal.
+        participant: String,
+    },
+    /// A principal was removed from the entity.
+    ParticipantRemoved {
+        /// The removed principal.
+        participant: String,
+    },
+    /// A call was started in the entity.
+    CallStarted {
+        /// The started call's id.
+        call_id: String,
+    },
+    /// A task was added to the project. Resolve references through authorized project history.
+    TaskAdded,
+    /// A task was removed from the project.
+    TaskRemoved,
+    /// An action outside this deployment's vocabulary.
+    Unknown {
+        /// The stored action tag.
+        tag: String,
+        /// The stored payload, verbatim.
+        payload: Option<Value>,
+    },
+}
+
+impl ToolActivityAction {
+    fn from_recorded(
+        action: RecordedAction,
+        properties: &HashMap<String, ActivityPropertyMetadata>,
+    ) -> Self {
+        match action {
+            RecordedAction::Known(Action::Created) => Self::Created,
+            RecordedAction::Known(Action::Edited) => Self::Edited,
+            RecordedAction::Known(Action::Opened) => Self::Opened,
+            RecordedAction::Known(Action::Deleted) => Self::Deleted,
+            RecordedAction::Known(Action::Messaged) => Self::Messaged,
+            RecordedAction::Known(Action::Sent) => Self::Sent,
+            RecordedAction::Known(Action::Responded) => Self::Responded,
+            RecordedAction::Known(Action::PropertyChanged(change)) => {
+                let metadata = properties.get(&change.property);
+                let from_labels = option_labels(change.from.as_ref(), metadata);
+                let to_labels = option_labels(change.to.as_ref(), metadata);
+                Self::PropertyChanged {
+                    property: change.property,
+                    property_name: metadata.map(|property| property.display_name.clone()),
+                    property_type: metadata.map(|property| property.data_type.clone()),
+                    from: change.from,
+                    from_labels,
+                    to: change.to,
+                    to_labels,
+                }
+            }
+            RecordedAction::Known(Action::ParticipantAdded(change)) => Self::ParticipantAdded {
+                participant: change.participant.as_ref().to_owned(),
+            },
+            RecordedAction::Known(Action::ParticipantRemoved(change)) => Self::ParticipantRemoved {
+                participant: change.participant.as_ref().to_owned(),
+            },
+            RecordedAction::Known(Action::CallStarted(start)) => Self::CallStarted {
+                call_id: start.call_id,
+            },
+            RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded,
+            RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved,
+            RecordedAction::Known(
+                action @ (Action::Renamed(_)
+                | Action::AppearanceChanged(_)
+                | Action::PictureChanged
+                | Action::CallEnded(_)
+                | Action::AccessRequested(_)),
+            ) => {
+                let (tag, payload) = action.to_columns();
+                Self::Unknown {
+                    tag: tag.to_owned(),
+                    payload,
+                }
+            }
+            RecordedAction::Unknown { tag, payload } => Self::Unknown { tag, payload },
+        }
+    }
+}
+
+fn option_labels(
+    value: Option<&Value>,
+    metadata: Option<&ActivityPropertyMetadata>,
+) -> Option<Vec<String>> {
+    let value = value?;
+    let metadata = metadata?;
+    if value.get("type").and_then(Value::as_str) != Some("SelectOption") {
+        return None;
+    }
+    let labels: Vec<String> = value
+        .get("value")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .filter_map(|id| metadata.option_labels.get(id).cloned())
+        .collect();
+    (!labels.is_empty()).then_some(labels)
+}
+
+/// One activity event returned by [`ReadActivity`].
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "json_schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ToolActivityEvent {
+    /// The principal that mechanically performed the action.
+    pub actor_id: String,
+    /// The kind of entity acted on.
+    pub entity_type: String,
+    /// The entity acted on.
+    pub entity_id: String,
+    /// What the principal did.
+    pub action: ToolActivityAction,
+    /// When the action occurred.
+    pub occurred_at: DateTime<Utc>,
+}
+
+impl ToolActivityEvent {
+    fn from_record(
+        record: ActivityRecord,
+        properties: &HashMap<String, ActivityPropertyMetadata>,
+    ) -> Self {
+        Self {
+            actor_id: record.actor.as_ref().to_owned(),
+            entity_type: record.entity_type.as_ref().to_owned(),
+            entity_id: record.entity_id,
+            action: ToolActivityAction::from_recorded(record.action, properties),
+            occurred_at: record.occurred_at,
+        }
+    }
+}
+
+/// Response from [`ReadActivity`].
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "json_schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ReadActivityResponse {
+    /// Matching activity events, newest first.
+    pub activities: Vec<ToolActivityEvent>,
+    /// Whether more than 100 events matched the requested range.
+    pub truncated: bool,
+}
+
+/// Why a bounded activity range could not be read.
+#[derive(Debug, thiserror::Error)]
+pub enum ReadActivityError {
+    /// `from` was not before `to`.
+    #[error("activity range `from` must be before `to`")]
+    InvalidRange,
+    /// The activity store failed.
+    #[error("unable to read activity for the requested time range")]
+    Store(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl ReadActivityResponse {
+    /// Read the subject's newest activity in `[from, to)`, at most 100 events,
+    /// with property changes resolved for the subject as viewer.
+    pub async fn read<R>(
+        service: &ActivityReadService<R>,
+        subject: &MacroUserIdStr<'_>,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Self, ReadActivityError>
+    where
+        R: ActivityReads,
+    {
+        if from >= to {
+            return Err(ReadActivityError::InvalidRange);
+        }
+
+        let range = service
+            .subject_activity_range(
+                subject,
+                from,
+                to,
+                NonZeroU32::new(MAX_ACTIVITY_RESULTS).expect("activity result limit is non-zero"),
+            )
+            .await
+            .map_err(|error| ReadActivityError::Store(error.into()))?;
+
+        let crate::domain::service::ResolvedActivityRange {
+            activity,
+            properties,
+        } = range;
+        Ok(Self {
+            activities: activity
+                .records
+                .into_iter()
+                .map(|record| ToolActivityEvent::from_record(record, &properties))
+                .collect(),
+            truncated: activity.truncated,
+        })
+    }
+}
+
+#[cfg(test)]
+mod test;
