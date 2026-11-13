@@ -122,8 +122,8 @@ export async function getNativeStagedUploadChecksum(
 }
 
 /**
- * Either a browser file, sent as the body itself so it is never read whole
- * into memory, or a native staged file, with the fields uploads need.
+ * Either a browser file, which is the upload body itself rather than a copy
+ * of its bytes, or a native staged file, with the fields uploads need.
  */
 export type UploadSource =
   | { kind: 'file'; file: File; sha: string; size: number }

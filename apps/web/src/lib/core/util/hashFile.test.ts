@@ -2,7 +2,11 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
-const workers = vi.hoisted(() => ({ started: 0 }));
+const workers = vi.hoisted(() => ({
+  started: 0,
+  terminated: 0,
+  crashNext: false,
+}));
 
 // Runs the real worker code in-process in place of a browser worker.
 vi.mock('../../workers/file-hash/hash-worker?worker', async () => {
@@ -16,6 +20,11 @@ vi.mock('../../workers/file-hash/hash-worker?worker', async () => {
       workers.started += 1;
     }
     postMessage(request: unknown) {
+      if (workers.crashNext) {
+        workers.crashNext = false;
+        this.onerror?.({ message: 'Worker crashed' } as ErrorEvent);
+        return;
+      }
       const port = {
         postMessage: (response: unknown) =>
           this.onmessage?.({ data: response }),
@@ -24,7 +33,9 @@ vi.mock('../../workers/file-hash/hash-worker?worker', async () => {
       installHashWorker(port);
       port.onmessage?.({ data: request } as MessageEvent);
     }
-    terminate() {}
+    terminate() {
+      workers.terminated += 1;
+    }
   }
   return { default: InProcessWorker };
 });
@@ -41,6 +52,23 @@ function unreadableWhole(bytes: Uint8Array<ArrayBuffer>, name: string) {
   Object.defineProperty(file, 'arrayBuffer', {
     value: () => {
       throw new Error('Must not read the whole file into memory');
+    },
+  });
+  return file;
+}
+
+/** A large file whose second chunk can't be read. */
+function failsMidRead(bytes: Uint8Array<ArrayBuffer>, name: string) {
+  const file = unreadableWhole(bytes, name);
+  const slice = file.slice.bind(file);
+  Object.defineProperty(file, 'slice', {
+    value: (start?: number, end?: number) => {
+      const chunk = slice(start, end);
+      if (start === 0) return chunk;
+      Object.defineProperty(chunk, 'arrayBuffer', {
+        value: () => Promise.reject(new Error('The file was changed on disk')),
+      });
+      return chunk;
     },
   });
   return file;
@@ -67,6 +95,26 @@ describe('hashFile', () => {
       sha256Hex(bytes)
     );
     expect(workers.started).toBe(started + 1);
+    expect(workers.terminated).toBe(workers.started);
+  });
+
+  it('rejects with the read error and ends the worker when a chunk fails', async () => {
+    const bytes = new Uint8Array(40 * 1024 * 1024).fill(3);
+
+    await expect(hashFile(failsMidRead(bytes, 'scan.pdf'))).rejects.toThrow(
+      'The file was changed on disk'
+    );
+    expect(workers.terminated).toBe(workers.started);
+  });
+
+  it('rejects and ends the worker when the worker itself fails', async () => {
+    const bytes = new Uint8Array(40 * 1024 * 1024).fill(5);
+    workers.crashNext = true;
+
+    await expect(hashFile(unreadableWhole(bytes, 'scan.pdf'))).rejects.toThrow(
+      'Worker crashed'
+    );
+    expect(workers.terminated).toBe(workers.started);
   });
 
   it('reports how much of a streamed file it has hashed', async () => {

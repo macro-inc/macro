@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import type { HashWorkerResponse } from '../../workers/file-hash/hash-worker';
 import HashWorker from '../../workers/file-hash/hash-worker?worker';
@@ -52,12 +53,15 @@ function hashInWorker(
  * Hex SHA-256 of a file, without holding a large file in memory. A streamed
  * file reports the share hashed so far to `onProgress`.
  */
-export async function hashFile(
+export function hashFile(
   file: File,
   onProgress?: (fraction: number) => void
 ): Promise<string> {
-  if (file.size <= WHOLE_FILE_HASH_MAX_BYTES) {
-    return contentHash(await file.arrayBuffer());
-  }
-  return hashInWorker(file, onProgress);
+  return Telemetry.span('file_upload.hash', async (span) => {
+    const streamed = file.size > WHOLE_FILE_HASH_MAX_BYTES;
+    span.setAttr('file_upload.bytes', file.size);
+    span.setAttr('file_upload.hash_streamed', streamed);
+    if (!streamed) return contentHash(await file.arrayBuffer());
+    return hashInWorker(file, onProgress);
+  });
 }
