@@ -10,8 +10,8 @@ tasks itself.
 
 ## Start here
 
-- `src/domain/service.rs`: expands current access for an event and publishes
-  one `Patch` per recipient to `macro.soup`.
+- `src/domain/service.rs`: resolves the current accessors of a batch of patches
+  in one access lookup and publishes one `Patch` per recipient to `macro.soup`.
 - `src/domain/models.rs` + `src/domain/ports.rs`: the `Patch<Entity>` shape
   and the ports the service depends on.
 - `src/inbound/kafka_consumer.rs`: maps each source Kafka event to
@@ -19,7 +19,8 @@ tasks itself.
 - `src/outbound/soup_consumer.rs`: `SoupRealtimeConsumerService`, consuming
   recipient-targeted patches into per-user subscriptions.
 - `src/outbound/kafka_publisher.rs`, `entity_access.rs`, `agent_sessions.rs`:
-  the Kafka and access-expansion adapters.
+  the Kafka and access-expansion adapters; `entity_access.rs` makes one
+  `EntityAudienceLookup` call per entity type in a batch.
 
 ## Scope
 
@@ -49,6 +50,10 @@ tasks itself.
 
 ## Gotchas
 
+- An event's patches go out in batches of up to 500 (`NOTIFY_BATCH_SIZE`), one
+  recipient lookup each, retried as a unit: a retry republishes the batch, and
+  the event span records `entity_count`, `recipient_lookup_count`,
+  `recipient_set_count` and `publish_count`.
 - Delivery is at least once: offsets commit only after successful fan-out,
   and exhausted retries stop the consumer for supervisor restart — downstream
   consumers must tolerate duplicate patches.

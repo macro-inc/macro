@@ -6,18 +6,21 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rootcause::Report;
 
-use super::models::{Patch, SoupRealtimeMessage, SoupRealtimePatch};
+use super::models::{Delivery, Patch, SharedAccess, SoupRealtimeMessage, SoupRealtimePatch};
 
 /// Inbound use-case port driven by entity update transports.
 pub trait SoupRealtimeService: Send + Sync + 'static {
-    /// Publishes one entity patch to every current accessor of its access source.
+    /// Publishes each patch to every current accessor of its access source.
     ///
-    /// Waits for capacity and returns success only after all publications succeed.
-    /// Failures may occur after partial delivery, so retries can produce duplicates.
+    /// Resolves the recipients of the whole batch in one access lookup, so callers
+    /// bound the batch size. Patches are published in order: every recipient of a
+    /// patch is sent it before the next patch is published. Waits for capacity and
+    /// returns success only after all publications succeed. Failures may occur after
+    /// partial delivery, so retries can produce duplicates.
     fn notify_users(
         &self,
-        patch: SoupRealtimePatch,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+        patches: Vec<SoupRealtimePatch>,
+    ) -> impl Future<Output = Result<Delivery, Report>> + Send;
 }
 
 /// Receives recipient-targeted Soup patches.
@@ -61,16 +64,17 @@ impl SoupRealtimeSubscriptionService for NoOpSoupRealtimeSubscriptionService {
     }
 }
 
-/// Resolves the users who currently have access to an entity.
+/// Resolves the users who currently have access to entities.
 pub trait UserAccessExpander: Send + Sync + 'static {
-    /// Returns all current user accessors for `entity`.
+    /// Returns the current user accessors of `entities`, grouping entities whose
+    /// accessors are the same.
     ///
-    /// Implementations may return duplicates; the domain service deduplicates
-    /// recipients before publication.
+    /// Entities without accessors may be left out. Implementations may return
+    /// duplicate users; the domain service deduplicates recipients before publication.
     fn expand_user_access(
         &self,
-        entity: &Entity<'static>,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+        entities: &[Entity<'static>],
+    ) -> impl Future<Output = Result<Vec<SharedAccess>, Report>> + Send;
 }
 
 /// Publishes recipient-targeted Soup patches.
