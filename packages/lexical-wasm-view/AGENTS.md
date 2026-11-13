@@ -57,8 +57,9 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Share wordKeyCommand between the root command classifier and application word routes so exact platform Control-or-Meta Left/Right offers MoveToStart/End to both before and after listeners; keep generic KeyDown first and portable hot input behavior separate.
 - Complete cold input callbacks after Diff/IO consumption so unhandled keys reach
   lower-priority view listeners, including queued inputs.
-- Send marked typing style for 200 ms and Android post-delete context through the
-  selection-change input; primitive caret moves stay available without context.
+- Send every admitted selectionchange through the selection-change input so Rust applies
+  Source onSelectionChange's format rule (marked typing style for 200 ms, else the anchor
+  text format) and Android post-delete context; primitive caret moves stay for other callers.
 - Preserve the production lexical/@lexical compatibility API over Rust; native optimizations must retain existing JS node hooks and plugins.
 - Retarget copied DOM code from Lexical 0.45.0; preserve its MIT notice and pin.
 - Keep HTML import and code highlighting off the startup path.

@@ -848,10 +848,8 @@ export function registerEvents(view: EditorView): {
     ) {
       view.submitDomSelection(
         () =>
-          view.port.selectionFromView(
-            selection,
-            marked || saved || context.domRangeSameNode ? context : undefined
-          ),
+          // Source onSelectionChange always applies its selection format rule.
+          view.port.selectionFromView(selection, context),
         selection
       );
       rememberSelection();
