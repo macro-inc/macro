@@ -1068,7 +1068,7 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
-  it('runs the rows of a typed search ahead of queued reads and their fences, unless a write was queued first', async () => {
+  it('runs the rows of a typed search ahead of queued reads and their fences, past network results, but not past a local change', async () => {
     const order: string[] = [];
     const blocker = Promise.withResolvers<void>();
     const started = Promise.withResolvers<void>();
@@ -1093,6 +1093,17 @@ describe('CacheWorkerCore', () => {
         writeQuery: async () => {
           order.push('write');
           return { ...written, revision: INITIAL_CACHE_REVISION };
+        },
+        enqueueOptimisticMutation: async () => {
+          order.push('local-change');
+          return {
+            ...written,
+            revision: INITIAL_CACHE_REVISION,
+            revalidations: [],
+            transactionId: '1',
+            upsertKind: { kind: 'inserted' },
+            initialClaim: { kind: 'not-runnable' },
+          };
         },
         readRecordsByKeys: async (
           _document: string,
@@ -1141,29 +1152,43 @@ describe('CacheWorkerCore', () => {
         query: 'query Current { document { id } }',
         data: { document: { id: 'doc-1' } },
       }),
-      core.handleRequest(port, { id: 9, kind: 'current-storage-generation' }),
+      rows(9, 'typed-after-network-write', true),
       core.handleRequest(port, {
         id: 10,
+        kind: 'enqueue-optimistic-mutation',
+        uuid: '00000000-0000-4000-8000-000000000009',
+        query: 'mutation Update { update }',
+        data: { update: true },
+        createdAtMs: 10,
+        owner: 'runner',
+        nowMs: 10,
+        leaseExpiresAtMs: 1_010,
+      }),
+      core.handleRequest(port, { id: 11, kind: 'current-storage-generation' }),
+      core.handleRequest(port, {
+        id: 12,
         kind: 'read',
         opId: 'later',
         query: 'query Later { later }',
         priority: 'user-visible',
       }),
-      rows(11, 'typed-after-write', true),
+      rows(13, 'typed-after-local-change', true),
     ];
     blocker.resolve();
     await Promise.all([running, ...queued]);
     expect(order).toEqual([
       'read:blocker',
       'rows:GraphqlSoupDocument:typed',
+      'rows:GraphqlSoupDocument:typed-after-network-write',
       'read:visible',
       'generation',
       'rows:GraphqlSoupDocument:plain',
       'teardown',
       'write',
+      'local-change',
       'generation',
       'read:later',
-      'rows:GraphqlSoupDocument:typed-after-write',
+      'rows:GraphqlSoupDocument:typed-after-local-change',
     ]);
   });
 

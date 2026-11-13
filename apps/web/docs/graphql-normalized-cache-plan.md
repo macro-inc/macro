@@ -288,9 +288,11 @@ that are only older; that write's cache change then refreshes the list.
 The record reads that load the rows a typed search named (`read-records-by-keys`
 with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
 rank with it: they run ahead of list rereads and past the same fences, since the
-search is not answered for the user until its rows list. The list keeps those
-rows until its next refresh, so one that arrives while a write or a deferred
-optimistic write is queued orders like any other record read instead.
+search is not answered for the user until its rows list. Like the search they
+can run before a network result queued ahead of them, whose cache change then
+refreshes the list. The list keeps those rows until that refresh, so a row read
+that arrives while a change made on this device is queued (an optimistic
+mutation or its settlement) orders like any other record read instead.
 The desktop host ignores the field.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request

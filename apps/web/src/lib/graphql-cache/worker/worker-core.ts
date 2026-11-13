@@ -141,6 +141,16 @@ function stopsTypedSearch(request: CacheRequest): boolean {
   return request.kind === 'init' || request.kind === 'clear';
 }
 
+/** A change made on this device rather than a result from the network. */
+function isLocalChange(request: CacheRequest): boolean {
+  return (
+    request.kind === 'enqueue-optimistic-mutation' ||
+    request.kind === 'defer-optimistic-write' ||
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'rollback-optimistic-write'
+  );
+}
+
 function isAuthoritativeWrite(request: CacheRequest): boolean {
   // A calendar commit records coverage for data written just before it, so it
   // must never overtake that write or hydration.
@@ -411,20 +421,18 @@ export class CacheWorkerCore {
 
   /**
    * The rows a typed search named rank with it, as the search is not answered
-   * for the person waiting until they list. Unlike the search's own result
-   * they stay listed until the next refresh, so one that arrives behind a
-   * queued write, or behind a change to an optimistic layer, orders like any
-   * other record read instead.
+   * for the person waiting until they list. They may run before a network
+   * result queued ahead of them: that is the result arriving a moment later,
+   * and its cache change refreshes the list. A change this page made itself
+   * must show in rows read after it, so behind one of those a row read orders
+   * like any other record read.
    */
   private arrivalPriority(request: CacheRequest): number {
     if (!isTypedSearchRowRead(request)) return requestPriority(request);
 
-    const changeAhead = this.queue.some(
-      (queued) =>
-        queued.priority === CACHE_WRITE_PRIORITY ||
-        queued.request.kind === 'defer-optimistic-write'
-    );
-    return changeAhead ? NORMAL_READ_PRIORITY : TYPED_SEARCH_PRIORITY;
+    return this.queue.some((queued) => isLocalChange(queued.request))
+      ? NORMAL_READ_PRIORITY
+      : TYPED_SEARCH_PRIORITY;
   }
 
   private enqueue(request: CacheRequest): Promise<unknown> {
@@ -532,7 +540,7 @@ export class CacheWorkerCore {
    * replayed backlog. It can then run before a write queued ahead of it:
    * its rows are only older, and that write's cache change refreshes them.
    * A row read that ranks with the search crosses the same fences; it carries
-   * no operation, and no write was queued ahead of it when it arrived.
+   * no operation, and no local change was queued ahead of it when it arrived.
    */
   private pickPastFences(selectedIndex: number, segmentEnd: number): number {
     let index = selectedIndex;
