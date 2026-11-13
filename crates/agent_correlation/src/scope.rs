@@ -208,6 +208,7 @@ pub const POST_READS: &[(&str, &str)] = &[
     ("POST", "/v1/user_notifications/item/bulk"),
     ("POST", "/properties/entities/bulk"),
     ("POST", "/search"),
+    ("POST", "/search/names"),
     ("POST", "/search/simple"),
     ("POST", "/scheduled-actions/check"),
     ("POST", "/unfurl/bulk"),
