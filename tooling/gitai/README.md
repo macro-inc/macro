@@ -26,7 +26,7 @@ It shows a plan and asks before changing anything (`--yes` skips the question, `
 6. Installs the `gitai-why` skill to `~/.claude/skills/` and `~/.codex/skills/`, and adds one instruction line, between `gitai-enroll` marker comments, to `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`: after opening a PR on `macro-inc/macro`, append `git-ai: https://gateway.macro.com/gitai/v1/prs/macro-inc/macro/<n>` to its description.
 7. Checks the credential with the server (`GET /v1/whoami`; a revoked one stops the script and asks for `--rotate`), then prints `git-ai whoami`, which reads only local state.
 
-Re-running is safe: it re-applies the settings and keeps the existing credential. `--rotate` mints a new one and revokes this machine's old ones (same email and hostname).
+Re-running is safe: it re-applies the settings and keeps the existing credential. `--rotate` mints a new one and revokes this machine's old ones (same email, compared case-insensitively because the server stores it lowercased, and same hostname); it warns if it found none to revoke.
 
 The shared key never touches disk, a log or a command line: the script removes it from the environment at start and hands it to curl as a config file on stdin. Every program it starts (git-ai, its daemon, the login-start installer) gets a minimal environment, so none of the Doppler secrets live on in the daemon.
 
@@ -38,7 +38,7 @@ If `~/.git-ai/config.json` is a symlink or read-only (a Home Manager file in the
 
 - It changes no git-ai settings, hooks or login start; those stay with your Nix config.
 - It mints the credential into `~/.git-ai/api-key.env` (`GIT_AI_API_KEY=...`, mode 600). git-ai reads `GIT_AI_API_KEY` from its environment ahead of `api_key`; it has no other place for a key outside `config.json`.
-- It prints the exact non-secret keys for `config.json` (`api_base_url`, `telemetry_oss`, `disable_auto_updates`, `disable_version_checks`, `notes_backend`, `allow_repositories`, and `git_path` where needed).
+- It checks every non-secret key it would set (`api_base_url`, `telemetry_oss` off, `disable_auto_updates`, `disable_version_checks`, `notes_backend.kind` `git_notes`, `allow_repositories` containing `https://github.com/macro-inc/macro`, and `git_path` where needed). If any is missing or wrong, it names them, prints the exact keys for `config.json` and stops without minting.
 
 Then put those keys in the Home Manager config and switch, so the base URL is in place before the key is used. Export the key file to everything that runs git-ai, agents included: `set -a; . ~/.git-ai/api-key.env; set +a` in your shell rc, and `EnvironmentFile=%h/.git-ai/api-key.env` for systemd user units. Restart the daemon (`git-ai bg shutdown`; it starts again on next use) from a shell that has the key, then re-run the script: it keeps the credential and prints `git-ai whoami`.
 
@@ -78,3 +78,5 @@ HOME="$scratch/home" git-ai bg shutdown
 ## Dashboard
 
 `infra/stacks/observability/nixos/gitai-dashboard.json` is plain JSON, provisioned by `gitai-dashboard.nix` into the "AI authorship" folder; it can also be imported by hand. Its panels read gitai-service's OTLP counters (`gitai_*_total`, filtered on `service_name="gitai-service"` and the `deployment_environment` variable). Edit the JSON directly; it ships with the next Deploy Observability run.
+
+The counters are cumulative and low-rate, and a plain `increase()` drops a series' first sample: a new author, model or repo, or the first event after a task restart, is already above zero when Prometheus first sees it. Each counting panel (all but the per-second rates under Ingest health) therefore adds `min_over_time(...) unless ... offset` (the first value of series that did not exist at the start of the window) to `increase()`. Keep that shape when you add a panel, and check a new or changed panel against a known count in dev before trusting it: make a few commits in `macro-inc/macro` from an enrolled scratch machine, then compare the Commits stat for that author with the number you made. Expect it slightly high, not low; `increase()` extrapolates to the window edges.

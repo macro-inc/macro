@@ -32,9 +32,15 @@ installs. `README.md` is the human guide: enrolment steps, credentials, testing.
   its arguments under `--dry-run`.
 - Never run `git-ai flush-metrics-db`: it uploads queued events without the
   `allow_repositories` gate.
-- `api_base_url` and `notes_backend.kind git_notes` must be set before any
-  credential is written. In managed mode
-  (read-only or symlinked config.json) the script cannot set it, so it writes the
-  credential only to `~/.git-ai/api-key.env`, which git-ai never reads by itself.
+- Every setting the script makes (`api_base_url`, `notes_backend.kind
+  git_notes`, the allowlist, telemetry and update switches) must be in place
+  before any credential is written. In managed mode (read-only or symlinked
+  config.json) the script cannot set them, so `managed_missing_settings` checks
+  each one and it refuses to mint until all pass; the credential goes only to
+  `~/.git-ai/api-key.env`, which git-ai never reads by itself. Add a new setting
+  to that check too.
+- The server lowercases emails; compare emails case-insensitively.
 - The read API, credential endpoints and metric names are fixed by
   gitai-service; keep the skill and the dashboard in step with it.
+- Dashboard counters: wrap every `increase()` in the first-sample correction the
+  README's Dashboard section describes, or new series undercount.
