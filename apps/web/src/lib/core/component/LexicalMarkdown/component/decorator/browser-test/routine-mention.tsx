@@ -35,6 +35,22 @@ queryClient.setQueryData(previewKeys.item(id).queryKey, {
   name: 'Daily review',
 } satisfies PreviewItem);
 
+// A pasted routine link is stored without a label.
+const pastedId = '01a16547-2001-7120-96e7-2f9785e39880';
+const pastedMention = `<m-document-mention>${JSON.stringify({
+  documentId: pastedId,
+  documentName: '',
+  blockName: 'routine',
+})}</m-document-mention>`;
+queryClient.setQueryData(previewKeys.item(pastedId).queryKey, {
+  id: pastedId,
+  type: 'routine',
+  access: 'access',
+  loading: false,
+  rawName: 'Daily CRM sweep',
+  name: 'Daily CRM sweep',
+} satisfies PreviewItem);
+
 // Only navigation is used by this isolated decorator fixture.
 setGlobalSplitManager({
   openWithSplit(content: SplitContent) {
@@ -52,6 +68,10 @@ render(
             <main class="p-4 text-ink bg-page">
               <StaticMarkdown
                 markdown={`Created ${mention}.`}
+                target="internal"
+              />
+              <StaticMarkdown
+                markdown={`Pasted ${pastedMention}`}
                 target="internal"
               />
               <p>

@@ -17,6 +17,7 @@ export function InboxFilterMenu(props: {
 }) {
   return (
     <ListFilterDropdown
+      size={props.activeCount ? 'xs' : 'icon-xs'}
       label={t('notificationsInbox.filter')}
       groups={INBOX_FILTER_GROUPS}
       open={props.open}

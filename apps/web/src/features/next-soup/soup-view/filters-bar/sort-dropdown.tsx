@@ -35,7 +35,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         tooltip={{ content: 'Sort', hotkey: TOKENS.soup.sort }}
         as={props.grouped ? ButtonGroup.Button : Button}
         variant="ghost"
-        size={props.grouped ? 'icon-sm' : 'icon-md'}
+        size="icon-md"
       >
         <SortIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>

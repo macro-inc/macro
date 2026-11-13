@@ -34,8 +34,16 @@ let
         ];
       }
     );
+  # An agent teammate's computer: the same guest without macro's sudo and
+  # docker (agentMode).
+  agentMode = image: {
+    imports = [ image ];
+    macro.box.agentMode = true;
+  };
   machine = guest ./_image.nix;
   container = guest ./_container.nix;
+  agentMachine = guest (agentMode ./_image.nix);
+  agentContainer = guest (agentMode ./_container.nix);
   box = machine.config.macro.box;
 in
 {
@@ -49,24 +57,25 @@ in
       pkgs,
       ...
     }:
-    {
-      packages = lib.optionalAttrs (system == "x86_64-linux") {
-        macro-box-claude-code = box.claudeCode;
-        macro-box-claude-agent-acp = box.claudeAgentAcp;
-        # What `incus image import` takes.
-        macro-box-incus = pkgs.runCommand "macro-box-incus" { } ''
+    let
+      # What `incus image import` takes.
+      incusImage =
+        name: nixos:
+        pkgs.runCommand name { } ''
           mkdir $out
-          ln -s ${machine.config.system.build.metadata}/tarball/*.tar.xz $out/metadata.tar.xz
-          ln -s ${machine.config.system.build.qemuImage}/nixos.qcow2 $out/disk.qcow2
+          ln -s ${nixos.config.system.build.metadata}/tarball/*.tar.xz $out/metadata.tar.xz
+          ln -s ${nixos.config.system.build.qemuImage}/nixos.qcow2 $out/disk.qcow2
         '';
-        # `docker load < result` → macro-box:latest; run as DockerFleet does
-        # (AGENTS.md).
-        macro-box-docker = pkgs.dockerTools.buildLayeredImage {
-          name = "macro-box";
+      # `docker load < result` → <name>:latest; run as DockerFleet does
+      # (AGENTS.md).
+      dockerImage =
+        name: nixos:
+        pkgs.dockerTools.buildLayeredImage {
+          inherit name;
           tag = "latest";
           includeNixDB = true;
           config = {
-            Entrypoint = [ "${container.config.system.build.toplevel}/init" ];
+            Entrypoint = [ "${nixos.config.system.build.toplevel}/init" ];
             Env = [
               "container=docker"
               # For `docker exec <id> systemctl ...`, which DockerFleet runs.
@@ -75,6 +84,17 @@ in
             StopSignal = "SIGRTMIN+3";
           };
         };
+    in
+    {
+      packages = lib.optionalAttrs (system == "x86_64-linux") {
+        macro-box-claude-code = box.claudeCode;
+        macro-box-claude-agent-acp = box.claudeAgentAcp;
+        macro-agent-runtime = box.agent.runtime;
+        macro-box-computer-use-linux = box.agent.computerUse.package;
+        macro-box-incus = incusImage "macro-box-incus" machine;
+        macro-box-docker = dockerImage "macro-box" container;
+        macro-box-agent = incusImage "macro-box-agent" agentMachine;
+        macro-box-agent-docker = dockerImage "macro-box-agent" agentContainer;
       };
       checks = lib.optionalAttrs (system == "x86_64-linux") {
         # The baked adapter starts and answers ACP initialize offline.
@@ -115,6 +135,22 @@ in
           inherit (self'.packages) macrod harnessd;
         };
         macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
+        # start-agent's boot (lock adoption, rollback) and agent-stopped's
+        # failure count, against local git repositories.
+        macro-box-boot =
+          pkgs.runCommand "macro-box-boot"
+            {
+              nativeBuildInputs = [
+                pkgs.bash
+                pkgs.bun
+                pkgs.git
+                pkgs.diffutils
+                pkgs.gnused
+                pkgs.coreutils
+                pkgs.gnugrep
+              ];
+            }
+            "bash ${./files}/test-start-agent.sh && touch $out";
       };
     };
 }

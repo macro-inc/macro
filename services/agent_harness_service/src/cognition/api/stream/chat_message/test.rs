@@ -129,6 +129,58 @@ async fn disabled_admission_allows_authorized_request_to_reach_chat_creation(poo
     assert!(error.code.is_none());
 }
 
+/// A scoped hidden session's chat runs no tools: asking for any is refused
+/// before admission, and a tool-free chat goes on to admission as before.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_scoped_session_chats_without_tools(pool: sqlx::PgPool) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let ctx = test_api_context(pool).await;
+    let send = |scope: SessionScope, toolset: ToolSet| {
+        let admission = TestAdmission::rejecting(ai_billing::AiAdmissionError::Unavailable);
+        let mut state = (*ctx).clone();
+        state.ai_admission = admission.clone();
+        let attribution = Attribution {
+            correlation_id: Some(uuid::Uuid::now_v7()),
+            session_id: Some(uuid::Uuid::now_v7()),
+            scope: Some(scope),
+            ..Attribution::default()
+        };
+        let request = HttpSendChatMessageRequest {
+            toolset,
+            ..admission_request(None)
+        };
+        async move {
+            let model_access = test_model_access(&state).await;
+            let error = scope_attribution(
+                attribution,
+                send_chat_message_inner(
+                    state,
+                    model_access,
+                    MacroUserIdStr::parse_from_str(ADMISSION_TEST_USER).unwrap(),
+                    BearerToken(String::new()),
+                    request,
+                ),
+            )
+            .await
+            .unwrap_err();
+            (error, admission.calls.lock().unwrap().len())
+        }
+    };
+    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+        let (error, admitted) = send(scope, ToolSet::All).await;
+        assert_eq!(error.status, Some(StatusCode::FORBIDDEN), "{scope:?}");
+        assert_eq!(admitted, 0, "{scope:?}");
+    }
+    let (error, admitted) = send(SessionScope::NoSend, ToolSet::None).await;
+    assert_eq!(
+        error.status,
+        Some(admission_status(ai_billing::AiAdmissionError::Unavailable))
+    );
+    assert_eq!(admitted, 1);
+}
+
 #[test]
 fn send_chat_message_request_accepts_arbitrary_model_string() {
     let request: HttpSendChatMessageRequest = serde_json::from_value(serde_json::json!({

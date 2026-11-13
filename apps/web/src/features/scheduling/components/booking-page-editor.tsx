@@ -41,7 +41,7 @@ export function BookingPageEditor(props: {
     <>
       <Show when={mode() === 'edit'}>
         <div class="pointer-events-auto flex items-center gap-2 touch:rounded-lg touch:bg-panel">
-          <HeaderActionGroup label="Booking page changes">
+          <HeaderActionGroup label="Booking page changes" size="md">
             <Show when={props.canEdit && props.hasChanges}>
               <ButtonGroup.Button
                 type="button"

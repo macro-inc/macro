@@ -1,8 +1,9 @@
 //! Optional attribution extraction and request-scoped propagation.
 
 use crate::{
-    context::Attribution,
+    context::{Attribution, SharingRefused},
     domain::{Correlation, CorrelationError, CorrelationRepository, validate},
+    scope::SignedScope,
 };
 use axum::{
     Json,
@@ -59,6 +60,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
         let token = verified_api_token(parts, &state.jwt).await;
+        checked_signed_scope(token.as_ref(), parts)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
         if let Some((_, correlation)) = correlation
             && let Some(scope) = correlation.scope
@@ -95,6 +97,26 @@ async fn verified_api_token(parts: &mut Parts, jwt: &JwtValidationArgs) -> Optio
     }
 }
 
+/// The scope `token` signs, or a refusal when the request is outside it. The
+/// signature is the claim's authority, so this needs no lookup.
+fn checked_signed_scope(
+    token: Option<&MacroApiToken>,
+    parts: &Parts,
+) -> Result<SignedScope, CorrelationRejection> {
+    let scope = SignedScope::from_claim(token.and_then(|token| token.agent_scope.as_deref()));
+    if !scope.allows(parts.method.as_str(), parts.uri.path()) {
+        tracing::warn!(
+            ?scope,
+            method = %parts.method,
+            agent_correlation_id = ?token.and_then(|token| token.agent_correlation_id),
+            agent_session_id = ?token.and_then(|token| token.agent_session_id),
+            "refused a request outside its credential's signed scope"
+        );
+        return Err(CorrelationRejection(CorrelationError::OutOfScope));
+    }
+    Ok(scope)
+}
+
 /// The SDK's display verb. Callers read it only after the correlation that
 /// makes it meaningful has been validated; an unknown value is absent.
 fn sdk_verb(parts: &Parts) -> Option<crate::AgentVerb> {
@@ -122,16 +144,17 @@ async fn accept_correlation(
     Ok(Some((id, correlation)))
 }
 
+#[derive(Serialize)]
+struct ErrorBody {
+    message: String,
+}
+
 /// A client-safe attribution failure, separate from authorization failures.
 #[derive(Debug)]
 pub struct CorrelationRejection(CorrelationError);
 
 impl IntoResponse for CorrelationRejection {
     fn into_response(self) -> Response {
-        #[derive(Serialize)]
-        struct ErrorBody {
-            message: String,
-        }
         let status = match &self.0 {
             CorrelationError::MissingAgent => StatusCode::BAD_REQUEST,
             CorrelationError::NotFound => StatusCode::NOT_FOUND,
@@ -151,8 +174,36 @@ impl IntoResponse for CorrelationRejection {
     }
 }
 
+impl IntoResponse for SharingRefused {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::FORBIDDEN,
+            Json(ErrorBody {
+                message: self.to_string(),
+            }),
+        )
+            .into_response()
+    }
+}
+
+/// Run a request's handling, and answer [`SharingRefused`] (403) when it
+/// refused a sharing change and failed. The writes that grant access refuse
+/// deep inside services, whose callers turn the refusal into errors of their
+/// own; this keeps the answer the same on every route. A request that
+/// refused a change and still succeeded keeps its answer.
+pub async fn answer_sharing_refusals<F: Future<Output = Response>>(handling: F) -> Response {
+    let (response, refused) = crate::context::recording_sharing_refusals(handling).await;
+    let status = response.status();
+    if refused && (status.is_client_error() || status.is_server_error()) {
+        return SharingRefused.into_response();
+    }
+    response
+}
+
 /// Validate before invoking any handler, then isolate attribution to this request:
 /// the code-mode correlation and the signed routine a request acts for.
+/// A request that refused a sharing change and failed is answered 403
+/// ([`answer_sharing_refusals`]).
 pub fn propagate(
     state: State<CorrelationState>,
     request: Request,
@@ -168,39 +219,76 @@ async fn propagate_request(
 ) -> Response {
     let (mut parts, body) = request.into_parts();
     let token = verified_api_token(&mut parts, &state.jwt).await;
+    let signed = match checked_signed_scope(token.as_ref(), &parts) {
+        Ok(signed) => signed,
+        Err(rejection) => return rejection.into_response(),
+    };
     let correlation = match accept_correlation(&state, token.as_ref()).await {
         Ok(correlation) => correlation,
         Err(error) => return error.into_response(),
     };
     // A session minted with a scope makes only the requests inside it, on
-    // every service that accepts its credential.
-    if let Some((_, correlation)) = correlation
+    // every service that accepts its credential. The harness signs the same
+    // scope, so this refuses only a credential that doesn't sign one.
+    if let Some((id, correlation)) = correlation
         && let Some(scope) = correlation.scope
         && !scope.allows(parts.method.as_str(), parts.uri.path())
     {
         tracing::warn!(
             scope = scope.as_str(),
             method = %parts.method,
+            agent_correlation_id = %id,
+            agent_session_id = %correlation.session_id,
             "refused a request outside its session's scope"
         );
         return CorrelationRejection(CorrelationError::OutOfScope).into_response();
     }
     let correlation_id = correlation.map(|(id, _)| id);
+    // Handlers read the scope stored with the correlation, else the one the
+    // credential signs (the harness signs the stored one).
     // The routine claim needs no lookup: the token's signature is its authority.
     let attribution = Attribution {
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
-        scope: correlation.and_then(|(_, correlation)| correlation.scope),
+        scope: correlation
+            .and_then(|(_, correlation)| correlation.scope)
+            .or(signed.known()),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
-    crate::context::scope_attribution(attribution, next.run(Request::from_parts(parts, body)))
+    let handling = answer_sharing_refusals(next.run(Request::from_parts(parts, body)));
+    crate::context::scope_attribution(attribution, handling)
         .instrument(tracing::info_span!(
             "agent_sdk_request",
             agent_correlation_id = correlation_id.map(|id| id.to_string()),
             routine_id = attribution.routine_id.map(|id| id.to_string()),
         ))
         .await
+}
+
+/// The scope check for a service with no database to look a correlation up
+/// in: refuse a request outside the scope its credential signs before any
+/// handler runs. Install it wherever a code-mode credential is accepted and
+/// [`propagate`] is not.
+pub fn enforce_signed_scope(
+    state: State<JwtValidationArgs>,
+    request: Request,
+    next: Next,
+) -> impl Future<Output = Response> + Send {
+    enforce_signed_scope_request(state, request, next)
+}
+
+async fn enforce_signed_scope_request(
+    State(jwt): State<JwtValidationArgs>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let (mut parts, body) = request.into_parts();
+    let token = verified_api_token(&mut parts, &jwt).await;
+    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts) {
+        return rejection.into_response();
+    }
+    next.run(Request::from_parts(parts, body)).await
 }
 
 #[cfg(test)]
