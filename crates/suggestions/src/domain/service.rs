@@ -572,7 +572,10 @@ where
         for suggestion in &mut suggestions {
             suggestion.is_new = suggestion.proposed_since(viewed_at);
         }
-        let new = suggestions.iter().filter(|suggestion| suggestion.is_new).count();
+        let new = suggestions
+            .iter()
+            .filter(|suggestion| suggestion.is_new)
+            .count();
         suggestions.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)

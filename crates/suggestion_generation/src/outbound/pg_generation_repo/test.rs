@@ -183,10 +183,13 @@ async fn ending_a_generation_follows_the_table(pool: PgPool) {
                     expected.unwrap_or(status),
                     "{trigger:?} {status:?} {event:?}"
                 );
-                sqlx::query!("DELETE FROM suggestion_generation WHERE id = $1", generation)
-                    .execute(&pool)
-                    .await
-                    .unwrap();
+                sqlx::query!(
+                    "DELETE FROM suggestion_generation WHERE id = $1",
+                    generation
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
             }
         }
     }
@@ -200,15 +203,8 @@ async fn a_heartbeat_reaches_only_a_running_generation(pool: PgPool) {
     let then = Utc::now() - TimeDelta::minutes(10);
     let now = Utc::now();
     for status in GenerationStatus::iter() {
-        let generation = insert_generation(
-            &pool,
-            OWNER,
-            GenerationTrigger::Nightly,
-            status,
-            then,
-            then,
-        )
-        .await;
+        let generation =
+            insert_generation(&pool, OWNER, GenerationTrigger::Nightly, status, then, then).await;
         assert_eq!(
             repo.beat(generation, now).await.unwrap(),
             status.is_running(),
@@ -309,7 +305,12 @@ async fn the_sweep_interrupts_generations_whose_heartbeat_stopped(pool: PgPool) 
     let rest = repo.interrupt_lost(before, now, 1).await.unwrap();
     assert_eq!(rest.len(), 1);
     assert_eq!(rest[0].generation, alive);
-    assert!(repo.interrupt_lost(before, now, 1).await.unwrap().is_empty());
+    assert!(
+        repo.interrupt_lost(before, now, 1)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// Admission reads whether any of the person's generations runs, and their
@@ -495,9 +496,17 @@ async fn session_cleanup_follows_the_table(pool: PgPool) {
             };
             assert_eq!(moved, expected.is_ok(), "{state:?} {event:?}");
             let after = stored_session(&pool, session).await;
-            assert_eq!(after.cleanup, expected.unwrap_or(state), "{state:?} {event:?}");
+            assert_eq!(
+                after.cleanup,
+                expected.unwrap_or(state),
+                "{state:?} {event:?}"
+            );
             let counted = i16::from(moved && event.counts_attempt());
-            assert_eq!(after.attempts, before.attempts + counted, "{state:?} {event:?}");
+            assert_eq!(
+                after.attempts,
+                before.attempts + counted,
+                "{state:?} {event:?}"
+            );
             if moved {
                 assert_eq!(
                     after.cleanup_at.map(|at| at.timestamp_micros()),
@@ -753,7 +762,11 @@ async fn stuck_sessions_are_claimed_and_then_wait(pool: PgPool) {
     let ids: HashSet<Uuid> = claimed.iter().map(|stale| stale.session).collect();
     let claimable = CleanupEvent::Deleted.sources();
     for (state, session) in &sessions {
-        assert_eq!(ids.contains(session), claimable.contains(state), "{state:?}");
+        assert_eq!(
+            ids.contains(session),
+            claimable.contains(state),
+            "{state:?}"
+        );
     }
     assert!(!ids.contains(&fresh));
     let claim = claimed
@@ -796,7 +809,12 @@ async fn a_person_is_due_while_in_the_rotation(pool: PgPool) {
     let now = Utc::now();
     let run = now + TimeDelta::hours(2);
     repo.see(&owner(), "Asia/Tokyo", now, run).await.unwrap();
-    assert!(repo.due(run - TimeDelta::seconds(1), 10).await.unwrap().is_empty());
+    assert!(
+        repo.due(run - TimeDelta::seconds(1), 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let due = repo.due(run, 10).await.unwrap();
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].user, owner());
@@ -852,7 +870,12 @@ async fn a_person_is_due_while_in_the_rotation(pool: PgPool) {
     // Seen again: back in, at the run given.
     let back = now + TimeDelta::hours(3);
     repo.see(&owner(), "Asia/Tokyo", now, back).await.unwrap();
-    assert!(repo.due(back - TimeDelta::seconds(1), 10).await.unwrap().is_empty());
+    assert!(
+        repo.due(back - TimeDelta::seconds(1), 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(repo.due(back, 10).await.unwrap().len(), 1);
 
     // A new zone moves the run.
@@ -977,7 +1000,10 @@ async fn the_overview_reads_the_running_the_ended_and_the_manual(pool: PgPool) {
 async fn routine_suggestions_read_the_latest_status(pool: PgPool) {
     insert_user(&pool, OWNER).await;
     let repo = PgGenerationRepo::new(pool.clone());
-    assert_eq!(GenerationStatuses::latest(&repo, &owner()).await.unwrap(), None);
+    assert_eq!(
+        GenerationStatuses::latest(&repo, &owner()).await.unwrap(),
+        None
+    );
     let start = Utc::now();
     for (offset, status) in (0_i64..).zip(GenerationStatus::iter()) {
         let at = start + TimeDelta::minutes(offset);

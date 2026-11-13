@@ -71,7 +71,10 @@ where
             get(list_suggestions::<S, Auth>).post(add_suggestion::<S, Auth>),
         )
         .route("/suggestions/review", get(review_suggestions::<S, Auth>))
-        .route("/suggestions/viewed", post(record_suggestions_viewed::<S, Auth>))
+        .route(
+            "/suggestions/viewed",
+            post(record_suggestions_viewed::<S, Auth>),
+        )
         .route(
             "/suggestions/{id}",
             axum::routing::patch(rewrite_suggestion::<S, Auth>),

@@ -182,13 +182,13 @@ async fn the_old_generate_route_starts_onboarding_and_answers_with_suggestions()
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body["status"], "generating");
-    assert_eq!(
-        starts.calls(),
-        [(USER.to_owned(), chrono_tz::Asia::Tokyo)]
-    );
+    assert_eq!(starts.calls(), [(USER.to_owned(), chrono_tz::Asia::Tokyo)]);
 }
 
-async fn call(app: Router, request: Request<Body>) -> (StatusCode, header::HeaderMap, serde_json::Value) {
+async fn call(
+    app: Router,
+    request: Request<Body>,
+) -> (StatusCode, header::HeaderMap, serde_json::Value) {
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
     let headers = response.headers().clone();

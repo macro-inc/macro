@@ -57,7 +57,13 @@ fn every_trigger_has_its_own_occasion() {
         );
     }
     assert!(
-        brief(GenerationTrigger::Manual, "Europe/Paris", now, "", "a-model")
-            .contains("asked for fresh suggestions")
+        brief(
+            GenerationTrigger::Manual,
+            "Europe/Paris",
+            now,
+            "",
+            "a-model"
+        )
+        .contains("asked for fresh suggestions")
     );
 }

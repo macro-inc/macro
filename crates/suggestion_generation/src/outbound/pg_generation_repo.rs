@@ -68,7 +68,9 @@ fn parse<T: std::str::FromStr>(
     value: &str,
     what: &'static str,
 ) -> Result<T, PgGenerationRepoError> {
-    value.parse().map_err(|_| PgGenerationRepoError::Decode(what))
+    value
+        .parse()
+        .map_err(|_| PgGenerationRepoError::Decode(what))
 }
 
 fn attempts(value: i16) -> Result<u8, PgGenerationRepoError> {
@@ -85,7 +87,11 @@ fn names<T: AsRef<str>>(states: &[T]) -> Vec<String> {
 
 /// The cleanup states `keep` holds for, by stored name.
 fn cleanup_states(keep: fn(Cleanup) -> bool) -> Vec<String> {
-    names(&Cleanup::iter().filter(|state| keep(*state)).collect::<Vec<_>>())
+    names(
+        &Cleanup::iter()
+            .filter(|state| keep(*state))
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn past_run(
@@ -579,11 +585,7 @@ impl GenerationRepo for PgGenerationRepo {
         Ok(OverviewFacts {
             running,
             last_ended,
-            latest_manual: past_run(
-                row.manual_status,
-                row.manual_attempt,
-                row.manual_started_at,
-            )?,
+            latest_manual: past_run(row.manual_status, row.manual_attempt, row.manual_started_at)?,
         })
     }
 }

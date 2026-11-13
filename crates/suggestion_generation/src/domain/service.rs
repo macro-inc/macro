@@ -435,11 +435,7 @@ where
             after: facts.latest.map(|latest| latest.started_at),
         };
         // Another start since admission read: that one runs.
-        if !repo
-            .insert(&new)
-            .await
-            .map_err(GenerationError::internal)?
-        {
+        if !repo.insert(&new).await.map_err(GenerationError::internal)? {
             return Ok(StartOutcome::Refused(Admission::Running));
         }
         let generation = new.id;
@@ -552,7 +548,9 @@ where
                     NightlyDecision::Drop => NightlyOutcome::Dropped,
                     NightlyDecision::Miss => NightlyOutcome::Missed,
                     NightlyDecision::Retry => NightlyOutcome::Retrying,
-                    NightlyDecision::Start => self.start_nightly(&member.user, member.timezone).await,
+                    NightlyDecision::Start => {
+                        self.start_nightly(&member.user, member.timezone).await
+                    }
                 };
                 counts.add(outcome);
                 let next_run = outcome.next_run(&member.user, member.timezone, now);
@@ -648,7 +646,10 @@ where
                     .record_nightly(&generation.user, NightlyOutcome::CutShort, Some(now), now)
                     .await
             {
-                tracing::warn!(?error, "could not make an interrupted nightly run due again");
+                tracing::warn!(
+                    ?error,
+                    "could not make an interrupted nightly run due again"
+                );
             }
         }
         let orphaned = repo
@@ -826,7 +827,10 @@ where
         let routines_suggested: u32 = routines.iter().map(|group| group.ended.work.count()).sum();
         let retries = routines.iter().filter(|group| group.retried).count();
         span.record("suggestion.generation.feed_changes", feed_changes);
-        span.record("suggestion.generation.routines_suggested", routines_suggested);
+        span.record(
+            "suggestion.generation.routines_suggested",
+            routines_suggested,
+        );
         span.record("suggestion.generation.retries", retries);
         span.record("suggestion.generation.outcome", outcome.as_ref());
         if event == GenerationEvent::NoneFinished {
@@ -919,9 +923,8 @@ where
         };
         let groups = layout.sessions().iter().map(|surfaces| async move {
             let first = self.routine_session(run, surfaces, 1, stop).await;
-            let retry = run.trigger == GenerationTrigger::Onboarding
-                && !first.work.any()
-                && !stop.any();
+            let retry =
+                run.trigger == GenerationTrigger::Onboarding && !first.work.any() && !stop.any();
             if retry {
                 GroupEnded {
                     ended: self.routine_session(run, surfaces, 2, stop).await,

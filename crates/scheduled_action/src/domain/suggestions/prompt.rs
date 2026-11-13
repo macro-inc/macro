@@ -73,7 +73,9 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     let occasion = match data.trigger {
-        GenerationTrigger::Onboarding => "The user just signed up. Be quick: they are waiting.".to_owned(),
+        GenerationTrigger::Onboarding => {
+            "The user just signed up. Be quick: they are waiting.".to_owned()
+        }
         GenerationTrigger::Nightly => format!(
             "This is the week's run (routine suggestions come once a week). {WEEKLY_REVIEW}"
         ),

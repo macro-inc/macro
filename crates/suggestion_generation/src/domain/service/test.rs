@@ -422,7 +422,11 @@ struct Session {
 }
 
 /// A nightly outcome as recorded: whose, what, and their next run.
-type Recorded = (MacroUserIdStr<'static>, NightlyOutcome, Option<DateTime<Utc>>);
+type Recorded = (
+    MacroUserIdStr<'static>,
+    NightlyOutcome,
+    Option<DateTime<Utc>>,
+);
 
 #[derive(Debug, thiserror::Error)]
 #[error("fake storage refused")]
@@ -761,9 +765,9 @@ impl GenerationRepo for FakeRepo {
         let mut sessions = self.sessions.lock().unwrap();
         let mut ended = Vec::new();
         for row in sessions.iter_mut() {
-            let running = generations
-                .iter()
-                .any(|generation| generation.id == row.generation && generation.status.is_running());
+            let running = generations.iter().any(|generation| {
+                generation.id == row.generation && generation.status.is_running()
+            });
             let orphaned = !running || row.opened_at < stale_before;
             if ended.len() == usize::from(limit) || !orphaned {
                 continue;
@@ -1585,7 +1589,10 @@ async fn a_nightly_run_suggests_routines_once_a_week() {
     let h = harness(false, true, finishes);
     h.repo
         .set_last_routines_ok(Some(Utc::now() - TimeDelta::days(1)));
-    assert_eq!(h.run(GenerationTrigger::Nightly).await, StartOutcome::Nothing);
+    assert_eq!(
+        h.run(GenerationTrigger::Nightly).await,
+        StartOutcome::Nothing
+    );
     assert!(h.repo.generations().is_empty());
 }
 
@@ -1609,7 +1616,10 @@ async fn only_a_routines_session_that_finished_and_suggested_counts_as_the_weeks
     ];
     for (script, counted) in scripts {
         let h = harness(false, true, script);
-        assert_eq!(h.run(GenerationTrigger::Nightly).await, StartOutcome::Started);
+        assert_eq!(
+            h.run(GenerationTrigger::Nightly).await,
+            StartOutcome::Started
+        );
         assert_eq!(h.repo.routines_ok.load(Ordering::SeqCst), counted);
     }
 }
@@ -1694,10 +1704,7 @@ async fn regenerating_is_refused_while_one_runs_and_within_the_hour() {
         asked,
         asked,
     );
-    h.service
-        .regenerate(&user(), chrono_tz::UTC)
-        .await
-        .unwrap();
+    h.service.regenerate(&user(), chrono_tz::UTC).await.unwrap();
     h.service.wait().await;
     let attempts: Vec<u8> = h
         .repo
@@ -1726,10 +1733,7 @@ async fn regenerating_is_refused_while_one_runs_and_within_the_hour() {
             .regenerate_available_at,
         None
     );
-    h.service
-        .regenerate(&user(), chrono_tz::UTC)
-        .await
-        .unwrap();
+    h.service.regenerate(&user(), chrono_tz::UTC).await.unwrap();
     h.service.wait().await;
 }
 
@@ -1802,7 +1806,10 @@ async fn the_sweep_interrupts_lost_generations_and_makes_a_nightly_one_due_again
         h.repo.generation(manual).status,
         GenerationStatus::Interrupted
     );
-    assert_eq!(h.repo.generation(alive).status, GenerationStatus::Generating);
+    assert_eq!(
+        h.repo.generation(alive).status,
+        GenerationStatus::Generating
+    );
     let recorded = h.repo.nightly();
     assert_eq!(recorded.len(), 1);
     assert_eq!(recorded[0].0, person(1));

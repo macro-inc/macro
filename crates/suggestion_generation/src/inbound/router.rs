@@ -322,7 +322,10 @@ where
         .regenerate(&user.authorization.macro_user_id, query.timezone)
         .await
         .map_err(GenerationApiError)?;
-    Ok((StatusCode::ACCEPTED, Json(GenerationStarted { started: true })))
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(GenerationStarted { started: true }),
+    ))
 }
 
 /// The retired `POST /scheduled-actions/suggestions/generate`: start the

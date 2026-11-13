@@ -12,7 +12,11 @@ const TABLE: [(Status, Event, Status); 5] = [
     (Status::Generating, Event::SomeFinished, Status::Partial),
     (Status::Generating, Event::NoneFinished, Status::Failed),
     (Status::Generating, Event::ProcessStopped, Status::Cancelled),
-    (Status::Generating, Event::HeartbeatLost, Status::Interrupted),
+    (
+        Status::Generating,
+        Event::HeartbeatLost,
+        Status::Interrupted,
+    ),
 ];
 
 /// Every (status, event) pair is either in the table or refused, and
@@ -104,7 +108,11 @@ fn a_generation_ends_by_what_its_sessions_finished_and_changed() {
         (Vec::new(), false, Event::NoneFinished),
     ];
     for (sessions, stopping, event) in cases {
-        assert_eq!(conclude(&sessions, stopping), event, "{sessions:?} {stopping}");
+        assert_eq!(
+            conclude(&sessions, stopping),
+            event,
+            "{sessions:?} {stopping}"
+        );
     }
 }
 
@@ -201,7 +209,12 @@ fn admission_follows_each_triggers_window_and_attempts() {
             past(Status::Interrupted, MAX_ATTEMPTS, now - NIGHTLY_EVERY),
             Admission::Start { attempt: 1 },
         ),
-        (Manual, true, past(Status::Ready, 1, at(1, 0)), Admission::Running),
+        (
+            Manual,
+            true,
+            past(Status::Ready, 1, at(1, 0)),
+            Admission::Running,
+        ),
         (
             Manual,
             false,

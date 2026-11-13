@@ -497,9 +497,7 @@ async fn suggestions_are_off_without_the_flag(pool: PgPool) {
         Err(SuggestionError::NotFound)
     ));
     assert!(matches!(
-        h.service
-            .viewed(&user(OWNER), SuggestionCaller::User)
-            .await,
+        h.service.viewed(&user(OWNER), SuggestionCaller::User).await,
         Err(SuggestionError::NotFound)
     ));
 }
@@ -2279,7 +2277,10 @@ async fn a_suggestion_is_new_until_the_person_opens_the_feed_after_it_was_propos
         );
     }
     // Before any visit, every proposed suggestion is new.
-    assert_eq!(new_in_feed(&h).await, HashSet::from([ids[0], ids[1], ids[2]]));
+    assert_eq!(
+        new_in_feed(&h).await,
+        HashSet::from([ids[0], ids[1], ids[2]])
+    );
     h.accept(&user(OWNER), ids[2]).await.unwrap();
     assert_eq!(new_in_feed(&h).await, HashSet::from([ids[0], ids[1]]));
 
@@ -2323,7 +2324,10 @@ async fn a_suggestion_is_new_until_the_person_opens_the_feed_after_it_was_propos
     repo.feed_viewed(&user(OTHER), viewed - chrono::Duration::hours(1))
         .await
         .unwrap();
-    assert_eq!(repo.feed_viewed_at(&user(OTHER)).await.unwrap(), Some(viewed));
+    assert_eq!(
+        repo.feed_viewed_at(&user(OTHER)).await.unwrap(),
+        Some(viewed)
+    );
     h.service
         .viewed(&user(OWNER), SuggestionCaller::User)
         .await
