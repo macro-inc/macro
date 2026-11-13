@@ -417,7 +417,7 @@ fn the_microsoft_idp_discovers_its_endpoints_and_refuses_unverified_domains() {
     assert_eq!(oauth2["emailVerifiedClaim"], "xms_edov");
     // The issuer is the same for every instance, so the snapshot key keeps it.
     assert_eq!(
-        without_redirect_urls(doc.clone()),
-        without_redirect_urls(doc)
+        without_instance_urls(doc.clone()),
+        without_instance_urls(doc)
     );
 }
