@@ -204,3 +204,33 @@ async fn cursor_probe_obeys_the_service_timeout() {
 
     assert!(matches!(result, Err(LoadAgentModelsError::Timeout)));
 }
+
+fn credential_rejected() -> Result<RawModelProbe, ModelProbeError> {
+    Err(ModelProbeError::CredentialRejected("reconnect".to_owned()))
+}
+
+#[tokio::test]
+async fn a_rejected_cursor_credential_is_not_a_probe_failure() {
+    let service = AgentModelsServiceImpl::new(
+        Access(true),
+        Probe::new(unsupported),
+        Probe::new(credential_rejected),
+        Probe::new(unsupported),
+        Duration::from_secs(1),
+    );
+
+    let result = service
+        .load(
+            caller(),
+            LoadAgentModels {
+                harness: ModelHarness::Cursor,
+                harness_id: None,
+            },
+        )
+        .await;
+
+    assert!(
+        matches!(&result, Err(LoadAgentModelsError::CredentialRejected(message)) if message == "reconnect"),
+        "got {result:?}"
+    );
+}

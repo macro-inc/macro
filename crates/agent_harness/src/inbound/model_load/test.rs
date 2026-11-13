@@ -32,6 +32,10 @@ fn handler_errors_map_to_transport_statuses() {
         (LoadAgentModelsError::Disconnected, StatusCode::CONFLICT),
         (LoadAgentModelsError::Timeout, StatusCode::GATEWAY_TIMEOUT),
         (
+            LoadAgentModelsError::CredentialRejected("reconnect".to_owned()),
+            StatusCode::CONFLICT,
+        ),
+        (
             LoadAgentModelsError::Probe("failed".to_owned()),
             StatusCode::BAD_GATEWAY,
         ),
@@ -71,6 +75,24 @@ async fn successful_response_serializes_available_catalog() {
                 "description": null,
                 "group": null
             }]
+        })
+    );
+}
+
+/// A refused credential is the caller's to fix, so it answers 4xx with a
+/// JSON body the client can tell apart from a disconnected runtime.
+#[tokio::test]
+async fn a_rejected_credential_answers_a_json_conflict_with_the_message() {
+    let response = model_error_response(LoadAgentModelsError::CredentialRejected(
+        "Reconnect Cursor with a personal API key.".to_owned(),
+    ));
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "code": "provider_credential_rejected",
+            "message": "Reconnect Cursor with a personal API key."
         })
     );
 }

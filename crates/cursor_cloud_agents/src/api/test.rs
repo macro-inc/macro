@@ -671,3 +671,85 @@ async fn both_initial_and_followup_requests_include_prompt_images() {
         .await
         .expect("followup run");
 }
+
+/// What Cursor answered `GET /v1/models` with in production when the
+/// connected key was a team-owned service token.
+const TEAM_SERVICE_TOKEN_BODY: &str = r#"{"code":"permission_denied","message":"[permission_denied] Error","details":[{"type":"aiserver.v1.ErrorDetails","debug":{"error":"ERROR_NOT_HIGH_ENOUGH_PERMISSIONS","details":{"title":"Access Denied","detail":"Team-owned service tokens cannot call user API routes; use a service account API key","isRetryable":false},"isExpected":true},"value":"CAQSZwoNQWNjZXNzIERlbmllZBJUVGVhbS1vd25lZCBzZXJ2aWNlIHRva2VucyBjYW5ub3QgY2FsbCB1c2VyIEFQSSByb3V0ZXM7IHVzZSBhIHNlcnZpY2UgYWNjb3VudCBBUEkga2V5IAAYAQ=="}]}"#;
+
+/// A key Cursor will never accept on this route has to arrive typed, or the
+/// harness above reports the person's own credential as an upstream outage.
+#[tokio::test]
+async fn a_team_service_token_listing_models_is_a_rejected_credential() {
+    let base_url = stand_in_server("403 Forbidden", TEAM_SERVICE_TOKEN_BODY);
+    let error = client_against(base_url)
+        .list_models()
+        .await
+        .expect_err("the stand-in refuses the key");
+    let rejected = error
+        .downcast_current_context::<crate::domain::error::CredentialRejected>()
+        .expect("a refused key is typed as one");
+    assert_eq!(rejected.status, 403);
+    assert_eq!(rejected.path, "/v1/models");
+    assert!(
+        rejected
+            .detail
+            .contains("ERROR_NOT_HIGH_ENOUGH_PERMISSIONS"),
+        "cursor's own body is kept for the logs: {}",
+        rejected.detail
+    );
+    let printed = format!("{error}");
+    assert!(printed.contains("403"), "got {printed}");
+}
+
+/// A revoked or mistyped key answers 401, usually without the Connect body.
+#[tokio::test]
+async fn an_unauthorized_key_is_a_rejected_credential() {
+    let base_url = stand_in_server(
+        "401 Unauthorized",
+        r#"{"error":{"code":"unauthenticated","message":"Invalid API key"}}"#,
+    );
+    let error = client_against(base_url)
+        .list_models()
+        .await
+        .expect_err("the stand-in refuses the key");
+    let rejected = error
+        .downcast_current_context::<crate::domain::error::CredentialRejected>()
+        .expect("a 401 is a refused key");
+    assert_eq!(rejected.status, 401);
+}
+
+/// Cursor saying a refusal may clear is taken at its word: that is not the
+/// person's key to replace.
+#[tokio::test]
+async fn a_forbidden_answer_cursor_marks_retryable_is_not_a_rejected_credential() {
+    let base_url = stand_in_server(
+        "403 Forbidden",
+        r#"{"code":"permission_denied","details":[{"debug":{"details":{"isRetryable":true}}}]}"#,
+    );
+    let error = client_against(base_url)
+        .list_models()
+        .await
+        .expect_err("the stand-in refuses the request");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::CredentialRejected>()
+            .is_none(),
+        "got {error}"
+    );
+}
+
+/// Upstream outages stay outages.
+#[tokio::test]
+async fn a_server_error_listing_models_is_not_a_rejected_credential() {
+    let base_url = stand_in_server("503 Service Unavailable", r#"{"error":"down"}"#);
+    let error = client_against(base_url)
+        .list_models()
+        .await
+        .expect_err("the stand-in is down");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::CredentialRejected>()
+            .is_none(),
+        "got {error}"
+    );
+}

@@ -92,6 +92,10 @@ pub enum ModelProbeError {
     /// A required live runtime, or the caller's Cursor account, is not connected.
     #[error("the requested harness is disconnected")]
     Disconnected,
+    /// The provider refused the caller's connected credential; carries what
+    /// to tell them.
+    #[error("{0}")]
+    CredentialRejected(String),
     /// Provider-specific probing failed.
     #[error("model probe failed: {0}")]
     Failed(String),
@@ -109,6 +113,10 @@ pub enum LoadAgentModelsError {
     /// A required runtime is disconnected.
     #[error("the requested harness is disconnected")]
     Disconnected,
+    /// The provider refused the caller's connected credential; carries what
+    /// to tell them.
+    #[error("{0}")]
+    CredentialRejected(String),
     /// The bounded request expired.
     #[error("model probe timed out")]
     Timeout,
@@ -245,6 +253,9 @@ where
             Ok(RawModelProbe::Options(options)) => Ok(AgentModels::from_options(&options)),
             Ok(RawModelProbe::Unsupported) => Ok(AgentModels::unsupported()),
             Err(ModelProbeError::Disconnected) => Err(LoadAgentModelsError::Disconnected),
+            Err(ModelProbeError::CredentialRejected(message)) => {
+                Err(LoadAgentModelsError::CredentialRejected(message))
+            }
             Err(ModelProbeError::Failed(message)) => Err(LoadAgentModelsError::Probe(message)),
         }
     }

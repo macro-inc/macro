@@ -43,6 +43,10 @@ fn handler_errors_map_to_transport_statuses() {
             StatusCode::GATEWAY_TIMEOUT,
         ),
         (
+            DiscoverAgentCapabilitiesError::CredentialRejected("reconnect".to_owned()),
+            StatusCode::CONFLICT,
+        ),
+        (
             DiscoverAgentCapabilitiesError::Probe("failed".to_owned()),
             StatusCode::BAD_GATEWAY,
         ),
@@ -96,6 +100,24 @@ async fn successful_response_serializes_config_options() {
                     "group": null
                 }]
             }]
+        })
+    );
+}
+
+/// A refused credential is the caller's to fix, so it answers 4xx with a
+/// JSON body the client can tell apart from a disconnected runtime.
+#[tokio::test]
+async fn a_rejected_credential_answers_a_json_conflict_with_the_message() {
+    let response = capability_error_response(DiscoverAgentCapabilitiesError::CredentialRejected(
+        "Reconnect Cursor with a personal API key.".to_owned(),
+    ));
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "code": "provider_credential_rejected",
+            "message": "Reconnect Cursor with a personal API key."
         })
     );
 }

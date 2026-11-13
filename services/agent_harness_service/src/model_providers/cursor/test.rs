@@ -129,3 +129,65 @@ async fn a_caller_without_a_cursor_key_is_not_connected_rather_than_a_provider_f
         Err(ModelProbeError::Disconnected)
     ));
 }
+
+/// A fake Cursor API answering every request with `status` and `body`.
+async fn refusing_cursor_api(
+    status: u16,
+    body: &'static str,
+) -> (String, tokio::task::JoinHandle<()>) {
+    let app = Router::new().fallback(any(move || async move {
+        (
+            axum::http::StatusCode::from_u16(status).unwrap(),
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            body,
+        )
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{address}"), server)
+}
+
+/// What Cursor answered `GET /v1/models` with in production for a team-owned
+/// service token.
+const TEAM_SERVICE_TOKEN_BODY: &str = r#"{"code":"permission_denied","message":"[permission_denied] Error","details":[{"type":"aiserver.v1.ErrorDetails","debug":{"error":"ERROR_NOT_HIGH_ENOUGH_PERMISSIONS","details":{"title":"Access Denied","detail":"Team-owned service tokens cannot call user API routes; use a service account API key","isRetryable":false},"isExpected":true}}]}"#;
+
+#[tokio::test]
+async fn a_key_cursor_refuses_is_a_rejected_credential_for_both_probes() {
+    use agent_harness::domain::capability_discovery::CapabilityProbe;
+    let (base_url, server) = refusing_cursor_api(403, TEAM_SERVICE_TOKEN_BODY).await;
+    let provider = CursorModels::new(TestCursorKeys, base_url);
+    let caller = MacroUserIdStr::try_from_email("models@example.com").unwrap();
+
+    match CursorModelProbe::probe(&provider, &caller).await {
+        Err(ModelProbeError::CredentialRejected(message)) => {
+            assert_eq!(message, CredentialRejected::USER_MESSAGE);
+        }
+        other => panic!("expected a rejected credential, got {other:?}"),
+    }
+    match CapabilityProbe::probe(&provider, &caller, Some("fast")).await {
+        Err(CapabilityProbeError::CredentialRejected(message)) => {
+            assert_eq!(message, CredentialRejected::USER_MESSAGE);
+        }
+        other => panic!("expected a rejected credential, got {other:?}"),
+    }
+    server.abort();
+}
+
+#[tokio::test]
+async fn a_cursor_outage_is_still_a_provider_failure() {
+    use agent_harness::domain::capability_discovery::CapabilityProbe;
+    let (base_url, server) = refusing_cursor_api(503, r#"{"error":"down"}"#).await;
+    let provider = CursorModels::new(TestCursorKeys, base_url);
+    let caller = MacroUserIdStr::try_from_email("models@example.com").unwrap();
+
+    assert!(matches!(
+        CursorModelProbe::probe(&provider, &caller).await,
+        Err(ModelProbeError::Failed(_))
+    ));
+    assert!(matches!(
+        CapabilityProbe::probe(&provider, &caller, None).await,
+        Err(CapabilityProbeError::Failed(_))
+    ));
+    server.abort();
+}
