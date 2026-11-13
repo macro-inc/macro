@@ -1,6 +1,7 @@
 //! The thread lists: what each view holds and how it pages.
 
 use std::collections::BTreeSet;
+use std::time::Duration;
 
 use email_e2e::{Inbox, Mail, Provider, Report, Stack, User, gmail_emulator, outlook_emulator};
 use rootcause::prelude::*;
@@ -215,4 +216,164 @@ async fn gmail_all_mail_leaves_out_spam_and_trash() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_all_mail_leaves_out_spam_and_trash() -> Result<(), Report> {
     all_mail_leaves_out_spam_and_trash(Provider::Outlook).await
+}
+
+/// The promotions-and-other list is paged over the mail that belongs in it:
+/// newer mail of other kinds does not use up the page.
+///
+/// When it fails: the list shows fewer rows than its page size, or nothing,
+/// while matching mail lies further down.
+async fn other_view_pages_over_its_own_mail(provider: Provider) -> Result<(), Report> {
+    const OTHER: usize = 6;
+    const PRIMARY: usize = 12;
+    const PAGE: usize = 3;
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+
+    // The promotions first, so that every primary thread is newer.
+    for index in 0..OTHER {
+        let subject = format!("Offer {index:02}");
+        // A minute apart, an hour ago: no two rows share a timestamp.
+        let age = Duration::from_secs(3600 - 60 * index as u64);
+        match provider {
+            Provider::Gmail => {
+                stack.gmail().deliver(
+                    inbox.email(),
+                    &gmail_emulator::NewMessage {
+                        from: Some("Shop <deals@example.net>".to_owned()),
+                        subject: Some(subject),
+                        date: Some(stack.gmail().now() - age),
+                        text: Some("Sale.".to_owned()),
+                        labels: Some(
+                            ["INBOX", "UNREAD", "CATEGORY_PROMOTIONS"]
+                                .map(str::to_owned)
+                                .to_vec(),
+                        ),
+                        ..Default::default()
+                    },
+                )?;
+            }
+            Provider::Outlook => {
+                stack.outlook().deliver(
+                    inbox.email(),
+                    &outlook_emulator::NewMessage {
+                        from: Some("Shop <deals@example.net>".to_owned()),
+                        subject: Some(subject),
+                        date: Some(stack.outlook().now() - age),
+                        text: Some("Sale.".to_owned()),
+                        other: true,
+                        ..Default::default()
+                    },
+                )?;
+            }
+        }
+    }
+    inbox
+        .wait_for_preview("other", &format!("Offer {:02}", OTHER - 1))
+        .await?;
+    for index in 0..PRIMARY {
+        inbox.deliver(&Mail::new(
+            "Grace <grace@example.com>",
+            &format!("Primary {index:02}"),
+            "Hello.",
+        ))?;
+    }
+    inbox
+        .wait_for_preview("inbox", &format!("Primary {:02}", PRIMARY - 1))
+        .await?;
+    email_e2e::eventually(
+        "every delivered thread to be synced",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || {
+            let all = inbox.previews("all").await?;
+            Ok((all.len() == OTHER + PRIMARY).then_some(()))
+        },
+    )
+    .await?;
+
+    let listed = pages(&ada, "other", PAGE).await?;
+    let expected: BTreeSet<String> = (0..OTHER).map(|index| format!("Offer {index:02}")).collect();
+    assert_eq!(
+        subjects(&listed).into_iter().collect::<BTreeSet<_>>(),
+        expected,
+        "the list holds every promotion and nothing else"
+    );
+    let sizes: Vec<usize> = listed.iter().map(Vec::len).collect();
+    assert_eq!(sizes, vec![PAGE, PAGE], "every page before the end is full");
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_other_view_pages_over_its_own_mail() -> Result<(), Report> {
+    other_view_pages_over_its_own_mail(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_other_view_pages_over_its_own_mail() -> Result<(), Report> {
+    other_view_pages_over_its_own_mail(Provider::Outlook).await
+}
+
+/// The Sent list holds what the user sent from every inbox they linked, not
+/// only from the first.
+///
+/// When it fails: mail sent from a second inbox is missing from Sent.
+async fn sent_lists_mail_from_every_inbox(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let first = ada.link(provider, ada.email()).await?;
+    let second = ada.link(provider, "ada.work@example.com").await?;
+
+    first
+        .send(&serde_json::json!({
+            "subject": "From the first inbox",
+            "to": [{ "email": "grace@example.com" }],
+            "body_text": "One.",
+        }))
+        .await?;
+    second
+        .send(&serde_json::json!({
+            "subject": "From the second inbox",
+            "to": [{ "email": "grace@example.com" }],
+            "body_text": "Two.",
+        }))
+        .await?;
+    first.wait_for_preview("sent", "From the first inbox").await?;
+    second
+        .wait_for_preview("sent", "From the second inbox")
+        .await?;
+
+    // The list as the app asks for it: no inbox named.
+    let listed = pages(&ada, "sent", 20).await?;
+    let by_subject = |subject: &str| {
+        listed
+            .iter()
+            .flatten()
+            .find(|preview| preview["name"] == subject)
+            .map(|preview| preview["linkId"].clone())
+    };
+    assert_eq!(
+        by_subject("From the first inbox"),
+        Some(Value::from(first.link_id().to_string()))
+    );
+    assert_eq!(
+        by_subject("From the second inbox"),
+        Some(Value::from(second.link_id().to_string())),
+        "mail sent from the second inbox is in Sent"
+    );
+    assert_eq!(subjects(&listed).len(), 2, "each sent thread is listed once");
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_sent_lists_mail_from_every_inbox() -> Result<(), Report> {
+    sent_lists_mail_from_every_inbox(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_sent_lists_mail_from_every_inbox() -> Result<(), Report> {
+    sent_lists_mail_from_every_inbox(Provider::Outlook).await
 }
