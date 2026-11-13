@@ -431,6 +431,7 @@ pub struct RowHeight(u16);
 
 /// One page of tabs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[schemars(rename = "DashboardTab")]
 pub struct Tab {
     pub label: String,
     pub children: Vec<Widget>,
@@ -439,6 +440,7 @@ pub struct Tab {
 /// Where a stat's number comes from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[schemars(rename = "DashboardStatSource")]
 pub enum StatSource {
     /// A saved query's answer: its last row's last column. Order a series by
     /// time so the last row is the latest.
@@ -451,6 +453,7 @@ pub enum StatSource {
 /// How a chart plots the answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "snake_case")]
+#[schemars(rename = "DashboardChartMode")]
 pub enum ChartMode {
     Bar,
     Line,
@@ -462,6 +465,7 @@ pub enum ChartMode {
 /// Which answer columns a chart plots, named as the SELECT returns them:
 /// the SDK's SavedQueryChart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[schemars(rename = "DashboardChartColumns")]
 pub struct ChartColumns {
     /// The labels: the x axis, or the pie's slices.
     pub x: String,
@@ -482,6 +486,7 @@ pub struct ChartColumns {
 /// Where a table's rows come from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[schemars(rename = "DashboardTableSource")]
 pub enum TableSource {
     /// A saved query's answer.
     #[serde(rename_all = "camelCase")]

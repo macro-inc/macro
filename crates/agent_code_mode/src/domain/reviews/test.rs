@@ -1244,7 +1244,7 @@ async fn a_view_is_presented_to_the_session_and_nothing_is_saved() {
 async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
     let f = Fixture::new();
     let widgets = (0..12)
-        .map(|_| json!({ "type": "chart" }))
+        .map(|_| json!({ "type": "piechart" }))
         .collect::<Vec<_>>();
     let Err(CodeModeError::Invalid(message)) = f
         .service

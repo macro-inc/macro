@@ -122,7 +122,7 @@ expression: schema
       ],
       "type": "string"
     },
-    "ChartColumns": {
+    "DashboardChartColumns": {
       "description": "Which answer columns a chart plots, named as the SELECT returns them:\nthe SDK's SavedQueryChart.",
       "properties": {
         "color": {
@@ -162,7 +162,7 @@ expression: schema
       ],
       "type": "object"
     },
-    "ChartMode": {
+    "DashboardChartMode": {
       "description": "How a chart plots the answer.",
       "enum": [
         "bar",
@@ -172,6 +172,107 @@ expression: schema
         "pie"
       ],
       "type": "string"
+    },
+    "DashboardStatSource": {
+      "description": "Where a stat's number comes from.",
+      "oneOf": [
+        {
+          "description": "A saved query's answer: its last row's last column. Order a series by\ntime so the last row is the latest.",
+          "properties": {
+            "kind": {
+              "const": "query",
+              "type": "string"
+            },
+            "queryId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "queryId"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "How many items a filter matches, counted up to 100.",
+          "properties": {
+            "kind": {
+              "const": "count",
+              "type": "string"
+            },
+            "query": {
+              "$ref": "#/$defs/Query"
+            }
+          },
+          "required": [
+            "kind",
+            "query"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DashboardTab": {
+      "description": "One page of tabs.",
+      "properties": {
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Widget"
+          },
+          "type": "array"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "children"
+      ],
+      "type": "object"
+    },
+    "DashboardTableSource": {
+      "description": "Where a table's rows come from.",
+      "oneOf": [
+        {
+          "description": "A saved query's answer.",
+          "properties": {
+            "kind": {
+              "const": "query",
+              "type": "string"
+            },
+            "queryId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "queryId"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A database view's rows, as its grid shows them.",
+          "properties": {
+            "databaseId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "view",
+              "type": "string"
+            },
+            "viewId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "databaseId",
+            "viewId"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "DateRangeFilter": {
       "description": "Bounds on a timestamp, as ISO 8601 strings.",
@@ -1220,107 +1321,6 @@ expression: schema
       },
       "type": "object"
     },
-    "StatSource": {
-      "description": "Where a stat's number comes from.",
-      "oneOf": [
-        {
-          "description": "A saved query's answer: its last row's last column. Order a series by\ntime so the last row is the latest.",
-          "properties": {
-            "kind": {
-              "const": "query",
-              "type": "string"
-            },
-            "queryId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "queryId"
-          ],
-          "type": "object"
-        },
-        {
-          "description": "How many items a filter matches, counted up to 100.",
-          "properties": {
-            "kind": {
-              "const": "count",
-              "type": "string"
-            },
-            "query": {
-              "$ref": "#/$defs/Query"
-            }
-          },
-          "required": [
-            "kind",
-            "query"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "Tab": {
-      "description": "One page of tabs.",
-      "properties": {
-        "children": {
-          "items": {
-            "$ref": "#/$defs/Widget"
-          },
-          "type": "array"
-        },
-        "label": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "label",
-        "children"
-      ],
-      "type": "object"
-    },
-    "TableSource": {
-      "description": "Where a table's rows come from.",
-      "oneOf": [
-        {
-          "description": "A saved query's answer.",
-          "properties": {
-            "kind": {
-              "const": "query",
-              "type": "string"
-            },
-            "queryId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "queryId"
-          ],
-          "type": "object"
-        },
-        {
-          "description": "A database view's rows, as its grid shows them.",
-          "properties": {
-            "databaseId": {
-              "type": "string"
-            },
-            "kind": {
-              "const": "view",
-              "type": "string"
-            },
-            "viewId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "databaseId",
-            "viewId"
-          ],
-          "type": "object"
-        }
-      ]
-    },
     "TagFilterMode": {
       "description": "How selected tags combine: items with any of them, or with all of them.",
       "enum": [
@@ -1786,7 +1786,7 @@ expression: schema
           "properties": {
             "tabs": {
               "items": {
-                "$ref": "#/$defs/Tab"
+                "$ref": "#/$defs/DashboardTab"
               },
               "type": "array"
             },
@@ -1821,7 +1821,7 @@ expression: schema
               "type": "string"
             },
             "source": {
-              "$ref": "#/$defs/StatSource"
+              "$ref": "#/$defs/DashboardStatSource"
             },
             "sparkline": {
               "description": "Draw the answer's last column across its rows (query sources only).",
@@ -1846,7 +1846,7 @@ expression: schema
           "description": "A saved query's answer drawn as a chart, as a document's live answer\ndraws it.",
           "properties": {
             "chart": {
-              "$ref": "#/$defs/ChartColumns"
+              "$ref": "#/$defs/DashboardChartColumns"
             },
             "dense": {
               "type": [
@@ -1855,7 +1855,7 @@ expression: schema
               ]
             },
             "mode": {
-              "$ref": "#/$defs/ChartMode"
+              "$ref": "#/$defs/DashboardChartMode"
             },
             "queryId": {
               "description": "The id database.saveQuery returned.",
@@ -1884,7 +1884,7 @@ expression: schema
               ]
             },
             "source": {
-              "$ref": "#/$defs/TableSource"
+              "$ref": "#/$defs/DashboardTableSource"
             },
             "title": {
               "type": [

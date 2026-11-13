@@ -38,7 +38,7 @@ fn without_content(message: &str) -> String {
         );
     }
     if let Some((_, expected)) = regex_captures!(r"^unknown variant .*, expected (.*)$", message) {
-        return format!("should be {expected}");
+        return format!("should be {}", without_dashboard_widgets(expected));
     }
     if let Some((_, expected)) = regex_captures!(r"^invalid value: .*, expected (.*)$", message) {
         return format!("should be {}", expected_name(expected));
@@ -54,6 +54,25 @@ fn without_content(message: &str) -> String {
         return format!("matches no shape of {name}");
     }
     "is not valid".to_owned()
+}
+
+/// Serde's list of variants without the dashboard widgets: a problem reaches
+/// models that were never offered them, so it must not suggest them.
+fn without_dashboard_widgets(expected: &str) -> String {
+    let Some(list) = expected.strip_prefix("one of ") else {
+        return expected.to_owned();
+    };
+    let names: Vec<&str> = list
+        .split(", ")
+        .filter(|name| {
+            let bare = name.trim_matches('`');
+            !crate::DASHBOARD_WIDGETS.contains(&bare)
+        })
+        .collect();
+    if names.len() == list.split(", ").count() {
+        return expected.to_owned();
+    }
+    format!("one of {}", names.join(", "))
 }
 
 /// What serde expected, as a phrase: a struct or tagged enum is an object.

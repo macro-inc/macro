@@ -966,6 +966,11 @@ async fn run() -> anyhow::Result<()> {
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
             app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
+            dashboards: ai_tools::agent_dashboards_rollout(
+                config.posthog_api_key.value(),
+                config.posthog_host.value(),
+                config.environment,
+            )?,
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each

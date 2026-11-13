@@ -86,15 +86,18 @@ pub fn present_view_schema(offer: Offer) -> String {
 }
 
 /// The widget types only dashboards are offered.
-const DASHBOARD_WIDGETS: [&str; 6] = ["grid", "tabs", "stat", "chart", "table", "savedView"];
+pub(crate) const DASHBOARD_WIDGETS: [&str; 6] =
+    ["grid", "tabs", "stat", "chart", "table", "savedView"];
 
 /// The definitions only dashboard widgets use.
+/// Their schema names carry `Dashboard` so no other type's definition shares
+/// one in a generator that holds many tools.
 const DASHBOARD_DEFINITIONS: [&str; 5] = [
-    "Tab",
-    "StatSource",
-    "ChartMode",
-    "ChartColumns",
-    "TableSource",
+    "DashboardTab",
+    "DashboardStatSource",
+    "DashboardChartMode",
+    "DashboardChartColumns",
+    "DashboardTableSource",
 ];
 
 /// A [`View`]'s schema without the dashboard layouts and panes: what a model
@@ -107,23 +110,51 @@ impl JsonSchema for ViewWithoutDashboards {
         View::schema_name()
     }
 
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        "dynamic_ui::ViewWithoutDashboards".into()
+    }
+
     fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        let schema = View::json_schema(generator);
+        // A generator that inlines subschemas puts the widget variants in the
+        // view's own schema, one that does not in its definitions: prune both.
+        let mut schema = View::json_schema(generator).to_value();
+        without_dashboard_variants(&mut schema);
         let definitions = generator.definitions_mut();
-        if let Some(variants) = definitions
-            .get_mut("Widget")
-            .and_then(|widget| widget.get_mut("oneOf"))
-            .and_then(serde_json::Value::as_array_mut)
-        {
-            variants.retain(|variant| {
-                let tag = variant["properties"]["type"]["const"].as_str();
-                !tag.is_some_and(|tag| DASHBOARD_WIDGETS.contains(&tag))
-            });
-        }
         for name in DASHBOARD_DEFINITIONS {
             definitions.remove(name);
         }
-        schema
+        if let Some(widget) = definitions.get_mut("Widget") {
+            without_dashboard_variants(widget);
+        }
+        schemars::Schema::try_from(schema).expect("a pruned schema is still a schema")
+    }
+}
+
+/// Drop every `oneOf`/`anyOf` alternative tagged as a dashboard widget,
+/// wherever the schema holds one.
+fn without_dashboard_variants(schema: &mut serde_json::Value) {
+    use serde_json::Value;
+
+    match schema {
+        Value::Object(fields) => {
+            for key in ["oneOf", "anyOf"] {
+                if let Some(Value::Array(variants)) = fields.get_mut(key) {
+                    variants.retain(|variant| {
+                        let tag = variant["properties"]["type"]["const"].as_str();
+                        !tag.is_some_and(|tag| DASHBOARD_WIDGETS.contains(&tag))
+                    });
+                }
+            }
+            for value in fields.values_mut() {
+                without_dashboard_variants(value);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                without_dashboard_variants(item);
+            }
+        }
+        _ => {}
     }
 }
 
