@@ -192,20 +192,21 @@ async function attempt(
       }
     }
     await reset(at, db, tokens, keep);
-    return { result, load, made, quality, run, build };
+    // The judge's model call goes through the stack's harness, so it holds the stack too.
+    const grade =
+      options.judge && result.draft && !result.error
+        ? await judge(at, session.judgeToken, item, result.draft, result.reply, session.names, baseOf(session, item))
+        : undefined;
+    return { result, load, made, quality, run, build, grade };
   });
-  const { result, load, made, quality, run, build } = held;
-  // Traces and the judge need nothing from the stack's state, so they run
-  // after the next eval may have the stack.
+  const { result, load, made, quality, run, build, grade } = held;
+  // Traces come from Tempo, not the stack, so they're read after the next
+  // eval may have it.
   const window = { start: result.startedAtMs, end: result.startedAtMs + result.wallMs };
   const spans =
     arm === 'draft'
       ? await draftSpans(at, result.traceId)
       : { spans: await sessionSpans(at, result.traceId, result.sessionId ?? '', window), checks: [] };
-  const grade =
-    options.judge && result.draft && !result.error
-      ? await judge(at, session.judgeToken, item, result.draft, result.reply, session.names, baseOf(session, item))
-      : undefined;
   return {
     case: item.id,
     arm,
