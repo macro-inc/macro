@@ -50,6 +50,20 @@ let
   display = ":${toString displayNumber}";
   vncPort = 5900 + displayNumber;
 
+  # nixpkgs' Bun 1.3.13 times out in Playwright's connectOverCDP, which the
+  # agent's browser capability and its checks use; 1.4.2 connects. Drop this
+  # once nixpkgs ships >= 1.4.2.
+  bun =
+    assert lib.assertMsg (lib.versionOlder pkgs.bun.version "1.4.2")
+      "nixpkgs ships Bun ${pkgs.bun.version}; drop the agent's Bun override";
+    pkgs.bun.overrideAttrs {
+      version = "1.4.2";
+      src = pkgs.fetchurl {
+        url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip";
+        hash = "sha256-NjaPrvdSeHXV/6UuU81IAhdB8qg+tiCKjdZAaNQiqRM=";
+      };
+    };
+
   ffmpegX11grab = pkgs.runCommand "ffmpeg-x11grab" { } ''
     mkdir -p $out/bin
     ln -s ${pkgs.ffmpeg-full}/bin/ffmpeg $out/bin/ffmpeg-x11grab
@@ -59,7 +73,7 @@ let
   # from the system profile, where the image installs the wrapper that reads
   # harnessd's sign-in.
   runtimePath = [
-    pkgs.bun
+    bun
     pkgs.git
     pkgs.coreutils
     pkgs.chromium
