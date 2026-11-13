@@ -1,0 +1,94 @@
+packages/sdk/generated/storage/index.ts
+  s_9d302c2d5b35f4::t_654a39a1dfac4c 4
+packages/sdk/specs/storage.json
+  s_9d302c2d5b35f4::t_654a39a1dfac4c 43378-43622,65769-65770
+packages/sdk/generated/storage/types.gen.ts
+  s_9d302c2d5b35f4::t_654a39a1dfac4c 9560-9662,23622
+  s_9d302c2d5b35f4::t_434d1cc66a4e8f 9559
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEvent.ts
+  s_9d302c2d5b35f4::t_e5fc519b6c33c8 7-22,25,27-46
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOf.ts
+  s_9d302c2d5b35f4::t_1e02973fd21a26 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfEventType.ts
+  s_9d302c2d5b35f4::t_2be15ed9876fda 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfFive.ts
+  s_9d302c2d5b35f4::t_f4eebd91087f83 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfFiveEventType.ts
+  s_9d302c2d5b35f4::t_873f0e0d36d7ef 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfNine.ts
+  s_9d302c2d5b35f4::t_053de4b415d5a9 9,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfNineEventType.ts
+  s_9d302c2d5b35f4::t_27ae652b4ca3e2 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnefive.ts
+  s_9d302c2d5b35f4::t_8aea993015f1d9 9,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnefiveEventType.ts
+  s_9d302c2d5b35f4::t_c16a890f609093 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnenine.ts
+  s_9d302c2d5b35f4::t_41908478d16108 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnenineEventType.ts
+  s_9d302c2d5b35f4::t_a7473c89dddfc1 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOneone.ts
+  s_9d302c2d5b35f4::t_8be3d955cb4e30 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOneoneEventType.ts
+  s_9d302c2d5b35f4::t_8af0bf05799861 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOneseven.ts
+  s_9d302c2d5b35f4::t_c377e62b99622d 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnesevenEventType.ts
+  s_9d302c2d5b35f4::t_5bb3a364622715 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnethree.ts
+  s_9d302c2d5b35f4::t_572edc9d8ddb2f 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfOnethreeEventType.ts
+  s_9d302c2d5b35f4::t_80c9d71779b372 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfSeven.ts
+  s_9d302c2d5b35f4::t_bd824681894e14 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfSevenEventType.ts
+  s_9d302c2d5b35f4::t_d05843ee988f0f 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfThree.ts
+  s_9d302c2d5b35f4::t_e834daae094c90 9,12,14-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfThreeEventType.ts
+  s_9d302c2d5b35f4::t_858c59aa4f6f42 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfThreeone.ts
+  s_9d302c2d5b35f4::t_8e2fb6a14b01b6 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfThreeoneEventType.ts
+  s_9d302c2d5b35f4::t_b5a712ab7e4803 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwofive.ts
+  s_9d302c2d5b35f4::t_8caac4bb36d8ee 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwofiveEventType.ts
+  s_9d302c2d5b35f4::t_e3b0336d2899b5 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwonine.ts
+  s_9d302c2d5b35f4::t_a3be4dcde838df 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwonineEventType.ts
+  s_9d302c2d5b35f4::t_e4c05ad5df15b6 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwoone.ts
+  s_9d302c2d5b35f4::t_6049f35d777a1f 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwooneEventType.ts
+  s_9d302c2d5b35f4::t_36627efbd3594e 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwoseven.ts
+  s_9d302c2d5b35f4::t_55c2fa187b871d 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwosevenEventType.ts
+  s_9d302c2d5b35f4::t_d5950e9e671059 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwothree.ts
+  s_9d302c2d5b35f4::t_642ef1b5e42d3e 7,11,13-15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailNotificationEventOneOfTwothreeEventType.ts
+  s_9d302c2d5b35f4::t_96994e51a92dc2 8-9,12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_9d302c2d5b35f4::t_f03a5bda6f09eb 1349-1381
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_9d302c2d5b35f4::t_1f4fda47ddde28 43378-43622,65769-65770
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6a24aff48d3d83cd650b12234507ce96f1c3c700",
+  "prompts": {},
+  "sessions": {
+    "s_9d302c2d5b35f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eba92134-fcdc-4053-be03-fafeb9be5fc3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
