@@ -98,13 +98,23 @@ fn sort_key_expression(enabled: bool) -> &'static str {
     }
 }
 
+/// The key a name sort orders and pages on.
+///
+/// ICU's root collation, not the database default: the web re-sorts loaded
+/// rows with `localeCompare(…, 'und')`, the same ICU root order, while the
+/// default libc collation ignores punctuation and would page "10. Wrap"
+/// before "1. Intro".
+fn name_sort_key(name_sql: &str) -> String {
+    format!(r#"lower({name_sql}) COLLATE "und-x-icu""#)
+}
+
 /// The `sort_name` column one union arm contributes to a name-sorted page.
 ///
-/// Lower-cased here so the page order, the keyset, and the cursor comparison
-/// all read the same expression.
+/// Lower-cased and collated here so the page order, the keyset, and the
+/// cursor comparison all read the same expression.
 fn name_sort_column(enabled: bool, name_sql: &str) -> String {
     if enabled {
-        format!(", lower({name_sql}) as sort_name")
+        format!(", {} as sort_name", name_sort_key(name_sql))
     } else {
         String::new()
     }
@@ -178,8 +188,8 @@ fn property_keyset(
     )
 }
 
-/// The cursor's own name is stored with its original case; lower it to match
-/// the `sort_name` column.
+/// The cursor's own name is stored with its original case; lower and collate
+/// it to match the `sort_name` column.
 fn name_keyset(
     sort: DynamicSort,
     key: &str,
@@ -191,7 +201,7 @@ fn name_keyset(
     keyed_keyset(
         direction,
         key,
-        &format!("lower(${cursor_name}::text)"),
+        &name_sort_key(&format!("${cursor_name}::text")),
         timestamp,
         id,
     )
@@ -2117,10 +2127,10 @@ fn build_query<'a>(
     // page was selected on; `sort_name` is only needed inside `TopItems`.
     builder.push(page_order(
         sort,
-        if name_sort {
-            "lower(\"name\")"
+        &if name_sort {
+            name_sort_key("\"name\"")
         } else {
-            "\"sort_key\""
+            "\"sort_key\"".to_owned()
         },
         "\"sort_ts\"",
         "\"id\"",
@@ -2951,10 +2961,10 @@ fn build_grouped_query<'a>(
     if property_sort || name_sort {
         builder.push(page_order(
             sort,
-            if name_sort {
-                "lower(\"name\")"
+            &if name_sort {
+                name_sort_key("\"name\"")
             } else {
-                "\"sort_key\""
+                "\"sort_key\"".to_owned()
             },
             "\"sort_ts\"",
             "\"id\"",

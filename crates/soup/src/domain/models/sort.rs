@@ -274,7 +274,9 @@ impl Ord for DynamicSortValue {
                 }
                 match (left, right) {
                     (Some(left), Some(right)) => {
-                        // SQL orders on `lower(name)`; match that here.
+                        // Name pages arrive in SQL's ICU order and are never re-sorted
+                        // here (only timestamp stitching sorts), so this only has to
+                        // be a consistent total order.
                         let order = left.to_lowercase().cmp(&right.to_lowercase());
                         if *direction == SoupSortDirection::Asc {
                             order.reverse()

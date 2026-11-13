@@ -157,6 +157,48 @@ async fn name_pages_are_alphabetical_regardless_of_case(pool: PgPool) -> anyhow:
     Ok(())
 }
 
+/// Pages follow ICU root order, which the web's `localeCompare(…, 'und')`
+/// shares: an empty name first, punctuation before digits, and "1. Intro"
+/// before "10. Wrap", where the default libc collation would ignore the
+/// punctuation and page the other way.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn name_pages_follow_icu_root_order(pool: PgPool) -> anyhow::Result<()> {
+    for (id, name) in [
+        (A, "10. Wrap"),
+        (B, "1. Intro"),
+        (C, "#tag"),
+        (D, ""),
+        (UNSET, "Émile"),
+    ] {
+        sqlx::query!(
+            r#"UPDATE "Document" SET name = $1 WHERE id = $2"#,
+            name,
+            id.to_string(),
+        )
+        .execute(&pool)
+        .await?;
+    }
+    let sort = DynamicSort::name(SoupSortDirection::Asc);
+    let mut cursor = Query::Sort(sort, documents());
+    let mut seen = Vec::new();
+    for _ in 0..4 {
+        let page = flat(&pool, cursor, 2).await?;
+        if page.is_empty() {
+            break;
+        }
+        seen.extend(page.iter().map(|item| item.item.id()));
+        cursor = continuation(&page.last().unwrap().item, sort);
+    }
+    assert_eq!(seen, [D, C, B, A, UNSET]);
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(
         path = "../../../../../../../macro_db_client/fixtures",
@@ -247,11 +289,11 @@ fn name_queries_order_on_the_name_column_without_a_property_join() {
     );
     let sql = query.sql().to_owned();
     let (candidates, details) = sql.split_once("Combined AS").unwrap();
-    assert!(candidates.contains("lower(d.name) as sort_name"));
+    assert!(candidates.contains(r#"lower(d.name) COLLATE "und-x-icu" as sort_name"#));
     assert!(candidates.contains("all_items.sort_name ASC NULLS LAST"));
-    assert!(candidates.contains("lower($9::text)"));
+    assert!(candidates.contains(r#"lower($9::text) COLLATE "und-x-icu""#));
     assert!(!candidates.contains("ep_sort"));
-    assert!(details.contains("lower(\"name\") ASC NULLS LAST"));
+    assert!(details.contains(r#"lower("name") COLLATE "und-x-icu" ASC NULLS LAST"#));
     assert_eq!(source_ids_slot(sort, false), 10);
     assert_eq!(first_document_id_slot(sort, false), 11);
     assert_eq!(source_ids_slot(sort, true), 12);

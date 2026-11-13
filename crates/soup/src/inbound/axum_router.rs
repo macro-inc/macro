@@ -95,7 +95,7 @@ pub struct Params {
     limit: Option<u16>,
     /// Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
     /// Missing definitions, unsupported types, and mismatched values sort as missing.
-    /// `name` orders by the item's own name, case-insensitively, unnamed last.
+    /// `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
     /// Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
     /// Defaults to viewed_at.
     #[serde(default)]
@@ -160,9 +160,10 @@ pub enum SoupApiSort {
     /// Flat reads omit calendar events, email, channels, calls, companies, and agent sessions.
     /// Grouped reads retain calendar events.
     Property,
-    /// Sort by the item's own name, case-insensitively, with unnamed items
-    /// last, then newest update and ID. Database rows have no name here and
-    /// always sort last. Omits the same sources a flat property sort does.
+    /// Sort by the item's own name, case-insensitively in ICU root collation
+    /// order, with unnamed items last, then newest update and ID. Database
+    /// rows have no name here and always sort last. Omits the same sources a
+    /// flat property sort does.
     Name,
 }
 
@@ -218,8 +219,8 @@ pub enum GroupedSoupSort {
     /// Missing definitions and unsupported types use update-time ordering.
     /// Email, channels, calls, companies, and agent sessions never appear.
     Property,
-    /// Sort each bin by the item's own name, case-insensitively, with unnamed
-    /// items last, then newest update and ID.
+    /// Sort each bin by the item's own name, case-insensitively in ICU root
+    /// collation order, with unnamed items last, then newest update and ID.
     Name,
 }
 

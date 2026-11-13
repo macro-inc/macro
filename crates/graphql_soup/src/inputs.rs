@@ -463,9 +463,9 @@ pub enum GraphqlSimpleSortMethod {
     /// Missing definitions and unsupported types use update-time ordering.
     /// Email, channels, calls, companies, and agent sessions never appear.
     Property,
-    /// Sort by the item's own name, case-insensitively, unnamed last, then
-    /// newest update and ID. Database rows have no name here and sort last.
-    /// Omits the same sources `PROPERTY` does.
+    /// Sort by the item's own name, case-insensitively in ICU root collation
+    /// order, unnamed last, then newest update and ID. Database rows have no
+    /// name here and sort last. Omits the same sources `PROPERTY` does.
     Name,
 }
 

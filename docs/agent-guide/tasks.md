@@ -281,7 +281,7 @@ the optimistic tag. Repeat with an existing assignment and with removal.
 
 Tasks lists and boards offer **Title**, **Status**, **Priority**, **Due soonest**,
 and **Due furthest away** sorting alongside Viewed, Updated, and Created. Title
-reads A to Z case-insensitively; picking it again reverses it, and the list's
+reads A to Z case-insensitively, punctuation before digits before letters ("1. Intro" before "10. Wrap"); picking it again reverses it, and the list's
 **Task** column header selects and reverses it too. Status
 follows stored option order; Priority puts urgent tasks first. Missing values
 stay last. Property- and title-sort ties use newest update, then descending task ID.
