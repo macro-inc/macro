@@ -3,9 +3,9 @@ use super::*;
 #[cfg(test)]
 mod desktop_test;
 #[cfg(test)]
-mod row_test;
-#[cfg(test)]
 mod menu_test;
+#[cfg(test)]
+mod row_test;
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum Headers {

@@ -47,19 +47,29 @@ fn select_table(
 ) -> Result<Selection, Error> {
     let selection = Selection::Table(TableSelection::new(table, anchor, focus));
     editor.update(|tx| tx.set_selection(Some(selection.clone())))?;
-    Ok(editor.state().selection().cloned().expect("table selection"))
+    Ok(editor
+        .state()
+        .selection()
+        .cloned()
+        .expect("table selection"))
 }
 
 #[test]
-fn insert_row_below_inserts_after_the_lower_selected_row_and_keeps_the_selection(
-) -> Result<(), Error> {
+fn insert_row_below_inserts_after_the_lower_selected_row_and_keeps_the_selection()
+-> Result<(), Error> {
     let mut editor = editor();
     let (table, rows) = grid(&editor)?;
     let before = select_table(&mut editor, table, rows[0][0], rows[1][1])?;
-    assert_eq!(menu(&mut editor, rows[0][0], "insert-row-below")?, Handled::Yes);
+    assert_eq!(
+        menu(&mut editor, rows[0][0], "insert-row-below")?,
+        Handled::Yes
+    );
     let (_, after) = grid(&editor)?;
     assert_eq!(after.len(), 4);
-    assert_eq!((after[0][0], after[1][0], after[3][0]), (rows[0][0], rows[1][0], rows[2][0]));
+    assert_eq!(
+        (after[0][0], after[1][0], after[3][0]),
+        (rows[0][0], rows[1][0], rows[2][0])
+    );
     // Source $insertTableRowAtNode returns without touching the selection.
     assert_eq!(editor.state().selection().cloned(), Some(before));
     Ok(())
@@ -70,10 +80,16 @@ fn insert_row_above_under_a_backward_selection_inserts_above_the_upper_row() -> 
     let mut editor = editor();
     let (table, rows) = grid(&editor)?;
     let before = select_table(&mut editor, table, rows[2][0], rows[1][1])?;
-    assert_eq!(menu(&mut editor, rows[2][0], "insert-row-above")?, Handled::Yes);
+    assert_eq!(
+        menu(&mut editor, rows[2][0], "insert-row-above")?,
+        Handled::Yes
+    );
     let (_, after) = grid(&editor)?;
     assert_eq!(after.len(), 4);
-    assert_eq!((after[0][0], after[2][0], after[3][0]), (rows[0][0], rows[1][0], rows[2][0]));
+    assert_eq!(
+        (after[0][0], after[2][0], after[3][0]),
+        (rows[0][0], rows[1][0], rows[2][0])
+    );
     assert_eq!(editor.state().selection().cloned(), Some(before));
     Ok(())
 }
@@ -83,20 +99,30 @@ fn insert_column_right_moves_the_caret_to_the_first_inserted_cell() -> Result<()
     let mut editor = editor();
     let (table, rows) = grid(&editor)?;
     select_table(&mut editor, table, rows[0][0], rows[1][1])?;
-    assert_eq!(menu(&mut editor, rows[0][0], "insert-column-right")?, Handled::Yes);
+    assert_eq!(
+        menu(&mut editor, rows[0][0], "insert-column-right")?,
+        Handled::Yes
+    );
     let (_, after) = grid(&editor)?;
     assert!(after.iter().all(|row| row.len() == 4));
     // Source $insertTableColumnAtNode(shouldSetSelection=true): $moveSelectionToCell.
     let inserted = after[0][2];
-    let selection = editor.state().selection().and_then(Selection::as_range).cloned();
+    let selection = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .cloned();
     let anchor = selection.expect("caret").anchor.key();
-    assert_eq!(find_cell_node(editor.state().view(), anchor).map(|cell| cell.key()), Some(inserted));
+    assert_eq!(
+        find_cell_node(editor.state().view(), anchor).map(|cell| cell.key()),
+        Some(inserted)
+    );
     Ok(())
 }
 
 #[test]
-fn with_no_live_table_selection_the_tracked_cell_is_selected_then_its_row_deleted(
-) -> Result<(), Error> {
+fn with_no_live_table_selection_the_tracked_cell_is_selected_then_its_row_deleted()
+-> Result<(), Error> {
     let mut editor = editor();
     let (_, rows) = grid(&editor)?;
     editor.update(|tx| tx.set_selection(None))?;
@@ -167,7 +193,10 @@ fn a_live_cell_acts_without_a_tracked_cell() -> Result<(), Error> {
     let mut editor = editor();
     let (table, rows) = grid(&editor)?;
     let before = select_table(&mut editor, table, rows[1][0], rows[1][0])?;
-    assert_eq!(menu_with(&mut editor, None, "insert-row-below")?, Handled::Yes);
+    assert_eq!(
+        menu_with(&mut editor, None, "insert-row-below")?,
+        Handled::Yes
+    );
     let (_, after) = grid(&editor)?;
     assert_eq!(after.len(), 4);
     assert_eq!((after[1][0], after[3][0]), (rows[1][0], rows[2][0]));
