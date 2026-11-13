@@ -249,6 +249,11 @@ function InlineLoading() {
 type ItemPreviewProps = ItemEntity & {
   /** Custom class for the button wrapper */
   class?: string;
+  /**
+   * Custom class for the hover-card trigger that wraps the button. In a flex
+   * row this is the flex item, so width constraints belong here.
+   */
+  triggerClass?: string;
   /** Custom class for the icon container */
   iconClass?: string;
   /** Custom class for the text/name */
@@ -316,6 +321,7 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     disabled={
                       props.disableHoverCard || isTouchDevice() || !blockName()
                     }
+                    triggerClass={props.triggerClass}
                     trigger={
                       <button
                         type="button"
