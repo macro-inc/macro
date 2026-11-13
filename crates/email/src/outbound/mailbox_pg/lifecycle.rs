@@ -317,9 +317,15 @@ impl InboxLifecycleRepository for PgMailboxSync {
         &self,
         owner: &str,
     ) -> Result<Vec<DeletedUserBinding>, InboxLifecycleError> {
+        // `email_links.fusionauth_user_id` names whoever holds the credentials
+        // in use, which another participant's connection can make someone other
+        // than the inbox's owner. Holding them is the custodian relationship;
+        // the owner relationship needs the inbox's account to be the deleted
+        // user's own, or already gone with them.
         let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!",true AS "is_custodian!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
             UNION SELECT l.id AS link_id,l.macro_id AS actor_id,false AS is_custodian FROM email_links l WHERE l.fusionauth_user_id = $1
-                AND NOT EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id)"#,owner).fetch_all(&self.db).await.map_err(failed)?;
+                AND NOT EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id)
+                AND NOT EXISTS(SELECT 1 FROM "User" u WHERE u.id = l.macro_id AND u.macro_user_id::text <> lower($1))"#,owner).fetch_all(&self.db).await.map_err(failed)?;
         rows.into_iter()
             .map(|row| {
                 Ok(DeletedUserBinding {
