@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   hasUnreadEntity: vi.fn(),
   transformEntities: vi.fn(),
   notificationPreferences: vi.fn(),
+  prewarm: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -31,6 +32,12 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@queries/channel/unread-presence', () => ({
   createChannelUnreadQuery: mocks.channels,
+}));
+vi.mock('@queries/channel/recently-opened', () => ({
+  createRecentlyOpenedChannelsQuery: () => ({ isEnabled: false }),
+}));
+vi.mock('@queries/messages/graphql/prewarm', () => ({
+  useChannelCachePrewarm: mocks.prewarm,
 }));
 
 vi.mock('@app/features/email-view/queries/email-query', () => ({
@@ -122,7 +129,7 @@ function setup(
         }))
     );
     const [witnesses, setWitnesses] = createSignal<
-      { id: string; state: NotificationState }[]
+      { id: string; state: NotificationState; channelId?: string }[]
     >([]);
     mocks.graphqlFlag.mockImplementation(() => ({ enabled: graphqlEnabled() }));
     const [loading, setLoading] = createSignal(true);
@@ -329,6 +336,20 @@ describe('navigation unread presence', () => {
     setWitnesses([]);
     expect(unread('channels')).toBe(false);
     expect(mocks.notifications).not.toHaveBeenCalled();
+  });
+
+  it('hands the channels still unread here to the cache prewarm', () => {
+    const { setLoading, setWitnesses, setDone } = setup(true);
+    const unreadChannels: () => string[] = mocks.prewarm.mock.calls[0][0];
+    expect(unreadChannels()).toEqual([]);
+    setLoading(false);
+    setWitnesses([
+      { id: 'unseen', state: 'UNSEEN', channelId: 'channel-a' },
+      { id: 'seen', state: 'SEEN', channelId: 'channel-b' },
+    ]);
+    expect(unreadChannels()).toEqual(['channel-a']);
+    setDone(true);
+    expect(unreadChannels()).toEqual([]);
   });
 
   it('follows cold-start transport changes without reading the inactive feed', () => {

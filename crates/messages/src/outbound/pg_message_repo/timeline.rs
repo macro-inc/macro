@@ -106,6 +106,47 @@ impl PgMessageRepository {
         .map_err(database_error)?;
         self.hydrate_root_rows(rows).await
     }
+    /// The roots among `ids` that `parent`'s timeline shows, hydrated like a
+    /// timeline page. Driven from the ids, so the cost follows their number
+    /// and not the parent's size.
+    pub(super) async fn read_roots_by_ids(
+        &self,
+        parent: &MessageParent,
+        ids: &[Uuid],
+    ) -> Result<Vec<MessageListItem>, MessageError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // The visibility rules repeat the timeline's: a deleted thread is
+        // hidden, and a deleted root stays while a live reply needs it.
+        // Each id is one primary-key probe of the message and of its thread.
+        // The `OFFSET 0` keeps the parent out of the probe, so no plan can
+        // walk the parent's roots instead.
+        let rows = sqlx::query_scalar!(
+            r#"SELECT root.message AS "message!: Json<StoredMessage>"
+            FROM unnest($3::uuid[]) changed(id)
+            CROSS JOIN LATERAL (
+                SELECT to_jsonb(m) AS message, m.id, m.parent_entity_type, m.parent_entity_id,
+                    m.thread_id, m.deleted_at, t.deleted_at AS thread_deleted_at
+                FROM comms_messages m
+                JOIN comms_message_threads t ON t.root_id = m.id
+                WHERE m.id = changed.id
+                OFFSET 0
+            ) root
+            WHERE root.parent_entity_type = $1 AND root.parent_entity_id = $2
+                AND root.thread_id IS NULL AND root.thread_deleted_at IS NULL
+                AND (root.deleted_at IS NULL OR $1 = 'document' OR EXISTS (
+                    SELECT 1 FROM comms_messages r
+                    WHERE r.thread_id = root.id AND r.deleted_at IS NULL))"#,
+            parent.entity_type(),
+            parent.entity_id(),
+            ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        self.hydrate_root_rows(rows).await
+    }
     async fn hydrate_root_rows(
         &self,
         mut rows: Vec<Json<StoredMessage>>,
@@ -174,7 +215,7 @@ impl PgMessageRepository {
                     OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))
                     OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                         AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))
-                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) < ($3, $4::uuid))
+                AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'))
             ORDER BY m.created_at DESC, m.id DESC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
@@ -199,7 +240,7 @@ impl PgMessageRepository {
                     OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))
                     OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                         AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))
-                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))
+                AND (m.created_at, m.id) > (COALESCE($3::timestamptz, '-infinity'), COALESCE($4::uuid, '00000000-0000-0000-0000-000000000000'))
             ORDER BY m.created_at ASC, m.id ASC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)

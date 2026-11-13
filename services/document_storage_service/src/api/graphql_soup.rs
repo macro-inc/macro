@@ -207,6 +207,11 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_scheduled_action_context.clone());
     data.insert(state.graphql_contacts_context.clone());
     data.insert(state.graphql_calendar_context.clone());
+    data.insert(
+        state
+            .graphql_channel_messages_context
+            .for_organization(organization_id),
+    );
     data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_work_feed_context.clone());
     data.insert(state.graphql_registered_work_context.clone());

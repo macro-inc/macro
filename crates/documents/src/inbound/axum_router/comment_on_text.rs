@@ -131,6 +131,10 @@ impl IntoResponse for CommentOnTextError {
                     StatusCode::CONFLICT,
                     "message id already exists".to_string(),
                 ),
+                MessageError::Busy => message(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "too many writes at once; retry".to_string(),
+                ),
                 MessageError::Repository(error) => {
                     tracing::error!(error = ?error, "could not post comment on text");
                     message(

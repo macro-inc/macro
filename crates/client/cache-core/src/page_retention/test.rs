@@ -207,3 +207,109 @@ fn database_view_pages_share_retention_and_hydration_policy() {
     omit_hydration_pages(&mut updates);
     assert_eq!(updates[&viewer_key], viewer());
 }
+
+fn channel_key(n: usize) -> String {
+    format!("channelMessages({{\"channelId\":\"{:036}\"}})", n)
+}
+fn channel_page(n: usize) -> CacheValue {
+    CacheValue::Ref(EntityKey(format!("GraphqlChannelMessages:{n:036}").into()))
+}
+fn count(record: &Record, is_field: fn(&str) -> bool) -> usize {
+    record.fields.keys().filter(|key| is_field(key)).count()
+}
+
+#[test]
+fn channel_pages_keep_the_latest_writes_within_their_own_budget() {
+    let mut record = viewer();
+    for n in 0..MAX_SOUP_PAGES {
+        let mut update = viewer();
+        update.fields.insert(key(n), page());
+        record.merge(update);
+    }
+    for n in 0..MAX_CHANNEL_PAGES + 10 {
+        let mut update = viewer();
+        update.fields.insert(channel_key(n), channel_page(n));
+        record.merge(update);
+    }
+    // Channel-sized links all fit the byte budget: the count is the bound.
+    assert_eq!(count(&record, is_channel_page_field), MAX_CHANNEL_PAGES);
+    assert!(!record.fields.contains_key(&channel_key(9)));
+    assert!(record.fields.contains_key(&channel_key(10)));
+    // Neither family pushes out the other.
+    assert_eq!(count(&record, is_page_field), MAX_SOUP_PAGES);
+    let mut update = viewer();
+    update.fields.insert(key(MAX_SOUP_PAGES), page());
+    record.merge(update);
+    assert_eq!(count(&record, is_channel_page_field), MAX_CHANNEL_PAGES);
+    assert!(record.fields.contains_key(&channel_key(10)));
+    assert_eq!(record.fields["emailLinks"], viewer().fields["emailLinks"]);
+}
+
+#[test]
+fn rewriting_a_channel_page_makes_it_the_newest_across_reopen() {
+    let mut record = viewer();
+    for n in 0..MAX_CHANNEL_PAGES {
+        let mut update = viewer();
+        update.fields.insert(channel_key(n), channel_page(n));
+        record.merge(update);
+    }
+    let mut reopened = crate::codec::decode_record(&encode_record(&record)).unwrap();
+    assert!(!compact_soup_pages(&mut reopened));
+    let mut rewrite = viewer();
+    rewrite.fields.insert(channel_key(0), channel_page(0));
+    reopened.merge(rewrite);
+    let mut next = viewer();
+    next.fields.insert(channel_key(9999), channel_page(9999));
+    reopened.merge(next);
+    assert!(reopened.fields.contains_key(&channel_key(0)));
+    assert!(!reopened.fields.contains_key(&channel_key(1)));
+}
+
+#[test]
+fn an_incoming_snapshot_does_not_replace_channel_page_recency() {
+    let mut record = viewer();
+    for n in 0..3 {
+        let mut update = viewer();
+        update.fields.insert(channel_key(n), channel_page(n));
+        record.merge(update);
+    }
+    let before = record.fields[CHANNEL_PAGE_ORDER_FIELD].clone();
+    let mut snapshot = viewer();
+    snapshot.fields.insert(
+        CHANNEL_PAGE_ORDER_FIELD.into(),
+        CacheValue::List(vec![CacheValue::String(channel_key(0))]),
+    );
+    assert!(!record.merge(snapshot));
+    assert_eq!(record.fields[CHANNEL_PAGE_ORDER_FIELD], before);
+    assert_eq!(count(&record, is_channel_page_field), 3);
+}
+
+#[test]
+fn legacy_channel_pages_are_compacted_and_survive_hydration() {
+    let mut record = viewer();
+    for n in 0..MAX_CHANNEL_PAGES + 100 {
+        record.fields.insert(channel_key(n), channel_page(n));
+    }
+    record.fields.insert(key(0), page());
+    assert!(compact_soup_pages(&mut record));
+    assert!(!compact_soup_pages(&mut record));
+    assert_eq!(count(&record, is_channel_page_field), MAX_CHANNEL_PAGES);
+    // An embedded page bigger than the whole budget is dropped, not kept.
+    let mut update = viewer();
+    update.fields.insert(
+        channel_key(5000),
+        CacheValue::String("x".repeat(MAX_CHANNEL_PAGE_BYTES)),
+    );
+    record.merge(update);
+    assert!(!record.fields.contains_key(&channel_key(5000)));
+    let viewer_key = EntityKey("GraphqlUser:viewer".into());
+    let mut updates = [(viewer_key.clone(), record.clone())].into();
+    omit_hydration_pages(&mut updates);
+    let hydrated = &updates[&viewer_key];
+    assert_eq!(count(hydrated, is_page_field), 0);
+    assert_eq!(count(hydrated, is_channel_page_field), MAX_CHANNEL_PAGES);
+    assert_eq!(
+        hydrated.fields[CHANNEL_PAGE_ORDER_FIELD],
+        record.fields[CHANNEL_PAGE_ORDER_FIELD]
+    );
+}

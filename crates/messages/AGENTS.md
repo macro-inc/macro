@@ -23,10 +23,16 @@ they need.
   address it.
 - `src/domain/discussions.rs`: a parent's live threads with all replies, the
   read both `ReadDiscussion` and the document comment reader share.
+- `src/domain/service/thread_replies.rs` +
+  `src/outbound/pg_message_repo/thread_replies.rs`: one page of a thread's
+  replies (see **Thread reply pages**).
 - `src/domain/service/guest_chat.rs` + `src/inbound/guest_chat.rs`: live guest
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
   adapters (feature `outbound`).
+- `src/domain/changes.rs` + `src/domain/service/changes.rs` +
+  `src/outbound/pg_message_repo/change_log.rs`: a channel's change sequence
+  (see **Channel change sequence**).
 - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
   realtime/notification delivery adapters (features `outbound`/`broker`).
 
@@ -74,7 +80,69 @@ New posts use the message sender receipt to retain signed code-mode agent
 attribution. All other operations use the caller receipt so attribution cannot
 grant users another agent invocation's edit, deletion, or reaction authority.
 
+## Channel change sequence
+
+Every committed change to a channel's messages takes the channel's next
+sequence number in the same transaction (`comms_channel_change_counters`) and
+leaves a row in `comms_channel_change_log`. `message_update` events carry the
+number as `seq`; `MessageService::channel_changes(since)` returns the current
+state of everything that changed after a number, or a reset. Other parents
+keep no log.
+
+- A new repository write to channel messages calls
+  `change_log::append_message` as its last statement before the commit. The
+  counter row must be the last lock the transaction takes: a write that takes
+  a message lock after it deadlocks with a writer holding that message and
+  waiting for the counter. A transaction that inserted a reply calls
+  `check_thread_references` first, because the reply's deferred foreign key
+  would otherwise lock the root at commit.
+- A channel's writes commit one at a time, in two queues. In the process,
+  one `write_gate` shared by every repository lets 4 writes per channel hold a
+  connection and makes the rest
+  wait up to 2 s before a connection is taken, so a burst into one channel
+  cannot take the pool from the others. In the database, the append takes the
+  channel's advisory lock under a 5 s `lock_timeout`
+  (`COUNTER_LOCK_TIMEOUT`), which only a stalled transaction reaches. Either
+  wait running out is `MessageError::Busy`: nothing was written, HTTP answers
+  503 with `Retry-After`. Every new write path to channel messages enters the
+  gate before `pool.begin()`.
+- Keep work after the append to the commit: the Slack import still updates
+  the channel and its checkpoint after it, and every live writer to that
+  channel waits for those statements.
+- Sequence numbers follow commit order, so a reader never sees `n` before
+  `n - 1`. `concurrent_writers_never_expose_a_gap_to_a_reader` holds this.
+- Historical import logs one `HistoryImported` row per batch; readers behind
+  it reset. A reader also resets when retention (30 days) removed the change
+  after its number, above the counter, or more than `CHANGE_RESET_BACKLOG`
+  behind.
+- Reads by logged id (`roots_by_ids`, `live_replies`, the activity
+  `read_by_ids`) probe the primary key per id behind `OFFSET 0`; a plain join
+  or `= ANY` lets a generic plan walk the whole channel.
+- Timeline facts (renames, joins) are logged by `ChannelSequencedActivities`
+  after the activity store commits them; a replayed batch logs a fact twice
+  and readers apply it by id.
+- A call's end changes what its root shows but logs only the `call_ended`
+  fact; `channel_changes` reloads the root the fact names. A new fact that
+  changes how a message reads needs the same.
+- `ChannelChangeLogRetention` prunes hourly from `document_storage_service`.
+
+## Thread reply pages
+
+`MessageService::thread_replies` returns one window of a thread's replies in
+`get_thread` order, `import_order NULLS LAST, created_at, id`, keyed by a
+`ReplyCursor` holding all three, never by offset. A row comparison cannot step
+across the NULLs, so every walk reads the imported and the posted part as two
+ranges of `idx_comms_messages_thread_order`. A page has a cursor on a side only
+when replies exist past it. The walks run with `enable_sort` off, because with
+stale statistics the planner sorts the whole thread through another index;
+hydration turns it back on. Deleted replies are read and skipped: a walk costs
+a buffer per deleted reply it passes.
+
 ## Gotchas
+
+- Timeline keyset reads spell an absent cursor with `COALESCE` to an infinite
+  bound, never `$3 IS NULL OR ...`: once the statement gets a generic plan the
+  `OR` form filters the whole channel instead of bounding the index scan.
 
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.

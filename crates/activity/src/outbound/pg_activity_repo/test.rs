@@ -947,6 +947,23 @@ async fn timeline_filters_parents_actions_and_pages_both_directions(pool: PgPool
             "exhausted cursors never repeat the boundary entry"
         );
     }
+    // Named records come back oldest first; another parent's record and an
+    // action outside the selection are left out.
+    let named = repo
+        .read_by_ids(crate::domain::timeline::ActivityTimelineLookup {
+            entity_type: EntityType::Document,
+            entity_id: "timeline".into(),
+            selection: TimelineSelection::new(&[ActionTag::Created, ActionTag::Deleted], &[]),
+            ids: rows.iter().map(|row| row.id).collect(),
+        })
+        .await
+        .unwrap();
+    let mut oldest_first = expected.clone();
+    oldest_first.reverse();
+    assert_eq!(
+        named.iter().map(|row| row.id).collect::<Vec<_>>(),
+        oldest_first
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

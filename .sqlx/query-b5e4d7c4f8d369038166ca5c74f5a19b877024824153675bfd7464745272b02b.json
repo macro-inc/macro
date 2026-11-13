@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET CONSTRAINTS comms_messages_thread_parent_fkey DEFERRED",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b5e4d7c4f8d369038166ca5c74f5a19b877024824153675bfd7464745272b02b"
+}

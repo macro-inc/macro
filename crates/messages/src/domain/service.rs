@@ -7,8 +7,10 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
+pub mod changes;
 #[cfg(test)]
 mod test;
+mod thread_replies;
 mod timeline;
 
 /// Call-scoped guest conversation use cases.
@@ -267,6 +269,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
+            seq: None,
             change: MessageChange::Typing {
                 thread_id: root_id,
                 active,
@@ -399,9 +402,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
-        let message = self
+        let Sequenced {
+            value: message,
+            seq,
+        } = self
             .repo
-            .create(CreateMessage {
+            .create_sequenced(CreateMessage {
                 canonical_root_id,
                 parent: parent.clone(),
                 actor: actor.clone(),
@@ -434,6 +440,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
+            seq,
             change: MessageChange::Posted {
                 notification_policy,
                 message: message.clone(),
@@ -465,7 +472,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .map_err(|_| MessageError::Invalid("the call has an invalid creator"))?;
         let created = self
             .repo
-            .create(CreateMessage {
+            .create_sequenced(CreateMessage {
                 canonical_root_id: None,
                 parent: parent.clone(),
                 actor: actor.clone(),
@@ -486,7 +493,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 },
             })
             .await;
-        let message = match created {
+        let Sequenced {
+            value: message,
+            seq,
+        } = match created {
             // The other request created it and delivers it.
             Err(MessageError::Conflict) => {
                 return self
@@ -502,6 +512,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             parent,
             actor: actor.as_ref().to_owned(),
             nonce: None,
+            seq,
             change: MessageChange::CallRootPosted {
                 message: message.clone(),
             },
@@ -594,11 +605,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
-        let message = self.repo.edit(&parent, id, input).await?;
+        let Sequenced {
+            value: message,
+            seq,
+        } = self.repo.edit_sequenced(&parent, id, input).await?;
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
+            seq,
             change: MessageChange::Edited {
                 notification_policy,
                 message: message.clone(),
@@ -641,10 +656,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if current.sender_id != actor && !can_moderate(access.entity_permission()) && !channel_bot {
             return Err(MessageError::Forbidden);
         }
-        let message = self.repo.delete(&parent, id).await?;
+        let Sequenced {
+            value: message,
+            seq,
+        } = self.repo.delete_sequenced(&parent, id).await?;
         self.publish_message(
             actor,
             nonce,
+            seq,
             &message,
             MessageChange::MessageDeleted {
                 message: message.clone(),
@@ -672,7 +691,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let ReactionResult { message, changed } = self
+        let ReactionResult {
+            message,
+            changed,
+            seq,
+        } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
@@ -684,6 +707,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.publish_message(
             actor,
             nonce,
+            seq,
             &message,
             MessageChange::ReactionChanged {
                 message: message.clone(),
@@ -736,6 +760,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
+            seq: None,
             change: MessageChange::ThreadUpdated {
                 state: state.clone(),
             },
@@ -784,6 +809,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             parent: parent.clone(),
             actor: actor.as_ref().to_owned(),
             nonce,
+            seq: None,
             change: MessageChange::ThreadUpdated {
                 state: state.clone(),
             },
@@ -1025,6 +1051,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         &self,
         actor: ChannelSender<'static>,
         nonce: Option<String>,
+        seq: Option<i64>,
         message: &Message,
         change: MessageChange,
     ) {
@@ -1032,6 +1059,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             parent: message.parent.clone(),
             actor: actor.as_ref().to_owned(),
             nonce,
+            seq,
             change,
         })
         .await;
@@ -1066,7 +1094,8 @@ fn log_read_error(error: &MessageError) {
         MessageError::NotFound
         | MessageError::Forbidden
         | MessageError::Invalid(_)
-        | MessageError::Conflict => tracing::info!(error = %error),
+        | MessageError::Conflict
+        | MessageError::Busy => tracing::info!(error = %error),
     }
 }
 

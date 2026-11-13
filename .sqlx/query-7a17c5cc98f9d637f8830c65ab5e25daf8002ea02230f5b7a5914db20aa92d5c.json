@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT root.message AS \"message!: Json<StoredMessage>\"\n            FROM unnest($3::uuid[]) changed(id)\n            CROSS JOIN LATERAL (\n                SELECT to_jsonb(m) AS message, m.id, m.parent_entity_type, m.parent_entity_id,\n                    m.thread_id, m.deleted_at, t.deleted_at AS thread_deleted_at\n                FROM comms_messages m\n                JOIN comms_message_threads t ON t.root_id = m.id\n                WHERE m.id = changed.id\n                OFFSET 0\n            ) root\n            WHERE root.parent_entity_type = $1 AND root.parent_entity_id = $2\n                AND root.thread_id IS NULL AND root.thread_deleted_at IS NULL\n                AND (root.deleted_at IS NULL OR $1 = 'document' OR EXISTS (\n                    SELECT 1 FROM comms_messages r\n                    WHERE r.thread_id = root.id AND r.deleted_at IS NULL))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7a17c5cc98f9d637f8830c65ab5e25daf8002ea02230f5b7a5914db20aa92d5c"
+}

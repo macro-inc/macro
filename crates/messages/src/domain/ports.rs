@@ -1,3 +1,4 @@
+use super::changes::ChannelChangeLog;
 use super::models::*;
 use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
@@ -24,10 +25,18 @@ pub enum MessageError {
     /// A client-supplied message id is already taken.
     #[error("message id already exists")]
     Conflict,
+    /// The parent is taking more writes than it can commit in time. Nothing
+    /// was written; the caller may retry.
+    #[error("too many writes to this conversation at once; retry shortly")]
+    Busy,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
 }
+
+/// Seconds a caller answered with [`MessageError::Busy`] waits before it
+/// sends the same request again, as the `Retry-After` header carries it.
+pub const BUSY_RETRY_AFTER_SECONDS: &str = "1";
 
 /// Cursor for a chronological parent timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +85,78 @@ pub struct MessageTimelineQuery {
     pub activity_before: Option<DateTime<Utc>>,
     /// Page size, clamped by the application to 1..=100.
     pub limit: Option<u16>,
+}
+
+/// Position of a reply in its thread's display order, `import_order NULLS
+/// LAST, created_at, id`: imported history first, in its source order, then
+/// the replies posted in Macro.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ReplyCursor {
+    /// Source order of an imported reply; absent for a reply posted in Macro.
+    pub import_order: Option<i64>,
+    /// Reply creation time.
+    pub created_at: DateTime<Utc>,
+    /// Reply UUID, breaking ties on the fields above.
+    pub id: Uuid,
+}
+
+/// Replies in a page when the caller names no limit.
+const DEFAULT_REPLY_PAGE: u16 = 50;
+/// Most replies in one page.
+const MAX_REPLY_PAGE: u16 = 100;
+
+/// Which window of a thread's live replies to read.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ThreadRepliesQuery {
+    /// Read the replies strictly on one side of this position.
+    pub cursor: Option<ReplyCursor>,
+    /// Which side of the cursor to read. Without a cursor, `Older` reads the
+    /// end of the thread and `Newer` its start.
+    #[serde(default)]
+    pub direction: MessageDirection,
+    /// Center the window on this live reply of the thread; invalid with `cursor`.
+    pub around: Option<Uuid>,
+    /// Page size, default 50, clamped by the application to 1..=100.
+    pub limit: Option<u16>,
+}
+
+impl ThreadRepliesQuery {
+    /// The most replies one page of this query holds.
+    pub fn page_size(&self) -> u16 {
+        self.limit
+            .unwrap_or(DEFAULT_REPLY_PAGE)
+            .clamp(1, MAX_REPLY_PAGE)
+    }
+}
+
+/// A window of a discussion's live replies with its root.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ThreadRepliesPage {
+    /// Shared thread lifecycle and anchor state.
+    pub state: ThreadState,
+    /// Root message, which may be a tombstone.
+    pub root: Message,
+    /// Live replies in display order, each as [`MessageThread::replies`]
+    /// holds it.
+    pub replies: Vec<Message>,
+    /// Continue to earlier replies; present only when some exist.
+    pub older_cursor: Option<ReplyCursor>,
+    /// Continue to later replies; present only when some exist.
+    pub newer_cursor: Option<ReplyCursor>,
+}
+
+/// The replies a repository read for one [`ThreadRepliesQuery`].
+#[derive(Debug, Clone, Default)]
+pub struct ReplyWindow {
+    /// Live replies in display order.
+    pub replies: Vec<Message>,
+    /// The first reply's position, when earlier replies exist.
+    pub older_cursor: Option<ReplyCursor>,
+    /// The last reply's position, when later replies exist.
+    pub newer_cursor: Option<ReplyCursor>,
 }
 
 pub use super::models::{MessageListItem, MessageThreadPreview};
@@ -279,6 +360,12 @@ pub struct MessageEvent {
     pub actor: String,
     /// Mutation nonce for optimistic reconciliation.
     pub nonce: Option<String>,
+    /// The sequence number this change took in its channel's change log. A
+    /// reader that has applied the number before it applies the change; any
+    /// other reader asks for the changes it missed. Absent for parents other
+    /// than channels and for changes that are not stored, such as typing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seq: Option<i64>,
     /// Persisted change.
     pub change: MessageChange,
 }
@@ -409,6 +496,25 @@ pub struct ReactionResult {
     pub message: Message,
     /// False for an idempotent add or remove that changed no rows.
     pub changed: bool,
+    /// The sequence number the change took in its channel's change log.
+    pub seq: Option<i64>,
+}
+
+/// A committed write and the sequence number it took in its channel's change
+/// log. Parents other than channels keep no log.
+#[derive(Debug, Clone)]
+pub struct Sequenced<T> {
+    /// What the write returned.
+    pub value: T,
+    /// The write's channel sequence number.
+    pub seq: Option<i64>,
+}
+
+impl<T> Sequenced<T> {
+    /// A write that logged nothing.
+    pub fn unlogged(value: T) -> Self {
+        Self { value, seq: None }
+    }
 }
 
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
@@ -464,6 +570,17 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
+    /// One window of a root's live replies within its parent, in the order
+    /// [`Self::replies`] returns them, with a cursor on each side that has
+    /// more. An empty window has no cursors. `NotFound` when `query.around`
+    /// is not a live reply of the root; the caller rejects `around` with a
+    /// cursor.
+    fn thread_replies(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        query: &ThreadRepliesQuery,
+    ) -> impl Future<Output = Result<ReplyWindow, MessageError>> + Send;
     /// Live messages before a prompt, in chronological order. Discussion context
     /// stays within the prompt's thread; channel context includes the timeline.
     fn preceding(
@@ -526,6 +643,71 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// [`Self::create`], also reporting the sequence number the write took in
+    /// its channel's change log. A store that keeps no log reports none.
+    fn create_sequenced(
+        &self,
+        command: CreateMessage,
+    ) -> impl Future<Output = Result<Sequenced<Message>, MessageError>> + Send {
+        async { self.create(command).await.map(Sequenced::unlogged) }
+    }
+    /// [`Self::edit`], also reporting the write's channel sequence number.
+    fn edit_sequenced(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        command: EditMessage,
+    ) -> impl Future<Output = Result<Sequenced<Message>, MessageError>> + Send {
+        async move {
+            self.edit(parent, id, command)
+                .await
+                .map(Sequenced::unlogged)
+        }
+    }
+    /// [`Self::delete`], also reporting the write's channel sequence number.
+    fn delete_sequenced(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Sequenced<Message>, MessageError>> + Send {
+        async move { self.delete(parent, id).await.map(Sequenced::unlogged) }
+    }
+    /// The channel's latest change sequence number; zero before its first
+    /// logged change.
+    fn channel_seq(
+        &self,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<i64, MessageError>> + Send {
+        async { Ok(0) }
+    }
+    /// Up to `limit` logged changes after `since` with the channel's counter
+    /// from the same snapshot; no changes when retention removed the one
+    /// right after `since`.
+    fn channel_change_log(
+        &self,
+        _channel_id: Uuid,
+        _since: i64,
+        _limit: usize,
+    ) -> impl Future<Output = Result<ChannelChangeLog, MessageError>> + Send {
+        async { Ok(ChannelChangeLog::default()) }
+    }
+    /// The roots among `ids` that `parent`'s timeline shows now, in no
+    /// particular order.
+    fn roots_by_ids(
+        &self,
+        _parent: &MessageParent,
+        _ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<MessageListItem>, MessageError>> + Send {
+        async { Ok(Vec::new()) }
+    }
+    /// The live replies among `ids` within `parent`, in no particular order.
+    fn live_replies(
+        &self,
+        _parent: &MessageParent,
+        _ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send {
+        async { Ok(Vec::new()) }
+    }
     /// The parent a live message belongs to; `None` once it is deleted. Grants
     /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
     fn parent_of(

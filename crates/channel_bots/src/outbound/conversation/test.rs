@@ -21,6 +21,7 @@ fn posted(parent: MessageParent, bot: bool) -> MessageEvent {
         parent,
         actor: message.sender_id.as_ref().to_owned(),
         nonce: None,
+        seq: None,
         change: MessageChange::Posted {
             notification_policy: Default::default(),
             message,
@@ -105,6 +106,7 @@ async fn attributed_posts_and_completed_replies_reach_the_local_detector() {
                 parent: message.parent.clone(),
                 actor: message.sender_id.as_ref().to_owned(),
                 nonce: None,
+                seq: None,
                 change,
             })
             .await

@@ -38,6 +38,9 @@ vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: mocks.reportError, span: mocks.trace },
 }));
+// These cover the REST reads, which serve a channel while the device cache is off.
+vi.mock('../graphql/source', () => ({ channelCacheHost: () => undefined }));
+
 vi.mock('../subscription', () => ({ useMessageSubscription() {} }));
 
 import {

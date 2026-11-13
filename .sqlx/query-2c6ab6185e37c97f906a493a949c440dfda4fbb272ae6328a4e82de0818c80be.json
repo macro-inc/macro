@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('lock_timeout') AS \"wait!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wait!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2c6ab6185e37c97f906a493a949c440dfda4fbb272ae6328a4e82de0818c80be"
+}

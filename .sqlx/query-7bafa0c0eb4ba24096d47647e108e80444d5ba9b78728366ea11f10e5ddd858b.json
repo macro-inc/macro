@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT event.id AS \"id!\", event.actor_id AS \"actor_id!\", event.occurred_at AS \"occurred_at!\",\n                       event.action AS \"action!\", event.action_payload AS payload\n                FROM unnest($1::uuid[]) named(id)\n                CROSS JOIN LATERAL (\n                    SELECT found.id, found.actor_id, found.occurred_at, found.action,\n                           found.action_payload, found.entity_type, found.entity_id\n                    FROM activity_events found\n                    WHERE found.id = named.id\n                    OFFSET 0\n                ) event\n                WHERE event.entity_type = $2 AND event.entity_id = $3\n                  AND event.action = ANY($4::text[])\n                  AND (event.action <> 'property_changed' OR cardinality($5::text[]) = 0\n                       OR event.action_payload->>'property' = ANY($5::text[]))\n                ORDER BY event.occurred_at ASC, event.id ASC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "occurred_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "action!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "7bafa0c0eb4ba24096d47647e108e80444d5ba9b78728366ea11f10e5ddd858b"
+}

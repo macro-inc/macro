@@ -1,4 +1,6 @@
 import { throwOnErr } from '@core/util/result';
+import { statusError } from '@core/util/safeFetch';
+import { sleep } from '@core/util/sleep';
 import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
@@ -85,16 +87,57 @@ function path(parent: MessageParent) {
   return `/messages/${parent.type}/${encodeURIComponent(parent.id)}`;
 }
 
+/**
+ * The write guard's refusal: too many writes to one channel were waiting, and
+ * nothing was written. It is the only 503 the message routes answer.
+ */
+const BUSY = statusError(503);
+/** The refusal asks for a retry after a second; a burst clears in less. */
+const BUSY_RETRY_MS = 1_000;
+const BUSY_RETRIES = 2;
+
+/**
+ * The newest write in flight for each message or thread. A refused write is
+ * sent again only while it is still that one: sent after a later write to the
+ * same target, it would put its older content back over the later one.
+ */
+const NEWEST_WRITE = new Map<string, symbol>();
+
 async function request<T extends object>(
   url: string,
   method = 'GET',
-  body?: unknown
+  body?: unknown,
+  /** The message or thread a write changes; a new message has none. */
+  target?: string
 ): Promise<T> {
-  return throwOnErr(() =>
-    dssFetch<T>(url, {
-      method,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+  const init = {
+    method,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  };
+  const write = Symbol();
+  if (target) NEWEST_WRITE.set(target, write);
+  const isNewest = () => !target || NEWEST_WRITE.get(target) === write;
+  try {
+    let result = await dssFetch<T>(url, init);
+    // Only a write is refused as busy; a read's 503 is not this refusal.
+    const retries = method === 'GET' ? 0 : BUSY_RETRIES;
+    for (let retry = 0; retry < retries && isBusy(result); retry += 1) {
+      await sleep(BUSY_RETRY_MS);
+      if (!isNewest()) break;
+      result = await dssFetch<T>(url, init);
+    }
+    return await throwOnErr(() => Promise.resolve(result));
+  } finally {
+    if (target && isNewest()) NEWEST_WRITE.delete(target);
+  }
+}
+
+function isBusy(result: Awaited<ReturnType<typeof dssFetch>>): boolean {
+  return (
+    result.isErr() &&
+    result.error.some(
+      (error) => error.code === BUSY.code && error.message === BUSY.message
+    )
   );
 }
 
@@ -133,13 +176,16 @@ export const entityMessagesClient = {
     return request<Message>(
       `${path(parent)}/items/${encodeURIComponent(id)}`,
       'PATCH',
-      { ...input, nonce: input.nonce ?? crypto.randomUUID() }
+      { ...input, nonce: input.nonce ?? crypto.randomUUID() },
+      id
     );
   },
   delete(parent: MessageParent, id: string, nonce?: string) {
     return request<Message>(
       `${path(parent)}/items/${encodeURIComponent(id)}${nonce ? `?nonce=${encodeURIComponent(nonce)}` : ''}`,
-      'DELETE'
+      'DELETE',
+      undefined,
+      id
     );
   },
   react(
@@ -152,20 +198,24 @@ export const entityMessagesClient = {
     return request<Message>(
       `${path(parent)}/items/${encodeURIComponent(id)}/reactions`,
       'POST',
-      { emoji, add, nonce }
+      { emoji, add, nonce },
+      id
     );
   },
   patchThread(parent: MessageParent, rootId: string, patch: ThreadPatch) {
     return request<ThreadState>(
       `${path(parent)}/threads/${encodeURIComponent(rootId)}`,
       'PATCH',
-      patch
+      patch,
+      rootId
     );
   },
   deleteThread(parent: MessageParent, rootId: string) {
     return request<ThreadState>(
       `${path(parent)}/threads/${encodeURIComponent(rootId)}`,
-      'DELETE'
+      'DELETE',
+      undefined,
+      rootId
     );
   },
   async typing(parent: MessageParent, rootId: string | null, active: boolean) {

@@ -1156,6 +1156,12 @@ async fn run_server() -> anyhow::Result<()> {
             }
         }
     });
+    consumer_tracker.spawn(crate::service::channel_changes::run_retention(
+        messages::domain::changes::ChannelChangeLogRetention::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+        ),
+        consumer_cancellation_token.clone(),
+    ));
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
     let editing_activity = Arc::new(
         documents_hex::outbound::editing_activity::RedisEditingActivityStore::new(
@@ -1164,7 +1170,12 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
-        let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        // Channel timeline facts join the channel's change sequence as they
+        // are stored, so a client catching up receives them.
+        let activity_repo = messages::domain::changes::ChannelSequencedActivities::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+        );
         let activity_realtime = activity::domain::announcements::ActivityAnnouncements::new(
             activity::KafkaActivityRealtimePublisher::new(macro_event_broker.clone()),
             crate::service::activity::EntityAccessActivityAudience::new(
@@ -1429,6 +1440,11 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let graphql_channel_messages_context =
+        graphql_channel::messages::ChannelMessagesGraphqlContext::new(
+            message_service.clone(),
+            entity_access_service.clone(),
+        );
     let call_roots: Arc<dyn messages::domain::api::CallRootPoster> = message_service.clone();
     if call_root_poster.set(call_roots).is_err() {
         tracing::error!("the call root poster was set twice");
@@ -2570,6 +2586,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         graphql_contacts_context,
         graphql_calendar_context,
+        graphql_channel_messages_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
             initiative_service,

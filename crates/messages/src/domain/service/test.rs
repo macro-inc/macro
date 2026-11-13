@@ -83,6 +83,14 @@ impl MessageRepository for Repo {
             .cloned()
             .collect())
     }
+    async fn thread_replies(
+        &self,
+        _: &MessageParent,
+        _: Uuid,
+        _: &ThreadRepliesQuery,
+    ) -> Result<ReplyWindow, MessageError> {
+        unimplemented!()
+    }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(true)
     }
@@ -224,6 +232,7 @@ impl MessageRepository for Repo {
         Ok(ReactionResult {
             message: self.message.clone(),
             changed: self.reaction_changed,
+            seq: None,
         })
     }
     async fn patch_thread(
@@ -1406,6 +1415,14 @@ impl MessageRepository for StrictRepo {
     ) -> Result<Vec<Message>, MessageError> {
         self.inner.replies(parent, root).await
     }
+    async fn thread_replies(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+        query: &ThreadRepliesQuery,
+    ) -> Result<ReplyWindow, MessageError> {
+        self.inner.thread_replies(parent, root, query).await
+    }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(self.parent_exists)
     }
@@ -1729,6 +1746,35 @@ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
             Ok(rows)
         })
     }
+
+    fn read_by_ids<'a>(
+        &'a self,
+        lookup: activity::domain::timeline::ActivityTimelineLookup,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            assert_eq!(lookup.entity_type, activity::EntityType::Channel);
+            assert_eq!(lookup.entity_id, Uuid::from_u128(20).to_string());
+            assert_eq!(lookup.selection, CHANNEL_TIMELINE);
+            let mut rows: Vec<_> = self
+                .0
+                .iter()
+                .filter(|row| lookup.ids.contains(&row.id))
+                .cloned()
+                .collect();
+            rows.sort_by_key(|row| (row.occurred_at, row.id));
+            Ok(rows)
+        })
+    }
 }
 
 /// Records each activity read's limit, to show how much a window reads.
@@ -1751,6 +1797,23 @@ impl activity::domain::timeline::ActivityTimeline for CountedFacts {
     > {
         self.1.lock().unwrap().push(query.limit);
         self.0.read(query)
+    }
+
+    fn read_by_ids<'a>(
+        &'a self,
+        lookup: activity::domain::timeline::ActivityTimelineLookup,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        self.0.read_by_ids(lookup)
     }
 }
 

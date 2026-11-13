@@ -39,6 +39,9 @@ vi.mock('@app/lib/analytics', () => ({
   },
 }));
 
+// These cover the REST reads, which serve a channel while the device cache is off.
+vi.mock('../graphql/source', () => ({ channelCacheHost: () => undefined }));
+
 vi.mock('../subscription', () => ({
   useMessageSubscription: () => {},
 }));

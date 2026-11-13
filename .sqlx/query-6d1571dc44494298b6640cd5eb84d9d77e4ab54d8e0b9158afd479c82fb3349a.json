@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COALESCE(counter.seq, 0) AS \"counter!\",\n                change.seq AS \"seq?\",\n                change.kind AS \"kind?\",\n                change.message_id AS \"message_id?\",\n                change.root_id AS \"root_id?\",\n                change.activity_id AS \"activity_id?\"\n            FROM (SELECT $1::uuid AS channel_id) channel\n            LEFT JOIN comms_channel_change_counters counter\n                ON counter.channel_id = channel.channel_id\n            LEFT JOIN LATERAL (\n                SELECT log.seq, log.kind, log.message_id, log.root_id, log.activity_id\n                FROM comms_channel_change_log log\n                WHERE log.channel_id = channel.channel_id\n                  AND log.seq > $2\n                  AND EXISTS (\n                      SELECT 1 FROM comms_channel_change_log next\n                      WHERE next.channel_id = channel.channel_id AND next.seq = $4\n                  )\n                ORDER BY log.seq\n                LIMIT $3\n            ) change ON true\n            ORDER BY change.seq\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "counter!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "seq?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "root_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "activity_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "6d1571dc44494298b6640cd5eb84d9d77e4ab54d8e0b9158afd479c82fb3349a"
+}

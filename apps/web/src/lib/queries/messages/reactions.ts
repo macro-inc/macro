@@ -9,6 +9,11 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
+import {
+  channelWriteResponseApplies,
+  channelWriteStarted,
+  reconcileFailedChannelWrite,
+} from './graphql/channel-sync';
 import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
@@ -234,6 +239,7 @@ export function useAddReactionMutation(
       {
         onMutate: async (vars) => {
           addReactionNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -246,8 +252,9 @@ export function useAddReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to add reaction', error);
@@ -255,6 +262,7 @@ export function useAddReactionMutation(
           if (context) {
             rollbackAddReaction(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
@@ -304,6 +312,7 @@ export function useRemoveReactionMutation(
       {
         onMutate: async (vars) => {
           removeReactionNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -316,8 +325,9 @@ export function useRemoveReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to remove reaction', error);
@@ -325,6 +335,7 @@ export function useRemoveReactionMutation(
           if (context) {
             rollbackRemoveReaction(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);

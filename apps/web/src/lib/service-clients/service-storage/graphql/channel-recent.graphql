@@ -1,0 +1,12 @@
+# The channels the viewer opened last, for warming their cached pages.
+query ChannelRecentlyOpened($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+			}
+		}
+	}
+}

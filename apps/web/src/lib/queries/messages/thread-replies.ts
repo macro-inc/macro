@@ -96,7 +96,7 @@ export function getThreadRepliesQueryKey(
 }
 
 /** Returns the shared prefix for all thread reply queries in a channel. */
-function getThreadRepliesQueryKeyPrefix(parent: MessageParent) {
+export function getThreadRepliesQueryKeyPrefix(parent: MessageParent) {
   return [...messageKeys.threadReplies._def, parent];
 }
 

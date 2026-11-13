@@ -80,9 +80,13 @@ describe('channel unread presence query', () => {
       );
       expect(f.operations[0].query).toEqual(ChannelUnreadPresenceDocument);
       f.respond('UNSEEN');
-      expect(f.query.data).toEqual([{ id: 'one', state: 'UNSEEN' }]);
+      expect(f.query.data).toEqual([
+        { id: 'one', state: 'UNSEEN', channelId: 'channel' },
+      ]);
       f.respond('SEEN');
-      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
+      expect(f.query.data).toEqual([
+        { id: 'one', state: 'SEEN', channelId: 'channel' },
+      ]);
       expect(getChannelListRevalidations()).toEqual([
         {
           document: ChannelUnreadPresenceDocument,
@@ -120,7 +124,9 @@ describe('channel unread presence query', () => {
         { requestPolicy: 'network-only' }
       );
       f.respond('SEEN');
-      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
+      expect(f.query.data).toEqual([
+        { id: 'one', state: 'SEEN', channelId: 'channel' },
+      ]);
     } finally {
       visible.mockRestore();
       f.dispose();

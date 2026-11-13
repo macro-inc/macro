@@ -656,6 +656,14 @@ function disposeSessionClients(): void {
  * Browser: wasm engine in a worker. Tauri: native engine in the host
  * process (graphql_cache_plugin).
  */
+/**
+ * The client with no cache behind it, for reads the device cache must not
+ * keep (a channel's older pages).
+ */
+export function getUncachedGraphqlSoupClient(): Client {
+  return graphqlSoupClient;
+}
+
 export function graphqlCacheEnabled(): boolean {
   cacheAvailability();
   if (!sessionActive()) return false;
