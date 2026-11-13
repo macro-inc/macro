@@ -1,0 +1,21 @@
+apps/web/src/features/block-canvas/components/artifact-inspector.tsx
+  s_db469ad4d09071::t_fadcbece9df339 1
+apps/web/src/features/block-canvas/context/artifact-library.ts
+  s_db469ad4d09071::t_fadcbece9df339 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ef41e302818ba3a799350b156cb46716af1434bf",
+  "prompts": {},
+  "sessions": {
+    "s_db469ad4d09071": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67403a05-27ff-4b1b-84cf-a4954e24f336",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
