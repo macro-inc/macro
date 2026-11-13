@@ -1,0 +1,27 @@
+services/gitai_service/AGENTS.md
+  s_9b1603f4fd6889::t_6950dce5999432 1-57
+crates/gitai/AGENTS.md
+  s_9b1603f4fd6889::t_6950dce5999432 1-51
+crates/gitai/CLAUDE.md
+  s_9b1603f4fd6889::t_c6972bcb88ad11 1
+docs/development/infrastructure.md
+  s_9b1603f4fd6889::t_992fc3e0a16445 142
+services/gitai_service/CLAUDE.md
+  s_9b1603f4fd6889::t_369ec9930e7393 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7db1925ed76b83f27ec714f93c87dfafd1c5e11a",
+  "prompts": {},
+  "sessions": {
+    "s_9b1603f4fd6889": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512eab67-c98d-4202-9de7-c6977f772667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
