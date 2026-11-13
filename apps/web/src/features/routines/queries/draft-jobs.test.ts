@@ -172,7 +172,47 @@ describe('startDraftJob', () => {
       drafting('older'),
     ]);
   });
+
+  it('leaves out a draft removed elsewhere before its start answered', async () => {
+    queryClient.setQueryData(KEY, []);
+    const answer = Promise.withResolvers<unknown>();
+    client.startRoutineDraftJob.mockReturnValue(answer.promise);
+    const started = startDraftJob(REQUEST, context);
+    // Cancelled in another tab, before this tab heard it began.
+    applyDraftUpdate({ draftId: 'gone', state: 'removed', progress: {} });
+    answer.resolve(ok(drafting('gone')));
+    await started;
+    expect(listed()).toEqual([]);
+  });
+
+  it('drops a start that answers after a login replaced the session', async () => {
+    await confirmLogin('me');
+    queryClient.setQueryData(KEY, []);
+    const answer = Promise.withResolvers<unknown>();
+    client.startRoutineDraftJob.mockReturnValue(answer.promise);
+    const started = startDraftJob(REQUEST, context);
+    await resetQueryAccountSession();
+    answer.resolve(ok(drafting('mine')));
+    await expect(started).resolves.toBe(SIGNED_IN_AGAIN);
+    // Nor is one handed on while the new login waits to be confirmed:
+    // listed, it would stand for the new account's drafts once it is.
+    await reportDraftJob(failed('mine'));
+    expect(listed()).toBeUndefined();
+    await confirmLogin('someone-else');
+  });
 });
+
+const SIGNED_IN_AGAIN =
+  'You signed in again before this draft started. Describe it again.';
+
+/** A login's identity read, as the app confirms one. */
+async function confirmLogin(id: string) {
+  await queryClient.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: () => ({ id, authenticated: true }),
+    staleTime: 0,
+  });
+}
 
 describe('background draft updates', () => {
   it('moves a draft’s progress on in place', () => {
