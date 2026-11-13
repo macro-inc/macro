@@ -1,0 +1,71 @@
+apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
+  s_471e2069ef160b::t_d9b0f73de58c37 119-120
+  s_471e2069ef160b::t_dd0879826d7062 1-118,121-247
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Sessions.tsx
+  s_471e2069ef160b::t_df3460180b6043 114
+  s_471e2069ef160b::t_3c46f2a49aabd6 1-52,58-105,110-113,115-162
+  s_471e2069ef160b::t_8881777529ab09 53-57,106-109
+apps/web/src/features/dynamic-ui/queries/keys.ts
+  s_471e2069ef160b::t_b72937891272f7 1-9
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Activity.tsx
+  s_471e2069ef160b::t_8881777529ab09 13,50-53
+  s_471e2069ef160b::t_0d0422c4a20d03 1,3-12,14-49,54-203,205-207,211-229
+  s_471e2069ef160b::t_3bd54765767981 204,208-210
+  s_471e2069ef160b::t_dd0879826d7062 2
+apps/web/src/features/dynamic-ui/core/spend.ts
+  s_471e2069ef160b::t_03582777e357f9 1,44-46,50-53,60-65
+  s_471e2069ef160b::t_448ceda8c768e8 2-43,47-49,54-59,66-71
+apps/web/src/lib/i18n/locales/en/dynamic-ui.ts
+  s_471e2069ef160b::t_748e4c63873310 1-15,41
+  s_471e2069ef160b::t_428b2432669242 16-40
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_471e2069ef160b::t_a9f222fd81f238 3-6,411-412,428-486
+  s_471e2069ef160b::t_bd778fc0cf1287 487-488
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_471e2069ef160b::t_bcddf741aa4a04 291-292
+apps/web/src/features/dynamic-ui/widgets/panes/pane.tsx
+  s_471e2069ef160b::t_748e4c63873310 1-212
+apps/web/src/features/dynamic-ui/context/agent-scope.tsx
+  s_471e2069ef160b::t_8881777529ab09 12-14
+  s_471e2069ef160b::t_1ef14931f0988c 1-11,15-28
+apps/web/src/features/dynamic-ui/core/session-tree.ts
+  s_471e2069ef160b::t_448ceda8c768e8 1-17,22-67
+  s_471e2069ef160b::t_df3460180b6043 18-21
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Spend.tsx
+  s_471e2069ef160b::t_8881777529ab09 6,92-96,110-114
+  s_471e2069ef160b::t_ae9f68f1562fb0 1-5,7-91,97-109,115-175
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_471e2069ef160b::t_748e4c63873310 175-185
+apps/web/src/lib/i18n/locales/en.ts
+  s_471e2069ef160b::t_748e4c63873310 17,61
+apps/web/src/features/dynamic-ui/render.tsx
+  s_471e2069ef160b::t_428b2432669242 13-16,43-46,60-62
+apps/web/src/features/dynamic-ui/core/spend.test.ts
+  s_471e2069ef160b::t_03582777e357f9 1-7,17-41,48-59
+  s_471e2069ef160b::t_8881777529ab09 8-16,42-47
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Routines.tsx
+  s_471e2069ef160b::t_651ab519c91b92 1-149
+apps/web/src/features/dynamic-ui/queries/agent-panes.ts
+  s_471e2069ef160b::t_b72937891272f7 1-87
+apps/web/src/features/dynamic-ui/core/session-tree.test.ts
+  s_471e2069ef160b::t_03582777e357f9 1-14,16-77
+  s_471e2069ef160b::t_8881777529ab09 15
+apps/web/src/features/dynamic-ui/widgets/panes/agent-pane.tsx
+  s_471e2069ef160b::t_1ef14931f0988c 1-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c9a85fc7b7d62dcacc1daea2c5f168826f685c3e",
+  "prompts": {},
+  "sessions": {
+    "s_471e2069ef160b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae591ca2-a46b-438d-9342-5bfaf81ffb1e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
