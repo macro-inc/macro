@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 /// Tool: search for an app to connect, or inspect one's tools and status.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 #[schemars(
     title = "DiscoverConnectors",
     description = "Find an integration when an external app is missing or a workflow requires an unconnected account. Search by app name, then inspect a returned app_slug to see its actual tools and connection status."

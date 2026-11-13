@@ -21,7 +21,7 @@ impl<D, S, N> Clone for ConnectorToolContext<D, S, N> {
 }
 
 /// Discovery metadata and optional markup for a user-controlled auth flow.
-#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema, utoipa::ToSchema)]
 pub struct DiscoverConnectorsResponse {
     /// Catalog or capability results.
     pub result: DiscoveryResult,

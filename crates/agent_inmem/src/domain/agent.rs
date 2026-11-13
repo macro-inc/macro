@@ -20,14 +20,14 @@ use agent::{ModelSpeed, ReasoningEffort};
 use agent_api_keys::domain::{AgentKeys, ModelProvider, UsableAgentKey};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
-    CancelNotification, ContentBlock, ContentChunk,
-    CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
-    InitializeResponse, Meta, NewSessionRequest, NewSessionResponse,
-    PromptRequest, PromptResponse, RequestId,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
-    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringPropertySchema, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate,
-    ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
+    CancelNotification, ContentBlock, ContentChunk, CreateElicitationRequest, ElicitationAction,
+    ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
+    InitializeRequest, InitializeResponse, Meta, NewSessionRequest, NewSessionResponse,
+    PromptRequest, PromptResponse, RequestId, ResumeSessionRequest, ResumeSessionResponse,
+    SessionCapabilities, SessionConfigOption, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, ToolCall as AcpToolCall,
+    ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,

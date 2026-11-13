@@ -560,7 +560,10 @@ fn channel_media_uploads_are_mcp_only() {
 fn every_eager_tool_exists() {
     let chat = tools_for(AiHost::Chat);
     for name in EAGER_TOOLS {
-        assert!(chat.toolset.tools.contains_key(*name), "{name} is not a tool");
+        assert!(
+            chat.toolset.tools.contains_key(*name),
+            "{name} is not a tool"
+        );
     }
 }
 

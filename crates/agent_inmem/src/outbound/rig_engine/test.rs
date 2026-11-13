@@ -159,7 +159,6 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
             gate: gate.clone(),
             session,
             awaiting: Arc::default(),
-            reviewed_tools: Vec::new(),
         };
         let result = tools
             .dispatch_tool_call(
@@ -478,7 +477,6 @@ async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments(
         gate: Arc::new(SelectedActor(requester.clone())),
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
-        reviewed_tools: Vec::new(),
     };
     let result = tools
         .dispatch_tool_call(
@@ -533,7 +531,6 @@ async fn cancelling_the_turn_ends_a_call_held_for_the_owner_and_a_later_approval
         gate: gate.clone(),
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
-        reviewed_tools: Vec::new(),
     });
     let request = RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap());
     let cancel = request.cancel.clone();

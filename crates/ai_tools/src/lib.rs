@@ -400,9 +400,13 @@ fn deferred_section(deferred: &[ai_toolset::SearchableTool]) -> String {
 /// These feed `gen_tool_schemas` / `generate-dcs-tools.ts` and are never
 /// sent to AI providers.
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
+    // Chat's tools cover every native tool agent sessions get. Its
+    // DisplayResults renders from the fold's decoded view, not a schema.
+    let mut chat = Arc::into_inner(tools_for(AiHost::Chat).toolset)
+        .expect("tools_for returns a fresh, uniquely owned collection");
+    chat.tools.remove("DisplayResults");
     frontend_schemas_builder()
-        .merge(&tools_for(AiHost::Chat))
-        .merge(&tools_for_agent_code_mode())
+        .merge(&chat)
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<

@@ -100,6 +100,7 @@ where
     }
 }
 
+/// Render a canvas to an image the model can see.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "RenderCanvas",
