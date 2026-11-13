@@ -33916,6 +33916,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
