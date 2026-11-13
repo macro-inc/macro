@@ -54,10 +54,12 @@ impl<S: PeopleSearchService> NameSource for PeopleNames<S> {
             NameSourceError::Internal(rootcause::report!("people search limit is zero"))
         })?;
 
-        // A needle too short (or long) to search reads nothing, so it isn't sent.
+        // A needle too short (or long) to search reads nothing, so it isn't
+        // sent. Exact matches rank first, so the read's limit can't drop them.
         let queries: Vec<PeopleSearchQuery> = needles
             .iter()
             .filter_map(|needle| PeopleSearchQuery::new(needle.as_str()))
+            .map(PeopleSearchQuery::exact_first)
             .filter(|query| query.searchable().is_some())
             .collect();
         tracing::Span::current().record("searched", queries.len());

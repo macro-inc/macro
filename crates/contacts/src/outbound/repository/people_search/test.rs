@@ -183,3 +183,72 @@ async fn blank_and_one_character_queries_return_nobody(pool: PgPool) {
         assert!(search(&pool, query, 50).await.is_empty(), "{query:?}");
     }
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("people_search"))
+)]
+async fn exact_first_keeps_exact_matches_ahead_of_teammates_under_the_limit(pool: PgPool) {
+    // Two more teammates: one whose name only contains the contact's full
+    // name, one whose last name starts with "sam" and sorts before any Sam.
+    sqlx::query!(
+        r#"
+        WITH added AS (
+            INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+            ('00000000-0000-4000-8000-000000000007', 'riveras', 'riveras@example.com', 'cus_people_riveras'),
+            ('00000000-0000-4000-8000-000000000008', 'samson', 'samson@example.com', 'cus_people_samson')
+            RETURNING id, email, username
+        ), profile AS (
+            INSERT INTO "User" (id, email, macro_user_id, "isAgent")
+            SELECT 'macro|' || email, email, id, false FROM added
+        ), named AS (
+            INSERT INTO macro_user_info (macro_user_id, first_name, last_name)
+            SELECT id, CASE username WHEN 'riveras' THEN 'Sam' ELSE 'Ada' END,
+                CASE username WHEN 'riveras' THEN 'Riveras' ELSE 'Samson' END
+            FROM added
+        )
+        INSERT INTO team_user (user_id, team_id, team_role)
+        SELECT 'macro|' || email, '00000000-0000-4000-9000-000000000001', 'member' FROM added
+        "#
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let first = |query: PeopleSearchQuery| {
+        let pool = pool.clone();
+        async move {
+            service(pool)
+                .search_people(
+                    MacroUserIdStr::try_from_email(VIEWER).unwrap(),
+                    &query,
+                    PeopleSearchLimit::new(1).unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|person| person.contact.user_id.to_string())
+                .collect::<Vec<_>>()
+        }
+    };
+
+    // A full name: the contact named exactly that beats a teammate containing it.
+    let full_name = PeopleSearchQuery::new("Sam Rivera").unwrap();
+    assert_eq!(
+        first(full_name.clone()).await,
+        vec!["macro|riveras@example.com"]
+    );
+    assert_eq!(
+        first(full_name.exact_first()).await,
+        vec!["macro|contact@example.com"]
+    );
+    // A first name: a Sam beats the teammate whose last name starts with it.
+    let first_name = PeopleSearchQuery::new("sam").unwrap();
+    assert_eq!(
+        first(first_name.clone()).await,
+        vec!["macro|samson@example.com"]
+    );
+    assert_eq!(
+        first(first_name.exact_first()).await,
+        vec!["macro|riveras@example.com"]
+    );
+}

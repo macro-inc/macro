@@ -2,7 +2,10 @@
 -- self, and the viewer's current team. Peers are read through
 -- contacts_connections_user1_user2_key and idx_contacts_connections_user2_user1,
 -- so nothing outside the viewer's own edges and team is ever read.
--- $1 viewer id, $2 trimmed query (at least two characters), $3 result limit.
+-- $1 viewer id, $2 trimmed query (at least two characters), $3 result limit,
+-- $4 whether people whose full name, first name or email is the query rank
+-- ahead of everyone else, so a lookup of a written name keeps them under the
+-- limit.
 WITH viewer AS MATERIALIZED (
     SELECT $1::text AS id, lower($2::text) AS needle
 ),
@@ -55,12 +58,19 @@ ranked AS (
             OR starts_with(lower(COALESCE(p.last_name, '')), (SELECT needle FROM viewer))
             OR starts_with(p.email, (SELECT needle FROM viewer))
         ) AS is_prefix,
+        (
+            $4::bool AND (
+                p.full_name = (SELECT needle FROM viewer)
+                OR split_part(p.full_name, ' ', 1) = (SELECT needle FROM viewer)
+                OR p.email = (SELECT needle FROM viewer)
+            )
+        ) AS is_exact,
         COALESCE(NULLIF(p.full_name, ''), p.email) COLLATE "C" AS sort_key
     FROM profiles AS p
     WHERE strpos(p.email, (SELECT needle FROM viewer)) > 0
        OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
     -- Byte order keeps ties stable whatever the database's locale.
-    ORDER BY p.is_teammate DESC, is_prefix DESC, sort_key, p.id COLLATE "C"
+    ORDER BY is_exact DESC, p.is_teammate DESC, is_prefix DESC, sort_key, p.id COLLATE "C"
     LIMIT $3
 )
 -- Same precedence as the directory's names: a Macro profile name wins;
@@ -91,4 +101,4 @@ LEFT JOIN LATERAL (
       AND r.last_name IS NULL
     LIMIT 1
 ) AS book ON TRUE
-ORDER BY r.is_teammate DESC, r.is_prefix DESC, r.sort_key, r.id COLLATE "C"
+ORDER BY r.is_exact DESC, r.is_teammate DESC, r.is_prefix DESC, r.sort_key, r.id COLLATE "C"

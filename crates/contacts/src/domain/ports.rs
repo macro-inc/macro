@@ -1,7 +1,9 @@
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
-use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::models::people::{
+    PeopleSearchLimit, PeopleSearchQuery, PeopleSearchRanking, PersonMatch,
+};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -67,11 +69,13 @@ pub trait ContactsPageService: Send + Sync + 'static {
 pub trait PeopleSearchRepository: Send + Sync + 'static {
     /// Match `needle` (lowercase, at least two characters) against the email and
     /// Macro profile name of the viewer's contacts, self, and current teammates.
-    /// Rank teammates first, then prefix matches, and return at most `limit`.
+    /// Rank as `ranking` says (teammates first, then prefix matches, with exact
+    /// matches ahead of both for `ExactFirst`), and return at most `limit`.
     fn search_people(
         &self,
         viewer: MacroUserIdStr<'_>,
         needle: &str,
+        ranking: PeopleSearchRanking,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
 }
