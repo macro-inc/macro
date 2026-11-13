@@ -353,7 +353,7 @@ Integrated documentation below for content ownership and navigation behavior.
 The product entry preloads the requested lazy route and its CSS before replacing
 prerendered HTML, avoiding a header-only flash on first load. Run this preload
 inside the asynchronous startup function, never with a module-level await:
-Rollup can place route dependencies in the entry chunk, which must finish
+the bundler can place route dependencies in the entry chunk, which must finish
 evaluating before those routes can load.
 
 Person and agent mentions use `--marketing-mention` with a soft tint in both
@@ -391,7 +391,7 @@ Feature app windows omit redundant introductory message bubbles and default to `
 Keep diagrams and external conversations unframed, and set `glassFrame: false` for the homepage document dissolve or mixed email-sharing composition. Calendar, booking, forms, benefit cards, and guide graphics reuse the glass material with solid reduced-transparency fallbacks.
 The Docs version-control chapter reuses `TimelineArtworkBand` from the homepage history graphic, with the same animated playhead and reduced-motion fallback.
 The Docs mentions chapter uses `HomepageCollaborativeDoc` with `showHistory={false}` to show the homepage typing and mention-picker animation in a single card, without the split email or conversation bubble.
-The first Docs chapter uses `DocumentProjectDemo` with `teamEditing`: Julia and Jacob type into the same paragraph with named live carets and an inline formatting change. Preserve character-by-character edits rather than revealing complete lines. Keep the interaction boundary so visitors can take over without the animation overwriting their edits.
+The first Docs chapter uses `DocumentProjectDemo` with `teamEditing`: Julia and Jacob type into the same paragraph with named live carets and an inline formatting change. Preserve character-by-character edits rather than revealing complete lines. Keep the interaction boundary so visitors can take over without the animation overwriting their edits. Its window is shorter than the brief, so `doc-story-page-fade` dissolves it into the page with the homepage document's mask instead of cutting the discussion off at a hard bottom edge; keep the title, tags, and edited paragraph above the fade, and keep the scroll room that lets a visitor bring the discussion and composer up to the readable part.
 The Docs backlinks chapter uses `DocumentReferencesDemo` with References expanded from the start. Show the sender, channel, timestamp, and message excerpt; clicking the reference opens its conversation. Keep the panel beside the document on desktop and use the full-width panel on phones.
 `FeatureDemoBackdrop` is shared with the homepage and reuses onboarding's
 `WorkspaceTexture` for dots and grain. Use overlapping, offset elliptical gradients with soft early falloff for a cloudy wash, rather than a centered circular spotlight. Remove the exported artboard radial fills so they do not restore a circular halo. Keep textures behind
@@ -829,7 +829,7 @@ the FAQ leads with writing, importing, collaboration, and sharing in Macro.
 Verify folder and tag navigation, search, source open/close with Escape and focus
 restoration, edits surviving navigation, local sharing, tool inspection,
 offscreen pause, and reduced motion. Compare desktop and mobile without a fade
-covering the editor. Tests: `DocumentStories.test.tsx`. The checkmark comparison covers document capabilities. Notion uploads live in
+covering the editor, apart from the first chapter's dissolve. Tests: `DocumentStories.test.tsx`. The checkmark comparison covers document capabilities. Notion uploads live in
 page blocks or database properties; imports can convert supported files to pages.
 Both tools support file uploads and Markdown import/export. The comparison makes
 the folder and cross-workspace differences explicit without claiming file formats
@@ -1038,7 +1038,9 @@ Closing restores focus to the mention. Editing a linked cell into plain text
 removes its reference; undo restores it. Check mouse and keyboard opening,
 Escape/close, and phone-width record tabs.
 
-Use `EmailShareStory` for the Mail feature-page illustration: one compact panel changes from email to channel picker to chat, then shows a new reply in the shared thread. Keep the three-step navigation and stop autoplay on the completed result. Avoid stacked email/chat windows and internal scrollbars; reduced motion shows the final result immediately. The separate interactive inbox sandbox retains `EmailSharingDemo` and its `DocMention` link for opening the complete sample thread.
+The Drive page is `DriveStories`: eight sections that all read one small set of files from `driveFiles.ts`, so a file keeps its name, kind, source, and tags from graphic to graphic. `DriveFileRows` is the shared file list, with entity icons coloured as the app colours them. Sharing reuses `DocumentSharingDemo`, the agent section uses the agent session replica, and the record section opens the CRM record on its Files tab. Paper graphics on the Drive and Spreadsheets pages sit in the section's glass frame (`demo={{ tone, glassFrame: true }}` with `backdrop={false}` on the graphic) so they get the same dot-matrix and glow as the product demos.
+
+The Mail feature page's sharing, drafting, and routine sections use the app's own replicas, not drawn diagrams. Sharing is `EmailSharingDemo` (the email block, its Share form, and the channel it posts to), also used by the inbox sandbox. Drafting is `EmailDraftStory`, the homepage's conversation and composer; both read their messages from `emailDraftMessages`. `EmailRoutineDemo` shows a routine's effects in order: the email arrives in the inbox, Macro posts it to a channel, and a push notification drops in. Reduced motion shows each finished result immediately.
 
 The retained `HomepageCrm` illustration has no playback footer or Pause/Replay controls;
 it still pauses offscreen and when a visitor enters the demo.
@@ -1085,7 +1087,7 @@ Keep /docs/switch-to-macro focused on bulk importers and MCP migration paths, ti
 Keep Changelog as one sidebar link; monthly archives remain accessible from its page, outside search.
 Keep the outdated Tool Reference unpublished and redirect its former URLs to MCP Setup.
 Keep concise FAQs on feature pages and put the full written setup, shortcut, and limitation reference in the expandable Setup and reference section below. Do not replace interactive demos
-with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. Keep the hamburger-to-Macro morph on the mobile toggle. The desktop mark is static. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
+with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. The mobile toggle folds its three bars into a close mark while the drawer is open and never shows the Macro logo; it keeps a 54px touch target, shows its highlight only on hover-capable pointers and keyboard focus, and sits in a 68px bar matching the drawer background, with the search field 8px below. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
 
 `src/features/documentation` owns the reading page, MDX components, and sidebar. Start guide headers with the title and description, without a Documentation eyebrow.
 Use the matching app block icons beside feature links, block guides, and their
@@ -1255,7 +1257,7 @@ Feature hero videos render with `TutorialVideoEmbed`, using the shared player di
 
 `/replace-apps` is the first Main benefits link. It shares feature hero typography, combines app selection with the existing pricing `SavingsCalculator`. Keep its route registered for preload, prerender, and site search.
 
-Use `ProductCopy` in feature section headings and descriptions to render explicit product names as linked icon-and-name mentions. Display only the icon and short product name (Mail, Tasks, etc.), omitting the Macro prefix. Keep them contextual: one or two related products per section, with no pills in hero copy or decorative examples. Link to the product page, preserve readable mobile wrapping, and use the actual product icon. Render mentions as underlined inline links with no border, padding, or resting background; show a subtly rounded background only on hover, fading over 160ms and respecting reduced motion.
+Use `ProductCopy` in feature section headings and descriptions to render explicit product names as linked icon-and-name mentions. Every mention's `href` must be a prerendered route (benefit pages live under `/docs/product/`): the build's link check in `scripts/verify-seo.ts` fails the deploy on a broken internal link, and pull request CI does not run it, so run `bun run build` after adding one. Display only the icon and short product name (Mail, Tasks, etc.), omitting the Macro prefix. Keep them contextual: only the products a section links to, with no pills in hero copy or decorative examples. Agents appears on nearly every page, so mention it in one section per page, the one about agents. Keep each section heading to one line on desktop; a pill's icon adds about a character's width. A product must be listed in `ProductMention.tsx` to render as a mention. Link to the product page, preserve readable mobile wrapping, and use the actual product icon. Render mentions as underlined inline links with no border, padding, or resting background; show a subtly rounded background only on hover, fading over 160ms and respecting reduced motion.
 
 Pricing uses `ProductPage` and `ProductHero`, open Free/Pro/Max plan rows, an expandable semantic comparison table, the shared savings calculator, and `FeaturePageFaq`. Keep pricing FAQ typography identical to feature FAQs; do not reintroduce slab FAQ headings or separate pricing disclosure styles. Use `HomepageClosing` inside the feature-page wrapper.
 

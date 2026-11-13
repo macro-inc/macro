@@ -26,6 +26,9 @@ path = "src/scheduling_openapi.rs"
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+clap = { workspace = true }
+computer_id = { workspace = true }
+genai_telemetry = { path = "../../crates/genai_telemetry" }
 universal_input = { path = "../../crates/universal_input" }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
@@ -86,7 +89,7 @@ databases_sql = { path = "../../crates/databases_sql", features = ["ai_tools"] }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
+email = { path = "../../crates/email", features = ["attachment", "gmail_senders", "outbound", "sqs"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
@@ -99,9 +102,13 @@ fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
+gmail_client = { path = "../../crates/gmail_client" }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
-harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
+harnessd_protocol = { workspace = true }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["inbound", "outbound", "ports"] }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
+incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 image_generation = { path = "../../crates/image_generation", features = ["axum"] }
@@ -176,6 +183,7 @@ soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
 sqs_worker = { path = "../../crates/sqs_worker" }
+sse-core = { workspace = true }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }
@@ -186,6 +194,7 @@ teams = { path = "../../crates/teams", default-features = false, features = ["ou
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio-stream = { workspace = true }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }

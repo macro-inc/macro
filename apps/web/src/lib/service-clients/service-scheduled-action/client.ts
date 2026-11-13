@@ -29,43 +29,51 @@ async function draftErrorResponseHandler(
   return aiUsageErrorResponseHandler(response);
 }
 
+/** Why a background draft didn't start, beside the blocking draft's reasons. */
+export type DraftJobErrorCode = DraftErrorCode | 'TOO_MANY';
+
+async function draftJobErrorResponseHandler(
+  response: Response
+): Promise<ResultError<DraftJobErrorCode | FetchWithTokenErrorCode>> {
+  if (response.status === 409) {
+    return { code: 'TOO_MANY', message: 'Too many drafts in progress' };
+  }
+  return draftErrorResponseHandler(response);
+}
+
 import {
   getAcceptSuggestionUrl,
   getDismissSuggestionUrl,
+  getGetSuggestionGenerationUrl,
   getListSuggestionsUrl,
+  getRecordSuggestionsViewedUrl,
+  getRegenerateSuggestionsUrl,
+  getRestoreSuggestionUrl,
 } from './generated/client';
 import type {
   AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
-  ActionExecutionRecord,
   CatalogEntry,
   CodeUpgrade,
   Draft,
+  DraftJob,
   DraftRoutineRequest,
+  ExecutionRecordResponse,
+  GenerationOverview,
   InProgressExecution,
+  RegenerationCooldown,
   RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartDraftJobRequest,
   Suggestion,
   SuggestionChanged,
   SuggestionFeed,
 } from './generated/schemas';
-
-// TODO(suggestions): take these two from the generated schemas once the
-// generation status and regenerate endpoints are in the service spec.
-/** `GET /suggestions/generation`. */
-export type SuggestionGenerationStatus = {
-  state: 'idle' | 'running';
-  trigger?: string | null;
-  startedAt?: string | null;
-  lastFinishedAt?: string | null;
-  lastOutcome?: string | null;
-  regenerateAvailableAt?: string | null;
-};
 
 /** How `POST /suggestions/regenerate` answered. */
 export type RegenerateAnswer =
@@ -107,6 +115,41 @@ export const scheduledActionClient = {
     ),
 
   /** `suggestionId` records the routine suggestion it is saved from. */
+  /**
+   * The caller's active sub-routines: the routines other routines' runs
+   * created, which `listSchedules` leaves out, without one-time ones that
+   * have run.
+   */
+  listSubRoutines: async () => {
+    const all = await scheduledActionFetch<ScheduledActionResponse[]>(
+      '/scheduled-actions?include_events=true&include_children=true',
+      { method: 'GET' }
+    );
+    return all.map((routines) =>
+      routines.filter((routine) => routine.sub_routine)
+    );
+  },
+
+  /**
+   * One routine's sub-routines: the active ones and its newest finished
+   * one-time ones.
+   */
+  listChildren: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledActionResponse[]>(
+      `/scheduled-actions?${new URLSearchParams({ include_events: 'true', parent: args.scheduleId })}`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * Keep a sub-routine as the owner's own routine: it moves to the main
+   * list and stops following the routine whose run created it.
+   */
+  detach: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/detach`,
+      { method: 'POST' }
+    ),
+
   createSchedule: async (
     body: ActionConfiguration,
     options: { suggestionId?: string } = {}
@@ -156,7 +199,7 @@ export const scheduledActionClient = {
     ),
 
   listHistory: async (args: { scheduleId: string }) =>
-    scheduledActionFetch<ActionExecutionRecord[]>(
+    scheduledActionFetch<ExecutionRecordResponse[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
     ),
@@ -198,6 +241,33 @@ export const scheduledActionClient = {
       }
     ),
 
+  /**
+   * Start drafting in the background; the answer comes once drafting is
+   * under way. Sent again with the same `clientId`, it answers with the job
+   * that start began.
+   */
+  startRoutineDraftJob: async (body: StartDraftJobRequest) =>
+    fetchWithToken<DraftJob, DraftJobErrorCode>(
+      `${scheduledActionHost}/scheduled-actions/draft-jobs`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: draftJobErrorResponseHandler,
+      }
+    ),
+
+  /** The caller's background drafts, newest first: drafting, ready and failed. */
+  listRoutineDraftJobs: async () =>
+    scheduledActionFetch<DraftJob[]>('/scheduled-actions/draft-jobs', {
+      method: 'GET',
+    }),
+
+  /** Cancel a background draft still drafting, or discard a finished one. */
+  discardRoutineDraftJob: async (args: { draftId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/draft-jobs/${args.draftId}`, {
+      method: 'DELETE',
+    }),
+
   listCodeUpgrades: async (args: { scheduleId: string }) =>
     scheduledActionFetch<CodeUpgrade[]>(
       `/scheduled-actions/${args.scheduleId}/code-upgrades`,
@@ -227,8 +297,11 @@ export const scheduledActionClient = {
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
 
-  /** The caller's feed of suggestions. `timezone` is the IANA zone they are in. */
-  listSuggestions: (args: { timezone: string }) =>
+  /**
+   * The caller's feed of suggestions. `timezone` is the IANA zone they are
+   * in. With `limit`, only that many open ones, best first, and no done ones.
+   */
+  listSuggestions: (args: { timezone: string; limit?: number }) =>
     scheduledActionFetch<SuggestionFeed>(getListSuggestionsUrl(args), {
       method: 'GET',
     }),
@@ -266,27 +339,28 @@ export const scheduledActionClient = {
 
   /** Whether a generation is running, and when a refresh may be asked for. */
   suggestionGeneration: () =>
-    scheduledActionFetch<SuggestionGenerationStatus>(
-      '/suggestions/generation',
-      { method: 'GET' }
-    ),
+    scheduledActionFetch<GenerationOverview>(getGetSuggestionGenerationUrl(), {
+      method: 'GET',
+    }),
 
   /**
    * Ask for a fresh run of suggestions. `running` and `cooldown` are the two
    * refusals: one is under way, or one was asked for within the hour.
    */
-  regenerateSuggestions: async (): Promise<
+  regenerateSuggestions: async (args: {
+    timezone: string;
+  }): Promise<
     Result<RegenerateAnswer, ResultError<FetchWithTokenErrorCode>[]>
   > => {
     let refusal: RegenerateAnswer | undefined;
     const result = await fetchWithToken<{}>(
-      `${scheduledActionHost}/suggestions/regenerate`,
+      `${scheduledActionHost}${getRegenerateSuggestionsUrl(args)}`,
       {
         method: 'POST',
         errorResponseHandler: async (response) => {
           if (response.status === 409) refusal = { kind: 'running' };
           if (response.status === 429) {
-            const body: { availableAt: string } = await response.clone().json();
+            const body: RegenerationCooldown = await response.clone().json();
             refusal = { kind: 'cooldown', availableAt: body.availableAt };
           }
 
@@ -299,9 +373,24 @@ export const scheduledActionClient = {
     return result.map(() => ({ kind: 'started' }));
   },
 
-  /** `keepalive` lets the call outlive a page that is closing. */
-  dismissSuggestion: (args: { suggestionId: string; keepalive?: boolean }) =>
+  /** Turn a suggestion down; one whose run is under way has it stopped. */
+  dismissSuggestion: (args: { suggestionId: string }) =>
     scheduledActionFetch(getDismissSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /** Take back the caller's own dismissal, within a few minutes of it. */
+  restoreSuggestion: (args: { suggestionId: string }) =>
+    scheduledActionFetch(getRestoreSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /**
+   * The caller looked at their feed: what is proposed after this is new.
+   * `keepalive` lets the call outlive a page that is closing.
+   */
+  recordSuggestionsViewed: (args: { keepalive?: boolean }) =>
+    scheduledActionFetch(getRecordSuggestionsViewedUrl(), {
       method: 'POST',
       keepalive: args.keepalive,
     }),

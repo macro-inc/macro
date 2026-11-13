@@ -18,9 +18,15 @@ Agent accounts never see this flow, including through a direct link; see
 
 ## Onboarding bypass — `/app/onboarding`
 
-All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
-skips the rest of the flow and leaves onboarding. Accounts on other domains
-do not see it.
+In local development (`LOCAL_ONLY`), every account sees **Bypass** on every
+signed-in onboarding step. Before signup, **Bypass** skips the opening slides
+and opens the sign-up step; authentication is still required. After signing in,
+**Bypass** saves the onboarding record as skipped, marks the tutorial complete,
+and opens the original destination or Home, so reloading does not restart setup.
+The button uses the same completion and retry path as finishing normally.
+
+Deployed builds keep **Bypass** restricted to `@macro.com` accounts; other
+accounts still follow the existing onboarding flow.
 
 ## Team setup — `/app/onboarding`
 

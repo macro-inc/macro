@@ -153,6 +153,10 @@ impl GenerationSessions for FakeGenerations {
     ) -> Result<Option<GenerationSession>, rootcause::Report> {
         Ok(self.sessions.lock().unwrap().get(&session).cloned())
     }
+
+    async fn undeleted(&self, session: Uuid) -> Result<bool, rootcause::Report> {
+        Ok(self.sessions.lock().unwrap().contains_key(&session))
+    }
 }
 
 #[async_trait::async_trait]

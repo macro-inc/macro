@@ -225,6 +225,8 @@ export function ForYouView(props: {
                             <DismissedSuggestion
                               suggestion={entry.suggestion}
                               wasRunning={entry.status === 'running'}
+                              busy={entry.busy}
+                              failed={entry.failed}
                               onUndo={() =>
                                 props.feed.undoDismiss(entry.suggestion)
                               }

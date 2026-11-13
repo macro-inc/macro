@@ -4,28 +4,62 @@ import type {
   SuggestionActions,
   SuggestionsSource,
 } from '../context/suggestions-source';
-import type { Suggestion } from '../core/suggestion';
+import type {
+  FeedCounts,
+  Suggestion,
+  SuggestionFeed,
+} from '../core/suggestion';
 import {
   backgroundSuggestion,
   composerSuggestion,
   doneSuggestion,
   draftedReplySuggestion,
   failedSuggestion,
+  quietBackgroundSuggestion as quietSuggestion,
   replySuggestion,
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
 import { createSuggestionsFeed, type SuggestionsFeed } from './feed';
 
+/** The drafted reply fixture's draft. */
+const DRAFT = {
+  entityType: 'email_thread',
+  entityId: 'thread-1',
+  partId: 'draft-1',
+  preview: 'The terms are unchanged; only the price moved.',
+};
+
+/** The counts a server would send for `suggestions`. */
+function countsOf(suggestions: Suggestion[]): FeedCounts {
+  const counts = { open: 0, running: 0, failed: 0, done: 0 };
+  for (const suggestion of suggestions) counts[suggestion.status] += 1;
+
+  return counts;
+}
+
 function host(suggestions: Suggestion[]) {
-  const [list] = createSignal<Suggestion[] | undefined>(suggestions);
+  const [feed, setFeed] = createSignal<SuggestionFeed | undefined>({
+    suggestions,
+    counts: countsOf(suggestions),
+  });
+  /** The server stops listing a suggestion, as after a dismissal. */
+  const drop = (id: string) =>
+    setFeed((held) => {
+      const left = held?.suggestions.filter((other) => other.id !== id) ?? [];
+      return { suggestions: left, counts: countsOf(left) };
+    });
   const source = {
-    suggestions: list,
+    feed,
     failed: () => false,
     retry: vi.fn(),
     refresh: vi.fn(async () => {}),
     accept: vi.fn(async (): Promise<'accepted' | 'changed'> => 'accepted'),
-    dismiss: vi.fn(async () => {}),
+    dismiss: vi.fn(async (id: string) => {
+      drop(id);
+    }),
+    restore: vi.fn(async (_id: string) => {}),
+    viewed: vi.fn(),
   } satisfies SuggestionsSource;
   const actions = {
     openComposer: vi.fn(async () => {}),
@@ -62,14 +96,14 @@ function shownIds(feed: SuggestionsFeed) {
 }
 
 describe('suggestions feed', () => {
-  it('keeps the server’s order, most important first, with done suggestions last', async () => {
+  it('shows the server’s order and counts as they are, with a failed run counted under Running', async () => {
     await withFeed(
       [
         composerSuggestion,
-        doneSuggestion,
         replySuggestion,
         failedSuggestion,
         runningSuggestion,
+        doneSuggestion,
       ],
       async (feed) => {
         expect(shownIds(feed)).toEqual([
@@ -166,11 +200,7 @@ describe('suggestions feed', () => {
       [draftedReplySuggestion, replySuggestion],
       async (feed, { actions }) => {
         await feed.accept(draftedReplySuggestion);
-        expect(actions.openDraft).toHaveBeenCalledWith({
-          entityType: 'email_thread',
-          entityId: 'thread-1',
-          partId: 'draft-1',
-        });
+        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
         expect(actions.openItem).not.toHaveBeenCalled();
 
         await feed.accept(replySuggestion);
@@ -221,30 +251,16 @@ describe('suggestions feed', () => {
     );
   });
 
-  it('keeps Run on a background suggestion someone took on for the person without starting it', async () => {
-    const takenOn = { ...backgroundSuggestion, state: 'accepted' as const };
-    await withFeed([takenOn], async (feed, { source }) => {
-      expect(feed.counts()).toEqual({ all: 1, running: 0, open: 1, done: 0 });
-
-      await feed.accept(takenOn);
-      expect(source.accept).toHaveBeenCalledWith(takenOn);
-    });
-  });
-
   it('lists an opened suggestion as done once the server says so, and opens it again without accepting', async () => {
-    const opened = { ...draftedReplySuggestion, state: 'done' as const };
+    const opened = { ...draftedReplySuggestion, status: 'done' as const };
     await withFeed(
-      [opened, replySuggestion],
+      [replySuggestion, opened],
       async (feed, { source, actions }) => {
         expect(shownIds(feed)).toEqual(['suggestion-reply', opened.id]);
         expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });
 
         feed.open(opened);
-        expect(actions.openDraft).toHaveBeenCalledWith({
-          entityType: 'email_thread',
-          entityId: 'thread-1',
-          partId: 'draft-1',
-        });
+        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
         expect(source.accept).not.toHaveBeenCalled();
       }
     );
@@ -260,93 +276,95 @@ describe('suggestions feed', () => {
     });
   });
 
-  it('opens what a finished run made', async () => {
-    await withFeed([doneSuggestion], async (feed, { actions }) => {
-      feed.open(doneSuggestion);
+  it('opens what the server says a finished run left, and a running one’s session', async () => {
+    await withFeed(
+      [runningSuggestion, doneSuggestion],
+      async (feed, { actions }) => {
+        feed.open(doneSuggestion);
+        expect(actions.openItem).toHaveBeenLastCalledWith({
+          entityType: 'document',
+          entityId: 'document-1',
+        });
 
-      expect(actions.openItem).toHaveBeenCalledWith({
-        entityType: 'document',
-        entityId: 'document-1',
-      });
+        feed.open(runningSuggestion);
+        expect(actions.openItem).toHaveBeenLastCalledWith({
+          entityType: 'agent_session',
+          entityId: 'session-1',
+        });
+      }
+    );
+  });
+
+  it('opens nothing for a finished suggestion that left nothing', async () => {
+    const unsettled: Suggestion = {
+      ...quietSuggestion,
+      status: 'done',
+    };
+    await withFeed([unsettled], async (feed, { actions }) => {
+      feed.open(unsettled);
+
+      expect(actions.openItem).not.toHaveBeenCalled();
     });
   });
 
-  it('holds a dismissal for Undo and sends only what is still dismissed on leaving', async () => {
-    const { source } = await withFeed(
+  it('sends a dismissal at once and keeps the suggestion as a row to undo', async () => {
+    await withFeed(
       [composerSuggestion, replySuggestion],
       async (feed, { source }) => {
-        feed.dismiss(composerSuggestion);
-        feed.dismiss(replySuggestion);
-        expect(feed.counts().all).toBe(0);
-        expect(source.dismiss).not.toHaveBeenCalled();
+        await feed.dismiss(composerSuggestion);
 
-        feed.undoDismiss(composerSuggestion);
+        expect(source.dismiss).toHaveBeenCalledWith('suggestion-composer');
+        const view = feed.view();
+        if (view.kind !== 'suggestions') throw new Error('expected a feed');
+        expect(
+          view.entries.map((entry) => [entry.suggestion.id, entry.dismissed])
+        ).toEqual([
+          ['suggestion-reply', false],
+          ['suggestion-composer', true],
+        ]);
         expect(feed.counts().all).toBe(1);
       }
     );
+  });
 
-    expect(source.dismiss).toHaveBeenCalledTimes(1);
-    expect(source.dismiss).toHaveBeenCalledWith('suggestion-reply', {
-      leaving: false,
+  it('asks the server to restore a dismissal on Undo, then drops its row', async () => {
+    await withFeed([composerSuggestion], async (feed, { source }) => {
+      await feed.dismiss(composerSuggestion);
+      await feed.undoDismiss(composerSuggestion);
+
+      expect(source.restore).toHaveBeenCalledWith('suggestion-composer');
+      // The row is gone; the restored card comes back with the next read.
+      expect(shownIds(feed)).toEqual([]);
     });
   });
 
-  it('sends held dismissals once when the page goes away', async () => {
-    const { source } = await withFeed([composerSuggestion], async (feed) => {
-      feed.dismiss(composerSuggestion);
-      feed.sendDismissals();
-    });
-
-    expect(source.dismiss).toHaveBeenCalledTimes(1);
-    expect(source.dismiss).toHaveBeenCalledWith('suggestion-composer', {
-      leaving: true,
-    });
-  });
-
-  it('sends a dismissal by itself once the Undo window passes, and not one that was undone', async () => {
-    vi.useFakeTimers();
-    const deps = host([composerSuggestion, replySuggestion]);
+  it('keeps the row, marked failed, when the server refuses to restore', async () => {
+    const deps = host([composerSuggestion]);
+    deps.source.restore.mockRejectedValueOnce(new Error('too late'));
 
     await createRoot(async (dispose) => {
-      const feed = createSuggestionsFeed(deps.source, deps.actions, {
-        undoMs: 8000,
-      });
-      feed.dismiss(composerSuggestion);
-      feed.dismiss(replySuggestion);
-      feed.undoDismiss(replySuggestion);
+      const feed = createSuggestionsFeed(deps.source, deps.actions);
+      await feed.dismiss(composerSuggestion);
+      await feed.undoDismiss(composerSuggestion);
 
-      vi.advanceTimersByTime(7999);
-      expect(deps.source.dismiss).not.toHaveBeenCalled();
-
-      vi.advanceTimersByTime(1);
-      expect(deps.source.dismiss).toHaveBeenCalledTimes(1);
-      expect(deps.source.dismiss).toHaveBeenCalledWith('suggestion-composer', {
-        leaving: false,
-      });
-      // Sent: gone from the feed without waiting for the next read.
-      expect(shownIds(feed)).toEqual(['suggestion-reply']);
+      const view = feed.view();
+      if (view.kind !== 'suggestions') throw new Error('expected a feed');
+      expect(view.entries[0]).toMatchObject({ dismissed: true, failed: true });
       dispose();
     });
-
-    expect(deps.source.dismiss).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
   });
 
-  it('puts a suggestion back, marked failed, when the server refused its dismissal', async () => {
+  it('leaves the card, marked failed, when the server refused its dismissal', async () => {
     const deps = host([composerSuggestion]);
     deps.source.dismiss.mockRejectedValueOnce(new Error('refused'));
 
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
-      feed.dismiss(composerSuggestion);
-      feed.sendDismissals();
-      expect(shownIds(feed)).toEqual([]);
+      await feed.dismiss(composerSuggestion);
 
-      await Promise.resolve();
-      await Promise.resolve();
-      expect(shownIds(feed)).toEqual(['suggestion-composer']);
       const view = feed.view();
-      expect(view.kind === 'suggestions' && view.entries[0]?.failed).toBe(true);
+      if (view.kind !== 'suggestions') throw new Error('expected a feed');
+      expect(view.entries[0]).toMatchObject({ dismissed: false, failed: true });
       dispose();
     });
   });

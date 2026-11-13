@@ -5,10 +5,17 @@ use utoipa::OpenApi;
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::axum_router::{
-    __path_check_action, __path_create_action, __path_delete_action, __path_execute_action,
-    __path_get_action, __path_health, __path_list_actions, __path_list_history,
-    __path_set_action_enabled, __path_update_action, ScheduledActionResponse,
-    SetScheduledActionEnabled,
+    __path_check_action, __path_create_action, __path_delete_action, __path_detach_action,
+    __path_execute_action, __path_get_action, __path_health, __path_list_actions,
+    __path_list_history, __path_set_action_enabled, __path_set_appearance, __path_update_action,
+    ScheduledActionResponse, SetScheduledActionEnabled,
+};
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
+use crate::inbound::draft_job_router::{
+    __path_discard_draft_job, __path_get_draft_job, __path_list_draft_jobs, __path_start_draft_job,
 };
 #[expect(
     unused_imports,
@@ -34,6 +41,7 @@ use crate::domain::models::{
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
+use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -50,12 +58,18 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::check_action,
         crate::inbound::axum_router::update_action,
         crate::inbound::axum_router::set_action_enabled,
+        crate::inbound::axum_router::set_appearance,
         crate::inbound::axum_router::delete_action,
+        crate::inbound::axum_router::detach_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
         crate::inbound::axum_router::list_code_upgrades,
         crate::inbound::axum_router::catalog,
         crate::inbound::draft_router::draft_routine,
+        crate::inbound::draft_job_router::start_draft_job,
+        crate::inbound::draft_job_router::list_draft_jobs,
+        crate::inbound::draft_job_router::get_draft_job,
+        crate::inbound::draft_job_router::discard_draft_job,
         crate::inbound::suggestion_router::list_suggestions,
         crate::inbound::suggestion_router::review_suggestions,
         crate::inbound::suggestion_router::retire_suggestion,
@@ -69,6 +83,9 @@ use model::response::EmptyResponse;
     components(
         schemas(
             AiAdmissionErrorBody,
+            crate::inbound::axum_router::ExecutionRecordResponse,
+            crate::domain::models::SubRoutine,
+            crate::domain::models::CreatedRoutine,
             crate::domain::catalog::CatalogEntry,
             routine_program::Surface,
             routine_program::NamedItemKind,
@@ -92,9 +109,22 @@ use model::response::EmptyResponse;
             crate::domain::drafts::DraftedRoutine,
             crate::domain::drafts::DraftedStep,
             crate::domain::drafts::StepProblem,
+            crate::domain::drafts::DraftCreated,
+            crate::inbound::draft_job_router::StartDraftJobRequest,
+            crate::domain::drafts::jobs::DraftJob,
+            crate::domain::drafts::jobs::DraftJobState,
+            crate::domain::drafts::jobs::DraftAsked,
+            crate::domain::drafts::jobs::DraftKind,
+            crate::domain::drafts::jobs::DraftUpdate,
+            crate::domain::drafts::jobs::DraftUpdateState,
+            crate::domain::drafts::progress::DraftJobProgress,
+            crate::domain::drafts::progress::DraftStage,
+            crate::domain::drafts::progress::CheckSummary,
+            crate::domain::drafts::progress::StepTitle,
             crate::domain::code_upgrade::CodeUpgrade,
             crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,
+            EntityAppearance, AppearanceIcon, AppearanceColor,
             ScheduledActionResponse,
             ActionConfiguration,
             ActionConfigurationUpdate,

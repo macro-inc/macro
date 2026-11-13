@@ -20,7 +20,11 @@ vi.mock('@service-scheduled-action/client', () => ({
     },
     listSuggestions: async () => {
       server.feed += 1;
-      return ok({ suggestions: [], done: [] });
+      return ok({
+        suggestions: [],
+        done: [],
+        counts: { open: 0, running: 0, failed: 0, done: 0 },
+      });
     },
   },
 }));

@@ -51,6 +51,7 @@ function Modal() {
         showCalls: true,
         showReviews: true,
         showActivity: true,
+        showPasswords: false,
         showExternal: true,
         get prefs() {
           return prefs();

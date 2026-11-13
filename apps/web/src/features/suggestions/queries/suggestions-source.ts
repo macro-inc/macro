@@ -7,9 +7,9 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { createEffect, createMemo } from 'solid-js';
 import type { SuggestionsSource } from '../context/suggestions-source';
-import { type Suggestion, suggestionStatus } from '../core/suggestion';
+import type { SuggestionFeed } from '../core/suggestion';
 import { useSuggestionsFlag } from '../use-suggestions-flag';
-import { toSuggestion, toSuggestions } from './decode';
+import { toFeed, toSuggestion } from './decode';
 import { generationOptions } from './generation';
 import { suggestionsKeys } from './keys';
 
@@ -20,7 +20,7 @@ function feedOptions(userId: string, enabled: boolean, generating: boolean) {
   return queryOptions({
     ...suggestionsKeys.feed(userId),
     queryFn: async () =>
-      toSuggestions(
+      toFeed(
         await throwOnErr(() =>
           scheduledActionClient.listSuggestions({
             timezone: getDefaultTimezone(),
@@ -32,8 +32,8 @@ function feedOptions(userId: string, enabled: boolean, generating: boolean) {
     // or a generation that may add or change cards.
     refetchInterval: (query) =>
       generating ||
-      query.state.data?.some(
-        (suggestion) => suggestionStatus(suggestion) === 'running'
+      query.state.data?.suggestions.some(
+        (suggestion) => suggestion.status === 'running'
       )
         ? WORKING_POLL_MS
         : false,
@@ -75,18 +75,26 @@ export function useSuggestionsSource(): SuggestionsSource {
     return now;
   }, false);
 
-  // FE-49: the feed is read again under open cards; an suggestion that didn't
+  // FE-49: the feed is read again under open cards; a suggestion that didn't
   // change keeps its object, so its card isn't rebuilt.
-  const suggestions = createMemo<Suggestion[] | undefined>((previous) =>
-    feed.data?.map((suggestion) => {
-      const before = previous?.find((other) => other.id === suggestion.id);
-      return before && deepEqual(before, suggestion) ? before : suggestion;
-    })
-  );
+  const shown = createMemo<SuggestionFeed | undefined>((previous) => {
+    const next = feed.data;
+    if (!next) return undefined;
+
+    return {
+      counts: next.counts,
+      suggestions: next.suggestions.map((suggestion) => {
+        const before = previous?.suggestions.find(
+          (other) => other.id === suggestion.id
+        );
+        return before && deepEqual(before, suggestion) ? before : suggestion;
+      }),
+    };
+  });
 
   return {
-    suggestions,
-    failed: () => feed.isError && suggestions() === undefined,
+    feed: shown,
+    failed: () => feed.isError && shown() === undefined,
     retry: () => fireAndForget(refresh(), 'suggestions'),
     refresh,
     async accept(suggestion) {
@@ -104,20 +112,37 @@ export function useSuggestionsSource(): SuggestionsSource {
         return changed ? 'changed' : 'accepted';
       }
 
-      queryClient.setQueryData(key(), (suggestions: Suggestion[] | undefined) =>
-        suggestions?.map((other) => (other.id === now.id ? now : other))
+      queryClient.setQueryData(key(), (held: SuggestionFeed | undefined) =>
+        held
+          ? {
+              ...held,
+              suggestions: held.suggestions.map((other) =>
+                other.id === now.id ? now : other
+              ),
+            }
+          : held
       );
       return 'changed';
     },
-    async dismiss(id, options) {
+    async dismiss(id) {
       await throwOnErr(() =>
-        scheduledActionClient.dismissSuggestion({
-          suggestionId: id,
-          // Sent as the page goes away, it must outlive it.
-          keepalive: options?.leaving,
-        })
+        scheduledActionClient.dismissSuggestion({ suggestionId: id })
       );
       await refresh();
     },
+    async restore(id) {
+      await throwOnErr(() =>
+        scheduledActionClient.restoreSuggestion({ suggestionId: id })
+      );
+      await refresh();
+    },
+    viewed: () =>
+      fireAndForget(
+        // Sent as the page goes away, it must outlive it.
+        throwOnErr(() =>
+          scheduledActionClient.recordSuggestionsViewed({ keepalive: true })
+        ),
+        'suggestions.viewed'
+      ),
   };
 }

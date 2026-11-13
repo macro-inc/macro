@@ -9,7 +9,6 @@ import type {
   AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
-  ActionExecutionRecord,
   AiAdmissionErrorBody,
   AttachDraft,
   CatalogEntry,
@@ -17,8 +16,12 @@ import type {
   CodeUpgrade,
   CreateScheduledActionParams,
   Draft,
+  DraftJob,
   DraftRoutineRequest,
   EmptyResponse,
+  EntityAppearance,
+  ExecutionRecordResponse,
+  GenerationOverview,
   GenerationStarted,
   InProgressExecution,
   ListRoutineSuggestionsParams,
@@ -26,6 +29,9 @@ import type {
   ListSuggestionsParams,
   NewSuggestion,
   RecordSuggestionsSeenParams,
+  RegenerateSuggestionsParams,
+  RegenerationCooldown,
+  RegenerationRunning,
   RetireSuggestion,
   RetireSuggestionRequest,
   RewriteSuggestion,
@@ -36,6 +42,7 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartDraftJobRequest,
   StartSuggestionGenerationParams,
   SuggestionChanged,
   SuggestionFeed,
@@ -158,6 +165,16 @@ export const listScheduledActions = async (
   } as listScheduledActionsResponse;
 };
 
+/**
+ * @summary Create a routine. A create made by a routine's run, from its code step
+or its Ask AI step's session, makes that routine's sub-routine: the
+caller's credential says so, never the body.
+ */
+export type createScheduledActionResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
 export type createScheduledActionResponse201 = {
   data: ScheduledActionResponse;
   status: 201;
@@ -178,19 +195,27 @@ export type createScheduledActionResponse403 = {
   status: 403;
 };
 
+export type createScheduledActionResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type createScheduledActionResponse500 = {
   data: string;
   status: 500;
 };
 
-export type createScheduledActionResponseSuccess =
-  createScheduledActionResponse201 & {
-    headers: Headers;
-  };
+export type createScheduledActionResponseSuccess = (
+  | createScheduledActionResponse200
+  | createScheduledActionResponse201
+) & {
+  headers: Headers;
+};
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
   | createScheduledActionResponse403
+  | createScheduledActionResponse409
   | createScheduledActionResponse500
 ) & {
   headers: Headers;
@@ -384,6 +409,261 @@ export const checkScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as checkScheduledActionResponse;
+};
+
+export type listRoutineDraftJobsResponse200 = {
+  data: DraftJob[];
+  status: 200;
+};
+
+export type listRoutineDraftJobsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listRoutineDraftJobsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listRoutineDraftJobsResponseSuccess =
+  listRoutineDraftJobsResponse200 & {
+    headers: Headers;
+  };
+export type listRoutineDraftJobsResponseError = (
+  | listRoutineDraftJobsResponse401
+  | listRoutineDraftJobsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listRoutineDraftJobsResponse =
+  | listRoutineDraftJobsResponseSuccess
+  | listRoutineDraftJobsResponseError;
+
+export const getListRoutineDraftJobsUrl = () => {
+  return `/scheduled-actions/draft-jobs`;
+};
+
+export const listRoutineDraftJobs = async (
+  options?: RequestInit
+): Promise<listRoutineDraftJobsResponse> => {
+  const res = await fetch(getListRoutineDraftJobsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listRoutineDraftJobsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listRoutineDraftJobsResponse;
+};
+
+export type startRoutineDraftJobResponse202 = {
+  data: DraftJob;
+  status: 202;
+};
+
+export type startRoutineDraftJobResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type startRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type startRoutineDraftJobResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
+export type startRoutineDraftJobResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type startRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type startRoutineDraftJobResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
+export type startRoutineDraftJobResponseSuccess =
+  startRoutineDraftJobResponse202 & {
+    headers: Headers;
+  };
+export type startRoutineDraftJobResponseError = (
+  | startRoutineDraftJobResponse400
+  | startRoutineDraftJobResponse401
+  | startRoutineDraftJobResponse402
+  | startRoutineDraftJobResponse409
+  | startRoutineDraftJobResponse500
+  | startRoutineDraftJobResponse503
+) & {
+  headers: Headers;
+};
+
+export type startRoutineDraftJobResponse =
+  | startRoutineDraftJobResponseSuccess
+  | startRoutineDraftJobResponseError;
+
+export const getStartRoutineDraftJobUrl = () => {
+  return `/scheduled-actions/draft-jobs`;
+};
+
+export const startRoutineDraftJob = async (
+  startDraftJobRequest: StartDraftJobRequest,
+  options?: RequestInit
+): Promise<startRoutineDraftJobResponse> => {
+  const res = await fetch(getStartRoutineDraftJobUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(startDraftJobRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startRoutineDraftJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startRoutineDraftJobResponse;
+};
+
+export type getRoutineDraftJobResponse200 = {
+  data: DraftJob;
+  status: 200;
+};
+
+export type getRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getRoutineDraftJobResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getRoutineDraftJobResponseSuccess =
+  getRoutineDraftJobResponse200 & {
+    headers: Headers;
+  };
+export type getRoutineDraftJobResponseError = (
+  | getRoutineDraftJobResponse401
+  | getRoutineDraftJobResponse404
+  | getRoutineDraftJobResponse500
+) & {
+  headers: Headers;
+};
+
+export type getRoutineDraftJobResponse =
+  | getRoutineDraftJobResponseSuccess
+  | getRoutineDraftJobResponseError;
+
+export const getGetRoutineDraftJobUrl = (id: string) => {
+  return `/scheduled-actions/draft-jobs/${id}`;
+};
+
+export const getRoutineDraftJob = async (
+  id: string,
+  options?: RequestInit
+): Promise<getRoutineDraftJobResponse> => {
+  const res = await fetch(getGetRoutineDraftJobUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getRoutineDraftJobResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getRoutineDraftJobResponse;
+};
+
+export type discardRoutineDraftJobResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type discardRoutineDraftJobResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type discardRoutineDraftJobResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type discardRoutineDraftJobResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type discardRoutineDraftJobResponseSuccess =
+  discardRoutineDraftJobResponse204 & {
+    headers: Headers;
+  };
+export type discardRoutineDraftJobResponseError = (
+  | discardRoutineDraftJobResponse401
+  | discardRoutineDraftJobResponse404
+  | discardRoutineDraftJobResponse500
+) & {
+  headers: Headers;
+};
+
+export type discardRoutineDraftJobResponse =
+  | discardRoutineDraftJobResponseSuccess
+  | discardRoutineDraftJobResponseError;
+
+export const getDiscardRoutineDraftJobUrl = (id: string) => {
+  return `/scheduled-actions/draft-jobs/${id}`;
+};
+
+export const discardRoutineDraftJob = async (
+  id: string,
+  options?: RequestInit
+): Promise<discardRoutineDraftJobResponse> => {
+  const res = await fetch(getDiscardRoutineDraftJobUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discardRoutineDraftJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discardRoutineDraftJobResponse;
 };
 
 export type draftRoutineResponse200 = {
@@ -1004,6 +1284,70 @@ export const deleteScheduledAction = async (
   } as deleteScheduledActionResponse;
 };
 
+export type setScheduledActionAppearanceResponse200 = {
+  data: EntityAppearance;
+  status: 200;
+};
+
+export type setScheduledActionAppearanceResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type setScheduledActionAppearanceResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type setScheduledActionAppearanceResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type setScheduledActionAppearanceResponseSuccess =
+  setScheduledActionAppearanceResponse200 & {
+    headers: Headers;
+  };
+export type setScheduledActionAppearanceResponseError = (
+  | setScheduledActionAppearanceResponse400
+  | setScheduledActionAppearanceResponse401
+  | setScheduledActionAppearanceResponse404
+) & {
+  headers: Headers;
+};
+
+export type setScheduledActionAppearanceResponse =
+  | setScheduledActionAppearanceResponseSuccess
+  | setScheduledActionAppearanceResponseError;
+
+export const getSetScheduledActionAppearanceUrl = (id: string) => {
+  return `/scheduled-actions/${id}/appearance`;
+};
+
+export const setScheduledActionAppearance = async (
+  id: string,
+  entityAppearance: EntityAppearance,
+  options?: RequestInit
+): Promise<setScheduledActionAppearanceResponse> => {
+  const res = await fetch(getSetScheduledActionAppearanceUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(entityAppearance),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setScheduledActionAppearanceResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setScheduledActionAppearanceResponse;
+};
+
 export type listScheduledActionCodeUpgradesResponse200 = {
   data: CodeUpgrade[];
   status: 200;
@@ -1063,6 +1407,77 @@ export const listScheduledActionCodeUpgrades = async (
     status: res.status,
     headers: res.headers,
   } as listScheduledActionCodeUpgradesResponse;
+};
+
+/**
+ * @summary Keep a sub-routine as the owner's own routine: it moves to the main list
+and no longer follows the routine whose run created it.
+ */
+export type detachScheduledActionResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
+export type detachScheduledActionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type detachScheduledActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type detachScheduledActionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type detachScheduledActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type detachScheduledActionResponseSuccess =
+  detachScheduledActionResponse200 & {
+    headers: Headers;
+  };
+export type detachScheduledActionResponseError = (
+  | detachScheduledActionResponse400
+  | detachScheduledActionResponse401
+  | detachScheduledActionResponse404
+  | detachScheduledActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type detachScheduledActionResponse =
+  | detachScheduledActionResponseSuccess
+  | detachScheduledActionResponseError;
+
+export const getDetachScheduledActionUrl = (id: string) => {
+  return `/scheduled-actions/${id}/detach`;
+};
+
+export const detachScheduledAction = async (
+  id: string,
+  options?: RequestInit
+): Promise<detachScheduledActionResponse> => {
+  const res = await fetch(getDetachScheduledActionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: detachScheduledActionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as detachScheduledActionResponse;
 };
 
 export type setScheduledActionEnabledResponse200 = {
@@ -1227,7 +1642,7 @@ export const executeScheduledActionNow = async (
 };
 
 export type listScheduledActionHistoryResponse200 = {
-  data: ActionExecutionRecord[];
+  data: ExecutionRecordResponse[];
   status: 200;
 };
 
@@ -1789,6 +2204,160 @@ export const startSuggestionGeneration = async (
 };
 
 /**
+ * @summary The caller's suggestion generations now.
+ */
+export type getSuggestionGenerationResponse200 = {
+  data: GenerationOverview;
+  status: 200;
+};
+
+export type getSuggestionGenerationResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getSuggestionGenerationResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getSuggestionGenerationResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getSuggestionGenerationResponseSuccess =
+  getSuggestionGenerationResponse200 & {
+    headers: Headers;
+  };
+export type getSuggestionGenerationResponseError = (
+  | getSuggestionGenerationResponse401
+  | getSuggestionGenerationResponse404
+  | getSuggestionGenerationResponse500
+) & {
+  headers: Headers;
+};
+
+export type getSuggestionGenerationResponse =
+  | getSuggestionGenerationResponseSuccess
+  | getSuggestionGenerationResponseError;
+
+export const getGetSuggestionGenerationUrl = () => {
+  return `/suggestions/generation`;
+};
+
+export const getSuggestionGeneration = async (
+  options?: RequestInit
+): Promise<getSuggestionGenerationResponse> => {
+  const res = await fetch(getGetSuggestionGenerationUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSuggestionGenerationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSuggestionGenerationResponse;
+};
+
+/**
+ * @summary Start fresh suggestions for the caller: at most once an hour, and not
+while one of their generations runs.
+ */
+export type regenerateSuggestionsResponse202 = {
+  data: GenerationStarted;
+  status: 202;
+};
+
+export type regenerateSuggestionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type regenerateSuggestionsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type regenerateSuggestionsResponse409 = {
+  data: RegenerationRunning;
+  status: 409;
+};
+
+export type regenerateSuggestionsResponse429 = {
+  data: RegenerationCooldown;
+  status: 429;
+};
+
+export type regenerateSuggestionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type regenerateSuggestionsResponseSuccess =
+  regenerateSuggestionsResponse202 & {
+    headers: Headers;
+  };
+export type regenerateSuggestionsResponseError = (
+  | regenerateSuggestionsResponse401
+  | regenerateSuggestionsResponse404
+  | regenerateSuggestionsResponse409
+  | regenerateSuggestionsResponse429
+  | regenerateSuggestionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type regenerateSuggestionsResponse =
+  | regenerateSuggestionsResponseSuccess
+  | regenerateSuggestionsResponseError;
+
+export const getRegenerateSuggestionsUrl = (
+  params: RegenerateSuggestionsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/regenerate?${stringifiedParams}`
+    : `/suggestions/regenerate`;
+};
+
+export const regenerateSuggestions = async (
+  params: RegenerateSuggestionsParams,
+  options?: RequestInit
+): Promise<regenerateSuggestionsResponse> => {
+  const res = await fetch(getRegenerateSuggestionsUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateSuggestionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as regenerateSuggestionsResponse;
+};
+
+/**
  * @summary What a suggestions generation session reads before managing suggestions.
  */
 export type reviewSuggestionsResponse200 = {
@@ -1924,6 +2493,76 @@ export const recordSuggestionsSeen = async (
     status: res.status,
     headers: res.headers,
   } as recordSuggestionsSeenResponse;
+};
+
+/**
+ * @summary The caller opened their feed: what it showed as new no longer is. The app
+sends it once the feed is on screen.
+ */
+export type recordSuggestionsViewedResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recordSuggestionsViewedResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recordSuggestionsViewedResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type recordSuggestionsViewedResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type recordSuggestionsViewedResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type recordSuggestionsViewedResponseSuccess =
+  recordSuggestionsViewedResponse204 & {
+    headers: Headers;
+  };
+export type recordSuggestionsViewedResponseError = (
+  | recordSuggestionsViewedResponse401
+  | recordSuggestionsViewedResponse403
+  | recordSuggestionsViewedResponse404
+  | recordSuggestionsViewedResponse500
+) & {
+  headers: Headers;
+};
+
+export type recordSuggestionsViewedResponse =
+  | recordSuggestionsViewedResponseSuccess
+  | recordSuggestionsViewedResponseError;
+
+export const getRecordSuggestionsViewedUrl = () => {
+  return `/suggestions/viewed`;
+};
+
+export const recordSuggestionsViewed = async (
+  options?: RequestInit
+): Promise<recordSuggestionsViewedResponse> => {
+  const res = await fetch(getRecordSuggestionsViewedUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recordSuggestionsViewedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recordSuggestionsViewedResponse;
 };
 
 /**
@@ -2232,6 +2871,80 @@ export const attachSuggestionDraft = async (
     status: res.status,
     headers: res.headers,
   } as attachSuggestionDraftResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, within
+five minutes of it.
+ */
+export type restoreSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type restoreSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type restoreSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type restoreSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type restoreSuggestionResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type restoreSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type restoreSuggestionResponseSuccess = restoreSuggestionResponse204 & {
+  headers: Headers;
+};
+export type restoreSuggestionResponseError = (
+  | restoreSuggestionResponse401
+  | restoreSuggestionResponse403
+  | restoreSuggestionResponse404
+  | restoreSuggestionResponse409
+  | restoreSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type restoreSuggestionResponse =
+  | restoreSuggestionResponseSuccess
+  | restoreSuggestionResponseError;
+
+export const getRestoreSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/restore`;
+};
+
+export const restoreSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<restoreSuggestionResponse> => {
+  const res = await fetch(getRestoreSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: restoreSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as restoreSuggestionResponse;
 };
 
 /**

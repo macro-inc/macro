@@ -22,14 +22,16 @@ mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
+use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
 };
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
-    DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+    DraftHandBacks, DraftJobStore, RequestSessions, ScheduledActionDispatcher, SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
@@ -40,6 +42,9 @@ use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
+use scheduled_action::inbound::draft_job_router::{
+    RoutineDraftJobRouterState, routine_draft_job_router,
+};
 use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
@@ -73,8 +78,10 @@ use suggestions::domain::resolution::SuggestionResolution;
 use suggestions::domain::service::SuggestionService;
 use suggestions::inbound::kafka_consumer::run_suggestion_resolution_consumer;
 use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::inbound::run_consumer::run_suggestion_runs_consumer;
 use suggestions::outbound::email_drafts::EmailSuggestionDrafts;
 use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::reply_waits::ItemReplyWaits;
 use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -94,10 +101,12 @@ const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 /// How often drafts a stopped process left behind are cleaned up.
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often generation sessions a stopped process left behind are cleaned up.
+/// How often the generation sweep marks generations whose process died
+/// interrupted and deletes the sessions left behind.
 const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often finished background runs of suggestions are settled.
-const SUGGESTION_RUN_SETTLE_INTERVAL: Duration = Duration::from_secs(30);
+/// How often unsettled background runs of suggestions are checked, for the
+/// session events a run missed and the runs over their time.
+const SUGGESTION_RUN_RECONCILE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// How often people in their night are checked for a nightly generation.
 const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -105,33 +114,50 @@ const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// code-mode invocations.
 struct ActivityCreations(activity::outbound::pg_activity_repo::PgActivityRepo);
 
-/// Activity rows read per draft; a draft creates a handful of items.
-const DRAFT_ACTIVITY_PAGE: u32 = 100;
+/// Activity rows read per page; a session creates a handful of items.
+const SESSION_ACTIVITY_PAGE: u32 = 100;
+/// Pages of a session's activity read at most.
+const SESSION_ACTIVITY_PAGES: usize = 10;
 
 #[async_trait::async_trait]
 impl SessionCreations for ActivityCreations {
+    /// Each item the session created, once, newest first.
     async fn created_by(&self, session: uuid::Uuid) -> Result<Vec<CreatedItem>> {
         use activity::domain::models::{Action, RecordedAction};
         use activity::domain::ports::AgentActivityReads as _;
-        let page = self
-            .0
-            .agent_activity(
-                session,
-                None,
-                None,
-                std::num::NonZeroU32::new(DRAFT_ACTIVITY_PAGE).context("page size")?,
-            )
-            .await
-            .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
-        Ok(page
-            .records
-            .into_iter()
-            .filter(|record| matches!(record.action, RecordedAction::Known(Action::Created)))
-            .map(|record| CreatedItem {
-                entity_type: record.entity_type,
-                entity_id: record.entity_id,
-            })
-            .collect())
+        let limit = std::num::NonZeroU32::new(SESSION_ACTIVITY_PAGE).context("page size")?;
+        let mut created = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut cursor = None;
+        for _ in 0..SESSION_ACTIVITY_PAGES {
+            let page = self
+                .0
+                .agent_activity(session, None, cursor, limit)
+                .await
+                .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
+            for record in page.records {
+                if !matches!(record.action, RecordedAction::Known(Action::Created)) {
+                    continue;
+                }
+                let item = CreatedItem {
+                    entity_type: record.entity_type,
+                    entity_id: record.entity_id,
+                };
+                if seen.insert(item.clone()) {
+                    created.push(item);
+                }
+            }
+            match page.next {
+                Some(next) => cursor = Some(next),
+                None => return Ok(created),
+            }
+        }
+        tracing::warn!(
+            agent.session.id = %session,
+            pages = SESSION_ACTIVITY_PAGES,
+            "session activity read only in part"
+        );
+        Ok(created)
     }
 }
 
@@ -179,6 +205,27 @@ impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
     ) -> Result<Option<uuid::Uuid>, rootcause::Report> {
         RequestSessions::session_of(self, correlation)
             .await
+            .map_err(|error| rootcause::report!("{error:?}"))
+    }
+}
+
+/// Agent sessions as the session store has them, to tell a generation session
+/// that is gone from one that couldn't be deleted.
+struct StoredAgentSessions<Stored>(Stored);
+
+#[async_trait::async_trait]
+impl<Stored> suggestion_generation::domain::ports::StoredSessions for StoredAgentSessions<Stored>
+where
+    Stored: agent_session::domain::ports::AgentSessionRepo,
+{
+    async fn exists(
+        &self,
+        session: agent_session::domain::model::AgentSessionId,
+    ) -> Result<bool, rootcause::Report> {
+        self.0
+            .find(session)
+            .await
+            .map(|found| found.is_some())
             .map_err(|error| rootcause::report!("{error:?}"))
     }
 }
@@ -311,7 +358,18 @@ where
         })
     }
 
-    async fn discard(
+    async fn stop(
+        &self,
+        run: &suggestions::domain::model::StoredRun,
+    ) -> Result<(), rootcause::Report> {
+        use agent_session::domain::routines::RoutineSessions as _;
+        self.sessions
+            .cancel(Self::action(run))
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
+    }
+
+    async fn delete(
         &self,
         run: &suggestions::domain::model::StoredRun,
     ) -> Result<(), rootcause::Report> {
@@ -415,6 +473,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(
         &conn_gateway_client,
     )));
+    let draft_updates = Arc::clone(&live_updates);
 
     let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
@@ -553,10 +612,29 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     drop(execution_rx);
 
     let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
+    let routine_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+                config.environment,
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Event routines follow each owner's PostHog flag; without PostHog no one has it.
+    let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
         Arc::clone(&service_executor),
+        event_routines.clone(),
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
@@ -567,7 +645,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let worker_shutdown = lifecycle.stop_workers.clone();
     let executions = lifecycle.executions.clone();
     start_event_tasks(
-        config.event_routines_enabled,
+        event_routines.is_some(),
         &lifecycle,
         move || {
             let mut ready = ready.clone();
@@ -607,7 +685,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // the model the person's Ask AI steps use, admitted and billed as their
     // agent session usage. A draft's session hands its routine back by checking
     // it; the check is kept on the draft's row, so any replica can read it.
-    let hand_backs: Arc<dyn DraftHandBacks> = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let draft_rows = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let hand_backs: Arc<dyn DraftHandBacks> = Arc::clone(&draft_rows) as _;
     let drafts = Arc::new(
         RoutineDrafts::new(
             Arc::clone(&code),
@@ -624,9 +703,21 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )))
         .with_conditions_enabled(conditions_enabled),
     );
-    // Drafts a stopped process left behind lose their session and row.
+    // Background drafts run here, on the replica they were started on, and
+    // keep their state on the same row, so a reload or any replica reads
+    // it. Shutdown fails the ones still drafting as interrupted.
+    let draft_jobs = Arc::new(DraftJobs::new(
+        Arc::clone(&drafts),
+        draft_rows as Arc<dyn DraftJobStore>,
+        draft_updates,
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
+    // Drafts a stopped process left behind lose their session and row, and
+    // background drafts whose drafter stopped fail.
     {
         let drafts = Arc::clone(&drafts);
+        let draft_jobs = Arc::clone(&draft_jobs);
         let stop = lifecycle.stop_workers.clone();
         lifecycle.workers.spawn(async move {
             let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
@@ -636,8 +727,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = stop.cancelled() => return,
                     _ = every.tick() => {}
                 }
-                // Logged by the sweep's span.
+                // Logged by the sweeps' spans.
                 let _ = drafts.sweep().await;
+                let _ = draft_jobs.sweep().await;
             }
         });
     }
@@ -656,32 +748,17 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             dispatcher_tx,
             access.clone(),
         )
-        .with_event_management_enabled(config.event_routines_enabled)
+        .with_event_routines(event_routines)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
         .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_run_sessions(Arc::clone(&request_sessions))
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
         ))))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
-    let template_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
-                key.to_owned(),
-                Duration::from_secs(3),
-                config.environment,
-            )
-        })
-        .transpose()
-        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
@@ -708,7 +785,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         request_sessions,
         generations.clone(),
         generations.clone(),
-        template_flags.clone(),
+        routine_flags.clone(),
         RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
@@ -733,7 +810,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             // Reading the feed counts paid readers in for nightly runs.
             Arc::new(PaidAudience::new(generations.clone(), Arc::clone(&plans))),
             Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
-            template_flags.clone(),
+            routine_flags.clone(),
         )
         // Accepting a background prompt suggestion runs it in a hidden session of the
         // in-process Macro agent, as the person, billed as their agent usage.
@@ -754,7 +831,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             suggestions::domain::prompt::SYMBOLS,
             suggestions::domain::prompt::FIELDS_OF,
         ))
-        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned()),
+        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned())
+        // A reply suggestion shows who its email thread or channel message waits
+        // on the person for, read when a session writes it.
+        .with_reply_waits(Arc::new(ItemReplyWaits {
+            email: email::outbound::EmailPgRepo::new(db.clone()),
+            pool: db.clone(),
+        })),
     );
     let generation = Arc::new(
         GenerationService::new(
@@ -762,7 +845,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             sessions,
             Arc::clone(&suggestions),
             Arc::clone(&feed),
-            template_flags.clone(),
+            routine_flags.clone(),
             GenerationAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
                 model: chat::domain::models::FREE_MODEL.to_owned(),
@@ -770,41 +853,64 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             lifecycle.workers.clone(),
             lifecycle.stop_workers.clone(),
         )
-        // Nightly runs are for paid plans; onboarding runs for everyone.
-        .with_plans(plans),
+        // Nightly runs are for paid plans; onboarding and manual ones run
+        // for everyone.
+        .with_plans(plans)
+        // A generation session that couldn't be deleted may be gone already.
+        .with_stored_sessions(Arc::new(StoredAgentSessions(
+            agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                db.clone(),
+                registrar.clone(),
+            ),
+        ))),
     );
-    // Generation sessions a stopped process left behind lose their session;
-    // once ready, people in their night get their nightly generation.
+    // Once ready, each periodic job runs on its own task, so a slow nightly
+    // tick never holds up the sweep or settling runs. Each is logged by its
+    // own span.
     {
         let generation = Arc::clone(&generation);
-        let settling = Arc::clone(&feed);
-        let stop = lifecycle.stop_workers.clone();
-        let mut ready = generation_ready;
-        lifecycle.workers.spawn(async move {
-            tokio::select! {
-                biased;
-                _ = stop.cancelled() => return,
-                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
-            }
-            let mut sweep = tokio::time::interval(GENERATION_SWEEP_INTERVAL);
-            sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
-            nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let mut runs = tokio::time::interval(SUGGESTION_RUN_SETTLE_INTERVAL);
-            runs.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            loop {
-                // Each is logged by its own span.
-                tokio::select! {
-                    biased;
-                    _ = stop.cancelled() => return,
-                    _ = sweep.tick() => { let _ = generation.sweep().await; }
-                    _ = nightly.tick() => { let _ = generation.nightly().await; }
-                    _ = runs.tick() => {
-                        let _ = suggestions::domain::ports::SuggestionApi::settle_runs(settling.as_ref()).await;
-                    }
+        spawn_ticker(
+            &lifecycle,
+            generation_ready.clone(),
+            GENERATION_SWEEP_INTERVAL,
+            move || {
+                let generation = Arc::clone(&generation);
+                async move {
+                    let _ = generation.sweep().await;
                 }
-            }
-        });
+            },
+        );
+    }
+    {
+        let generation = Arc::clone(&generation);
+        spawn_ticker(
+            &lifecycle,
+            generation_ready.clone(),
+            NIGHTLY_INTERVAL,
+            move || {
+                let generation = Arc::clone(&generation);
+                async move {
+                    let _ = generation.nightly().await;
+                }
+            },
+        );
+    }
+    {
+        let settling = Arc::clone(&feed);
+        spawn_ticker(
+            &lifecycle,
+            generation_ready,
+            SUGGESTION_RUN_RECONCILE_INTERVAL,
+            move || {
+                let settling = Arc::clone(&settling);
+                async move {
+                    let _ = suggestions::domain::ports::SuggestionRuns::reconcile_runs(
+                        settling.as_ref(),
+                    )
+                    .await;
+                }
+            },
+        );
     }
     let suggestion_state = RoutineSuggestionRouterState {
         service: suggestions,
@@ -814,6 +920,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // `macro.suggestions.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
     // generations with.
+    let runs = Arc::clone(&feed);
     let feed_state = SuggestionRouterState {
         service: feed,
         authorization_state: authorization_state.clone(),
@@ -826,11 +933,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // deleted item, lost access. Its own consumer group, started with the
     // other consumers once the listener is ready.
     let resolution = SuggestionResolution::new(feed_repo, suggestion_access);
+    let (resolution_ready, resolution_brokers) =
+        (suggestions_ready.clone(), suggestions_brokers.clone());
     let suggestions_shutdown = lifecycle.stop_consumers.clone();
     lifecycle.consumers.spawn(supervise_consumer(
         move || {
-            let mut ready = suggestions_ready.clone();
-            let brokers = suggestions_brokers.clone();
+            let mut ready = resolution_ready.clone();
+            let brokers = resolution_brokers.clone();
             let resolution = resolution.clone();
             let shutdown = suggestions_shutdown.clone();
             async move {
@@ -845,17 +954,43 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         lifecycle.stop_consumers.clone(),
         CONSUMER_RESTART_DELAY,
     ));
+    // Background runs move as their sessions go: a settled turn, a question, a
+    // deleted session. Its own consumer group; the reconcile sweep covers what
+    // it misses.
+    let runs_shutdown = lifecycle.stop_consumers.clone();
+    lifecycle.consumers.spawn(supervise_consumer(
+        move || {
+            let mut ready = suggestions_ready.clone();
+            let brokers = suggestions_brokers.clone();
+            let runs = Arc::clone(&runs);
+            let shutdown = runs_shutdown.clone();
+            async move {
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => return Ok(()),
+                    result = ready.wait_for(|ready| *ready) => if result.is_err() { return Ok(()); },
+                }
+                run_suggestion_runs_consumer(&brokers, runs, shutdown.cancelled()).await
+            }
+        },
+        lifecycle.stop_consumers.clone(),
+        CONSUMER_RESTART_DELAY,
+    ));
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
             Arc::new(PgRoutineTemplateRepo::new(db.clone())),
-            template_flags,
+            routine_flags,
         )),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
     };
     let draft_state = RoutineDraftRouterState {
         service: drafts,
+        authorization_state: authorization_state.clone(),
+    };
+    let draft_job_state = RoutineDraftJobRouterState {
+        service: draft_jobs,
         authorization_state: authorization_state.clone(),
     };
     let state = ScheduledActionRouterState {
@@ -866,6 +1001,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
+        .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
         .merge(suggestion_router::<_, _, ()>(feed_state))
         .merge(generation_router::<_, _, ()>(generation_state));
@@ -985,6 +1121,36 @@ impl ServiceLifecycle {
         tokio::join!(self.consumers.wait(), self.workers.wait());
         self.executions.wait().await;
     }
+}
+
+/// Run `tick` every `every` on the workers once the harness is `ready`,
+/// until they stop.
+fn spawn_ticker<F, Fut>(
+    lifecycle: &ServiceLifecycle,
+    mut ready: tokio::sync::watch::Receiver<bool>,
+    every: Duration,
+    mut tick: F,
+) where
+    F: FnMut() -> Fut + Send + 'static,
+    Fut: Future<Output = ()> + Send,
+{
+    let stop = lifecycle.stop_workers.clone();
+    lifecycle.workers.spawn(async move {
+        tokio::select! {
+            biased;
+            _ = stop.cancelled() => return,
+            result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+        }
+        let mut ticks = tokio::time::interval(every);
+        ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                _ = ticks.tick() => tick().await,
+            }
+        }
+    });
 }
 
 fn start_event_tasks<C, F>(

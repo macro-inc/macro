@@ -4,9 +4,8 @@ import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import { PriorityRow } from '../components/priority-row';
 import { TodayTimeline } from '../components/today-timeline';
-import type { SuggestionItemParts } from '../context/suggestions-source';
 import type { DayEvent, DayStrip } from '../core/day';
-import { type Suggestion, suggestionStatus } from '../core/suggestion';
+import type { Suggestion } from '../core/suggestion';
 
 /**
  * Home, below the composer: today's calendar as a quiet strip, when there is
@@ -16,7 +15,6 @@ export function HomePrioritiesView(props: {
   /** Undefined without a calendar. */
   today?: { date: Date; strip: DayStrip };
   priorities: Suggestion[];
-  parts: Pick<SuggestionItemParts, 'Waiting'>;
   onOpenEvent(event: DayEvent): void;
   onOpenSuggestion(suggestion: Suggestion): void;
   onOpenAll(): void;
@@ -48,8 +46,6 @@ export function HomePrioritiesView(props: {
               {(suggestion) => (
                 <PriorityRow
                   suggestion={suggestion}
-                  status={suggestionStatus(suggestion)}
-                  parts={props.parts}
                   onOpen={() => props.onOpenSuggestion(suggestion)}
                 />
               )}

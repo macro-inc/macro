@@ -13,7 +13,9 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType;
+use single_flight::{DatabaseKey, SingleFlight};
 use sqlx::{Pool, Postgres};
+use std::sync::{Arc, LazyLock};
 
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessGrant, AccessLevel};
@@ -51,9 +53,19 @@ mod typed_owner_test;
 #[derive(Debug, Clone)]
 pub struct SourceIds(pub Vec<String>);
 
+type UserSourceIdsKey = (DatabaseKey, String);
+type UserSourceIds = Result<SourceIds, Arc<sqlx::Error>>;
+
+static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSourceIds>> =
+    LazyLock::new(SingleFlight::new);
+
 /// Grabs the users source ids for the entity access table
 /// NOTE: This could return an empty list in the event the user is not logged in and attempting to review a resource
-#[tracing::instrument(skip(pool), err)]
+///
+/// Callers that miss the cache at the same time for the same database and user
+/// share one run of the query. A failure reaches all of them as an
+/// `Arc<sqlx::Error>`.
+#[tracing::instrument(skip(pool), err, fields(coalesced = tracing::field::Empty))]
 #[cfg_attr(
     not(test),
     cached(
@@ -67,10 +79,32 @@ pub async fn get_user_source_ids(
     pool: &Pool<Postgres>,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
 ) -> anyhow::Result<SourceIds> {
-    if let Some(user_id) = user_id {
-        // Fetch source IDs first
-        let source_ids = sqlx::query_scalar!(
-            r#"
+    let Some(user_id) = user_id else {
+        return Ok(SourceIds(vec![]));
+    };
+
+    let user_id = user_id.as_ref().to_string();
+    let key = (DatabaseKey::of(pool), user_id.clone());
+    let lookup = || {
+        let pool = pool.clone();
+        let user_id = user_id.clone();
+
+        async move {
+            query_user_source_ids(&pool, &user_id)
+                .await
+                .map_err(Arc::new)
+        }
+    };
+
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup)).await?)
+}
+
+async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
+    let source_ids = sqlx::query_scalar!(
+        r#"
             SELECT cp.channel_id::text FROM comms_channel_participants cp
                 WHERE cp.user_id = $1 AND cp.left_at IS NULL
             UNION ALL
@@ -79,17 +113,12 @@ pub async fn get_user_source_ids(
             UNION ALL
             SELECT $1
             "#,
-            user_id.as_ref()
-        )
-        .fetch_all(pool)
-        .await?;
+        user_id
+    )
+    .fetch_all(pool)
+    .await?;
 
-        let source_ids: Vec<String> = source_ids.into_iter().flatten().collect();
-
-        Ok(SourceIds(source_ids))
-    } else {
-        Ok(SourceIds(vec![]))
-    }
+    Ok(SourceIds(source_ids.into_iter().flatten().collect()))
 }
 
 /// Grabs the source ids available to a bot operating in its owning team's scope.

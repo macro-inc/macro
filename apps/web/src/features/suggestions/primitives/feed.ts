@@ -1,30 +1,25 @@
-import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import type {
   SuggestionActions,
   SuggestionsSource,
 } from '../context/suggestions-source';
 import {
   type FeedFilter,
-  filterCounts,
-  isNewSince,
   matchesFilter,
-  orderFeed,
   type Suggestion,
   type SuggestionStatus,
-  suggestionResult,
-  suggestionStatus,
+  tabCounts,
 } from '../core/suggestion';
 
 /** One card in the feed. */
 export type FeedEntry = {
   suggestion: Suggestion;
   status: SuggestionStatus;
-  /** Turned down here, not yet sent: its card is a one-line Undo row. */
+  /** Turned down during this visit: its card is a one-line Undo row. */
   dismissed: boolean;
-  /** Arrived since the person last looked. */
+  /** Proposed since the person last opened their feed. */
   isNew: boolean;
   /** Its action is under way. */
   busy: boolean;
@@ -40,69 +35,52 @@ export type FeedView =
   | { kind: 'empty' }
   | { kind: 'suggestions'; entries: FeedEntry[] };
 
-export type SuggestionsFeedOptions = {
-  /** When the person last looked at the feed, for the new marks. */
-  lastSeenAt?: Accessor<string | undefined>;
-  /** How long a dismissal waits for Undo before it is sent. */
-  undoMs?: number;
-};
-
-const UNDO_MS = 8_000;
-
 /**
- * The feed's state: its filter, each card's action, and dismissals. The
- * server has no way to take a dismissal back, so each is held here with an
- * Undo and sent a few seconds after the last one, or when the person leaves.
+ * The feed's state: its filter and each card's action. The server decides
+ * every card's status, order and counts; a dismissal is sent at once, and a
+ * suggestion dismissed during this visit stays as a row whose Undo asks the
+ * server to restore it.
  */
 export function createSuggestionsFeed(
   source: SuggestionsSource,
-  actions: SuggestionActions,
-  options: SuggestionsFeedOptions = {}
+  actions: SuggestionActions
 ) {
   const [filter, setFilter] = createSignal<FeedFilter>('all');
-  const [dismissedIds, setDismissedIds] = createSignal<string[]>([]);
-  // Sent to the server; hidden until the feed stops listing them.
-  const [sentIds, setSentIds] = createSignal<string[]>([]);
+  // Dismissed during this visit, as they were: the feed no longer lists them.
+  const [dismissed, setDismissed] = createSignal<Suggestion[]>([]);
   const [busyIds, setBusyIds] = createSignal<string[]>([]);
   const [failedIds, setFailedIds] = createSignal<string[]>([]);
   const [changedIds, setChangedIds] = createSignal<string[]>([]);
 
-  const ordered = createMemo(() => {
-    const suggestions = source.suggestions();
-    if (!suggestions) return undefined;
-
-    const sent = sentIds();
-
-    return orderFeed(
-      suggestions.filter((suggestion) => !sent.includes(suggestion.id))
-    );
-  });
-
-  const counts = createMemo(() => {
-    const dismissed = dismissedIds();
-    return filterCounts(
-      (ordered() ?? []).filter(
-        (suggestion) => !dismissed.includes(suggestion.id)
-      )
-    );
-  });
+  const counts = createMemo(() =>
+    tabCounts(
+      source.feed()?.counts ?? { open: 0, running: 0, failed: 0, done: 0 }
+    )
+  );
 
   const view = createMemo((): FeedView => {
-    const suggestions = ordered();
-    if (!suggestions)
-      return source.failed() ? { kind: 'error' } : { kind: 'loading' };
+    const feed = source.feed();
+    if (!feed) return source.failed() ? { kind: 'error' } : { kind: 'loading' };
 
-    const entries = suggestions
-      .map((suggestion) => ({
-        suggestion,
-        status: suggestionStatus(suggestion),
-        dismissed: dismissedIds().includes(suggestion.id),
-        isNew: isNewSince(suggestion, options.lastSeenAt?.()),
-        busy: busyIds().includes(suggestion.id),
-        failed: failedIds().includes(suggestion.id),
-        changed: changedIds().includes(suggestion.id),
-      }))
-      .filter((entry) => matchesFilter(entry.status, filter()));
+    const gone = dismissed();
+    const entry = (suggestion: Suggestion, isDismissed: boolean) => ({
+      suggestion,
+      status: suggestion.status,
+      dismissed: isDismissed,
+      isNew: suggestion.isNew,
+      busy: busyIds().includes(suggestion.id),
+      failed: failedIds().includes(suggestion.id),
+      changed: changedIds().includes(suggestion.id),
+    });
+    const entries = [
+      ...feed.suggestions
+        // Between a dismissal and the next read the feed may still list it.
+        .filter(
+          (suggestion) => !gone.some((other) => other.id === suggestion.id)
+        )
+        .map((suggestion) => entry(suggestion, false)),
+      ...gone.map((suggestion) => entry(suggestion, true)),
+    ].filter((shown) => matchesFilter(shown.status, filter()));
     if (entries.length === 0) return { kind: 'empty' };
 
     return { kind: 'suggestions', entries };
@@ -145,8 +123,8 @@ export function createSuggestionsFeed(
         return;
       }
 
-      // Accepted first: an suggestion rewritten under the card opens nothing, and
-      // the card shows it as it is now.
+      // Accepted first: a suggestion rewritten under the card opens nothing,
+      // and the card shows it as it is now.
       if ((await source.accept(suggestion)) === 'changed') {
         setChangedIds((ids) => [...ids, suggestion.id]);
         return;
@@ -163,52 +141,31 @@ export function createSuggestionsFeed(
       }
     });
 
-  const sendDismissal = async (id: string, leaving: boolean) => {
-    try {
-      await source.dismiss(id, { leaving });
-    } catch (error) {
-      // Refused: the suggestion is back in the feed, and its card says the
-      // dismissal didn't go through.
-      setSentIds(without(id));
-      setFailedIds((ids) => [...without(id)(ids), id]);
-      throw error;
-    }
-  };
-
-  const sendDismissals = (leaving: boolean) => {
-    const ids = dismissedIds();
-    if (ids.length === 0) return;
-
-    setDismissedIds([]);
-    setSentIds((sent) => [...sent, ...ids]);
-    for (const id of ids) {
-      // Detached: the page may be going away.
-      fireAndForget(sendDismissal(id, leaving), 'suggestions');
-    }
-  };
-
-  const sendAfterUndoWindow = debounce(
-    () => sendDismissals(false),
-    options.undoMs ?? UNDO_MS
-  );
-
-  onCleanup(() => {
-    sendAfterUndoWindow.clear();
-    sendDismissals(false);
-  });
-
   return {
     filter,
     setFilter,
     counts,
     view,
     accept,
-    /** Open what an suggestion made, else what taking it up opened. */
+    /**
+     * Open what a finished suggestion left, a running one's session, else
+     * what taking it up opened.
+     */
     open(suggestion: Suggestion) {
-      const result = suggestionResult(suggestion);
-      if (result) return actions.openItem(result);
+      if (suggestion.result) return actions.openItem(suggestion.result);
 
-      if (suggestion.kind === 'prompt' && suggestion.runMode === 'composer') {
+      if (suggestion.kind === 'prompt' && suggestion.runMode === 'background') {
+        // Its run's session shows the work under way.
+        if (suggestion.run) {
+          actions.openItem({
+            entityType: 'agent_session',
+            entityId: suggestion.run.sessionId,
+          });
+        }
+        return;
+      }
+
+      if (suggestion.kind === 'prompt') {
         return fireAndForget(
           actions.openComposer(suggestion.prompt),
           'suggestions'
@@ -233,15 +190,23 @@ export function createSuggestionsFeed(
         actions.reviewRoutine(suggestion.routineSuggestionId);
       }
     },
-    dismiss(suggestion: Suggestion) {
-      setDismissedIds((ids) => [...without(suggestion.id)(ids), suggestion.id]);
-      sendAfterUndoWindow();
-    },
-    undoDismiss(suggestion: Suggestion) {
-      setDismissedIds(without(suggestion.id));
-    },
-    /** Send held dismissals now, as the page goes away. */
-    sendDismissals: () => sendDismissals(true),
+    /** Sent at once; a refusal leaves the card, marked failed. */
+    dismiss: (suggestion: Suggestion) =>
+      act(suggestion, 'dismiss', async () => {
+        await source.dismiss(suggestion.id);
+        setDismissed((list) => [
+          ...list.filter((other) => other.id !== suggestion.id),
+          suggestion,
+        ]);
+      }),
+    /** Ask the server to bring it back; a refusal leaves the row, marked failed. */
+    undoDismiss: (suggestion: Suggestion) =>
+      act(suggestion, 'restore', async () => {
+        await source.restore(suggestion.id);
+        setDismissed((list) =>
+          list.filter((other) => other.id !== suggestion.id)
+        );
+      }),
   };
 }
 

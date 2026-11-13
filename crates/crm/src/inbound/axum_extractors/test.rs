@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    http::{Method, Request, StatusCode, header},
     routing::get,
 };
 use chrono::{DateTime, Utc};
@@ -390,6 +390,35 @@ impl CrmService for FakeCrmService {
         Err(CrmError::ContactNotFoundForTeam)
     }
 
+    async fn add_contact_email(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn remove_contact_email(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn unlink_contact_company(
+        &self,
+        _access: &crate::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+    ) -> Result<crate::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
     async fn set_contact_name(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
@@ -763,11 +792,11 @@ async fn credential_failures_happen_before_permission_lookup() {
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn contact_mutation_http_contract_is_add_only_and_personal_scoped(
+async fn contact_mutation_http_contract_covers_addresses_and_company_links(
     pool: sqlx::PgPool,
 ) -> anyhow::Result<()> {
     use crate::domain::{companies_repo::CompaniesRepository, service::CrmServiceImpl};
-    use crate::inbound::axum_router::{set_contact_company, set_contact_email};
+    use crate::inbound::axum_router::{contact_emails, set_contact_company, set_contact_email};
     use crate::outbound::{
         companies_repo::CompaniesRepositoryImpl, no_op_resolver::NoOpCompanyMetadataResolver,
     };
@@ -823,8 +852,14 @@ async fn contact_mutation_http_contract_is_add_only_and_personal_scoped(
                 axum::routing::put(set_contact_email::handler),
             )
             .route(
+                "/contacts/{contact_id}/emails",
+                axum::routing::put(contact_emails::add_handler)
+                    .delete(contact_emails::remove_handler),
+            )
+            .route(
                 "/contacts/{contact_id}/company",
-                axum::routing::put(set_contact_company::handler),
+                axum::routing::put(set_contact_company::handler)
+                    .delete(set_contact_company::unlink_handler),
             )
             .with_state(CrmRouterState {
                 service: service.clone(),
@@ -890,16 +925,61 @@ async fn contact_mutation_http_contract_is_add_only_and_personal_scoped(
             StatusCode::OK
         );
     }
+    // Addresses travel in the body, so request telemetry never records one.
+    // Adding needs edit access like every other contact setter.
+    let address = |method: Method, id: Uuid, email: &str| {
+        Request::builder()
+            .method(method)
+            .uri(format!("/contacts/{id}/emails"))
+            .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json!({ "email": email }).to_string()))
+            .unwrap()
+    };
+    assert_eq!(
+        router(AccessLevel::View)
+            .oneshot(address(Method::PUT, contact.id, "second@example.com"))
+            .await?
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = edit
+        .clone()
+        .oneshot(address(Method::PUT, contact.id, "Second+tag@Example.com"))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["email"], "contact@example.com");
+    assert_eq!(
+        body["emails"],
+        json!(["contact@example.com", "second+tag@example.com"])
+    );
+    assert_eq!(body["companyDomain"], false);
+    assert_eq!(body["companyDomainEmails"], json!([]));
     assert_eq!(
         edit.clone()
-            .oneshot(request(
-                contact.id,
-                "email",
-                json!({"email": "changed@example.com"})
-            ))
+            .oneshot(address(Method::PUT, contact.id, "not-an-address"))
             .await?
             .status(),
         StatusCode::BAD_REQUEST
+    );
+    let response = edit
+        .clone()
+        .oneshot(address(
+            Method::DELETE,
+            contact.id,
+            "second+tag@example.com",
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["emails"], json!(["contact@example.com"]));
+    assert_eq!(
+        router(AccessLevel::View)
+            .oneshot(address(Method::DELETE, contact.id, "contact@example.com"))
+            .await?
+            .status(),
+        StatusCode::UNAUTHORIZED
     );
     assert_eq!(
         edit.clone()
@@ -952,5 +1032,22 @@ async fn contact_mutation_http_contract_is_add_only_and_personal_scoped(
     let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
     assert_eq!(body["personalEmail"], true);
     assert_eq!(body["companyId"], company.company.id.to_string());
+
+    let unlink = |level| {
+        router(level).oneshot(
+            Request::delete(format!("/contacts/{}/company", blank.id))
+                .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+    };
+    assert_eq!(
+        unlink(AccessLevel::View).await?.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = unlink(AccessLevel::Edit).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
+    assert_eq!(body["companyId"], Value::Null);
     Ok(())
 }

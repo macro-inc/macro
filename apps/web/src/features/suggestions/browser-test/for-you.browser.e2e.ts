@@ -116,33 +116,70 @@ test('a routine suggestion shows its sentence and can be reviewed or turned on',
   await expect(suggestion).toHaveAttribute('data-suggestion-status', 'done');
 });
 
-test('a dismissed suggestion can be undone, and is sent only on leaving', async ({
+test('a dismissal is sent at once, and Undo asks the server to bring it back', async ({
   page,
 }) => {
   await page.goto('/');
   await page
     .getByRole('button', { name: 'Dismiss “Prepare the budget review”' })
     .click();
-  await page
-    .getByRole('button', { name: 'Dismiss “Reply about the invoice”' })
-    .click();
-  await expect(page.locator('[data-suggestion]')).toHaveCount(7);
-  await expect(requests(page).getByRole('listitem')).toHaveCount(0);
+  await expect(requests(page).getByRole('listitem')).toHaveText([
+    'dismiss suggestion-composer',
+  ]);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(8);
 
   await page
     .locator('[data-suggestion-dismissed="suggestion-composer"]')
     .getByRole('button', { name: 'Undo' })
     .click();
   await expect(card(page, 'suggestion-composer')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Leave page' }).click();
   await expect(requests(page).getByRole('listitem')).toHaveText([
-    'dismiss suggestion-reply',
+    'dismiss suggestion-composer',
+    'restore suggestion-composer',
   ]);
-  await expect(card(page, 'suggestion-reply')).toHaveCount(0);
+  await expect(page.locator('[data-suggestion-dismissed]')).toHaveCount(0);
 });
 
-test('tabs filter by where an suggestion stands', async ({ page }) => {
+test('a refused dismissal leaves the card and says it didn’t work', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=dismiss-refused');
+  const composer = card(page, 'suggestion-composer');
+  await composer
+    .getByRole('button', { name: 'Dismiss “Prepare the budget review”' })
+    .click();
+
+  await expect(composer.getByRole('alert')).toHaveText(
+    'That didn’t work. Try again.'
+  );
+  await expect(page.locator('[data-suggestion-dismissed]')).toHaveCount(0);
+});
+
+test('an Undo the server refuses keeps the row and says it may be too late', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=restore-refused');
+  await page
+    .getByRole('button', { name: 'Dismiss “Prepare the budget review”' })
+    .click();
+  const row = page.locator('[data-suggestion-dismissed="suggestion-composer"]');
+  await row.getByRole('button', { name: 'Undo' }).click();
+
+  await expect(row.getByRole('alert')).toHaveText(
+    'Couldn’t undo. It may be too late to bring this back.'
+  );
+});
+
+test('leaving the page records that the feed was viewed', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
+  await expect(requests(page).getByText('viewed')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Leave page' }).click();
+  await expect(requests(page).getByText('viewed')).toHaveCount(1);
+});
+
+test('tabs filter by where a suggestion stands', async ({ page }) => {
   await page.goto('/');
   const tabs = page.getByRole('radiogroup', {
     name: 'Filter your suggestions',

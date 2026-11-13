@@ -8,9 +8,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { layoutDay } from './core/day';
-import { type Suggestion, topPriorities } from './core/suggestion';
-import { useSuggestionsSource } from './queries/suggestions-source';
-import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
+import type { Suggestion } from './core/suggestion';
+import { useTopSuggestions } from './queries/top-suggestions';
 import { HomePrioritiesView } from './views/home-priorities-view';
 
 const PRIORITIES_SHOWN = 5;
@@ -53,11 +52,9 @@ function useToday() {
 
 function HomePrioritiesContent() {
   const navigate = useNavigate();
-  const source = useSuggestionsSource();
+  // The server picks and orders them.
+  const priorities = useTopSuggestions(PRIORITIES_SHOWN);
   const today = useToday();
-  const priorities = createMemo(() =>
-    topPriorities(source.suggestions() ?? [], PRIORITIES_SHOWN)
-  );
   const openForYou = (suggestion?: Suggestion) =>
     fireAndForget(
       navigate(
@@ -75,7 +72,6 @@ function HomePrioritiesContent() {
     <HomePrioritiesView
       today={today()}
       priorities={priorities()}
-      parts={SUGGESTION_ITEM_PARTS}
       onOpenEvent={(chip) => {
         const event = today()?.events.find((event) => event.id === chip.id);
         if (!event) return;

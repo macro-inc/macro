@@ -23,6 +23,7 @@ import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
+import { ImportNamespace } from './entities/imports/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
@@ -49,6 +50,11 @@ import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
+export type {
+  AppearanceColor,
+  AppearanceIcon,
+  EntityAppearance,
+} from '../generated/storage/types.gen';
 export type { MacroOpts } from './config';
 export type {
   ActivityAction,
@@ -212,6 +218,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** The import ledger: external items proposed for, or copied into, Macro. */
+  readonly imports: ImportNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
 
@@ -296,6 +304,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.imports = new ImportNamespace(client);
     this.web = new WebNamespace(client);
     this.memory = new MemoryNamespace(client);
     this.activity = new ActivityNamespace(client);
@@ -408,6 +417,11 @@ export {
 } from './entities/canvases/canvas';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
+export type {
+  MessageContext,
+  MessageContextOptions,
+  ReplyContext,
+} from './entities/channels/message';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {

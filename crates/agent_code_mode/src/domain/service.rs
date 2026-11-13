@@ -63,7 +63,7 @@ impl CodeModeService {
 
     async fn run(
         &self,
-        identity: ExecutionIdentity,
+        mut identity: ExecutionIdentity,
         execution: ExecutionId,
         request: ExecuteRequest,
         cancel: CancellationToken,
@@ -80,29 +80,32 @@ impl CodeModeService {
             activity: Vec::new(),
             activity_truncated: false,
         };
-        if let Err(error) = self.0.store.create(identity.session, &record).await {
-            if matches!(error, CodeModeError::Duplicate) {
-                let existing = self
-                    .0
-                    .store
-                    .get(identity.session, execution)
-                    .await
-                    .map_err(|error| match error {
-                        // The ID may be unavailable outside this session. Do
-                        // not look up or reveal another session's record.
-                        CodeModeError::NotFound => CodeModeError::Invalid(
-                            "execution ID unavailable; use a fresh UUID".into(),
-                        ),
-                        other => other,
-                    })?;
-                if existing.source == request.source
-                    && existing.acting_as == Some(identity.acting_as)
-                    && existing.turn_id == Some(identity.turn)
-                {
-                    return Ok(receipt(&existing));
+        match self.0.store.create(identity.session, &record).await {
+            Ok(()) => {}
+            Err(CodeModeError::Duplicate) => {
+                match self.0.store.get(identity.session, execution).await {
+                    Ok(existing)
+                        if existing.source == request.source
+                            && existing.acting_as == Some(identity.acting_as)
+                            && existing.turn_id == Some(identity.turn) =>
+                    {
+                        return Ok(receipt(&existing));
+                    }
+                    // Models reuse example UUIDs, so a taken ID is usually not a
+                    // retry. Run under a fresh ID; the receipt reports it. Never
+                    // read or reveal another session's record.
+                    Ok(_) | Err(CodeModeError::NotFound) => {
+                        let fresh = ExecutionId::mint();
+                        tracing::Span::current()
+                            .record("assigned_execution_id", tracing::field::display(fresh));
+                        record.execution_id = fresh;
+                        identity.execution = fresh;
+                        self.0.store.create(identity.session, &record).await?;
+                    }
+                    Err(error) => return Err(error),
                 }
             }
-            return Err(error);
+            Err(error) => return Err(error),
         }
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
@@ -250,7 +253,11 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReactToChannelMessage"
                 | "ReadChannelMessages"
                 | "ReadChannelThread"
+                // Message.context().
+                | "ReadChannelMessageContext"
                 | "RenameChannel"
+                // shareWithChannel() on every shareable item's handle.
+                | "ShareWithChannel"
                 | "ManageChannelParticipants"
                 // macro.channels.dm() and macro.channels.private().
                 | "OpenDirectMessage"
@@ -311,9 +318,12 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
-                // macro.agents.coding() and macro.agentSessions.createManaged.
+                // macro.agents.coding(), macro.agents.list() and
+                // macro.agentSessions.createManaged, which prompts an agent
+                // its operator runs as well as a managed one.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                | "CreateAgentSession"
                 // macro.connectedApps.discover and .addServer.
                 | "DiscoverConnectors"
                 | "ConnectMcpServer"
@@ -349,7 +359,6 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateMemory"
                 // User.activity(), macro.activity.mine() and Initiative.activity().
                 | "GetUserActivity"
-                | "ReadActivity"
                 | "ReadInitiativeActivity"
                 // Document.readPresentation, editPresentation and copyPresentation.
                 | "ReadPresentation"
@@ -361,6 +370,51 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadDesign"
                 | "ReadPhotoshopDocument"
                 | "ReadIllustratorDocument"
+                // macro.documents.create(), createSpreadsheet(), createCanvas()
+                // and upload(); macro.tasks.create().
+                | "CreateDocument"
+                // Document.updateSharePermissions() and Project.updateSharePermissions().
+                | "UpdateSharing"
+                // macro.databases.saveQuery(), Database.saveQuery() and
+                // DatabaseTable.saveQuery().
+                | "SaveDatabaseQuery"
+                // macro.crm: companyById(), createCompany(), createContact()
+                // and importCompaniesCsv().
+                | "GetCompany"
+                | "CreateCompany"
+                | "CreateContact"
+                | "ImportCompaniesCsv"
+                // macro.crm.pipelines and CrmPipeline.
+                | "ListPipelines"
+                | "CreatePipeline"
+                | "FindPipelineEntries"
+                | "AddToPipeline"
+                | "UpdatePipelineEntries"
+                | "RemoveFromPipeline"
+                | "EditPipeline"
+                | "ImportPipelineCsv"
+                | "ExportPipelineCsv"
+                // macro.initiatives and Initiative.update() and delete().
+                // ReadInitiative: initiatives.byId() detail, description() and
+                // properties through properties.bulkEntityProperties().
+                | "ListInitiatives"
+                | "ReadInitiative"
+                | "CreateInitiative"
+                | "UpdateInitiative"
+                | "UpdateInitiativeSharing"
+                | "DeleteInitiative"
+                // macro.imports: list(), track(), recordImported(),
+                // importNotionPage() and ImportEntry.decline().
+                | "ListImportEntities"
+                | "CreateImportEntity"
+                | "DeleteImportEntity"
+                | "ImportNotionPage"
+                // macro.agentSessions.updates(), whose cards an agentUpdates
+                // view draws.
+                | "ListAgentUpdates"
+                // macro.agents.list() and Agent.update().
+                | "ListAgents"
+                | "ConfigureAgent"
         )
 }
 
@@ -407,6 +461,7 @@ impl SessionCodeMode for CodeModeService {
             "code_mode.execution",
             agent_session_id = %session.id,
             execution_id = %execution,
+            assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,

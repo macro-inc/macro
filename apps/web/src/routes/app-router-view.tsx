@@ -41,6 +41,7 @@ import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
   AgentsRouteView,
+  BookingLinksRouteView,
   CalendarRouteView,
   CallDetailRouteView,
   CallsCallDetail,
@@ -53,6 +54,8 @@ import {
   DriveRouteView,
   EmailComposeRouteView,
   EmailDetailRouteView,
+  ExternalChatRouteView,
+  ExternalRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
   ForYouRouteView,
@@ -62,6 +65,7 @@ import {
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
+  PasswordsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
@@ -156,6 +160,7 @@ import {
   notificationsCalendarRoute,
   notificationsRoute,
   onboardingRoute,
+  passwordsRoute,
   prDetailRoute,
   projectDetailRoute,
   projectTaskRoute,
@@ -197,23 +202,10 @@ const AgentSetupDonePage = lazyNamed(
   () => import('@app/features/agent-setup/agent-setup-page'),
   'AgentSetupDonePage'
 );
-const ExternalChatRouteView = lazyNamed(
-  () => import('@app/features/external-view/route-views'),
-  'ExternalChatRouteView'
-);
-
 const { Router, Route } = SplitRouter;
 
 // Views under appRoute load lazily (lazy-route-views.ts); auth and booking
 // pages render outside it and load with the app.
-const BookingLinksRouteView = lazyNamed(
-  () => import('@app/features/scheduling/route-views'),
-  'BookingLinksRouteView'
-);
-const ExternalRouteView = lazyNamed(
-  () => import('@app/features/external-view/route-views'),
-  'ExternalRouteView'
-);
 const SystemStatusDashboard = lazyNamed(
   () => import('@app/features/system-status/views/SystemStatusDashboard'),
   'SystemStatusDashboard'
@@ -384,6 +376,7 @@ export function appRouteElements(): JSX.Element {
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
+        <Route definition={passwordsRoute} component={PasswordsRouteView} />
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}

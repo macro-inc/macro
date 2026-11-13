@@ -1,16 +1,11 @@
 import { t } from '@app/lib/i18n';
 import { Show } from 'solid-js';
-import type { SuggestionItemParts } from '../context/suggestions-source';
-import type { Suggestion, SuggestionStatus } from '../core/suggestion';
+import type { Suggestion } from '../core/suggestion';
 import { SuggestionTile } from './suggestion-tile';
+import { waitingLabel } from './waiting';
 
 /** One of Home's priorities: the suggestion's tile, title and a one-line reason. */
-export function PriorityRow(props: {
-  suggestion: Suggestion;
-  status: SuggestionStatus;
-  parts: Pick<SuggestionItemParts, 'Waiting'>;
-  onOpen(): void;
-}) {
+export function PriorityRow(props: { suggestion: Suggestion; onOpen(): void }) {
   return (
     <li>
       <button
@@ -25,10 +20,10 @@ export function PriorityRow(props: {
             {props.suggestion.title}
           </span>
           <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
-            <Show when={props.status === 'running'}>
+            <Show when={props.suggestion.status === 'running'}>
               <span class="shrink-0">{t('suggestions.badgeRunning')}</span>
             </Show>
-            <Show when={props.status === 'failed'}>
+            <Show when={props.suggestion.status === 'failed'}>
               <span
                 class="size-1.5 shrink-0 rounded-full bg-warning"
                 aria-hidden="true"
@@ -37,21 +32,20 @@ export function PriorityRow(props: {
             </Show>
             <Show
               when={
-                props.status === 'open' &&
+                props.suggestion.status === 'open' &&
                 props.suggestion.kind === 'entity' &&
                 props.suggestion.draft
               }
-              keyed
               fallback={
                 <span class="truncate">{props.suggestion.summary}</span>
               }
             >
-              {(draft) => (
-                <span class="truncate">
-                  {t('suggestions.replyDrafted')}
-                  <props.parts.Waiting thread={draft} lead=" · " />
-                </span>
-              )}
+              <span class="truncate">
+                {t('suggestions.replyDrafted')}
+                <Show when={waitingLabel(props.suggestion)}>
+                  {(waiting) => ` · ${waiting()}`}
+                </Show>
+              </span>
             </Show>
           </span>
         </span>

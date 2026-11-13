@@ -9,11 +9,9 @@ import {
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { enableSuggestions } from '@core/constant/featureFlags';
-import { useUserId } from '@core/context/user';
 import { onCleanup, Show } from 'solid-js';
 import { forYouSearch } from './for-you-search';
 import { createSuggestionsFeed } from './primitives/feed';
-import { createLastSeen } from './primitives/last-seen';
 import { createRefresh } from './primitives/refresh';
 import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
 import { useSuggestions } from './suggestions';
@@ -25,14 +23,14 @@ function ForYouPage() {
   const [search] = createSearchParams(forYouSearch);
   const { source, generation, actions } = useSuggestions();
   const refresh = createRefresh(generation);
-  const lastSeen = createLastSeen(useUserId());
-  const feed = createSuggestionsFeed(source, actions, {
-    lastSeenAt: lastSeen.before,
-  });
+  const feed = createSuggestionsFeed(source, actions);
   usePending('suggestions.load', () => feed.view().kind === 'loading');
-  // A dismissal held for Undo still has to reach the server if the tab closes.
-  window.addEventListener('pagehide', feed.sendDismissals);
-  onCleanup(() => window.removeEventListener('pagehide', feed.sendDismissals));
+  // Leaving the page is when the person has looked: what comes after is new.
+  window.addEventListener('pagehide', source.viewed);
+  onCleanup(() => {
+    window.removeEventListener('pagehide', source.viewed);
+    source.viewed();
+  });
 
   return (
     <ViewShell.Root aside={false}>

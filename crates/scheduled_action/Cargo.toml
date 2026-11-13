@@ -12,7 +12,7 @@ local_auth = ["macro_authorization/local_auth"]
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 ai_usage = { path = "../ai_usage" }
 bots = { path = "../bots", features = ["outbound"] }
-activity = { path = "../activity", default-features = false }
+activity = { path = "../activity", default-features = false, features = ["outbound"] }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = ["admission"] }
 agent_correlation = { path = "../agent_correlation" }

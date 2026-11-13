@@ -1,4 +1,3 @@
-import { t } from '@app/lib/i18n';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -9,8 +8,6 @@ import { type ItemType, stringToItemType } from '@service-storage/client';
 import { Show } from 'solid-js';
 import type { SuggestionItemParts } from './context/suggestions-source';
 import type { SuggestionTarget } from './core/suggestion';
-import { waitingFor } from './core/thread';
-import { useSuggestionThread } from './queries/suggestion-thread';
 
 /** The app's item type for an suggestion's target; a saved routine is listed by its own name. */
 function itemType(target: SuggestionTarget): ItemType | undefined {
@@ -55,7 +52,11 @@ function useItem(target: () => SuggestionTarget) {
   };
 }
 
-function Source(props: { target: SuggestionTarget; onOpen(): void }) {
+function Source(props: {
+  target: SuggestionTarget;
+  from?: string;
+  onOpen(): void;
+}) {
   const item = useItem(() => props.target);
 
   return (
@@ -74,10 +75,7 @@ function Source(props: { target: SuggestionTarget; onOpen(): void }) {
             when={itemType(props.target) === 'email'}
             fallback={<span class="truncate">{name()}</span>}
           >
-            <EmailSourceName
-              threadId={props.target.entityId}
-              subject={name()}
-            />
+            <EmailSourceName from={props.from} subject={name()} />
           </Show>
         </button>
       )}
@@ -85,63 +83,15 @@ function Source(props: { target: SuggestionTarget; onOpen(): void }) {
   );
 }
 
-/** A drafted reply's text in quotes, or `fallback` until it is read. */
-function Draft(props: { draft: SuggestionTarget; fallback: string }) {
-  const thread = useSuggestionThread(
-    () => props.draft.entityId,
-    () => props.draft.partId
-  );
-
-  return (
-    <Show when={thread()?.draftText} fallback={props.fallback}>
-      {(text) => `“${text()}”`}
-    </Show>
-  );
-}
-
-function Waiting(props: {
-  thread: SuggestionTarget;
-  lead?: string;
-  fallback?: string;
-}) {
-  const thread = useSuggestionThread(() => props.thread.entityId);
-  const waiting = () => {
-    const since = thread()?.waitingSince;
-    const length = since ? waitingFor(since, new Date()) : undefined;
-    if (!length) return undefined;
-
-    return length.unit === 'days'
-      ? t('suggestions.waitingDays', { count: length.count })
-      : t('suggestions.waitingHours', { count: length.count });
-  };
-
-  return (
-    <Show when={waiting()} fallback={props.fallback}>
-      {(text) => (
-        <span data-suggestion-waiting>
-          {props.lead}
-          {text()}
-        </span>
-      )}
-    </Show>
-  );
-}
-
-/** An email chip's name: who wrote last, then the subject. */
-function EmailSourceName(props: { threadId: string; subject: string }) {
-  const thread = useSuggestionThread(() => props.threadId);
-
+/** An email source's name: who wrote, then the subject. */
+function EmailSourceName(props: { from?: string; subject: string }) {
   return (
     <span class="truncate">
-      <Show when={thread()?.sender}>{(sender) => `${sender()} · `}</Show>
+      <Show when={props.from}>{(from) => `${from()} · `}</Show>
       {props.subject}
     </span>
   );
 }
 
 /** The card parts that read the app's items, for the For you page. */
-export const SUGGESTION_ITEM_PARTS: SuggestionItemParts = {
-  Source,
-  Draft,
-  Waiting,
-};
+export const SUGGESTION_ITEM_PARTS: SuggestionItemParts = { Source };

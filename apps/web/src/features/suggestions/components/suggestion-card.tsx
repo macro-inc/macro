@@ -18,6 +18,7 @@ import type {
   SuggestionTarget,
 } from '../core/suggestion';
 import { SuggestionTile } from './suggestion-tile';
+import { waitingLabel } from './waiting';
 
 export type SuggestionCardProps = {
   suggestion: Suggestion;
@@ -105,24 +106,6 @@ function suggestionTime(
   return formatRelativeTimestamp(suggestion.createdAt, { condensed: true });
 }
 
-/** The thread someone may be waiting on: an open reply suggestion's email thread. */
-function replyThread(
-  suggestion: Suggestion,
-  status: SuggestionStatus
-): SuggestionTarget | undefined {
-  if (
-    status !== 'open' ||
-    suggestion.kind !== 'entity' ||
-    suggestion.action !== 'reply'
-  ) {
-    return undefined;
-  }
-
-  return suggestion.about.find(
-    (target) => target.entityType === 'email_thread'
-  );
-}
-
 /** The app's card for one suggestion: the same surface the routine cards use. */
 function SuggestionSurface(props: {
   suggestion: Suggestion;
@@ -203,10 +186,7 @@ function SuggestionSentence(props: SuggestionCardProps) {
       >
         {(draft) => (
           <Card.Description class="line-clamp-2" data-suggestion-draft>
-            <props.parts.Draft
-              draft={draft}
-              fallback={props.suggestion.summary}
-            />
+            {draft.preview ? `“${draft.preview}”` : props.suggestion.summary}
           </Card.Description>
         )}
       </Match>
@@ -257,14 +237,7 @@ function SuggestionFacts(props: SuggestionCardProps) {
           <Show when={suggestionTime(props.suggestion, props.status)}>
             {(time) => (
               <span class="shrink-0" data-suggestion-time>
-                <Show
-                  when={replyThread(props.suggestion, props.status)}
-                  fallback={time()}
-                >
-                  {(thread) => (
-                    <props.parts.Waiting thread={thread()} fallback={time()} />
-                  )}
-                </Show>
+                {waitingLabel(props.suggestion) ?? time()}
               </span>
             )}
           </Show>
@@ -272,6 +245,11 @@ function SuggestionFacts(props: SuggestionCardProps) {
             {(target) => (
               <props.parts.Source
                 target={target()}
+                from={
+                  props.suggestion.kind === 'entity'
+                    ? props.suggestion.from
+                    : undefined
+                }
                 onOpen={() => props.onOpenSource(target())}
               />
             )}
@@ -466,6 +444,10 @@ export function DismissedSuggestion(props: {
   suggestion: Suggestion;
   /** Its run was under way: dismissing stops it. */
   wasRunning: boolean;
+  /** Undo is under way. */
+  busy: boolean;
+  /** The server refused to bring it back. */
+  failed: boolean;
   onUndo(): void;
 }) {
   return (
@@ -483,9 +465,19 @@ export function DismissedSuggestion(props: {
               { title: props.suggestion.title }
             )}
           </Card.Description>
+          <Show when={props.failed}>
+            <Card.Metadata role="alert" class="text-failure">
+              {t('suggestions.undoFailed')}
+            </Card.Metadata>
+          </Show>
         </Item.Content>
         <Item.Actions>
-          <Button variant="ghost" size="sm" onClick={props.onUndo}>
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={props.busy}
+            onClick={props.onUndo}
+          >
             {t('suggestions.undo')}
           </Button>
         </Item.Actions>

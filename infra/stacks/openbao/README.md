@@ -11,7 +11,7 @@ hosted dev vault that QA uses.
 | Seal | `awskms` through the external `kms-aws` plugin (2.7 dropped the built-in), downloaded digest-pinned from ghcr.io into the data volume at startup; key `alias/openbao-dev`, rotation on; only the task role may use it |
 | Backup | AWS Backup vault `openbao-dev`, daily at 05:00 UTC, kept 14 days |
 | TLS | Internal ALB, ACM certificate for `openbao-dev.macro-internal.com`, TLS 1.2+/1.3 policy |
-| Access | ALB ingress 443 only from the document storage service's security group; task port 8200 only from the ALB |
+| Access | ALB ingress 443 only from the document storage service's security group and the OpenBao task's own (the operator tunnel); task port 8200 only from the ALB |
 | Audit | Declared device `passwords`, `file_path = stdout`, `log_raw = false`; FireLens ships it to Datadog as `service:openbao` (and to Grafana in dev) |
 | Alarms | ECS deployment failure; no healthy target for 5 minutes |
 
@@ -61,18 +61,44 @@ timeout (95 s) is longer.
    the vault unseals itself on every restart. The recovery key is only for
    `bao operator generate-root`.
 
-## Provisioning (follow-up, not in this stack yet)
+## Operator tunnel
 
-Hosted provisioning of team namespaces, mounts, JWT roles, and the lifecycle
-role is a follow-up that lands after Passwords. Until it does, no team can use
-the vault. It will reuse the local bootstrap's policy and role logic and accept
-only this exact HTTPS origin. Its JWT roles allow no clock leeway, so DSS and
-the vault must keep synchronized clocks (Fargate uses Amazon Time Sync).
+Operators reach the verified HTTPS origin through an SSM port-forward that runs
+inside the OpenBao task and connects to the internal ALB. The ALB admits the
+task's security group for exactly this. TLS is still checked against
+`openbao-dev.macro-internal.com`, so the client knows it is talking to this
+vault:
 
-At provisioning time, the document storage service's dev Doppler config gets
-`OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY`
-together; it refuses a partial set. Only explicitly provisioned teams work,
-because creating a team does not create its namespace.
+```sh
+target=<ecs:<cluster>_<task id>_<openbao container runtime id>, as in step 3 above>
+aws ssm start-session --target "$target" \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["openbao-dev.macro-internal.com"],"portNumber":["443"],"localPortNumber":["18443"]}'
+# in another shell:
+curl --connect-to openbao-dev.macro-internal.com:443:127.0.0.1:18443 \
+  https://openbao-dev.macro-internal.com/v1/sys/health
+```
+
+Only the TCP endpoint moves to the local port. The origin stays exactly
+`https://openbao-dev.macro-internal.com`, with no port, in both the Host header
+and the TLS name, so you don't need to bind local port 443. Hosted provisioning
+connects the same way, through its `--connect 127.0.0.1:18443` option. Use the
+tunnel for provisioning and any other administration. The plain
+port-forward to 8200 in step 3 is only for the one-time init.
+
+## Provisioning
+
+`infra/openbao/provision.py` provisions a team's namespace, mounts, policies,
+and JWT roles through the operator tunnel, with the same logic as the local
+bootstrap; [its README](../../openbao/README.md) has the procedure. Only
+explicitly provisioned teams work, because creating a team does not create its
+namespace: each new team needs its own run. Its JWT roles allow no clock
+leeway, so DSS and the vault must keep synchronized clocks (Fargate uses Amazon
+Time Sync).
+
+The document storage service's dev Doppler config holds `OPENBAO_ADDRESS`,
+`PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY` together; it refuses a
+partial set.
 
 ## Backups
 
@@ -123,6 +149,8 @@ Not built. A separate design decides:
   config; the root token revoked after provisioning; recovery keys split across
   operators; a scoped provisioner identity; automatic namespace provisioning on
   team creation.
+- **Key rotation:** roles that trust the old and new signing keys together
+  (`jwt_validation_pubkeys` takes a list), so rotation needs no outage.
 - **Service URL:** `OPENBAO_ADDRESS` becomes a typed `macro_service_urls` entry.
 - **Monitoring:** telemetry to Grafana/Datadog; seal, leader, and Raft-commit
   alerts; audit logs retained in immutable storage.

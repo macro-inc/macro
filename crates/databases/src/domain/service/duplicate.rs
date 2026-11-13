@@ -371,6 +371,7 @@ fn plan(
                     position: row.position.clone(),
                 })
                 .collect(),
+            ids: Vec::new(),
         });
     }
 
@@ -644,6 +645,7 @@ where
         let copy = Database {
             id: DatabaseId::new(),
             name,
+            appearance: source.database.appearance.clone(),
             owner_id: owner.to_string(),
             created_at: Utc::now(),
             trashed_at: None,

@@ -1,26 +1,37 @@
 import type { Accessor, Component } from 'solid-js';
 import type { Generation } from '../core/generation';
-import type { Suggestion, SuggestionTarget } from '../core/suggestion';
+import type {
+  Suggestion,
+  SuggestionFeed,
+  SuggestionTarget,
+} from '../core/suggestion';
 
-/** The person's suggestions and the two writes they can make. */
+/** The person's feed and the writes they can make on it. */
 export type SuggestionsSource = {
-  /** Open suggestions, best first, then those done lately; undefined until loaded. */
-  suggestions: Accessor<Suggestion[] | undefined>;
+  /** The feed in the server's order, with its counts; undefined until loaded. */
+  feed: Accessor<SuggestionFeed | undefined>;
   /** Nothing to show because loading failed. */
   failed: Accessor<boolean>;
   retry(): void;
-  /** Read the feed again, after something outside it changed an suggestion. */
+  /** Read the feed again, after something outside it changed a suggestion. */
   refresh(): Promise<void>;
   /**
-   * Take an suggestion up as the card showed it; a background prompt suggestion starts
-   * running. `changed` means it was rewritten since: nothing was taken up and
-   * the feed now holds the suggestion as it is.
+   * Take a suggestion up as the card showed it; a background prompt suggestion
+   * starts running. `changed` means it was rewritten since: nothing was taken
+   * up and the feed now holds the suggestion as it is.
    */
   accept(
     suggestion: Pick<Suggestion, 'id' | 'updatedAt'>
   ): Promise<'accepted' | 'changed'>;
-  /** Turn an suggestion down. `leaving` sends it so it survives the page closing. */
-  dismiss(id: string, options?: { leaving?: boolean }): Promise<void>;
+  /** Turn a suggestion down; a run under way is stopped. */
+  dismiss(id: string): Promise<void>;
+  /** Take a dismissal back; the server allows it for a few minutes. */
+  restore(id: string): Promise<void>;
+  /**
+   * The person looked at the feed and is leaving it: what is proposed from
+   * now on is new next time.
+   */
+  viewed(): void;
 };
 
 /** Whether suggestions are being looked for, and asking for a fresh run. */
@@ -60,21 +71,17 @@ export type SuggestionActions = {
 };
 
 /**
- * The parts of a card that show an item of the app: its icon and name, a
- * draft's text. They read the app's own data, so the host supplies them.
+ * The part of a card that reads the app's items, supplied by the host: this
+ * feature knows a source only by its id.
  */
 export type SuggestionItemParts = {
-  /** An item's icon and name, as a chip that opens it. */
-  Source: Component<{ target: SuggestionTarget; onOpen(): void }>;
-  /** The text of a drafted reply. */
-  Draft: Component<{ draft: SuggestionTarget; fallback: string }>;
   /**
-   * How long the other side of a thread has waited for the person, as text
-   * after `lead`; `fallback` when nobody waits or it isn't known.
+   * A source's icon and name as a quiet link; `from` is who wrote, for a
+   * thread. Shows nothing for an item the viewer can't read.
    */
-  Waiting: Component<{
-    thread: SuggestionTarget;
-    lead?: string;
-    fallback?: string;
+  Source: Component<{
+    target: SuggestionTarget;
+    from?: string;
+    onOpen(): void;
   }>;
 };

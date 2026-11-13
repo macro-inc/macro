@@ -20,6 +20,7 @@ export default {
   turnOn: 'Turn on',
   dismiss: 'Dismiss',
   dismissSuggestion: 'Dismiss “{{title}}”',
+  undoFailed: 'Couldn’t undo. It may be too late to bring this back.',
   stopAndDismiss: 'Stop the run and dismiss',
   stopAndDismissSuggestion: 'Stop the run and dismiss “{{title}}”',
   dismissedAndStopped:

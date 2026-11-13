@@ -154,6 +154,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Controls appearance editing only; saved icons and colors remain visible. */
+export const enableEntityAppearance = defineFlag({
+  key: 'enable-entity-appearance',
+  env: 'ENABLE_ENTITY_APPEARANCE',
+  default: onInDev,
+});
+
 /**
  * Connect apps Macro Connect serves through it instead of Pipedream. The
  * backend reads the same PostHog key and decides per app; this side only
@@ -194,6 +201,16 @@ export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
   env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
   default: onInDev,
+});
+
+/**
+ * Macro computers: the whole computer UI (Settings → Machines, Billing,
+ * Agents). Off hides it; existing computers keep running and billing.
+ * No dev default: dev follows PostHog like the backend, which fails closed.
+ */
+export const enableMacroComputers = defineFlag({
+  key: 'enable-macro-computers',
+  env: 'ENABLE_MACRO_COMPUTERS',
 });
 
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
@@ -1008,6 +1025,16 @@ export const enableRoutineSuggestions = defineFlag({
   default: onInDev,
 });
 
+// New routine drafts in the background: the dialog shows the draft's progress,
+// it keeps going after the dialog closes, and a toast says when it is ready.
+// Off, the dialog waits on the blocking draft request as before. The
+// background routes must be deployed before this turns on.
+export const enableRoutineBackgroundDrafts = defineFlag({
+  key: 'enable-routine-background-drafts',
+  env: 'ENABLE_ROUTINE_BACKGROUND_DRAFTS',
+  default: onInDev,
+});
+
 // Suggestions: the For you feed of proactive suggestions. The backend gates every
 // suggestions route on the same PostHog flag.
 export const enableSuggestions = defineFlag({
@@ -1021,6 +1048,14 @@ export const enableSuggestions = defineFlag({
 export const enableRoutineSharing = defineFlag({
   key: 'enable-routine-sharing',
   env: 'ENABLE_ROUTINE_SHARING',
+});
+
+// Event triggers (Macro and GitHub events). The server checks the same key per
+// routine owner, on save and before each run, so follow PostHog even in
+// development.
+export const enableEventRoutines = defineFlag({
+  key: 'enable-event-routines',
+  env: 'ENABLE_EVENT_ROUTINES',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
@@ -1129,4 +1164,16 @@ export const enableInAppTours = defineFlag({
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
+});
+
+/**
+ * Passwords v1: the `/passwords` route and its rail and dock entries (which
+ * also need a team). The backend evaluates the same key. On only for local
+ * stacks; hosted dev and production follow the remote PostHog flag. Override
+ * locally with VITE_ENABLE_PASSWORDS=true.
+ */
+export const enablePasswords = defineFlag({
+  key: 'enable-passwords-v1',
+  env: 'ENABLE_PASSWORDS',
+  default: LOCAL_ONLY || undefined,
 });

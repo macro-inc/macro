@@ -72,11 +72,16 @@ from this import's other databases into it are not linked.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
   `object`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
-  link or write), cancel and the report.
+  link or write), cancel and the report. Database columns and cells come
+  from `import_notion::domain::macro_cells`.
 - `src/inbound/toolset.rs`: the AI-chat-facing import tools
   (`toolset/import_from_notion.rs` is the workspace import tool).
 - `src/inbound/axum_router.rs`: the `/import/*` routes (state, accept/decline,
   Slack discovery, the Notion import report and cancel).
+  `axum_router/ledger.rs` serves the ledger tools' operations to the SDK's
+  `macro.imports`: `GET|POST /import/entities` (list, stage or record),
+  `DELETE /import/entities/{id}` (decline) and `POST /import/notion/pages`
+  (one page), with typed outcomes in place of the tools' prose.
 
 ## Scope
 

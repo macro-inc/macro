@@ -7,7 +7,9 @@
  */
 import type { EntityAction } from './entityAction';
 import type { SuggestionKindOneOfFourDraft } from './suggestionKindOneOfFourDraft';
+import type { SuggestionKindOneOfFourFrom } from './suggestionKindOneOfFourFrom';
 import type { SuggestionKindOneOfFourKind } from './suggestionKindOneOfFourKind';
+import type { SuggestionKindOneOfFourWaitingSince } from './suggestionKindOneOfFourWaitingSince';
 
 /**
  * A note about specific items, with what to do about them.
@@ -16,5 +18,10 @@ export type SuggestionKindOneOfFour = {
   /** What to do about the items. */
   action: EntityAction;
   draft?: SuggestionKindOneOfFourDraft;
+  /** A reply suggestion's: that message's sender, by name. */
+  from?: SuggestionKindOneOfFourFrom;
   kind: SuggestionKindOneOfFourKind;
+  /** A reply suggestion's: when the message the person hasn't answered
+came, as read from its item when the suggestion was last written. */
+  waitingSince?: SuggestionKindOneOfFourWaitingSince;
 };

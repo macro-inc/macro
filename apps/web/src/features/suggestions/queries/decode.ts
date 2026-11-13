@@ -1,15 +1,15 @@
 import type {
+  SuggestionFeed as WireFeed,
   Suggestion as WireSuggestion,
-  SuggestionFeed as WireSuggestions,
   Target as WireTarget,
 } from '@service-scheduled-action/generated/schemas';
 import { match, P } from 'ts-pattern';
 import type {
-  RunProgress,
   Suggestion,
   SuggestionCategory,
+  SuggestionFeed,
   SuggestionKind,
-  SuggestionRun,
+  SuggestionStatus,
   SuggestionTarget,
 } from '../core/suggestion';
 
@@ -21,20 +21,6 @@ function toTarget(target: WireTarget): SuggestionTarget {
   };
 }
 
-function toRun(run: WireSuggestion['run']): SuggestionRun | undefined {
-  if (!run) return undefined;
-
-  const progress = match(run.progress)
-    .returnType<RunProgress>()
-    .with('finished', () => 'finished')
-    .with('failed', () => 'failed')
-    // Runs no longer pause for the person, and one that can't be read yet is
-    // still under way.
-    .otherwise(() => 'running');
-
-  return { sessionId: run.sessionId, startedAt: run.startedAt, progress };
-}
-
 function toKind(suggestion: WireSuggestion): SuggestionKind | undefined {
   return (
     match(suggestion)
@@ -44,7 +30,14 @@ function toKind(suggestion: WireSuggestion): SuggestionKind | undefined {
         runMode: 'background',
         prompt: prompt.prompt,
         ...(prompt.sends ? { sends: prompt.sends } : {}),
-        run: toRun(suggestion.run),
+        ...(suggestion.run
+          ? {
+              run: {
+                sessionId: suggestion.run.sessionId,
+                startedAt: suggestion.run.startedAt,
+              },
+            }
+          : {}),
       }))
       .with({ kind: 'prompt' }, (prompt) => ({
         kind: 'prompt',
@@ -56,7 +49,18 @@ function toKind(suggestion: WireSuggestion): SuggestionKind | undefined {
         (entity) => ({
           kind: 'entity',
           action: entity.action,
-          ...(entity.draft ? { draft: toTarget(entity.draft) } : {}),
+          ...(entity.draft
+            ? {
+                draft: {
+                  ...toTarget(entity.draft),
+                  ...(entity.draft.preview
+                    ? { preview: entity.draft.preview }
+                    : {}),
+                },
+              }
+            : {}),
+          ...(entity.from ? { from: entity.from } : {}),
+          ...(entity.waitingSince ? { waitingSince: entity.waitingSince } : {}),
         })
       )
       .with({ kind: 'routine' }, (routine) => ({
@@ -80,18 +84,18 @@ function isCategory(category: string): category is SuggestionCategory {
 }
 
 /**
- * An suggestion as the feed shows it, or undefined for one this build can't show:
- * a kind it doesn't know, or a state the feed never lists.
+ * A suggestion as the feed shows it, or undefined for one this build can't
+ * show: a kind it doesn't know, or a status the feed never lists.
  */
 export function toSuggestion(
   suggestion: WireSuggestion
 ): Suggestion | undefined {
   const kind = toKind(suggestion);
-  const state = match(suggestion.state)
-    .returnType<Suggestion['state'] | undefined>()
-    .with('proposed', 'accepted', 'done', (shown) => shown)
+  const status = match(suggestion.status)
+    .returnType<SuggestionStatus | undefined>()
+    .with('open', 'running', 'failed', 'done', (shown) => shown)
     .otherwise(() => undefined);
-  if (!kind || !state) return undefined;
+  if (!kind || !status) return undefined;
 
   return {
     ...kind,
@@ -100,19 +104,23 @@ export function toSuggestion(
     summary: suggestion.summary,
     importance: suggestion.importance,
     categories: suggestion.categories.filter(isCategory),
-    state,
+    status,
+    isNew: suggestion.isNew,
     createdAt: suggestion.createdAt,
     stateChangedAt: suggestion.stateChangedAt,
     updatedAt: suggestion.updatedAt,
     about: suggestion.about.map(toTarget),
-    produced: suggestion.produced.map(toTarget),
+    ...(suggestion.result ? { result: toTarget(suggestion.result) } : {}),
   };
 }
 
-/** The feed's open suggestions, then the ones done lately. */
-export function toSuggestions(feed: WireSuggestions): Suggestion[] {
-  return [...feed.suggestions, ...feed.done].flatMap((wire) => {
-    const suggestion = toSuggestion(wire);
-    return suggestion ? [suggestion] : [];
-  });
+/** The feed in the server's order: what waits or runs, then what is done. */
+export function toFeed(feed: WireFeed): SuggestionFeed {
+  return {
+    suggestions: [...feed.suggestions, ...(feed.done ?? [])].flatMap((wire) => {
+      const suggestion = toSuggestion(wire);
+      return suggestion ? [suggestion] : [];
+    }),
+    counts: feed.counts,
+  };
 }

@@ -191,6 +191,7 @@ export function ChannelCallTab(props: {
               render: (panel) => (
                 <CallDiscussionContent
                   discussion={discussion}
+                  access={{ kind: 'member' }}
                   panel={panel}
                   onViewChannel={() => setActiveTab('messages')}
                   onOutsideCountChange={setOutsideCount}

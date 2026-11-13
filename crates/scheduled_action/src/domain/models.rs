@@ -5,6 +5,7 @@ use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{Owner, OwnerType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -279,8 +280,122 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("{0}")]
+    InvalidAppearance(String),
     #[error("only a routine suggestion session may suggest routines")]
     NotSuggesting,
+    #[error(
+        "this routine already has {MAX_ACTIVE_SUB_ROUTINES} active sub-routines; \
+         delete or finish some before creating another"
+    )]
+    TooManySubRoutines,
+    #[error("a key names a routine created by a routine's run; create it without a key here")]
+    KeyOutsideRun,
+    #[error("a routine key must be 1 to {MAX_KEY_CHARS} characters")]
+    InvalidKey,
+    #[error("this routine was not created by another routine")]
+    NotSubRoutine,
+}
+
+/// Most active sub-routines one routine can have; finished one-time ones
+/// don't count.
+pub const MAX_ACTIVE_SUB_ROUTINES: i64 = 50;
+
+/// Longest key a run can name a sub-routine by.
+pub const MAX_KEY_CHARS: usize = 200;
+
+/// The name a run gives a routine it creates, so creating it again under the
+/// same parent updates it instead of adding a duplicate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(transparent)]
+pub struct SubRoutineKey(String);
+
+impl SubRoutineKey {
+    /// A key of 1 to [`MAX_KEY_CHARS`] characters, trimmed.
+    pub fn new(key: &str) -> Result<Self, ActionPolicyError> {
+        let key = key.trim();
+        if key.is_empty() || key.chars().count() > MAX_KEY_CHARS {
+            return Err(ActionPolicyError::InvalidKey);
+        }
+        Ok(Self(key.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// How a routine created by a routine's run belongs to that routine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SubRoutine {
+    /// The top-level routine it follows: pausing that routine pauses it, and
+    /// deleting that routine deletes it. A routine a sub-routine's run
+    /// creates follows the same top-level routine.
+    #[schema(value_type = String, format = Uuid)]
+    pub parent_id: Uuid,
+    /// The run that created it: the id of that run's history record, which
+    /// exists once the run ends.
+    #[schema(value_type = String, format = Uuid)]
+    pub created_by_run_id: Uuid,
+    /// The name its creating code gave it, when it gave one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub key: Option<SubRoutineKey>,
+    /// It is off because its parent was switched off, and resumes with it.
+    #[serde(default)]
+    pub paused_by_parent: bool,
+}
+
+/// A routine's run that is in progress, as the caller of a create proves it:
+/// who a new routine would belong to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningRun {
+    /// The routine that is running.
+    pub routine_id: Uuid,
+    /// The routine it follows, when it is a sub-routine itself.
+    pub parent_id: Option<Uuid>,
+    /// Who the running routine belongs to.
+    pub owner: Owner,
+    /// The run: its claim's token, which becomes its history record's id.
+    pub run_id: Uuid,
+}
+
+/// How a create request says it comes from a routine's run. Both come from
+/// the request's signed credential, never from its body.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunCaller {
+    /// The routine a code step's credential is signed for.
+    pub routine: Option<Uuid>,
+    /// The code-mode invocation of an agent session, validated against it.
+    pub correlation: Option<Uuid>,
+}
+
+/// Which of a person's routines a list holds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ListScope {
+    /// Routines nobody's run created, as the main list shows them.
+    #[default]
+    TopLevel,
+    /// One routine's sub-routines: the active ones and its newest finished
+    /// one-time ones.
+    ChildrenOf(Uuid),
+    /// Top-level routines and their active sub-routines.
+    WithChildren,
+}
+
+/// A routine a run created, as that run's history names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct CreatedRoutine {
+    #[schema(value_type = String, format = Uuid)]
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// A finished run with the routines it created that still exist.
+#[derive(Debug, Clone)]
+pub struct ListedRun {
+    pub record: ActionExecutionRecord,
+    pub created: Vec<CreatedRoutine>,
 }
 
 /// A routine's finished runs, as code reads them: its last run and its last
@@ -372,6 +487,9 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// Optional presentation overrides; absent values use routine defaults.
+    #[serde(default)]
+    pub appearance: EntityAppearance,
     /// The routine suggestion it was saved from, if any: a plain pointer
     /// that stays after the suggestion is replaced.
     #[serde(default)]
@@ -380,9 +498,25 @@ pub struct ScheduledAction {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+    /// Set on a routine one of another routine's runs created: the routine
+    /// it follows and the run that created it.
+    #[serde(default)]
+    pub sub_routine: Option<SubRoutine>,
 }
 
 impl ScheduledAction {
+    /// The routine this one follows, when a routine's run created it.
+    pub fn parent_id(&self) -> Option<Uuid> {
+        self.sub_routine.as_ref().map(|link| link.parent_id)
+    }
+
+    /// Whether it ran its single time and has nothing left to run: a `once`
+    /// routine with no next run. A finished sub-routine leaves its parent's
+    /// active list and stops counting toward the parent's cap.
+    pub fn is_finished_once(&self) -> bool {
+        matches!(self.trigger, ActionTrigger::Once { .. }) && self.next_run_at.is_none()
+    }
+
     /// The user this action runs as.
     ///
     /// For every path that acts as the owner rather than merely naming them:

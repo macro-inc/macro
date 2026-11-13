@@ -12,8 +12,7 @@ import type {
 } from '../context/suggestions-source';
 import { layoutDay } from '../core/day';
 import type { Generation } from '../core/generation';
-import type { Suggestion } from '../core/suggestion';
-import { topPriorities } from '../core/suggestion';
+import type { Suggestion, SuggestionFeed } from '../core/suggestion';
 import { createSuggestionsFeed } from '../primitives/feed';
 import { createRefresh } from '../primitives/refresh';
 import {
@@ -39,12 +38,22 @@ for (const [token, value] of Object.entries(
   document.documentElement.style.setProperty(`--color-${token}`, value);
 }
 
+// The sender has waited two days, whenever the page is opened.
+const TWO_DAYS_AGO = new Date(
+  Date.now() - 2 * 86_400_000 - 60_000
+).toISOString();
+
+const waitingTwoDays = (suggestion: Suggestion): Suggestion =>
+  suggestion.kind === 'entity'
+    ? { ...suggestion, waitingSince: TWO_DAYS_AGO }
+    : suggestion;
+
 const ALL: Suggestion[] = [
-  draftedReplySuggestion,
+  waitingTwoDays(draftedReplySuggestion),
   backgroundSuggestion,
   composerSuggestion,
   routineSuggestion,
-  replySuggestion,
+  waitingTwoDays(replySuggestion),
   quietBackgroundSuggestion,
   runningSuggestion,
   failedSuggestion,
@@ -55,14 +64,25 @@ const ALL: Suggestion[] = [
 const PARTS: SuggestionItemParts = {
   Source: (props) => (
     <button type="button" data-suggestion-source onClick={() => props.onOpen()}>
+      {props.from ? `${props.from} · ` : ''}
       {props.target.entityType} {props.target.entityId}
     </button>
   ),
-  Draft: (props) => <>“Draft {props.draft.partId}”</>,
-  Waiting: (props) => (
-    <span data-suggestion-waiting>{props.lead}waiting 2 days</span>
-  ),
 };
+
+/** The feed a server would send for `list`: what waits or runs, then what is done, and the counts. */
+function served(list: Suggestion[]): SuggestionFeed {
+  const counts = { open: 0, running: 0, failed: 0, done: 0 };
+  for (const suggestion of list) counts[suggestion.status] += 1;
+
+  return {
+    suggestions: [
+      ...list.filter((suggestion) => suggestion.status !== 'done'),
+      ...list.filter((suggestion) => suggestion.status === 'done'),
+    ],
+    counts,
+  };
+}
 
 const REWRITTEN_AT = '2026-11-09T09:30:00Z';
 
@@ -86,8 +106,13 @@ function Fixture() {
       )
     );
 
+  // Dismissed here, to put back when the dismissal is undone.
+  let dismissedHere: Suggestion[] = [];
   const source: SuggestionsSource = {
-    suggestions,
+    feed: () => {
+      const list = suggestions();
+      return list ? served(list) : undefined;
+    },
     failed,
     retry: () => {
       setFailed(false);
@@ -110,24 +135,39 @@ function Fixture() {
         suggestion.kind === 'prompt' && suggestion.runMode === 'background'
           ? {
               ...suggestion,
-              state: 'accepted',
+              status: 'running',
               run: {
                 sessionId: `session-${id}`,
                 startedAt: '2026-11-09T09:00:00Z',
-                progress: 'running',
               },
             }
-          : { ...suggestion, state: 'done' }
+          : { ...suggestion, status: 'done' }
       );
 
       return 'accepted';
     },
     dismiss: async (id) => {
       record(`dismiss ${id}`);
+      if (scenario === 'dismiss-refused') throw new Error('refused');
+
+      const gone = suggestions()?.find((suggestion) => suggestion.id === id);
+      if (gone) dismissedHere = [...dismissedHere, gone];
       setSuggestions((list) =>
         list?.filter((suggestion) => suggestion.id !== id)
       );
     },
+    restore: async (id) => {
+      record(`restore ${id}`);
+      if (scenario === 'restore-refused') throw new Error('too late');
+
+      const back = dismissedHere.find((suggestion) => suggestion.id === id);
+      if (!back) return;
+      // A run that the dismissal stopped stays stopped: it comes back open.
+      const restored: Suggestion =
+        back.status === 'running' ? { ...back, status: 'open' } : back;
+      setSuggestions((list) => [restored, ...(list ?? [])]);
+    },
+    viewed: () => record('viewed'),
   };
   const actions: SuggestionActions = {
     openComposer: async (prompt) => {
@@ -157,13 +197,11 @@ function Fixture() {
       record(`turn-on ${id}`);
       change('suggestion-routine', (suggestion) => ({
         ...suggestion,
-        state: 'done',
+        status: 'done',
       }));
     },
   };
-  const feed = createSuggestionsFeed(source, actions, {
-    lastSeenAt: () => '2026-11-09T05:00:00Z',
-  });
+  const feed = createSuggestionsFeed(source, actions);
   // `?generation=`: running, cooldown (ends after `?cooldownMs=`), none (a
   // server that can't say), else idle.
   const cooldownEnd = () =>
@@ -199,17 +237,15 @@ function Fixture() {
       list?.map((suggestion) =>
         suggestion.kind === 'prompt' &&
         suggestion.runMode === 'background' &&
-        suggestion.run?.progress === 'running'
+        suggestion.status === 'running' &&
+        suggestion.run
           ? {
               ...suggestion,
-              state: 'done',
-              run: { ...suggestion.run, progress: 'finished' },
-              produced: [
-                {
-                  entityType: 'agent_session',
-                  entityId: suggestion.run.sessionId,
-                },
-              ],
+              status: 'done',
+              result: {
+                entityType: 'agent_session',
+                entityId: suggestion.run.sessionId,
+              },
             }
           : suggestion
       )
@@ -233,7 +269,7 @@ function Fixture() {
           <button type="button" onClick={finishGeneration}>
             Finish generation
           </button>
-          <button type="button" onClick={feed.sendDismissals}>
+          <button type="button" onClick={source.viewed}>
             Leave page
           </button>
           <ol aria-label="Requests" class="flex gap-3">
@@ -277,13 +313,12 @@ function HomeFixture() {
     <main class="h-dvh overflow-y-auto bg-panel p-8 font-sans text-ink">
       <div class="mx-auto max-w-180">
         <HomePrioritiesView
-          parts={PARTS}
           today={
             PARAMS.get('calendar') === 'none'
               ? undefined
               : { date: NOON, strip: layoutDay(EVENTS, NOON) }
           }
-          priorities={topPriorities(ALL, 5)}
+          priorities={served(ALL).suggestions.slice(0, 5)}
           onOpenEvent={(event) => setOpened(`event ${event.id}`)}
           onOpenSuggestion={(suggestion) =>
             setOpened(`suggestion ${suggestion.id}`)

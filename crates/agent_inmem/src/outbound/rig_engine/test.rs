@@ -46,8 +46,8 @@ async fn a_failure_after_partial_output_is_still_forwarded_to_the_consumer() {
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
-#[path = "test/tool_mode.rs"]
-mod tool_mode;
+#[path = "test/code_tools.rs"]
+mod code_tools;
 
 #[test]
 fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
@@ -76,7 +76,7 @@ fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
 
 #[test]
 fn reduced_definitions_keep_user_input_and_user_tool_review() {
-    let tools = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let tools = NativeTools::new();
     assert!(tools.for_turn(true).tools.contains_key("AskUser"));
     assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
     for supports_input in [true, false] {
@@ -501,5 +501,75 @@ async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments(
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("acting_as"))
+    );
+}
+
+/// Holds every call until the owner's answer arrives on `answer`.
+struct HeldForOwner {
+    held: tokio::sync::Notify,
+    answer: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<NativeToolVerdict>>>,
+}
+
+impl NativeToolGate for HeldForOwner {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        _: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async move {
+            let answer = self.answer.lock().await.take().unwrap();
+            self.held.notify_one();
+            answer.await.unwrap()
+        })
+    }
+}
+
+#[tokio::test]
+async fn cancelling_the_turn_ends_a_call_held_for_the_owner_and_a_later_approval_runs_nothing() {
+    let (approve, answer) = tokio::sync::oneshot::channel();
+    let gate = Arc::new(HeldForOwner {
+        held: tokio::sync::Notify::new(),
+        answer: tokio::sync::Mutex::new(Some(answer)),
+    });
+    let tools = Arc::new(GatedToolSet {
+        tools: Arc::new(AsyncToolCollection::<String>::new().add_tool::<ReadTurnContext, String>()),
+        gate: gate.clone(),
+        session: AgentSessionId::new(),
+        awaiting: Arc::default(),
+        reviewed_tools: Vec::new(),
+    });
+    let request = RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap());
+    let cancel = request.cancel.clone();
+    let call = tokio::spawn({
+        let tools = Arc::clone(&tools);
+        async move {
+            tools
+                .dispatch_tool_call(
+                    "context".into(),
+                    request,
+                    "ReadTurnContext",
+                    &serde_json::json!({"acting_as":"owner"}),
+                )
+                .await
+        }
+    });
+    gate.held.notified().await;
+
+    cancel.cancel();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), call)
+        .await
+        .expect("cancelling the turn ends the held call")
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(result.unwrap_err().description, TURN_CANCELLED);
+    assert!(
+        approve
+            .send(NativeToolVerdict::RunAs(
+                MacroUserIdStr::try_from_email("owner@example.com").unwrap()
+            ))
+            .is_err(),
+        "nobody is left waiting to act on a later approval"
     );
 }

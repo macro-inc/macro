@@ -2,7 +2,7 @@
 
 ## What it is
 
-The Macro computer guest: a NixOS configuration with macrod, Claude Code,
+The Macro computer guest: a NixOS configuration with macrod, harnessd, Claude Code,
 herdr, Chromium on Xvnc + Openbox, Docker and nix-ld. It ships as an Incus
 VM image (for the computers IncusFleet) and a Docker image with systemd as
 PID 1 (for the dev-only DockerFleet).
@@ -12,7 +12,7 @@ PID 1 (for the dev-only DockerFleet).
 - `_guest.nix` is the whole machine as one NixOS module: users, the macrod
   units, the desktop user services, `/etc/skel`, Claude Code settings,
   packages, Docker, nix-ld and envfs. Options under `macro.box` take macrod
-  (required), Claude Code, the ACP adapter, chrome-devtools-mcp and the
+  and harnessd (required), Claude Code, the ACP adapter, chrome-devtools-mcp and the
   enrollment source.
 - `_image.nix` adds nixpkgs' `virtualisation/incus-virtual-machine.nix`:
   `make-disk-image` builds an EFI qcow2 (systemd-boot, ext4 root by label,
@@ -45,6 +45,7 @@ PID 1 (for the dev-only DockerFleet).
 - `nix build .#macro-box-incus` → `result/{metadata.tar.xz,disk.qcow2}`.
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
+- `nix build .#harnessd` → the harnessd binary.
 - `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
 - `nix build .#nixosConfigurations.macro-box.config.system.build.toplevel` →
   the system closure, without packing the disk.
@@ -57,18 +58,37 @@ PID 1 (for the dev-only DockerFleet).
   (`incus`, or `file:<path>`). The marker `/var/lib/macrod/enrolled` holds
   `<computer id>\n<generation>`; a newer generation re-enrolls, and no source
   with a marker means already enrolled. `check-enrollment-source` runs first:
-  it fails with a reason when there is no source and no marker, and passes
-  when the marker exists, leaving the decision to `macrod enroll`. Enroll
+  it waits up to 60 s (`MACRO_INCUS_SOCKET_WAIT`) for `/dev/incus/sock`,
+  which incus-agent creates a few seconds after it starts, then fails with a
+  reason when there is no source and no marker, and passes when the marker
+  exists, leaving the decision to `macrod enroll`. Enroll
   writes only `macrod.toml` (owned by `macro`), the credential and the
   marker; it installs no units (`/etc/systemd/system` is read-only on
-  NixOS). It restarts on failure every 10 s with no start limit, and
-  `OnSuccess=` starts macrod once a retry succeeds.
+  NixOS). It restarts on failure every 10 s with no start limit, and its
+  `ExecStartPost` starts macrod, so a retry that succeeds after boot still
+  does. `OnSuccess=` would never fire: with `RemainAfterExit` the unit stays
+  active.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`, after
-  `macrod-enroll.service`. It restarts after 1 s, backing off to 30 s, and
+  `macrod-enroll.service`, which it `Wants` (not `Requires`, so a failed first
+  attempt does not fail it) and whose marker it needs
+  (`ConditionPathExists`). It restarts after 1 s, backing off to 30 s, and
   never hits a start limit.
-- Claude signs in through Claude Code's own `/login`, in a herdr pane; its
-  credentials stay in `~macro/.claude` on the data disk.
+- `harnessd.service` runs `harnessd serve` as `macro` (socket
+  `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
+  the unwrapped pinned Claude Code. The control plane execs `harnessd` (the
+  client, on PATH) through the fleet. Its state, the Claude credential
+  `<state>/claude/credential.json`, is `/home/.system/harnessd` with a data
+  disk, else `/var/lib/harnessd` (tmpfiles, macro, 0700). See
+  `crates/harnessd/AGENTS.md`.
+- `claude` on PATH (and so macrod's `CLAUDE_CODE_EXECUTABLE`) is
+  `_claude-wrapper.nix` over `files/claude-wrapper`: when the credential file
+  has a token it unsets `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_API_KEY` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
+  exports `CLAUDE_CODE_OAUTH_TOKEN` (the customer's plan); with no file it
+  changes nothing (Macro credits); an unreadable file or one without a token
+  keeps the gateway env and warns on stderr without the token. Never write
+  `~/.claude/.credentials.json`.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
 - Both units get PATH `/run/wrappers/bin:/run/current-system/sw/bin`, so agents
   find the same tools as a login shell.
@@ -91,6 +111,9 @@ enrollment bind mount. Without the mount, `macrod-enroll` fails with the
 missing-file message (`docker exec <id> journalctl -u macrod-enroll`).
 
 ## Importing into an Incus host (runtime-dev-1)
+
+`root@runtime-dev-1` goes over IAP; pass the SSH options from the Deploy
+section of `nix/hosts/README.md` to `scp` and `ssh`.
 
 ```sh
 nix build .#macro-box-incus
@@ -141,7 +164,8 @@ The control plane, per computer:
   the `macro-box` profile, so nothing is signed.
 - `systemd-networkd-wait-online` waits for any link (30 s cap), not all.
 - The kernel command line has `quiet`; `ttyS0` stays the recovery console.
-- `check-enrollment-source` gives the Incus socket 2 s.
+- `check-enrollment-source` waits up to 60 s for the Incus socket to appear,
+  then gives the request 2 s.
 - To measure, boot `disk.qcow2` under QEMU with OVMF and read
   `systemd-analyze` from the serial console.
 - Not done: a UKI as `\EFI\BOOT\BOOTX64.EFI` (skips systemd-boot) or
@@ -150,12 +174,16 @@ The control plane, per computer:
 ## Checks
 
 - `nix build .#checks.x86_64-linux.macro-box` boots `_guest.nix` in a NixOS
-  test VM: enrollment fails with its reason, macrod's ordering and user,
+  test VM: enrollment fails with its reason, macrod's ordering and user, a
+  late enrollment still starts macrod,
   `macrod detect-agents` reports Claude Code with nothing to install, the
   tools are on macro's PATH, a downloaded glibc binary runs through nix-ld,
   and Xvnc and Chromium's CDP port come up. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
+- `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
+  `files/claude-wrapper` against a fake claude: no credential, a credential,
+  an unreadable one and one without a token.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;

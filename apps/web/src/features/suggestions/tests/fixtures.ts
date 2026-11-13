@@ -3,12 +3,12 @@ import type { Suggestion } from '../core/suggestion';
 const BASE = {
   importance: 50,
   categories: [],
-  state: 'proposed' as const,
+  status: 'open' as const,
+  isNew: false,
   createdAt: '2026-11-09T04:00:00Z',
   stateChangedAt: '2026-11-09T06:00:00Z',
   updatedAt: '2026-11-09T06:00:00Z',
   about: [],
-  produced: [],
 };
 
 export const composerSuggestion: Suggestion = {
@@ -46,39 +46,24 @@ export const quietBackgroundSuggestion: Suggestion = {
 export const runningSuggestion: Suggestion = {
   ...backgroundSuggestion,
   id: 'suggestion-running',
-  state: 'accepted',
-  run: {
-    sessionId: 'session-1',
-    startedAt: '2026-11-09T08:00:00Z',
-    progress: 'running',
-  },
+  status: 'running',
+  run: { sessionId: 'session-1', startedAt: '2026-11-09T08:00:00Z' },
 };
 
 export const failedSuggestion: Suggestion = {
   ...backgroundSuggestion,
   id: 'suggestion-failed',
-  state: 'accepted',
-  run: {
-    sessionId: 'session-2',
-    startedAt: '2026-11-09T08:00:00Z',
-    progress: 'failed',
-  },
+  status: 'failed',
+  run: { sessionId: 'session-2', startedAt: '2026-11-09T08:00:00Z' },
 };
 
 export const doneSuggestion: Suggestion = {
   ...backgroundSuggestion,
   id: 'suggestion-done',
-  state: 'done',
+  status: 'done',
   stateChangedAt: '2026-11-09T08:05:00Z',
-  run: {
-    sessionId: 'session-3',
-    startedAt: '2026-11-09T08:00:00Z',
-    progress: 'finished',
-  },
-  produced: [
-    { entityType: 'agent_session', entityId: 'session-3' },
-    { entityType: 'document', entityId: 'document-1' },
-  ],
+  run: { sessionId: 'session-3', startedAt: '2026-11-09T08:00:00Z' },
+  result: { entityType: 'document', entityId: 'document-1' },
 };
 
 export const replySuggestion: Suggestion = {
@@ -89,6 +74,8 @@ export const replySuggestion: Suggestion = {
   title: 'Reply about the invoice',
   summary: 'They asked for approval before Friday; nobody has replied.',
   about: [{ entityType: 'email_thread', entityId: 'thread-1' }],
+  from: 'Priya Shah',
+  waitingSince: '2026-11-07T09:00:00Z',
 };
 
 export const draftedReplySuggestion: Suggestion = {
@@ -100,6 +87,7 @@ export const draftedReplySuggestion: Suggestion = {
     entityType: 'email_thread',
     entityId: 'thread-1',
     partId: 'draft-1',
+    preview: 'The terms are unchanged; only the price moved.',
   },
 };
 

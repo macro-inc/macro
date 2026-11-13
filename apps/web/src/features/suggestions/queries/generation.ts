@@ -1,9 +1,8 @@
 import { useUserId } from '@core/context/user';
+import { getDefaultTimezone } from '@core/util/cron';
 import { throwOnErr } from '@core/util/result';
-import {
-  type SuggestionGenerationStatus,
-  scheduledActionClient,
-} from '@service-scheduled-action/client';
+import { scheduledActionClient } from '@service-scheduled-action/client';
+import type { GenerationOverview } from '@service-scheduled-action/generated/schemas';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { match } from 'ts-pattern';
 import type { GenerationSource } from '../context/suggestions-source';
@@ -14,7 +13,7 @@ import { suggestionsKeys } from './keys';
 /** How often to ask while a generation runs; nothing is asked while idle. */
 const GENERATING_POLL_MS = 3_000;
 
-function toGeneration(status: SuggestionGenerationStatus): Generation {
+function toGeneration(status: GenerationOverview): Generation {
   const trigger = match(status.trigger)
     .returnType<GenerationTrigger | undefined>()
     .with('onboarding', 'nightly', 'manual', (known) => known)
@@ -67,7 +66,9 @@ export function useSuggestionGeneration(): GenerationSource {
     generation: () => status.data,
     async regenerate() {
       const answer = await throwOnErr(() =>
-        scheduledActionClient.regenerateSuggestions()
+        scheduledActionClient.regenerateSuggestions({
+          timezone: getDefaultTimezone(),
+        })
       );
       if (answer.kind === 'cooldown') {
         set((generation) => ({

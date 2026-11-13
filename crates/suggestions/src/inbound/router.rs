@@ -72,6 +72,10 @@ where
         )
         .route("/suggestions/review", get(review_suggestions::<S, Auth>))
         .route(
+            "/suggestions/viewed",
+            post(record_suggestions_viewed::<S, Auth>),
+        )
+        .route(
             "/suggestions/{id}",
             axum::routing::patch(rewrite_suggestion::<S, Auth>),
         )
@@ -90,6 +94,10 @@ where
         .route(
             "/suggestions/{id}/dismiss",
             post(dismiss_suggestion::<S, Auth>),
+        )
+        .route(
+            "/suggestions/{id}/restore",
+            post(restore_suggestion::<S, Auth>),
         )
         .with_state(state)
 }
@@ -118,6 +126,9 @@ impl IntoResponse for SuggestionApiError {
             Self::Service(error @ SuggestionError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
+            Self::Service(error @ SuggestionError::NotRestorable) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
             Self::Service(
                 error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
             ) => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
@@ -143,7 +154,8 @@ impl IntoResponse for SuggestionApiError {
     }
 }
 
-/// The suggestion changed since the caller read it.
+/// The suggestion changed since the caller read it, or can't run until its
+/// last run settles.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct SuggestionChanged {
     /// What happened.
@@ -157,7 +169,8 @@ pub struct SuggestionChanged {
 #[serde(rename_all = "camelCase")]
 pub struct AcceptSuggestionRequest {
     /// The suggestion's `updatedAt` as the caller read it. A background suggestion runs
-    /// only if it is unchanged since; otherwise the answer is 409.
+    /// only if it is unchanged since and no run of it is still settling;
+    /// otherwise the answer is 409.
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -178,7 +191,7 @@ fn caller(user: &MacroUserAuthentication, headers: &HeaderMap) -> SuggestionCall
     }
 }
 
-/// The reader's time zone.
+/// The reader's time zone, and how much of the feed to read.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct FeedQuery {
@@ -187,6 +200,11 @@ pub struct FeedQuery {
     #[param(value_type = Option<String>)]
     #[serde(default)]
     pub timezone: Option<chrono_tz::Tz>,
+    /// Most open suggestions to return, best first; all when unset. With a
+    /// limit the feed leaves out `done`; `counts` always counts every one.
+    #[param(value_type = Option<u16>, minimum = 1)]
+    #[serde(default)]
+    pub limit: Option<std::num::NonZeroU16>,
 }
 
 #[utoipa::path(
@@ -196,7 +214,7 @@ pub struct FeedQuery {
     operation_id = "list_suggestions",
     params(FeedQuery),
     responses(
-        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions they can open every item of, best first"),
+        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of"),
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not read the feed"),
         (status = 404, body = String, description = "Suggestions are off for the caller"),
@@ -218,9 +236,46 @@ where
     Ok(Json(
         state
             .service
-            .feed(&user.authorization.macro_user_id, caller, query.timezone)
+            .feed(
+                &user.authorization.macro_user_id,
+                caller,
+                query.timezone,
+                query.limit.map(|limit| usize::from(limit.get())),
+            )
             .await?,
     ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/viewed",
+    tag = "suggestions",
+    operation_id = "record_suggestions_viewed",
+    responses(
+        (status = 204, description = "Recorded: suggestions proposed until now are no longer new in the feed"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not record a visit"),
+        (status = 404, body = String, description = "Suggestions are off for the caller"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller opened their feed: what it showed as new no longer is. The app
+/// sends it once the feed is on screen.
+pub async fn record_suggestions_viewed<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .viewed(&user.authorization.macro_user_id, caller)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -235,7 +290,7 @@ where
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not accept"),
-        (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it: the body has it as it is now"),
+        (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now"),
         (status = 404, body = String, description = "No open or done suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
@@ -297,6 +352,41 @@ where
     state
         .service
         .dismiss(&user.authorization.macro_user_id, caller, id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/{id}/restore",
+    tag = "suggestions",
+    operation_id = "restore_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    responses(
+        (status = 204, description = "Open again, as proposed; a run the dismissal stopped stays stopped"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not restore"),
+        (status = 404, body = String, description = "No suggestion with this id for the caller, or suggestions are off"),
+        (status = 409, body = String, description = "Not dismissed in the last five minutes, or a routine suggestion"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller, or their own agent, takes back dismissing a suggestion, within
+/// five minutes of it.
+pub async fn restore_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .restore(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -575,6 +575,12 @@ export const forYouRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'for-you' }),
 });
 
+export const passwordsRoute = defineRoute({
+  id: 'view-passwords',
+  path: 'passwords',
+  claim: () => ({ namespace: 'component', id: 'passwords' }),
+});
+
 export const activityRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'view-activity',
