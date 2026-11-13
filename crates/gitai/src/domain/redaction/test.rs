@@ -220,9 +220,34 @@ fn password_and_secret_assignments_keep_the_name() {
 }
 
 #[test]
+fn unquoted_colon_assignments_are_masked() {
+    let cases = [
+        (
+            "password: hunter2-fake-pw",
+            "password: [REDACTED:password_assignment]",
+        ),
+        (
+            "  db_secret: 'letmein'\n",
+            "  db_secret: '[REDACTED:password_assignment]'\n",
+        ),
+        (
+            "The password: correcthorse. Then",
+            "The password: [REDACTED:password_assignment]. Then",
+        ),
+    ];
+    for (text, expected) in cases {
+        let (redacted, hits) = redact(text);
+        assert_eq!(redacted, expected);
+        assert_eq!(hits.get(RedactionRule::PasswordAssignment), 1, "{text}");
+    }
+}
+
+#[test]
 fn password_near_misses_are_kept() {
     assert_untouched("reset your password in settings");
     assert_untouched("password: string;");
+    assert_untouched("fn login(password: &str, secret: Option<String>)");
+    assert_untouched("client_secret::load()");
     assert_untouched(r#"{"password": {"type": "string"}}"#);
     assert_untouched(r#"{"password": ""}"#);
     assert_untouched("passwords=");
@@ -275,7 +300,84 @@ fn json_strings_are_redacted_at_every_depth_and_keys_are_kept() {
         "use [REDACTED:github_token]"
     );
     assert_eq!(value["a"]["1"], "https://github.com/macro-inc/macro");
-    // Numbers are not text: only strings are scanned.
-    assert_eq!(value["v"]["0"]["count"], 4242424242424242_u64);
-    assert_eq!(hits.total(), 1);
+    // A number that is a card number is replaced by the mask.
+    assert_eq!(value["v"]["0"]["count"], "[REDACTED:card_number]");
+    assert_eq!(hits.total(), 2);
+}
+
+#[test]
+fn numbers_that_are_not_card_numbers_are_kept() {
+    let mut value = json!({"t": 1_794_543_965_103_u64, "n": 4242424242424241_u64, "f": 1.5});
+    let before = value.clone();
+    let mut hits = RedactionHits::default();
+    redact_json(&mut value, &mut hits);
+
+    assert_eq!(value, before);
+    assert_eq!(hits.total(), 0);
+}
+
+#[test]
+fn jwts_are_masked_without_bearer() {
+    let jwt = concat!(
+        "eyJhbGciOiJIUzI1NiJ9",
+        ".eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+        ".dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+    );
+    assert_masked(&format!("cookie session={jwt};"), jwt, RedactionRule::Jwt);
+    assert_masked(&format!("token {jwt}"), jwt, RedactionRule::Jwt);
+}
+
+#[test]
+fn jwt_near_misses_are_kept() {
+    assert_untouched("eyJhbGciOiJIUzI1NiJ9");
+    assert_untouched("eyJhbGciOiJIUzI1NiJ9.not-a-payload.x");
+}
+
+#[test]
+fn url_credentials_are_masked_and_the_url_kept() {
+    // `@` is joined at runtime so the PII scanner does not read an address.
+    let (redacted, hits) = redact(&format!(
+        "DATABASE_URL=postgres://app:s3cr3t-pw{}db.internal:5432/app",
+        '@'
+    ));
+    assert_eq!(
+        redacted,
+        "DATABASE_URL=postgres://app:[REDACTED:url_credential]@db.internal:5432/app"
+    );
+    assert_eq!(hits.get(RedactionRule::UrlCredential), 1);
+
+    assert_masked(
+        &format!(
+            "git clone https://x-access-token:abc123def{}github.com/o/r",
+            '@'
+        ),
+        "abc123def",
+        RedactionRule::UrlCredential,
+    );
+}
+
+#[test]
+fn url_near_misses_are_kept() {
+    assert_untouched("https://github.com/macro-inc/macro");
+    assert_untouched("http://localhost:8080/gitai");
+    assert_untouched(&format!("ssh://git{}github.com/o/r", '@'));
+    assert_untouched(&format!("mailto:dev{}example.com", '@'));
+}
+
+#[test]
+fn doppler_tokens_are_masked() {
+    for prefix in ["dp.st.prd.", "dp.pt.", "dp.ct.", "dp.sa.", "dp.scim."] {
+        let token = format!("{prefix}{}", "Ab3dE".repeat(9));
+        assert_masked(
+            &format!("DOPPLER_TOKEN={token} doppler run"),
+            &token,
+            RedactionRule::DopplerToken,
+        );
+    }
+}
+
+#[test]
+fn doppler_near_misses_are_kept() {
+    assert_untouched("dp.st.short");
+    assert_untouched("the dp.pt. prefix marks a personal token");
 }

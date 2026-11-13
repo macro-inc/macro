@@ -36,9 +36,17 @@ pub enum RedactionRule {
     AwsAccessKey,
     /// Values assigned to AWS secret key or session token names.
     AwsSecret,
+    /// Doppler service, personal, CLI, service account and SCIM tokens
+    /// (`dp.st.`, `dp.pt.`, `dp.ct.`, `dp.sa.`, `dp.scim.`).
+    DopplerToken,
+    /// JSON Web Tokens (`eyJ….eyJ….…`), with or without `Bearer`.
+    Jwt,
     /// `Bearer <token>`.
     BearerToken,
-    /// Values assigned to `password`, `passwd`, `pwd` or `*secret` names.
+    /// The password in a URL's userinfo (`scheme://user:password@host`).
+    UrlCredential,
+    /// Values assigned to `password`, `passwd`, `pwd` or `*secret` names,
+    /// with `=` or `:`.
     PasswordAssignment,
     /// Luhn-valid card numbers with a card network prefix.
     CardNumber,
@@ -105,7 +113,7 @@ struct Pattern {
 /// assignment rules, so a token is tagged by its kind; a masked value starts
 /// with `[`, which the later rules do not match. `regex!` checks each pattern
 /// at compile time.
-static PATTERNS: LazyLock<[Pattern; 10]> = LazyLock::new(|| {
+static PATTERNS: LazyLock<[Pattern; 13]> = LazyLock::new(|| {
     [
         Pattern {
             rule: RedactionRule::PrivateKey,
@@ -155,16 +163,35 @@ static PATTERNS: LazyLock<[Pattern; 10]> = LazyLock::new(|| {
             mask: Mask::Group("value"),
         },
         Pattern {
+            rule: RedactionRule::DopplerToken,
+            regex: regex!(r"\bdp\.(?:st|pt|ct|sa|scim)\.[A-Za-z0-9_.-]{20,}"),
+            mask: Mask::Whole,
+        },
+        Pattern {
+            rule: RedactionRule::Jwt,
+            // Header and payload are base64url JSON objects, so both start
+            // with `eyJ` (`{"`).
+            regex: regex!(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+            mask: Mask::Whole,
+        },
+        Pattern {
             rule: RedactionRule::BearerToken,
             regex: regex!(r"(?i)\bbearer\s+(?P<value>[A-Za-z0-9\-._~+/]{16,}=*)"),
             mask: Mask::Group("value"),
         },
         Pattern {
+            rule: RedactionRule::UrlCredential,
+            regex: regex!(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@\[\]]+:(?P<value>[^\s/@\[\]]+)@"),
+            mask: Mask::Group("value"),
+        },
+        Pattern {
             rule: RedactionRule::PasswordAssignment,
-            // `password=x`, `client_secret = "x"`, and JSON/YAML `"password": "x"`.
-            // An unquoted value does not take a sentence's closing period.
+            // `password=x`, `client_secret = "x"`, YAML or prose
+            // `password: x`, and JSON `"password": "x"`. An unquoted value
+            // does not take a sentence's closing period; `name::` (a path)
+            // is not an assignment.
             regex: regex!(
-                r#"(?i)(?:\b(?:password|passwd|pwd|[a-z0-9_]*secret)\s*=\s*["']?(?P<value>[^\s"'`,;&\[\]()]*[^\s"'`,;&\[\]().])|"(?:password|passwd|pwd|[a-z0-9_]*secret)"\s*:\s*"(?P<quoted>[^"\[\]][^"]*)")"#
+                r#"(?i)(?:\b(?:password|passwd|pwd|[a-z0-9_]*secret)\s*[=:]\s*["']?(?P<value>[^\s"'`,;&\[\]().:](?:[^\s"'`,;&\[\]()]*[^\s"'`,;&\[\]().:])?)|"(?:password|passwd|pwd|[a-z0-9_]*secret)"\s*:\s*"(?P<quoted>[^"\[\]][^"]*)")"#
             ),
             mask: Mask::Group("value"),
         },
@@ -178,9 +205,19 @@ fn card_candidates() -> &'static Regex {
     regex!(r"\b(?:\d{13,19}|\d{4}(?:[ -]\d{4}){3}|\d{4}[ -]\d{6}[ -]\d{5})\b")
 }
 
-/// Redacts every string inside `value` (object keys are left alone).
+/// Redacts every string inside `value`, and numbers that are card numbers
+/// (object keys are left alone).
 pub fn redact_json(value: &mut Value, hits: &mut RedactionHits) {
     match value {
+        Value::Number(number) => {
+            let is_card = number
+                .as_u64()
+                .is_some_and(|digits| is_card_number(&digits.to_string()));
+            if is_card {
+                hits.add(RedactionRule::CardNumber);
+                *value = Value::String(RedactionRule::CardNumber.mask());
+            }
+        }
         Value::String(text) => {
             if let Cow::Owned(redacted) = redact_text(text, hits) {
                 *text = redacted;
@@ -196,7 +233,7 @@ pub fn redact_json(value: &mut Value, hits: &mut RedactionHits) {
                 redact_json(item, hits);
             }
         }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        Value::Null | Value::Bool(_) => {}
     }
 }
 
@@ -211,6 +248,9 @@ pub fn redact_text<'a>(text: &'a str, hits: &mut RedactionHits) -> Cow<'a, str> 
         let replaced = pattern
             .regex
             .replace_all(&current, |captures: &Captures| {
+                if names_a_type(pattern, captures) {
+                    return captures.get(0).map_or("", |m| m.as_str()).to_owned();
+                }
                 hits.add(pattern.rule);
                 masked(pattern, captures)
             })
@@ -236,6 +276,35 @@ pub fn redact_text<'a>(text: &'a str, hits: &mut RedactionHits) -> Cow<'a, str> 
     }
 
     current
+}
+
+/// Type names that follow `password:` in code (`password: string;`), which
+/// are not secrets.
+const TYPE_NAMES: &[&str] = &[
+    "any",
+    "bool",
+    "boolean",
+    "null",
+    "number",
+    "option",
+    "str",
+    "string",
+    "undefined",
+    "unknown",
+];
+
+/// Whether an assignment match is a type annotation rather than a value.
+fn names_a_type(pattern: &Pattern, captures: &Captures) -> bool {
+    pattern.rule == RedactionRule::PasswordAssignment
+        && captures.name("value").is_some_and(|value| {
+            // `&str`, `Option<String>`: the type before any reference or
+            // generic arguments.
+            let value = value.as_str().trim_start_matches('&');
+            let value = value.split('<').next().unwrap_or(value);
+            TYPE_NAMES
+                .iter()
+                .any(|name| value.eq_ignore_ascii_case(name))
+        })
 }
 
 /// The match with its secret part replaced by the rule's mask.
