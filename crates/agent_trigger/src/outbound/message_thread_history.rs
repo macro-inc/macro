@@ -4,6 +4,7 @@
 mod test;
 
 use crate::domain::{
+    context::PeopleDirectory,
     service::{AuthorizedInvocation, ThreadHistory},
     thread_window::ThreadMessage,
 };
@@ -17,7 +18,9 @@ use macro_uuid::Uuid;
 use messages::domain::{
     api::MessageReader, models::MessageParent, ports::MessageError, service::MessageWrite,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
+use trigger_context::ContextPerson;
 
 trait InvocationAuthorizer: Send + Sync + 'static {
     fn capability(
@@ -50,20 +53,55 @@ impl<Access: EntityAccessService> InvocationAuthorizer for Access {
     }
 }
 
-/// Reads common message history with the invoking user's current capability.
-pub struct MessageThreadHistory<Access> {
+/// Reads common message history with the invoking user's current capability,
+/// naming each sender the way people in the thread do.
+pub struct MessageThreadHistory<Access, People> {
     messages: Arc<dyn MessageReader>,
     access: Access,
+    people: People,
 }
 
-impl<Access> MessageThreadHistory<Access> {
-    /// Compose the read application port and current parent authorization.
-    pub fn new(messages: Arc<dyn MessageReader>, access: Access) -> Self {
-        Self { messages, access }
+impl<Access, People> MessageThreadHistory<Access, People> {
+    /// Compose the read application port, current parent authorization, and
+    /// the directory that names senders.
+    pub fn new(messages: Arc<dyn MessageReader>, access: Access, people: People) -> Self {
+        Self {
+            messages,
+            access,
+            people,
+        }
     }
 }
 
-impl<Access: InvocationAuthorizer> ThreadHistory for MessageThreadHistory<Access> {
+impl<Access, People: PeopleDirectory> MessageThreadHistory<Access, People> {
+    /// Names for the given senders, keyed by sender id. Best effort: a failed
+    /// lookup leaves every sender unnamed rather than failing the read.
+    async fn sender_names(&self, senders: Vec<String>) -> HashMap<String, String> {
+        let people = match self.people.people(senders).await {
+            Ok(people) => people,
+            Err(error) => {
+                tracing::warn!(error = ?error, "sender names unavailable; reading the thread unnamed");
+                return HashMap::new();
+            }
+        };
+        people
+            .into_iter()
+            .filter_map(|person| known_name(&person).map(|name| (person.id, name)))
+            .collect()
+    }
+}
+
+/// A person's name when one is on record. The directory falls back to a
+/// user's email, or a bot's id, when it has none; neither is a name.
+fn known_name(person: &ContextPerson) -> Option<String> {
+    let is_fallback =
+        person.email.as_deref() == Some(person.name.as_str()) || person.name == person.id;
+    (!is_fallback).then(|| person.name.clone())
+}
+
+impl<Access: InvocationAuthorizer, People: PeopleDirectory> ThreadHistory
+    for MessageThreadHistory<Access, People>
+{
     async fn authorize_invocation(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -93,11 +131,24 @@ impl<Access: InvocationAuthorizer> ThreadHistory for MessageThreadHistory<Access
             Err(MessageError::NotFound) => return Ok(Vec::new()),
             Err(error) => return Err(AgentSessionError::Unknown(error.into())),
         };
-        Ok(std::iter::once(thread.root)
+        let messages: Vec<_> = std::iter::once(thread.root)
             .chain(thread.replies)
             .filter(|message| message.deleted_at.is_none())
+            .collect();
+
+        let mut senders: Vec<String> = messages
+            .iter()
+            .map(|message| message.sender_id.as_ref().to_owned())
+            .collect();
+        senders.sort_unstable();
+        senders.dedup();
+        let names = self.sender_names(senders).await;
+
+        Ok(messages
+            .into_iter()
             .map(|message| ThreadMessage {
                 id: message.id,
+                name: names.get(message.sender_id.as_ref()).cloned(),
                 sender: message.sender_id,
                 content: message.content,
                 created_at: message.created_at,

@@ -153,6 +153,7 @@ fn yield_channel_event(
                 bot_id: session_bot,
                 session_id: session.id,
                 kind: ThreadMessageKind::MentionThread,
+                confidence: None,
                 message: posted.clone(),
             })
         }

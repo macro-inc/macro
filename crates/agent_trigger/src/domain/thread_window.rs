@@ -17,6 +17,9 @@ pub struct ThreadMessage {
     pub id: Uuid,
     /// Who posted it.
     pub sender: ChannelSender<'static>,
+    /// What people call the sender: a person's profile name or a bot's
+    /// display name. `None` when neither is on record.
+    pub name: Option<String>,
     /// Message body.
     pub content: String,
     /// When it was posted.
@@ -88,12 +91,15 @@ pub fn thread_window<'a>(
 }
 
 /// Renders a transcript for a judge reading the thread, labelling each of
-/// `agents`' own messages `agent N` (1-based, in `agents` order) so it can tell
-/// which participants it is deciding about.
+/// `agents`' own messages `agent N (name)` (1-based, in `agents` order) so it
+/// can tell which participants it is deciding about, and naming everyone else
+/// the way people in the thread do, so a message that calls someone by name
+/// can be read as meant for them.
 ///
-/// Other bots keep their raw ids: a bot that is not a candidate is a
+/// Other bots are labelled `bot (name)`: a bot that is not a candidate is a
 /// participant like any other, and labelling it as an agent would invite the
-/// judge to route to the wrong one.
+/// judge to route to the wrong one. Raw ids never appear: they carry emails
+/// and tell the judge nothing a name does not.
 #[must_use]
 pub fn render_transcript(entries: &[TranscriptEntry<'_>], agents: &[BotId]) -> String {
     let mut rendered = String::new();
@@ -104,21 +110,29 @@ pub fn render_transcript(entries: &[TranscriptEntry<'_>], agents: &[BotId]) -> S
                 let _ = writeln!(rendered, "({count} earlier message{plural} hidden)");
             }
             TranscriptEntry::Message(message) => {
-                let speaker = match (message.sender.as_bot(), message.sender.as_user()) {
-                    (Some(bot), _) => {
-                        match agents.iter().position(|agent| *agent == bot.bot_id()) {
-                            Some(index) => format!("agent {}", index + 1),
-                            None => format!("bot {bot}"),
-                        }
-                    }
-                    (None, Some(user)) => format!("user {user}"),
-                    // A sender is one or the other; a future third kind should
-                    // still appear in the transcript rather than vanish.
-                    (None, None) => "unknown".to_owned(),
-                };
-                let _ = writeln!(rendered, "[{speaker}] {}", message.content);
+                let _ = writeln!(rendered, "[{}] {}", speaker(message, agents), message.content);
             }
         }
     }
     rendered
+}
+
+/// How a transcript labels a message's sender.
+fn speaker(message: &ThreadMessage, agents: &[BotId]) -> String {
+    let name = message.name.as_deref();
+    let agent = message
+        .sender
+        .as_bot()
+        .and_then(|bot| agents.iter().position(|agent| *agent == bot.bot_id()));
+
+    match (agent, message.sender.as_bot(), name) {
+        (Some(index), _, Some(name)) => format!("agent {} ({name})", index + 1),
+        (Some(index), _, None) => format!("agent {}", index + 1),
+        (None, Some(_), Some(name)) => format!("bot ({name})"),
+        (None, Some(_), None) => "bot".to_owned(),
+        (None, None, Some(name)) => name.to_owned(),
+        // A person with no name on record, or a future sender kind: still a
+        // participant, but one the thread cannot call by name.
+        (None, None, None) => "someone".to_owned(),
+    }
 }

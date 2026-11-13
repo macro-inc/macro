@@ -45,6 +45,9 @@ const TRANSCRIPT_CAP: usize = 40;
 /// an agent.
 const ADDRESSED_THRESHOLD: f32 = 0.5;
 
+/// Who the judge is told posted a message whose author has no name on record.
+const UNNAMED_AUTHOR: &str = "someone";
+
 /// Bot facts required to decide whether a mention may start an agent session.
 #[cfg_attr(test, mockall::automock)]
 pub trait AgentBotLookup: Send + Sync + 'static {
@@ -163,11 +166,13 @@ pub trait ImplicitTriggerJudge: Send + Sync + 'static {
     /// For each of the `agents` live in the thread, the probability from 0 to
     /// 1 that the message is directed at it, in order. `transcript` is the
     /// thread around the agents' participation, labelling them `agent 1` to
-    /// `agent {agents}`; empty when the thread could not be read.
+    /// `agent {agents}` with their names; empty when the thread could not be
+    /// read. `author` names whoever posted the message.
     fn addressee_probabilities(
         &self,
         posted: &MessagePostedMetadata,
         transcript: &str,
+        author: &str,
         agents: usize,
     ) -> impl Future<Output = Result<Vec<f32>>> + Send;
 }
@@ -178,12 +183,13 @@ impl<J: ImplicitTriggerJudge> ImplicitTriggerJudge for Option<J> {
         &self,
         posted: &MessagePostedMetadata,
         transcript: &str,
+        author: &str,
         agents: usize,
     ) -> Result<Vec<f32>> {
         match self {
             Some(judge) => {
                 judge
-                    .addressee_probabilities(posted, transcript, agents)
+                    .addressee_probabilities(posted, transcript, author, agents)
                     .await
             }
             None => Ok(vec![0.0; agents]),
@@ -434,6 +440,12 @@ where
         thread_id = ?posted.thread_id,
         message.scope = tracing::field::Empty,
         agent.mention.bot_count = tracing::field::Empty,
+        agent.trigger.inferred.outcome = tracing::field::Empty,
+        agent.trigger.inferred.agent_count = tracing::field::Empty,
+        agent.trigger.inferred.probabilities = tracing::field::Empty,
+        agent.trigger.inferred.top_probability = tracing::field::Empty,
+        agent.trigger.inferred.threshold = tracing::field::Empty,
+        agent.trigger.inferred.bot_id = tracing::field::Empty,
     ))]
     pub async fn evaluate(&self, posted: &MessagePostedMetadata) -> Result<Vec<TriggerDecision>> {
         let Some(user) = posted.invoking_user() else {
@@ -570,6 +582,10 @@ where
     ///
     /// A bot's message is judged like anyone's, but never against the bot's
     /// own session; the hop limit has already bounded agent chains.
+    ///
+    /// Every judged message records its outcome, the judge's probabilities
+    /// and the threshold on the `evaluate` span and in one log event, so
+    /// inferred replies can be counted and the threshold tuned from data.
     async fn evaluate_implicit(
         &self,
         posted: &MessagePostedMetadata,
@@ -595,9 +611,11 @@ where
         {
             // The reply-target says who it answers on its face, so it needs no
             // thread read at all.
+            tracing::Span::current().record("agent.trigger.inferred.outcome", "explicit_reply");
             return Ok(Some(thread_event(
                 session,
                 ThreadMessageKind::ExplicitReply,
+                None,
                 posted,
             )));
         }
@@ -612,17 +630,26 @@ where
         #[cfg(feature = "admission")]
         if let Err(error) = self.admission.admit(_user, AiFeature::Automation).await {
             tracing::info!(code = error.code(), "skipping agent trigger inference");
+            tracing::Span::current().record("agent.trigger.inferred.outcome", "not_admitted");
             return Ok(None);
         }
 
-        let transcript = self.transcript(posted, invocation, &candidates).await;
+        let thread = self.transcript(posted, invocation, &candidates).await;
         let probabilities = self
-            .addressee_probabilities(posted, &transcript, candidates.len())
+            .addressee_probabilities(posted, &thread.transcript, &thread.author, candidates.len())
             .await;
-        match addressed_candidate(&probabilities) {
+        let addressee = addressed_candidate(&probabilities);
+        let routed_to = match addressee {
+            Addressee::One(index) => Some(candidates[index].bot_id),
+            Addressee::None | Addressee::Several => None,
+        };
+        record_judgement(posted, &probabilities, &addressee, candidates.len(), routed_to);
+
+        match addressee {
             Addressee::One(index) => Ok(Some(thread_event(
                 candidates.swap_remove(index),
                 ThreadMessageKind::Inferred,
+                probabilities.get(index).copied().map(confidence_percent),
                 posted,
             ))),
             Addressee::None => {
@@ -675,7 +702,8 @@ where
 
     /// The thread around the points where the candidate agents took part:
     /// their own messages, and the message being judged, each with
-    /// [`WINDOW_RADIUS`] messages of surrounding conversation.
+    /// [`WINDOW_RADIUS`] messages of surrounding conversation, and the name of
+    /// whoever posted the message being judged.
     ///
     /// An unreadable thread yields an empty transcript rather than an error, so
     /// the judge still rules on the message itself instead of the whole path
@@ -685,14 +713,22 @@ where
         posted: &MessagePostedMetadata,
         invocation: &AuthorizedInvocation,
         candidates: &[AgentSession],
-    ) -> String {
+    ) -> JudgedThread {
         let messages = match self.history.thread_messages(invocation).await {
             Ok(messages) => messages,
             Err(error) => {
                 tracing::warn!(error = ?error, "thread read failed; judging without thread context");
-                return String::new();
+                return JudgedThread {
+                    transcript: String::new(),
+                    author: UNNAMED_AUTHOR.to_owned(),
+                };
             }
         };
+        let author = messages
+            .iter()
+            .find(|message| message.id == posted.message_id)
+            .and_then(|message| message.name.clone())
+            .unwrap_or_else(|| UNNAMED_AUTHOR.to_owned());
         let agents: Vec<BotId> = candidates.iter().map(|session| session.bot_id).collect();
         let anchors: Vec<Uuid> = messages
             .iter()
@@ -706,10 +742,13 @@ where
             .map(|message| message.id)
             .collect();
 
-        render_transcript(
-            &thread_window(&messages, &anchors, WINDOW_RADIUS, TRANSCRIPT_CAP),
-            &agents,
-        )
+        JudgedThread {
+            transcript: render_transcript(
+                &thread_window(&messages, &anchors, WINDOW_RADIUS, TRANSCRIPT_CAP),
+                &agents,
+            ),
+            author,
+        }
     }
 
     /// The judge's probabilities, one per candidate; a failure or a malformed
@@ -718,11 +757,12 @@ where
         &self,
         posted: &MessagePostedMetadata,
         transcript: &str,
+        author: &str,
         agents: usize,
     ) -> Vec<f32> {
         match self
             .judge
-            .addressee_probabilities(posted, transcript, agents)
+            .addressee_probabilities(posted, transcript, author, agents)
             .await
         {
             Ok(probabilities) if probabilities.len() == agents => probabilities,
@@ -748,6 +788,74 @@ enum Addressee {
     None,
     One(usize),
     Several,
+}
+
+impl Addressee {
+    /// The outcome as recorded on the span and log.
+    fn outcome(&self) -> &'static str {
+        match self {
+            Self::None => "not_addressed",
+            Self::One(_) => "inferred",
+            Self::Several => "ambiguous",
+        }
+    }
+}
+
+/// The transcript the judge reads, and who posted the message it judges.
+struct JudgedThread {
+    transcript: String,
+    author: String,
+}
+
+/// Records one judgement on the `evaluate` span and as a log event: the
+/// outcome, every probability in candidate order, the highest, the threshold,
+/// and the agent it routed to. An empty probability list means the judge
+/// failed or answered malformed, which reads as not addressed.
+fn record_judgement(
+    posted: &MessagePostedMetadata,
+    probabilities: &[f32],
+    addressee: &Addressee,
+    agent_count: usize,
+    routed_to: Option<BotId>,
+) {
+    let listed = probabilities
+        .iter()
+        .map(|probability| format!("{probability:.2}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let top = probabilities.iter().copied().fold(None, |top: Option<f32>, probability| {
+        Some(top.map_or(probability, |top| top.max(probability)))
+    });
+
+    let span = tracing::Span::current();
+    span.record("agent.trigger.inferred.outcome", addressee.outcome());
+    span.record("agent.trigger.inferred.agent_count", agent_count);
+    span.record("agent.trigger.inferred.probabilities", listed.as_str());
+    span.record("agent.trigger.inferred.threshold", ADDRESSED_THRESHOLD);
+    if let Some(top) = top {
+        span.record("agent.trigger.inferred.top_probability", top);
+    }
+    if let Some(bot_id) = routed_to {
+        span.record("agent.trigger.inferred.bot_id", tracing::field::display(bot_id));
+    }
+
+    tracing::info!(
+        message_id = %posted.message_id,
+        outcome = addressee.outcome(),
+        agent_count,
+        probabilities = %listed,
+        top_probability = ?top,
+        threshold = ADDRESSED_THRESHOLD,
+        bot_id = ?routed_to,
+        "agent trigger judged an unmentioned message"
+    );
+}
+
+/// A probability as the whole percentage an agent is told it was judged at.
+fn confidence_percent(probability: f32) -> u8 {
+    // The judge's probabilities are validated to 0..=1, so this stays in range;
+    // the clamp keeps a malformed value from wrapping.
+    (probability.clamp(0.0, 1.0) * 100.0).round() as u8
 }
 
 /// The single candidate whose probability reaches [`ADDRESSED_THRESHOLD`].
@@ -787,12 +895,14 @@ fn session_id(session: &ThreadSession) -> Option<AgentSessionId> {
 fn thread_event(
     session: AgentSession,
     kind: ThreadMessageKind,
+    confidence: Option<u8>,
     posted: &MessagePostedMetadata,
 ) -> TriggerDecision {
     TriggerDecision::Existing {
         bot_id: session.bot_id,
         session_id: session.id,
         kind,
+        confidence,
         message: posted.clone(),
     }
 }
