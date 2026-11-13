@@ -412,17 +412,81 @@ export class EditorView implements ViewSink {
     this.prevented = false;
     return value;
   }
-  /** Mark tables a NodeSelection includes; unmark those it no longer does. */
-  private syncNodeSelectedTables(
-    previous: ViewSelection,
-    selection: ViewSelection
-  ): void {
-    const keys = (value: ViewSelection) =>
-      value.kind === 'node' ? value.keys : [];
-    const next = new Set(keys(selection));
-    for (const key of keys(previous))
-      if (!next.has(key)) this.tables.get(key)?.setNodeSelected(false);
-    for (const key of next) this.tables.get(key)?.setNodeSelected(true);
+  /** Child indexes from the root to a mirror node, for document order. */
+  private documentPath(key: NodeKey): number[] {
+    const path: number[] = [];
+    for (let node = this.node(key); node && node.parent !== null; ) {
+      const parent = this.node(node.parent);
+      if (!parent) break;
+      path.unshift(parent.children.indexOf(node.key));
+      node = parent;
+    }
+    return path;
+  }
+  private isWithin(key: NodeKey, ancestor: NodeKey): boolean {
+    for (let node = this.node(key); node; ) {
+      if (node.key === ancestor) return true;
+      node = node.parent === null ? null : this.node(node.parent);
+    }
+    return false;
+  }
+  /**
+   * Tables the selection includes without being a TableSelection over them
+   * (Source TableNode.isSelected): a NodeSelection of the table, or a range with
+   * one point inside it, or both points on either side of it. Two points inside
+   * one table are Source's TableSelection or a single-cell range, never this.
+   */
+  private includedTables(selection: ViewSelection): Set<NodeKey> {
+    const included = new Set<NodeKey>();
+    if (selection.kind === 'node') {
+      for (const key of selection.keys)
+        if (this.tables.has(key)) included.add(key);
+      return included;
+    }
+    if (selection.kind !== 'range') return included;
+    const anchor = selection.anchor.key;
+    const focus = selection.focus.key;
+    if (anchor === focus && selection.anchor.offset === selection.focus.offset)
+      return included;
+    const order = (left: number[], right: number[]) => {
+      for (let index = 0; index < Math.min(left.length, right.length); index++)
+        if (left[index] !== right[index]) return left[index] - right[index];
+      return left.length - right.length;
+    };
+    // An element point sits before the child at its offset; a text point at its node.
+    // So a start path equal to the table's is a point just before it (included),
+    // and an end path equal to it is a point just before it (excluded).
+    const pointPath = (point: {
+      readonly key: NodeKey;
+      readonly offset: number;
+      readonly type: 'text' | 'element';
+    }) =>
+      point.type === 'element'
+        ? [...this.documentPath(point.key), point.offset]
+        : this.documentPath(point.key);
+    const [start, end] = [
+      pointPath(selection.anchor),
+      pointPath(selection.focus),
+    ].sort(order);
+    for (const key of this.tables.keys()) {
+      const inAnchor = this.isWithin(anchor, key);
+      const inFocus = this.isWithin(focus, key);
+      if (inAnchor && inFocus) continue;
+      const table = this.documentPath(key);
+      if (
+        inAnchor ||
+        inFocus ||
+        (order(start, table) <= 0 && order(table, end) < 0)
+      )
+        included.add(key);
+    }
+    return included;
+  }
+  /** Mark the tables the selection includes; unmark those it no longer does. */
+  private syncIncludedTables(selection: ViewSelection): void {
+    const included = this.includedTables(selection);
+    for (const [key, observer] of this.tables)
+      observer.setIncluded(included.has(key));
   }
   acknowledgeSelection(selection: ViewSelection): void {
     if (
@@ -438,7 +502,7 @@ export class EditorView implements ViewSink {
         ?.select(selection.anchorCell, selection.focusCell);
     else if (previous.kind === 'table')
       this.tables.get(previous.table)?.clear();
-    this.syncNodeSelectedTables(previous, selection);
+    this.syncIncludedTables(selection);
     this.notify(
       {
         mutations: new Map(),
@@ -643,8 +707,7 @@ export class EditorView implements ViewSink {
           const selection = this.selectionInfo.selection;
           if (observer && selection.kind === 'table' && selection.table === key)
             next.select(selection.anchorCell, selection.focusCell);
-          if (selection.kind === 'node' && selection.keys.includes(key))
-            next.setNodeSelected(true);
+          if (this.includedTables(selection).has(key)) next.setIncluded(true);
         }
       }
       attachments?.flush();
@@ -713,7 +776,7 @@ export class EditorView implements ViewSink {
                   ?.select(selection.anchorCell, selection.focusCell);
               else if (previousSelection.kind === 'table')
                 this.tables.get(previousSelection.table)?.clear();
-              this.syncNodeSelectedTables(previousSelection, selection);
+              this.syncIncludedTables(selection);
               // Only a focused history-awareness restore may override the
               // content update's skip tag in this packet.
               const echo = this.domSelectionEcho;

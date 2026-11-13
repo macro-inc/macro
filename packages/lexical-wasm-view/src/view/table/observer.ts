@@ -76,8 +76,11 @@ export class TableObserver {
   private dragOwnsSelection = false;
   private readonly selectedCellClasses: string[];
   private readonly selectedTableClasses: string[];
-  /** A NodeSelection includes this table (Source TableNode.isSelected). */
-  private nodeSelected = false;
+  /**
+   * The selection includes this table without being a TableSelection over it
+   * (Source TableNode.isSelected outside $updateTableTableSelection).
+   */
+  private included = false;
   constructor(
     readonly view: EditorView,
     readonly key: number,
@@ -114,7 +117,7 @@ export class TableObserver {
         this.domGrid.length = 0;
         this.selected.clear();
         this.selectionBounds = null;
-        this.paintTableSelected();
+        this.paintIncluded();
         return;
       }
       let first = 0;
@@ -357,21 +360,30 @@ export class TableObserver {
       cell.element.setAttribute('aria-selected', 'true');
     }
     this.selected = selected;
-    this.paintTableSelected();
+    this.paintIncluded();
   }
   /**
-   * Source $syncTableSelectionState marks the table selected for selected cells
-   * or a NodeSelection containing it; native also unmarks it once neither holds
-   * (Source leaves the class stale after a NodeSelection clears).
+   * Source $syncTableSelectionState on SELECTION_CHANGE: while the table is in
+   * the selection, $addHighlightStyleToTable puts theme.tableSelection on the
+   * table and theme.tableCellSelected on every cell; $removeHighlightStyleToTable
+   * takes both off once it is not.
    */
-  setNodeSelected(selected: boolean): void {
-    this.nodeSelected = selected;
-    this.paintTableSelected();
+  setIncluded(included: boolean): void {
+    if (this.included === included) return;
+    this.included = included;
+    this.paintIncluded();
   }
-  private paintTableSelected(): void {
-    if (this.selected.size || this.nodeSelected)
+  private paintIncluded(): void {
+    if (this.selected.size || this.included)
       this.table.classList.add(...this.selectedTableClasses);
     else this.table.classList.remove(...this.selectedTableClasses);
+    for (const [key, cell] of this.cells) {
+      if (getTableElement(cell.element) !== this.table) continue;
+      if (this.included)
+        cell.element.classList.add(...this.selectedCellClasses);
+      else if (!this.selected.has(key))
+        cell.element.classList.remove(...this.selectedCellClasses);
+    }
   }
   /** The browser text drag must yield once this gesture owns a table range. */
   preserveDragSelection(dom: Selection): boolean {
