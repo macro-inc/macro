@@ -1,10 +1,14 @@
+export function userScopedStorageKey(baseKey: string, userId: string): string {
+  return `${baseKey}:${encodeURIComponent(userId)}`;
+}
+
 /**
  * Safe, user-scoped localStorage access. Keys are namespaced per user id and
  * every storage failure (unavailable, blocked, full) degrades to "no value" /
  * no-op so in-memory state keeps working.
  */
 export function createUserScopedStorage(baseKey: string) {
-  const key = (userId: string) => `${baseKey}:${encodeURIComponent(userId)}`;
+  const key = (userId: string) => userScopedStorageKey(baseKey, userId);
   return {
     read(userId: string): string | null {
       if (typeof localStorage === 'undefined') return null;

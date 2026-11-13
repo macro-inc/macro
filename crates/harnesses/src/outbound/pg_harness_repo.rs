@@ -64,6 +64,23 @@ impl PgHarnessRepo {
         .await?;
         Ok(computer.flatten().map(ComputerId::new_from_uuid))
     }
+
+    /// Who the runtime serving `bot` authenticates as: the owner of the
+    /// harness the bot is bound to, or whoever paired it. `None` when the
+    /// bot is bound to no live harness.
+    pub async fn runtime_user_for_bot(&self, bot: bot_id::BotId) -> sqlx::Result<Option<String>> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(h.owner_user_id, h.created_by) AS "user!"
+            FROM agent_configs ac
+            JOIN harnesses h ON h.id = ac.harness_id
+            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
+            "#,
+            bot.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+    }
 }
 
 struct HarnessRow {

@@ -533,6 +533,9 @@ fn remount(
     if sidecars.gmail_emulator {
         up.arg(super::google_emulator::SERVICE);
     }
+    if sidecars.outlook_emulator {
+        up.arg(super::microsoft_emulator::SERVICE);
+    }
     stage.run("Remounting Rust services", &mut up)?;
     write_state(
         instance,

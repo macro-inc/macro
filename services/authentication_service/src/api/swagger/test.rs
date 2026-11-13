@@ -6,7 +6,7 @@ fn computer_status_openapi_uses_canonical_setup_progress() {
     let schemas = &openapi["components"]["schemas"];
     assert_eq!(
         schemas["SetupStep"]["enum"],
-        serde_json::json!(["creating", "booting", "connecting", "ready"]),
+        serde_json::json!(["billing", "creating", "booting", "connecting", "ready"]),
     );
     assert_eq!(
         schemas["SetupProgress"]["properties"]["step"]["$ref"],
