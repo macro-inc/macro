@@ -192,12 +192,13 @@ pub enum MarkdownSubtype {
 impl MarkdownSubtype {
     /// Convert a simple task flag into the default markdown subtype. A task is
     /// shared with the team only when the caller resolved one; teamless creators
-    /// get a private task instead of a failed create.
+    /// get a private task instead of a failed create, and so does an agent
+    /// session that may not share.
     pub fn from_task_flag(is_task: bool, team_id: Option<uuid::Uuid>) -> Self {
         if is_task {
             Self::Task {
                 property_values: None,
-                share_with_team: team_id.is_some(),
+                share_with_team: team_id.is_some() && agent_correlation::context::may_share(),
                 team_id,
             }
         } else {

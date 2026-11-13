@@ -18,11 +18,17 @@
 //! catalog routines marked `suggest` as Macro's templates, to
 //! [`PER_SURFACE`], skipping what the person dismissed or saved a routine
 //! from. Dismissal is permanent and later generations are told.
+//!
+//! An AI suggestion's state is stored; [`state::RoutineSuggestionState::on`]
+//! is the one function that changes it and its card in the Suggestions feed
+//! (retiring, dismissing, saving).
 
 pub mod decode;
 pub mod model;
 pub mod ports;
 pub mod prompt;
+pub mod state;
+pub mod text;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -35,15 +41,18 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 use routine_program::{CATALOG, Surface};
-use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
+use suggestions::domain::model::{GenerationSession, GenerationTrigger, RoutineText, SessionKind};
 use suggestions::domain::ports::GenerationSessions;
 
 use self::model::{
-    GenerationStatus, RetireSuggestion, ReviewedState, ReviewedSuggestion, RoutineGenerationReport,
+    GenerationStatus, RetireSuggestion, ReviewedSuggestion, RoutineGenerationReport,
     RoutineSuggestion, RoutineSuggestions, StoredPick, StoredSuggestion, SuggestOutcome,
     SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
 };
-use self::ports::{GenerationStatuses, SuggestionRepo, SuggestionSources};
+use suggestions::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
+
+use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
+use self::state::{RoutineSuggestionState, Transition};
 use super::models::ActionPolicyError;
 use super::ports::{
     RequestSessions, RoutineCode, ScheduledActionService, SuggestionOrigin, SuggestionOrigins,
@@ -245,11 +254,11 @@ where
         allowed: &[Surface],
         request: SuggestRequest,
     ) -> Result<SuggestOutcome> {
+        // Keeping counts again under the person's lock; this only spares a
+        // drafted routine's check when the session is done.
         let kept = self.repo.kept_by(user, session.session).await?;
         if kept >= MAX_KEPT_PER_SESSION {
-            return Ok(rejected(vec![format!(
-                "you suggested {MAX_KEPT_PER_SESSION} routines; that is enough, stop now"
-            )]));
+            return Ok(rejected(vec![session_full()]));
         }
         let (checked, check) = match request {
             SuggestRequest::Catalog {
@@ -258,22 +267,13 @@ where
                 reason,
                 surfaces,
                 keep_probability,
+                card,
             } => {
-                let (stored, dismissed) = tokio::try_join!(
-                    self.repo.suggestions(user),
-                    self.repo.dismissed_templates(user),
-                )?;
-                // A retired pick may be suggested again; an open or
-                // dismissed one may not.
-                let taken = dismissed.contains(&key)
-                    || stored.iter().any(|suggestion| {
-                        suggestion.retired_at.is_none()
-                            && matches!(&suggestion.pick, StoredPick::Catalog { key: taken, .. } if *taken == key)
-                    });
-                if taken {
-                    return Ok(rejected(vec![format!(
-                        "`{key}` was suggested already or dismissed; suggest something else"
-                    )]));
+                if card.is_some() {
+                    return Ok(rejected(vec![
+                        "only a drafted routine is shown among suggestions; leave `card` out of a catalog routine"
+                            .to_owned(),
+                    ]));
                 }
                 (
                     decode::catalog_pick(&key, knobs, &reason, surfaces, keep_probability, allowed),
@@ -286,6 +286,7 @@ where
                 reason,
                 surfaces,
                 keep_probability,
+                card,
             } => {
                 let check = self
                     .actions
@@ -305,6 +306,7 @@ where
                         &reason,
                         surfaces,
                         keep_probability,
+                        card,
                         allowed,
                     ),
                     Some(check),
@@ -313,7 +315,7 @@ where
         };
         match checked {
             Ok(checked) => {
-                let id = self
+                let kept = self
                     .repo
                     .add(
                         user,
@@ -323,11 +325,40 @@ where
                         Utc::now(),
                     )
                     .await?;
+                let problem = match kept {
+                    Kept::Stored(id) => {
+                        return Ok(SuggestOutcome {
+                            ok: true,
+                            problems: Vec::new(),
+                            check,
+                            id: Some(id),
+                        });
+                    }
+                    Kept::SessionFull => session_full(),
+                    // A retired pick may be suggested again; an open,
+                    // dismissed or saved one may not.
+                    Kept::Taken => match &checked.pick {
+                        StoredPick::Catalog { key, .. } => format!(
+                            "`{key}` was suggested already or dismissed; suggest something else"
+                        ),
+                        StoredPick::Routine { .. } => {
+                            "this was suggested already; suggest something else".to_owned()
+                        }
+                    },
+                    Kept::SuggestionsFull => format!(
+                        "the user has {OPEN_LIMIT} open suggestions, and a drafted routine is one; \
+                         retire a suggestion that matters less first"
+                    ),
+                    Kept::NightFull => format!(
+                        "this generation added {NEW_PER_GENERATION} suggestions, the most for one night, \
+                         and a drafted routine is one; stop drafting"
+                    ),
+                };
                 Ok(SuggestOutcome {
-                    ok: true,
-                    problems: Vec::new(),
+                    ok: false,
+                    problems: vec![problem],
                     check,
-                    id: Some(id),
+                    id: None,
                 })
             }
             Err(problems) => Ok(SuggestOutcome {
@@ -417,7 +448,29 @@ where
         }))
     }
 
-    async fn kept(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<u32> {
+    #[tracing::instrument(name = "routine.suggestions.texts", skip_all, fields(
+        routine.suggestions.asked = ids.len(),
+        routine.suggestions.drafted = tracing::field::Empty,
+    ), err)]
+    async fn texts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        ids: &[Uuid],
+        timezone: Tz,
+    ) -> Result<Vec<(Uuid, RoutineText)>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let drafted = self.repo.drafted(user, ids).await?;
+        tracing::Span::current().record("routine.suggestions.drafted", drafted.len());
+        let now = Utc::now();
+        Ok(drafted
+            .into_iter()
+            .map(|(id, routine)| (id, text::routine_text(&routine, timezone, now)))
+            .collect())
+    }
+
+    async fn suggested(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<u32> {
         self.repo.kept_by(user, session).await
     }
 
@@ -475,33 +528,22 @@ where
     ) -> Result<SuggestionReview> {
         let (user, session, _) = self.session(principal, correlation).await?;
         self.require_flag(&user).await?;
-        let (stored, saved, kept) = tokio::try_join!(
+        let (stored, kept) = tokio::try_join!(
             self.repo.suggestions(&user),
-            self.repo.saved_from(&user),
             self.repo.kept_by(&user, session.session),
         )?;
-        let saved: HashSet<Uuid> = saved.into_iter().collect();
         let suggestions: Vec<ReviewedSuggestion> = stored
             .iter()
             .map(|suggestion| {
-                let (state, closed_at) = if saved.contains(&suggestion.id) {
-                    (ReviewedState::Saved, None)
-                } else if let Some(at) = suggestion.dismissed_at {
-                    (ReviewedState::Dismissed, Some(at))
-                } else if let Some(at) = suggestion.retired_at {
-                    (ReviewedState::Retired, Some(at))
-                } else {
-                    (ReviewedState::Open, None)
-                };
                 let shown = for_you(suggestion, false);
                 ReviewedSuggestion {
                     id: suggestion.id,
                     surfaces: suggestion.surfaces.clone(),
                     reason: suggestion.reason.clone(),
                     keep_probability: suggestion.keep_probability,
-                    state,
+                    state: suggestion.state,
                     created_at: suggestion.created_at,
-                    closed_at,
+                    closed_at: suggestion.closed_at(),
                     pick: shown.pick,
                 }
             })
@@ -543,19 +585,17 @@ where
                  without anyone's details"
             )]));
         }
-        let saved = self.repo.saved_from(&user).await?;
-        let retired = !saved.contains(&id)
-            && self
-                .repo
-                .retire(
-                    &user,
-                    id,
-                    session.session,
-                    session.generation,
-                    &reason,
-                    Utc::now(),
-                )
-                .await?;
+        let retired = self
+            .repo
+            .retire(
+                &user,
+                id,
+                session.session,
+                session.generation,
+                &reason,
+                Utc::now(),
+            )
+            .await?;
         span.record("routine.suggestion.ok", retired);
         if !retired {
             return Ok(rejected(vec![
@@ -579,8 +619,12 @@ where
     async fn dismiss(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<()> {
         self.require_flag(user).await?;
         let span = tracing::Span::current();
-        if self.repo.dismiss(user, id).await? {
+        if let Some(transition) = self.repo.dismiss(user, id).await? {
             span.record("routine.suggestion.from", SuggestionFrom::ForYou.as_ref());
+            // Dismissing never refuses; one dismissed or saved already stays.
+            if transition != Transition::Move(RoutineSuggestionState::Dismissed) {
+                return Ok(());
+            }
             let stored = self.repo.suggestions(user).await.unwrap_or_default();
             let origin = origin_of(&stored, user, id);
             tracing::info!(
@@ -715,6 +759,10 @@ fn surface_name(surface: Surface) -> &'static str {
     }
 }
 
+fn session_full() -> String {
+    format!("you suggested {MAX_KEPT_PER_SESSION} routines; that is enough, stop now")
+}
+
 fn rejected(problems: Vec<String>) -> SuggestOutcome {
     SuggestOutcome {
         ok: false,
@@ -726,9 +774,10 @@ fn rejected(problems: Vec<String>) -> SuggestOutcome {
 
 /// Per surface (only `surface`, when given), AI's open suggestions best
 /// first, then catalog routines marked `suggest` as Macro's templates, to
-/// [`PER_SURFACE`]. Skips what the person dismissed or saved a routine
-/// from, and a template AI already picked. Each suggestion appears once,
-/// in the order its first surface reached it.
+/// [`PER_SURFACE`]. Skips AI's suggestions that aren't open, and a template
+/// the person dismissed, saved a routine from (`saved_from`) or AI already
+/// picked. Each suggestion appears once, in the order its first surface
+/// reached it.
 pub fn fill(
     user: &MacroUserIdStr<'_>,
     stored: &[StoredSuggestion],
@@ -748,7 +797,7 @@ pub fn fill(
         .collect();
     let mut open: Vec<&StoredSuggestion> = stored
         .iter()
-        .filter(|suggestion| suggestion.is_open() && !saved.contains(&suggestion.id))
+        .filter(|suggestion| suggestion.is_open())
         .collect();
     // Drafted routines first, then catalog picks, each best first; a second
     // one with the same catalog key or name is left out.

@@ -12,4 +12,10 @@ export type ListSuggestionsParams = {
 the reader's night.
  */
   timezone?: string;
+  /**
+ * Most open suggestions to return, best first; all when unset. With a
+limit the feed leaves out `done`; `counts` always counts every one.
+ * @minimum 1
+ */
+  limit?: number;
 };

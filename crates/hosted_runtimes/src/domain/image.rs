@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::enrollment::Enrollment;
 use crate::domain::size::ComputerResources;
 
 /// The root disk's share of a computer's disk quota, in GiB: the NixOS
@@ -55,6 +56,40 @@ impl std::fmt::Display for GuestImage {
 impl<'de> Deserialize<'de> for GuestImage {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+/// The images a fleet creates guests from: the regular guest, and the same
+/// guest built in agent mode for computers that run an agent teammate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuestImages<Image> {
+    /// For computers without an agent, e.g. `macro-box/2026-11-10`.
+    pub regular: Image,
+    /// For agent teammate computers, e.g. `macro-box-agent/2026-11-10`.
+    pub agent: Image,
+}
+
+impl<Image> GuestImages<Image> {
+    /// The image a new guest is created from: the agent image when its
+    /// enrollment carries an agent. A guest recreated after a loss enrolls
+    /// the same way, so an agent computer stays on the agent image.
+    pub fn for_enrollment(&self, enrollment: &Enrollment) -> &Image {
+        if enrollment.agent.is_some() {
+            &self.agent
+        } else {
+            &self.regular
+        }
+    }
+
+    /// Convert both images, failing on the first that does not convert.
+    pub fn try_map<Other, Error>(
+        self,
+        mut convert: impl FnMut(Image) -> Result<Other, Error>,
+    ) -> Result<GuestImages<Other>, Error> {
+        Ok(GuestImages {
+            regular: convert(self.regular)?,
+            agent: convert(self.agent)?,
+        })
     }
 }
 

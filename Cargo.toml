@@ -8,10 +8,14 @@ members = [
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
+  "crates/agent_credentials",
+  "crates/agent_git",
+  "crates/team_agents",
   "crates/routines",
   "crates/routine_program",
   "crates/shown_text",
   "crates/suggestions",
+  "crates/suggestions_db_utils",
   "crates/suggestion_generation",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
@@ -327,6 +331,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -568,6 +573,8 @@ subtle = "2.6.1"
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
+# Bundles a newer IANA tzdata release than crates.io; see vendor/chrono-tz/README-MACRO.md.
+chrono-tz = { path = "vendor/chrono-tz" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests
