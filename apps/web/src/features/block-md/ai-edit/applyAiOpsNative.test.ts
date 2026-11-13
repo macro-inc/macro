@@ -6,7 +6,10 @@ import { locks } from 'node:worker_threads';
 import type { DocumentOp } from '@ai-ops/editor';
 import { dispatchApplicationCommandSettledIfSessionEdit } from '@core/component/LexicalMarkdown/plugins/group-b/command';
 import * as native from '@core/document-session/wasm/document_session_wasm.js';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  CommandCode,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
   mountLocalSessionView,
@@ -92,6 +95,8 @@ function mount() {
       },
     })
   );
+  // As the app's Source rig does after seeding: the seed is not an undo step.
+  runtime.port.command(CommandCode.ClearHistory);
   return { ...runtime, root };
 }
 
@@ -104,15 +109,7 @@ function paragraphs(runtime: Runtime): string[] {
 }
 
 function undo(runtime: Runtime): void {
-  runtime.root.focus();
-  runtime.root.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key: 'z',
-      ctrlKey: true,
-      bubbles: true,
-      cancelable: true,
-    })
-  );
+  runtime.port.command(CommandCode.Undo);
 }
 
 /** A real facade span whose events and attributes the test reads. */
@@ -225,10 +222,11 @@ test('skips a refused op, applies the ops after it and reports it without conten
 
 test('a view retired before entry drops the edit silently', async () => {
   const runtime = mount();
-  const input = vi.spyOn(runtime.executor.session, 'input');
   const report = vi.spyOn(Telemetry, 'error');
   const { span, event } = recordedSpan();
   const closing = runtime.close();
+  // Watched from here: closing has inputs of its own.
+  const input = vi.spyOn(runtime.executor.session, 'input');
   try {
     expect(() =>
       applyAiOpsNative(runtime.view, [setText('alphaId1', 'Omega')], span)
@@ -425,8 +423,11 @@ test('two AI edits group for undo by the 400 ms window, like Source', async () =
   // Source rows: undo-gap.json ee25472b and loro-interval.json 981542e3.
   const rows: { gap: number; merged: boolean }[] = [];
   for (const gap of [0, 399, 400, 500]) {
+    // Both host clocks move together, as in a browser: native MergeTracker
+    // reads the executor's mono time, Loro's merge interval its wall time.
     let time = 1_000_000;
     vi.spyOn(performance, 'now').mockImplementation(() => time);
+    vi.spyOn(Date, 'now').mockImplementation(() => time);
     const runtime = mount();
     const { span } = recordedSpan();
     try {
