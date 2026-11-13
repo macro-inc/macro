@@ -221,6 +221,7 @@ async fn equal_names_page_without_repeating_or_skipping(pool: PgPool) -> anyhow:
         seen.extend(page.iter().map(|item| item.item.id()));
         cursor = continuation(&page.last().unwrap().item, sort);
     }
+    assert_eq!(seen.len(), 5, "no tied document repeats: {seen:?}");
     let mut unique = seen.clone();
     unique.sort();
     unique.dedup();
