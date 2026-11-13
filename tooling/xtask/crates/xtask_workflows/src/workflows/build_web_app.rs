@@ -5,7 +5,7 @@
 //! upload waits for it. Generated into `build_web_app.yml`.
 
 use anyhow::Result;
-use gh_workflow::{Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
 
 use crate::workflows::{runners, steps, vars};
 
@@ -48,17 +48,26 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
 
 /// The build uses the shared Namespace `web-ci` sccache cache, so no sccache
 /// backend secret is needed here.
+///
+/// Wasm packages whose inputs did not change come from a GitHub Actions cache
+/// instead of being rebuilt with LTO. A run on a branch only reads its own
+/// scope and the default branch's, so a pull request cannot write what a deploy
+/// reads; the Namespace HTTP cache PR jobs share stays off here.
 fn build_job() -> Job {
     Job::default()
         .name("Build")
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
+        .add_env(("WASM_PKG_CACHE_DIR", vars::DEPLOY_WASM_PKG_CACHE_DIR))
         .add_step(checkout())
         .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
+        .add_step(restore_wasm_packages())
+        .add_step(build_wasm_packages())
+        .add_step(save_wasm_packages())
         .add_step(build())
         .add_step(steps::show_sccache_stats())
         .add_step(upload_dist())
@@ -77,7 +86,60 @@ pub fn checkout() -> Step<Use> {
         .add_with(("ref", "${{ github.sha }}"))
 }
 
-/// Build identical across dev/prod up to `MODE` (`just build-<env>`).
+/// Saved entries are named by the set of package keys they hold plus the run
+/// that saved them (`scripts/deploy_build_wasm.sh`), and the newest one in
+/// scope is restored. A run name keeps a set that comes back, say after a
+/// revert, saveable again: Actions cache entries cannot be overwritten.
+const WASM_PACKAGES_KEY_PREFIX: &str = "deploy-wasm-pkgs-v1-";
+
+/// actions/cache v5.0.5.
+const ACTIONS_CACHE_SHA: &str = "27d5ce7f107fe9357f9df03efb73ab90386fccae";
+
+/// The packages are tens of megabytes. A transfer that stalls gives up and the
+/// build goes on without them rather than holding the deploy.
+const WASM_CACHE_TIMEOUT_MINUTES: u32 = 3;
+
+fn restore_wasm_packages() -> Step<Use> {
+    Step::new("Restore wasm packages")
+        .uses("actions/cache", "restore", ACTIONS_CACHE_SHA)
+        .id("restore-wasm")
+        .continue_on_error(true)
+        .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
+        .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
+        .add_with((
+            "key",
+            format!("{WASM_PACKAGES_KEY_PREFIX}${{{{ github.sha }}}}"),
+        ))
+        .add_with(("restore-keys", WASM_PACKAGES_KEY_PREFIX))
+}
+
+/// Its own step, saved before the app build, so a run whose app build fails
+/// still keeps its packages. It names the set to save, or nothing when the
+/// restored entry already holds it.
+fn build_wasm_packages() -> Step<Run> {
+    Step::new("Build wasm packages")
+        .run(include_str!("scripts/deploy_build_wasm.sh"))
+        .id("wasm")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .add_env(("KEY_PREFIX", WASM_PACKAGES_KEY_PREFIX))
+        .add_env((
+            "RESTORED_KEY",
+            "${{ steps.restore-wasm.outputs.cache-matched-key }}",
+        ))
+}
+
+fn save_wasm_packages() -> Step<Use> {
+    Step::new("Save wasm packages")
+        .uses("actions/cache", "save", ACTIONS_CACHE_SHA)
+        .if_condition(Expression::new("steps.wasm.outputs.key != ''"))
+        .continue_on_error(true)
+        .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
+        .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
+        .add_with(("key", "${{ steps.wasm.outputs.key }}"))
+}
+
+/// Build identical across dev/prod up to `MODE` (`just build-<env>`). Its
+/// `build-wasm` dependency reuses every package the step above built.
 fn build() -> Step<Run> {
     Step::new("Build")
         .run("just build-${{ inputs.environment }}")

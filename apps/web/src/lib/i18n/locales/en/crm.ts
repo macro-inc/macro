@@ -1,7 +1,13 @@
 export default {
   email: 'Email',
-  editContactEmail: 'Add contact email',
   addEmail: 'Add email',
+  manageContactEmail: 'Email options for {{email}}',
+  primaryEmail: 'Primary',
+  primaryContactEmail: '{{email}} (primary)',
+  makePrimaryContactEmail: 'Make primary',
+  removeContactEmail: 'Remove',
+  contactEmailLinksCompany:
+    'This address links the contact to its company, so it cannot be removed.',
   contactEmailPlaceholder: 'person@example.com',
   saveContact: 'Save',
   savingContact: 'Saving…',
@@ -12,6 +18,14 @@ export default {
   addCompany: 'Add company',
   editContactCompany: 'Change contact company',
   noCompany: 'No company',
+  removeCompany: 'Remove company',
+  removeCompanyTitle: 'Remove company from this contact?',
+  removeCompanyBody:
+    'The contact, its email history and its discussions are kept. It will no longer appear under this company.',
+  removeCompanyPermanent:
+    'Its primary email is not a personal address, so it cannot be linked to a company again from here.',
+  contactCompanyLinkedByEmail:
+    'Linked by an email address on this company’s domain.',
   goToCompany: 'Go to company',
   searchCompanies: 'Search companies…',
   contactEditFailed: 'Could not save this change. Try again.',

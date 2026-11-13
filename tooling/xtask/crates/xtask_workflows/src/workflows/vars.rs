@@ -101,6 +101,10 @@ pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-mod
 /// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
 pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 
+/// The deploy build's wasm packages, kept in a GitHub Actions cache rather than
+/// on the cache volume, which PR jobs write. Off the volume on purpose.
+pub const DEPLOY_WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs-deploy";
+
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";

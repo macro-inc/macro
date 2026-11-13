@@ -431,6 +431,48 @@ where
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(skip_all, fields(initiative_id = %receipt.entity().entity_id), err)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, InitiativeError> {
+        let id = initiative_id_from_receipt(&receipt)?;
+        appearance.validate().map_err(InitiativeError::BadRequest)?;
+        let attribution = receipt_attribution(&receipt);
+        let update = activity::AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: attribution
+                .clone()
+                .map(|actor| activity::Attribution::new(actor.actor, actor.on_behalf_of)),
+            event_id: uuid::Uuid::now_v7(),
+            occurred_at: Utc::now(),
+        };
+        if let Some(previous) = self
+            .repo
+            .set_appearance(id, &update)
+            .await
+            .map_err(Into::into)?
+        {
+            self.publish(
+                id,
+                InitiativeTopicEvent::AppearanceChanged {
+                    change: InitiativeChange {
+                        initiative_id: id,
+                        attribution,
+                        occurred_at: update.occurred_at,
+                    },
+                    appearance: activity::AppearanceChange {
+                        from: (!previous.is_default()).then_some(previous),
+                        to: (!appearance.is_default()).then(|| appearance.clone()),
+                    },
+                },
+            )
+            .await;
+        }
+        Ok(appearance)
+    }
+
     #[tracing::instrument(err, skip_all)]
     async fn update(
         &self,

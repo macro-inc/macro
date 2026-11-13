@@ -69,6 +69,10 @@ the entity-access domain service.
   wraps its checks in `observe_source_ids` to record the count on its own span,
   as `initiative.read` does. A new check that fetches source ids goes through
   `user_source_ids` so its span gets the count.
+- `get_user_source_ids` is cached for 10 s per process and concurrent misses
+  for one user share one query through `single_flight`. A failure then arrives
+  as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
+  new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related

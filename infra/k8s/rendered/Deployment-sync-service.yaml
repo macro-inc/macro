@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: sync-service
+    app.kubernetes.io/name: sync-service
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: sync-service
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: sync-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: sync-service
+        app.kubernetes.io/name: sync-service
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: app
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/sync-service:build.0dg03yywmng6mccc9h5889l7b1plf8qn
+          imagePullPolicy: IfNotPresent
+          name: sync-service
+          ports:
+            - containerPort: 8787
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8787
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /state
+              name: vol-state
+      enableServiceLinks: false
+      initContainers: []
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-state
+          persistentVolumeClaim:
+            claimName: sync-state

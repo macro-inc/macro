@@ -91,6 +91,11 @@ button.sample-record-row:hover, div.sample-record-row:hover { background: var(--
   .sample-company-record[data-panel-open=true] .sample-company-scroll { padding-right: 344px; }
 }
 
+/* A narrower record bar drops the list's name, so the tabs and the record's own name fit. */
+@container sample-main (max-width: 820px) {
+  .sample-crumb-root, .sample-crumb-separator { display: none; }
+}
+
 /* The app's compact record bar: icon tabs, and the panel as a bottom sheet. */
 @container sample-main (max-width: 640px) {
   .sample-company-topbar { gap: 6px; padding: 0 8px; }

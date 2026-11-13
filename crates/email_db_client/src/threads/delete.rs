@@ -1,8 +1,7 @@
 use sqlx::types::Uuid;
 
-/// Deletes a thread if it has no associated messages
-#[tracing::instrument(skip(tx), err)]
-pub async fn delete_thread_if_empty(
+/// Read the existing empty-thread predicate in the caller's transaction.
+pub async fn thread_has_messages(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
 ) -> anyhow::Result<bool> {
@@ -14,19 +13,17 @@ pub async fn delete_thread_if_empty(
     .await?
     .exists;
 
-    if messages_exist {
-        return Ok(false);
-    }
+    Ok(messages_exist)
+}
 
-    // No messages exist, delete the thread
+/// Delete the selected empty thread and return the affected count.
+pub async fn delete_empty_thread(
+    tx: &mut sqlx::PgConnection,
+    thread_id: Uuid,
+) -> anyhow::Result<u64> {
     let result = sqlx::query!(r#"DELETE FROM email_threads WHERE id = $1"#, thread_id)
         .execute(&mut *tx)
         .await?;
 
-    if result.rows_affected() == 0 {
-        tracing::warn!(thread_id = %thread_id, "Thread not found for deletion");
-        return Ok(false);
-    }
-
-    Ok(true)
+    Ok(result.rows_affected())
 }

@@ -100,7 +100,7 @@ const scopes: CrmRecordScope[] = [
   {
     type: 'contact',
     id: 'contact-1',
-    email: 'phil@example.com',
+    emails: ['phil@example.com'],
     companyId: 'company-1',
   },
   { type: 'company', id: 'company-1', domains: ['example.com'] },
