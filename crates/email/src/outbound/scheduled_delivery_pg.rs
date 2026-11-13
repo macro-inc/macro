@@ -40,6 +40,8 @@ impl ClaimTransaction for PgClaimTransaction {
                 delivery_started_at: row.delivery_started_at,
                 delivery_message_id: row.delivery_message_id,
                 delivery_status: row.delivery_status,
+                delivery_absent_lookups: row.delivery_absent_lookups,
+                delivery_resends: row.delivery_resends,
                 approved_attachments: row.approved_attachments,
                 available: row.available,
             }))
@@ -89,6 +91,25 @@ impl DeliveryTransitions for PgPool {
             claim.schedule.link_id,
             claim.token.0,
             retry,
+        )
+        .await
+    }
+    async fn record_absent_lookup(&self, claim: &DeliveryClaim, retry: i32) -> anyhow::Result<u64> {
+        delivery::record_absent_lookup(
+            self,
+            claim.schedule.message_id,
+            claim.schedule.link_id,
+            claim.token.0,
+            retry,
+        )
+        .await
+    }
+    async fn release_for_resend(&self, claim: &DeliveryClaim) -> anyhow::Result<u64> {
+        delivery::release_for_resend(
+            self,
+            claim.schedule.message_id,
+            claim.schedule.link_id,
+            claim.token.0,
         )
         .await
     }
