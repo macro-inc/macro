@@ -77,7 +77,7 @@ export type PasswordSource = {
     batch: ImportBatchBody
   ): PasswordResult<ImportBatchResult>;
 };
-/** One request to `POST …/imports/{importId}/items` (`PasswordImportBatch`). */
+/** One request to `POST …/imports/{importId}/items`; checked against `PasswordImportBatch`. */
 export type ImportBatchBody = {
   format: ImportFormat;
   target: ImportTarget;
@@ -94,7 +94,7 @@ export type ImportErrorCode =
   | 'folder_missing'
   | 'busy'
   | 'vault_unavailable';
-/** Per-item outcomes, never values (`PasswordImportBatchResult`). */
+/** Per-item outcomes, never values; mapped from `PasswordImportBatchResult`. */
 export type ImportBatchResult = {
   targetFolderId: string | null;
   folders: { key: string; folderId: string }[];

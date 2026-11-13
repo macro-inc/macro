@@ -10,6 +10,8 @@ import { PasswordErrorCode } from '@service-storage/generated/schemas/passwordEr
 import type { PasswordFolder as FolderDto } from '@service-storage/generated/schemas/passwordFolder';
 import type { PasswordFolderBody } from '@service-storage/generated/schemas/passwordFolderBody';
 import type { PasswordGrant as GrantDto } from '@service-storage/generated/schemas/passwordGrant';
+import type { PasswordImportBatch } from '@service-storage/generated/schemas/passwordImportBatch';
+import type { PasswordImportBatchResult } from '@service-storage/generated/schemas/passwordImportBatchResult';
 import type { PasswordItemMetadata } from '@service-storage/generated/schemas/passwordItemMetadata';
 import type { PasswordMoveFolderBody } from '@service-storage/generated/schemas/passwordMoveFolderBody';
 import type { PasswordPatchItem } from '@service-storage/generated/schemas/passwordPatchItem';
@@ -345,12 +347,25 @@ export function createPasswordSource(
     totp(id) {
       return currentCode(id);
     },
-    importBatch(importId, batch) {
+    async importBatch(importId, batch) {
       // Spanned by the caller's `passwords.import`; values never reach attributes.
-      return request<ImportBatchResult>(
-        `/imports/${encodeURIComponent(importId)}/items`,
-        'POST',
-        batch
+      return (
+        await request<PasswordImportBatchResult>(
+          `/imports/${encodeURIComponent(importId)}/items`,
+          'POST',
+          batch satisfies PasswordImportBatch
+        )
+      ).map(
+        (result): ImportBatchResult => ({
+          targetFolderId: result.targetFolderId ?? null,
+          folders: result.folders,
+          items: result.items.map((item) => ({
+            sourceKey: item.sourceKey,
+            outcome: item.outcome,
+            errorCode: item.errorCode ?? undefined,
+            itemId: item.itemId ?? undefined,
+          })),
+        })
       );
     },
     async logo(domain) {
