@@ -10,9 +10,12 @@ Pulumi stacks; they do not host extra agent processes.
 
 ## Start here
 
-- `src/main.rs`: composition root — builds Postgres repositories, the
+- `src/lib.rs`: composition root (`run()`) — builds Postgres repositories, the
   container manager, channel/session services, and wires
-  `macro.channels`-derived triggers into `macro.agent_sessions`.
+  `macro.channels`-derived triggers into `macro.agent_sessions`. All modules
+  live in the library so the crate compiles once and caches; `src/main.rs` only
+  starts it (allocator, `MacroEntrypoint`, `run()`). Never add a `mod` to
+  `main.rs`.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
   crate's own router (`agent_session`, `agent_changes`, `agent_egress`,
@@ -287,14 +290,14 @@ Pulumi stacks; they do not host extra agent processes.
 - Add a new agent-session route: the owning domain crate's `inbound::axum_router`
   → mount it in `src/api.rs`.
 - Add a new model/runtime provider: `src/model_providers/<provider>.rs` →
-  `src/model_providers/mod.rs` → wire into `src/main.rs`.
+  `src/model_providers/mod.rs` → wire into `src/lib.rs`.
 - Inspect a session's protocol log: `just session-log <channel_id>`.
 
 ## Tool contracts
 
 - Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
 - An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
-- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
+- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `run()` in `lib.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
 - The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
 - Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
@@ -380,7 +383,8 @@ is cognition's Secrets Manager reference; AI tools resolve the separate
 
 The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
 glibc malloc kept freed memory resident as fragmentation under this
-workload. Tests and the library keep the system allocator.
+workload. Tests and the library keep the system allocator, so the allocator
+stays in `main.rs` while everything else lives in `src/lib.rs`.
 
 `AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
 a session's command worker waits before it releases a quiet session from
