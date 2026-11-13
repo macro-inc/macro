@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 
 pub use folder::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, S3ObjectInfo,
-    UploadExtractFolderRequest, UploadExtractFolderResponseData,
+    UploadExtractFolderRequest, UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
 /// The upload status of the folder
 #[derive(
@@ -69,6 +69,21 @@ pub struct BulkUploadRequest {
     pub error_message: Option<String>,
     pub root_project_id: Option<String>,
     pub parent_id: Option<String>,
+    /// How far the extractor has got storing the folder's files, once it knows
+    /// how many there are.
+    pub progress: Option<UploadFolderProgress>,
+}
+
+/// Files of an extracted folder moved into storage so far.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadFolderProgress {
+    /// Files the folder holds.
+    pub files_total: u32,
+    /// Files stored successfully.
+    pub files_stored: u32,
+    /// Files that could not be stored.
+    pub files_failed: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

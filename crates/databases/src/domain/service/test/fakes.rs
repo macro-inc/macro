@@ -96,12 +96,32 @@ pub(super) struct FakeAccess(pub(super) Shared);
 
 impl DatabasesRepo for FakeRepo {
     type Error = FakeError;
+
+    async fn set_appearance(
+        &self,
+        id: DatabaseId,
+        update: activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        let database = world
+            .databases
+            .iter_mut()
+            .find(|database| database.id == id && database.trashed_at.is_none())
+            .ok_or(FakeError)?;
+        let previous = database.appearance.clone().unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        database.appearance = Some(update.appearance);
+        Ok(Some(previous))
+    }
     async fn create_database(
         &self,
         command: &CreateDatabase,
         first_table: FirstTable,
     ) -> Result<Database, FakeError> {
         let database = Database {
+            appearance: None,
             id: DatabaseId::new(),
             name: command.name.clone(),
             owner_id: command.owner_id.as_ref().to_string(),

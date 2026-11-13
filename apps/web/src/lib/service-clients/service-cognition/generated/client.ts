@@ -18,12 +18,9 @@ import type {
   CreateChatRequest,
   CreateConfirmedCalendarEvent200,
   CreateConfirmedCalendarEventBody,
-  CreateDatabaseSyncRequest,
   CreatePipedreamMcpTokenBody,
   DatabaseQueryAnswer,
   DatabaseQueryRequest,
-  DatabaseSync,
-  DatabaseSyncSources,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -45,8 +42,11 @@ import type {
   GetChatsForAttachmentResponse,
   GetUserActivityParams,
   HttpSendChatMessageRequest,
+  ImportEntitiesResponse,
+  ImportNotionPageRequest,
+  ImportNotionPageResponse,
   ImportSource,
-  ListDatabaseSyncsResponse,
+  ListImportEntitiesParams,
   ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -86,6 +86,8 @@ import type {
   StructuredCompletionError,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  TrackImportEntityRequest,
+  TrackImportEntityResponse,
   UpdateExplicitMemoryRequest,
   UpdateServerRequest,
   UpdateToolCallRequest,
@@ -1439,432 +1441,6 @@ export const generateDatabaseQuery = async (
   } as generateDatabaseQueryResponse;
 };
 
-/**
- * @summary Create a database, named after the source, whose one table is synced
-with it. Retrying with the same `id` answers the first attempt's sync.
- */
-export type createSyncedDatabaseResponse201 = {
-  data: DatabaseSync;
-  status: 201;
-};
-
-export type createSyncedDatabaseResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type createSyncedDatabaseResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type createSyncedDatabaseResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type createSyncedDatabaseResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createSyncedDatabaseResponse502 = {
-  data: ErrorResponse;
-  status: 502;
-};
-
-export type createSyncedDatabaseResponseSuccess =
-  createSyncedDatabaseResponse201 & {
-    headers: Headers;
-  };
-export type createSyncedDatabaseResponseError = (
-  | createSyncedDatabaseResponse401
-  | createSyncedDatabaseResponse404
-  | createSyncedDatabaseResponse409
-  | createSyncedDatabaseResponse500
-  | createSyncedDatabaseResponse502
-) & {
-  headers: Headers;
-};
-
-export type createSyncedDatabaseResponse =
-  | createSyncedDatabaseResponseSuccess
-  | createSyncedDatabaseResponseError;
-
-export const getCreateSyncedDatabaseUrl = () => {
-  return `/databases/syncs`;
-};
-
-export const createSyncedDatabase = async (
-  createDatabaseSyncRequest: CreateDatabaseSyncRequest,
-  options?: RequestInit
-): Promise<createSyncedDatabaseResponse> => {
-  const res = await fetch(getCreateSyncedDatabaseUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createDatabaseSyncRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createSyncedDatabaseResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createSyncedDatabaseResponse;
-};
-
-/**
- * @summary What the caller can sync a table from: whether Granola is connected,
-and the Notion data sources their connection can read.
- */
-export type listDatabaseSyncSourcesResponse200 = {
-  data: DatabaseSyncSources;
-  status: 200;
-};
-
-export type listDatabaseSyncSourcesResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type listDatabaseSyncSourcesResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type listDatabaseSyncSourcesResponse502 = {
-  data: ErrorResponse;
-  status: 502;
-};
-
-export type listDatabaseSyncSourcesResponseSuccess =
-  listDatabaseSyncSourcesResponse200 & {
-    headers: Headers;
-  };
-export type listDatabaseSyncSourcesResponseError = (
-  | listDatabaseSyncSourcesResponse401
-  | listDatabaseSyncSourcesResponse500
-  | listDatabaseSyncSourcesResponse502
-) & {
-  headers: Headers;
-};
-
-export type listDatabaseSyncSourcesResponse =
-  | listDatabaseSyncSourcesResponseSuccess
-  | listDatabaseSyncSourcesResponseError;
-
-export const getListDatabaseSyncSourcesUrl = () => {
-  return `/databases/syncs/sources`;
-};
-
-export const listDatabaseSyncSources = async (
-  options?: RequestInit
-): Promise<listDatabaseSyncSourcesResponse> => {
-  const res = await fetch(getListDatabaseSyncSourcesUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listDatabaseSyncSourcesResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listDatabaseSyncSourcesResponse;
-};
-
-/**
- * @summary The database's syncs.
- */
-export type listDatabaseSyncsResponse200 = {
-  data: ListDatabaseSyncsResponse;
-  status: 200;
-};
-
-export type listDatabaseSyncsResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type listDatabaseSyncsResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type listDatabaseSyncsResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type listDatabaseSyncsResponseSuccess = listDatabaseSyncsResponse200 & {
-  headers: Headers;
-};
-export type listDatabaseSyncsResponseError = (
-  | listDatabaseSyncsResponse401
-  | listDatabaseSyncsResponse403
-  | listDatabaseSyncsResponse500
-) & {
-  headers: Headers;
-};
-
-export type listDatabaseSyncsResponse =
-  | listDatabaseSyncsResponseSuccess
-  | listDatabaseSyncsResponseError;
-
-export const getListDatabaseSyncsUrl = (id: string) => {
-  return `/databases/${id}/syncs`;
-};
-
-export const listDatabaseSyncs = async (
-  id: string,
-  options?: RequestInit
-): Promise<listDatabaseSyncsResponse> => {
-  const res = await fetch(getListDatabaseSyncsUrl(id), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listDatabaseSyncsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listDatabaseSyncsResponse;
-};
-
-/**
- * @summary Add a table synced with a source to the database. Its writes act with
-the caller's access. Retrying with the same `id` answers the first
-attempt's sync.
- */
-export type createDatabaseSyncResponse201 = {
-  data: DatabaseSync;
-  status: 201;
-};
-
-export type createDatabaseSyncResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type createDatabaseSyncResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type createDatabaseSyncResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type createDatabaseSyncResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type createDatabaseSyncResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createDatabaseSyncResponse502 = {
-  data: ErrorResponse;
-  status: 502;
-};
-
-export type createDatabaseSyncResponseSuccess =
-  createDatabaseSyncResponse201 & {
-    headers: Headers;
-  };
-export type createDatabaseSyncResponseError = (
-  | createDatabaseSyncResponse401
-  | createDatabaseSyncResponse403
-  | createDatabaseSyncResponse404
-  | createDatabaseSyncResponse409
-  | createDatabaseSyncResponse500
-  | createDatabaseSyncResponse502
-) & {
-  headers: Headers;
-};
-
-export type createDatabaseSyncResponse =
-  | createDatabaseSyncResponseSuccess
-  | createDatabaseSyncResponseError;
-
-export const getCreateDatabaseSyncUrl = (id: string) => {
-  return `/databases/${id}/syncs`;
-};
-
-export const createDatabaseSync = async (
-  id: string,
-  createDatabaseSyncRequest: CreateDatabaseSyncRequest,
-  options?: RequestInit
-): Promise<createDatabaseSyncResponse> => {
-  const res = await fetch(getCreateDatabaseSyncUrl(id), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createDatabaseSyncRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createDatabaseSyncResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createDatabaseSyncResponse;
-};
-
-/**
- * @summary Stop a sync. Its table and rows stay as they are.
- */
-export type deleteDatabaseSyncResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type deleteDatabaseSyncResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type deleteDatabaseSyncResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type deleteDatabaseSyncResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type deleteDatabaseSyncResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type deleteDatabaseSyncResponseSuccess =
-  deleteDatabaseSyncResponse204 & {
-    headers: Headers;
-  };
-export type deleteDatabaseSyncResponseError = (
-  | deleteDatabaseSyncResponse401
-  | deleteDatabaseSyncResponse403
-  | deleteDatabaseSyncResponse404
-  | deleteDatabaseSyncResponse500
-) & {
-  headers: Headers;
-};
-
-export type deleteDatabaseSyncResponse =
-  | deleteDatabaseSyncResponseSuccess
-  | deleteDatabaseSyncResponseError;
-
-export const getDeleteDatabaseSyncUrl = (id: string, syncId: string) => {
-  return `/databases/${id}/syncs/${syncId}`;
-};
-
-export const deleteDatabaseSync = async (
-  id: string,
-  syncId: string,
-  options?: RequestInit
-): Promise<deleteDatabaseSyncResponse> => {
-  const res = await fetch(getDeleteDatabaseSyncUrl(id, syncId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteDatabaseSyncResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteDatabaseSyncResponse;
-};
-
-/**
- * @summary Run a sync as soon as a worker is free.
- */
-export type runDatabaseSyncResponse202 = {
-  data: void;
-  status: 202;
-};
-
-export type runDatabaseSyncResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type runDatabaseSyncResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type runDatabaseSyncResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type runDatabaseSyncResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type runDatabaseSyncResponseSuccess = runDatabaseSyncResponse202 & {
-  headers: Headers;
-};
-export type runDatabaseSyncResponseError = (
-  | runDatabaseSyncResponse401
-  | runDatabaseSyncResponse403
-  | runDatabaseSyncResponse404
-  | runDatabaseSyncResponse500
-) & {
-  headers: Headers;
-};
-
-export type runDatabaseSyncResponse =
-  | runDatabaseSyncResponseSuccess
-  | runDatabaseSyncResponseError;
-
-export const getRunDatabaseSyncUrl = (id: string, syncId: string) => {
-  return `/databases/${id}/syncs/${syncId}/run`;
-};
-
-export const runDatabaseSync = async (
-  id: string,
-  syncId: string,
-  options?: RequestInit
-): Promise<runDatabaseSyncResponse> => {
-  const res = await fetch(getRunDatabaseSyncUrl(id, syncId), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: runDatabaseSyncResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as runDatabaseSyncResponse;
-};
-
 export type decisionsResponse200 = {
   data: DecisionResponse;
   status: 200;
@@ -2150,6 +1726,197 @@ export const generateImage = async (
 };
 
 /**
+ * @summary List the caller's import ledger: staged candidates, running and finished
+imports (with the team's imports), and declined items.
+ */
+export type listImportEntitiesResponse200 = {
+  data: ImportEntitiesResponse;
+  status: 200;
+};
+
+export type listImportEntitiesResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listImportEntitiesResponseSuccess =
+  listImportEntitiesResponse200 & {
+    headers: Headers;
+  };
+export type listImportEntitiesResponseError = listImportEntitiesResponse500 & {
+  headers: Headers;
+};
+
+export type listImportEntitiesResponse =
+  | listImportEntitiesResponseSuccess
+  | listImportEntitiesResponseError;
+
+export const getListImportEntitiesUrl = (params?: ListImportEntitiesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/import/entities?${stringifiedParams}`
+    : `/import/entities`;
+};
+
+export const listImportEntities = async (
+  params?: ListImportEntitiesParams,
+  options?: RequestInit
+): Promise<listImportEntitiesResponse> => {
+  const res = await fetch(getListImportEntitiesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listImportEntitiesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listImportEntitiesResponse;
+};
+
+/**
+ * @summary Track an external item in the ledger: stage it as a candidate, or record a
+Macro entity already created from it. Says when the item was already
+imported, so callers do not create a duplicate.
+ */
+export type trackImportEntityResponse200 = {
+  data: TrackImportEntityResponse;
+  status: 200;
+};
+
+export type trackImportEntityResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type trackImportEntityResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type trackImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type trackImportEntityResponseSuccess = trackImportEntityResponse200 & {
+  headers: Headers;
+};
+export type trackImportEntityResponseError = (
+  | trackImportEntityResponse400
+  | trackImportEntityResponse422
+  | trackImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type trackImportEntityResponse =
+  | trackImportEntityResponseSuccess
+  | trackImportEntityResponseError;
+
+export const getTrackImportEntityUrl = () => {
+  return `/import/entities`;
+};
+
+export const trackImportEntity = async (
+  trackImportEntityRequest: TrackImportEntityRequest,
+  options?: RequestInit
+): Promise<trackImportEntityResponse> => {
+  const res = await fetch(getTrackImportEntityUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(trackImportEntityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: trackImportEntityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as trackImportEntityResponse;
+};
+
+/**
+ * @summary Decline one of the caller's staged candidates; it is remembered as declined
+and not proposed again.
+ */
+export type declineImportEntityResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type declineImportEntityResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type declineImportEntityResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type declineImportEntityResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type declineImportEntityResponseSuccess =
+  declineImportEntityResponse204 & {
+    headers: Headers;
+  };
+export type declineImportEntityResponseError = (
+  | declineImportEntityResponse404
+  | declineImportEntityResponse409
+  | declineImportEntityResponse500
+) & {
+  headers: Headers;
+};
+
+export type declineImportEntityResponse =
+  | declineImportEntityResponseSuccess
+  | declineImportEntityResponseError;
+
+export const getDeclineImportEntityUrl = (id: string) => {
+  return `/import/entities/${id}`;
+};
+
+export const declineImportEntity = async (
+  id: string,
+  options?: RequestInit
+): Promise<declineImportEntityResponse> => {
+  const res = await fetch(getDeclineImportEntityUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: declineImportEntityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as declineImportEntityResponse;
+};
+
+/**
  * @summary Where the user's Notion workspace import stands.
  */
 export type notionReportHandlerResponse200 = {
@@ -2248,6 +2015,71 @@ export const cancelNotionHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelNotionHandlerResponse;
+};
+
+/**
+ * @summary Import one Notion page as a Macro document through the caller's Notion
+connection, deduplicated against the ledger. Notion databases are not
+imported; a whole workspace goes through a reviewed import instead.
+ */
+export type importNotionPageResponse200 = {
+  data: ImportNotionPageResponse;
+  status: 200;
+};
+
+export type importNotionPageResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type importNotionPageResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type importNotionPageResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type importNotionPageResponseSuccess = importNotionPageResponse200 & {
+  headers: Headers;
+};
+export type importNotionPageResponseError = (
+  | importNotionPageResponse400
+  | importNotionPageResponse422
+  | importNotionPageResponse500
+) & {
+  headers: Headers;
+};
+
+export type importNotionPageResponse =
+  | importNotionPageResponseSuccess
+  | importNotionPageResponseError;
+
+export const getImportNotionPageUrl = () => {
+  return `/import/notion/pages`;
+};
+
+export const importNotionPage = async (
+  importNotionPageRequest: ImportNotionPageRequest,
+  options?: RequestInit
+): Promise<importNotionPageResponse> => {
+  const res = await fetch(getImportNotionPageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(importNotionPageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: importNotionPageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as importNotionPageResponse;
 };
 
 /**

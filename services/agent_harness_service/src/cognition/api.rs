@@ -111,11 +111,7 @@ fn api_router(api_context: ApiContext) -> Router {
     );
 
     let activity_state = activity::inbound::axum_router::ActivityRouterState::new(
-        api_context
-            .tool_service_context
-            .activity_tool_context
-            .service
-            .clone(),
+        api_context.tool_service_context.activity_service.clone(),
         authorization_state.clone(),
     );
 

@@ -439,8 +439,9 @@ and start it with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })
 omitting `agent` for the default persona.
 
 Ask a chat agent what your coding agents need from you and it calls
-`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
-question, or tool approval, plus sessions running with no activity for 20
+`ListAgentUpdates` (in code mode, `macro.agentSessions.updates()`, presented
+as an `agentUpdates` view): your non-archived coding sessions waiting on a
+permission, question, or tool approval, plus sessions running with no activity for 20
 minutes (at most 25 sessions; the result says when it was truncated). The
 result shows the same live cards as the Agents home, so you answer in place;
 agents cannot answer for you. To send a coding agent instructions the chat uses
@@ -467,6 +468,8 @@ the shimmer.
   **Agents** in the sidebar opens the same roster as the composer’s
   **Create agent** action. **Connections** manages MCP integrations (including
   app authentication and disconnection), also available under Settings → Integrations.
+  Every agent composer's **+** button, including a session opened in a split,
+  lists the connected apps with **Add connections** and **Manage connections**.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
 - Ask the agent to connect an MCP server by URL (for example "connect the MCP
@@ -1284,9 +1287,8 @@ When the harness has its local Deno runtime configured, the session's `macro_int
 server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-process agent sees
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, every conversation turn of a user's session runs
-code mode whenever those three tools are listed (otherwise the turn falls back
-to the direct tools and logs a warning; for owners with the
-`ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
+code mode, and needs those three tools: a turn without them fails, with no
+direct-tools fallback. Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
@@ -1307,8 +1309,8 @@ tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
-Sessions without a user owner, or whose turn lacks the code-mode MCP tools,
-keep the standard toolset. Summary/compaction calls advertise no tools. The mode
+Sessions without a user owner can't run in-process turns at all.
+Summary/compaction calls advertise no tools. The mode
 controls presentation, not authorization; SDK requests retain normal user
 permissions, and issuing the run credential requires execution approval.
 External coding harnesses keep their own tool selection. A runner that fails
@@ -1394,7 +1396,12 @@ Inline channel and discussion steps show the observed SDK operation names while
 code runs, using the same execution journal as the full session view. The final
 tool receipt carries those operations into the shared fold, so posted step
 snapshots retain the names and outcomes without exposing source or returned JSON.
-A code run without observed SDK requests keeps its generic execution step.
+A code run without observed SDK requests reads as **Worked in your workspace**.
+People never see that the agent works in code: no surface names `ExecuteCode`,
+shows a program or its JSON, or words a step as code, scripts, the SDK or
+requests. `DescribeCodeTools`, `ReadCodeDocs`, `SearchTools` and `LoadTools`
+calls render nothing in the session view or chat and are not channel steps;
+the live status line and the agent's own instructions avoid the same words.
 Unfinished requests are shown as interrupted, never as confirmed successes. Code
 that creates a saved review immediately emits a separate completed **PresentReview**
 ACP call.
@@ -1408,8 +1415,11 @@ request”. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
-If a reused execution ID refers to different source, the card reports that tool
-results are unavailable and does not display the other program's saved results.
+`execution_id` is optional: without one the server assigns an ID. If a
+requested ID is already taken (another session's record, or a different
+source, actor or turn in this one), the program also runs under a fresh
+server-minted ID. The receipt always reports the ID used; the card follows the
+receipt and never displays another program's saved results.
 An unfinished saved record is explicitly labeled as an unconfirmed outcome on
 reads and retries. It may still be running or have been interrupted; reading or
 retrying its ID does not replay the program or infer which writes completed.
@@ -1421,8 +1431,7 @@ again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
 For local verification, run the harness with a configured Deno runner; without
-one, turns fall back to the direct tools, or fail for owners with the
-`ai-session-code-mode-only` flag. Supported
+one, a user's conversation turns fail. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -1648,8 +1657,8 @@ behavior. Model-provider credentials, repository/git access, previews, billing,
 and memory retain their
 existing session identities. ExecuteCode chooses one account for every SDK call
 in that execution. It must echo the server-issued `turn_id` from its originating
-prompt; delayed calls cannot adopt a newer requester’s turn. Retrying an execution ID requires the same source, actor
-selection, and original turn; use a new ID for another turn or account.
+prompt; delayed calls cannot adopt a newer requester’s turn. Retrying an execution ID returns the saved receipt only for the same source, actor
+selection, and original turn; any other reuse runs as a new execution under a fresh ID.
 
 When another person requests owner access, the session view shows what the agent
 wants to do. The owner sees `Approval needed` with `Decline`, `Always allow`, and
@@ -1831,7 +1840,7 @@ its turn ends reads **Stopped**; a failed call is faded with **Failed** in the f
 color after its label (for example **Add to calendar Failed**), and when the
 tool gave a reason, the row's caret opens it. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
-tool's name. Labels stay in the present tense (**Fetch**, **Load tools**) until
+tool's name. Labels stay in the present tense (**Fetch**, **Read email**) until
 a result arrives.
 
 Only tools with a supported result view can expand. Unknown tools, unsupported
@@ -1850,7 +1859,11 @@ before collapsing smoothly. These delays are shared by the group, never queued
 per call, and do not delay answer text or tool execution. Manually opening,
 closing, or interacting with a group overrides automatic collapse. Subagents
 and tools requiring user input remain outside these groups so they stay visible
-during other tool bursts. Nested agent activity uses the same peek window.
+during other tool bursts. A subagent row is titled by the call's short
+description, else the first line of its brief, and says **Running**, **Done**,
+or **Failed**; expanding it shows the **Instructions** and the **Result**. A long
+title truncates before the state, never over it, on phones too. Nested agent
+activity uses the same peek window.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
@@ -1902,11 +1915,15 @@ in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
-("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+("Searching your workspace…", "Reading your emails…") with a cheap model and
 pushes it to every viewer (`agent_session_activity`). It replaces the
 **Using N tools** label of the run the turn is in: one with a call in flight,
-or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls; a settled run reads **Used N tools**.
+or the newest run while the agent thinks between calls. The line carries no
+count (the server drops a trailing "(N)" the model adds), and it is the turn's
+only working indicator: no separate working row shows under it. Without a line,
+the indicator is the group's own **Using N tools** while a call runs, or a single
+**Working** row between calls. The caret still opens the raw calls; a
+settled run reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is

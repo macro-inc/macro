@@ -22,9 +22,16 @@ import {
   DatabasePageActions,
 } from './database-page-actions';
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
+
 // Keep the real split label, title and menu together; stub only host data.
 vi.mock('@app/components/entity-detail/DocumentTitleHoverCard', () => ({
   DocumentTitleHoverCard: () => null,
+}));
+vi.mock('@app/features/entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => vi.fn(),
 }));
 vi.mock('@core/block', () => ({
   isInBlock: () => true,

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   rollout: true,
   offers: [] as SizeOffer[],
   offersError: undefined as unknown,
+  refetchOffers: vi.fn(),
   openSettings: vi.fn(),
   computers: [] as ComputerStatus[],
   release: vi.fn(),
@@ -27,6 +28,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@queries/computers/computers', () => ({
   useComputerOffersQuery: () => ({
     isPending: false,
+    isFetching: false,
+    refetch: mocks.refetchOffers,
     get isError() {
       return mocks.offersError !== undefined;
     },
@@ -474,4 +477,24 @@ it('tells a trialing team computers are for paid plans and links to Billing', as
   expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Go to Billing' }));
   expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
+});
+
+it('says computers are unavailable when sizes fail with a 503, and retries on Retry', async () => {
+  // What the client makes of a 503 from /team/computers/offers.
+  mocks.offersError = new ThrownResultError([
+    {
+      code: 'COMPUTERS_UNAVAILABLE',
+      message: 'computers are not available',
+    },
+  ]);
+  render(() => <MacroComputers harnesses={[]} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    "Computers aren't available right now. Try again later."
+  );
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(mocks.refetchOffers).toHaveBeenCalledOnce();
 });

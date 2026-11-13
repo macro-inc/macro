@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: agent-harness-service
+    app.kubernetes.io/name: agent-harness-service
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: agent-harness-service
+  namespace: macro-kube-reference
+spec:
+  ports:
+    - name: p8080
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    - name: p8102
+      port: 8102
+      protocol: TCP
+      targetPort: 8102
+    - name: p8111
+      port: 8111
+      protocol: TCP
+      targetPort: 8111
+    - name: p2222
+      port: 2222
+      protocol: TCP
+      targetPort: 2222
+  publishNotReadyAddresses: false
+  selector:
+    app: agent-harness-service

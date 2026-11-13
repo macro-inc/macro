@@ -1946,6 +1946,117 @@
         }
       }
     },
+    "/import/entities": {
+      "get": {
+        "tags": ["import"],
+        "summary": "List the caller's import ledger: staged candidates, running and finished\nimports (with the team's imports), and declined items.",
+        "operationId": "list_import_entities",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Only rows from this source.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only rows in this status.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ImportStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportEntitiesResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["import"],
+        "summary": "Track an external item in the ledger: stage it as a candidate, or record a\nMacro entity already created from it. Says when the item was already\nimported, so callers do not create a duplicate.",
+        "operationId": "track_import_entity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackImportEntityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackImportEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid item or metadata"
+          },
+          "422": {
+            "description": "The import service refused the item"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/entities/{id}": {
+      "delete": {
+        "tags": ["import"],
+        "summary": "Decline one of the caller's staged candidates; it is remembered as declined\nand not proposed again.",
+        "operationId": "decline_import_entity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger row id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Declined"
+          },
+          "404": {
+            "description": "No such row belongs to the caller"
+          },
+          "409": {
+            "description": "Only staged rows can be declined"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/import/notion": {
       "get": {
         "tags": ["import"],
@@ -1983,6 +2094,44 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/notion/pages": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Import one Notion page as a Macro document through the caller's Notion\nconnection, deduplicated against the ledger. Notion databases are not\nimported; a whole workspace goes through a reviewed import instead.",
+        "operationId": "import_notion_page",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportNotionPageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportNotionPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No page given"
+          },
+          "422": {
+            "description": "Not a page that can be imported, or Notion is not connected"
           },
           "500": {
             "description": "Internal server error"
@@ -6134,6 +6283,20 @@
           }
         }
       },
+      "ImportEntitiesResponse": {
+        "type": "object",
+        "description": "The caller's ledger rows.",
+        "required": ["entities"],
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportEntity"
+            },
+            "description": "The caller's own rows and their team's imported rows, newest first."
+          }
+        }
+      },
       "ImportEntity": {
         "type": "object",
         "description": "One row of the import ledger.",
@@ -6241,6 +6404,43 @@
           "jira_project",
           "jira_epic",
           "channel"
+        ]
+      },
+      "ImportNotionPageRequest": {
+        "type": "object",
+        "description": "Body for importing one Notion page.",
+        "required": ["page"],
+        "properties": {
+          "page": {
+            "type": "string",
+            "description": "The Notion page URL or 32-character page id."
+          }
+        }
+      },
+      "ImportNotionPageResponse": {
+        "type": "object",
+        "description": "The outcome of importing a Notion page, with its ledger row.",
+        "required": ["outcome", "entity"],
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/ImportEntity",
+            "description": "The row behind the outcome; `entity_id` is the document once imported."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ImportNotionPageResult",
+            "description": "What happened."
+          }
+        }
+      },
+      "ImportNotionPageResult": {
+        "type": "string",
+        "description": "What importing one Notion page did.",
+        "enum": [
+          "imported",
+          "already_imported",
+          "already_imported_by_teammate",
+          "previously_declined",
+          "import_in_progress"
         ]
       },
       "ImportRun": {
@@ -8270,6 +8470,65 @@
             }
           }
         ]
+      },
+      "TrackImportEntityRequest": {
+        "type": "object",
+        "description": "Body for tracking one external item in the ledger.",
+        "required": ["source", "foreignId", "status", "metadata"],
+        "properties": {
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "The Macro entity created from the item; required when `status` is\n`imported`."
+          },
+          "foreignId": {
+            "type": "string",
+            "description": "Stable id of the item in its source: a Linear identifier such as\n`ENG-142`, a Notion page URL or id, or a Slack channel id."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Per-source metadata. Linear: `{identifier, title, …}`; Notion:\n`{title, url?, summary?}`; Slack: `{name, …}`."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImportSource",
+            "description": "The external system the item comes from."
+          },
+          "status": {
+            "$ref": "#/components/schemas/TrackImportStatus",
+            "description": "`staged` to propose the item, `imported` to record an entity already\ncreated from it."
+          }
+        }
+      },
+      "TrackImportEntityResponse": {
+        "type": "object",
+        "description": "The outcome of tracking an item, with its ledger row.",
+        "required": ["outcome", "entity"],
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/ImportEntity",
+            "description": "The row behind the outcome."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/TrackImportOutcome",
+            "description": "What happened."
+          }
+        }
+      },
+      "TrackImportOutcome": {
+        "type": "string",
+        "description": "What tracking an item did.",
+        "enum": [
+          "staged",
+          "recorded_imported",
+          "already_imported",
+          "already_imported_by_teammate",
+          "previously_declined",
+          "import_in_progress"
+        ]
+      },
+      "TrackImportStatus": {
+        "type": "string",
+        "description": "Whether a tracked item is a candidate or an import already made.",
+        "enum": ["staged", "imported"]
       },
       "UpdateChannelSharePermission": {
         "type": "object",

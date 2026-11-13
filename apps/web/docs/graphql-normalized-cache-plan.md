@@ -271,11 +271,19 @@ records how many hints each coalesced broadcast replaced, without payloads.
 
 While parked or transitioning, `waiting` pauses read/init deadlines without
 creating a second page-side request queue. Reads, writes, and teardown retain
-coordinator admission order. A visible consumer starts a one-second read budget
+coordinator admission order, except that a typed search (a `search` with a
+query) reaches a new engine first and, inside the engine worker, runs ahead of
+list rereads and past generation checks and operation teardowns. It registers
+nothing and writes nothing, so those fences do not order it; it never passes
+`init` or `clear`. It can run before a write queued ahead of it, returning rows
+that are only older; that write's cache change then refreshes the list. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
-Only read callers are canceled, not admitted engine work or writes. Readiness
+Only read callers are canceled, not admitted engine work or writes. A typed
+search already sent is the exception: it has no network fallback, so it stays
+queued and the replacement engine answers it. One issued while reads are
+blocked is refused like any read, and Quick Access replays it. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
 
@@ -1028,7 +1036,7 @@ measurements, not production p90s.
 #### Cache notification coalescing
 
 Native maintained views return a `registrationId` bound to the engine's retained
-validated specification. The native host keeps at most 32 descriptors; subsequent
+validated specification. The native host keeps at most 256 descriptors; subsequent
 reads of the same descriptor send only its view id, registration token and
 subscriber revision. Token lookup and the read share the engine lease. Replacement,
 release, eviction or reset makes resume miss, so the host registers the complete
@@ -1459,7 +1467,7 @@ request in flight at once, so a timer that fires more than a second late starts
 a new window.
 
 Native live views advertise a specification-bound registration token. The host
-retains at most 32 descriptors and resumes an unchanged specification from its
+retains at most 256 descriptors and resumes an unchanged specification from its
 id, token and revision; a missing registration triggers a full request. Changed
 specifications, release, reset and disposal invalidate retention. Older
 installed binaries omit the token and keep receiving full requests. Empty record
