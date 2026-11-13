@@ -174,7 +174,7 @@ pub struct StreamPrincipal {
 /// The kinds of credential that may open a stream. A stream always follows
 /// one user's access: a bot listens as the user it acts for, and a bot with
 /// no acting user cannot open one. A harness runtime listens as the user it
-/// acts for (as `User`); internal credentials are never admitted.
+/// acts for; internal credentials are never admitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrincipalKind {
     /// A user's own session, Macro API token or API key.
@@ -188,6 +188,15 @@ pub enum PrincipalKind {
     /// minus webhook, bot and API key lifecycle.
     AccountManager {
         /// The managed user.
+        user: MacroUserIdStr<'static>,
+    },
+    /// A harness runtime (the coding agent daemon) acting for its owner:
+    /// the owner's events, personal ones included, as before streams had
+    /// principals.
+    Harness {
+        /// The harness.
+        harness_id: Uuid,
+        /// The user it acts for.
         user: MacroUserIdStr<'static>,
     },
     /// A bot acting for a user.
@@ -207,9 +216,10 @@ impl PrincipalKind {
     /// The user whose access the stream follows.
     pub fn user(&self) -> &MacroUserIdStr<'static> {
         match self {
-            Self::User { user, .. } | Self::AccountManager { user } | Self::Bot { user, .. } => {
-                user
-            }
+            Self::User { user, .. }
+            | Self::AccountManager { user }
+            | Self::Harness { user, .. }
+            | Self::Bot { user, .. } => user,
         }
     }
 
@@ -217,7 +227,7 @@ impl PrincipalKind {
     pub fn bot_id(&self) -> Option<Uuid> {
         match self {
             Self::Bot { bot_id, .. } => Some(*bot_id),
-            Self::User { .. } | Self::AccountManager { .. } => None,
+            Self::User { .. } | Self::AccountManager { .. } | Self::Harness { .. } => None,
         }
     }
 
@@ -226,7 +236,7 @@ impl PrincipalKind {
     /// bot unless the bot's owner is the acting user.
     pub fn sees_personal_events(&self) -> bool {
         match self {
-            Self::User { .. } | Self::AccountManager { .. } => true,
+            Self::User { .. } | Self::AccountManager { .. } | Self::Harness { .. } => true,
             Self::Bot { owned_by_user, .. } => *owned_by_user,
         }
     }
@@ -236,7 +246,7 @@ impl PrincipalKind {
     /// key lifecycle.
     pub fn is_account_holder(&self) -> bool {
         match self {
-            Self::User { .. } => true,
+            Self::User { .. } | Self::Harness { .. } => true,
             Self::AccountManager { .. } => false,
             Self::Bot { owned_by_user, .. } => *owned_by_user,
         }
@@ -249,6 +259,7 @@ impl PrincipalKind {
             Self::User { api_key: true, .. } => "api_key",
             Self::AccountManager { .. } => "account_manager",
             Self::Bot { .. } => "bot",
+            Self::Harness { .. } => "harness",
         }
     }
 }

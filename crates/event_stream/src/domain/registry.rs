@@ -66,6 +66,8 @@ pub struct Match {
     pub principal: Arc<StreamPrincipal>,
     /// Personal or team workspace.
     pub scope: WebhookScope,
+    /// Whether the holder has the `public-event-stream` flag.
+    pub preview: bool,
 }
 
 #[derive(Default)]
@@ -85,9 +87,10 @@ pub struct Registry {
 }
 
 /// Whether a stream held by `principal` may receive an event at all, before
-/// its audience is resolved: preview events need the flag, and only the
-/// account holder (or a bot they own) receives their own webhook, bot and API
-/// key lifecycle.
+/// its audience is resolved: preview events need the flag, and on flagged
+/// streams only the account holder (or a bot they own) receives their own
+/// webhook, bot and API key lifecycle; unflagged streams keep the original
+/// rule (their workspace's events, whoever acts for it).
 pub fn eligible(
     principal: &StreamPrincipal,
     preview: bool,
@@ -99,7 +102,7 @@ pub fn eligible(
     }
     let holder_family = filters::family(&event.event_name)
         .is_some_and(|family| ACCOUNT_HOLDER_FAMILIES.contains(&family));
-    !holder_family || principal.kind.is_account_holder()
+    !(preview && holder_family) || principal.kind.is_account_holder()
 }
 
 impl Registry {
@@ -215,6 +218,7 @@ impl Registry {
                     id,
                     principal: registration.principal.clone(),
                     scope: registration.scope,
+                    preview: registration.preview,
                 })
             })
             .collect()
@@ -229,8 +233,18 @@ impl Registry {
         };
         match entry.sender.try_send(delivery) {
             Ok(()) => true,
-            Err(mpsc::error::TrySendError::Full(_)) => {
+            // A flagged stream closes as lagged and resumes from its cursor.
+            // An unflagged one has no cursor: it skips the event and carries
+            // on, as streams did before.
+            Err(mpsc::error::TrySendError::Full(_)) if entry.registration.preview => {
                 close_entry(entry, CloseReason::Lagged);
+                false
+            }
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                tracing::warn!(
+                    stream.id = id,
+                    "an unflagged event stream is behind; skipping an event"
+                );
                 false
             }
             Err(mpsc::error::TrySendError::Closed(_)) => false,
@@ -252,12 +266,17 @@ impl Registry {
             .get(&bot_id)
             .map(|ids| ids.iter().copied().collect())
             .unwrap_or_default();
+        // Closing a deleted bot's streams is new: flagged streams only.
+        let mut closed = 0;
         for id in &ids {
-            if let Some(entry) = index.streams.get_mut(id) {
+            if let Some(entry) = index.streams.get_mut(id)
+                && entry.registration.preview
+            {
                 close_entry(entry, reason);
+                closed += 1;
             }
         }
-        ids.len()
+        closed
     }
 
     /// Close every stream.

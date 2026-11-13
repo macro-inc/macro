@@ -169,9 +169,9 @@ async fn principal<B: BotOwners>(
         // its triggers as the user it acts for, as it did before streams
         // had principals; refusing it would cut the daemon off.
         MacroAuthorization::Harness(harness) => Ok(StreamPrincipal {
-            kind: PrincipalKind::User {
+            kind: PrincipalKind::Harness {
+                harness_id: harness.harness_id.as_uuid(),
                 user,
-                api_key: false,
             },
             credential_id: format!("harness_token:{}", harness.token_id),
         }),

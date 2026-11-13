@@ -248,6 +248,7 @@ async fn high_frequency_events_are_coalesced_per_entity_latest_wins() {
 async fn an_api_key_holds_at_most_five_streams() {
     let harness = Harness::default();
     let holder = user("holder@example.com");
+    harness.preview.enable(&holder);
     let key = StreamPrincipal {
         kind: PrincipalKind::User {
             user: holder,
@@ -462,4 +463,127 @@ async fn an_event_held_for_coalescing_keeps_the_resume_point_before_it() {
     let _first = next_id(&mut stream).await;
     let updated_id: Cursor = next_id(&mut stream).await.unwrap().parse().unwrap();
     assert!(updated_id < held, "resuming from it replays the held event");
+}
+
+/// Unflagged streams keep the original contract: no concurrency limit, a 50
+/// filter cap, no credential re-check, and a full buffer skips events
+/// instead of closing the stream.
+mod unflagged {
+    use super::*;
+
+    fn reader_with_access() -> (Harness, macro_user_id::user_id::MacroUserIdStr<'static>) {
+        let harness = Harness::default();
+        let reader = user("reader@example.com");
+        harness
+            .access
+            .grant(EntityType::Document, DOC, reader.as_ref());
+        (harness, reader)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_api_key_opens_more_than_five_streams() {
+        let (harness, reader) = reader_with_access();
+        let key = StreamPrincipal {
+            kind: PrincipalKind::User {
+                user: reader,
+                api_key: true,
+            },
+            credential_id: "key-digest".to_owned(),
+        };
+        let mut open = Vec::new();
+        for _ in 0..6 {
+            open.push(
+                harness
+                    .open(
+                        key.clone(),
+                        WebhookScope::User,
+                        filter(&["document.updated"]),
+                        None,
+                    )
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert_eq!(open.len(), 6);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn fifty_filters_are_accepted_and_the_flag_caps_at_32() {
+        let (harness, reader) = reader_with_access();
+        let fifty: Vec<_> = (0..50)
+            .flat_map(|_| filter(&["document.updated"]))
+            .collect();
+        let thirty_three: Vec<_> = (0..33)
+            .flat_map(|_| filter(&["document.updated"]))
+            .collect();
+
+        assert!(
+            harness
+                .open(person(&reader), WebhookScope::User, fifty, None)
+                .await
+                .is_ok()
+        );
+        harness.preview.enable(&reader);
+        assert!(matches!(
+            harness
+                .open(person(&reader), WebhookScope::User, thirty_three, None)
+                .await,
+            Err(StreamError::BadRequest(_))
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_expired_credential_does_not_close_the_stream() {
+        let (harness, reader) = reader_with_access();
+        let mut stream = harness
+            .open(
+                person(&reader),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .unwrap();
+
+        stream.valid.store(false, Ordering::SeqCst);
+        tokio::time::sleep(REVALIDATE_INTERVAL * 2).await;
+        harness.publish(doc_event("document.updated")).await;
+
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("document.updated")
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stream_that_falls_behind_skips_events_and_carries_on() {
+        let (harness, reader) = reader_with_access();
+        let mut stream = harness
+            .open(
+                person(&reader),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .unwrap();
+        for _ in 0..(STREAM_BUFFER + 64) {
+            harness.publish(doc_event("document.updated")).await;
+        }
+
+        let mut received = 0;
+        while let Some(item) = stream.next_now().await {
+            match item {
+                StreamItem::Event { .. } => received += 1,
+                StreamItem::Control(control) => panic!("unexpected control event {control:?}"),
+            }
+        }
+        assert!(received < STREAM_BUFFER + 64, "some events were skipped");
+
+        harness.publish(doc_event("document.updated")).await;
+        assert_eq!(
+            stream.next_event_name().await.as_deref(),
+            Some("document.updated")
+        );
+    }
 }

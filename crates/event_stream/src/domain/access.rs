@@ -175,6 +175,10 @@ pub struct Candidate<'a> {
     pub principal: &'a StreamPrincipal,
     /// Personal or team workspace, for workspace rules.
     pub scope: WebhookScope,
+    /// Whether the holder has the `public-event-stream` flag. Only flagged
+    /// streams withhold personal events from bots their acting user does
+    /// not own; unflagged ones keep the original rule.
+    pub preview: bool,
 }
 
 /// The outcome of resolving one event's audience for some candidates.
@@ -354,10 +358,11 @@ where
                 let key = (*entity_type, entity_id.clone());
                 self.admits_entity(memo, &key, kind).await
             }
-            Audience::Recipient { user_id } | Audience::Owner { user_id } => Ok(kind
-                .sees_personal_events()
-                && candidate.scope == WebhookScope::User
-                && kind.user() == user_id),
+            Audience::Recipient { user_id } | Audience::Owner { user_id } => {
+                Ok((!candidate.preview || kind.sees_personal_events())
+                    && candidate.scope == WebhookScope::User
+                    && kind.user() == user_id)
+            }
             Audience::Person { user_id } => Ok(kind.user() == user_id),
             Audience::Snapshot { user_ids } => {
                 Ok(candidate.scope == WebhookScope::User && user_ids.contains(kind.user()))

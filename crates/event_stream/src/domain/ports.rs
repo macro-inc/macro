@@ -173,6 +173,8 @@ pub enum LimitKey {
     ApiKey(String),
     /// Streams per bot (5).
     Bot(Uuid),
+    /// Streams per harness runtime (5).
+    Harness(Uuid),
 }
 
 impl LimitKey {
@@ -182,6 +184,7 @@ impl LimitKey {
             Self::User(_) => "user",
             Self::ApiKey(_) => "api_key",
             Self::Bot(_) => "bot",
+            Self::Harness(_) => "harness",
         }
     }
 
@@ -189,7 +192,7 @@ impl LimitKey {
     pub fn max_streams(&self) -> u64 {
         match self {
             Self::User(_) => 20,
-            Self::ApiKey(_) | Self::Bot(_) => 5,
+            Self::ApiKey(_) | Self::Bot(_) | Self::Harness(_) => 5,
         }
     }
 }

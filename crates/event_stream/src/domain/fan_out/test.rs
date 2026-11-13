@@ -166,6 +166,7 @@ async fn a_recipient_event_reaches_only_its_recipient_and_never_a_borrowed_bot()
     let harness = Harness::default();
     let callee = user("callee@example.com");
     let other = user("other@example.com");
+    harness.preview.enable(&callee);
     let recipient = Audience::Recipient {
         user_id: callee.clone(),
     };
@@ -515,9 +516,10 @@ async fn a_workspace_event_reaches_only_the_matching_workspace_stream() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_bot_listens_as_its_acting_user_without_their_personal_events() {
+async fn a_flagged_bot_listens_as_its_acting_user_without_their_personal_events() {
     let harness = Harness::default();
     let member = user("member@example.com");
+    harness.preview.enable(&member);
     harness
         .access
         .grant(EntityType::Document, DOC, member.as_ref());
@@ -554,9 +556,10 @@ async fn a_bot_listens_as_its_acting_user_without_their_personal_events() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn an_account_manager_never_receives_webhook_lifecycle() {
+async fn a_flagged_account_manager_never_receives_webhook_lifecycle() {
     let harness = Harness::default();
     let managed = user("managed@example.com");
+    harness.preview.enable(&managed);
     let manager = StreamPrincipal {
         kind: PrincipalKind::AccountManager {
             user: managed.clone(),
@@ -741,6 +744,7 @@ async fn a_failed_access_lookup_drops_the_event_and_keeps_the_stream() {
 async fn a_deleted_bot_loses_its_streams() {
     let harness = Harness::default();
     let acting = user("acting@example.com");
+    harness.preview.enable(&acting);
     let mut stream = harness
         .open(
             bot(&acting, true),
@@ -858,6 +862,8 @@ async fn a_recipient_nested_in_any_still_excludes_a_borrowed_bot() {
     let harness = Harness::default();
     let first = user("first@example.com");
     let second = user("second@example.com");
+    harness.preview.enable(&first);
+    harness.preview.enable(&second);
     let audience = Audience::Any(vec![
         Audience::Recipient {
             user_id: first.clone(),
@@ -1073,5 +1079,73 @@ async fn a_snapshot_reaches_a_bot_acting_for_a_captured_user() {
     assert_eq!(
         borrowed.next_event_name().await.as_deref(),
         Some("team.member_removed")
+    );
+}
+
+/// Without the flag, webhook lifecycle reaches the workspace's stream
+/// whoever acts for it, as before.
+#[tokio::test(start_paused = true)]
+async fn an_unflagged_account_manager_still_receives_webhook_lifecycle() {
+    let harness = Harness::default();
+    let managed = user("managed@example.com");
+    let manager = StreamPrincipal {
+        kind: PrincipalKind::AccountManager {
+            user: managed.clone(),
+        },
+        credential_id: "manager-key".to_owned(),
+    };
+    let mut stream = harness
+        .open(
+            manager,
+            WebhookScope::User,
+            filter(&["webhook.created"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("webhook.created", "webhook", "wh_1"),
+            Audience::Workspace {
+                workspace_id: managed.as_ref().to_owned(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("webhook.created")
+    );
+}
+
+/// Without the flag a bot acting for a user still receives that user's
+/// addressed events, as before.
+#[tokio::test(start_paused = true)]
+async fn an_unflagged_bot_still_receives_its_users_addressed_events() {
+    let harness = Harness::default();
+    let callee = user("callee@example.com");
+    let mut stream = harness
+        .open(
+            bot(&callee, false),
+            WebhookScope::User,
+            filter(&["call.ringing"]),
+            None,
+        )
+        .await
+        .unwrap();
+
+    harness
+        .publish(public(
+            event("call.ringing", "call", DOC),
+            Audience::Recipient {
+                user_id: callee.clone(),
+            },
+        ))
+        .await;
+
+    assert_eq!(
+        stream.next_event_name().await.as_deref(),
+        Some("call.ringing")
     );
 }

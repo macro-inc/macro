@@ -17,7 +17,7 @@ mod test;
 
 use crate::domain::access::{AudienceResolver, Candidate};
 use crate::domain::filters::{
-    self, FilterSubject, MAX_STREAM_FILTERS, WebhookFilters, validate_filters,
+    self, FilterSubject, MAX_STREAM_FILTERS, MAX_WEBHOOK_FILTERS, WebhookFilters, validate_filters,
 };
 use crate::domain::models::{
     CloseReason, ControlEvent, Cursor, LogEntry, PrincipalKind, StreamItem, StreamPrincipal,
@@ -172,10 +172,10 @@ pub fn limit_keys(principal: &StreamPrincipal) -> Vec<LimitKey> {
             LimitKey::User(user.as_ref().to_owned()),
             LimitKey::ApiKey(principal.credential_id.clone()),
         ],
-        PrincipalKind::Bot { bot_id, user, .. } => vec![
-            LimitKey::User(user.as_ref().to_owned()),
-            LimitKey::Bot(*bot_id),
-        ],
+        // A bot's or harness's streams count against that credential only,
+        // never against the user it acts for.
+        PrincipalKind::Bot { bot_id, .. } => vec![LimitKey::Bot(*bot_id)],
+        PrincipalKind::Harness { harness_id, .. } => vec![LimitKey::Harness(*harness_id)],
     }
 }
 
@@ -242,11 +242,19 @@ where
         request: OpenStream,
     ) -> Result<BoxStream<'static, StreamItem>, StreamError> {
         let span = tracing::Span::current();
-        validate_filters(&request.filters, MAX_STREAM_FILTERS)
-            .map_err(|error| StreamError::BadRequest(error.0))?;
-
         let preview = self.preview_enabled(&request.principal).await;
         span.record("preview", preview);
+
+        // Everything new is behind the flag. An unflagged stream keeps the
+        // original contract: 50 filters, no concurrency limit, no credential
+        // re-check, no coalescing, and a full buffer skips rather than closes.
+        let max_filters = if preview {
+            MAX_STREAM_FILTERS
+        } else {
+            MAX_WEBHOOK_FILTERS
+        };
+        validate_filters(&request.filters, max_filters)
+            .map_err(|error| StreamError::BadRequest(error.0))?;
 
         // Without the flag a stream has no cursors: `Last-Event-ID` carries a
         // broker event id from an older client and is ignored, as before.
@@ -273,6 +281,7 @@ where
             let candidate = Candidate {
                 principal: &principal,
                 scope: request.scope,
+                preview,
             };
             let workspace = self
                 .resolver
@@ -287,7 +296,11 @@ where
         }
 
         let lease_holder = uuid::Uuid::now_v7().to_string();
-        let limit_keys = limit_keys(&principal);
+        let limit_keys = if preview {
+            limit_keys(&principal)
+        } else {
+            Vec::new()
+        };
         if self
             .limiter
             .acquire(&limit_keys, &lease_holder)
@@ -424,7 +437,7 @@ where
                         return stop;
                     }
                 }
-                _ = revalidate.tick() => {
+                _ = revalidate.tick(), if self.preview => {
                     if let Err(stop) = self.revalidate().await {
                         return stop;
                     }
@@ -491,6 +504,7 @@ where
         let candidate = Candidate {
             principal: &self.principal,
             scope: self.scope,
+            preview: self.preview,
         };
         let admitted = match self
             .service
@@ -517,7 +531,7 @@ where
         delivery: Delivery,
         closed: &mut oneshot::Receiver<CloseReason>,
     ) -> Result<(), Stop> {
-        if COALESCED_EVENTS.contains(&delivery.event.event_name.as_str()) {
+        if self.preview && COALESCED_EVENTS.contains(&delivery.event.event_name.as_str()) {
             let key = (
                 delivery.event.event_name.clone(),
                 delivery.event.entity_id.clone(),

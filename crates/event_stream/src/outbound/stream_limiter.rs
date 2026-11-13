@@ -26,6 +26,9 @@ fn rate_limit_key(key: &LimitKey) -> RateLimitKey {
         LimitKey::User(user) => RateLimitKey::builder(&"event-streams:user").append(user),
         LimitKey::ApiKey(digest) => RateLimitKey::builder(&"event-streams:api-key").append(digest),
         LimitKey::Bot(bot_id) => RateLimitKey::builder(&"event-streams:bot").append(bot_id),
+        LimitKey::Harness(harness_id) => {
+            RateLimitKey::builder(&"event-streams:harness").append(harness_id)
+        }
     }
     .finish()
 }

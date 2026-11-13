@@ -132,6 +132,7 @@ where
                 .map(|matched| Candidate {
                     principal: &matched.principal,
                     scope: matched.scope,
+                    preview: matched.preview,
                 })
                 .collect();
             let admitted = match self.resolver.resolve(&public.audience, &candidates).await {
