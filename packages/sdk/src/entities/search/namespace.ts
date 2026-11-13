@@ -182,9 +182,8 @@ export class SearchNamespace {
    * a document or task named in under 3 characters, which isn't looked for,
    * and one whose name more than 50 newer documents contain.
    *
-   * Look names up while setting something up, then keep the ids: a
-   * routine's code and instructions use the ids found while writing it, and
-   * never call this to find the same item on every run.
+   * In a routine's code step, never look up a name written into the code:
+   * a name the request gives goes in a knob, so its owner can change it.
    *
    * @readonly
    *
