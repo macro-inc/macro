@@ -4,6 +4,7 @@ apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
   s_471e2069ef160b::t_9712893b08cb3d 105
 apps/web/src/features/dynamic-ui/queries/agent-panes.ts
   s_471e2069ef160b::t_9712893b08cb3d 12-13,21-22,47
+  s_471e2069ef160b::t_f72ec26bdedc00 11,18-19
 ---
 {
   "schema_version": "authorship/3.0.0",
