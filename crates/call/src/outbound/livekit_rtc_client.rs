@@ -16,8 +16,8 @@ use livekit_api::services::room::{CreateRoomOptions, RoomClient};
 use livekit_api::services::{ServiceError, TwirpError, TwirpErrorCode};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
-    AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
-    TrackSource, VideoCodec, encoded_file_output, participant_info,
+    AudioCodec, CreateAgentDispatchRequest, EgressInfo, EgressStatus, EncodedFileOutput,
+    EncodedFileType, S3Upload, TrackSource, VideoCodec, encoded_file_output, participant_info,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -546,7 +546,7 @@ impl CallRtcClient for LivekitRtcClient {
         // Extract file URL from egress info if available.
         let (egress_id, file_url) = match &event.egress_info {
             Some(info) => {
-                let url = info.file_results.first().map(|f| f.location.clone());
+                let url = recorded_file_location(info);
                 let id = if info.egress_id.is_empty() {
                     None
                 } else {
@@ -608,4 +608,26 @@ fn is_not_found(error: &ServiceError) -> bool {
         error,
         ServiceError::Twirp(TwirpError::Twirp(code)) if code.code == TwirpErrorCode::NOT_FOUND
     )
+}
+
+/// The uploaded file of an egress that wrote one. A failed or aborted egress
+/// (e.g. a call that ended within a second or two) still lists its planned
+/// location, but nothing was uploaded there.
+fn recorded_file_location(info: &EgressInfo) -> Option<String> {
+    let wrote_file = matches!(
+        EgressStatus::try_from(info.status),
+        Ok(EgressStatus::EgressComplete | EgressStatus::EgressLimitReached)
+    );
+    let file = info.file_results.first()?;
+    if !wrote_file || file.size <= 0 || file.location.is_empty() {
+        tracing::warn!(
+            egress_id = info.egress_id,
+            status = info.status,
+            size = file.size,
+            error = info.error,
+            "egress ended without a recording file"
+        );
+        return None;
+    }
+    Some(file.location.clone())
 }

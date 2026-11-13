@@ -208,3 +208,52 @@ async fn guest_tokens_preserve_names_and_only_grant_the_room() {
     assert_eq!(event.guest_identity, Some(guest_id));
     assert_eq!(event.participant_identity, None);
 }
+
+fn receive_egress_ended(status: &str, size: &str) -> crate::domain::models::CallWebhookEvent {
+    let body = serde_json::json!({
+        "event": "egress_ended",
+        "id": "EV_egress",
+        "createdAt": 1,
+        "egressInfo": {
+            "egressId": "EG_test",
+            "status": status,
+            "fileResults": [{
+                "filename": "calls/call-1/recording.mp4",
+                "size": size,
+                "location": "https://bucket.example/calls/call-1/recording.mp4"
+            }]
+        }
+    })
+    .to_string();
+    let token = sign_webhook(&body);
+    client()
+        .receive_webhook(&body, &token)
+        .expect("egress webhook")
+}
+
+#[test]
+fn receive_webhook_keeps_file_of_completed_egress() {
+    for status in ["EGRESS_COMPLETE", "EGRESS_LIMIT_REACHED"] {
+        let event = receive_egress_ended(status, "1024");
+        assert_eq!(event.egress_id.as_deref(), Some("EG_test"));
+        assert_eq!(
+            event.file_url.as_deref(),
+            Some("https://bucket.example/calls/call-1/recording.mp4"),
+            "{status}"
+        );
+    }
+}
+
+#[test]
+fn receive_webhook_drops_file_egress_never_uploaded() {
+    for (status, size) in [
+        ("EGRESS_FAILED", "0"),
+        ("EGRESS_ABORTED", "0"),
+        ("EGRESS_FAILED", "1024"),
+        ("EGRESS_COMPLETE", "0"),
+    ] {
+        let event = receive_egress_ended(status, size);
+        assert_eq!(event.egress_id.as_deref(), Some("EG_test"));
+        assert_eq!(event.file_url, None, "{status} size {size}");
+    }
+}
