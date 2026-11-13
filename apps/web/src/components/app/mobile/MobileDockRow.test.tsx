@@ -220,7 +220,13 @@ it('opens customization, updates the measured boundary, and persists keyboard re
   const mounted = render(() => <MobileDockRow />);
   fireEvent.click(screen.getByRole('button', { name: 'More views' }));
   fireEvent.click(screen.getByRole('button', { name: 'Customize dock' }));
-  await screen.findByRole('button', { name: 'Reorder Tasks' });
+  // The first open loads the lazily imported customizer, which can take
+  // longer than the default wait on a loaded CI runner.
+  await screen.findByRole(
+    'button',
+    { name: 'Reorder Tasks' },
+    { timeout: 5000 }
+  );
   const drawer = within(screen.getByRole('dialog', { name: 'Customize dock' }));
   expect(drawer.getByText('In dock · 1')).toBeTruthy();
   expect(drawer.getByText('In More · 3')).toBeTruthy();
