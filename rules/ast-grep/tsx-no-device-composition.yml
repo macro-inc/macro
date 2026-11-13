@@ -25,6 +25,7 @@ ignores:
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-image/component/Block.tsx
   - apps/web/src/features/block-md/component/Block.tsx
+  - apps/web/src/features/block-unknown/component/Block.tsx
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
@@ -75,7 +76,6 @@ ignores:
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetToolbar.tsx
   - apps/web/src/features/block-spreadsheet/views/SpreadsheetDraftMenu.tsx
   - apps/web/src/features/block-spreadsheet/views/SpreadsheetEditor.tsx
-  - apps/web/src/features/block-unknown/component/TopBar.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
   - apps/web/src/features/calendar-view/components/CalendarSidebar.tsx
   - apps/web/src/features/calendar-view/components/EventGuests.tsx
