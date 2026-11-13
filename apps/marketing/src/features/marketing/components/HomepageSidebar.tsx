@@ -56,6 +56,7 @@ const CALLOUTS: readonly {
   id: Destination;
   label: string;
   description?: string;
+  mobileDescription?: string;
   icon: NavIcon;
   side: 'left' | 'right';
 }[] = [
@@ -93,6 +94,7 @@ const CALLOUTS: readonly {
     id: 'agents',
     label: 'External agents',
     description: 'Cursor, Claude, ChatGPT, Hermes, ACP, etc.',
+    mobileDescription: 'Cursor, Claude, ChatGPT',
     icon: AgentIcon,
     side: 'right',
   },
@@ -513,7 +515,19 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
               >
                 <span>{item.label}</span>
                 <Show when={item.description}>
-                  <p>{item.description}</p>
+                  <p
+                    classList={{
+                      'homepage-sidebar-description-full':
+                        !!item.mobileDescription,
+                    }}
+                  >
+                    {item.description}
+                  </p>
+                  <Show when={item.mobileDescription}>
+                    <p class="homepage-sidebar-description-mobile">
+                      {item.mobileDescription}
+                    </p>
+                  </Show>
                 </Show>
               </div>
             )}

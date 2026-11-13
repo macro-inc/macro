@@ -6,6 +6,7 @@ import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
+import { validateSearchServiceText } from '@queries/soup/search';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -89,6 +90,12 @@ export function EmailEmptyState() {
   const searchText = () =>
     canSearchEmailTab(state.tab) ? state.search.trim() : '';
   const noInboxesSelected = () => state.inboxIds?.length === 0;
+  // Focus filters its own list as you type; every other tab waits for the
+  // search service, which starts at three characters.
+  const searchTooShort = () =>
+    state.tab !== 'focus' &&
+    searchText().length > 0 &&
+    !validateSearchServiceText(searchText());
 
   return (
     <Switch>
@@ -115,6 +122,16 @@ export function EmailEmptyState() {
             label: 'Show all inboxes',
             onClick: () => setInboxIds(undefined),
           }}
+        />
+      </Match>
+
+      <Match when={searchTooShort()}>
+        <EmptyStatePanel
+          centered
+          graphic={EmptyStateNoSearchMatchGraphic}
+          title="Keep typing to search"
+          description="Email search starts at 3 characters and matches subjects, senders, and message content."
+          documentationUrl={`${DOCS_BASE}/product/search`}
         />
       </Match>
 

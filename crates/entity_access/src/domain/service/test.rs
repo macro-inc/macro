@@ -351,6 +351,18 @@ impl AccessRepository for MockRepo {
         Ok(*self.document_access.lock().await)
     }
 
+    async fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<String, AccessLevel>, AccessError> {
+        let level = *self.document_access.lock().await;
+        Ok(document_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (id.clone(), level)))
+            .collect())
+    }
+
     async fn get_chat_access(
         &self,
         _chat_id: &str,
