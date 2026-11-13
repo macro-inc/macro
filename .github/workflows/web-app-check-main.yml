@@ -29,6 +29,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -56,6 +57,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -84,6 +86,7 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+            - 'apps/web/src/components/gantt/**'
           calendar_details_changed:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
@@ -333,6 +336,8 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -663,12 +668,14 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Build natural-time WASM for tests
       run: just build-natural-time-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Test
@@ -752,6 +759,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       working-directory: apps/web
     - name: Functional Browser Tests
       run: bun run test:functional
@@ -830,6 +838,7 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Sign-up Browser Tests
@@ -957,6 +966,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web

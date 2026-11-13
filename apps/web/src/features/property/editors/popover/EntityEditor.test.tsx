@@ -432,6 +432,33 @@ describe('team-first assignees', () => {
     }
   );
   it.each([EntityEditor, EntitySheetEditor])(
+    'keeps a removed assignee searchable for re-adding in the same editor',
+    async (Editor) => {
+      const assigned: EntityProperty = {
+        ...property,
+        value: [
+          { entity_id: 'macro|outside@example.com', entity_type: 'USER' },
+        ],
+      };
+      const onSave = setup(undefined, assigned, Editor);
+      fireEvent.click(screen.getByText('Outside'));
+
+      const input = screen.getByRole('textbox');
+      fireEvent.input(input, { target: { value: 'outside' } });
+      const option = await screen.findByText('Outside');
+      fireEvent.click(option);
+      expect(
+        option.closest('[data-entity-index]')?.querySelector('input')
+      ).toHaveProperty('checked', true);
+
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([EntityEditor, EntitySheetEditor])(
     'does not assign a non-team contact through search or Enter',
     async (Editor) => {
       const onSave = setup(undefined, property, Editor);
@@ -456,7 +483,12 @@ describe('team-first assignees', () => {
     };
     const onSave = setup(undefined, assigned);
     fireEvent.click(screen.getByText('former@example.com'));
-    expect(screen.queryByText('former@example.com')).toBeNull();
+    expect(
+      screen
+        .getByText('former@example.com')
+        .closest('[data-entity-index]')
+        ?.querySelector('input')
+    ).toHaveProperty('checked', false);
     fireEvent.click(screen.getByText('Dismiss'));
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith(

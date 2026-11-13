@@ -103,7 +103,7 @@ describe('shared call lifecycle', () => {
     expect(ports.requestToken).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(300);
     await first;
-    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token);
+    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token, 'user');
     expect(lifecycle.getState()).toEqual({ t: 'active', call });
     expect(vi.getTimerCount()).toBe(0);
   });
