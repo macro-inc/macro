@@ -16,7 +16,8 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
   crate's own router (`agent_session`, `agent_changes`, `agent_egress`,
-  `agent_harness`).
+  `agent_harness`), plus agent accounts' wake telemetry (`agent_wakes`,
+  wired in `src/agent_wakes.rs`).
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
@@ -32,6 +33,8 @@ Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+  `tools/list` serves ExecuteCode's description with the dashboard widgets
+  only when the session owner has `enable-agent-dashboards`.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -278,7 +281,7 @@ Pulumi stacks; they do not host extra agent processes.
 - Owns: the deployed process wiring every agent-session domain crate
   together — not the domain logic itself, which lives in `crates/agent_harness`,
   `crates/agent_session`, `crates/agent_changes`, `crates/agent_egress`,
-  `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
+  `crates/agent_wakes`, `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
 - Not here: coding-agent business logic for a specific runtime (e.g. Cursor
   API calls) → `crates/codex_connection`, `crates/codex_cloud_agents`.
 
@@ -368,7 +371,8 @@ code does not read them. `POSTHOG_API_KEY` and `POSTHOG_HOST` drive
 feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
-owner unsharing and already activated routines remain available.
+owner unsharing and already activated routines remain available. Without
+the key nobody is offered the agent-dashboard widgets.
 `AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
 scheduling configs regardless of billing flags. It is a Secrets Manager name
 in deployed configs and a direct key locally. Resolve it for the harness, cognition, and

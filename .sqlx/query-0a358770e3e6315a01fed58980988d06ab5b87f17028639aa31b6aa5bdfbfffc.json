@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_wakes\n            SET trace_updated_at = $3\n            WHERE agent_user_id = $1 AND wake_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a358770e3e6315a01fed58980988d06ab5b87f17028639aa31b6aa5bdfbfffc"
+}

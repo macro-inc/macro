@@ -17,6 +17,8 @@ import { List } from './widgets/List';
 import { Md } from './widgets/Md';
 import { Tags } from './widgets/Tags';
 import { Timeline } from './widgets/Timeline';
+import { Trace } from './widgets/Trace';
+import { Wakes } from './widgets/Wakes';
 
 /**
  * The single, exhaustive node renderer. One `match()` arm per widget `type`
@@ -35,6 +37,8 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'cards' }, (n) => <Cards {...n} />)
     .with({ type: 'tags' }, (n) => <Tags {...n} />)
     .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
+    .with({ type: 'wakes' }, (n) => <Wakes {...n} />)
+    .with({ type: 'trace' }, (n) => <Trace {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
     .exhaustive();
 }
@@ -49,6 +53,8 @@ const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
   'events',
   'tags',
   'agentUpdates',
+  'wakes',
+  'trace',
 ]);
 
 /**

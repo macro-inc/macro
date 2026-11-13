@@ -18,6 +18,8 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AgentUpdates,
+  AgentWake,
+  AgentWakesPage,
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
@@ -58,6 +60,7 @@ import type {
   LinkedTaskResponse,
   LinkTaskRequest,
   ListAgentRepositoryBranchesParams,
+  ListAgentWakesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   OpenInApp,
@@ -83,6 +86,8 @@ import type {
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   Voice,
+  WakeRecord,
+  WakeTrace,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -4357,6 +4362,393 @@ export const listAgentWorkRegistrations = async (
     status: res.status,
     headers: res.headers,
   } as listAgentWorkRegistrationsResponse;
+};
+
+/**
+ * @summary A page of an agent account's wakes, newest first. Readable by the agent and
+the owners and admins of its teams.
+ */
+export type listAgentWakesResponse200 = {
+  data: AgentWakesPage;
+  status: 200;
+};
+
+export type listAgentWakesResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type listAgentWakesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentWakesResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listAgentWakesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentWakesResponseSuccess = listAgentWakesResponse200 & {
+  headers: Headers;
+};
+export type listAgentWakesResponseError = (
+  | listAgentWakesResponse400
+  | listAgentWakesResponse401
+  | listAgentWakesResponse404
+  | listAgentWakesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentWakesResponse =
+  | listAgentWakesResponseSuccess
+  | listAgentWakesResponseError;
+
+export const getListAgentWakesUrl = (
+  agentUserId: string,
+  params?: ListAgentWakesParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agents/${agentUserId}/wakes?${stringifiedParams}`
+    : `/agents/${agentUserId}/wakes`;
+};
+
+export const listAgentWakes = async (
+  agentUserId: string,
+  params?: ListAgentWakesParams,
+  options?: RequestInit
+): Promise<listAgentWakesResponse> => {
+  const res = await fetch(getListAgentWakesUrl(agentUserId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentWakesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentWakesResponse;
+};
+
+/**
+ * @summary Record one of the caller's own wakes: a muppet `WakeRecord` (version 1),
+unchanged. Only the agent account itself may. The latest record per wake id
+is kept; repeating a record, or sending one of an earlier phase than the one
+stored, changes nothing.
+ */
+export type recordAgentWakeResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recordAgentWakeResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type recordAgentWakeResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recordAgentWakeResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type recordAgentWakeResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type recordAgentWakeResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type recordAgentWakeResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type recordAgentWakeResponseSuccess = recordAgentWakeResponse204 & {
+  headers: Headers;
+};
+export type recordAgentWakeResponseError = (
+  | recordAgentWakeResponse400
+  | recordAgentWakeResponse401
+  | recordAgentWakeResponse403
+  | recordAgentWakeResponse404
+  | recordAgentWakeResponse409
+  | recordAgentWakeResponse500
+) & {
+  headers: Headers;
+};
+
+export type recordAgentWakeResponse =
+  | recordAgentWakeResponseSuccess
+  | recordAgentWakeResponseError;
+
+export const getRecordAgentWakeUrl = (agentUserId: string) => {
+  return `/agents/${agentUserId}/wakes`;
+};
+
+export const recordAgentWake = async (
+  agentUserId: string,
+  wakeRecord: WakeRecord,
+  options?: RequestInit
+): Promise<recordAgentWakeResponse> => {
+  const res = await fetch(getRecordAgentWakeUrl(agentUserId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(wakeRecord),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recordAgentWakeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recordAgentWakeResponse;
+};
+
+/**
+ * @summary One of an agent account's wakes.
+ */
+export type getAgentWakeResponse200 = {
+  data: AgentWake;
+  status: 200;
+};
+
+export type getAgentWakeResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentWakeResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentWakeResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentWakeResponseSuccess = getAgentWakeResponse200 & {
+  headers: Headers;
+};
+export type getAgentWakeResponseError = (
+  | getAgentWakeResponse401
+  | getAgentWakeResponse404
+  | getAgentWakeResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentWakeResponse =
+  | getAgentWakeResponseSuccess
+  | getAgentWakeResponseError;
+
+export const getGetAgentWakeUrl = (agentUserId: string, wakeId: string) => {
+  return `/agents/${agentUserId}/wakes/${wakeId}`;
+};
+
+export const getAgentWake = async (
+  agentUserId: string,
+  wakeId: string,
+  options?: RequestInit
+): Promise<getAgentWakeResponse> => {
+  const res = await fetch(getGetAgentWakeUrl(agentUserId, wakeId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentWakeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentWakeResponse;
+};
+
+/**
+ * @summary The trace of one of an agent account's wakes, whole. Not found when none was
+uploaded or it has expired.
+ */
+export type getAgentWakeTraceResponse200 = {
+  data: WakeTrace;
+  status: 200;
+};
+
+export type getAgentWakeTraceResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentWakeTraceResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentWakeTraceResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentWakeTraceResponseSuccess = getAgentWakeTraceResponse200 & {
+  headers: Headers;
+};
+export type getAgentWakeTraceResponseError = (
+  | getAgentWakeTraceResponse401
+  | getAgentWakeTraceResponse404
+  | getAgentWakeTraceResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentWakeTraceResponse =
+  | getAgentWakeTraceResponseSuccess
+  | getAgentWakeTraceResponseError;
+
+export const getGetAgentWakeTraceUrl = (
+  agentUserId: string,
+  wakeId: string
+) => {
+  return `/agents/${agentUserId}/wakes/${wakeId}/trace`;
+};
+
+export const getAgentWakeTrace = async (
+  agentUserId: string,
+  wakeId: string,
+  options?: RequestInit
+): Promise<getAgentWakeTraceResponse> => {
+  const res = await fetch(getGetAgentWakeTraceUrl(agentUserId, wakeId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentWakeTraceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentWakeTraceResponse;
+};
+
+/**
+ * @summary Replace the trace of one of the caller's own recorded wakes: its model
+session's turns and tool calls, redacted by the agent. Only the agent
+account itself may. At most 10 MiB; kept 30 days after its last upload. A
+live trace sent after the wake's `end` record is dropped, so the final trace
+stands.
+ */
+export type putAgentWakeTraceResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type putAgentWakeTraceResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type putAgentWakeTraceResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentWakeTraceResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type putAgentWakeTraceResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type putAgentWakeTraceResponse413 = {
+  data: string;
+  status: 413;
+};
+
+export type putAgentWakeTraceResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentWakeTraceResponseSuccess = putAgentWakeTraceResponse204 & {
+  headers: Headers;
+};
+export type putAgentWakeTraceResponseError = (
+  | putAgentWakeTraceResponse400
+  | putAgentWakeTraceResponse401
+  | putAgentWakeTraceResponse403
+  | putAgentWakeTraceResponse404
+  | putAgentWakeTraceResponse413
+  | putAgentWakeTraceResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentWakeTraceResponse =
+  | putAgentWakeTraceResponseSuccess
+  | putAgentWakeTraceResponseError;
+
+export const getPutAgentWakeTraceUrl = (
+  agentUserId: string,
+  wakeId: string
+) => {
+  return `/agents/${agentUserId}/wakes/${wakeId}/trace`;
+};
+
+export const putAgentWakeTrace = async (
+  agentUserId: string,
+  wakeId: string,
+  wakeTrace: WakeTrace,
+  options?: RequestInit
+): Promise<putAgentWakeTraceResponse> => {
+  const res = await fetch(getPutAgentWakeTraceUrl(agentUserId, wakeId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(wakeTrace),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentWakeTraceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentWakeTraceResponse;
 };
 
 /**

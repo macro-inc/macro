@@ -46,6 +46,15 @@ use agent_session::inbound::axum_router::{
     SessionStatusDto, SetAgentSessionArchivedRequest, WithAgentSessionId,
 };
 use agent_session::inbound::coding_agents::{self, CodingAgentsResponse};
+use agent_wakes::domain::record::{
+    WakeEffect, WakeEndStatus, WakeFailure, WakeOutcome, WakeOutcomeCheck, WakeOutcomeSource,
+    WakeParent, WakePhase, WakeRecord, WakeSession, WakeTraceIds, WakeTrigger, WakeTriggerKind,
+    WakeUsage,
+};
+use agent_wakes::domain::trace::{WakeTrace, WakeTraceSource, WakeTraceSpan, WakeTraceTokens};
+use agent_wakes::inbound::axum_router::{
+    self as wakes_router, AgentWake, AgentWakeStatusFilter, AgentWakesPage,
+};
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
@@ -134,6 +143,11 @@ impl Modify for SecurityAddon {
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
+        wakes_router::record_agent_wake,
+        wakes_router::list_agent_wakes,
+        wakes_router::get_agent_wake,
+        wakes_router::put_agent_wake_trace,
+        wakes_router::get_agent_wake_trace,
         tool_approvals::answer_tool_approval_handler,
         app_connections::app_connected_handler,
         crate::computers::claude::claude_sign_in_handler,
@@ -142,6 +156,27 @@ impl Modify for SecurityAddon {
         crate::computers::claude::claude_mode_handler,
     ),
     components(schemas(
+        AgentWake,
+        AgentWakesPage,
+        AgentWakeStatusFilter,
+        WakeRecord,
+        WakePhase,
+        WakeTraceIds,
+        WakeParent,
+        WakeTrigger,
+        WakeTriggerKind,
+        WakeSession,
+        WakeEndStatus,
+        WakeFailure,
+        WakeOutcome,
+        WakeOutcomeSource,
+        WakeOutcomeCheck,
+        WakeEffect,
+        WakeUsage,
+        WakeTrace,
+        WakeTraceSource,
+        WakeTraceSpan,
+        WakeTraceTokens,
         team_agents::domain::voice::Voice,
         CodingAgent,
         CodingAgentsResponse,

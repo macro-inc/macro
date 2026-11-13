@@ -154,6 +154,27 @@ pub fn canvas_artifacts_rollout_from_env(
     )
 }
 
+/// The agent dashboards rollout read from PostHog, or `None` without a
+/// PostHog key (off for everyone). Answers are cached like
+/// [`macro_connect_rollout`], and a failed read answers `false`.
+pub fn agent_dashboards_rollout(
+    api_key: Option<&str>,
+    host: Option<&str>,
+    environment: Environment,
+) -> anyhow::Result<Option<agent_code_mode::inbound::toolset::DashboardsRollout>> {
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+        environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags, dynamic_ui::AGENT_DASHBOARDS_FLAG)))
+}
+
 fn rollout_from<F>(flags: F, flag: &'static str) -> ConnectRollout
 where
     F: feature_flags::FeatureFlags + Clone + 'static,

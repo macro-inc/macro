@@ -4050,6 +4050,11 @@ export type View_Serialize = {
   widgets: Widget_Serialize[];
 };
 
+/**  The wakes a wakes widget shows, by where they stand. */
+export type WakeStatusFilter =
+  /**  Still running. */
+  'running' | 'ok' | 'failed' | 'timeout' | 'cancelled';
+
 /**
  *  One block of a view. Layout is order-driven; nesting is achieved with the
  *  `container` widget.
@@ -4066,6 +4071,7 @@ export type Widget_Deserialize =
    *  "md", never "markdown".
    */
   | ({ type: 'md'; markdown: string } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4078,8 +4084,10 @@ export type Widget_Deserialize =
       limit?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
       title?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**  A chronological sequence of events. Great for "what happened" answers. */
@@ -4088,6 +4096,7 @@ export type Widget_Deserialize =
       title?: string;
       events: TimelineEvent_Deserialize[];
     } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4100,7 +4109,9 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4116,6 +4127,7 @@ export type Widget_Deserialize =
       /**  Cap the number of rows shown. */
       limit?: number;
     } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4126,7 +4138,9 @@ export type Widget_Deserialize =
       justify?: never;
       markdown?: never;
       messageId?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -4137,6 +4151,7 @@ export type Widget_Deserialize =
       /**  The message to render. */
       messageId: string;
     } & {
+      agentId?: never;
       align?: never;
       children?: never;
       direction?: never;
@@ -4148,8 +4163,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       source?: never;
+      status?: never;
       tags?: never;
       title?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4158,6 +4175,7 @@ export type Widget_Deserialize =
    *  an answer is about calendar events instead of listing them in text.
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Deserialize[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4170,7 +4188,9 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4181,6 +4201,7 @@ export type Widget_Deserialize =
    *  widget for longer sets.
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4193,7 +4214,9 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4203,6 +4226,7 @@ export type Widget_Deserialize =
    *  table or a list in markdown.
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Deserialize[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4216,6 +4240,8 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4225,6 +4251,7 @@ export type Widget_Deserialize =
    *  returns any: these cards are the only place the user can answer them.
    */
   | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4237,8 +4264,72 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
       title?: never;
+      wakeId?: never;
+      wrap?: never;
+    })
+  /**
+   *  An agent account's wakes, newest first: what woke it, whether it is
+   *  still running, how long it took, what it cost when known, and what
+   *  came of it. Only the agent and the owners and admins of its teams can
+   *  read them; others see that they have no access.
+   */
+  | ({
+      type: 'wakes';
+      title?: string;
+      /**  The agent account's user id, e.g. what macro.me() returns for it. */
+      agentId: string;
+      /**  Only wakes in this status. */
+      status?: WakeStatusFilter;
+      /**  Cap the number of rows shown. Defaults to 25. */
+      limit?: number;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      wakeId?: never;
+      wrap?: never;
+    })
+  /**
+   *  One wake's model session as a waterfall: its prompt, turns and tool
+   *  calls with their timing, tokens and results. Use the wake id a wakes
+   *  widget or the SDK's wake list shows.
+   */
+  | ({
+      type: 'trace';
+      title?: string;
+      /**  The agent account's user id. */
+      agentId: string;
+      /**  The wake's id. */
+      wakeId: string;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      status?: never;
+      tags?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -4253,6 +4344,7 @@ export type Widget_Deserialize =
       title?: string;
       children: Widget_Deserialize[];
     } & {
+      agentId?: never;
       channelId?: never;
       events?: never;
       groupBy?: never;
@@ -4261,7 +4353,9 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
     });
 
 /**
@@ -4274,6 +4368,7 @@ export type Widget_Serialize =
    *  "md", never "markdown".
    */
   | ({ type: 'md'; markdown: string } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4286,12 +4381,15 @@ export type Widget_Serialize =
       limit?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
       title?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**  A chronological sequence of events. Great for "what happened" answers. */
   | ({ type: 'timeline'; title?: string; events: TimelineEvent_Serialize[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4304,7 +4402,9 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4320,6 +4420,7 @@ export type Widget_Serialize =
       /**  Cap the number of rows shown. */
       limit?: number;
     } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4330,7 +4431,9 @@ export type Widget_Serialize =
       justify?: never;
       markdown?: never;
       messageId?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -4341,6 +4444,7 @@ export type Widget_Serialize =
       /**  The message to render. */
       messageId: string;
     } & {
+      agentId?: never;
       align?: never;
       children?: never;
       direction?: never;
@@ -4352,8 +4456,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       source?: never;
+      status?: never;
       tags?: never;
       title?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4362,6 +4468,7 @@ export type Widget_Serialize =
    *  an answer is about calendar events instead of listing them in text.
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Serialize[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4374,7 +4481,9 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4385,6 +4494,7 @@ export type Widget_Serialize =
    *  widget for longer sets.
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4397,7 +4507,9 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4407,6 +4519,7 @@ export type Widget_Serialize =
    *  table or a list in markdown.
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Serialize[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4420,6 +4533,8 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
+      wakeId?: never;
       wrap?: never;
     })
   /**
@@ -4429,6 +4544,7 @@ export type Widget_Serialize =
    *  returns any: these cards are the only place the user can answer them.
    */
   | ({ type: 'agentUpdates'; items: AgentUpdateItem[] } & {
+      agentId?: never;
       align?: never;
       channelId?: never;
       children?: never;
@@ -4441,8 +4557,72 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
       title?: never;
+      wakeId?: never;
+      wrap?: never;
+    })
+  /**
+   *  An agent account's wakes, newest first: what woke it, whether it is
+   *  still running, how long it took, what it cost when known, and what
+   *  came of it. Only the agent and the owners and admins of its teams can
+   *  read them; others see that they have no access.
+   */
+  | ({
+      type: 'wakes';
+      title?: string;
+      /**  The agent account's user id, e.g. what macro.me() returns for it. */
+      agentId: string;
+      /**  Only wakes in this status. */
+      status?: WakeStatusFilter;
+      /**  Cap the number of rows shown. Defaults to 25. */
+      limit?: number;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      wakeId?: never;
+      wrap?: never;
+    })
+  /**
+   *  One wake's model session as a waterfall: its prompt, turns and tool
+   *  calls with their timing, tokens and results. Use the wake id a wakes
+   *  widget or the SDK's wake list shows.
+   */
+  | ({
+      type: 'trace';
+      title?: string;
+      /**  The agent account's user id. */
+      agentId: string;
+      /**  The wake's id. */
+      wakeId: string;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      status?: never;
+      tags?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -4457,6 +4637,7 @@ export type Widget_Serialize =
       title?: string;
       children: Widget_Serialize[];
     } & {
+      agentId?: never;
       channelId?: never;
       events?: never;
       groupBy?: never;
@@ -4465,5 +4646,7 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      status?: never;
       tags?: never;
+      wakeId?: never;
     });

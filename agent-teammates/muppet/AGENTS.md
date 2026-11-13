@@ -34,7 +34,7 @@ fails isn't run.
 - Owns: the behavior, event, hook, capability and runtime mechanisms; the
   Claude Code agent; utilities any agent can use (schedules, jobs,
   credentials, browser, Macro chat and screen share, failures, time, wake
-  telemetry).
+  telemetry, wake traces).
 - Not here: any particular agent's prompts, memory or product logic →
   the agent's own repository, started from `../starter-agent`.
 
@@ -43,7 +43,8 @@ fails isn't run.
 - Depends on: `@macro-inc/sdk`, the Claude Agent SDK, TypeScript.
 - `utilities/telemetry` emits through `@macro-inc/observability`
   (`packages/observability`), which the agent passes in: the library does
-  not import it.
+  not import it. Its `macroSink` sends records and traces to Macro through a
+  client the agent passes in.
 - Used by: agents built from `../starter-agent`, which link `packages/lib`.
 - Not in the root workspace: it has its own `package.json`, `bun.lock` and
   `flake.nix`, and the root checks don't cover it.

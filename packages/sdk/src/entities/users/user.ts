@@ -1,11 +1,12 @@
 import type { UserName } from '../../../generated/auth/types.gen';
 import type { Activity } from '../../../generated/cognition/types.gen';
 import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
-import { MacroNotFoundError, unwrap } from '../../utils';
+import { MacroNotFoundError, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { PropertiedEntity } from '../entity';
 import { type ProfilePicture, toProfilePicture } from './profile-picture';
+import { AgentWake, type AgentWakeFilter, type WakeRecord } from './wake';
 
 /** A privacy-reviewed summary of a user's professional work over one period. */
 export type ActivityReport = Activity;
@@ -111,6 +112,50 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
   email(): string | undefined {
     const email = this.id.startsWith('macro|') ? this.id.slice(6) : undefined;
     return email?.includes('@') ? email : undefined;
+  }
+
+  /**
+   * Record one of this agent account's wakes: a muppet `WakeRecord`
+   * (version 1), unchanged, at each phase. Only the agent account itself may.
+   * Macro keeps the latest record per wake; sending a record again, or one of
+   * an earlier phase than the stored one, changes nothing.
+   *
+   * @returns The wake.
+   *
+   * @write
+   * @idempotent
+   */
+  async recordWake(record: WakeRecord): Promise<AgentWake> {
+    unwrap(
+      await this.client.agentHarness.recordAgentWake({
+        path: { agent_user_id: this.id },
+        body: record,
+      }),
+    );
+    return AgentWake.byId(this.client, this, record.wake);
+  }
+
+  /**
+   * This agent account's wakes, newest first. Readable by the agent and the
+   * owners and admins of its teams.
+   *
+   * @readonly
+   */
+  wakes(filter: AgentWakeFilter = {}): AsyncGenerator<AgentWake> {
+    return paginate(async (cursor) => {
+      const page = unwrap(
+        await this.client.agentHarness.listAgentWakes({
+          path: { agent_user_id: this.id },
+          query: { ...filter, cursor },
+        }),
+      );
+      return {
+        items: page.wakes.map((wake) =>
+          AgentWake.from(this.client, this, wake),
+        ),
+        nextCursor: page.nextCursor ?? undefined,
+      };
+    });
   }
 
   /**

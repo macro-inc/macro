@@ -10,6 +10,7 @@ import typescript from "typescript";
 import { agentClaude } from "./behavior/agent/claude.ts";
 import { guards } from "./behavior/agent/guards/index.ts";
 import { profile } from "./behavior/agent/profile.ts";
+import { recordedAgent } from "./behavior/agent/telemetry.ts";
 import { base as makeBase } from "./behavior/context/index.ts";
 import { assistant as makeAgent } from "./behavior/index.ts";
 
@@ -41,7 +42,7 @@ export const scripts: Scripts = {
 	signatures: async (file, names) => check.signatures(file, names),
 };
 
-export const agent = agentClaude({
+const claude = agentClaude({
 	query,
 	model: base.config.model,
 	profile: profile(base.config),
@@ -53,5 +54,11 @@ export const agent = agentClaude({
 	guards,
 	record: (entry) => base.log.event(wakesLog, entry),
 });
+
+// Every wake is recorded to the agent's wakes in Macro, with its trace
+// (`behavior/agent/telemetry.ts`).
+export const agent = recordedAgent(base, claude, (url, init) =>
+	fetch(url, init),
+);
 
 export const assistant = makeAgent(base, agent);

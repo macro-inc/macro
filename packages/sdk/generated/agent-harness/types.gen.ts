@@ -810,6 +810,43 @@ export type AgentUpdates = {
 };
 
 /**
+ * One wake: its latest record.
+ */
+export type AgentWake = {
+    /**
+     * When that record arrived.
+     */
+    receivedAt: string;
+    /**
+     * The latest record: `start`, `session`, or `end`.
+     */
+    record: WakeRecord;
+    /**
+     * When the wake's trace was last uploaded, if it was.
+     */
+    traceUpdatedAt?: string | null;
+};
+
+/**
+ * A wake's status, for filtering.
+ */
+export type AgentWakeStatusFilter = 'running' | 'ok' | 'failed' | 'timeout' | 'cancelled';
+
+/**
+ * A page of wakes, newest first.
+ */
+export type AgentWakesPage = {
+    /**
+     * Pass as `cursor` for the next page; absent on the last.
+     */
+    nextCursor?: string | null;
+    /**
+     * The wakes.
+     */
+    wakes: Array<AgentWake>;
+};
+
+/**
  * Public admission error payload. Handlers with additional fields can reuse the
  * domain error's code and message and [`admission_status`].
  */
@@ -3216,6 +3253,412 @@ export type Voice = {
 };
 
 /**
+ * Something a wake did that its system saw for itself.
+ */
+export type WakeEffect = {
+    /**
+     * Which one.
+     */
+    id?: string | null;
+    /**
+     * What kind of effect, e.g. `pr_opened`.
+     */
+    kind: string;
+    /**
+     * A link to it.
+     */
+    url?: string | null;
+};
+
+/**
+ * How a wake ended, apart from what came of it.
+ */
+export type WakeEndStatus = 'ok' | 'failed' | 'timeout' | 'cancelled';
+
+/**
+ * What went wrong.
+ */
+export type WakeFailure = {
+    /**
+     * What happened.
+     */
+    message: string;
+    /**
+     * A low-cardinality name, e.g. `timeout`.
+     */
+    type: string;
+};
+
+/**
+ * What came of a wake, and how that is known.
+ */
+export type WakeOutcome = {
+    /**
+     * How the report held up.
+     */
+    check: WakeOutcomeCheck;
+    /**
+     * One of the system's declared outcomes, or `unclassified`.
+     */
+    name: string;
+    /**
+     * What the effects alone imply.
+     */
+    observed?: string | null;
+    /**
+     * What the agent reported.
+     */
+    reported?: string | null;
+    /**
+     * Where `name` came from.
+     */
+    source: WakeOutcomeSource;
+    /**
+     * The agent's one line on what it did.
+     */
+    summary?: string | null;
+};
+
+/**
+ * How the agent's report held up against the effects.
+ */
+export type WakeOutcomeCheck = 'confirmed' | 'unverifiable' | 'contradicted' | 'not_reported';
+
+/**
+ * Where an outcome's name came from.
+ */
+export type WakeOutcomeSource = 'reported' | 'observed' | 'none';
+
+/**
+ * The wake, and its system, that started this one.
+ */
+export type WakeParent = {
+    /**
+     * The parent wake's system.
+     */
+    system?: string | null;
+    /**
+     * The parent wake's id.
+     */
+    wake?: string | null;
+};
+
+/**
+ * The phase of a record: how far the wake had got when it was written.
+ */
+export type WakePhase = 'start' | 'session' | 'end';
+
+/**
+ * One wake record, version 1, as a muppet system sends it.
+ */
+export type WakeRecord = {
+    /**
+     * How long it ran.
+     */
+    durationMs?: number | null;
+    /**
+     * What the system saw it do.
+     */
+    effects?: Array<WakeEffect> | null;
+    /**
+     * When it ended, ISO 8601 in UTC. This and the fields below come with
+     * the `end` record only.
+     */
+    endedAt?: string | null;
+    error?: null | WakeFailure;
+    /**
+     * `invoke_workflow` when no model was woken.
+     */
+    operation?: string | null;
+    outcome?: null | WakeOutcome;
+    parent?: null | WakeParent;
+    /**
+     * `start`, `session`, or `end`.
+     */
+    phase: WakePhase;
+    session?: null | WakeSession;
+    /**
+     * ISO 8601 in UTC, to the millisecond.
+     */
+    startedAt: string;
+    status?: null | WakeEndStatus;
+    /**
+     * The system that woke its agent, e.g. `pr-factory`.
+     */
+    system: string;
+    /**
+     * The Herdr terminal it ran in.
+     */
+    terminal?: string | null;
+    /**
+     * Where the wake sits in a trace.
+     */
+    trace: WakeTraceIds;
+    /**
+     * What woke it.
+     */
+    trigger: WakeTrigger;
+    usage?: null | WakeUsage;
+    /**
+     * The format version; always 1.
+     */
+    v: number;
+    /**
+     * This wake's id, unique within the agent.
+     */
+    wake: string;
+};
+
+/**
+ * The model session a wake ran as.
+ */
+export type WakeSession = {
+    /**
+     * What ran it, e.g. `claude` or `codex`.
+     */
+    agent: string;
+    /**
+     * Claude Code's session id, Codex's conversation id.
+     */
+    id?: string | null;
+    /**
+     * The model.
+     */
+    model?: string | null;
+    /**
+     * Who serves the model, e.g. `anthropic`.
+     */
+    provider?: string | null;
+};
+
+/**
+ * A wake's model session from end to end.
+ */
+export type WakeTrace = {
+    /**
+     * What the session cost, when known.
+     */
+    costUsd?: number | null;
+    /**
+     * The transcript's last instant.
+     */
+    endedAt: string;
+    /**
+     * Whether the session was still being written when this was uploaded.
+     */
+    live: boolean;
+    /**
+     * The model.
+     */
+    model?: string | null;
+    /**
+     * The model session's id.
+     */
+    sessionId: string;
+    /**
+     * Which program wrote the transcript.
+     */
+    source: WakeTraceSource;
+    /**
+     * The timeline.
+     */
+    spans: Array<WakeTraceSpan>;
+    /**
+     * The transcript's first instant.
+     */
+    startedAt: string;
+    /**
+     * The title Claude Code gave the session.
+     */
+    title?: string | null;
+    /**
+     * The format version; always 1.
+     */
+    v: number;
+};
+
+/**
+ * Where the wake sits in an OpenTelemetry trace, as lower-case hex.
+ */
+export type WakeTraceIds = {
+    /**
+     * The span of what started it, if anything.
+     */
+    parentSpanId?: string | null;
+    /**
+     * 16 hex characters.
+     */
+    spanId: string;
+    /**
+     * 32 hex characters.
+     */
+    traceId: string;
+};
+
+/**
+ * Which program wrote the transcript the trace was parsed from.
+ */
+export type WakeTraceSource = 'claude' | 'codex';
+
+/**
+ * One step on a trace's timeline. Instants are ISO 8601.
+ */
+export type WakeTraceSpan = {
+    /**
+     * When it was said.
+     */
+    at: string;
+    kind: 'user';
+    /**
+     * What was said.
+     */
+    text: string;
+} | {
+    /**
+     * When it began.
+     */
+    at: string;
+    /**
+     * When it ended.
+     */
+    end: string;
+    /**
+     * Its place among the turns, from 0.
+     */
+    index: number;
+    kind: 'turn';
+    /**
+     * The model that answered.
+     */
+    model?: string | null;
+    /**
+     * What it said.
+     */
+    text: string;
+    /**
+     * What it thought.
+     */
+    thinking: string;
+    /**
+     * What it used.
+     */
+    tokens: WakeTraceTokens;
+} | {
+    /**
+     * When it was called.
+     */
+    at: string;
+    /**
+     * When it returned; absent while it runs.
+     */
+    end?: string | null;
+    /**
+     * Whether it failed.
+     */
+    error: boolean;
+    /**
+     * The tool call's id.
+     */
+    id: string;
+    /**
+     * Its input, as the model gave it.
+     */
+    input: {
+        [key: string]: unknown;
+    };
+    kind: 'tool';
+    /**
+     * The tool.
+     */
+    name: string;
+    /**
+     * Its result as text; absent while it runs.
+     */
+    result?: string | null;
+    /**
+     * The index of the turn that called it.
+     */
+    turn: number;
+};
+
+/**
+ * Tokens one model turn used.
+ */
+export type WakeTraceTokens = {
+    /**
+     * Input tokens read from the cache.
+     */
+    cacheRead: number;
+    /**
+     * Input tokens written to the cache.
+     */
+    cacheWrite: number;
+    /**
+     * Input tokens.
+     */
+    input: number;
+    /**
+     * Output tokens.
+     */
+    output: number;
+};
+
+/**
+ * What woke the agent.
+ */
+export type WakeTrigger = {
+    /**
+     * The ids of what it is about, by what they identify, e.g. `pr`.
+     */
+    ids: {
+        [key: string]: string;
+    };
+    /**
+     * What kind of thing woke it.
+     */
+    kind: WakeTriggerKind;
+    /**
+     * What within the source, when it has a name.
+     */
+    name?: string | null;
+    /**
+     * The event source that fired, as the behavior names it.
+     */
+    source: string;
+    /**
+     * One line a person reads.
+     */
+    summary?: string | null;
+};
+
+/**
+ * What kind of thing woke the agent.
+ */
+export type WakeTriggerKind = 'schedule' | 'message' | 'event' | 'job' | 'manual';
+
+/**
+ * What the wake used.
+ */
+export type WakeUsage = {
+    /**
+     * Cost in US dollars, when known.
+     */
+    costUsd?: number | null;
+    /**
+     * Input tokens.
+     */
+    inputTokens?: number | null;
+    /**
+     * Output tokens.
+     */
+    outputTokens?: number | null;
+    /**
+     * Model turns.
+     */
+    turns?: number | null;
+};
+
+/**
  * A client-minted id deduplicates warm calls without creating a conversation.
  */
 export type WarmAgentSessionRequest = {
@@ -4968,6 +5411,174 @@ export type ListAgentWorkRegistrationsResponses = {
 };
 
 export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
+
+export type ListAgentWakesData = {
+    body?: never;
+    path: {
+        /**
+         * User id of the agent account
+         */
+        agent_user_id: string;
+    };
+    query?: {
+        /**
+         * Only wakes in this status; `running` is every wake with no `end` record yet.
+         */
+        status?: AgentWakeStatusFilter;
+        /**
+         * Page size, 1 to 100; 25 when left out.
+         */
+        limit?: number;
+        /**
+         * `nextCursor` from the page before.
+         */
+        cursor?: string;
+    };
+    url: '/agents/{agent_user_id}/wakes';
+};
+
+export type ListAgentWakesErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ListAgentWakesError = ListAgentWakesErrors[keyof ListAgentWakesErrors];
+
+export type ListAgentWakesResponses = {
+    200: AgentWakesPage;
+};
+
+export type ListAgentWakesResponse = ListAgentWakesResponses[keyof ListAgentWakesResponses];
+
+export type RecordAgentWakeData = {
+    body: WakeRecord;
+    path: {
+        /**
+         * User id of the agent account
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_user_id}/wakes';
+};
+
+export type RecordAgentWakeErrors = {
+    400: string;
+    401: string;
+    403: string;
+    404: string;
+    409: string;
+    500: string;
+};
+
+export type RecordAgentWakeError = RecordAgentWakeErrors[keyof RecordAgentWakeErrors];
+
+export type RecordAgentWakeResponses = {
+    /**
+     * Recorded, or older than the record already stored
+     */
+    204: void;
+};
+
+export type RecordAgentWakeResponse = RecordAgentWakeResponses[keyof RecordAgentWakeResponses];
+
+export type GetAgentWakeData = {
+    body?: never;
+    path: {
+        /**
+         * User id of the agent account
+         */
+        agent_user_id: string;
+        /**
+         * The wake's id
+         */
+        wake_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_user_id}/wakes/{wake_id}';
+};
+
+export type GetAgentWakeErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type GetAgentWakeError = GetAgentWakeErrors[keyof GetAgentWakeErrors];
+
+export type GetAgentWakeResponses = {
+    200: AgentWake;
+};
+
+export type GetAgentWakeResponse = GetAgentWakeResponses[keyof GetAgentWakeResponses];
+
+export type GetAgentWakeTraceData = {
+    body?: never;
+    path: {
+        /**
+         * User id of the agent account
+         */
+        agent_user_id: string;
+        /**
+         * The wake's id
+         */
+        wake_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_user_id}/wakes/{wake_id}/trace';
+};
+
+export type GetAgentWakeTraceErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type GetAgentWakeTraceError = GetAgentWakeTraceErrors[keyof GetAgentWakeTraceErrors];
+
+export type GetAgentWakeTraceResponses = {
+    200: WakeTrace;
+};
+
+export type GetAgentWakeTraceResponse = GetAgentWakeTraceResponses[keyof GetAgentWakeTraceResponses];
+
+export type PutAgentWakeTraceData = {
+    body: WakeTrace;
+    path: {
+        /**
+         * User id of the agent account
+         */
+        agent_user_id: string;
+        /**
+         * The wake's id
+         */
+        wake_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_user_id}/wakes/{wake_id}/trace';
+};
+
+export type PutAgentWakeTraceErrors = {
+    400: string;
+    401: string;
+    403: string;
+    404: string;
+    413: string;
+    500: string;
+};
+
+export type PutAgentWakeTraceError = PutAgentWakeTraceErrors[keyof PutAgentWakeTraceErrors];
+
+export type PutAgentWakeTraceResponses = {
+    /**
+     * Stored
+     */
+    204: void;
+};
+
+export type PutAgentWakeTraceResponse = PutAgentWakeTraceResponses[keyof PutAgentWakeTraceResponses];
 
 export type ListCodingAgentsData = {
     body?: never;

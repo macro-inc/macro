@@ -79,6 +79,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     agent_git: Router,
     sharing: Router,
     routine_sessions: Router,
+    agent_wakes: Router,
     coding_agents: Router,
     claude_access: Router,
     capabilities: Router,
@@ -137,6 +138,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             agent_git: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
+            agent_wakes: Router::new(),
             coding_agents: Router::new(),
             claude_access: Router::new(),
             capabilities: Router::new(),
@@ -245,6 +247,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach internal-only routine routes with their independent domain service.
     pub fn with_routine_sessions(mut self, router: Router) -> Self {
         self.routine_sessions = router;
+        self
+    }
+
+    /// Attach agent accounts' wake telemetry routes.
+    pub fn with_agent_wakes(mut self, router: Router) -> Self {
+        self.agent_wakes = router;
         self
     }
 
@@ -463,6 +471,7 @@ where
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
+        .merge(states.agent_wakes)
         .merge(states.coding_agents)
         .merge(states.claude_access)
         .merge(states.capabilities)

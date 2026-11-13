@@ -96,6 +96,32 @@ pub(super) struct InternalTools {
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
     /// Macro app origin, for links back to the calling session.
     pub(super) app_url: Arc<str>,
+    /// Whether a session's owner has agent dashboards, which ExecuteCode's
+    /// view schema then offers; `None` offers them to nobody.
+    pub(super) dashboards: Option<agent_code_mode::inbound::toolset::DashboardsRollout>,
+}
+
+impl InternalTools {
+    /// ExecuteCode's description offering dashboard widgets, when the
+    /// session's owner has agent dashboards; otherwise `None`, keeping the
+    /// tool's own description.
+    async fn execute_code_description(
+        &self,
+        context: &rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Option<String> {
+        let rollout = self.dashboards.as_ref()?;
+        let AuthenticatedSession(grant) = context
+            .extensions
+            .get::<axum::http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())?;
+        let owner = grant.owner_user().ok()?.clone();
+        if !rollout(owner).await {
+            return None;
+        }
+        Some(agent_code_mode::inbound::toolset::execute_code_description(
+            dynamic_ui::Offer::Dashboards,
+        ))
+    }
 }
 
 impl ServerHandler for InternalTools {
@@ -121,7 +147,7 @@ impl ServerHandler for InternalTools {
     async fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let mut definitions: Vec<_> = toolset()
             .tools
@@ -143,24 +169,36 @@ impl ServerHandler for InternalTools {
             })
             .collect();
         if self.code_mode.is_some() {
+            let execute_code = self.execute_code_description(&context).await;
             definitions.extend(
                 agent_code_mode::inbound::toolset::toolset()
                     .tools
                     .iter()
                     .map(|(name, tool)| {
-                        Tool::new(
-                            name.clone(),
-                            tool.description.clone(),
-                            Arc::new(tool.input_schema.clone()),
-                        )
-                        .with_title(tool.annotations.title)
-                        .annotate(
-                            ToolAnnotations::with_title(tool.annotations.title)
-                                .read_only(tool.annotations.kind.read_only_hint())
-                                .destructive(tool.annotations.kind.destructive_hint())
-                                .idempotent(tool.annotations.idempotent)
-                                .open_world(tool.annotations.open_world),
-                        )
+                        let mut input_schema = tool.input_schema.clone();
+                        let description = match (name.as_str(), &execute_code) {
+                            // The input schema repeats the description at its
+                            // root; both must offer the same views.
+                            ("ExecuteCode", Some(description)) => {
+                                if input_schema.contains_key("description") {
+                                    input_schema.insert(
+                                        "description".to_owned(),
+                                        description.clone().into(),
+                                    );
+                                }
+                                description.clone()
+                            }
+                            _ => tool.description.clone(),
+                        };
+                        Tool::new(name.clone(), description, Arc::new(input_schema))
+                            .with_title(tool.annotations.title)
+                            .annotate(
+                                ToolAnnotations::with_title(tool.annotations.title)
+                                    .read_only(tool.annotations.kind.read_only_hint())
+                                    .destructive(tool.annotations.kind.destructive_hint())
+                                    .idempotent(tool.annotations.idempotent)
+                                    .open_world(tool.annotations.open_world),
+                            )
                     }),
             );
         }

@@ -91,6 +91,40 @@ pub enum Widget {
     /// items macro.agentSessions.updates() returned, unchanged, whenever it
     /// returns any: these cards are the only place the user can answer them.
     AgentUpdates { items: Vec<AgentUpdateItem> },
+    /// An agent account's wakes, newest first: what woke it, whether it is
+    /// still running, how long it took, what it cost when known, and what
+    /// came of it. Only the agent and the owners and admins of its teams can
+    /// read them; others see that they have no access.
+    #[serde(rename_all = "camelCase")]
+    Wakes {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        /// The agent account's user id, e.g. what macro.me() returns for it.
+        agent_id: String,
+        /// Only wakes in this status.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = WakeStatusFilter)]
+        status: Option<WakeStatusFilter>,
+        /// Cap the number of rows shown. Defaults to 25.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(range(min = 1, max = 100))]
+        #[specta(optional, type = u32)]
+        limit: Option<u32>,
+    },
+    /// One wake's model session as a waterfall: its prompt, turns and tool
+    /// calls with their timing, tokens and results. Use the wake id a wakes
+    /// widget or the SDK's wake list shows.
+    #[serde(rename_all = "camelCase")]
+    Trace {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        title: Option<String>,
+        /// The agent account's user id.
+        agent_id: String,
+        /// The wake's id.
+        wake_id: String,
+    },
     /// A nestable flex container of widgets.
     Container {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -323,4 +357,17 @@ pub enum Justify {
     Center,
     End,
     Between,
+}
+
+/// The wakes a wakes widget shows, by where they stand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "DashboardWakeStatusFilter")]
+pub enum WakeStatusFilter {
+    /// Still running.
+    Running,
+    Ok,
+    Failed,
+    Timeout,
+    Cancelled,
 }

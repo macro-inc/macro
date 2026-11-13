@@ -340,6 +340,10 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.putAgentAutoArchivePreferences",
         "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
+        // An agent's own wake telemetry: only the agent itself may write
+        // it, and writing it notifies nobody.
+        "agent-harness.recordAgentWake",
+        "agent-harness.putAgentWakeTrace",
         // Rejecting a pending tool call runs nothing; running or rewriting
         // one is refused.
         "cognition.rejectToolCall",

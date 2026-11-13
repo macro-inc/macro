@@ -55,6 +55,9 @@ const MACRO_API_TOKENS = getMacroApiToken();
 // reachable from the database; superseded patches are deleted on capture and
 // a session's last patch is orphaned when the session is deleted, so the
 // lifecycle rule is what reclaims those.
+//
+// It also holds agent accounts' wake traces (agent session content too), one
+// object per wake under `agent-wakes/`, kept 30 days after the last upload.
 
 const sessionChangesBucket = createBucket({
   id: `macro-agent-session-changes-${stack}`,
@@ -66,6 +69,12 @@ const sessionChangesBucket = createBucket({
       id: 'expire-orphaned-patches',
       enabled: true,
       expiration: { days: 90 },
+    },
+    {
+      id: 'expire-agent-wake-traces',
+      enabled: true,
+      prefix: 'agent-wakes/',
+      expiration: { days: 30 },
     },
   ],
   tags,

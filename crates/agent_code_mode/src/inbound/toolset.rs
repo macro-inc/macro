@@ -75,13 +75,7 @@ enum CodeHost {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
-    description = format!(
-        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
-        include_str!("toolset/session/execute_code.md"),
-        include_str!("toolset/shared/program.md"),
-        include_str!("toolset/shared/runtime.md"),
-        dynamic_ui::present_view_schema(),
-    )
+    description = execute_code_description(dynamic_ui::Offer::Views)
 )]
 pub struct ExecuteCode {
     /// Optional caller-chosen ID, recorded in the tool input so a call whose
@@ -108,6 +102,28 @@ pub struct ExecuteCode {
         description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000."
     )]
     pub timeout_ms: u64,
+}
+
+/// Per-person answer to whether agent dashboards are on, read from the
+/// [`dynamic_ui::AGENT_DASHBOARDS_FLAG`] flag; a failed read answers `false`.
+pub type DashboardsRollout = Arc<
+    dyn Fn(MacroUserIdStr<'static>) -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// ExecuteCode's description in agent sessions, with the views it offers.
+/// The tool's schema carries [`dynamic_ui::Offer::Views`]; a host that knows
+/// its person has agent dashboards replaces it with
+/// [`dynamic_ui::Offer::Dashboards`].
+pub fn execute_code_description(offer: dynamic_ui::Offer) -> String {
+    format!(
+        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
+        include_str!("toolset/session/execute_code.md"),
+        include_str!("toolset/shared/program.md"),
+        include_str!("toolset/shared/runtime.md"),
+        dynamic_ui::present_view_schema(offer),
+    )
 }
 
 fn default_timeout() -> u64 {

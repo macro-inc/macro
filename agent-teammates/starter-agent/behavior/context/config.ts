@@ -33,6 +33,8 @@ export type Config = {
 	readonly timeZone: string;
 	/** Macro's connection gateway, which presence is a socket to. */
 	readonly gateway: string;
+	/** Macro's agent harness API, where the agent's wakes and their traces are recorded. */
+	readonly harness: string;
 	/** Retention: days a per-run log is kept, and lines kept in a JSONL log or a channel's history. */
 	readonly keep: {
 		readonly logDays: number;
@@ -76,5 +78,6 @@ export const config = ({
 	identity: { name: settings.name, email: settings.email },
 	timeZone: settings.timeZone,
 	gateway: "wss://gateway.macro.com/connection-gateway/",
+	harness: "https://gateway.macro.com/agent-harness",
 	keep: { logDays: 30, logLines: 5000, historyLines: 1000 },
 });

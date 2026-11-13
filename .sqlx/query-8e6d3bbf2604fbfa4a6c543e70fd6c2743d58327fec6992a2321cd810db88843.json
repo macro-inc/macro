@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH upserted AS (\n                INSERT INTO agent_wakes\n                    (agent_user_id, wake_id, system, phase, status, started_at, record)\n                VALUES ($1, $2, $3, $4, $5, $6, $7)\n                ON CONFLICT (agent_user_id, wake_id) DO UPDATE SET\n                    phase = EXCLUDED.phase,\n                    status = EXCLUDED.status,\n                    started_at = EXCLUDED.started_at,\n                    record = EXCLUDED.record,\n                    received_at = now()\n                WHERE agent_wakes.system = EXCLUDED.system\n                  AND agent_wakes.phase <= EXCLUDED.phase\n                RETURNING 1 AS stored\n            )\n            SELECT\n                EXISTS (SELECT 1 FROM upserted) AS \"stored!\",\n                (\n                    SELECT system FROM agent_wakes\n                    WHERE agent_user_id = $1 AND wake_id = $2\n                ) AS existing_system\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stored!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "existing_system",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int2",
+        "Text",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "8e6d3bbf2604fbfa4a6c543e70fd6c2743d58327fec6992a2321cd810db88843"
+}

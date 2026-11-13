@@ -106,6 +106,23 @@ Each call the agent is on is a process of its own (`bin/agent joinCall`), so
 a call outlives a restart of the agent. The browser it shares from is a
 second unit, `<name>-screen.service`.
 
+### Its wakes in Macro
+
+Every wake is recorded to the agent account's wakes in Macro, with its Claude
+Code session as a trace, so its owner (and the owners and admins of its teams)
+can see what woke it, how long it ran, what it cost, and every turn and tool
+call (`behavior/agent/telemetry.ts`). It is on by default whenever the agent
+has its `MACRO_API_KEY`, and needs nothing else.
+
+- The trace is redacted before it leaves: every one of the agent's credential
+  values, then anything shaped like a secret. If a credential can't be read,
+  that trace isn't sent.
+- While Macro has wakes off for the account (it answers 404), the agent sends
+  nothing more until it restarts. A slow or down Macro costs records and
+  traces, never a wake.
+- Records go to `https://gateway.macro.com/agent-harness` (`harness` in
+  `behavior/context/config.ts`).
+
 ## Operate
 
     systemctl --user status <name>          # is it up
@@ -135,7 +152,7 @@ the same messages.
     behavior/
       index.ts                     the whole behavior, composed from the areas
       context/                     the one place IO happens: disk, clock, shell, credentials, Macro
-      agent/                       the agent as Claude Code, its limits per event, its guards
+      agent/                       the agent as Claude Code, its limits per event, its guards, its wake telemetry
       events/sources/<area>.ts     where events come from
       events/handlers/<area>.ts    what happens when one fires
       capabilities/<area>/         what it can do, its prompts, and all of the area's logic
