@@ -34,6 +34,8 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a setting saved in Settings › Email does not change the
+    // next sent message, or a removed inbox's mail and picker entry remain.
     test('a signature, read receipts off and on, and removing an inbox', async ({
       page,
       mailbox,

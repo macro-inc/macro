@@ -29,6 +29,8 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a scheduled message goes out at the wrong time or at
+    // once, a new time or a cancel is ignored, or it never goes out.
     test('schedule, reschedule, cancel, schedule again; it goes out when due', async ({
       page,
       mailbox,
@@ -105,6 +107,14 @@ for (const provider of PROVIDERS) {
       await expect(scheduledNotice).toBeVisible();
       await expect.poll(async () => (await scheduled()).length).toBe(1);
       expect(await readMailbox(mailbox, grace)).toEqual([]);
+      // Nothing went out early in all that time: the provider's Sent is empty.
+      expect(
+        (await mailbox.providerMessages()).filter(
+          (message) =>
+            message.subject === 'Quarterly numbers' &&
+            message.labels.includes(sentFolder(provider))
+        )
+      ).toEqual([]);
 
       const [again] = await scheduled();
       const due = await mailbox.stack.sql(

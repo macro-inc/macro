@@ -1,22 +1,8 @@
 // Where a thread is listed besides the inbox: Sent across linked inboxes, and
 // the folder a thread was moved to.
 
-import type { Page } from '@playwright/test';
 import { expect, test } from './harness/fixtures';
-import { focusedRowId, rowIds } from './harness/list';
-
-/** Moves the list's cursor to the row of `threadId`. */
-async function focusRow(page: Page, threadId: string): Promise<void> {
-  await expect.poll(() => rowIds(page)).toContain(threadId);
-  await expect.poll(() => focusedRowId(page)).toBeDefined();
-  const rows = await rowIds(page);
-  const from = rows.indexOf((await focusedRowId(page)) ?? '');
-  const to = rows.indexOf(threadId);
-  for (let step = 0; step < Math.abs(to - from); step++) {
-    await page.keyboard.press(to > from ? 'j' : 'k');
-  }
-  await expect.poll(() => focusedRowId(page)).toBe(threadId);
-}
+import { focusRow, rowIds } from './harness/list';
 
 test.describe('the Sent view', () => {
   // Class sent-view-only-primary-inbox: when this fails, Sent lists only what

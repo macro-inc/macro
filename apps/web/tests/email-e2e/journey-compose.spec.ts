@@ -11,13 +11,18 @@ import { addMailbox, readMailbox, sentFolder } from './harness/journeys';
 import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
 
-/** The recipient input of a composer row: `To`, `Cc` or `Bcc`. */
+/**
+ * The recipient input of a composer row: `To`, `Cc` or `Bcc`. The inputs have
+ * no names, so this takes the innermost element holding the row's label and
+ * an input: the row itself, whose ancestors come before it in the document.
+ */
 function recipientInput(page: Page, row: 'To' | 'Cc' | 'Bcc') {
   return page
     .locator('div')
     .filter({ has: page.getByText(row, { exact: true }) })
-    .getByRole('combobox')
-    .last();
+    .filter({ has: page.getByRole('combobox') })
+    .last()
+    .getByRole('combobox');
 }
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
@@ -27,6 +32,8 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a recipient of a new message misses it, the file or the
+    // signature, or a Bcc recipient is exposed to the others or lost.
     test('a suggested recipient, Cc, Bcc, a file and the signature reach every recipient', async ({
       page,
       mailbox,

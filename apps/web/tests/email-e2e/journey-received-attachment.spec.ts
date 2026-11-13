@@ -21,6 +21,8 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a received file is missing from its thread, or the
+    // download saves different bytes from those that were sent.
     test('is listed in its thread and downloads with the bytes that were sent', async ({
       page,
       mailbox,

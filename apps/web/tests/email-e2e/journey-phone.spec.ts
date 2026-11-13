@@ -19,7 +19,18 @@ async function swipeLeft(
   const surface = page.locator(
     `[data-swipe-id="${threadId}"] [data-swipe-surface]`
   );
-  const box = await surface.boundingBox();
+  // The touches go to fixed points: wait until the row stops moving (the
+  // list slides back in after a thread is closed).
+  let box = await surface.boundingBox();
+  await expect
+    .poll(async () => {
+      const next = await surface.boundingBox();
+      const still =
+        next !== null && box !== null && next.x === box.x && next.y === box.y;
+      box = next;
+      return still;
+    })
+    .toBe(true);
   if (!box) throw new Error(`no row for ${threadId}`);
   const y = box.y + box.height / 2;
   const start = box.x + box.width - 60;
@@ -48,6 +59,8 @@ for (const provider of PROVIDERS) {
     test.use({ ...phone, provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a reply written on a phone does not reach the sender, or
+    // a swiped row is not marked done at the provider.
     test('open a thread, reply from the phone composer, swipe a row to done', async ({
       page,
       mailbox,

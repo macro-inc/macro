@@ -2,7 +2,7 @@
 // and marked done at once, one moved to Trash and restored from there, one
 // marked unread and read again, one starred; and a message the provider put
 // in spam brought back. The same journey for a Gmail and an Outlook inbox;
-// each step is checked at the provider.
+// each step but the star, a Macro favorite, is checked at the provider.
 
 import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
@@ -13,22 +13,9 @@ import {
   syncedInView,
   trashFolder,
 } from './harness/journeys';
-import { focusedRowId, rowIds } from './harness/list';
+import { focusRow, rowIds } from './harness/list';
 import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
-
-/** Moves the list's cursor to the row of `threadId`. */
-async function focusRow(page: Page, threadId: string): Promise<void> {
-  await expect.poll(() => rowIds(page)).toContain(threadId);
-  await expect.poll(() => focusedRowId(page)).toBeDefined();
-  const rows = await rowIds(page);
-  const from = rows.indexOf((await focusedRowId(page)) ?? '');
-  const to = rows.indexOf(threadId);
-  for (let step = 0; step < Math.abs(to - from); step++) {
-    await page.keyboard.press(to > from ? 'j' : 'k');
-  }
-  await expect.poll(() => focusedRowId(page)).toBe(threadId);
-}
 
 /** The row of a thread in the list. */
 function row(page: Page, threadId: string) {
@@ -42,6 +29,8 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a triage action shows its notice but the provider keeps
+    // the old state: still in the inbox, not in Trash, or read or unread.
     test('bulk done, Trash and restore, unread and read, star', async ({
       page,
       mailbox,

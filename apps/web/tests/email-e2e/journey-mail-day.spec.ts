@@ -4,7 +4,6 @@
 // for a Gmail and an Outlook inbox; what each provider then holds is checked
 // through its own API.
 
-import type { Page } from '@playwright/test';
 import {
   composeNew,
   discardButton,
@@ -14,22 +13,9 @@ import {
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { addMailbox, readMailbox, sentFolder } from './harness/journeys';
-import { focusedRowId, rowIds } from './harness/list';
+import { focusRow, rowIds } from './harness/list';
 import { notice, replyEditor } from './harness/send';
 import type { Provider } from './harness/stack';
-
-/** Moves the list's cursor to the row of `threadId`. */
-async function focusRow(page: Page, threadId: string): Promise<void> {
-  await expect.poll(() => rowIds(page)).toContain(threadId);
-  await expect.poll(() => focusedRowId(page)).toBeDefined();
-  const rows = await rowIds(page);
-  const from = rows.indexOf((await focusedRowId(page)) ?? '');
-  const to = rows.indexOf(threadId);
-  for (let step = 0; step < Math.abs(to - from); step++) {
-    await page.keyboard.press(to > from ? 'j' : 'k');
-  }
-  await expect.poll(() => focusedRowId(page)).toBe(threadId);
-}
 
 const PROVIDERS: Provider[] = ['OUTLOOK', 'GMAIL'];
 
@@ -38,6 +24,9 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
+    // When this fails, a step of an ordinary day does not reach the provider:
+    // a reply or forward goes missing or loses the quote, a draft is lost or
+    // not deleted, Done or its undo stays in Macro, or filing loses the thread.
     test('list, open, reply, forward, draft and discard, done and undo, file in a folder', async ({
       page,
       mailbox,
@@ -122,7 +111,8 @@ for (const provider of PROVIDERS) {
       expect(forwarded.html).toContain('Noon at the usual place?');
 
       // A new message is saved as a draft, survives a reload, and is thrown
-      // away: Macro and the provider both let go of it.
+      // away: Macro lets go of it, and so does Outlook, where Macro writes its
+      // drafts into the mailbox (a Gmail inbox's drafts stay in Macro).
       await composeNew(page, mailbox, {
         to: zed,
         subject: 'Offsite plan',
@@ -134,6 +124,11 @@ for (const provider of PROVIDERS) {
           (await draftThreads(mailbox)).map((thread) => thread.name)
         )
         .toEqual(['Offsite plan']);
+      if (provider === 'OUTLOOK') {
+        await expect
+          .poll(async () => (await held('Offsite plan')) !== undefined)
+          .toBe(true);
+      }
       await page.reload();
       await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
         'Offsite plan'

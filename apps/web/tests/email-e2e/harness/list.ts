@@ -1,7 +1,7 @@
 // What the mail list and the thread view show, and what the browser asks
 // the services, for tests of list and thread state.
 
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import type { Mailbox } from './fixtures';
 import type { Mail } from './stack';
 
@@ -193,4 +193,17 @@ export function seenRequestsInFlight(page: Page): () => number {
   page.on('requestfinished', (request) => inFlight.delete(request));
   page.on('requestfailed', (request) => inFlight.delete(request));
   return () => inFlight.size;
+}
+
+/** Moves the list's cursor to the row of `threadId`, with j and k. */
+export async function focusRow(page: Page, threadId: string): Promise<void> {
+  await expect.poll(() => rowIds(page)).toContain(threadId);
+  await expect.poll(() => focusedRowId(page)).toBeDefined();
+  const rows = await rowIds(page);
+  const from = rows.indexOf((await focusedRowId(page)) ?? '');
+  const to = rows.indexOf(threadId);
+  for (let step = 0; step < Math.abs(to - from); step++) {
+    await page.keyboard.press(to > from ? 'j' : 'k');
+  }
+  await expect.poll(() => focusedRowId(page)).toBe(threadId);
 }
