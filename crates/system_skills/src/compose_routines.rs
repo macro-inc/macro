@@ -1,58 +1,111 @@
-//! System skill for composing a routine's triggers and steps.
+//! System skill for writing a routine, or changing one, from a conversation.
+//!
+//! Its second half is `routine_program::WRITING`, the text every writer of
+//! routines follows; this module adds only how a code-mode session finds the
+//! items, checks and saves the routine, and answers.
 
-use prompt::StaticPrompt;
+use prompt::{ComposedPrompt, StaticPrompt};
 
 use crate::SystemSkill;
 
 static TITLE: &str = "Compose Routines";
 
-static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to create a routine or to change one - when it runs, what each run does, or whether it runs at all. A routine is triggers plus steps that run as the user after this session ends. `CreateRoutine` documents the configuration and how to write code steps; this skill is how to put one together well.
+static INSTRUCTIONS: &str = r##"Follow this skill when someone asks for a routine, or to change one: work that runs later, as them, on a schedule or whenever something happens ("remind me", "every Monday", "when an email arrives"). A meeting with other people is a calendar event, and a to-do with a due date is a task.
 
-## Start from what exists
+Be quick. Usually one program finds what the request names, checks the routine and creates it, and then a one- or two-sentence reply ends the turn. Write that program from this skill and the example below; read the SDK reference only for a method a step calls that isn't shown here.
 
-1. When the user means an existing routine (attached, mentioned, or "my invoice routine"), find it with `ListRoutines` and call `ReadRoutine`. Its `configuration` (name, `triggers`, `steps`, `requiredApps`) is the starting point. When it has `notEditableHere` instead (GitHub or payload filters), you can only pause or resume it; send the user to the routine's page for anything else.
-2. Before creating one, check `ListRoutines` for a routine that already does this, and offer to change it instead of adding a duplicate.
+## Find what it names
 
-## Choose the triggers
+- Look up every item the request names (a channel, person, project or folder, document, database, label or tag) with one `macro.search.names([...])` call, each name as written. The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
+- When a name has no exact match, or several and the request doesn't say which kind it means, ask which one with `AskUser` instead of creating the routine with it left out.
+- When they mean a routine they have (attached, or "my invoice routine"), change it rather than adding another. Find it by name in `await macro.routines.list({ includeEvents: true })`, or with `macro.routines.byId(id)` when it is attached. Return `routine.toJSON().detail` (after `await routine.name()` for one from `byId`) to read its `trigger` and `task.steps` as stored.
 
-- **Schedule**: `cron` (six fields, seconds first, with the user's IANA time zone) for recurring work, `once` (a future RFC3339 time) for a single run. A scheduled run has no triggering item.
-- **Activity**: `event` with the events that should start a run. Limit message, status, priority and deletion events to chosen channels, tasks or documents with `ids`; creation events, `channel.mentioned` and `email.message_received` usually watch everything. Add a yes/no `condition` when only some events matter ("Is this email from a customer?"); events answered no are skipped before any step runs.
-- Any trigger starts a run. Only people's actions trigger routines, never routines or agents. GitHub triggers aren't available through these tools; point the user to the routine's page for them.
+## Write it
 
-## Compose the steps
+Write it as `macro.routines.create` takes it:
 
-Steps run in order and a failed step stops the run.
+- `trigger`: `{ type: 'cron', schedule, timezone }` in the person's time zone, `{ type: 'once', at }`, `{ type: 'events', filters: [{ events, entities, condition }] }`, or `{ type: 'multiple', triggers }`. A filter names the items it watches in `entities`, as references to handles the SDK returned: `{ type: 'channel', entity: channel }`, or `'document'` for a task or document. Never an id, and never an `ids` key.
+- `steps`: `{ type: 'code', title, summary, knobs, sentence, source }`, and at most one `{ type: 'agent', instructions }`, last.
+- `dangerouslyOperateAsUser: true` only when they asked for it to post or send as them.
+- Create beforehand only what the routine needs to exist before it runs, when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into): create it with the name given and pass its handle in `created`. Create nothing else.
+- To change a routine, `routine.update(options)` replaces its name, trigger and steps, so pass all of them with only the change asked for, keeping each code step's `id`. Give every filter's items again as `entities` (`macro.channels.byId(id)`, `macro.tasks.byId(id)`): a filter passed back with its stored `ids` loses them and watches everything.
 
-A routine has two kinds of step: `code` and `agent` ("Ask AI").
+## Check, then save, in the same program
 
-- Use a `code` step for everything that acts or decides: label or archive an email, set a property, create a task, comment, post in a channel, move to a folder, judge items with `macro.ai.decide`, or read many items and loop. One code step usually does all of it. Write it like code-mode code, type the argument `StepContext`, check `trigger.kind` before reading the triggering item, take the run's time from `run.at` and `run.timezone` rather than the clock, list every area it changes in `writes`, and give it a title and one-sentence summary the user can read. Saving type-checks it; fix the errors the tool returns and save again.
-- Use an `agent` step only for open-ended work: drafting, research, summarizing many items. A routine has at most one, and it sees the triggering event and what earlier steps returned, so put it last. Apps it needs beyond its own go in `requiredApps`, and the user must already have them connected.
-- A later code step reads an earlier one's output as `steps.<id>`. Saving gives a step without an `id` one from its title ("Find invoices" becomes `find_invoices`); set one to choose the name.
-- Resolve names in code through the SDK, or look ids up first (ListTags, GetEntityProperties, ListTeamMembers, channel search). Never invent an id.
-- Limits: 40 steps in all.
+`macro.routines.check(routine, { created })` runs saving's checks without saving. Create or update only when `ok` is true; otherwise return `problems` and `steps`, fix what they name, and run the program again. A new routine is switched on. Don't run or test it.
 
-## Confirm, then write
+## Reply
 
-1. When something is ambiguous - which channel, label, folder or person, or whether it should run on a schedule or on activity - ask before writing.
-2. Pass `steps` as a JSON array encoded in a string.
-3. To change a routine, call `UpdateRoutine` with `"type": "configuration"` and its `configuration` from ReadRoutine with only the user's change: it replaces the name, triggers and steps, so carry over everything the user didn't ask to change. Omit `requiredApps` to keep its apps; a list replaces them. Pause or resume with `"type": "enabled"` instead. A running routine can be paused but not reconfigured until its run ends.
-4. If the tool refuses, fix what its message names and try once more; otherwise relay the reason.
+In one or two sentences, say when it runs and what each run does, with its link (`routine.webUrl()`). Add only what they must act on.
 
-## Report
+## Without code
 
-Say in one or two sentences what the routine now does - when it runs and what each run does - and mention it as `CreateRoutine` describes. Offer `RunRoutine` to try a scheduled routine; one that reads its triggering item only does something on real activity.
+With the routine tools (`CreateRoutine`, `UpdateRoutine`) instead of `ExecuteCode`, find each named item with `NameSearch` (ask in your reply about one that isn't settled), and a routine to change with `ListRoutines` and `ReadRoutine`. Save with `CreateRoutine`, or with `UpdateRoutine` (`"type": "configuration"`, the whole configuration with only the change asked for). Their descriptions give the configuration's shape, in which a filter lists its items' ids in `ids`. Saving checks it: fix what a refusal names and save again.
 
 ## Example
 
-"When an invoice email arrives, label it Finance." `CreateRoutine` ends with this routine's configuration: an `email.message_received` trigger and one code step that asks `macro.ai.decide` whether the email is an invoice and adds the inbox's Finance label if so.
+"Whenever a task in the Website Redesign project moves to In review, post the task name in #design-review."
+
+```js
+export async function main({ macro }) {
+  const { results } = await macro.search.names(['Website Redesign', '#design-review']);
+  const exact = results.map((result) => result.matches.filter((match) => match.exact));
+  if (exact.some((matches) => matches.length !== 1)) {
+    const options = results.map(({ name, matches }) => ({ name, matches: matches.map(({ type, name, exact }) => ({ type, name, exact })) }));
+    return { data: { ask: options } };
+  }
+  const [project, channel] = exact.map(([match]) => match.entity);
+  const routine = {
+    name: 'Website Redesign reviews in #design-review',
+    // A status change is about the task, never its project: watch every task.
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['task.status_changed'], condition: 'Did the task just move to In review?' }],
+    },
+    steps: [
+      {
+        type: 'code',
+        title: 'Post the task',
+        summary: 'Posts the name of a task in the project that moved to In review.',
+        knobs: [
+          { type: 'text', name: 'project', label: 'Project its tasks are in', value: project.id },
+          { type: 'text', name: 'channel', label: 'Channel to post in', value: channel.id },
+        ],
+        sentence: 'Post the name of a task in {project} in {channel}.',
+        source: `export async function main({ macro, trigger, knobs }: StepContext) {
+  if (trigger.kind !== 'event') return { posted: false };
+  const task = macro.tasks.byId(trigger.item.entity_id);
+  if ((await task.project())?.id !== knobs.project) return { posted: false };
+  await macro.channels.byId(knobs.channel).send(trigger.item.item?.name ?? 'A task');
+  return { posted: true };
+}`,
+      },
+    ],
+  };
+  const check = await macro.routines.check(routine);
+  if (!check.ok) return { data: { problems: check.problems, steps: check.steps } };
+  const saved = await macro.routines.create(routine);
+  return { data: { url: saved.webUrl() } };
+}
+```
 "##;
 
-static INTENT: &str = "Requests to create or change a routine become one complete configuration - triggers \
-     that fit the work, code steps that act and decide, and at most one Ask AI step, with every \
-     id resolved - written through CreateRoutine or UpdateRoutine and reported in plain words.";
+static INTENT: &str = "A request for a routine, or a change to one, becomes a checked routine in as few \
+     programs as possible: the items it names found in one name lookup or asked about, triggers \
+     that fit the work, code steps that act and decide and at most one Ask AI step, saved switched \
+     on and reported in a sentence or two with its link.";
 
-/// The skill's instructions as a composable prompt section.
-pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+static SESSION: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+static WRITING: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Writing the routine",
+    routine_program::WRITING,
+    "Triggers, steps, items and code steps, the same for every writer of routines.",
+);
+
+/// The skill's instructions as a composable prompt section: how a session
+/// finds, checks, saves and reports a routine, then how to write one.
+pub static PROMPT: ComposedPrompt = SESSION.compose(&WRITING);
 
 /// The compose-routines system skill.
 pub static SKILL: SystemSkill = SystemSkill {
