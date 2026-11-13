@@ -1391,6 +1391,7 @@ async fn run() -> anyhow::Result<()> {
             PgBotsRepo::new(pool.clone()),
             pool.clone(),
         )),
+        Arc::clone(&notifications),
     )
     .await?;
     let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
