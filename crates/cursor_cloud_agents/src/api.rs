@@ -315,7 +315,10 @@ fn classify_credential_rejection(
         |envelope| {
             envelope
                 .details
-                .iter()
+                .into_iter()
+                .filter_map(|detail| {
+                    serde_json::from_value::<crate::api::wire::ConnectErrorDetail>(detail).ok()
+                })
                 .any(|detail| detail.debug.details.is_retryable)
         },
     );

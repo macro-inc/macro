@@ -738,6 +738,25 @@ async fn a_forbidden_answer_cursor_marks_retryable_is_not_a_rejected_credential(
     );
 }
 
+/// A malformed sibling entry doesn't hide another entry's `isRetryable`.
+#[tokio::test]
+async fn a_retryable_detail_beside_a_malformed_one_is_not_a_rejected_credential() {
+    let base_url = stand_in_server(
+        "403 Forbidden",
+        r#"{"details":[{"debug":{"details":{"isRetryable":true}}},{"debug":null}]}"#,
+    );
+    let error = client_against(base_url)
+        .list_models()
+        .await
+        .expect_err("the stand-in refuses the request");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::CredentialRejected>()
+            .is_none(),
+        "got {error}"
+    );
+}
+
 /// Upstream outages stay outages.
 #[tokio::test]
 async fn a_server_error_listing_models_is_not_a_rejected_credential() {
