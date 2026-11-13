@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ListPlusIcon from '@icon/system/regular/list-plus.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
@@ -57,9 +58,12 @@ export function AddProjectTasks(props: { project: ProjectDetail }) {
       }}
       placement="bottom-end"
     >
-      <Dropdown.Trigger variant="secondary" size="md">
-        <ListPlusIcon class="size-4" />
-        Add existing tasks
+      <Dropdown.Trigger
+        variant="secondary"
+        size={isMobile() ? 'icon-md' : 'md'}
+      >
+        <ListPlusIcon class="size-4 mobile:size-6" />
+        <span class="mobile:sr-only">Add existing tasks</span>
       </Dropdown.Trigger>
       <Show when={open()}>
         <EditorPopover onClose={close}>
