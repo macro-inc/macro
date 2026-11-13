@@ -470,7 +470,7 @@ where
             .collect())
     }
 
-    async fn kept(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<u32> {
+    async fn suggested(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<u32> {
         self.repo.kept_by(user, session).await
     }
 

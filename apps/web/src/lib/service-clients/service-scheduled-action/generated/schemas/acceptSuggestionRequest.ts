@@ -11,6 +11,7 @@
  */
 export interface AcceptSuggestionRequest {
   /** The suggestion's `updatedAt` as the caller read it. A background suggestion runs
-only if it is unchanged since; otherwise the answer is 409. */
+only if it is unchanged since and no run of it is still settling;
+otherwise the answer is 409. */
   updatedAt: string;
 }

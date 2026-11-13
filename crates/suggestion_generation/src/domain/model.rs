@@ -6,7 +6,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use routine_program::Surface;
 use serde::Serialize;
+use suggestions::domain::model::GenerationTrigger;
 use utoipa::ToSchema;
+
+use super::generation::{Admission, PastRun};
+use super::session::SessionEnding;
 
 /// The agent generation sessions run as, and their model.
 #[derive(Debug, Clone)]
@@ -96,7 +100,7 @@ impl Default for SessionLayout {
     }
 }
 
-/// A session row a stopped process left open.
+/// A session the sweep cleans up: ended, and not yet deleted.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StaleSession {
     /// The agent session.
@@ -105,6 +109,48 @@ pub struct StaleSession {
     pub user: MacroUserIdStr<'static>,
     /// The agent it runs as.
     pub agent: BotId,
+    /// How its turn ended.
+    pub ending: SessionEnding,
+    /// How many deletes of it failed before.
+    pub attempts: u8,
+}
+
+/// A generation whose heartbeat stopped, marked interrupted.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LostGeneration {
+    /// The generation.
+    pub generation: Uuid,
+    /// Whose it was.
+    pub user: MacroUserIdStr<'static>,
+    /// What started it.
+    pub trigger: GenerationTrigger,
+}
+
+/// What admission reads about the person's generations of one trigger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdmissionFacts {
+    /// Whether one of theirs is running, of any trigger.
+    pub running: bool,
+    /// Their latest of the trigger.
+    pub latest: Option<PastRun>,
+}
+
+/// A generation to store as running.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewGeneration {
+    /// Its id, new for every attempt.
+    pub id: Uuid,
+    /// Whose it is.
+    pub user: MacroUserIdStr<'static>,
+    /// What started it.
+    pub trigger: GenerationTrigger,
+    /// Which attempt it is, from 1.
+    pub attempt: u8,
+    /// When it starts.
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    /// When the latest of its trigger that admission read started: it is
+    /// stored only if none started since.
+    pub after: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A person due a nightly generation.
@@ -126,26 +172,56 @@ pub struct GenerationStarted {
     pub started: bool,
 }
 
-/// How a generation ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
-#[strum(serialize_all = "snake_case")]
-pub enum GenerationOutcome {
-    /// Every session finished its turn.
-    Ready,
-    /// Some sessions failed, timed out or were stopped.
-    Partial,
-    /// No session finished.
-    Failed,
-    /// The process is stopping.
-    Cancelled,
+/// Why fresh suggestions weren't started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RegenerationRefusal {
+    /// One of the person's generations is running.
+    Running,
+}
+
+/// Fresh suggestions weren't started: a generation is running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegenerationRunning {
+    /// Why.
+    pub reason: RegenerationRefusal,
+}
+
+/// Fresh suggestions weren't started: the person asked within the hour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegenerationCooldown {
+    /// When they may ask again.
+    pub available_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// What asking for a generation did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartOutcome {
+    /// It started, in the background.
+    Started,
+    /// None started: [`Admission`] refused it.
+    Refused(Admission),
+    /// None started: nothing it would run is on or due.
+    Nothing,
 }
 
 /// Why a generation call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum GenerationError {
-    /// Neither suggestions nor routine suggestions are on for the person.
+    /// What was asked for is off for the person.
     #[error("suggestions are off")]
     NotFound,
+    /// One of the person's generations is running.
+    #[error("a generation is running")]
+    Running,
+    /// The person asked for fresh suggestions within the hour.
+    #[error("fresh suggestions are available at {available_at}")]
+    Cooldown {
+        /// When they may ask again.
+        available_at: chrono::DateTime<chrono::Utc>,
+    },
     /// Anything else.
     #[error("internal generation error: {0:?}")]
     Internal(rootcause::Report),

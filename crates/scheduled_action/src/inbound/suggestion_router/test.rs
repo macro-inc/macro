@@ -72,7 +72,7 @@ impl RoutineSuggestionApi for Suggestions {
         unreachable!("routes never word cards")
     }
 
-    async fn kept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<u32> {
+    async fn suggested(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<u32> {
         unreachable!("routes never count")
     }
 

@@ -7,9 +7,11 @@
  */
 
 import type { Category } from './category';
+import type { SuggestionAllOfResult } from './suggestionAllOfResult';
 import type { SuggestionAllOfRun } from './suggestionAllOfRun';
 import type { SuggestionAllOfStateReason } from './suggestionAllOfStateReason';
 import type { SuggestionState } from './suggestionState';
+import type { SuggestionStatus } from './suggestionStatus';
 import type { Target } from './target';
 
 export type SuggestionAllOf = {
@@ -29,8 +31,12 @@ this suggestion instead of adding one. */
    * @minimum 0
    */
   importance: number;
+  /** Proposed since the person last opened their feed. Only the feed sets
+it; false everywhere else. */
+  isNew: boolean;
   /** What acting on it produced. */
   produced: Target[];
+  result?: SuggestionAllOfResult;
   run?: SuggestionAllOfRun;
   /** Where it is for the person. */
   state: SuggestionState;
@@ -38,6 +44,8 @@ this suggestion instead of adding one. */
   stateChangedAt: string;
   /** Why it was resolved; only on resolved suggestions. */
   stateReason?: SuggestionAllOfStateReason;
+  /** What the card shows: whether it is open, being run, failed or done. */
+  status: SuggestionStatus;
   /** Why, in a line or two. */
   summary: string;
   /** What to do, in a few words. */

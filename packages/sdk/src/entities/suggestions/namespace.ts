@@ -5,6 +5,7 @@ import type {
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import {
   outcome,
   Suggestion,
@@ -22,6 +23,18 @@ export interface SuggestionsReview {
   readonly openLimit: number;
   /** Suggestions this session's generation may still add or bring back. */
   readonly newLeft: number;
+}
+
+/** How much of the user's feed to read, and for which time zone. */
+export interface SuggestionListOptions {
+  /** Most open suggestions to return, best first; all when unset. At least 1. With a limit, the done ones are left out. */
+  limit?: number;
+  /**
+   * The user's IANA time zone, such as `Europe/Paris`, when known (say, their
+   * calendar's): reading the feed with it schedules their nightly suggestions
+   * in their night. Never pass the zone the program happens to run in.
+   */
+  timezone?: string;
 }
 
 /** Fields every new suggestion has. */
@@ -70,7 +83,7 @@ export type SuggestionInput =
  *
  * ### For the user
  *
- * - Read their feed with `macro.suggestions.list()`: their open suggestions, best first.
+ * - Read their feed with `macro.suggestions.list()`: their open suggestions, best first, then those done in the last day. Each one's `status` says where it is: `open`, `running` (its background run is under way), `failed` (its last run failed; the user can run it again from the app) or `done`. When they just dismissed one by mistake, `suggestion.restore()` brings it back within five minutes.
  * - When they take one up, call `suggestion.accept()`. A background prompt suggestion is then only taken on: the user starts its run from the app, so tell them it is ready to run there; never try to run it another way. Any other suggestion becomes done, so do it yourself: run a composer prompt suggestion's `prompt`, or do an entity suggestion's `action` on the items in `about`, using its `draft` when it has one. A routine suggestion can't be accepted (400): the user saves its routine from the app.
  * - When they don't want one, call `suggestion.dismiss()`.
  * - Never suggest, rewrite or retire suggestions for the user: only a suggestions generation session may, and any other session gets a 403.
@@ -89,15 +102,26 @@ export class SuggestionNamespace {
 
   /**
    * The user's feed: their open suggestions about items they can still open, best
-   * first. For the user's own agent; a generation session gets a 403.
+   * first, then those done in the last day, most recently first. Each one's
+   * `status` is `open`, `running`, `failed` or `done`. With a `limit`, at
+   * most that many open ones and no done ones. For the user's own agent; a
+   * generation session gets a 403.
    *
    * @example
-   * const suggestions = await macro.suggestions.list();
-   * return suggestions.map((suggestion) => ({ title: suggestion.title, kind: suggestion.kind }));
+   * const suggestions = await macro.suggestions.list({ limit: 5 });
+   * return suggestions.map((suggestion) => ({ title: suggestion.title, status: suggestion.status }));
    */
-  async list(): Promise<Suggestion[]> {
-    const feed = unwrap(await this.client.scheduledAction.listSuggestions());
-    return feed.suggestions.map((suggestion) =>
+  async list(options: SuggestionListOptions = {}): Promise<Suggestion[]> {
+    rejectUnknownOptions('suggestions.list', options, {
+      limit: true,
+      timezone: true,
+    });
+    const feed = unwrap(
+      await this.client.scheduledAction.listSuggestions({
+        query: { timezone: options.timezone, limit: options.limit },
+      }),
+    );
+    return [...feed.suggestions, ...(feed.done ?? [])].map((suggestion) =>
       Suggestion.from(this.client, suggestion),
     );
   }

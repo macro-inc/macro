@@ -172,8 +172,9 @@ pub trait RoutineSuggestionApi: Send + Sync + 'static {
         timezone: chrono_tz::Tz,
     ) -> impl Future<Output = Result<Vec<(Uuid, RoutineText)>>> + Send;
 
-    /// How many suggestions the person's routines session `session` kept.
-    fn kept(
+    /// How many routine suggestions the person's routines session `session`
+    /// suggested and kept; retirements don't count.
+    fn suggested(
         &self,
         user: &MacroUserIdStr<'static>,
         session: Uuid,
