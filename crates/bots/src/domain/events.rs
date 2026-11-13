@@ -92,7 +92,7 @@ impl TopicEvent for BotTopicEvent {
 
     const SCHEMA_VERSION: u8 = 1;
 
-    type PublicPayload = macro_event_broker::exposure::Unexposed;
+    type PublicPayload = BotPublicEvent;
 
     fn exposure(
         &self,
@@ -100,14 +100,180 @@ impl TopicEvent for BotTopicEvent {
         macro_event_broker::exposure::Exposure<'_, Self::PublicPayload>,
         macro_event_broker::exposure::ExposureError,
     > {
-        use macro_event_broker::exposure::{Exposure, PendingPhase};
+        use macro_event_broker::exposure::{
+            Audience, EntityRef, Exposure, MinTeamRole, PublicEntityType, PublicEvent, Stage,
+            parse_user_id,
+        };
+        use std::borrow::Cow;
 
-        Ok(match self {
-            Self::Created(_) | Self::Updated(_) | Self::Deleted(_) => Exposure::pending(
-                PendingPhase::TeamFamilies,
-                "bot family: Team or Owner from BotOwner with a thin projection",
+        let (name, bot_id, owner, payload) = match self {
+            Self::Created(m) => (
+                "bot.created",
+                m.bot_id,
+                &m.owner,
+                BotPublicEvent::Created(m.into()),
             ),
-        })
+            Self::Updated(m) => (
+                "bot.updated",
+                m.bot_id,
+                &m.owner,
+                BotPublicEvent::Updated(m.into()),
+            ),
+            Self::Deleted(m) => (
+                "bot.deleted",
+                m.bot_id,
+                &m.owner,
+                BotPublicEvent::Deleted(m.into()),
+            ),
+        };
+        let audience = match owner {
+            BotOwner::User { user_id } => Audience::Owner {
+                user_id: parse_user_id(user_id)?,
+            },
+            BotOwner::Team { team_id } => Audience::Team {
+                team_id: *team_id,
+                min_role: MinTeamRole::Member,
+            },
+        };
+        Ok(Exposure::Public(PublicEvent {
+            name,
+            entity: EntityRef::new(PublicEntityType::Bot, bot_id.to_string()),
+            audience,
+            stage: Stage::Preview,
+            payload: Cow::Owned(payload),
+        }))
+    }
+}
+
+/// The public projection of [`BotTopicEvent`], delivered to the bot's owning
+/// user or team. Thin: ids, kind, owner, names and who acted; never the
+/// description, avatar or tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum BotPublicEvent {
+    /// A bot was created.
+    #[serde(rename = "bot.created")]
+    Created(BotCreated),
+    /// A bot was updated.
+    #[serde(rename = "bot.updated")]
+    Updated(BotUpdated),
+    /// A bot was deleted.
+    #[serde(rename = "bot.deleted")]
+    Deleted(BotDeleted),
+}
+
+/// Public body of `bot.created`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct BotCreated {
+    /// The bot.
+    pub bot_id: BotId,
+    /// Its kind.
+    pub kind: BotKind,
+    /// The owning user or team.
+    pub owner: BotOwner,
+    /// Display name.
+    pub name: String,
+    /// Stable handle.
+    pub handle: String,
+    /// Who created it.
+    pub actor: MacroUserIdStr<'static>,
+    /// When it was created.
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<&BotCreatedMetadata> for BotCreated {
+    fn from(metadata: &BotCreatedMetadata) -> Self {
+        Self {
+            bot_id: metadata.bot_id,
+            kind: metadata.kind,
+            owner: metadata.owner.clone(),
+            name: metadata.name.clone(),
+            handle: metadata.handle.clone(),
+            actor: metadata.created_by_user_id.clone(),
+            created_at: metadata.created_at,
+        }
+    }
+}
+
+/// A bot field an update changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum BotField {
+    /// The display name.
+    Name,
+    /// The handle.
+    Handle,
+    /// The description.
+    Description,
+    /// The avatar.
+    AvatarUrl,
+}
+
+/// Public body of `bot.updated`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct BotUpdated {
+    /// The bot.
+    pub bot_id: BotId,
+    /// The owning user or team.
+    pub owner: BotOwner,
+    /// Who updated it.
+    pub actor: MacroUserIdStr<'static>,
+    /// Which fields the update set.
+    pub changed: Vec<BotField>,
+    /// New display name, when it changed.
+    pub name: Option<String>,
+    /// New handle, when it changed.
+    pub handle: Option<String>,
+    /// When it was updated.
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<&BotUpdatedMetadata> for BotUpdated {
+    fn from(metadata: &BotUpdatedMetadata) -> Self {
+        let changed = [
+            (metadata.name.is_some(), BotField::Name),
+            (metadata.handle.is_some(), BotField::Handle),
+            (metadata.description.is_some(), BotField::Description),
+            (metadata.avatar_url.is_some(), BotField::AvatarUrl),
+        ]
+        .into_iter()
+        .filter_map(|(set, field)| set.then_some(field))
+        .collect();
+        Self {
+            bot_id: metadata.bot_id,
+            owner: metadata.owner.clone(),
+            actor: metadata.actor_user_id.clone(),
+            changed,
+            name: metadata.name.clone(),
+            handle: metadata.handle.clone(),
+            updated_at: metadata.updated_at,
+        }
+    }
+}
+
+/// Public body of `bot.deleted`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct BotDeleted {
+    /// The bot.
+    pub bot_id: BotId,
+    /// The owning user or team.
+    pub owner: BotOwner,
+    /// Who deleted it.
+    pub actor: MacroUserIdStr<'static>,
+}
+
+impl From<&BotDeletedMetadata> for BotDeleted {
+    fn from(metadata: &BotDeletedMetadata) -> Self {
+        Self {
+            bot_id: metadata.bot_id,
+            owner: metadata.owner.clone(),
+            actor: metadata.actor_user_id.clone(),
+        }
     }
 }
 

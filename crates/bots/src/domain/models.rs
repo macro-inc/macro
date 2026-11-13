@@ -12,7 +12,7 @@ pub use harness_id::HarnessId;
 
 /// Bot kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BotKind {
     /// User- or team-owned bot.
@@ -86,7 +86,7 @@ impl std::str::FromStr for BotChannelType {
 
 /// Bot owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum BotOwner {
     /// User-owned bot.
