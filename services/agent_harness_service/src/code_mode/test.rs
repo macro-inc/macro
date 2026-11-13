@@ -392,8 +392,9 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
         // CloudFront serves document content only to URLs the storage service
         // signs; the editing worker accepts only document tokens the storage
-        // service mints, behind its scope check; unfurl previews public links
-        // for any caller.
+        // service mints with a POST a generation session can't make, and its
+        // routes edit documents, which a run that sends nothing may do;
+        // unfurl previews public links for any caller.
         SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
             ScopeEnforcement::NoMacroCredential
         }
@@ -403,8 +404,8 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
 /// Every host the SDK can reach, including the ones it falls back to when
 /// code mode passes none, is one code mode knows, and its service holds a
 /// scoped session's credential to its scope: it checks the scope on a path
-/// the scope understands, or accepts no Macro credential and serves nothing
-/// outside either scope.
+/// the scope understands, or accepts no Macro credential and the SDK calls
+/// nothing there outside either scope.
 #[test]
 fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
     use std::str::FromStr;
