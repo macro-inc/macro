@@ -312,6 +312,8 @@ enum Settle {
     Program,
     /// The session or its programs couldn't say.
     Unknown,
+    /// Its turn couldn't be stopped, so it may still be writing.
+    Unstopped,
 }
 
 impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
@@ -437,7 +439,11 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         }
         // Activity is recorded asynchronously: a session that may have
         // written waits for its last writes' activity.
-        let settle = self.settle(session, activity.as_ref()).await;
+        let settle = if cleanup.stopped {
+            self.settle(session, activity.as_ref()).await
+        } else {
+            Settle::Unstopped
+        };
         span.record("routine.draft.settle", <&str>::from(settle));
         if settle != Settle::Skipped {
             tokio::time::sleep(ACTIVITY_SETTLE).await;

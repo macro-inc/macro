@@ -109,14 +109,16 @@ type Turn = Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + S
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
 /// check route would, then ends, unless the session `hangs`. Its turn
-/// can't be read while it is `unreadable`. It reports calling `tools`, and
-/// can't say what it did when they are unset.
+/// can't be read while it is `unreadable`, nor stopped while it is
+/// `unstoppable`. It reports calling `tools`, and can't say what it did when
+/// they are unset.
 struct Sessions {
     rows: Arc<Rows>,
     code: Arc<Checker>,
     turn: Turn,
     hangs: bool,
     unreadable: bool,
+    unstoppable: bool,
     tools: Option<Vec<String>>,
     refuses: Option<RoutineSessionError>,
     prepared: Mutex<Vec<PrepareRoutineSession>>,
@@ -135,6 +137,7 @@ impl Sessions {
             turn,
             hangs: false,
             unreadable: false,
+            unstoppable: false,
             tools: None,
             refuses: None,
             prepared: Mutex::new(Vec::new()),
@@ -220,6 +223,9 @@ impl RoutineSessions for Sessions {
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.cancelled.lock().unwrap().push(command.session_id);
+        if self.unstoppable {
+            return Err(RoutineSessionError::OperationFailed);
+        }
         Ok(())
     }
 
@@ -671,8 +677,17 @@ impl SessionCreations for Programs {
 #[tokio::test(start_paused = true)]
 async fn a_draft_whose_session_only_read_does_not_wait_for_activity() {
     let read = Some(&["mcp__macro_internal__ReadCodeDocs", "ExecuteCode"][..]);
-    let elapsed = time_to_draft(read, Programs(Some(false))).await;
+    let elapsed = time_to_draft(read, Programs(Some(false)), true).await;
     assert!(elapsed < ACTIVITY_SETTLE, "{elapsed:?}");
+}
+
+/// A session that only read but couldn't be stopped may still be writing,
+/// so its draft waits for activity anyway.
+#[tokio::test(start_paused = true)]
+async fn a_draft_whose_session_could_not_be_stopped_waits_for_activity() {
+    let read = Some(&["ExecuteCode"][..]);
+    let elapsed = time_to_draft(read, Programs(Some(false)), false).await;
+    assert!(elapsed >= ACTIVITY_SETTLE, "{elapsed:?}");
 }
 
 /// A session that called a tool that writes, ran a program that may have
@@ -687,7 +702,7 @@ async fn a_draft_whose_session_may_have_written_waits_for_activity() {
         (code, Some(true)),
         (code, None),
     ] {
-        let elapsed = time_to_draft(tools, Programs(programs)).await;
+        let elapsed = time_to_draft(tools, Programs(programs), true).await;
         assert!(
             elapsed >= ACTIVITY_SETTLE,
             "{tools:?} {programs:?}: {elapsed:?}"
@@ -695,9 +710,10 @@ async fn a_draft_whose_session_may_have_written_waits_for_activity() {
     }
 }
 
-/// How long a draft whose session reports calling `tools`, and whose
-/// programs answer as `programs` do, takes, its check passing at once.
-async fn time_to_draft(tools: Option<&[&str]>, programs: Programs) -> Duration {
+/// How long a draft whose session reports calling `tools`, whose programs
+/// answer as `programs` do, and that `stops` or can't be stopped, takes, its
+/// check passing at once.
+async fn time_to_draft(tools: Option<&[&str]>, programs: Programs, stops: bool) -> Duration {
     let rows = Arc::new(Rows::default());
     let mut sessions = Sessions::new(
         &rows,
@@ -710,6 +726,7 @@ async fn time_to_draft(tools: Option<&[&str]>, programs: Programs) -> Duration {
         }),
     );
     sessions.hangs = true;
+    sessions.unstoppable = !stops;
     sessions.tools = tools.map(|tools| tools.iter().map(|tool| (*tool).to_owned()).collect());
     let sessions = Arc::new(sessions);
     let drafts = drafts(&rows, &sessions).with_session_creations(Arc::new(programs));

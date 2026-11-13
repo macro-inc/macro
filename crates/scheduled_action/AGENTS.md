@@ -56,7 +56,7 @@ each run.
   checks named with what its recorded activity shows (`SessionCreations`,
   read once the turn stops; since activity is written asynchronously, a
   session that may have written waits `ACTIVITY_SETTLE` first: one that
-  called a tool outside `READ_TOOLS`, ran a program that called anything
+  couldn't be stopped, called a tool outside `READ_TOOLS`, ran a program that called anything
   but reads, hadn't finished or whose activity may be incomplete, ran more
   programs than the host reads (32), or can't say which tools it called or
   what its programs did), each
@@ -76,7 +76,8 @@ each run.
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the session id, checks, items
   created, the session's tool calls and turns, why it waited for activity
-  or that it didn't (`settle`: `skipped`, `tool`, `program`, `unknown`),
+  or that it didn't (`settle`: `skipped`, `tool`, `program`, `unknown`,
+  `unstopped`),
   status reads and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
