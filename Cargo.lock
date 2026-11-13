@@ -625,6 +625,7 @@ dependencies = [
  "cursor_api_key",
  "cursor_cloud_agents",
  "database_env_vars",
+ "database_syncs",
  "databases",
  "databases_sql",
  "document_storage_service_client",
@@ -6088,6 +6089,41 @@ dependencies = [
  "utoipa",
  "uuid",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "database_syncs"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "call",
+ "chrono",
+ "databases",
+ "entity_access",
+ "granola_sync",
+ "import_notion",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "models_databases",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

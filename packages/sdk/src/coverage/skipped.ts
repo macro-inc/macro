@@ -222,8 +222,15 @@ export const cognitionExcluded = [
   'upsertAiProjection',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
-export const cognitionBacklog =
-  [] as const satisfies readonly (keyof CognitionSdk)[];
+export const cognitionBacklog = [
+  // Database syncs; the SDK wrappers come in the follow-up pull request.
+  'createDatabaseSync',
+  'createSyncedDatabase',
+  'deleteDatabaseSync',
+  'listDatabaseSyncSources',
+  'listDatabaseSyncs',
+  'runDatabaseSync',
+] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const connectionExcluded = [
   'batchSendMessageHandler',

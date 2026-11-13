@@ -32,7 +32,7 @@ The copy has every table, column (options and colours, formulas, relations withi
 the database), view (filters, sorts, layouts and hand-placed board cards) and
 record, under new ids. A relation into another database stays only if you can see
 that database; otherwise the column and its view references are left out.
-Sharing, forms, webhooks, saved queries and row history stay with the original.
+Sharing, forms, webhooks, syncs, saved queries and row history stay with the original.
 Drive and list rows offer the same **Duplicate**, and agents use `DuplicateItem`
 with `entityType: "database"`. Verify by editing a record in the copy and
 checking the original is unchanged.
@@ -836,6 +836,25 @@ webhook stops working if they lose edit access.
 
 Browser examples: [desktop](media/database-webhooks/desktop.png) and
 [phone](media/database-webhooks/phone.png).
+
+### Synced tables
+
+A synced table mirrors an outside source: the creator's imported Granola
+meetings (Title, Date, Attendees, Summary, Granola link, Call) or a Notion data
+source read through their Notion connection (its title and every property with
+a Macro column type). The cognition routes are `GET /databases/syncs/sources`
+(Granola connected, readable Notion data sources), `POST /databases/syncs`
+(a new database named after the source), `POST|GET /databases/{id}/syncs`,
+`POST /databases/{id}/syncs/{syncId}/run` and `DELETE /databases/{id}/syncs/{syncId}`
+(the table and rows stay). Creating takes a client-minted `id`; retrying it
+answers the same sync. The harness worker runs a new sync within seconds, a
+Granola sync a few seconds after each imported meeting and every 15 minutes,
+a Notion sync every 30 minutes. Rows mirror the source: editing a synced cell
+is overwritten on the next change, and a row deleted in Macro comes back. A
+column you delete or retype stops syncing (listed in `detachedColumns`); new
+Notion properties add columns. Writes act as the sync's creator and stop with
+`status.failure = "creator_lost_access"` if they lose edit access. Verify by
+running a sync and reading the table, then changing the source and choosing run.
 
 ## Side panel and activity
 

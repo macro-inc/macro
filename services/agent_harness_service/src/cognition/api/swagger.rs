@@ -22,6 +22,7 @@ use ai_projections::inbound::axum_router::upsert_projection::{
     ProjectionStateResponse, UpsertProjectionRequest,
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
+use database_syncs::inbound::axum_router::{self as database_syncs_api, ListDatabaseSyncsResponse};
 use image_generation::inbound::axum_router::{self as image_generation_api};
 use import::inbound::axum_router::{self as import_api, RunImportRequest};
 use mcp_client::inbound::axum_router::{
@@ -117,6 +118,12 @@ use utoipa::OpenApi;
             import_api::workspace_report_handler,
             import_api::cancel_workspace_handler,
             import_api::cancel_notion_handler,
+            database_syncs_api::sources_handler,
+            database_syncs_api::create_synced_database_handler,
+            database_syncs_api::create_sync_handler,
+            database_syncs_api::list_syncs_handler,
+            database_syncs_api::sync_now_handler,
+            database_syncs_api::delete_sync_handler,
             import_api::ledger::list_entities_handler,
             import_api::ledger::track_entity_handler,
             import_api::ledger::decline_entity_handler,
@@ -257,6 +264,21 @@ use utoipa::OpenApi;
                 activity::inbound::axum_router::ActivityErrorBody,
 
                 // Import pipeline
+                ListDatabaseSyncsResponse,
+                database_syncs::domain::models::AvailableSources,
+                database_syncs::domain::models::DatabaseSync,
+                database_syncs::domain::models::DetachReason,
+                database_syncs::domain::models::DetachedColumn,
+                database_syncs::domain::models::GranolaAvailability,
+                database_syncs::domain::models::GranolaField,
+                database_syncs::domain::models::NewSync,
+                database_syncs::domain::models::NotionAvailability,
+                database_syncs::domain::models::NotionDataSourceSummary,
+                database_syncs::domain::models::SyncFailure,
+                database_syncs::domain::models::SyncField,
+                database_syncs::domain::models::SyncSource,
+                database_syncs::domain::models::SyncStatus,
+                database_syncs::domain::models::SyncedColumn,
                 import::domain::models::ImportState,
                 import::domain::models::ImportEntity,
                 import::domain::models::ImportRun,
