@@ -89,7 +89,8 @@ their 96px estimate would only grow the adjustment, and a long fling stops at
 `scrollTop` 0 with history still above it. On WebKit the range extractor
 therefore keeps rows up to twelve viewports above the reading position mounted
 and measured before a gesture reaches them, adding at most six unmeasured rows
-per range pass.
+per frame. Back-to-back passes hold the main thread until the whole buffer is
+measured, so the limit is per frame whatever recomputes the range.
 Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
 the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
 navigation flush the adjustment before computing targets.
@@ -134,6 +135,16 @@ initial positioning and explicit navigation, so idle-time prepends establish nat
 scroll headroom before the next gesture. Each new oldest key rearms the request if
 the buffer is still short; once full, loading stops. The paginator guards against
 concurrent requests and stops at the actual beginning of history.
+Neither buffer is needed to show the list. Loading older pages and measuring
+history both start once the first screen has painted, or at the first wheel or
+touch if that comes sooner, so opening a conversation requests and mounts only
+what its first screen needs. The cost is a short window after the first paint:
+until the rows of the first page have been measured, a few frames after
+buffering starts, and until the next page has loaded and been measured in turn,
+a fling crosses rows that still have their estimated height. It can stop short
+of loaded history, or run past it, as it did before the buffers existed.
+Starting the buffers at a touch does not help the gesture that touch begins,
+because corrections during a gesture are deferred.
 
 This retains the normal top-origin scroller and its bottom-pinning behavior. It
 reduces pagination stops, but a fling can still exhaust the native headroom that
