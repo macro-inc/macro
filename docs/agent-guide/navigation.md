@@ -567,6 +567,10 @@ External (plug icon, `g x`) appears on the rail only with the
   split (Shift-click for a new split); there is no account menu. Log out lives
   on **Settings → Account**, and the command menu is `Ctrl K`.
 
+Above Settings, the question-mark **Help** button opens a menu: **Message
+support** opens your support channel (hidden when you have none), **Book a call**
+opens the booking page, and **Email** starts an email to support.
+
 The rail highlights the workspace shown by the **active split**, not every app
 named in the multi-split URL. Nested details keep their owning workspace selected
 (for example, a thread under Email or a document under Home). Selection changes
@@ -1203,13 +1207,15 @@ template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
 `enable-routine-code-steps` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
-of Discover's cards, at Discover's size (as many as fit, three at most desktop
-widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
+of Discover's cards, as many as fit, and after them a narrow **N more · In
+Discover** column, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
-the templates no suggestion already offers, four cards to a row (the knob
-sentence in two lines, the chain and the action; **On** once turned on), with
+the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
-**picked for you, then Macro's templates**. The list's search narrows Discover
+**picked for you, then Macro's templates**. Every suggestion card, in the row,
+on Discover and in the sidebar dialog, is the dialog's card: 25rem wide
+(narrower only in a pane too small for one) and as tall as the tallest card in
+its row. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser
 hasn't shown there; opening or leaving it marks them seen. The cards behave as
 in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.

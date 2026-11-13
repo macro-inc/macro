@@ -48,7 +48,7 @@ use macro_authorization::{
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    StaticFilePublicUrl, StaticFileServiceUrl,
+    GoogleOauthAuthorizationUrl, StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
@@ -251,8 +251,7 @@ async fn run_server() -> anyhow::Result<()> {
     // Gates new Outlook connections per user (`enable-outlook`). Without a
     // PostHog key the deployment switch alone decides.
     let feature_flags = config
-        .posthog_api_key
-        .value()
+        .posthog_api_key()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
@@ -288,6 +287,8 @@ async fn run_server() -> anyhow::Result<()> {
         std::time::Duration::from_secs(10),
     ));
     let static_file_public_url = StaticFilePublicUrl::new()?.to_string();
+    let google_authorization_url = url::Url::parse(GoogleOauthAuthorizationUrl::new()?.as_str())
+        .context("Google OAuth authorization URL is not a URL")?;
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
         DocumentStorageServiceUrl::new()?.to_string(),
@@ -376,7 +377,7 @@ async fn run_server() -> anyhow::Result<()> {
                     test_event_code: config.meta_test_event_code.value().map(str::to_string),
                 }
             }),
-        posthog: config.posthog_api_key.value().map(|api_key| {
+        posthog: config.posthog_api_key().map(|api_key| {
             tracing::info!("configuring PostHog");
             PostHogConfig {
                 api_key: api_key.to_string(),
@@ -735,6 +736,30 @@ async fn run_server() -> anyhow::Result<()> {
         )
         .with_rollout(computer_rollout),
     );
+    // Agent teammates: off for every admin unless `enable-agent-teammates`
+    // is on for them in PostHog.
+    let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
+        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+            user_api_key::domain::service::UserApiKeyServiceImpl::new(
+                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+            ),
+        )),
+        team_agents::outbound::agent_git_repos::AgentGitRepos::new(
+            agent_git::client::AgentGitClient::new(
+                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+                internal_key.clone(),
+            )
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        ),
+        team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
+            computer_service.clone(),
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
+        ),
+        feature_flags.clone(),
+        crate::outbound::agent_addresses::AgentAddresses,
+    ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
@@ -852,6 +877,7 @@ async fn run_server() -> anyhow::Result<()> {
             rate_limit_service: rate_limit,
             event_broker: macro_event_broker.clone(),
             calendar_scope_enabled: config.calendar_scope_enabled,
+            google_authorization_url,
             account_link_state_key,
             jwt_args,
             authorization_state,
@@ -870,6 +896,7 @@ async fn run_server() -> anyhow::Result<()> {
             computer_prices,
             computer_billing_observer: computer_service.clone(),
             computer_service,
+            team_agents_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
@@ -980,8 +1007,15 @@ async fn run_computer_billing_effects(
             () = stop.cancelled() => return,
             _ = interval.tick() => {}
         }
-        if let Err(error) = service.run_billing_effects().await {
-            tracing::error!(error = ?error, "computer billing effects pass failed");
+        match service.run_billing_effects().await {
+            Ok(_) => {}
+            // A busy pool is not a failure; the next tick tries again.
+            Err(error) if error.is_storage_unavailable() => {
+                tracing::warn!("computer storage unavailable; billing effects pass skipped");
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "computer billing effects pass failed");
+            }
         }
     }
 }

@@ -8,6 +8,7 @@ version = "0.1.0"
 toolset = ["inbound", "dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:bot_id", "dep:schemars"]
 default = ["ports", "postgres"]
 inbound = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:macro_authorization",
   "dep:model-error-response",
@@ -28,6 +29,7 @@ postgres = [
 ]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -64,6 +66,7 @@ mockall = { workspace = true }
 
 [dev-dependencies]
 activity = { path = "../activity", default-features = false, features = ["outbound"] }
+agent_correlation = { path = "../agent_correlation" }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 anyhow = { workspace = true }
 http-body-util = { workspace = true }
@@ -74,3 +77,4 @@ serde_json = { workspace = true }
 system_properties = { path = "../system_properties" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }

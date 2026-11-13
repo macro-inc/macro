@@ -85,6 +85,7 @@ import type {
   QuickAccessListOptions,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 /**
  * index entry for sorted lists.
@@ -1346,7 +1347,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           })
         : undefined;
 
-    const list = createLazyMemo(() => {
+    const buildList = (): QuickAccessItem[] => {
       const local = [...localItems(), ...personList.items()];
       if (!projected || options?.enabled?.() === false)
         return deduplicateContactItems(local);
@@ -1398,7 +1399,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         ),
         combined
       );
-    });
+    };
+    const list = createLazyMemo<QuickAccessItem[]>(
+      (listed) => keepUnchangedRows(listed, buildList()),
+      []
+    );
     return {
       items: list,
       windowKey: personList.windowKey,
@@ -1412,6 +1417,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             historyQuery.isLoading ||
             (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading())
         ),
+      isSearching: () =>
+        options?.enabled?.() !== false && (projected?.isSearching() ?? false),
       isLoadingMore: () =>
         personList.isLoadingMore() || (projected?.isLoadingMore() ?? false),
       error: () => personList.error() ?? projected?.error(),

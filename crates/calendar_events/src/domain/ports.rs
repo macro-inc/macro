@@ -26,11 +26,11 @@ use super::models::{
     CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionPreview,
     CalendarMentionRequestItem, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
     CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedCalendar, DueCalendarReminder, EventDetails,
-    GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan,
-    GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, MeetingCopy, OccurrenceListing,
-    OccurrenceRange, OwnedInbox, ProviderCalendar, ProviderCalendarTarget, StoredGoogleCalendar,
-    TeamOutOfOffice, VisibleCalendar,
+    CalendarSyncFailure, CalendarSyncHealth, CalendarSyncStatus, DisconnectedCalendar,
+    DueCalendarReminder, EventDetails, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch,
+    GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, GuestPolicy,
+    MeetingCopy, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
+    ProviderCalendarTarget, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -75,6 +75,30 @@ impl CalendarProviderError {
     pub fn message(&self) -> &str {
         &self.message
     }
+}
+
+impl From<CalendarProviderErrorKind> for CalendarSyncFailure {
+    /// A sync that fails for any reason a retry can clear is transient.
+    fn from(kind: CalendarProviderErrorKind) -> Self {
+        match kind {
+            CalendarProviderErrorKind::Permanent => Self::Permanent,
+            CalendarProviderErrorKind::ReauthRequired => Self::ReauthRequired,
+            CalendarProviderErrorKind::Transient
+            | CalendarProviderErrorKind::SyncTokenExpired
+            | CalendarProviderErrorKind::PushUnsupported => Self::Transient,
+        }
+    }
+}
+
+/// Reads how current a requester's calendar data is.
+pub trait CalendarSyncHealthReader: Send + Sync + 'static {
+    /// The freshness of every calendar visible to the requester, as
+    /// `list_visible_calendars` lists them, and the inboxes whose first sync
+    /// has listed none yet.
+    fn calendar_sync_health(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<CalendarSyncHealth, Report>> + Send;
 }
 
 /// Stable identifiers and sync policy for one provider calendar fetch.
@@ -762,13 +786,15 @@ pub trait CalendarRepository: Send + Sync + 'static {
     /// fencing token: store the message, stamp the time, and bump the
     /// consecutive-failure counter that gates whether the failure surfaces to
     /// the user. The calendar's sync state is left untouched so the next poll
-    /// retries it. A successful `commit_google_calendar_sync` clears all three.
+    /// retries it. A successful `commit_google_calendar_sync` clears them all,
+    /// as it does the failure's `kind`.
     fn record_google_calendar_sync_error(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 

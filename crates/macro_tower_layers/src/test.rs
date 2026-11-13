@@ -406,6 +406,23 @@ async fn starvation_detector_does_not_warn_within_grace_period() {
     assert_eq!(captured.event_count(Level::WARN), 0);
 }
 
+#[test]
+fn current_trace_id_is_the_current_spans_and_none_outside_a_trace() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    assert_eq!(current_trace_id(), None);
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    with_default(subscriber, || {
+        let span = tracing::info_span!("generation");
+        let _guard = span.enter();
+        let trace_id = span.context().span().span_context().trace_id().to_string();
+        assert_eq!(current_trace_id(), Some(trace_id));
+    });
+}
+
 #[tokio::test]
 async fn request_span_keeps_credential_path_params_out_of_url_path() {
     for (route, uri, expected) in [

@@ -21,16 +21,24 @@ semantic control islands on the right. Collection headers use `ListHeader`:
 filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
-Noise) are `Tabs`: separate 32px pills, never inside a group. Action groups use
-`variant="secondary" finish="raised"`, fully rounded ends, `sm`/`icon-sm` segments
-(28px controls), and 8px gaps. Tabs, New, and Search retain `md` sizing.
+Noise) are `Tabs`: separate pills at their bar's control height (`size="sm"`
+in a detail header), never inside a group. Action groups use
+`variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
+the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
+(28px controls); collection headers, beside New and Search, use `md`/`icon-md`
+(32px). New and Search retain `md` sizing. A block whose split header is 32px
+passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars and touch
-layouts. Recent, Folders, and Agents lists use the same islands (filters,
+iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+belongs to its view's mobile view. Where one exists (the email thread is the
+first), the header shows Back, the title (tap it for the title menu), and Info,
+with other actions in the title menu; other touch headers keep their current
+controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)
@@ -329,7 +337,7 @@ write shows failure feedback and leaves the card open for retry.
 Actions live in the top bar immediately before Share, with consistent compact
 buttons (labels collapse on narrow headers). There are no Actions sections in
 information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
-includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
+includes Ask Macro and Create task; PDF, calls, and pull requests include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata appears at the top of each panel, before the interactive

@@ -7,12 +7,17 @@ import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { For } from 'solid-js';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import {
+  computerSetupRequest,
+  requestComputerSetup,
+} from '../primitives/setup-request';
 import { MacroComputers } from './MacroComputers';
 
 const mocks = vi.hoisted(() => ({
   rollout: true,
   offers: [] as SizeOffer[],
   offersError: undefined as unknown,
+  offersPending: false,
   refetchOffers: vi.fn(),
   openSettings: vi.fn(),
   computers: [] as ComputerStatus[],
@@ -27,20 +32,26 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@queries/computers/computers', () => ({
   useComputerOffersQuery: () => ({
-    isPending: false,
-    isFetching: false,
+    get isPending() {
+      return mocks.offersPending;
+    },
+    get isFetching() {
+      return mocks.offersPending;
+    },
     refetch: mocks.refetchOffers,
     get isError() {
-      return mocks.offersError !== undefined;
+      return !mocks.offersPending && mocks.offersError !== undefined;
     },
     get isSuccess() {
-      return mocks.offersError === undefined;
+      return !mocks.offersPending && mocks.offersError === undefined;
     },
     get error() {
       return mocks.offersError;
     },
     get data() {
-      return mocks.offersError === undefined ? mocks.offers : undefined;
+      return mocks.offersPending || mocks.offersError !== undefined
+        ? undefined
+        : mocks.offers;
     },
   }),
   usePurchaseComputerMutation: () => ({
@@ -78,7 +89,9 @@ vi.mock('@queries/computers/claude', () => ({
 }));
 
 vi.mock('./computer-setup-dialog', () => ({
-  ComputerSetupSteps: () => null,
+  ComputerSetupSteps: (props: { step: string; computer: { id: string } }) => (
+    <p data-testid="setup-step">{`${props.computer.id}:${props.step}`}</p>
+  ),
   StepHeader: () => null,
   computerConnected: () => false,
 }));
@@ -153,6 +166,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.rollout = true;
   mocks.offersError = undefined;
+  mocks.offersPending = false;
   mocks.computers = [];
   mocks.offers = [
     {
@@ -471,12 +485,44 @@ it('tells a trialing team computers are for paid plans and links to Billing', as
 
   expect(
     await screen.findByText(
-      'Computers are available on paid plans. Your team is on a trial.'
+      'Computers can be added once your trial ends and your team is on a paid plan.'
     )
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Go to Billing' }));
   expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
+});
+
+it('tells a team with no paid plan to subscribe, on the row and in the dialog', async () => {
+  // What the client makes of a 422 from /team/computers/offers.
+  mocks.offersError = new ThrownResultError([
+    { code: 'NO_PAID_PLAN', message: 'the team has no active subscription' },
+  ]);
+  render(() => <MacroComputers harnesses={[]} />);
+
+  expect(
+    await screen.findByText(
+      'Computers need a paid Macro plan. Your team does not have one yet.'
+    )
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Go to Billing' }));
+  expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
+});
+
+it('shows the sizes loading as a skeleton, never a bare spinner', async () => {
+  mocks.offersPending = true;
+  render(() => <MacroComputers harnesses={[]} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  expect(
+    await screen.findByRole('status', { name: 'Loading computer sizes' })
+  ).toBeTruthy();
+  expect(screen.queryByText('Loading...')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Buy' })).toHaveProperty(
+    'disabled',
+    true
+  );
 });
 
 it('says computers are unavailable when sizes fail with a 503, and retries on Retry', async () => {
@@ -494,7 +540,56 @@ it('says computers are unavailable when sizes fail with a 503, and retries on Re
     "Computers aren't available right now. Try again later."
   );
   expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+  expect(screen.queryByRole('radio')).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(mocks.refetchOffers).toHaveBeenCalledOnce();
+});
+
+it('offers an account outside the rollout nothing but Close', async () => {
+  mocks.offersError = new ThrownResultError([
+    { code: 'ROLLOUT_DISABLED', message: 'not enabled' },
+  ]);
+  render(() => <MacroComputers harnesses={[]} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    "Computers aren't available for this account yet."
+  );
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Go to Billing' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+});
+
+it("reopens a computer's setup at Bring your AI when a notification asks", async () => {
+  mocks.computers = [
+    {
+      id: 'computer-1',
+      name: 'Build machine',
+      size: 'standard',
+      vcpus: 4,
+      memoryGib: 8,
+      diskGib: 100,
+      catalogEntry: 'standard@2026-11',
+      status: 'ready',
+      billing: 'active',
+      poweredOn: true,
+      agentCount: 1,
+      canUndoCancel: false,
+      canRestore: false,
+      purchasedBy: 'viewer',
+      createdAt: '2026-01-01T00:00:00Z',
+      harnessId: 'harness-build',
+      setupCompletedAt: null,
+    },
+  ];
+  render(() => <MacroComputers harnesses={[]} />);
+  expect(screen.queryByTestId('setup-step')).toBeNull();
+
+  requestComputerSetup('computer-1');
+
+  expect((await screen.findByTestId('setup-step')).textContent).toBe(
+    'computer-1:claude'
+  );
+  expect(computerSetupRequest()).toBeUndefined();
 });

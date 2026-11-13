@@ -270,3 +270,16 @@ Access tokens, FusionAuth JWTs or Macro API tokens, are not revocable: presentin
 token issued before the revocation stays valid until it expires. Every token
 response carries `expires_in`, which is that remaining window; FusionAuth signs
 them for one hour (`ttlSeconds` in `infra/stacks/fusionauth-instance`).
+
+## User API keys
+
+The harness also wires the existing revocable `UserApiKeyAuthorizer` into the
+mounted MCP router. Clients can send `x-macro-user-api-key` instead of a JWT
+bearer. Valid keys resolve only their account owner using the same validity and
+scope checks as other user-key routes; revoked or expired keys cannot authenticate.
+A valid bearer still works when no valid key is present. Account/agent claims
+in request headers or tool arguments never select the authenticated identity.
+The API-key secret is not included in request extensions or tool context.
+
+MCP accepts only a user's own API key. Delegated account-manager keys are
+rejected because execution tokens do not preserve their grant restrictions.

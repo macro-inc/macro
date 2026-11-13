@@ -379,6 +379,8 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+A level meter under the preview lights as the microphone picks up sound
+(`Speak to test your mic`); muting it empties the meter and shows `Mic is off`.
 Shared-link setup shows the people currently connected, with avatars, names, and
 an attendee count. It refreshes every 15 seconds while setup is open; guests see
 this only for standalone links. Empty calls show `No one else is here yet`; a
@@ -422,6 +424,28 @@ Guest access is limited to the call room and its live text discussion; joining d
 anonymous access to saved transcripts and recordings. Guest names are preserved in
 the host's call history. Signed-in attendees receive access to that session's saved
 call without gaining access to the channel.
+
+Live call discussion follows the call's stored type: a channel thread opens the
+channel call panel, while `call_chat` opens the call's own chat. Quick and
+scheduled calls use `call_chat` for both signed-in participants and guests.
+Guests can send text, quote replies, react, and edit or delete their own
+messages in the same chat as signed-in participants.
+Deleting the first call-chat message leaves later replies and the chat available.
+The guest composer is the shared `ChannelInput`: its text posts and quoted
+replies appear in the same `MessageThread` as signed-in messages. Guests cannot
+add mentions, attachments, or anchors. A guest's reactions and edits appear to
+signed-in participants; a guest can edit or delete only their own messages.
+Quoted account messages show the sender's profile name on both sides. Guest
+responses carry opaque participant IDs, while signed-in quotes retain normal
+account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
+deletes; the changes should appear live. Closing and reopening the chat refreshes
+the thread.
+A guest never receives Macro markup for things they cannot open. Have a signed-in
+participant send a quote reply, a pasted message link, a document mention, and a
+person mention: the guest sees the quote rendered and each reference as plain
+text with its name (a person as `@name`), never raw `<m-…>` text or a **No
+Access** chip. Web links stay clickable. On desktop the guest composer has no `+`
+menu; on phones `+` opens text formatting only.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
@@ -587,6 +611,8 @@ avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
 hover it on desktop or tap it on touch to open the profile card; guests use
 the shared avatar fallback.
+Signed-out meeting guests see initials for all participants, including account
+participants, without account profile-picture requests.
 This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.
@@ -823,3 +849,14 @@ push producer, notification/activity, permission and answer phases, and status
 HTTP requests; connection and cancellation outcomes end the incoming trace.
 For local collector verification and the exporter fixture, see
 [native call tracing](../development/android.md#native-call-tracing).
+
+### Calling an agent teammate
+
+An agent teammate (`enable-agent-teammates`) joins calls from its own computer
+and speaks with the voice in its repository's `config/voice.json`: the one
+picked when it was invited, or set later from **Team → Members** (see
+[agent teammates](settings.md#agent-teammates)). A changed voice applies from
+the agent's next call. Its speech runs through Macro's speech gateway on the
+agent harness service (`/brain/inference/stt` and `/brain/inference/tts`, the
+agent's own key), so call audio and synthesized text are billed as the agent's
+AI usage.

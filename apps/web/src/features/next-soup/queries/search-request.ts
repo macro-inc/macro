@@ -198,6 +198,7 @@ export function buildSoupSearchRequest(
     ? {
         search_on: 'name_content',
         match_type: matchType,
+        term_matching: 'dynamic',
         query,
         include_crm: true,
         filters: {
@@ -211,6 +212,7 @@ export function buildSoupSearchRequest(
     : {
         search_on: 'name_content',
         match_type: matchType,
+        term_matching: 'dynamic',
         query,
         filters: baseFilters,
       };

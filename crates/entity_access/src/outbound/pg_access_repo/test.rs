@@ -1,4 +1,4 @@
-use super::PgAccessRepository;
+use super::{PgAccessRepository, anyhow_access_error};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotId, ChannelRoleResult, CrmEntityAccess,
@@ -21,6 +21,7 @@ const TEAM_BETA_OWNER: &str = "macro|multi@team.com";
 
 mod agent_session_parent;
 mod channel_call_chat;
+mod telemetry;
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
@@ -1397,4 +1398,19 @@ async fn direct_recipients_exclude_inherited_grants(pool: PgPool) -> anyhow::Res
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].as_ref(), "macro|direct@example.com");
     Ok(())
+}
+
+#[test]
+fn an_outage_shared_between_concurrent_callers_is_still_unavailable() {
+    let pool_timeout = anyhow::Error::new(std::sync::Arc::new(sqlx::Error::PoolTimedOut));
+    assert!(matches!(
+        anyhow_access_error(pool_timeout),
+        AccessError::Unavailable(_)
+    ));
+
+    let missing_row = anyhow::Error::new(std::sync::Arc::new(sqlx::Error::RowNotFound));
+    assert!(matches!(
+        anyhow_access_error(missing_row),
+        AccessError::Internal(_)
+    ));
 }

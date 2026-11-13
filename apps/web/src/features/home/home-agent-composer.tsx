@@ -80,15 +80,15 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       return true;
     },
   });
-  // The session opens in Home's detail pane rather than Agents; its row joins
-  // the Home list once the create answers.
+  // The session opens in Home's detail pane rather than Agents; the server
+  // lists its row as the viewer's work before the sandbox boots.
   const start = (conversation: StartConversation) => {
     const id = startPendingSession({
       ...conversation,
       userId: userId(),
       submitSurface: 'home',
     });
-    home.openPreview({ type: 'agent_session', id });
+    home.openStartedSession(id);
   };
   return (
     <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">
