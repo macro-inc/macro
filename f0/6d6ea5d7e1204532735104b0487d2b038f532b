@@ -111,6 +111,7 @@ crates/event_stream/src/outbound.rs
 crates/event_stream/src/domain/fan_out.rs
   s_8703f73ae8e37d::t_83cf8c9318af52 1-169
   s_8703f73ae8e37d::t_53f62bc762391c 170
+  s_8703f73ae8e37d::t_5de274830a31d9 171-172
 services/document_storage_service/src/outbound/stream_contacts/test.rs
   s_8703f73ae8e37d::t_1020670aef466b 64-65,85-86
 services/document_storage_service/src/outbound/stream_contacts.rs
@@ -119,6 +120,7 @@ crates/event_stream/src/domain/test_support.rs
   s_8703f73ae8e37d::t_05c094d7d4dee9 1-468
   s_8703f73ae8e37d::t_badbcd9a3cb81b 469-471
   s_8703f73ae8e37d::t_09732d0342c3ec 472-496
+  s_8703f73ae8e37d::t_5de274830a31d9 497
 crates/event_stream/src/inbound.rs
   s_8703f73ae8e37d::t_9748997431ebea 1-8
 crates/event_stream/AGENTS.md
@@ -161,6 +163,7 @@ crates/webhook/src/topics.rs
   s_8703f73ae8e37d::t_4cf139df79d88a 1-2,4
 docs/guides/add-kafka-event.md
   s_8703f73ae8e37d::t_20cd92bd16e872 21-22,114,215-216,218-237,245-249
+  s_8703f73ae8e37d::t_5de274830a31d9 213-214
 services/document_storage_service/Cargo.toml
   s_8703f73ae8e37d::t_12d31c58a46ff4 84-88
 services/document_storage_service/src/api.rs
