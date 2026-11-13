@@ -15,6 +15,12 @@ mod test;
 /// creates routines reads it, and it ends [`WRITING`].
 pub const CODE_STEPS: &str = include_str!("code_steps.md");
 
+/// How to write a routine short of its code steps: its triggers and the
+/// events they start on, when a step is code and when it is Ask AI, and how it
+/// uses the items a request names. It begins [`WRITING`]; a host whose
+/// routine tool already carries [`CODE_STEPS`] carries this alone.
+pub const ROUTINE_RULES: &str = include_str!("writing.md");
+
 /// How to write a whole routine: its triggers and the events they start on,
 /// when a step is code and when it is Ask AI, how it uses the items a request
 /// names, and [`CODE_STEPS`]. The one text every writer of routines follows:
