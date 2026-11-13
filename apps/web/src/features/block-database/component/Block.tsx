@@ -13,6 +13,7 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { DATABASE_MODEL, modelsForPlan } from '@core/component/AI/constant';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { ParamsProvider, useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -60,7 +61,10 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
-import { createDatabaseViewSelection } from '../primitives/view-selection';
+import {
+  createDatabaseViewSelection,
+  followLinkedLocation,
+} from '../primitives/view-selection';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';
 import { trashDatabase } from '../queries/trash-database';
@@ -131,6 +135,8 @@ const Block: Component = () => {
     // Another table's grid takes the request when it mounts.
     openRequestedRecord();
   }
+  const linked = useUrlParams({ tableId: 'tableId', viewId: 'viewId' });
+  followLinkedLocation(linked, setSelection);
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
       if (params.tableId && params.viewId)
@@ -593,7 +599,9 @@ const DatabaseBlock: Component = () => {
         </div>
       }
     >
-      <Block />
+      <ParamsProvider>
+        <Block />
+      </ParamsProvider>
     </Show>
   );
 };
