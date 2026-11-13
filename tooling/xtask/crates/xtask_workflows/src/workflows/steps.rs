@@ -398,26 +398,12 @@ pub fn mount_web_test_cache_volume() -> Step<Use> {
         ))
 }
 
-/// [`mount_web_cache_volume`] for jobs that compile the browser wasm packages
-/// (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack` is the
-/// downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps the
-/// worker build warm. Compiled objects use Namespace remote sccache.
-pub fn mount_web_build_cache_volume() -> Step<Use> {
-    nscloud_cache_action("Mount Namespace cache volume")
-        .add_with(("cache", "nix"))
-        .add_with((
-            "path",
-            format!(
-                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}",
-                vars::BUN_CACHE_VOLUME_DIR,
-                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
-            ),
-        ))
-}
-
-/// [`mount_web_build_cache_volume`] plus [`vars::WASM_PKG_CACHE_DIR`], for the PR
-/// build that reuses unchanged wasm packages. Deploy builds keep theirs in an
-/// Actions cache instead (`build_web_app`), since PR jobs write this volume.
+/// [`mount_web_cache_volume`] for the PR build, which compiles the browser wasm
+/// packages (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack`
+/// is the downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps
+/// the worker build warm; [`vars::WASM_PKG_CACHE_DIR`] holds the unchanged
+/// packages it reuses. Deploy builds keep theirs in an Actions cache instead
+/// (`build_web_app`) and mount none of these, since PR jobs write this volume.
 pub fn mount_web_build_check_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount Namespace cache volume")
         .add_with(("cache", "nix"))
