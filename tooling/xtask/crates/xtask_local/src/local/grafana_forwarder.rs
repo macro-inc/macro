@@ -5,15 +5,16 @@
 //! `grafana-forwarder` container (`docker/docker-compose.yml`,
 //! `docker/grafana-forwarder/config.alloy`), which samples it, tags it with the
 //! machine's name and sends it with the token. Both containers are global, one
-//! per machine, so every run with the default `--traces lgtm` brings them in line
-//! with the settings: the latest run decides for every stack on the machine.
+//! per machine, so every bring-up with the default `--traces lgtm` brings them in
+//! line with the settings and the latest one decides for every stack on the
+//! machine; one with telemetry turned off for that run leaves them as they are.
 
 use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result};
 use xtask_local_telemetry::forwarding::write_private;
-use xtask_local_telemetry::{Forwarding, Paths, opaque_id};
+use xtask_local_telemetry::{Forwarding, Paths, Switch, opaque_id};
 
 use super::instance::Instance;
 use super::stage::Stage;
@@ -48,10 +49,15 @@ pub(super) struct Forwarder {
 
 impl Forwarder {
     /// Read the settings, or `None` when this run has nothing to do: forwarding
-    /// is off and no earlier run left it on. A setting that can't be used is
-    /// reported and counts as off.
+    /// is off and no earlier run left it on, or `MACRO_LOCAL_TELEMETRY`/`CI`
+    /// turn telemetry off for this run only, which leaves the machine's
+    /// forwarder as it is. A setting that can't be used is reported and counts
+    /// as off.
     pub(super) fn from_settings(stage: &Stage) -> Option<Self> {
         let paths = Paths::for_user()?;
+        if paths.switch == Switch::Off {
+            return None;
+        }
         let forwarding = Forwarding::load(&paths).unwrap_or_else(|error| {
             stage.note(&format!(
                 "  WARNING: not forwarding telemetry to Grafana: {error}"
