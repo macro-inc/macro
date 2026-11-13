@@ -967,8 +967,9 @@ New routine. A finished draft gets a toast: **Routine draft ready** with
 **Review**, or **Couldn’t draft that routine** with the reason and **Edit
 request**, which reopens New routine with the request back in the box and the
 reason under it. A ready draft waits until it is opened or discarded, also
-across reloads and devices: New routine shows **Your draft is ready** with
-**Discard** and **Review**, and closing its toast only closes the toast.
+across reloads and devices, and one left unopened for 7 days is deleted. While
+one waits, New routine shows **Your draft is ready** with **Discard** and
+**Review**, and closing its toast only closes the toast.
 Reloading mid-draft brings the pill back. Off, the dialog waits on the
 blocking request as before; older clients keep using it.
 
