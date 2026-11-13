@@ -162,3 +162,41 @@ fn a_bitwarden_login_with_null_uris_keeps_its_credentials() {
     assert_eq!(item.password.expose_secret(), "secret-one");
     assert_eq!(item.url, None);
 }
+
+#[test]
+fn null_1password_lists_and_entries_read_as_empty() {
+    let export = pux(r#"{"accounts":[{"attrs":{"uuid":"account1"},"vaults":[
+            {"attrs":{"uuid":"vault0","name":"Empty"},"items":null},
+            {"attrs":{"uuid":"vault1","name":"Vault"},"items":[
+            {"uuid":"item1","categoryUuid":"001","overview":{"title":"Example","urls":null,"tags":[null,"tag-one"]},
+             "details":{"loginFields":[null,{"designation":"username","value":"user-one"}],
+                        "sections":[null,{"title":"Empty","fields":null}],"passwordHistory":null}}]}]}]}"#);
+
+    let export = parse(&export, SourceFormat::OnePasswordPux, &Limits::default()).expect("parses");
+
+    assert!(export.skipped.is_empty());
+    let item = export.items.first().expect("one item");
+    assert_eq!(item.username.expose_secret(), "user-one");
+    let fields: Vec<(&str, &str)> = item
+        .fields
+        .iter()
+        .map(|field| (field.label.as_str(), field.value.expose_secret()))
+        .collect();
+    assert_eq!(fields, vec![("Tags", "tag-one")]);
+}
+
+#[test]
+fn null_bitwarden_fields_read_as_empty() {
+    let json = r#"{"encrypted":false,"folders":null,"items":[
+        {"id":"item1","type":2,"name":"Example","notes":"note-one","fields":null,"secureNote":{"type":0}}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert!(export.skipped.is_empty());
+    assert_eq!(export.items.len(), 1);
+}

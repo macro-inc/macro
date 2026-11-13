@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
 use serde_json::value::RawValue;
 
-use crate::bounded::{Bounded, Count, Counted};
+use crate::bounded::{Bounded, Count, Counted, null_as_empty};
 use crate::draft::{self, Draft, Parts};
 use crate::error::ImportError;
 use crate::model::{
@@ -59,7 +59,7 @@ struct Export<'a> {
 #[derive(Deserialize)]
 struct Account<'a> {
     attrs: Option<AccountAttributes>,
-    #[serde(borrow, default)]
+    #[serde(borrow, default, deserialize_with = "null_as_empty")]
     vaults: Vec<Vault<'a>>,
 }
 
@@ -74,7 +74,7 @@ struct AccountAttributes {
 #[derive(Deserialize)]
 struct Vault<'a> {
     attrs: Option<VaultAttributes>,
-    #[serde(borrow, default)]
+    #[serde(borrow, default, deserialize_with = "null_as_empty")]
     items: Vec<&'a RawValue>,
 }
 
