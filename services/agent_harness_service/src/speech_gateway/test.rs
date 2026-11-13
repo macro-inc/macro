@@ -85,8 +85,10 @@ fn gateway(
         agent_teammates_on(),
         admission,
         recorder,
-        "project-key",
-        "project-secret",
+        LiveKitKeys {
+            api_key: "project-key",
+            api_secret: "project-secret",
+        },
         upstream,
         &format!("{upstream}/models"),
     )
@@ -158,8 +160,10 @@ async fn an_agent_with_agent_teammates_off_is_refused_before_admission() {
         BrainRollout::new(FakeFeatureFlags::default()),
         admission.clone(),
         Arc::new(Recorder::default()),
-        "project-key",
-        "project-secret",
+        LiveKitKeys {
+            api_key: "project-key",
+            api_secret: "project-secret",
+        },
         "http://127.0.0.1:1",
         "http://127.0.0.1:1/models",
     )
@@ -181,8 +185,10 @@ fn both_credentials_are_required() {
                 BrainRollout::default(),
                 Arc::new(CountingAdmission::default()),
                 Arc::new(Recorder::default()),
-                key,
-                secret,
+                LiveKitKeys {
+                    api_key: key,
+                    api_secret: secret,
+                },
                 "http://localhost",
                 "http://localhost/models",
             )

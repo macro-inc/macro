@@ -1414,8 +1414,10 @@ async fn run() -> anyhow::Result<()> {
         brain_rollout.clone(),
         admission.clone(),
         recorder.clone(),
-        config.livekit_api_key.as_ref(),
-        config.livekit_api_secret.as_ref(),
+        speech_gateway::LiveKitKeys {
+            api_key: config.livekit_api_key.as_ref(),
+            api_secret: config.livekit_api_secret.as_ref(),
+        },
         speech_gateway::LIVEKIT_INFERENCE_URL,
         speech_gateway::DEEPGRAM_MODELS_URL,
     )?);

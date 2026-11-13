@@ -91,6 +91,12 @@ pub(crate) struct SpeechGateway {
     samples: tokio::sync::Mutex<BTreeMap<VoiceModel, Vec<u8>>>,
 }
 
+/// The LiveKit project's key pair, as configured.
+pub(crate) struct LiveKitKeys<'a> {
+    pub(crate) api_key: &'a str,
+    pub(crate) api_secret: &'a str,
+}
+
 impl SpeechGateway {
     /// Both credentials are required: a gateway without them fails at boot.
     pub(crate) fn new(
@@ -98,12 +104,11 @@ impl SpeechGateway {
         rollout: BrainRollout,
         admission: Arc<dyn AiAdmissionService>,
         recorder: Arc<dyn UsageRecorder>,
-        api_key: &str,
-        api_secret: &str,
+        keys: LiveKitKeys<'_>,
         upstream_url: &str,
         catalog_url: &str,
     ) -> anyhow::Result<Self> {
-        let (api_key, secret) = (api_key.trim(), api_secret.trim());
+        let (api_key, secret) = (keys.api_key.trim(), keys.api_secret.trim());
         if api_key.is_empty() || secret.is_empty() {
             anyhow::bail!("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must both be set");
         }
