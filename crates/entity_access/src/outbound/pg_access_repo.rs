@@ -321,6 +321,32 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_dashboard_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let id = id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid dashboard ID"))?;
+        let Some(user) = user_id else {
+            return Ok(None);
+        };
+        let sources = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(
+            queries::dashboard_access::get_dashboard_access(
+                &self.pool,
+                id,
+                user.as_ref(),
+                &sources,
+            )
+            .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_pipeline_access(
         &self,
         id: &str,
@@ -653,6 +679,8 @@ impl AccessRepository for PgAccessRepository {
             // through a team scope. A runtime is used by people, not team bots.
             | EntityType::Reminder
             | EntityType::Harness
+            // Dashboards are shared with people, not team bots.
+            | EntityType::Dashboard
             | EntityType::ScheduledAction => {
                 return Err(AccessError::BadRequest(
                     "Unsupported entity type for team item access",

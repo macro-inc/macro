@@ -33,6 +33,8 @@ pub async fn facts(
         // A computer's harness belongs to its team and has no direct shares.
         EntityType::Harness => sqlx::query!(r#"SELECT COALESCE(owner_user_id, created_by) AS "owner!", name FROM harnesses WHERE id = $1 AND deleted_at IS NULL AND computer_id IS NULL FOR SHARE"#, id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
+        EntityType::Dashboard => sqlx::query!("SELECT user_id, COALESCE(title, 'Dashboard') AS \"name!\" FROM dashboard_entities WHERE id = $1 FOR SHARE", id)
+            .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.name, None)),
         EntityType::Initiative => sqlx::query!("SELECT owner_user_id, name FROM initiative WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_user_id, r.name, None)),
         EntityType::Database => sqlx::query!("SELECT user_id AS owner_id, name FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE", id)

@@ -123,6 +123,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Highest access on a dashboard: its owner, the owners and admins of the
+    /// owner's teams, and the caller's grants.
+    fn get_dashboard_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// All pipeline grants for the caller's current sharing sources.
     fn list_pipeline_access(
         &self,

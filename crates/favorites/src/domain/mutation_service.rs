@@ -113,6 +113,7 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::Harness
         | EntityType::Initiative
         | EntityType::CrmPipeline
+        | EntityType::Dashboard
         // Database rows are never favoritable.
         | EntityType::DatabaseRow => Err(FavoritesError::UnsupportedEntityType(entity_type)),
     }

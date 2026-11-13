@@ -259,10 +259,11 @@ fn a_pane_is_replaced_at_any_depth() {
     }))
     .expect("decodes");
     let pane = PaneId::try_new("inner").expect("a pane id");
-    let widget = decode_view(&json!({ "widgets": [{ "type": "md", "id": "inner", "markdown": "New" }] }))
-        .expect("decodes")
-        .widgets
-        .remove(0);
+    let widget =
+        decode_view(&json!({ "widgets": [{ "type": "md", "id": "inner", "markdown": "New" }] }))
+            .expect("decodes")
+            .widgets
+            .remove(0);
 
     assert!(view.replace_pane(&pane, widget));
     assert_eq!(
@@ -276,7 +277,10 @@ fn a_pane_is_replaced_at_any_depth() {
     );
 
     let missing = PaneId::try_new("missing").expect("a pane id");
-    let widget = Widget::Md { id: None, markdown: "x".to_owned() };
+    let widget = Widget::Md {
+        id: None,
+        markdown: "x".to_owned(),
+    };
     assert!(!view.replace_pane(&missing, widget));
 }
 

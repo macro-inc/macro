@@ -76,6 +76,7 @@ where
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
             EntityType::CrmPipeline => self.repo.get_pipeline_access(entity_id, user_id).await,
+            EntityType::Dashboard => self.repo.get_dashboard_access(entity_id, user_id).await,
             EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
             EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
@@ -303,6 +304,8 @@ where
             | EntityType::Skill
             // A runtime is used by people; a bot reaches one by being bound to it.
             | EntityType::Harness
+            // Dashboards are shared with people, not team bots.
+            | EntityType::Dashboard
             | EntityType::ScheduledAction => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
@@ -573,6 +576,7 @@ where
             | EntityType::ExternalChat
             | EntityType::Form
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
@@ -687,6 +691,7 @@ where
             | EntityType::ExternalChat
             | EntityType::Form
             | EntityType::Harness
+            | EntityType::Dashboard
             | EntityType::ScheduledAction => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)

@@ -94,6 +94,9 @@ pub enum EntityType {
     /// A chat from another messaging service (see [`ExternalChatProvider`])
     /// a person added to Macro as an independently shared entity.
     ExternalChat,
+    /// A saved dynamic-UI view with its own grants and version history (see
+    /// the `dashboards` crate).
+    Dashboard,
 }
 
 impl EntityType {
@@ -153,6 +156,9 @@ impl EntityType {
             // A runtime's grants are `entity_access` rows, but it is not something
             // you file into a project.
             EntityType::Harness => false,
+            // A dashboard's grants are `entity_access` rows, but it is not
+            // filed into projects.
+            EntityType::Dashboard => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

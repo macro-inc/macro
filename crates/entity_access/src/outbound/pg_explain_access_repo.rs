@@ -162,6 +162,19 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 )
                 .await?)
             }
+            EntityType::Dashboard => {
+                let id = parse_uuid(entity_id, "Invalid dashboard ID")?;
+                let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::list_entity_access_grants(
+                    &self.pool,
+                    &id,
+                    EntityType::Dashboard,
+                    &sources,
+                )
+                .await?)
+            }
             EntityType::ExternalChat => {
                 let id = parse_uuid(entity_id, "Invalid group ID")?;
                 let sources = queries::get_user_source_ids(&self.pool, Some(user_id))

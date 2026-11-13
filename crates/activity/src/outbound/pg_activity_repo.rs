@@ -508,7 +508,8 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::DatabaseRow
         | EntityType::Form
         | EntityType::ExternalChat
-        | EntityType::Harness => {}
+        | EntityType::Harness
+        | EntityType::Dashboard => {}
     }
 }
 

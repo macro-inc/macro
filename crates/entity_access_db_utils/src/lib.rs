@@ -418,6 +418,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
+            // Dashboards are shared with people, never channels.
+            | EntityType::Dashboard
             => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
@@ -499,6 +501,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
+            // Dashboards are shared with people, never channels.
+            | EntityType::Dashboard
             => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"

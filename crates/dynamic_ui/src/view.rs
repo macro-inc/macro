@@ -160,7 +160,17 @@ pub enum Widget {
 /// A widget's stable id, so a saved view can address one pane of it.
 #[nutype(
     validate(not_empty, len_char_max = 64),
-    derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsRef, Display)
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        Serialize,
+        Deserialize,
+        AsRef,
+        Display
+    )
 )]
 pub struct PaneId(String);
 
