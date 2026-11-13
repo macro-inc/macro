@@ -1,0 +1,343 @@
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 271-326
+crates/scheduled_action/src/domain/suggestions.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-2,4-15,17-20,38-39,42-44,46-48,61,74,76,79-80,83,104-106,111-115,118-119,127,135-136,138,141-144,146-147,149,176-177,181,192-198,201-203,206-215,217-218,220,229-230,236,242,246-247,250-251,263,265-270,275-276,279-280,288,298,318-319,327,329-335,337-354,356-357,359,371-420,422-424,432,435-464,469,475-476,484-488,491,495-500,502-513,515-542,545-551,553-573,575-577,579-593,595-601,604-609,611-621,623-638,641-670,672-679,780
+apps/web/src/features/onboarding/queries/routine-suggestions.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 25,29,61-63,66-68,72
+crates/agent_correlation/src/inbound.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 5,62-69,112,122,138,171-172,175-188,193-194
+crates/scheduled_action/src/outbound/pg_suggestion_repo/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 7,27,39-43,47-87,91,93-94,97-108,110-118,120,122,124-125,129-152,159,163-172,187,204-337
+crates/suggestion_generation/src/lib.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-9
+crates/suggestions/src/domain/service/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 50-114,120-121,140-141,147-149,153-154,304-308,310-313,316,380,409,452,535,688,707-709,717,738,758-763,776-861,900
+crates/suggestion_generation/src/swagger.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-13
+crates/scheduled_action/src/inbound/suggestion_router.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 17-19,21,68-73,186-245,248
+  s_3c6362fd17dcc4::t_a9f0e85f8ab582 246-247
+crates/suggestions_db_utils/src/lib.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-257
+crates/suggestions_db_utils/src/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-143
+docs/agent-guide/onboarding.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 63-65
+crates/suggestion_generation/src/inbound/router.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-235
+crates/agent_correlation/src/domain.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 6-7,15-17,23-30,47-50,82-87,100
+crates/macro_tower_layers/src/lib.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 64-71
+crates/suggestion_generation/AGENTS.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-82
+crates/suggestion_generation/src/domain/model.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-159
+crates/suggestion_generation/src/outbound/pg_generation_repo/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-513
+crates/suggestions/src/domain/service.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 21-24,27-28,30,63-65,67-70,84-86,93-95,97-98,102-116,154-155,157,167-169,285,288-298,336-352,408-432,455,497,677,791
+crates/suggestions_db_utils/AGENTS.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-25
+services/agent_harness_service/Cargo.toml
+  s_3c6362fd17dcc4::t_13afeae6190f50 174
+crates/suggestions/src/inbound/kafka_consumer/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-236
+services/agent_harness_service/src/code_mode.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 5,19-102,114,117-121,165,185-189
+apps/web/src/features/suggestions/queries/use-record-suggestions-activity.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-40
+crates/macro_event_broker/src/domain/models/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 336
+services/agent_harness_service/src/cognition/service/structured_completion.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 28-30,113-119,128
+crates/agent_correlation/src/scope.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-135
+crates/suggestions/src/inbound/router.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 7,17-18,124-134,140,152,161
+services/agent_harness_service/src/scheduling/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 185-211
+apps/web/src/vite-env.d.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 32
+crates/macro_db_client/migrations/20261109221120_backfill_routine_cards.sql
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-59
+crates/scheduled_action/Cargo.toml
+  s_3c6362fd17dcc4::t_13afeae6190f50 58-59
+crates/scheduled_action/src/domain/suggestions/ports.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 13-14,16-17,20,22-23,26-27,29-32,36-37,39,41-43,46,48-49,51,53-54,66-67,131-134,137-138,140-174,184,186,194-213
+crates/suggestions/src/domain/ports.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 8,12-15,17,79-86,125-141,173-208,213-214,218,235-246,281-289
+services/agent_harness_service/AGENTS.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 195-203
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 1049-1056
+crates/scheduled_action/src/domain/suggestions/prompt/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 6,52-60
+  s_3c6362fd17dcc4::t_d51bd7842a0702 61
+crates/scheduled_action/src/domain/suggestions/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 2,8,14,18,21-24,28,30,34-35,42,45,53-54,57-63,65-89,106,141-145,148-150,152-154,156,158-161,175-177,179,181,184,194-195,201-202,204,206,208,212,220-244,254,270-271,273,275-277,280,283,285-288,291,298,308-315,323,329,347,378,397,442,484-485,513-514,537,559,582-583,678-697,702-942
+crates/scheduled_action/src/inbound/suggestion_router/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 16-17,56,59-95,196-217
+  s_3c6362fd17dcc4::t_e913f88fa4c70b 218
+crates/suggestions/src/inbound.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1,3
+crates/suggestions/src/domain.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 7-8
+services/agent_harness_service/src/cognition/api/structured_completion/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 17-20,32,86-142
+  s_3c6362fd17dcc4::t_7f085943291f6f 143-144
+crates/suggestion_generation/src/domain/audience.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-49
+crates/suggestions/src/domain/model.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 429-441,463-468,504-529
+  s_3c6362fd17dcc4::t_9a02383ac504de 530
+packages/sdk/generated/scheduled-action/index.ts
+  s_3c6362fd17dcc4::t_36e76e870bc55e 4
+crates/scheduled_action/src/domain/suggestions/model.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 121-123,135-136,140-154,198-207,218-221,225-229,232-294
+crates/macro_db_client/migrations/20261109212700_unify_suggestion_generation.sql
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-72
+crates/suggestion_generation/src/domain/night/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-54
+packages/sdk/src/entities/routines/suggestion.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-84
+services/agent_harness_service/src/scheduling.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 40,77-82,84,106-109,162-180,193-221,254,431-432,552-561,576-577,579,581,584-624,626,628,630-638,640,644-645,664,667,669,672-698,727-728,751
+crates/suggestions/src/domain/prompt.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-145
+crates/agent_correlation/src/inbound/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 20-25,30-31,34,203-276
+  s_3c6362fd17dcc4::t_256b3d307ee8c1 277
+crates/suggestions_db_utils/Cargo.toml
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-15
+services/agent_harness_service/src/main.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 789-796,811,842-851,916
+packages/sdk/src/coverage/skipped.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 301-302
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_3c6362fd17dcc4::t_36e76e870bc55e 5
+  s_3c6362fd17dcc4::t_13afeae6190f50 162-166,173-187,301-307,315-319
+  s_3c6362fd17dcc4::t_6af0546eed5404 320-321
+crates/scheduled_action/AGENTS.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 125-164
+crates/suggestions/src/inbound/kafka_consumer.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-252
+docs/runbooks/routine-suggestions.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 7-15,18,22-23,28-32,41-43,51-57
+infra/stacks/monitoring/monitors/routine-suggestions.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-3,11-19,28-30,45-47,52,65,73
+services/agent_harness_service/src/cognition/service/structured_completion/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 133
+crates/scheduled_action/src/swagger.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 74-75,104-107
+services/agent_harness_service/src/scheduling_openapi.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 9
+crates/agent_correlation/src/outbound.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 3,14-19,22-23,31-32,35-53,70-74,80-81,84-87,89
+crates/suggestion_generation/src/inbound/router/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-144
+crates/suggestions/src/domain/prompt.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-131
+crates/suggestion_generation/src/domain/ports.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-139
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 770-779,937-946,957-981,1225-1244,1595,1605-1608,1748-1758,2259,2262-2263,2266,2269-2273,2279,2281,2283,2285,2288,2322-2354,2733-2739,2795-2826,2858-2884
+  s_3c6362fd17dcc4::t_21ade1085582a4 2885
+crates/suggestions/AGENTS.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 17-26,31-43,58-63,71-80,83-84
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 14-15,297-302,305-307,313-327,360-361,364-372,374,380-385,388,390,457-459,527-529,531-532,611-690
+packages/sdk/src/entities/routines/namespace.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 3,11,198,204-207,239-240,259,264-284
+  s_3c6362fd17dcc4::t_7cd6767821b4bb 285-286
+crates/agent_correlation/src/scope/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-66
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 263-273
+crates/agent_correlation/src/context.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 6-7,15-18,39-48,82,137
+crates/suggestions/Cargo.toml
+  s_3c6362fd17dcc4::t_13afeae6190f50 11,13-15,20,22,25,28-29,34,45-46
+crates/scheduled_action/src/domain/suggestions/prompt.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 1,6
+packages/sdk/src/macro.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 561
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 122-142,145,170
+crates/suggestion_generation/Cargo.toml
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-44
+crates/scheduled_action/src/domain/suggestions/prompt.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 8-9,33-34,60-80
+services/agent_harness_service/src/code_mode/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 88-204
+crates/agent_code_mode/src/domain/documentation/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 416-425
+crates/agent_correlation/AGENTS.md
+  s_3c6362fd17dcc4::t_13afeae6190f50 9-12,17-27,54-56
+Cargo.toml
+  s_3c6362fd17dcc4::t_13afeae6190f50 15-16,562
+crates/scheduled_action/src/outbound/pg_suggestion_repo.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1,9-10,15-17,46-53,56-80,82-87,91,93,100,103,105,131-145,147-235,241,267-268,285,292,294-301
+crates/suggestion_generation/src/inbound.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-3
+crates/suggestion_generation/src/outbound.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-3
+crates/suggestion_generation/src/domain/service.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-915
+crates/suggestion_generation/src/domain/service/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-811
+crates/suggestion_generation/src/domain.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-7
+apps/web/src/routes/Root.tsx
+  s_3c6362fd17dcc4::t_13afeae6190f50 5,192
+crates/agent_code_mode/src/domain/documentation.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 64-101
+crates/agent_correlation/src/lib.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 17
+crates/suggestions/src/domain/resolution/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-502
+crates/scheduled_action/src/domain/suggestions/decode.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 21-23,66,74-75,81,85-98,128
+crates/macro_tower_layers/src/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 409-425
+crates/suggestions/src/domain/prompt/test.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-39
+crates/suggestions/src/domain/resolution.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-261
+packages/sdk/specs/scheduled-action.json
+  s_3c6362fd17dcc4::t_13afeae6190f50 854-855,857-858,861,865,880-889,891,965-1044,1951-1961,2083-2142,2202-2244,4007-4017,4271-4282,4295-4350,4708-4732,5355-5365,5399,5403-5406,5664-5682,5882-5885
+packages/sdk/src/utils/verbs.ts
+  s_3c6362fd17dcc4::t_13afeae6190f50 95,104
+crates/suggestion_generation/src/outbound/pg_generation_repo.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-407
+.github/workspace-dep-closures.json
+  s_3c6362fd17dcc4::t_13afeae6190f50 1017,1019,1218-1219,2088-2089,2279-2280,3648-3649,4663-4664,5969-5970,6668,6751,6769-6770,9778,9859,9877-9878,11693,11774,11792-11793,13663,13743,13761-13762,15458-15606,15608,15611-15613,15616,15618,15621-15630,15632,15634-15635,15637-15646,15648-15650,15652,15655-15659,15661-15665,15668-15675,15678-15679,15683-15688,15691-15693,15698,15701,15703-15705,15707,15710-15712,15714-15717,15719-15721,15723-15726,15729-15732,15734-15749
+crates/suggestion_generation/src/domain/night.rs
+  s_3c6362fd17dcc4::t_13afeae6190f50 1-81
+.sqlx/query-0db6b904fecd577d2336b5fc2302c947a64eb842d4cfb384bfcde6277d1b9ece.json
+  s_3c6362fd17dcc4::t_ca9492c568ea68 1-15
+.sqlx/query-17fa1fdf5b12d93ee6ecc30abbed30924e9333a9aaef32c3fe019c600f0af73d.json
+  s_3c6362fd17dcc4::t_b2c5780632565b 3,34
+.sqlx/query-2b981b47105e543920b518b04c487e4f4bee0dc37990267d5c121724d2e1d7b6.json
+  s_3c6362fd17dcc4::t_1bfcda97969b0c 1-16
+.sqlx/query-33d8c47223e9821acc4be998c312a5410255e5987d217fe6676af509f37f8282.json
+  s_3c6362fd17dcc4::t_7c597e25d55e65 1-14
+.sqlx/query-39c9b614e16ad2d3b98738096b473091b6aff28727dbb023fa6e007192316326.json
+  s_3c6362fd17dcc4::t_d91d3260d3decb 1-25
+.sqlx/query-3c03765b1c1d78cac642a1b4063e56c67267f5c2b9b35843a88106d17bb3a711.json
+  s_3c6362fd17dcc4::t_7607ce2bcd4a8d 1-20
+.sqlx/query-4a55c4432c5d68d4ed1bdc9f08be9f36a9374dc25a8fb3683c02ffe7a65783a7.json
+  s_3c6362fd17dcc4::t_9afc95c917c12c 1-15
+.sqlx/query-5c7c441f7adf18642f0000c5348a951777ade8b40aace47a7e3263ac0738f268.json
+  s_3c6362fd17dcc4::t_aa38a273e653b1 1-17
+.sqlx/query-5f8c0e1c3432c5fe65798a1f44ae184d2be67692154f582a3732ea62ab715df5.json
+  s_3c6362fd17dcc4::t_da2f96438dcfd0 3,43-44,48-52,70-71,75
+.sqlx/query-6086b457bf38f7d27e2edd8be140008452f53dcf22b913d1a2047a08d56fd50a.json
+  s_3c6362fd17dcc4::t_0d8e1cb1b6586d 1-18
+.sqlx/query-69df2d6ed8535fc2fc832244b459d0e62557350ebfb1acc2365e8933efcdc44a.json
+  s_3c6362fd17dcc4::t_8a731816bf1c62 1-15
+.sqlx/query-7d381a603814f646b7d9dcfd92f20a59e925b6097b4aae9371a555c4c56c0cbd.json
+  s_3c6362fd17dcc4::t_b25f3ba27b7cf1 1-23
+.sqlx/query-81b2ff131c20230a40d1397972a501b2c6da603b3eefb73b50021b596bfaf6a5.json
+  s_3c6362fd17dcc4::t_c46b8ee7030926 1-22
+.sqlx/query-85bb8be3fca559c75e84626ac7ab1ccb1fae6da9bcdfdb001ba0430041c27fea.json
+  s_3c6362fd17dcc4::t_74f68b28ac78e3 3,16-17,24
+.sqlx/query-8d076fb3abf5c36e9a25b96d06ea96cd288286d7e67cb2fddf4a5067be2c940c.json
+  s_3c6362fd17dcc4::t_35a826565597b2 1-23
+.sqlx/query-8d22eeeda1cf9338aca484d47f81d16b6e169b71509483e9fa37b2a5174dae7f.json
+  s_3c6362fd17dcc4::t_389a3e736048c7 1-19
+.sqlx/query-8d373d8050f2dac3fef072dec222ca4b659e52be2f09610ad60f6fbd5c42c945.json
+  s_3c6362fd17dcc4::t_a98665fc56e7ab 1-17
+.sqlx/query-91753dd44edfc1520a2309f5b2f5c0b17e8f277eeb9df0c611e08c11172c2435.json
+  s_3c6362fd17dcc4::t_6903174ade17a1 3,15-19,29-30,33
+.sqlx/query-9b1f31aaea9c12101775cb44475be9a5b0f9dd068e4df5f1fd5c907222423e4c.json
+  s_3c6362fd17dcc4::t_8c2b20124a7659 1-30
+.sqlx/query-ae02c989e0c7b598b81f947764e70e5ca3049e3e68e155f369da16842d17d03e.json
+  s_3c6362fd17dcc4::t_aa06dde2985fb5 1-22
+.sqlx/query-b6be3f34cc45761b9e80a34486852262298ca213b9eb1b8248f81058133ec82c.json
+  s_3c6362fd17dcc4::t_87e8b2d7d45280 1-36
+.sqlx/query-bb692fa968cda18fa76809aa9b671cea288daf9c4cf5fcbb80607564ad9a3302.json
+  s_3c6362fd17dcc4::t_20ce882f5d0ec8 1-23
+.sqlx/query-c02f5867ff52349cf902e1e9ed52cdb47da612305fd20ddf28117222b46d7fd9.json
+  s_3c6362fd17dcc4::t_e7658c43787ffa 1-15
+.sqlx/query-c2d7b2d9839ab9d82746aad0b0a81a120aced842ef31c809e886d87fdd7616bf.json
+  s_3c6362fd17dcc4::t_d61c5f743fed36 3,13-14,18,23-27,32-34,47-48,51
+.sqlx/query-d1982fcac03b445954d70090fa23f360d27dd709cd795964871844a8ba9a3ce9.json
+  s_3c6362fd17dcc4::t_2e0851f41f44a4 1-23
+.sqlx/query-d2bb8a73c7224fc02861465cf642ac46af43b98d5a4f9d85fea586f10eaf3142.json
+  s_3c6362fd17dcc4::t_06384bd05d4edc 1-14
+.sqlx/query-d7c90e4d6e03defa5047c88d17586ee006a2fc92701c55cc343b512f4641bf0a.json
+  s_3c6362fd17dcc4::t_137133d3be46de 1-16
+.sqlx/query-e37fe065d0a495d0c330c1406b70995bdaee5e99f70d96db2da389c3d102b1b0.json
+  s_3c6362fd17dcc4::t_fff150ac8bbaba 1-24
+.sqlx/query-ea73eb468122cb6f9c8b605bc59a5bc1135d8b93f4a39afbfe4a1c309cbca311.json
+  s_3c6362fd17dcc4::t_3a64c27cf7534e 1-15
+.sqlx/query-efbb7e3ed44777737542b2cd32276fdcf4cb84a6a2825301154f0a1c5c375d3a.json
+  s_3c6362fd17dcc4::t_16e5d9377f893a 1-22
+.sqlx/query-fed4a50e7ac49806930ee47510360cb08476ef50a3fca96c5f2cd4d1c5271906.json
+  s_3c6362fd17dcc4::t_137fca6c3cdeb1 1-49
+Cargo.lock
+  s_3c6362fd17dcc4::t_3bdc0eface9410 734,1407,1409,18000-18001,20117-20156,20164,20166-20168,20173,20176,20179,20182-20183,20190,20193,20199-20210
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_3c6362fd17dcc4::t_6fa9f9bd4c38b9 23,27,29-30,41,43,939-943,947,952-957,962,967-968,971-975,980-982,984-985,988,990-991,993,998,1005,1069-1142,2063-2076,2080,2083,2174-2251,2318-2389
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/generationStarted.ts
+  s_3c6362fd17dcc4::t_c5fe24293b5bb6 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_3c6362fd17dcc4::t_e634531ea17929 137,148,163-164,166-169,209,262,288,298-300
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/listSuggestionsParams.ts
+  s_3c6362fd17dcc4::t_2d8c9f0c318aef 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/recordSuggestionsSeenParams.ts
+  s_3c6362fd17dcc4::t_f56f79f76e6cf5 9
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/retireSuggestion.ts
+  s_3c6362fd17dcc4::t_012ebe31dc3663 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedState.ts
+  s_3c6362fd17dcc4::t_1f65ca24f2ca61 1-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedSuggestion.ts
+  s_3c6362fd17dcc4::t_857df04a7627e2 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedSuggestionAllOf.ts
+  s_3c6362fd17dcc4::t_e3c76359e6515c 1-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/reviewedSuggestionAllOfClosedAt.ts
+  s_3c6362fd17dcc4::t_4cebe5625c57f0 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineSuggestionCard.ts
+  s_3c6362fd17dcc4::t_e609b5aa6d8417 1-25
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/startSuggestionGenerationParams.ts
+  s_3c6362fd17dcc4::t_31bae754ba8536 1-14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequest.ts
+  s_3c6362fd17dcc4::t_26e63f31a39a8c 9,14
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOf.ts
+  s_3c6362fd17dcc4::t_25d51c73dc501d 8,17
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOfCard.ts
+  s_3c6362fd17dcc4::t_14b8fc4fb8096a 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOfFive.ts
+  s_3c6362fd17dcc4::t_5990c94c40d1f0 11-12,18-20,24
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestRequestOneOfFiveKind.ts
+  s_3c6362fd17dcc4::t_bb81994c98c885 9-10,13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/suggestionReview.ts
+  s_3c6362fd17dcc4::t_26615e9fb75698 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_3c6362fd17dcc4::t_5a6137605e6446 854-855,857-858,861,865,880-889,891,965-1044,1951-1961,2083-2142,2202-2244,4007-4017,4271-4282,4295-4350,4708-4732,5355-5365,5399,5403-5406,5664-5682,5882-5885
+crates/suggestion_generation/CLAUDE.md
+  s_3c6362fd17dcc4::t_77e86f8cb42377 1
+crates/suggestions_db_utils/CLAUDE.md
+  s_3c6362fd17dcc4::t_f3ec5b9791b089 1
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_3c6362fd17dcc4::t_73f81fcaed979a 89,111
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_3c6362fd17dcc4::t_4c05a11d70373a 756,835-836
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2548e95cb16950d2ec6c6001d5cca8fdf9485c91",
+  "prompts": {},
+  "sessions": {
+    "s_3c6362fd17dcc4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02467add-a007-41c9-9280-bad5f33c09fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
