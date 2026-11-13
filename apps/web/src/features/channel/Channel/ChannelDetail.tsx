@@ -8,6 +8,7 @@ import {
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
 import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
+import { AgentDashboardButton } from '@app/features/agent-dashboards/agent-dashboard-button';
 import {
   DmWorkPanel,
   DmWorkProvider,
@@ -214,6 +215,9 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
         </Show>
       </HeaderActionGroup>
       <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.agent-dashboard">
+          <AgentDashboardButton channelId={props.channelId} />
+        </DebugSuspense>
         <DebugSuspense name="ChannelDetail.account-manager">
           <AccountManagerRequestButton channelId={props.channelId} />
         </DebugSuspense>
