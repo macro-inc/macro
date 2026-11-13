@@ -16,19 +16,28 @@ and the web's TypeScript through specta.
 - `src/query.rs`: the list widget's filter, the web's Next Soup `Query`.
 - `src/decode.rs`: `decode_view` and `deserialize_view`. A field the types do
   not name is ignored.
+- `src/lib.rs`: `present_view_schema(Offer)`. The agent dashboard widgets
+  (`wakes`, `trace`) decode in every view, but only `Offer::Dashboards` tells
+  a model about them; hosts choose it per person from `AGENT_DASHBOARDS_FLAG`
+  (`enable-agent-dashboards`, the web flag's key too). A view field that
+  reaches a model without that choice takes
+  `#[schemars(with = "ViewWithoutDashboards")]`.
 
 ## Boundaries
 
 - Depends on: `serde`, `serde_path_to_error`, `schemars`, `specta`, `nutype`.
 - Used by: `agent_code_mode` (`execution.views.present`, ExecuteCode's
-  description), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
+  description; `agent_harness_service`'s internal MCP picks its `Offer`), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
   details and activity cards, built for wasm too).
 
 ## Recipes
 
+- Add a dashboard widget: also list its tag in `DASHBOARD_WIDGETS` and the
+  definitions only it uses in `DASHBOARD_DEFINITIONS` (schema names carrying
+  `Dashboard`); `only_dashboards_offer_wakes_and_trace` fails while one leaks.
 - Add a widget: add a `Widget` variant with its doc comment (the widget
   lists pinned in `ai_tools` `display_results` and `agent_code_mode` review
-  tests name every variant), run
+  tests name every variant offered without dashboards), run
   `just gen-dynamic-ui-types` and `just gen-agent-fold-types` in `apps/web`
   (agent_fold's wire types embed the view), and add its arm to `Render` in
   `apps/web/src/features/dynamic-ui/render.tsx`; the exhaustive `match` fails
@@ -40,8 +49,9 @@ and the web's TypeScript through specta.
 
 ## Checks
 
-- `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` snapshots
-  the model-facing schema with insta.
+- `cargo test -p dynamic_ui`; `the_present_view_schema_is_pinned` and
+  `the_dashboard_schema_is_pinned` snapshot both model-facing schemas with
+  insta.
 - `just gen-dynamic-ui-types` and `just gen-agent-fold-types` in `apps/web`,
   and `bun run gen-api document-cognition` (ExecuteCode's description embeds
   the view schema), then commit `src/features/dynamic-ui/generated`,

@@ -362,6 +362,7 @@ pub enum Justify {
 /// The wakes a wakes widget shows, by where they stand.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "snake_case")]
+#[schemars(rename = "DashboardWakeStatusFilter")]
 pub enum WakeStatusFilter {
     /// Still running.
     Running,

@@ -1,4 +1,4 @@
-use crate::{View, Widget, decode_view, present_view_schema};
+use crate::{Offer, View, Widget, decode_view, present_view_schema};
 use serde_json::json;
 
 /// One of every widget, with every field the types name.
@@ -163,7 +163,7 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `wakes`, `trace`, `container`";
+    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),
@@ -238,8 +238,66 @@ fn a_problem_never_repeats_what_the_view_holds() {
 #[test]
 fn the_present_view_schema_is_pinned() {
     let schema: serde_json::Value =
-        serde_json::from_str(&present_view_schema()).expect("the schema is JSON");
+        serde_json::from_str(&present_view_schema(Offer::Views)).expect("the schema is JSON");
     insta::with_settings!({ sort_maps => true }, {
         insta::assert_json_snapshot!(schema);
     });
+}
+
+#[test]
+fn the_dashboard_schema_is_pinned() {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema(Offer::Dashboards)).expect("the schema is JSON");
+    insta::with_settings!({ sort_maps => true }, {
+        insta::assert_json_snapshot!(schema);
+    });
+}
+
+/// The widget types a schema offers the model.
+fn offered_types(offer: Offer) -> Vec<String> {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema(offer)).expect("the schema is JSON");
+    schema["$defs"]["Widget"]["oneOf"]
+        .as_array()
+        .expect("widget variants")
+        .iter()
+        .map(|variant| {
+            variant["properties"]["type"]["const"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect()
+}
+
+/// Without agent dashboards the model never reads the wakes and trace
+/// widgets, though a view holding them still decodes.
+#[test]
+fn only_dashboards_offer_wakes_and_trace() {
+    let views = [
+        "md",
+        "timeline",
+        "list",
+        "channelMessage",
+        "events",
+        "cards",
+        "tags",
+        "agentUpdates",
+        "container",
+    ];
+    assert_eq!(offered_types(Offer::Views), views);
+    let mut dashboards = views.to_vec();
+    dashboards.splice(8..8, ["wakes", "trace"]);
+    assert_eq!(offered_types(Offer::Dashboards), dashboards);
+
+    let views_schema = present_view_schema(Offer::Views);
+    for name in ["DashboardWakeStatusFilter", "agentId", "wakeId"] {
+        assert!(!views_schema.contains(&format!("\"{name}\"")), "{name}");
+    }
+    let view = json!({ "widgets": [
+        { "type": "wakes", "agentId": "macro|agent@macro.com", "status": "running", "limit": 5 },
+        { "type": "trace", "agentId": "macro|agent@macro.com", "wakeId": "wake-1" }
+    ] });
+    let decoded = decode_view(&view).expect("wakes and trace decode in every view");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
 }

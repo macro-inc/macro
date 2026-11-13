@@ -193,6 +193,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
                 app_url: "https://macro.com".into(),
+                dashboards: None,
             },
         );
         for (host, expected) in [
@@ -409,3 +410,102 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
 }
 
 mod code_mode;
+
+/// Code mode whose programs never run: listing tools needs only that it exists.
+struct IdleCodeMode;
+
+#[async_trait::async_trait]
+impl SessionCodeMode for IdleCodeMode {
+    async fn execute(
+        &self,
+        _: &agent_session::domain::model::AgentSession,
+        _: agent_code_mode::domain::ExecutionId,
+        _: ai_toolset::actor::ToolActor,
+        _: macro_uuid::Uuid,
+        _: code_execution::domain::ExecuteRequest,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<agent_code_mode::domain::ExecutionReceipt, agent_code_mode::domain::CodeModeError>
+    {
+        unreachable!("listing tools runs no program")
+    }
+
+    async fn read(
+        &self,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+        _: agent_code_mode::domain::ExecutionId,
+    ) -> Result<agent_code_mode::domain::ExecutionRecord, agent_code_mode::domain::CodeModeError>
+    {
+        unreachable!("listing tools reads no execution")
+    }
+}
+
+/// ExecuteCode's description as a session owner with the given dashboards
+/// answer lists it.
+async fn execute_code_description(dashboards: Option<bool>) -> String {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+        .await
+        .unwrap();
+    let tasks = FixedTasks::default();
+    let rollout: Option<agent_code_mode::inbound::toolset::DashboardsRollout> = dashboards.map(
+        |on| -> agent_code_mode::inbound::toolset::DashboardsRollout {
+            Arc::new(move |_| Box::pin(async move { on }))
+        },
+    );
+    let app = router(
+        Arc::new(repo.clone()),
+        Vec::new(),
+        InternalTools {
+            service: Arc::new(SessionPullRequestService::new(
+                repo.clone(),
+                RecordingRealtime::new(),
+                Arc::new(tasks.clone()),
+            )),
+            tasks: Arc::new(tasks),
+            code_mode: Some(Arc::new(IdleCodeMode)),
+            cognition: None,
+            reviews: Arc::new(OnceLock::new()),
+            gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            app_url: "https://macro.com".into(),
+            dashboards: rollout,
+        },
+    );
+    let (status, listed) = rpc(app, Some("secret"), "tools/list", serde_json::json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    let tool = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "ExecuteCode")
+        .unwrap()
+        .clone();
+    let description = tool["description"].as_str().unwrap().to_owned();
+    // A copy of the description at the input schema's root says the same.
+    if let Some(repeated) = tool["inputSchema"]["description"].as_str() {
+        assert_eq!(repeated, description);
+    }
+    description
+}
+
+/// Only an owner with agent dashboards reads the wakes and trace widgets in
+/// ExecuteCode's view schema; everyone else reads today's description.
+#[tokio::test]
+async fn execute_code_offers_wakes_and_trace_only_with_agent_dashboards() {
+    let dashboards = r#""const":"wakes""#;
+    let views =
+        agent_code_mode::inbound::toolset::execute_code_description(dynamic_ui::Offer::Views);
+    for off in [None, Some(false)] {
+        let description = execute_code_description(off).await;
+        assert_eq!(description, views);
+        assert!(!description.contains(dashboards));
+    }
+    assert!(
+        execute_code_description(Some(true))
+            .await
+            .contains(dashboards)
+    );
+}
