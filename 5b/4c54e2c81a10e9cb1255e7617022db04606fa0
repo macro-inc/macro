@@ -1,0 +1,19 @@
+docs/guides/add-kafka-event.md
+  s_800cdee5095ae4::t_01fd6e98bb33d5 52-53,188-220,226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b4c54e2c81a10e9cb1255e7617022db04606fa0",
+  "prompts": {},
+  "sessions": {
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
