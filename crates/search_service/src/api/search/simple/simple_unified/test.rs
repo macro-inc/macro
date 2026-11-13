@@ -584,3 +584,130 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
     };
     assert_eq!(channel_cursor.as_updated_at(), Some((entity_id, ts(1000))));
 }
+
+fn caller(origin: macro_authorization::CredentialOrigin) -> MacroUserAuthentication {
+    let user_id = "macro|user@example.com";
+    MacroUserAuthentication {
+        origin,
+        agent_id: None,
+        agent_via: None,
+        macro_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_string())
+            .expect("valid user id"),
+        user_context: UserContext {
+            user_id: user_id.to_string(),
+            fusion_user_id: "fusion-user-id".to_string(),
+            permissions: None,
+            organization_id: None,
+        },
+    }
+}
+
+/// The span is what production traces keep of a search, so it holds the mode,
+/// the sizes and the caller, and nothing the user typed or picked.
+#[test]
+fn the_unified_search_span_carries_the_mode_and_not_the_request() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let chat_id = "0191b9a2-7c7e-7c3a-9d53-6f1f8b0d2a11";
+    let mut req = UnifiedSearchRequest {
+        query: "severance offer letter".to_string(),
+        match_type: MatchType::Partial,
+        filters: Default::default(),
+        search_on: SearchOn::NameContent,
+        include_crm: false,
+        calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
+        collapse: None,
+    };
+    req.filters.chat_filters.chat_ids = vec![chat_id.to_string()];
+    let query_params = SearchPaginationParams {
+        page: None,
+        page_size: Some(25),
+        cursor: None,
+    };
+
+    let span = unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::Internal),
+        &query_params,
+        &req,
+    );
+    span.in_scope(|| {
+        record_term_counts(&tracing::Span::current(), 3, 0);
+        tracing::Span::current().record(
+            "search.entity_types",
+            searched_entity_types(
+                &[
+                    models_opensearch::OpenSearchEntityType::Emails,
+                    models_opensearch::OpenSearchEntityType::Chats,
+                ]
+                .into(),
+                &[
+                    ("chats", true),
+                    ("channels", false),
+                    ("crm_companies", true),
+                ],
+            ),
+        );
+    });
+
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.caller"], "internal");
+    assert_eq!(span["search.caller_agent"], "false");
+    assert_eq!(span["search.search_on"], "name_content");
+    assert_eq!(span["search.match_type"], "partial");
+    assert_eq!(span["search.page_size"], "25");
+    assert_eq!(span["search.entity_types"], "chats,crm_companies,emails");
+    assert_eq!(span["search.terms"], "3");
+    assert_eq!(span["search.dropped_terms"], "0");
+    assert_eq!(
+        span.keys().copied().collect::<Vec<_>>(),
+        [
+            "search.caller",
+            "search.caller_agent",
+            "search.dropped_terms",
+            "search.entity_types",
+            "search.match_type",
+            "search.page_size",
+            "search.search_on",
+            "search.terms",
+            "user_id",
+        ]
+    );
+    for value in span.values() {
+        assert!(!value.contains("severance"), "the query reached the span");
+        assert!(!value.contains(chat_id), "a filter value reached the span");
+    }
+}
+
+#[test]
+fn the_unified_search_span_defaults_the_page_size() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let req = UnifiedSearchRequest {
+        query: "quarterly plan".to_string(),
+        match_type: MatchType::Exact,
+        filters: Default::default(),
+        search_on: SearchOn::Content,
+        include_crm: false,
+        calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
+        collapse: None,
+    };
+    let query_params = SearchPaginationParams {
+        page: None,
+        page_size: None,
+        cursor: None,
+    };
+
+    let _span = unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::Session),
+        &query_params,
+        &req,
+    );
+
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.caller"], "session");
+    assert_eq!(span["search.page_size"], "10");
+}

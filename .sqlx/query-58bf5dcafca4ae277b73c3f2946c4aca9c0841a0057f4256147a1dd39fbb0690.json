@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_repos (agent_user_id, team_id, token_hash)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (agent_user_id) DO UPDATE\n                SET token_hash = EXCLUDED.token_hash\n                WHERE agent_repos.team_id = EXCLUDED.team_id\n            RETURNING agent_user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "58bf5dcafca4ae277b73c3f2946c4aca9c0841a0057f4256147a1dd39fbb0690"
+}

@@ -72,11 +72,12 @@ through the same service.
 
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's
-  rows through `idx_user_notification_viewer_entity` on those copies, so a row
+  rows through `idx_user_notification_viewer_entity` on those copies, and an
+  entity read's event-type filter reads the copied type from that index, so a row
   inserted without them never matches an entity read or mark-seen, and a
   migration that rewrites those `notification` columns must update
   `user_notification` too.
-- Keep the primary entity-notification union arm ordered by state, creation time, and ID behind `OFFSET 0` so stale statistics retain the viewer/entity covering-index path; apply limits only after notification filters and cap the read transaction with a 15-second statement timeout.
+- Keep the primary entity-notification union arm ordered by state, creation time, and ID behind `OFFSET 0` so stale statistics retain the viewer/entity covering-index path; apply limits only after notification filters and cap the read transaction with a 5-second statement timeout.
 - Feature flags gate most adapters (`axum`, `ai_tool`, `clear_ios_push`,
   `schema`, and the default `kafka` for the Kafka publishers and consumer); building without the feature a caller needs silently drops the
   module instead of failing loudly — check `Cargo.toml` before assuming an

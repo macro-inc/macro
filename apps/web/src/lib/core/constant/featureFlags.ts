@@ -213,6 +213,16 @@ export const enableMacroComputers = defineFlag({
   env: 'ENABLE_MACRO_COMPUTERS',
 });
 
+/**
+ * Agent teammates: team admins invite an AI agent, with its own account and
+ * Macro computer, from Settings → Team → Members.
+ */
+export const enableAgentTeammates = defineFlag({
+  key: 'enable-agent-teammates',
+  env: 'ENABLE_AGENT_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',
@@ -1025,11 +1035,37 @@ export const enableRoutineSuggestions = defineFlag({
   default: onInDev,
 });
 
+// New routine drafts in the background: the dialog shows the draft's progress,
+// it keeps going after the dialog closes, and a toast says when it is ready.
+// Off, the dialog waits on the blocking draft request as before. The
+// background routes must be deployed before this turns on.
+export const enableRoutineBackgroundDrafts = defineFlag({
+  key: 'enable-routine-background-drafts',
+  env: 'ENABLE_ROUTINE_BACKGROUND_DRAFTS',
+  default: onInDev,
+});
+
+// Suggestions: the For you feed of proactive suggestions. The backend gates every
+// suggestions route on the same PostHog flag.
+export const enableSuggestions = defineFlag({
+  key: 'enable-suggestions',
+  env: 'ENABLE_SUGGESTIONS',
+  default: onInDev,
+});
+
 // Templates are not ready for general use. Follow PostHog even in development
 // so the UI and the server's per-user rollout agree.
 export const enableRoutineSharing = defineFlag({
   key: 'enable-routine-sharing',
   env: 'ENABLE_ROUTINE_SHARING',
+});
+
+// Event triggers (Macro and GitHub events). The server checks the same key per
+// routine owner, on save and before each run, so follow PostHog even in
+// development.
+export const enableEventRoutines = defineFlag({
+  key: 'enable-event-routines',
+  env: 'ENABLE_EVENT_ROUTINES',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

@@ -14,17 +14,25 @@ use telemetry::{
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
+pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
+pub mod connection;
 pub mod contacts;
 pub mod credentials;
 pub mod drafts;
 pub mod gmail_history;
+pub mod gmail_push;
 pub mod health;
+/// Per-delivery Gmail inbox admission and reconciliation.
+pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
+/// Link-maintenance queue decisions and reconnect notification selection.
+pub mod link_manager;
 pub mod progress;
 pub mod projection;
+pub mod reimport;
 pub mod settings;
 pub mod telemetry;
 #[cfg(test)]
@@ -265,7 +273,8 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageRetry {
     /// Claim it again after `seconds`. A mailbox-wide refusal (throttling, no
-    /// token) is not `counted`, so it gives the claim back to `attempts`.
+    /// token), or a provider failure once its backoff is at the longest, is not
+    /// `counted`, so it gives the claim back to `attempts`.
     After { seconds: u32, counted: bool },
     /// Stop claiming the leased revision. It stays queued and is counted as
     /// abandoned until a provider change, a resync or a reconnect queues the
@@ -669,6 +678,10 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// How a failed reconciliation is retried. `attempts` counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
+/// A transient provider failure (Graph 5xx or 408, a request Graph never
+/// answered) says nothing about the message either: during an outage every
+/// message gets one. It backs off like any failure but is never abandoned, and
+/// stops counting once the backoff is at its longest.
 fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
     match error {
         MailboxError::Provider(
@@ -689,17 +702,28 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
                 }
             }
         }
+        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+            let seconds = backoff_seconds(attempts);
+            MessageRetry::After {
+                seconds,
+                counted: seconds < MAX_BACKOFF_SECONDS,
+            }
+        }
         MailboxError::Stale => MessageRetry::After {
             seconds: 30,
             counted: true,
         },
         _ if attempts >= MESSAGE_FAILURE_ATTEMPTS => MessageRetry::Abandon,
-        // 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
         _ => MessageRetry::After {
-            seconds: (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS),
+            seconds: backoff_seconds(attempts),
             counted: true,
         },
     }
+}
+
+/// 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
+fn backoff_seconds(attempts: i32) -> u32 {
+    (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS)
 }
 
 fn retry_seconds(error: &EmailApiError) -> u32 {

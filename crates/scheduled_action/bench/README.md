@@ -29,13 +29,13 @@ call runs beside the first turn and is left out.
 
 ## Run it
 
-The stack must save event routines (`EVENT_ROUTINES_ENABLED`, off by default
-locally): with them off every event-triggered draft's check fails and the session
-keeps retrying, so `run` stops before drafting.
+The stack must save event routines: it needs PostHog configured
+(`POSTHOG_API_KEY`), and the seeded user needs the `enable-event-routines` flag.
+Without them every event-triggered draft's check fails and the session keeps
+retrying, so `run` stops before drafting.
 
 ```bash
-echo EVENT_ROUTINES_ENABLED=true > /tmp/drafting.env
-just run_local --instance drafting --env-file /tmp/drafting.env   # needs model keys in Doppler (lcl_personal)
+just run_local --instance drafting   # needs model keys in Doppler (lcl_personal)
 just seed-scenario --instance drafting apply --file "$PWD/crates/scheduled_action/bench/scenario.json"
 nix develop --command bun crates/scheduled_action/bench/drafts.ts run \
   --label main --runs 3 --out /tmp/drafts-main.json

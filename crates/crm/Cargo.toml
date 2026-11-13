@@ -16,6 +16,7 @@ ai_tools = [
   "ports",
 ]
 axum = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:messages",
   "dep:macro_authorization",
@@ -61,6 +62,7 @@ ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_da
 search = ["dep:sqlx", "ports"]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation", optional = true }
 bot_id = { path = "../bot_id", optional = true }
 databases = { path = "../databases", default-features = false, features = ["ports"], optional = true }
 models_databases = { path = "../models_databases", optional = true }
@@ -112,6 +114,7 @@ unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_correlation = { path = "../agent_correlation" }
 databases = { path = "../databases", features = ["postgres", "gateway"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }

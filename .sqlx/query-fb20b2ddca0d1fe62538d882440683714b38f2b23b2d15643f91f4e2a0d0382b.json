@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion SET state = $3, state_reason = NULL, updated_at = $4, state_changed_at = $4\n           WHERE id = (SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1)\n             AND state = $2\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fb20b2ddca0d1fe62538d882440683714b38f2b23b2d15643f91f4e2a0d0382b"
+}

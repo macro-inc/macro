@@ -256,6 +256,14 @@ Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
+Wrapped and multi-line text cells have backend-free regressions in a plain
+database and a CRM pipeline: Shift+Enter and Alt+Enter add lines without leaving
+the row, a trailing new line takes the caret, arrows move through wrapped lines
+before leaving the cell, the closed cell shows every line, and the editor keeps
+the value's weight and line height:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts multiline.browser.e2e.ts`
+and `bunx playwright test --config src/features/crm/browser-test/playwright.config.ts editor.browser.e2e.ts`.
+
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
 It uses the real records view with a local source and picker to exercise opening,
@@ -321,16 +329,37 @@ Initialize browser fixtures with the app's `data-touch-device` root attribute an
 `applyTheme`; setting `data-theme-light` alone does not apply the theme tokens.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
-A call's own chat on a meeting page (the real `CallChat` under only the providers
-`Root` gives every page) has a backend-free desktop and phone regression: the
-first message sent shows in the panel, and a guest's message renders without
-the app's notification state:
+A call's own chat on a meeting page has backend-free desktop and phone
+regressions for both `CallDiscussionContent` and `CallChat` under only the
+providers `Root` gives every page. The first sent message appears in the panel,
+and a guest's message renders for a member without the app's notification state:
 `bunx playwright test --config src/features/channel/Call/chat/browser-test/playwright.config.ts`.
-A meeting page has none of `AppProviders`; anything rendering app messages there
-goes inside `MeetingDiscussionHost`, created by the host's render function.
+A meeting page has none of `AppProviders`; only `ChannelCallPanel` goes inside
+`MeetingDiscussionHost`, created by the host's render function. `CallChat`
+renders directly for both member and guest access.
+The stored discussion chooses one of two paths: `channel_thread` uses
+`ChannelCallPanel`, while `call_chat` uses the call's own shared message thread.
+Quick and scheduled calls use `call_chat`. Guests use the same `MessageThread`
+and `ChannelInput` composer as members; they can send text, quote replies,
+react, and edit or delete their own messages.
+Signed-out meeting guests get initial avatars in tiles and the roster; do not
+mount account profile-picture queries for them.
+
+Channel history keeps the message being read in place when a split opens or
+closes beside the channel (the pane rewraps every message); the backend-free
+regression over the production `ThreadList` is
+`bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
+
+Inviting an agent teammate from Team → Members (People | Agent in Invite to
+Team, behind `enable-agent-teammates`), Bring your AI for its new computer
+(skipped, and signed in), its row's Setting up → Running status, its row's
+Claude sign-in and switch back to credits, and its removal have a backend-free browser regression at desktop 1440 and
+phone 390 over a scripted auth service. It launches Chromium with
+`--disable-web-security` because the scripted services answer for other origins:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
@@ -377,6 +406,13 @@ desktop/phone regression:
 It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
 menu on the first tap.
+
+Every agent session composer (the Agents view and a session opened as a split
+block) uses `AgentComposerAddMenu` (`features/block-agent/ui`) for its plus
+button, so connections stay one tap away; don't give a session input its own
+attachments-only menu. The block composer's plus menu has a backend-free
+browser regression on desktop and phone:
+`bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts composer.browser.e2e.ts`.
 
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
@@ -560,6 +596,16 @@ border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.
 
+The database timeline (the real view over an in-memory host) has a desktop/phone
+regression in the same suite, `timeline.browser.e2e.ts`: a bar too short for its
+title shows it beside the bar, inside the calendar clip, until zoom makes room
+(a truncated bar field does not count), and the view menu sits with the chart's
+controls. CI runs it when
+`components/gantt` changes too. A bar's beside title widens its
+`GanttCalendarClip`; without that the clip cuts it off at the bar's end. Only a
+cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
+so wrap a bar's title in it.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
@@ -698,7 +744,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
-- Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
+- Keep contact address edits (add, remove, make primary) and company edits (personal-provider
+  link/switch, Remove company unless an address is on the company's domain) in shared CRM field views, using Tasks
   property primitives and committed-response/session-fenced cache updates. Close
   direct cache-write admission on logout and login replacement, and drain admitted
   durable writes before clearing storage, while starting independent local/server
@@ -732,8 +779,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
-  Keep Files scoped to the contact when its optional email is absent; emit an
-  email-attachment participant literal only for a present address.
+  Keep Files scoped to the contact when it has no email; emit one
+  email-attachment participant literal per address the contact holds.
   Put Archive beside Copy link for visible CRM records; put the Archived chip and
   separate compact secondary Restore button in the identity heading for archived records.
   Match record metadata to the 24px property-control scale while reserving separate
@@ -836,10 +883,24 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   seconds (close 4499, retried). A phone can wake to a socket that reads open but
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
+- The page that owns the cache engine keeps the engine's compiled WebAssembly
+  and hands it to each new engine worker (`worker/compiled-engine.ts`), keyed by
+  the asset it was compiled from: the browser compiles the engine's functions
+  lazily in every new worker, which cost more than reopening the database on
+  each tab return. The exchange has its own port, so a failure only costs the
+  shortcut; never put the module in the activation message.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
+  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
+  A typed search held across an engine restart reaches the new engine first, and
+  one already sent is not refused when the read budget expires; it has no
+  network fallback. It still ends after the ordinary read timeout, Quick
+  Access stops reporting it as pending after `UNANSWERED_SEARCH_LIMIT_MS`
+  (while still replaying it if the engine arrives), and a list aborts the
+  search it has superseded.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
 - Snapshot cache generation subscribers before dispatch and skip removed listeners;
@@ -875,6 +936,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
+- Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
@@ -900,8 +962,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Render project collection titles with `ViewSidebar.Title caret={false}`; keep
   individual project names and touch pickers unchanged. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
-- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
+- Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
+  `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
 - PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer. The proxy authenticates by session cookie, so a proxied `<img>` uses `crossorigin="use-credentials"` and a fetch of it `credentials: 'include'` (`isImageProxyUrl`); `anonymous` drops the cookie cross-origin and the proxy answers 401.
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
@@ -912,7 +976,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
-  operation rows only; never show the program or code-mode wording.
+  operation rows only; never show the program or code-mode wording. A live
+  tool group's header is the shared `ActivityLine` (`block-agent/ui`), the one
+  a channel reply's open run uses; never add a second working line or a
+  scrolling peek window beside it. `activity.browser.e2e.ts` in
+  `block-agent/browser-test` replays a long run and checks it shows one live
+  line, then one settled row.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
@@ -994,9 +1063,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
   bump its checkpoint version when changing the hydration input contract.
-- Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device. Include
-  off-page favorites in unread presence without adding them to section counts.
+- Refresh the channel list's bounded unread and mention edges when opening a
+  conversation, including an empty unread result after a read on another
+  device. Include off-page favorites in unread presence without adding them to
+  section counts; mention counts include thread replies, the unread dot does not.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
@@ -1017,7 +1087,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering. Keep every joined public/private channel in All channels regardless of custom-section assignments.
   Hide section drag-handle icons; retain whole-heading drag-to-reorder and an icon-free reorder control in an out-of-flow wrapper revealed on keyboard focus without increasing header height. Preserve normal collapse clicks and exclude action buttons from dragging. Keep personal section order and route list navigation through the sectioned renderer's scroll handle, scrolling immediately with two rows of context clamped to the viewport.
-  Default sections to their natural content height and the shared sidebar scroll area, ignoring saved heights without clearing them. Gate vertical resizing on `enable-chat-sidebar-section-resize`, off by default including development; when enabled, preserve personal heights, pane/content caps, independent scrolling, four-row Favorites/DM defaults, keyboard resize controls, edge-scroll compensation, and resize-only scroll-anchor suppression. Use TanStack Virtual for the section stack, channel rows, and search results; refresh nested row offsets from each section's measured start and size, not only total stack height, snapshot index-reconciled rows before keying by identity, and retain focused rows and drag sources.
+  Default sections to their natural content height and the shared sidebar scroll area, ignoring saved heights without clearing them. Gate vertical resizing on `enable-chat-sidebar-section-resize`, off by default including development; when enabled, preserve personal heights, pane/content caps, independent scrolling, four-row Favorites/DM defaults, keyboard resize controls, edge-scroll compensation, and resize-only scroll-anchor suppression. Use TanStack Virtual for the section stack, channel rows, and search results; refresh nested row offsets from each section's measured start and size, not only total stack height, snapshot index-reconciled rows before keying by identity, ignore a row measured at an index whose key it no longer shows (transitions update keys before the rows on screen), and retain focused rows and drag sources.
   Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent section rows by 8px; style empty states like saved views with a padded, bordered surface and secondary actions, without the extra row indentation. Keep unsectioned search results unindented.
@@ -1344,6 +1414,18 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 4. **Strip the instrumentation before committing.**
 
+## iOS gotcha: a detached file input loses its picker's result
+WebKit drops a file picker's result when it garbage-collects the `<input type="file">` that opened it, and nothing keeps an input created with `document.createElement` alive unless it is in the document. The iOS app's photo and file pickers stay open long enough for that, so the pick vanishes with no `change` and no error. Keep the input in the document until `change` or `cancel`, as `fileSelector` does. Check it in the iOS Simulator by sending `Heap.gc` over the Web Inspector protocol while the picker is open.
+
+## iOS gotcha: WebKit never collects a stream its own callbacks can reach
+In WebKit, a `ReadableStream` or `TransformStream` whose `start`, `pull`, `cancel` or `flush` callback can reach the stream is never garbage-collected, and neither is anything else those callbacks can reach. Chromium collects it. Reaching includes the scope the callbacks were made in: every closure made in one function call shares that scope, so a callback made beside `const clone = response.clone.bind(response)` holds the response without mentioning it. The published `@tauri-apps/plugin-http` `fetch` has that shape, which kept the `Response` object of every native request alive for the life of the page on iOS, read or not.
+
+The stream's JavaScript object, on the other hand, is collected while a `Response` built from it can still be read. A `FinalizationRegistry` that watches the stream therefore fires too early; watch an object that only the stream's callbacks hold.
+
+**Rule:** make a stream's callbacks in a function of their own that receives only what they need. They never refer to the stream, to its `Response`, or to a closure that holds either. The HTTP plugin's JavaScript patch under `patches/` is written this way so that it can release a native response the page dropped unread; carry it over when the package is upgraded. Its callbacks still hold the abort signal the caller passed, so a listener a caller adds to that signal must not hold the request's response either.
+
+**How to check:** unit tests cannot see this, because Node collects like Chromium. In the iOS Simulator's webview, register the object with a `FinalizationRegistry`, drop it, send `Heap.gc` over the Web Inspector protocol a few times, and see whether the callback ran. Check the built bundle, not only the source: a minifier that inlines the function puts the callbacks back in the caller's scope.
+
 ### Agent session failure indicators
 
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
@@ -1381,6 +1463,9 @@ keep incomplete trailing Macro XML hidden in settled agent prose, preserve
 completed chips and literal tag examples in Markdown code, and leave user prompts
 unchanged.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
+The same suite opens a tool group in the real `Transcript` while a reply streams
+below it (`transcript.browser.e2e.ts`): the press must land and the group must
+stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
@@ -1439,6 +1524,20 @@ own account, never its email) from `claude-mode` for managers, and the harness l
 claude.ai control stays a plain `target="_blank"` link; never open it after an
 await. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
+
+Guided purchase (the Buy computer → Configure agent → Bring your AI → Create
+agent dialog) has a backend-free browser regression that mounts the real section
+over the real computers client and answers `/auth/team/computers/*` from
+Playwright, covering the size skeleton, every step, each offers failure (422,
+403, 502, 503, dropped connection, timeout), and the two endings (Try it into
+the real composer with the agent selected, Create an agent on this computer into
+the real create form with the computer chosen), and the setup notices (close
+after Buy, the "ready" notice reopens the dialog on Bring your AI through to
+Create agent; the failure notice reopens it on Retry setup) on desktop and
+phone:
+`bunx playwright test --config src/features/settings/computers/browser-test/playwright.config.ts`.
+Set `COMPUTERS_SCREENSHOT_DIR` to also save each step's screenshot there; the setup
+notice test then also records a video of its path (`test-results/*/video.webm`).
 
 Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
 computer, total and next-invoice amounts; never calculate a bill from catalog
@@ -1614,7 +1713,10 @@ sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
-rather than feature-local chrome. Register its desktop composable split layout
+rather than feature-local chrome. Adapt Passwords metadata to the app's existing
+item drag provider and tree drop slots; never coerce vault items into Drive entities
+or install a nested provider. Scope drag cancellation and auto-scroll to the
+current vault's own drag. Register its desktop composable split layout
 and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
 legacy header does not reserve an empty band. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.

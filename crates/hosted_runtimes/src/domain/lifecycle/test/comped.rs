@@ -16,6 +16,7 @@ fn comped(phase: Phase) -> ComputerState {
         power_on_requested: false,
         capacity_wait: None,
         retried_by_team: false,
+        failure: None,
     }
 }
 
