@@ -83,6 +83,7 @@ export async function rotateCacheScope(): Promise<string | undefined> {
     try {
       const scope = crypto.randomUUID();
       localStorage.setItem(SCOPE_STORAGE_KEY, scope);
+      createdScope = scope;
       return scope;
     } catch {
       try {
@@ -116,8 +117,9 @@ export function getOrCreateCacheScope(): string {
 
 /**
  * Whether this page created `scope`, so its cache starts with nothing in it:
- * the first visit in this browser profile, or one after its site data was
- * cleared. Known at once, unlike a miss, which waits for the cache to open.
+ * the first visit in this browser profile, one after its site data was
+ * cleared, or a rotation on this page. Known at once, unlike a miss, which
+ * waits for the cache to open.
  */
 export function cacheScopeStartsEmpty(scope: string): boolean {
   return scope === createdScope;

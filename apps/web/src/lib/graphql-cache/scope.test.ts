@@ -132,4 +132,16 @@ describe('a scope this page created', () => {
     expect(getOrCreateCacheScope()).toBe(created);
     expect(cacheScopeStartsEmpty(created)).toBe(true);
   });
+
+  it('includes one this page rotated to', async () => {
+    vi.stubGlobal('navigator', {});
+    try {
+      const rotated = await rotateCacheScope();
+      expect(rotated).toBeDefined();
+      expect(getOrCreateCacheScope()).toBe(rotated);
+      expect(cacheScopeStartsEmpty(rotated ?? '')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
