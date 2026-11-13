@@ -1,0 +1,23 @@
+crates/entity_access/src/domain/service.rs
+  s_8703f73ae8e37d::t_17b4908f73f225 958
+crates/entity_access/src/outbound/pg_access_repo.rs
+  s_8703f73ae8e37d::t_ebe513062f64aa 916,932,948
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_accessor.rs
+  s_8703f73ae8e37d::t_15bf3e3604d8a9 32,103,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "df199b34774300cd1fe18e265fcd8aa29c679f8f",
+  "prompts": {},
+  "sessions": {
+    "s_8703f73ae8e37d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "454fbe71-7375-4512-bfab-dee3bf02b867",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
