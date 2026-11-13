@@ -9073,7 +9073,6 @@ dependencies = [
  "macro_env_var",
  "macro_tower_layers",
  "rootcause",
- "serde",
  "tokio",
  "tower 0.5.3",
  "tower-http",

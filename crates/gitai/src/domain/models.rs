@@ -5,4 +5,4 @@ pub const ALLOWED_REPOSITORIES: &[&str] = &["github.com/macro-inc/macro"];
 /// The git-ai release this server is tested against. `/worker/releases`
 /// offers only this version, so an upstream wire change reaches laptops only
 /// after it is bumped here.
-pub const PINNED_CLIENT_VERSION: &str = "1.7.7";
+pub const PINNED_CLIENT_VERSION: &str = "1.7.6";

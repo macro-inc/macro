@@ -6,9 +6,10 @@ use tower::ServiceExt;
 use super::*;
 
 async fn status_for_body_of(len: usize) -> StatusCode {
-    let routes = with_worker_body_limit(
-        Router::new().route("/upload", post(|body: Bytes| async move { body.len().to_string() })),
-    );
+    let routes = with_worker_body_limit(Router::new().route(
+        "/upload",
+        post(|body: Bytes| async move { body.len().to_string() }),
+    ));
     let request = Request::post("/upload")
         .body(Body::from(vec![b'x'; len]))
         .unwrap();
