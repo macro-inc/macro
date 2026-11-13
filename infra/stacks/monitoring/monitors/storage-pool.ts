@@ -22,7 +22,10 @@
 // All tagged `db.client.connection.pool.name` (`primary` or `readonly`), plus
 // `env` and `service`. The gauges export one reading a minute, are per task
 // and tasks may share a series, so they are read with `max`, never `sum`. A task that fell back to the
-// primary at startup reports no `readonly` series. The dashboard also reads the `perform_unified_search`
+// primary at startup reports no `readonly` series. A minute in which every
+// wait sample was 0 exports no points, so no data on `wait_time` is the
+// healthy state and its average covers only minutes with a wait: the monitor
+// must not alert on missing data. The dashboard also reads the `perform_unified_search`
 // span (`search.search_on`, `search.caller`) and its child spans from
 // crates/search_service, and the text of sqlx's slow-acquire warning.
 //
