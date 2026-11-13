@@ -14,6 +14,7 @@ mod api;
 mod aws;
 mod inbox;
 mod infra;
+mod lambda;
 mod macro_services;
 mod process;
 mod stack;

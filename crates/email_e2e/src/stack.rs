@@ -31,6 +31,8 @@ use crate::wait::eventually;
 const API: &str = "email_service";
 /// The binary that runs the queue workers and the Outlook mailbox loops.
 const WORKERS: &str = "pubsub_workers";
+/// The Lambda binary of the scheduled-send sweep.
+const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
 /// How long the API gets to answer its health check.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 /// How often the API is started again on another port when the one picked
@@ -317,6 +319,16 @@ impl Stack {
             .as_ref()
             .map(|macro_services| macro_services.url(service))
             .unwrap_or_default()
+    }
+
+    /// Runs the scheduled-send sweep once, as the cron does in production:
+    /// the real `email_scheduled_handler` picks the deliveries that are due
+    /// or stranded and enqueues them. Returns when the sweep has finished;
+    /// the workers then send what it enqueued.
+    pub async fn run_scheduled_sweep(&self) -> Result<(), Report> {
+        let mut env = self.worker_env.clone();
+        env.insert("DATABASE_URL".to_owned(), self.database().url());
+        crate::lambda::invoke_scheduled(SCHEDULED_HANDLER, &env, &self.log_dir).await
     }
 
     /// Makes one of the Macro service stand-ins answer an error once: the

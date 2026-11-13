@@ -241,6 +241,8 @@ jobs:
         # test build resolves; default features, because `local_auth` changes how the
         # API authenticates.
         cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
+        # The scheduled-send sweep, which scenarios run as the cron does.
+        cargo build "${flags[@]}" -p email_scheduled_handler
 
         started=$(date +%s)
         cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"

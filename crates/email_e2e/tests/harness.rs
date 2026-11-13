@@ -41,3 +41,13 @@ async fn redis_is_the_services_database() -> Result<(), Report> {
 
     stack.finish().await
 }
+
+/// The real scheduled-send sweep runs against the scenario's database and
+/// queues and finishes.
+#[tokio::test(flavor = "multi_thread")]
+async fn scheduled_sweep_runs() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    stack.run_scheduled_sweep().await?;
+    assert!(stack.take_queue_messages("scheduled").await?.is_empty());
+    stack.finish().await
+}

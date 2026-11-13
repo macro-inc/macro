@@ -56,8 +56,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   ends when its condition holds, so the 120 s limit only costs time on failure.
 - To prove something does *not* happen, make a later event happen and wait
   for that (deliver a second mail, then assert the first has no duplicate).
-- Work the crons do in production is enqueued by the scenario:
-  `stack.send_to_queue("scheduled" | "link-manager" | "sfs-delete", …)`.
+- The scheduled-send cron: `stack.run_scheduled_sweep()` runs the real
+  `email_scheduled_handler` once. Work of the other crons is enqueued by the
+  scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`.
 - One file per area in `tests/` (`gmail.rs`, `outlook.rs`, …); each file is a
   test binary, so keep shared helpers in the harness, not in `tests/`.
 - Every scenario is `#[tokio::test(flavor = "multi_thread")]`: the stack's
