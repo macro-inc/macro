@@ -96,16 +96,17 @@ const unreadable = 422;
 
 /**
  * Whether the agent has a home dashboard. One whose current view Macro cannot
- * read (it answers 422) still exists, and the agent repairs it by saving a new
- * view, so it counts.
+ * read (it answers 422) still exists, so it is `"unreadable"`, not `"none"`.
  */
-const hasHome = async (
+const home = async (
 	macro: Awaited<ReturnType<Needs["macro"]>>,
-): Promise<boolean> => {
+): Promise<"none" | "readable" | "unreadable"> => {
 	try {
-		return (await macro.me.homeDashboard()) !== undefined;
+		return (await macro.me.homeDashboard()) === undefined
+			? "none"
+			: "readable";
 	} catch (error) {
-		if (status(error) === unreadable) return true;
+		if (status(error) === unreadable) return "unreadable";
 		throw error;
 	}
 };
@@ -113,7 +114,7 @@ const hasHome = async (
 /** What making the home dashboard came to. */
 export type Ensured =
 	| { readonly kind: "created" | "existing" }
-	| { readonly kind: "unavailable" };
+	| { readonly kind: "unavailable" | "unreadable" };
 
 /**
  * Makes the dashboard recorded as pending the home, when one is recorded and
@@ -140,9 +141,12 @@ const reusePending = async (
 /**
  * Makes sure the agent has a home dashboard: once, on its first run, it
  * creates the default and makes it its home. An agent that already has one
- * keeps it, even one whose current view Macro cannot read. While dashboards are off for the agent's account (the server
- * answers 404), nothing is written, so a later run tries again. A default
- * created by a run that failed before making it the home is reused.
+ * keeps it. One whose current view Macro cannot read (the server answers 422)
+ * is kept too: the run logs it and writes nothing, so a later run checks again
+ * after the agent saves a new view or sets another home. While dashboards are
+ * off for the agent's account (the server answers 404), nothing is written,
+ * so a later run tries again. A default created by a run that failed before
+ * making it the home is reused.
  */
 export const ensureHomeDashboard = async (context: Needs): Promise<Ensured> => {
 	const memory = context.state.memory(owner);
@@ -151,7 +155,12 @@ export const ensureHomeDashboard = async (context: Needs): Promise<Ensured> => {
 	const pending = context.join(memory, pendingFile);
 	const macro = await context.macro();
 	try {
-		if (!(await hasHome(macro))) {
+		const found = await home(macro);
+		if (found === "unreadable") {
+			await context.log.event(owner, { kind: "unreadable" });
+			return { kind: "unreadable" };
+		}
+		if (found === "none") {
 			let dashboard = await reusePending(context, macro, pending);
 			if (dashboard === undefined) {
 				const me = await macro.users.me();

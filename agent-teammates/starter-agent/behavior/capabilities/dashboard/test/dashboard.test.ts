@@ -148,7 +148,7 @@ test("an agent that already has a home dashboard keeps it", async () => {
 	});
 });
 
-test("an agent whose home dashboard has an unreadable view keeps it and does not fail", async () => {
+test("an agent whose home dashboard has an unreadable view keeps it, logs it, and checks again next run", async () => {
 	const macro = fakeMacro({
 		dashboards: {
 			create: async () => {
@@ -163,10 +163,9 @@ test("an agent whose home dashboard has an unreadable view keeps it and does not
 	});
 	const fake = context(macro);
 
-	expect(await ensureHomeDashboard(fake)).toEqual({ kind: "existing" });
-	expect(fake.files.get("/state/memory/dashboard/home-dashboard")).toBe(
-		"existing\n",
-	);
+	expect(await ensureHomeDashboard(fake)).toEqual({ kind: "unreadable" });
+	expect(fake.files.size).toBe(0);
+	expect(fake.events).toEqual([{ kind: "unreadable" }]);
 });
 
 test("while dashboards are off for the account, nothing is written and a later run tries again", async () => {
