@@ -1,6 +1,7 @@
 import { readPendingEmailSends } from '@service-storage/email-send';
 import type { PendingEmailSendsQuery } from '@service-storage/graphql/generated/graphql';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { readEmailSendIntents, watchEmailSends } from './send-queue';
 import {
   refreshServerEmailSends,
   serverEmailSends,
@@ -10,6 +11,10 @@ import {
 
 vi.mock('@service-storage/email-send', () => ({
   readPendingEmailSends: vi.fn(),
+}));
+vi.mock('./send-queue', () => ({
+  readEmailSendIntents: vi.fn(),
+  watchEmailSends: vi.fn(),
 }));
 
 const pending: PendingEmailSendsQuery['user'] = {
@@ -31,9 +36,52 @@ const pending: PendingEmailSendsQuery['user'] = {
   },
 };
 
+const nothingPending: PendingEmailSendsQuery['user'] = {
+  id: 'owner',
+  pendingEmailSends: { nextCursor: null, attempts: [] },
+};
+const withStatus = (
+  status: PendingEmailSendsQuery['user']['pendingEmailSends']['attempts'][number]['attempt']['status'],
+  sendTime: string | null = null
+): PendingEmailSendsQuery['user'] => ({
+  id: 'owner',
+  pendingEmailSends: {
+    nextCursor: null,
+    attempts: [
+      {
+        linkId: 'inbox',
+        attempt: {
+          ...pending.pendingEmailSends.attempts[0].attempt,
+          status,
+          sendTime,
+        },
+      },
+    ],
+  },
+});
+
+let journalChanged: () => void = () => {};
+let visibility: DocumentVisibilityState = 'visible';
+const show = (state: DocumentVisibilityState) => {
+  visibility = state;
+  document.dispatchEvent(new Event('visibilitychange'));
+};
+const reads = () => vi.mocked(readPendingEmailSends).mock.calls.length;
+
 beforeEach(() => {
   vi.useFakeTimers();
+  visibility = 'visible';
+  vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+    () => visibility
+  );
   vi.mocked(readPendingEmailSends).mockReset().mockResolvedValue(pending);
+  vi.mocked(readEmailSendIntents).mockReset().mockResolvedValue([]);
+  vi.mocked(watchEmailSends)
+    .mockReset()
+    .mockImplementation((changed) => {
+      journalChanged = changed;
+      return () => {};
+    });
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
 });
 afterEach(() => {
@@ -93,4 +141,119 @@ it('discards an in-flight status response after sign-out', async () => {
   await refresh;
   expect(serverSendAccount()).toBeUndefined();
   expect(serverEmailSends()).toEqual([]);
+});
+
+it('reads once a minute while visible with nothing in motion', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const settled = reads();
+  await vi.advanceTimersByTimeAsync(49_000);
+  expect(reads()).toBe(settled);
+  await vi.advanceTimersByTimeAsync(11_000);
+  expect(reads()).toBe(settled + 1);
+  await vi.advanceTimersByTimeAsync(600_000);
+  expect(reads()).toBe(settled + 11);
+});
+
+it.each([
+  ['a failed send', withStatus('FAILED')],
+  ['an unconfirmed send', withStatus('DELIVERY_UNCONFIRMED')],
+  [
+    'a send scheduled for tomorrow',
+    withStatus('ACCEPTED', new Date(Date.now() + 86_400_000).toISOString()),
+  ],
+])('keeps the idle pace for %s', async (_, response) => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(response);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const settled = reads();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(reads()).toBe(settled + 1);
+});
+
+it.each([
+  ['accepted', withStatus('ACCEPTED')],
+  ['sending', withStatus('SENDING')],
+  [
+    'due within the minute',
+    withStatus('ACCEPTED', new Date(Date.now() + 30_000).toISOString()),
+  ],
+])('reads every ten seconds while a send is %s', async (_, response) => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(response);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const started = reads();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(reads()).toBe(started + 6);
+});
+
+it('returns to the idle pace once the send is gone', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(withStatus('SENDING'));
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(30_000);
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  await vi.advanceTimersByTimeAsync(10_000);
+  const settled = reads();
+  expect(serverEmailSends()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(59_000);
+  expect(reads()).toBe(settled);
+});
+
+it('reads at once and keeps the fast pace while this browser has a queued send', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const idle = reads();
+  vi.mocked(readEmailSendIntents).mockResolvedValue([
+    {} as Awaited<ReturnType<typeof readEmailSendIntents>>[number],
+  ]);
+  journalChanged();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reads()).toBe(idle + 1);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(reads()).toBe(idle + 4);
+  vi.mocked(readEmailSendIntents).mockResolvedValue([]);
+  journalChanged();
+  await vi.advanceTimersByTimeAsync(0);
+  const retired = reads();
+  expect(retired).toBe(idle + 5);
+  await vi.advanceTimersByTimeAsync(59_000);
+  expect(reads()).toBe(retired);
+});
+
+it('does not read when only drafts change in the journal', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  const idle = reads();
+  journalChanged();
+  journalChanged();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(reads()).toBe(idle);
+});
+
+it('stops reading while hidden, even with a send in motion, and reads when shown', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(withStatus('SENDING'));
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(10_000);
+  show('hidden');
+  const hidden = reads();
+  await vi.advanceTimersByTimeAsync(600_000);
+  expect(reads()).toBe(hidden);
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  show('visible');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reads()).toBe(hidden + 1);
+  expect(serverEmailSends()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(reads()).toBe(hidden + 2);
+});
+
+it('keeps the fast pace when the journal cannot be read', async () => {
+  vi.mocked(readPendingEmailSends).mockResolvedValue(nothingPending);
+  vi.mocked(readEmailSendIntents).mockRejectedValue(new Error('no storage'));
+  setServerSendSession('owner');
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(reads()).toBe(7);
 });
