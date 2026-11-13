@@ -1,5 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import {
   cleanup,
   fireEvent,
@@ -7,7 +8,8 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, For, type JSX } from 'solid-js';
+import { createMemo, createRoot, createSignal, For, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsDataSource } from '../queries';
 
@@ -293,6 +295,57 @@ describe('mobile channel press feedback', () => {
     await opened.promise;
     await vi.runAllTimersAsync();
     expect(row.classList.contains('touch-highlight')).toBe(false);
+  });
+});
+
+describe('mobile section membership', () => {
+  it('reads a large rule section membership once instead of once per conversation', () => {
+    const channels = Array.from({ length: 1000 }, (_, index) => ({
+      ...channel,
+      id: `channel-${index}`,
+    }));
+    const [memberIds, setMemberIds] = createStore(
+      channels.slice(0, 500).map(({ id }) => id)
+    );
+    let memberReads = 0;
+    const trackedIds = new Proxy(memberIds, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          memberReads += 1;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const label: ChannelLabel = {
+      id: 'large-rule',
+      name: 'Large rule',
+      rule: { attribute: 'name', contains: 'channel' },
+      channelIds: trackedIds,
+      channelCount: memberIds.length,
+      sortOrder: 0,
+      createdAt: '',
+      updatedAt: '',
+    };
+    createRoot((dispose) => {
+      try {
+        const matches = createMemo(() =>
+          channelsForMobileSection({
+            tab: 'label:large-rule',
+            channels,
+            labels: [label],
+          })
+        );
+        expect(matches()).toEqual(channels.slice(0, 500));
+        expect(memberReads).toBeLessThanOrEqual(memberIds.length);
+
+        memberReads = 0;
+        setMemberIds(0, 'channel-999');
+        expect(matches()).toEqual([...channels.slice(1, 500), channels[999]]);
+        expect(memberReads).toBeLessThanOrEqual(memberIds.length);
+      } finally {
+        dispose();
+      }
+    });
   });
 });
 
