@@ -155,6 +155,7 @@ members = [
   "crates/system_skills",
   "crates/system_status",
   "crates/task_dedup",
+  "crates/safe_fetch",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
@@ -337,6 +338,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 image-webp = "0.2"
 indexmap = "2"
+ipnet = "2.12"
 infer = "0.19.0"
 indoc = "2"
 inquire = "0.7"

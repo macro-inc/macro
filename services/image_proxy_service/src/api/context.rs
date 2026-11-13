@@ -11,5 +11,5 @@ pub struct ApiContext {
     pub logo_service: crate::domain::LogoService<crate::outbound::FaviconProvider>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub environment: Environment,
-    pub http_client: reqwest::Client,
+    pub fetcher: safe_fetch::SafeFetcher,
 }

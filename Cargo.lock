@@ -10969,6 +10969,7 @@ dependencies = [
  "macro_tower_layers",
  "model",
  "reqwest 0.13.4",
+ "safe_fetch",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -17876,6 +17877,21 @@ dependencies = [
  "model_owner",
  "urlencoding",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "safe_fetch"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "ipnet",
+ "reqwest 0.13.4",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
  "workspace-hack",
 ]
 
