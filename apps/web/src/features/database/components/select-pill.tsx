@@ -12,6 +12,7 @@ export function OptionPill(props: {
 }) {
   return (
     <Badge
+      data-option-pill
       variant="outline"
       size="xs"
       class="min-w-0 max-w-full"

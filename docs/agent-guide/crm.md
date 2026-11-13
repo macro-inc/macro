@@ -335,13 +335,21 @@ Touch headers use the section drawer described above. Overview shows the name, p
 for each domain and `Last interacted`, the generated description, a
 **Pipelines** section and the Discussion. Pipelines stacks one full-width card
 per row of a pipeline you can open that references the record. A card's header
-strip names the pipeline (a lock marks a private one); below it, the row's first
-four fields sit side by side, label over value (two per row on a narrow card),
-and the rest wait behind `Show N more` in the card's footer. Expanded, text
-values wrap to their full length instead of truncating, the footer's
-`Show less` stays pinned to the bottom of the view while the card runs past it,
-and collapsing scrolls the card back into view. Cells edit like the pipeline
-table's when you can edit that pipeline. Inside Customers, the header's
+strip names the pipeline (a lock marks a private one); below it, the row's fields
+are a list, one field per row with its label in a left column and its value
+beside it. On a narrow card (under 520px, as on a phone) the label column
+narrows, and prose (text with a line break, or longer than a short phrase)
+drops below its label to take the full width. Collapsed, the card lists the
+first six filled fields, cuts prose to two lines and offers `Show N more` in its
+footer. Expanded, it lists every filled field in column order with prose in
+full, paragraphs kept, then folds the empty ones into one `N empty fields` row
+naming them; opening that row lists them in place, each saying `Empty`, and
+moves focus to the first. A card with six filled fields or fewer shows them
+all with its empty ones folded below, and has no footer until that row opens. Emails and other single-line values stay on one
+line and end in an ellipsis when cut. A value cleared in place keeps its row
+until the card folds again. The footer's `Show less` stays pinned to the bottom
+of the view while the card runs past it, and collapsing scrolls the card back
+into view. Cells edit like the pipeline table's when you can edit that pipeline. Inside Customers, the header's
 `Open <pipeline>` button opens it. The `Pipelines` caret header collapses and expands the cards, like the Discussion
 header; both start expanded on each visit. The
 section is absent when the record is in no pipeline.

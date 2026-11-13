@@ -133,14 +133,36 @@ export function DatabaseTextEditor(props: DatabaseTextEditorProps) {
   );
 }
 
-export function DatabaseTextValue(props: { value: string }) {
+/**
+ * A text cell's Markdown: its first paragraph on one line, or with
+ * `paragraphs`, every paragraph, cut to two lines or in full.
+ */
+export function DatabaseTextValue(props: {
+  value: string;
+  paragraphs?: 'clamp' | 'full';
+}) {
   return (
-    <span
-      class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
-      onPointerDown={stopLinkPointerDown}
+    <Show
+      when={props.paragraphs}
+      fallback={
+        <span
+          class="[&_.markdown]:inline [&_p]:inline [&_p]:m-0 [&_p]:leading-normal"
+          onPointerDown={stopLinkPointerDown}
+        >
+          <StaticMarkdown markdown={props.value} singleLine target="internal" />
+        </span>
+      }
     >
-      <StaticMarkdown markdown={props.value} singleLine target="internal" />
-    </span>
+      {(paragraphs) => (
+        <span
+          class="[&_p]:my-0! [&_p+p]:mt-2!"
+          classList={{ 'line-clamp-2': paragraphs() === 'clamp' }}
+          onPointerDown={stopLinkPointerDown}
+        >
+          <StaticMarkdown markdown={props.value} target="internal" />
+        </span>
+      )}
+    </Show>
   );
 }
 
