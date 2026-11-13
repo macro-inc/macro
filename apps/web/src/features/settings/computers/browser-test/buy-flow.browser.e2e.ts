@@ -430,7 +430,8 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
   );
   const row = page.locator('[data-runtime-row="Maya\'s Agent Box"]');
   await expect(row).toContainText('Setup failed: The host ran out of disk.');
-  await expect(row.getByRole('button', { name: 'Retry setup' })).toBeVisible();
+  // The modal hides the page from assistive tech, so match the label as text.
+  await expect(row.getByText('Retry setup', { exact: true })).toBeVisible();
   await shoot(page, 'setup-failed');
 
   await stuck.getByRole('button', { name: 'Retry setup' }).click();
