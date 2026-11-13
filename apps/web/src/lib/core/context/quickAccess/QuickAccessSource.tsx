@@ -73,7 +73,7 @@ import {
   searchQuickAccessItems,
 } from './entity-search';
 import { createPersonList } from './person-list';
-import { createProjectedList } from './projected-list';
+import { createProjectedList, searchRowHost } from './projected-list';
 import type {
   Bucket,
   BucketCombination,
@@ -1220,7 +1220,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   channelIndex.buildDurationMs,
               };
             },
-            materialize: async (documents) => {
+            materialize: async (documents, query) => {
+              const rowHost = searchRowHost(projectionHost, query);
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
               const missing = documents.filter(
@@ -1234,12 +1235,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedEmails,
                 cachedInitiatives,
               ] = await Promise.all([
-                materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                materializeCachedGraphqlChannels(projectionHost, documents),
-                materializeCachedGraphqlCrmCompanies(projectionHost, missing),
-                materializeCachedGraphqlCrmContacts(projectionHost, missing),
-                materializeCachedEmailItems(projectionHost, documents),
-                materializeCachedGraphqlInitiatives(projectionHost, documents),
+                materializeCachedGraphqlHistoryItems(rowHost, missing),
+                materializeCachedGraphqlChannels(rowHost, documents),
+                materializeCachedGraphqlCrmCompanies(rowHost, missing),
+                materializeCachedGraphqlCrmContacts(rowHost, missing),
+                materializeCachedEmailItems(rowHost, documents),
+                materializeCachedGraphqlInitiatives(rowHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
