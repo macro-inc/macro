@@ -206,7 +206,9 @@ whether it leaves Macro, to whom, and in what shape. The vocabulary is in
   `Recipient`, `Owner`, `Team`, `TeamsOf`, `ContactsOf`, `Workspace`,
   `GithubInstallation`, `Snapshot` when grants are gone, `Any` for a union); it
   reads only the payload. Routing fields such as a
-  recipient go on the audience and are stripped from the payload.
+  recipient go on the audience and are stripped from the payload. Personal
+  data (mail, calendar, notifications, activity) goes to `Recipient`, never
+  `Owner`: `Owner` also reaches the owner's team webhooks.
 - The payload is an explicit projection, not the whole metadata by default: a
   new family ships thin (ids, actor, what changed). It derives
   `utoipa::ToSchema` under the crate's `schema` or `inbound` feature and has a

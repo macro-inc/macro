@@ -101,7 +101,10 @@ The document storage service consumes `team.member_joined` from `macro.teams`
 under the `teammate-dms` consumer group. The consumer lives in the channels
 crate and creates a DM between `member_id` and each id in `teammate_ids`; it
 does not load a team roster. The webhook Kafka consumer and webhook delivery
-pipeline do not consume or deliver these events.
+pipeline do not consume or deliver these events yet. Each variant declares a
+thin public projection (`TeamPublicEvent` in `src/domain/events/public.rs`) at
+stage Preview: team members, admins only for invites and the auto-join domain,
+and a member snapshot for removals and deletion.
 
 ## Delivery semantics and compatibility
 
