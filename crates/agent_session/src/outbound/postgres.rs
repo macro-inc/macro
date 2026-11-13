@@ -17,6 +17,7 @@ mod recovery;
 mod session_task;
 mod sharing;
 mod source;
+mod thread_replies;
 mod turn_state;
 mod work_registration;
 mod working_branch;
@@ -831,7 +832,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         })
     }
 
-    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+    async fn find_replying_in_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
         let rows = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -852,6 +853,10 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE thread_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM agent_session_thread_reply_pause pause
+                  WHERE pause.session_id = agent_session.id
+              )
             ORDER BY agent_session.created_at DESC
             "#,
             thread_id,

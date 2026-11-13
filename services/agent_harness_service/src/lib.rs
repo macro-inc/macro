@@ -2090,6 +2090,16 @@ pub async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let thread_replies =
+        agent_session::inbound::axum_router::thread_replies::agent_thread_replies_router(
+            AgentSessionRouterState::new(
+                agent_session::domain::thread_replies::ThreadRepliesService::new(
+                    session_repo.clone(),
+                ),
+                entity_access.clone(),
+                MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            ),
+        );
     let auto_archive = agent_session::inbound::axum_router::auto_archive::agent_auto_archive_router(
         AgentSessionRouterState::new(
             auto_archive_settings,
@@ -2224,6 +2234,7 @@ pub async fn run() -> anyhow::Result<()> {
             .with_session_tasks(session_task_links)
             .with_updates(updates)
             .with_auto_archive(auto_archive)
+            .with_thread_replies(thread_replies)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
             .with_app_connections(app_connections)

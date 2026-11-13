@@ -54,6 +54,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getAgentAutoArchivePreferences getAgentCodingPreferences getAgentSandboxSize getAgentSession
       getAgentSessionAutoArchive getAgentSessionChanges getAgentSessionChangesPatch getCodeExecution
       getAgentSessionLog getAgentSessionFoldedLog getAgentSessionPermissions getSessionReview
+      getAgentSessionThreadReplies
     `,
     listed: `
       listAgentConversations listAgentRepositories listAgentRepositoryBranches
@@ -67,7 +68,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     edited: `
       putAgentAutoArchivePreferences putAgentCodingPreferences putAgentSandboxSize chooseAgentMode
       putAgentSessionAutoArchive updateAgentSessionPermissions editQueuedAction
-      putAgentSessionSandboxSize
+      putAgentSessionSandboxSize putAgentSessionThreadReplies
     `,
     renamed: 'renameAgentSession',
     archived: 'setAgentSessionArchived',

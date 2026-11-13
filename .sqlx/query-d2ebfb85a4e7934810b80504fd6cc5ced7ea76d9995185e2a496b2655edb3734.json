@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO agent_session_thread_reply_pause (session_id, paused_by)\n                    VALUES ($1, $2)\n                    ON CONFLICT (session_id) DO NOTHING\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d2ebfb85a4e7934810b80504fd6cc5ced7ea76d9995185e2a496b2655edb3734"
+}

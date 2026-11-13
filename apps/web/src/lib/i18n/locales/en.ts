@@ -3,6 +3,7 @@ import agentAutoArchive from './en/agent-auto-archive';
 import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
+import agentThreadReplies from './en/agent-thread-replies';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
 import calendarPrompt from './en/calendar-prompt';
@@ -61,6 +62,7 @@ export default {
   accountManager,
   agentSetup,
   githubConnect,
+  agentThreadReplies,
   agentWork,
   calendarPrompt,
   calls,
