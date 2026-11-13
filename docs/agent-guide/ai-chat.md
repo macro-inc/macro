@@ -1345,8 +1345,9 @@ row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
 `DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
 never opens on its own, so a step that failed and was recovered from is counted
 on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
-list; a program that failed, timed out or never reported steps is one failed
-step, and one that was cancelled is not counted as failed. While the program
+list; a program that failed or timed out before reporting a step is one failed
+step, one that reported steps counts the ones that failed, and one that was
+cancelled is not counted as failed. While the program
 runs, the group's live line names its observed operations. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
@@ -1853,14 +1854,15 @@ drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
 Consecutive tool calls, programs and thoughts between two pieces of the agent's
-text form one group from the group's first call, thoughts after the last call
-included. Subagents, tools requiring user input, presented views and tools that
+text form one group, with the thoughts before, between and after its calls; a
+run of thoughts with no call stays as separate rows. Subagents, tools requiring user input, presented views and tools that
 render their own answer stay outside groups so they stay visible during other
 tool bursts. A group never opens on its own and has no scrolling window: opened,
 it lists every call in full, and that stays open as the group settles.
 
-Only one group of a turn is live: the last one, while it closes the message or
-only a prompt waiting on the person follows it. Its row is the turn's one
+Only one group of a turn is live: the last one, while it closes the message,
+or while one of its calls is still out and only a prompt waiting on the person
+about it follows. Its row is the turn's one
 working indicator, the same activity line a channel reply shows: the working
 dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
 run check**), taking turns every 2s among steps running at once and otherwise
@@ -1943,8 +1945,8 @@ A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
 thought after a tool call belongs to that call's group, at the end of a message
-too: the group's live line says **Thinking** while it streams. A thought with
-no call before it in its run stays its own row.
+too: the group's live line says **Thinking** while it streams. A run of
+thoughts with no call in it stays as separate rows.
 Only the newest turn can be live: once the composer stops showing the
 agent as working, every Thinking label, live group line, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
