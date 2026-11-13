@@ -233,7 +233,10 @@
     "colWidths": [
      120,
      120
-    ]
+    ],
+    "frozenColumnCount": null,
+    "frozenRowCount": null,
+    "rowStriping": null
    }
   ],
   "direction": null,

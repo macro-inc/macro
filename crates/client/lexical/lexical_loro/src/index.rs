@@ -263,11 +263,18 @@ impl LoroProjection {
             indexed_state: state.clone(),
             indexed_vv: doc.oplog_vv(),
             indexed_frontiers: doc.state_frontiers(),
+            #[cfg(feature = "test-faults")]
+            fail_after_writes: None,
             policy,
             index,
             events,
             _subscription: subscription,
         })
+    }
+    /// Fail the next projection after `writes` own-field writes have reached Loro.
+    #[cfg(feature = "test-faults")]
+    pub fn fail_after_writes(&mut self, writes: usize) {
+        self.fail_after_writes = Some(writes);
     }
     /// Native node-map container for undo bookkeeping and presence diagnostics.
     pub fn container_of(&self, key: NodeKey) -> Option<&ContainerID> {

@@ -7,6 +7,8 @@ publish = false
 [features]
 # Preview/test probes; the production feature graph excludes this opt-in.
 dev-probes = []
+# Simulation-only projection write faults; never ship enabled.
+test-faults = []
 
 [dependencies]
 lexical_model = { workspace = true }

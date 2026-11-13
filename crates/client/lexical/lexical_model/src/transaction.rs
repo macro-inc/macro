@@ -283,13 +283,16 @@ impl<'editor> Transaction<'editor> {
     /// value, so stored export matches what a sync writer emits. Marks nothing dirty,
     /// runs no transforms and adds no history; the publication carries
     /// `Commit::stored_state_superseded`. Ordinary local transactions only: refused while
-    /// initializing and in collaboration or history updates. Returns whether it changed.
+    /// initializing, in collaboration or history updates, and for any key outside the
+    /// sync policy's `retained` live root keys. Returns whether it changed.
     pub fn supersede_retained_root_state<ValueType: StateValue>(
         &mut self,
         key: &'static StateKey<ValueType>,
+        retained: &[&str],
     ) -> Result<bool, Error> {
         self.guard_write()?;
-        if self.is_initializing()
+        if !retained.contains(&key.name())
+            || self.is_initializing()
             || self.options.tags.contains(&UpdateTag::Collaboration)
             || self.options.tags.contains(&UpdateTag::Historic)
         {

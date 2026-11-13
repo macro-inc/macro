@@ -33,10 +33,46 @@ impl EditorSurface {
         {
             self.group_active = undo.group_start().is_ok();
         }
+        // Source's load write is a background update: a failed projection write is reported
+        // and the open continues. Partial ops are sealed as a fixup, then the editor and its
+        // projection are rebuilt from the actual document, as resync does, without
+        // rerunning this follow-up. A missing projection is an invariant failure and stays
+        // fatal.
         let projection = self.projection.as_mut().ok_or(SessionError::NotReady)?;
-        let refreshed = projection
-            .refresh_root_search_text(doc, &state, now.wall.0 / 1000)?
-            .changed;
+        #[cfg(feature = "test-faults")]
+        if let Some(writes) = self.fail_load_refresh_after_writes.take() {
+            projection.fail_after_writes(writes);
+        }
+        let mut upgrade = upgrade;
+        let refreshed = match projection.refresh_root_search_text(doc, &state, now.wall.0 / 1000) {
+            Ok(projected) => projected.changed,
+            Err(error) => {
+                view.push(ViewEffect::Editor(Effect::FollowUpFailed {
+                    plugin: "load-search-text",
+                    kind: "Projection",
+                    message: Arc::from(error.to_string()),
+                }));
+                doc.commit_with(
+                    loro::CommitOptions::new()
+                        .origin(FIXUP_ORIGIN)
+                        .timestamp(now.wall.0 / 1000),
+                );
+                // Initialize carries the rebuilt state.
+                let mut rebuilt = Vec::new();
+                if let Attached::Ready { upgrade: requested } =
+                    self.attach_editor(doc, now, Access::Edit, &mut rebuilt)?
+                {
+                    upgrade = requested;
+                }
+                if let Some(undo) = &mut self.undo
+                    && self.history_ready
+                    && !self.group_active
+                {
+                    self.group_active = undo.group_start().is_ok();
+                }
+                false
+            }
+        };
         // Only the application Metadata plugin requests the upgrade.
         if !upgrade {
             return Ok(refreshed);

@@ -77,4 +77,6 @@ Write load-time derived root search text with refresh_root_search_text (the same
 
 Keep `dev-probes` default-off and restricted to preview/test inspection; production native feature graphs must reject it.
 
+Keep `test-faults` default-off and simulation-only: it fails a projection after a set number of own-field writes, so callers can test recovery from partial writes. Only document_session's `test-faults` enables it; never ship it.
+
 Use feature-gated `stored_comparison` only for the exact projection comparison policy; it forwards `comparison::model` and is neither ordinary public export nor raw Loro JSON.

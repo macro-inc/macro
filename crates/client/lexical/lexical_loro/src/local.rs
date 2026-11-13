@@ -498,6 +498,14 @@ impl LoroProjection {
             }
             let count = stats.containers_written;
             schema::diff_map(&map, before, new, schema::MapSchema::Node, &mut stats)?;
+            #[cfg(feature = "test-faults")]
+            if let Some(remaining) = self.fail_after_writes.as_mut() {
+                if *remaining == 0 {
+                    self.fail_after_writes = None;
+                    return Err(diverged("injected projection write fault"));
+                }
+                *remaining -= 1;
+            }
             if count != stats.containers_written {
                 written.insert(key);
             }

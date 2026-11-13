@@ -25,6 +25,18 @@ pub use builder::{
 };
 static PLAIN: PlainPolicy = PlainPolicy;
 
+/// Outcome of rebuilding the editor from the document.
+pub(super) enum Attached {
+    /// An empty document opened without edit access; Initialize is already queued.
+    EmptyRead,
+    /// Attached and ready; the application load follow-up may run.
+    Ready {
+        /// The metadata plugin requested its upgrade during initialization.
+        #[cfg(feature = "application")]
+        upgrade: bool,
+    },
+}
+
 /// Annotation constructor supplied by the editor's application registry.
 pub type CommentNodeFactory = fn(&mut Transaction<'_>, Vec<String>) -> Result<NodeKey, Error>;
 
@@ -103,6 +115,8 @@ pub struct EditorSurface {
     pub(crate) projection_fault_writes: Vec<crate::ProjectionFaultWrite>,
     #[cfg(test)]
     pub(crate) fail_next_remote: bool,
+    #[cfg(feature = "test-faults")]
+    pub(crate) fail_load_refresh_after_writes: Option<usize>,
 }
 impl EditorSurface {
     pub(crate) fn new(config: EditorConfig, peer: u64, now: Now) -> Result<Self, SessionError> {
@@ -139,6 +153,8 @@ impl EditorSurface {
             projection_fault_writes: Vec::new(),
             #[cfg(test)]
             fail_next_remote: false,
+            #[cfg(feature = "test-faults")]
+            fail_load_refresh_after_writes: None,
         })
     }
     pub(crate) fn builder(config: &EditorConfig, mode: EditorMode, peer: u64) -> EditorBuilder {
@@ -248,17 +264,17 @@ impl EditorSurface {
     pub fn selection_cursors(&self) -> Option<lexical_loro::SelectionCursors> {
         self.cursor.clone()
     }
-    pub(crate) fn init(
+    /// Rebuild the editor and projection from the document and arm a fresh history.
+    pub(super) fn attach_editor(
         &mut self,
         doc: &LoroDoc,
         now: Now,
         access: Access,
         view: &mut Vec<ViewEffect>,
-    ) -> Result<(), SessionError> {
+    ) -> Result<Attached, SessionError> {
         let interval = i64::try_from(self.config.delay_ms)
             .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
-        let _open = tracing::info_span!("editor.open", peer = doc.peer_id()).entered();
         let load = tracing::info_span!("state.load", peer = doc.peer_id());
         let load_guard = load.enter();
         self.projection = None;
@@ -302,7 +318,7 @@ impl EditorSurface {
                 diff: self.view_diff()?,
                 state: self.core.state().to_json()?,
             }));
-            return Ok(());
+            return Ok(Attached::EmptyRead);
         }
         let mut projection = if cleanup {
             lexical_loro::mirror::set_synced_editor_state(
@@ -345,6 +361,28 @@ impl EditorSurface {
         self.availability = HistoryAvailability::default();
         // Initialization's ClearHistory boundary makes the manager ready for user edits.
         self.history_ready = true;
+        drop(load_guard);
+        Ok(Attached::Ready {
+            #[cfg(feature = "application")]
+            upgrade,
+        })
+    }
+    pub(crate) fn init(
+        &mut self,
+        doc: &LoroDoc,
+        now: Now,
+        access: Access,
+        view: &mut Vec<ViewEffect>,
+    ) -> Result<(), SessionError> {
+        let _open = tracing::info_span!("editor.open", peer = doc.peer_id()).entered();
+        let attached = self.attach_editor(doc, now, access, view)?;
+        let Attached::Ready {
+            #[cfg(feature = "application")]
+            upgrade,
+        } = attached
+        else {
+            return Ok(());
+        };
         // Source's first node-mutating update after load queues the history-merge
         // metadata upgrade. Its sync writes derived root search text, then the version:
         // two local commits in one undo group, after the initial content.
@@ -357,7 +395,6 @@ impl EditorSurface {
                 matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. }))
             }));
         }
-        drop(load_guard);
         let _view = tracing::info_span!("view.initialize").entered();
         // A full patch is generated from an empty editor in the same registry.
         let mut empty = Self::builder(&self.config, self.config.mode, doc.peer_id()).build()?;
@@ -843,6 +880,8 @@ mod routed_history_test;
 
 #[cfg(all(test, feature = "application"))]
 mod grouping_test;
+#[cfg(all(test, feature = "application"))]
+mod metadata_test;
 
 #[cfg(all(test, feature = "application"))]
 mod ai_ops_history_test;

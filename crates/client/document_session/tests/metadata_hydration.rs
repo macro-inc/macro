@@ -1074,10 +1074,12 @@ fn the_re_emitting_edit_publishes_like_an_ordinary_edit() -> Result<(), Box<dyn 
     Ok(())
 }
 
-/// The supersede adds no undo entry and leaves the 400 ms merge rule unchanged: after the
-/// re-emitting edit, an edit 399 ms later merges and one 401 ms later starts a new entry.
+/// Guard: after the re-emitting edit, an edit 399 ms later still merges and one 401 ms
+/// later starts a new entry. Loro's 400 ms merge interval decides this grouping; the test
+/// cannot detect a MergeTracker effect.
 #[test]
-fn the_supersede_leaves_history_merging_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+fn guard_the_supersede_keeps_loro_merge_interval_grouping() -> Result<(), Box<dyn std::error::Error>>
+{
     use lexical_model::*;
     let (mut surface, doc) = open_stale_document()?;
     let undo = || Input::Command {
@@ -1105,9 +1107,10 @@ fn the_supersede_leaves_history_merging_unchanged() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-/// Live OFF profile (2a10869b): a stale document whose last block is a table gains its
-/// trailing empty paragraph in the load follow-up, with the metadata, after the search text.
-/// Fixture: that document's load state without the trailing paragraph and metadata.
+/// Live OFF profile (live-profile.json 2a10869b): a stale document whose last block is a
+/// table gains its trailing empty paragraph in the load follow-up, with the metadata, after
+/// the search text. Fixture: that create-route document's shape (table keys stored as null)
+/// without the trailing paragraph and metadata.
 #[test]
 fn the_load_follow_up_runs_root_transforms_after_a_final_table()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -1187,6 +1190,63 @@ fn the_load_follow_up_runs_root_transforms_after_a_final_table()
             per_commit[1]
         );
     }
+    Ok(())
+}
+
+/// An already-normalized document (version 10, environmentTags present, searchText
+/// present) opens with no Loro commit and no undo item.
+#[test]
+fn opening_a_normalized_document_writes_nothing() -> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::Mutex;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root"}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5","searchText":""},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let writer = lexical_loro::new_doc(60)?;
+    writer.import(&snapshot)?;
+    let root_state = match writer.get_map("root").get("$") {
+        Some(loro::ValueOrContainer::Container(loro::Container::Map(map))) => map,
+        _ => return Err("root state map".into()),
+    };
+    let metadata = root_state.insert_container("documentMetadata", loro::LoroMap::new())?;
+    metadata.insert("version", 10)?;
+    metadata.insert("environmentTags", loro::LoroValue::Null)?;
+    writer.commit();
+    let doc = lexical_loro::new_doc(50)?;
+    doc.import(&writer.export(loro::ExportMode::Snapshot)?)?;
+    let opened = doc.oplog_vv();
+    let commits = Arc::new(Mutex::new(0_usize));
+    let counted = commits.clone();
+    let _subscription = doc.subscribe_local_update(Box::new(move |_| {
+        if let Ok(mut commits) = counted.lock() {
+            *commits += 1;
+        }
+        true
+    }));
+    let mut config = application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), 50, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    assert_eq!(*commits.lock().map_err(|_| "commit count lock")?, 0);
+    assert_eq!(doc.oplog_vv(), opened);
+    assert!(
+        !surface.history().can_undo,
+        "an empty load group is no undo item"
+    );
+    assert!(!surface.history().can_redo);
     Ok(())
 }
 

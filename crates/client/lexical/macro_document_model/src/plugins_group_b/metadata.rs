@@ -70,7 +70,10 @@ impl Plugin for Metadata {
             >= DOCUMENT_VERSION
         {
             // Not stale: Source's sync still writes the parsed live value (a null slot).
-            tx.supersede_retained_root_state(&DOCUMENT_METADATA)?;
+            tx.supersede_retained_root_state(
+                &DOCUMENT_METADATA,
+                crate::sync::RETAINED_LIVE_ROOT_STATE,
+            )?;
             return Ok(Handled::Yes);
         }
         let mut metadata = current
@@ -115,7 +118,10 @@ impl Plugin for Metadata {
         if !commit.tags.contains(&UpdateTag::Collaboration)
             && !commit.tags.contains(&UpdateTag::Historic)
         {
-            tx.supersede_retained_root_state(&DOCUMENT_METADATA)?;
+            tx.supersede_retained_root_state(
+                &DOCUMENT_METADATA,
+                crate::sync::RETAINED_LIVE_ROOT_STATE,
+            )?;
         }
         Ok(())
     }

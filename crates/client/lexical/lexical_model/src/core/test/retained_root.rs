@@ -53,7 +53,7 @@ fn a_local_supersede_re_records_the_stored_slot_without_dirtying()
         "the live value is retained"
     );
     let (changed, commit) = editor.update(|tx| {
-        let changed = tx.supersede_retained_root_state(&META)?;
+        let changed = tx.supersede_retained_root_state(&META, &["meta"])?;
         assert!(!tx.has_dirty_nodes(), "the supersede marked nodes dirty");
         Ok(changed)
     })?;
@@ -67,7 +67,8 @@ fn a_local_supersede_re_records_the_stored_slot_without_dirtying()
         None,
         "the earlier committed snapshot is unchanged"
     );
-    let (changed, commit) = editor.update(|tx| tx.supersede_retained_root_state(&META))?;
+    let (changed, commit) =
+        editor.update(|tx| tx.supersede_retained_root_state(&META, &["meta"]))?;
     assert!(!changed, "an equal stored copy is not superseded again");
     assert!(commit.is_noop());
     Ok(())
@@ -83,7 +84,7 @@ fn a_supersede_is_refused_in_collaboration_and_history_updates()
                 skip_transforms: false,
                 tags: TagSet::from_tags([tag]),
             },
-            |tx| tx.supersede_retained_root_state(&META),
+            |tx| tx.supersede_retained_root_state(&META, &["meta"]),
         );
         assert!(matches!(
             refused,
@@ -111,7 +112,7 @@ impl Plugin for InitialSupersede {
             && seen.is_none()
         {
             *seen = Some(matches!(
-                tx.supersede_retained_root_state(&META),
+                tx.supersede_retained_root_state(&META, &["meta"]),
                 Err(Error::StoredStateSupersedeRefused { .. })
             ));
         }
@@ -175,8 +176,29 @@ fn a_flag_only_commit_is_not_delivered_to_after_commit_hooks()
         },
         |tx| tx.apply_remote_fields_retaining_state(NodeKey::ROOT, &root, &["meta"]),
     )?;
-    let (changed, commit) = editor.update(|tx| tx.supersede_retained_root_state(&META))?;
+    let (changed, commit) =
+        editor.update(|tx| tx.supersede_retained_root_state(&META, &["meta"]))?;
     assert!(changed && commit.only_supersedes_stored_state());
     assert_eq!(seen.load(std::sync::atomic::Ordering::Relaxed), 0);
+    Ok(())
+}
+
+static OTHER: StateKey<Arc<Value>> = StateKey::new("other", |value| {
+    Arc::new(value.cloned().unwrap_or(Value::Null))
+});
+
+#[test]
+fn a_supersede_is_refused_for_a_key_outside_the_retained_list()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut editor = retained_without_stored_copy()?;
+    editor.update(|tx| tx.set_state(NodeKey::ROOT, &OTHER, Arc::new(json!(1))))?;
+    for (refused, retained) in [(&OTHER, &["meta"][..]), (&META, &["other"][..])] {
+        let result = editor.update(|tx| tx.supersede_retained_root_state(refused, retained));
+        assert!(matches!(
+            result,
+            Err(Error::StoredStateSupersedeRefused { .. })
+        ));
+    }
+    assert_eq!(stored_meta(editor.state()), None);
     Ok(())
 }

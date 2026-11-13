@@ -37,7 +37,7 @@ dev-probes = ["lexical_loro/dev-probes"]
 compatibility = ["lexical_model/foreign-nodes"]
 conformance = []
 # Simulation-only malformed projection producer; never ship enabled.
-test-faults = []
+test-faults = ["lexical_loro/test-faults"]
 
 [[example]]
 name = "collab"

@@ -110,6 +110,9 @@ pub struct LoroProjection {
     indexed_state: EditorState,
     indexed_vv: loro::VersionVector,
     indexed_frontiers: loro::Frontiers,
+    /// Fail the projection after this many more own-field writes (simulation only).
+    #[cfg(feature = "test-faults")]
+    fail_after_writes: Option<usize>,
     _subscription: loro::Subscription,
 }
 /// A consistency mismatch with its location and both observable values.
