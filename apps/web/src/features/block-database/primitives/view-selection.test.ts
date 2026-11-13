@@ -1,5 +1,6 @@
 import { batch, createRoot, createSignal } from 'solid-js';
 import { expect, it } from 'vitest';
+import type { DatabaseViewSelection } from '../../database/core/view-selection';
 import {
   createDatabaseViewSelection,
   followLinkedLocation,
@@ -38,9 +39,9 @@ it('restores and saves the selected view when identity arrives after mounting', 
 it('opens the table and view a link names, keeping other remembered views', () => {
   const [tableId, setTableId] = createSignal<string>();
   const [viewId, setViewId] = createSignal<string>();
-  const [selection, select] = createSignal({
+  const [selection, select] = createSignal<DatabaseViewSelection>({
     tableId: 'table-1',
-    views: { 'table-1': 'grid', activities: 'list' } as Record<string, string>,
+    views: { 'table-1': 'grid', activities: 'list' },
   });
   const dispose = createRoot((dispose) => {
     followLinkedLocation({ tableId, viewId }, select);
