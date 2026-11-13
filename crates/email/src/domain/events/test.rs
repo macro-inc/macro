@@ -230,6 +230,14 @@ fn threads_reindex_reason_uses_snake_case() {
 
 #[test]
 fn event_type_strings_follow_dot_convention() {
+    for (event, expected_type) in every_event() {
+        let value = serde_json::to_value(event.event()).expect("serializable");
+        assert_eq!(value["event_type"], *expected_type);
+    }
+}
+
+/// One event of every variant, with the `event_type` it must carry.
+fn every_event() -> Vec<(EmailMacroEvent, &'static str)> {
     let link_id = Uuid::nil();
     let owner = user_id("macro|owner@example.com");
     let actor = Some(user_id("macro|actor@example.com"));
@@ -445,11 +453,7 @@ fn event_type_strings_follow_dot_convention() {
             "email.threads_reindex_requested",
         ),
     ];
-
-    for (event, expected_type) in cases {
-        let value = serde_json::to_value(event.event()).expect("serializable");
-        assert_eq!(value["event_type"], *expected_type);
-    }
+    cases
 }
 
 fn user_label() -> LabelRef {
@@ -545,4 +549,206 @@ fn thread_label_change_maps_user_labels_to_diff() {
 fn thread_label_change_skips_gmail_category_labels() {
     assert!(label_change(system_label("CATEGORY_PROMOTIONS"), true).is_none());
     assert!(label_change(system_label("CATEGORY_SOCIAL"), false).is_none());
+}
+
+const INTERNAL_EVENTS: [&str; 3] = [
+    "email.message_draft_synced",
+    "email.thread_backfilled",
+    "email.threads_reindex_requested",
+];
+
+#[test]
+fn public_events_reach_only_the_mailbox_owner() {
+    use macro_event_broker::exposure::{Audience, Exposure, Stage};
+
+    let owner = user_id("macro|owner@example.com");
+    for (event, name) in every_event() {
+        let exposure = event.event().event.exposure().expect("valid exposure");
+        match exposure {
+            Exposure::Public(public) => {
+                assert!(
+                    !INTERNAL_EVENTS.contains(&name),
+                    "{name} must stay internal"
+                );
+                assert_eq!(public.name, name);
+                assert_eq!(public.stage, Stage::Preview);
+                assert_eq!(
+                    public.audience,
+                    Audience::Recipient {
+                        user_id: owner.clone()
+                    },
+                    "{name}"
+                );
+                let payload = serde_json::to_value(public.payload.as_ref()).unwrap();
+                assert_eq!(payload["event_type"], name);
+                let body = payload.to_string();
+                for forbidden in [
+                    "owner@example.com",
+                    "\"owner\"",
+                    "subject",
+                    "email_address",
+                    "to_emails",
+                    "cc_emails",
+                    "from_",
+                    "provider_message_id",
+                    "provider_thread_id",
+                ] {
+                    assert!(
+                        !body.contains(forbidden),
+                        "{name} leaks {forbidden}: {body}"
+                    );
+                }
+            }
+            Exposure::Internal(_) => {
+                assert!(INTERNAL_EVENTS.contains(&name), "{name} must be public");
+            }
+        }
+    }
+}
+
+#[test]
+fn email_entities_are_the_thread_or_the_link() {
+    use macro_event_broker::exposure::{EntityRef, EntityType, Exposure, PublicEntityType};
+
+    for (event, name) in every_event() {
+        let Exposure::Public(public) = event.event().event.exposure().unwrap() else {
+            continue;
+        };
+        let expected = if name.starts_with("email.link_") {
+            EntityRef::new(PublicEntityType::EmailLink, Uuid::nil().to_string())
+        } else {
+            EntityRef::new(EntityType::EmailThread, Uuid::nil().to_string())
+        };
+        assert_eq!(public.entity, expected, "{name}");
+    }
+}
+
+fn public_payload(event: &EmailMacroEvent) -> serde_json::Value {
+    use macro_event_broker::exposure::Exposure;
+
+    let Exposure::Public(public) = event.event().event.exposure().unwrap() else {
+        panic!("expected a public event");
+    };
+    serde_json::to_value(public.payload.as_ref()).unwrap()
+}
+
+#[test]
+fn message_received_public_body() {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+    let event = EmailMacroEvent::message_received(MessageReceivedMetadata {
+        link_id,
+        owner: user_id("macro|owner@example.com"),
+        message_id,
+        provider_message_id: "gmail-1".to_string(),
+        thread_id,
+        provider_thread_id: "gmail-t-1".to_string(),
+        is_new_thread: true,
+        subject: Some("Quarterly numbers".to_string()),
+        from_email: Some("sender@example.com".to_string()),
+        from_name: Some("Sender".to_string()),
+        to_emails: vec!["owner@example.com".to_string()],
+        attachment_count: 2,
+        is_spam_or_trash: false,
+        received_at: Some(timestamp()),
+    });
+
+    assert_eq!(
+        public_payload(&event),
+        json!({
+            "event_type": "email.message_received",
+            "metadata": {
+                "link_id": "00000000-0000-0000-0000-000000000001",
+                "thread_id": "00000000-0000-0000-0000-000000000002",
+                "message_id": "00000000-0000-0000-0000-000000000003",
+                "is_new_thread": true,
+                "attachment_count": 2,
+                "is_spam_or_trash": false,
+                "received_at": "2026-01-02T03:04:05Z"
+            }
+        })
+    );
+}
+
+#[test]
+fn link_connected_public_body() {
+    let event = EmailMacroEvent::link_connected(LinkConnectedMetadata {
+        link_id: Uuid::nil(),
+        owner: user_id("macro|owner@example.com"),
+        email_address: "owner@example.com".to_string(),
+        provider: "GMAIL".to_string(),
+        is_primary: true,
+        connected_at: timestamp(),
+    });
+
+    assert_eq!(
+        public_payload(&event),
+        json!({
+            "event_type": "email.link_connected",
+            "metadata": {
+                "link_id": "00000000-0000-0000-0000-000000000000",
+                "provider": "GMAIL",
+                "is_primary": true,
+                "connected_at": "2026-01-02T03:04:05Z"
+            }
+        })
+    );
+}
+
+#[test]
+fn link_disconnected_public_body() {
+    let event = EmailMacroEvent::link_disconnected(LinkDisconnectedMetadata {
+        link_id: Uuid::nil(),
+        owner: user_id("macro|owner@example.com"),
+        email_address: "owner@example.com".to_string(),
+        reason: LinkDisconnectReason::AccessRevoked,
+    });
+
+    assert_eq!(
+        public_payload(&event),
+        json!({
+            "event_type": "email.link_disconnected",
+            "metadata": {
+                "link_id": "00000000-0000-0000-0000-000000000000",
+                "reason": "access_revoked"
+            }
+        })
+    );
+}
+
+#[test]
+fn thread_labels_updated_public_body() {
+    let event = EmailMacroEvent::thread_labels_updated(ThreadLabelsUpdatedMetadata {
+        link_id: Uuid::nil(),
+        owner: user_id("macro|owner@example.com"),
+        actor: Some(user_id("macro|actor@example.com")),
+        thread_id: Uuid::nil(),
+        added: vec![LabelRef {
+            label_id: Some(Uuid::nil()),
+            provider_label_id: "Label_1".to_string(),
+            name: Some("Receipts".to_string()),
+        }],
+        removed: vec![],
+        origin: EmailEventOrigin::UserAction,
+    });
+
+    assert_eq!(
+        public_payload(&event),
+        json!({
+            "event_type": "email.thread_labels_updated",
+            "metadata": {
+                "link_id": "00000000-0000-0000-0000-000000000000",
+                "thread_id": "00000000-0000-0000-0000-000000000000",
+                "actor": "macro|actor@example.com",
+                "added": [{
+                    "label_id": "00000000-0000-0000-0000-000000000000",
+                    "provider_label_id": "Label_1",
+                    "name": "Receipts"
+                }],
+                "removed": [],
+                "origin": "user_action"
+            }
+        })
+    );
 }
