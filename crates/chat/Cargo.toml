@@ -33,6 +33,7 @@ ports = []
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+agent_correlation = { path = "../agent_correlation" }
 # Domain (always included)
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }

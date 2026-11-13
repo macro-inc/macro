@@ -262,6 +262,16 @@ impl SessionScope {
             Self::NoSend => !listed(SENDS, method, path),
         }
     }
+
+    /// Whether the scope may change who an item is shared with. Neither
+    /// does: a share reaches someone else. Routes that change sharing among
+    /// other fields check their body with
+    /// [`crate::context::refuse_sharing`], since a path can't tell.
+    pub fn allows_sharing(self) -> bool {
+        match self {
+            Self::Generation | Self::NoSend => false,
+        }
+    }
 }
 
 /// The scope a credential signs (`agent_scope`), for a service that has no

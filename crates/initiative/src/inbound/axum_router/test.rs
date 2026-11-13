@@ -671,6 +671,45 @@ async fn update_returns_200() {
     assert_eq!(service.calls(), vec![ServiceCall::Update]);
 }
 
+/// A scoped session renames an initiative but never changes who it's shared
+/// with: its sharing or its members, who are granted access.
+#[tokio::test]
+async fn a_scoped_session_edits_an_initiative_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = FakeInitiativeService::default();
+    let router = build_router(service.clone(), FakeEntityAccessService::default());
+    let edit = |body: serde_json::Value| {
+        authed(axum::http::Request::patch(format!("/{}", existing_id())))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(json_body(body))
+            .expect("request should build")
+    };
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = serde_json::json!({ "sharePermission": { "teamShareAccessLevel": "view" } });
+    for (body, status) in [
+        (share.clone(), StatusCode::FORBIDDEN),
+        (
+            serde_json::json!({ "memberIds": ["macro|member@macro.com"] }),
+            StatusCode::FORBIDDEN,
+        ),
+        (serde_json::json!({ "name": "Renamed" }), StatusCode::OK),
+    ] {
+        let response = scope_attribution(no_send, send(router.clone(), edit(body.clone()))).await;
+        assert_eq!(response.status(), status, "{body}");
+    }
+    let response = send(router, edit(share)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        service.calls(),
+        vec![ServiceCall::Update, ServiceCall::Update]
+    );
+}
+
 #[tokio::test]
 async fn delete_returns_200() {
     let service = FakeInitiativeService::default();

@@ -22,3 +22,19 @@ async fn capture_keeps_verb_only_with_its_correlation() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn a_scoped_request_changes_no_sharing() {
+    assert_eq!(refuse_sharing(true), Ok(()));
+    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+        let scoped = Attribution {
+            scope: Some(scope),
+            ..Attribution::default()
+        };
+        scope_attribution(scoped, async {
+            assert_eq!(refuse_sharing(true), Err(SharingRefused), "{scope:?}");
+            assert_eq!(refuse_sharing(false), Ok(()), "{scope:?}");
+        })
+        .await;
+    }
+}

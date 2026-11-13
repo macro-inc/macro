@@ -862,6 +862,12 @@ pub async fn edit_call_record_handler<
     access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(
+        request.share_permission.is_some() || request.share_with_team.is_some(),
+    )
+    .map_err(|refused| CallError::Forbidden(refused.to_string()))?;
     state
         .service
         .edit_call_record(access.entity_access_receipt, request)

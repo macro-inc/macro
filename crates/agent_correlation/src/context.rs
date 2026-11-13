@@ -50,6 +50,28 @@ pub fn current_scope() -> Option<SessionScope> {
     attribution().scope
 }
 
+/// A request that changes who an item is shared with, refused to the scope
+/// it was made under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("{}", Self::MESSAGE)]
+pub struct SharingRefused;
+
+impl SharingRefused {
+    /// The refusal's message, for error types that hold a static one.
+    pub const MESSAGE: &str = "this session can't change who an item is shared with";
+}
+
+/// Refuses a request whose body changes sharing (`changes_sharing`) when the
+/// current request's scope may not share. A route that edits sharing among
+/// other fields calls this from its handler: the scope's path check can't
+/// see the body.
+pub fn refuse_sharing(changes_sharing: bool) -> Result<(), SharingRefused> {
+    match current_scope() {
+        Some(scope) if changes_sharing && !scope.allows_sharing() => Err(SharingRefused),
+        _ => Ok(()),
+    }
+}
+
 /// Display verb accepted with the current correlation, if any.
 pub fn current_verb() -> Option<AgentVerb> {
     attribution().verb

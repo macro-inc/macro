@@ -71,6 +71,9 @@ soft delete/restore/purge, and bulk upload into a project tree.
   DSS's GraphQL entity mutations) run them on their own task, so a dropped
   request cannot cancel one partway or stop a purge's document cleanup after
   it commits. The purge enqueues document deletes eight SQS batches at a time.
+- `edit_project.rs` refuses a share permission change from a scoped agent
+  session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
+  field joins that check.
 
 ## Checks
 

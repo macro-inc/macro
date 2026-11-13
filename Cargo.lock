@@ -4028,6 +4028,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_correlation",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -4408,6 +4409,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -5510,6 +5512,7 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "crm"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -11234,6 +11237,7 @@ name = "initiative"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -16202,6 +16206,7 @@ name = "projects"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-recursion",

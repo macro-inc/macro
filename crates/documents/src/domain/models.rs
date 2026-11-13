@@ -37,6 +37,10 @@ pub enum DocumentError {
     /// The user is not authorized to perform this action.
     #[error("unauthorized")]
     Unauthorized,
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     /// The document does not exist in storage (S3/sync service).
     #[error("document does not exist in storage")]
     Gone,

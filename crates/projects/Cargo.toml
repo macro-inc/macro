@@ -44,6 +44,7 @@ service = ["dep:entity_access_management", "dep:shared_entity_registry", "ports"
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+agent_correlation = { path = "../agent_correlation" }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }

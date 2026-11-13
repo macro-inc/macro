@@ -151,6 +151,9 @@ realtime appearance events do not re-ingest history.
   standalone.
 - The markdown backfill binary defaults to dry-run; the `_apply`/prod `just`
   recipes require a typed confirmation before writing.
+- `edit_document.rs` refuses a share permission change from a scoped agent
+  session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
+  field joins that check.
 
 ## Related
 

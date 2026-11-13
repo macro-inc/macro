@@ -41,6 +41,8 @@ use macro_user_id::user_id::MacroUserId;
 #[derive(Clone, Default)]
 struct MockService {
     created_owners: Arc<Mutex<Vec<Owner>>>,
+    /// Whether each patch asked to change sharing.
+    patches: Arc<Mutex<Vec<bool>>>,
 }
 
 impl MockService {
@@ -113,8 +115,12 @@ impl ChatService for MockService {
     async fn patch(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _args: PatchChatArgs,
+        args: PatchChatArgs,
     ) -> Result<()> {
+        self.patches
+            .lock()
+            .expect("patches lock poisoned")
+            .push(args.share_permission.is_some());
         Ok(())
     }
 
@@ -656,8 +662,12 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 }
 
 fn mock_id_router() -> Router {
+    mock_id_router_with(MockService::default())
+}
+
+fn mock_id_router_with(service: MockService) -> Router {
     let state = ChatRouterState::new(
-        MockService::default(),
+        service,
         MockAccessService,
         authorization_state(),
         permissions_service(),
@@ -816,6 +826,46 @@ async fn patch_chat_repo_error_returns_500() {
 
     let res = error_id_router().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+/// A scoped session renames a chat but never changes who it's shared with.
+#[tokio::test]
+async fn a_scoped_session_patches_a_chat_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = MockService::default();
+    let router = mock_id_router_with(service.clone());
+    let patch = |body: &str| {
+        Request::builder()
+            .method("PATCH")
+            .uri("/some-chat-id")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_owned()))
+            .unwrap()
+    };
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = r#"{"sharePermission": {"teamShareAccessLevel": "view"}}"#;
+    let res = scope_attribution(no_send, router.clone().oneshot(patch(share)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    let res = scope_attribution(
+        no_send,
+        router.clone().oneshot(patch(r#"{"name": "Renamed"}"#)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let res = router.oneshot(patch(share)).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(
+        *service.patches.lock().expect("patches lock poisoned"),
+        [false, true]
+    );
 }
 
 // -- copy_chat tests --

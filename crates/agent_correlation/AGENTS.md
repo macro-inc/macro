@@ -34,14 +34,18 @@ code, not in its prompt. The harness also signs the scope into the credential
   `agent_scope` authenticates as `ScopedMacroApiJwt`, which
   `AccountHolderOrInternal` refuses on every route that issues a credential.
   `SignedScope` reads the `agent_scope` claim; a name this build doesn't know
-  allows only reads.
+  allows only reads. No scope may share (`allows_sharing`).
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, the validated session
   (`current_session`), and the scope stored with it, else the one the
   credential signs (`current_scope`)); capture before spawning,
   scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
-  on routine writes.
+  on routine writes. `refuse_sharing` is the body check a path match can't
+  make: every edit route whose body can change sharing calls it and answers
+  `SharingRefused` with 403 (documents, call records, initiatives with their
+  members, projects, chats, DSS threads and saved views, CRM pipeline edits).
+  A new sharing field or edit route joins that check.
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
   (`propagate` checks the signed scope, then scopes the validated
