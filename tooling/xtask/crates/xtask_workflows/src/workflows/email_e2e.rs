@@ -2,6 +2,11 @@
 //! its workers against the Gmail and Outlook emulators. Generated into
 //! `email_e2e.yml`.
 //!
+//! The scenarios are divided over jobs that run side by side, so the
+//! workflow takes as long as its slowest job, not as long as their sum: the
+//! scenarios without search in [`PARTITIONS`] parts, the search scenarios
+//! with their OpenSearch, and the scenarios kept for known bugs.
+//!
 //! It runs on every push to `main` that changes backend code, because a
 //! shared crate or a migration can break email as easily as email code can,
 //! and as part of `PR CI` for pull requests that touch email itself
@@ -9,8 +14,8 @@
 //! red run on the merge commit; nothing is reverted or blocked by it.
 
 use gh_workflow::{
-    Concurrency, Container, Env, Event, Expression, Job, Port, Push, Run, Step, Use, Workflow,
-    WorkflowCall, WorkflowDispatch,
+    Concurrency, Container, Env, Event, Expression, Job, Port, Push, Run, Step, Strategy, Use,
+    Workflow, WorkflowCall, WorkflowDispatch,
 };
 use xtask_paths::RepoGlob;
 
@@ -53,6 +58,16 @@ const MAIN_PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!(".github/workflows/email_e2e.yml"),
 ];
 
+/// How many jobs the scenarios without search are divided over.
+const PARTITIONS: u8 = 3;
+
+/// The search scenarios: one test binary, and the only one that needs
+/// OpenSearch and the indexer.
+const SEARCH: &str = "binary(search)";
+
+/// Every other scenario.
+const WITHOUT_SEARCH: &str = "not binary(search)";
+
 /// Where the suite keeps each scenario's service logs.
 const LOGS: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("target/debug/email-e2e");
@@ -72,7 +87,9 @@ pub fn email_e2e() -> Workflow {
             .workflow_call(WorkflowCall::default()))
         .concurrency(concurrency())
         .map(vars::with_global_env)
-        .add_job("email-e2e", suite())
+        .add_job("email-e2e", scenarios())
+        .add_job("email-e2e-search", search())
+        .add_job("email-e2e-known-bugs", known_bug_scenarios())
 }
 
 /// Every commit on `main` gets its own result: a later merge does not cancel
@@ -86,11 +103,11 @@ fn concurrency() -> Concurrency {
     .cancel_in_progress(true)
 }
 
-/// Build the services and run the scenarios against Postgres, Redis, an
-/// SQS-compatible server, a Kafka broker and OpenSearch.
-fn suite() -> Job {
+/// Start a job of the suite: the runner, the servers every scenario needs,
+/// and the toolchain.
+fn job(name: &str) -> Job {
     Job::default()
-        .name("Email end-to-end")
+        .name(name)
         .timeout_minutes(45u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(code_check_cloud_storage::with_test_compile_env)
@@ -103,14 +120,17 @@ fn suite() -> Job {
         .add_env(("EMAIL_E2E_REDIS_URL", "redis://127.0.0.1:6379"))
         .add_env(("EMAIL_E2E_SQS_URL", "http://127.0.0.1:9324"))
         .add_env(("EMAIL_E2E_KAFKA_BROKERS", "127.0.0.1:9092"))
-        .add_env(("EMAIL_E2E_OPENSEARCH_URL", "http://127.0.0.1:9200"))
         .add_service("postgres", code_check_cloud_storage::postgres_service())
         .add_service("redis", code_check_cloud_storage::redis_service())
         .add_service("sqs", sqs_service())
         .add_service("kafka", kafka_service())
         .add_step(steps::checkout(false, false))
-        .add_step(start_opensearch())
-        .add_step(steps::mount_cache_volume())
+}
+
+/// The steps between the checkout and the scenarios: the toolchain, the
+/// database, and the services' binaries.
+fn prepare(job: Job) -> Job {
+    job.add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -118,10 +138,63 @@ fn suite() -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(raise_connection_limit())
         .add_step(code_check_cloud_storage::configure_postgres())
+        .add_step(build_services())
+}
+
+/// The steps after the scenarios.
+fn finish(job: Job, logs: &str) -> Job {
+    job.add_step(upload_logs(logs))
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+/// The scenarios that need no search cluster, divided over [`PARTITIONS`]
+/// jobs that run side by side.
+fn scenarios() -> Job {
+    let parts: Vec<u8> = (1..=PARTITIONS).collect();
+    job(&format!(
+        "Email end-to-end (${{{{ matrix.partition }}}}/{PARTITIONS})"
+    ))
+    // A failure in one part says nothing about the others: let them finish.
+    .strategy(Strategy {
+        matrix: Some(serde_json::json!({ "partition": parts })),
+        fail_fast: Some(false),
+        max_parallel: None,
+    })
+    .add_env(("EMAIL_E2E_SCENARIOS", WITHOUT_SEARCH))
+    .add_env((
+        "EMAIL_E2E_PARTITION",
+        format!("slice:${{{{ matrix.partition }}}}/{PARTITIONS}"),
+    ))
+    .map(prepare)
+    .add_step(run_scenarios())
+    .map(|job| finish(job, "email-e2e-logs-${{ matrix.partition }}"))
+}
+
+/// The search scenarios, with OpenSearch and the indexer, and the search
+/// scenarios kept for known bugs.
+fn search() -> Job {
+    job("Email end-to-end (search)")
+        .add_env(("EMAIL_E2E_OPENSEARCH_URL", "http://127.0.0.1:9200"))
+        .add_env(("EMAIL_E2E_SCENARIOS", SEARCH))
+        .add_env(("EMAIL_E2E_BUILD_INDEXER", "true"))
+        .add_step(start_opensearch())
+        .map(prepare)
         .add_step(create_search_indices())
-        .add_step(run_suite())
+        .add_step(run_scenarios())
         .add_step(known_bugs())
-        .add_step(upload_logs())
+        .map(|job| finish(job, "email-e2e-logs-search"))
+}
+
+/// The scenarios kept for known, unfixed bugs, outside search. They fail by
+/// design and several wait out a timeout, so they have a job of their own
+/// that never fails for a scenario: it reports which still fail and which
+/// now pass.
+fn known_bug_scenarios() -> Job {
+    job("Email end-to-end (known bugs)")
+        .add_env(("EMAIL_E2E_SCENARIOS", WITHOUT_SEARCH))
+        .map(prepare)
+        .add_step(known_bugs())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -183,21 +256,27 @@ fn raise_connection_limit() -> Step<Run> {
         .run(include_str!("scripts/email_e2e_postgres.sh"))
 }
 
-fn run_suite() -> Step<Run> {
-    Step::new("run the email end-to-end suite").run(include_str!("scripts/email_e2e.sh"))
+/// Build what the scenarios start. Every job builds for itself; the compiler
+/// cache is shared.
+fn build_services() -> Step<Run> {
+    Step::new("build the services").run(include_str!("scripts/email_e2e_build.sh"))
+}
+
+fn run_scenarios() -> Step<Run> {
+    Step::new("run the email end-to-end scenarios").run(include_str!("scripts/email_e2e.sh"))
 }
 
 /// The scenarios kept for known, unfixed bugs fail by design, so this step
 /// never fails the job: it reports which still fail and which now pass.
 fn known_bugs() -> Step<Run> {
     Step::new("report scenarios for known bugs")
-        .run("crates/email_e2e/scripts/known_bugs.sh")
+        .run(include_str!("scripts/email_e2e_known_bugs.sh"))
         .continue_on_error(true)
 }
 
 /// Every scenario's service logs, when the suite failed.
-fn upload_logs() -> Step<Use> {
-    steps::upload_artifact("email-e2e-logs", LOGS)
+fn upload_logs(name: &str) -> Step<Use> {
+    steps::upload_artifact(name, LOGS)
         .add_with(("if-no-files-found", "ignore"))
         .add_with(("retention-days", 7))
         .if_condition(Expression::new("failure()"))

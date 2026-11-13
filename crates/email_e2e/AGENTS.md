@@ -83,7 +83,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   when it fails.
 - A scenario for a bug that is not fixed yet asserts the right behaviour and
   is marked `#[ignore = "known bug: <class id>"]`. The suite skips it; `just
-  email-e2e-known-bugs` (a non-gating CI step) runs only those and reports
+  email-e2e-known-bugs` (in CI a job that never fails for a scenario) runs only those and reports
   which still fail and which now pass. Remove the attribute with the fix.
 - Sending the way the web composer does (a stack with `document_storage`):
   `inbox.send_attempt(attempt_id, &message, &extra)` with the GraphQL draft
@@ -163,6 +163,11 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - CI: the `Email end-to-end` workflow (`xtask_workflows`' `email_e2e.rs`)
   runs the suite on pushes to `main` that change backend code and, within
   `PR CI`, on pull requests that touch email, the emulators or the schema.
+  Its jobs run side by side: the scenarios without search in three parts
+  (nextest `--partition`), the search scenarios with OpenSearch, and the
+  scenarios for known bugs. A scenario outside `tests/search.rs` that sets
+  `StackOptions::search` has no cluster in CI: keep search scenarios in that
+  file.
 
 ## Gotchas
 
