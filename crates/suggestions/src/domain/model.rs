@@ -725,6 +725,11 @@ pub enum SuggestionError {
     /// The suggestion changed since the caller read it: here it is as it is now.
     #[error("the suggestion changed since it was read; read it again")]
     Changed(Box<Suggestion>),
+    /// A routine suggestion isn't accepted: the person saves its routine in
+    /// the app, which saves the suggestion and records the routine it
+    /// produced.
+    #[error("a routine suggestion is not accepted; the user saves its routine in the app")]
+    RoutineNotAccepted,
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),

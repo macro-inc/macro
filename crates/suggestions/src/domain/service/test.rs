@@ -1083,6 +1083,31 @@ async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
         .await
         .unwrap();
     assert!(!retire.ok);
+    // Nor is it accepted, by the person or anyone acting for them: saving
+    // its routine in the app makes it done.
+    for by_person in [true, false] {
+        let accepted = h
+            .service
+            .accept(
+                &user(OWNER),
+                SuggestionCaller::User,
+                card.id,
+                Accept {
+                    shown_updated_at: card.updated_at,
+                    by_person,
+                },
+            )
+            .await;
+        assert!(
+            matches!(accepted, Err(SuggestionError::RoutineNotAccepted)),
+            "{accepted:?}"
+        );
+    }
+    let state = sqlx::query_scalar!("SELECT state FROM suggestion WHERE id = $1", card.id)
+        .fetch_one(&h.pool)
+        .await
+        .unwrap();
+    assert_eq!(state, "proposed");
     // The person dismissing it dismisses its suggestion, which closes both.
     h.service
         .dismiss(&user(OWNER), SuggestionCaller::User, card.id)

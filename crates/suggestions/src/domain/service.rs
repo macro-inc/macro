@@ -617,6 +617,13 @@ where
             .await
             .map_err(SuggestionError::internal)?
             .ok_or(SuggestionError::NotFound)?;
+        // A routine card follows its routine suggestion, which only saving the
+        // routine in the app moves to saved (its card to done, with the routine
+        // it produced). Turning it on here would be a second save path, and a
+        // routine is the person's to switch on.
+        if suggestion.kind.name() == KindName::Routine {
+            return Err(SuggestionError::RoutineNotAccepted);
+        }
         if let SuggestionKind::Prompt {
             prompt,
             run_mode: RunMode::Background,
@@ -649,8 +656,8 @@ where
                 )
                 .await;
         }
-        // Anything else the person acts on themself (opens the item, the
-        // composer, the routine) is done when they do; accepting a done suggestion
+        // Anything else the person acts on themself (opens the item or the
+        // composer) is done when they do; accepting a done suggestion
         // again changes nothing.
         if suggestion.state == SuggestionState::Done {
             return Ok(());

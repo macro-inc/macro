@@ -95,11 +95,15 @@ scheduler's spec.
   written with it by `macro.routines.suggest` through `crates/suggestions_db_utils`
   in one transaction; catalog picks never have one. One a replica on the
   previous release drafts during a deploy has none: every path that closes
-  a routine suggestion tolerates a missing one. Dismissing a routine suggestion
-  dismisses its suggestion through `RoutineSuggestionDismissal`; retiring its
-  suggestion retires it; saving a routine from the suggestion makes it done
-  with the routine as `produced`. Suggestions sessions never add, rewrite or retire
-  routine suggestions.
+  a routine suggestion tolerates a missing one. That suggestion follows the
+  routine suggestion's state and moves only with it, through
+  `RoutineSuggestionState::on` in `crates/scheduled_action`: `proposed` while
+  open, then `dismissed`, `retired`, or `done` with the saved routine as
+  `produced`. Dismissing it in the feed dismisses the routine suggestion
+  through `RoutineSuggestionDismissal`. Accepting it is refused (400
+  `RoutineNotAccepted`): the person saves its routine in the app, switched
+  off until they turn it on, and that save is what makes it done. Suggestions
+  sessions never add, rewrite or retire routine suggestions.
 
 - Background runs: the person accepting a `prompt` suggestion with `runMode`
   `background` in the app (their own session, not a program: `Accept`'s
@@ -118,8 +122,9 @@ scheduler's spec.
   in the harness) makes a finished run's suggestion done with the session and what
   it created as `produced`; a failed run leaves the suggestion accepted, and
   accepting it again retries. Retiring or dismissing a suggestion never stops its
-  run. Accepting any other suggestion makes it done (`done` in the feed);
-  accepting a done suggestion again changes nothing.
+  run. Accepting any other suggestion except a routine suggestion makes it
+  done (`done` in the feed); accepting a done suggestion again changes
+  nothing.
 - A run is never started twice: a prompt whose answer was lost
   (`RunStartError::Uncertain`) leaves the run for its session to settle; only
   a definite refusal (the prompted session deleted) settles it failed at once.

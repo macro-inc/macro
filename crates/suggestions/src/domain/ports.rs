@@ -333,7 +333,9 @@ pub trait SuggestionApi: Send + Sync + 'static {
     /// The person, or someone acting for them, acts on a suggestion. A
     /// background prompt suggestion starts a run (one whose last run failed runs
     /// again) only when the person themself accepts it in the app as they
-    /// saw it; anyone acting for them only takes it on. Any other is done.
+    /// saw it; anyone acting for them only takes it on. A routine suggestion
+    /// is refused (`RoutineNotAccepted`): saving its routine makes it done.
+    /// Any other is done.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,

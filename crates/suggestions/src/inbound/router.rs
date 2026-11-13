@@ -118,6 +118,9 @@ impl IntoResponse for SuggestionApiError {
             Self::Service(error @ SuggestionError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
+            Self::Service(error @ SuggestionError::RoutineNotAccepted) => {
+                (StatusCode::BAD_REQUEST, error.to_string()).into_response()
+            }
             Self::Service(
                 error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
             ) => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
@@ -232,7 +235,7 @@ where
     request_body = AcceptSuggestionRequest,
     responses(
         (status = 204, description = "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"),
-        (status = 400, body = String),
+        (status = 400, body = String, description = "A routine suggestion: the person saves its routine in the app instead"),
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not accept"),
         (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it: the body has it as it is now"),
@@ -242,8 +245,9 @@ where
 )]
 /// The caller, or someone acting for them, acts on a suggestion: a background
 /// prompt suggestion starts its run when the person accepts it in the app (anyone
-/// else only takes it on); any other is done once they act on it (open its
-/// item, the composer, the routine), and shows in the feed's `done`.
+/// else only takes it on); a note or prompt is done once they act on it (open its
+/// item or the composer), and shows in the feed's `done`. A routine suggestion is
+/// refused: the person saves its routine in the app, which makes it done.
 pub async fn accept_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
