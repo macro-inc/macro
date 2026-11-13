@@ -97,3 +97,5 @@ sets `GITAI_SHARED_KEY`.
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Docs:
   `docs/guides/new-service.md`
+
+First deploy, pilot and operating steps: [gitai-service runbook](../../docs/runbooks/gitai-service.md).
