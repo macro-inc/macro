@@ -329,6 +329,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.linkAgentSessionTask",
         "agent-harness.putAgentSessionAutoArchive",
         "agent-harness.putAgentSessionSandboxSize",
+        "agent-harness.putAgentSessionThreadReplies",
         "agent-harness.refreshAgentSessionChanges",
         "agent-harness.registerAgentSessionWork",
         "agent-harness.removeQueuedAction",

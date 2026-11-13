@@ -620,7 +620,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * Whether this session answers unmentioned replies in its thread.
+   * Whether thread replies are paused.
    *
    * @readonly
    */
@@ -633,9 +633,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * Pause or resume this session's unmentioned replies in its thread. While
-   * paused, the agent answers only messages that mention it. Edit access;
-   * only a session started from a thread can be paused.
+   * Pause or resume thread replies. While paused, the agent answers only
+   * messages in its thread that mention it. Edit access; only a session
+   * started from a thread can be paused.
    *
    * @write
    * @idempotent
