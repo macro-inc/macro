@@ -1253,6 +1253,25 @@ export default function AgentUiGallery() {
             />
           </Item>
 
+          <Item label="PermissionCard (viewer manages the runtime)">
+            <PermissionCard
+              action="Run command"
+              detail="cargo test -p coding_agent_worker"
+              options={[
+                { id: 'allow', name: 'Allow once', kind: 'allow_once' },
+                {
+                  id: 'always',
+                  name: 'Always allow `cargo test -p coding_agent_worker` in this session',
+                  kind: 'allow_always',
+                },
+                { id: 'reject', name: 'Reject', kind: 'reject_once' },
+              ]}
+              canAnswer
+              onSelect={() => {}}
+              stopAsking={{ running: false, onSelect: () => {} }}
+            />
+          </Item>
+
           <Item label="ComposerNotice">
             <ComposerNotice text="Waking the agent's sandbox…" active />
           </Item>

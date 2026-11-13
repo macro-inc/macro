@@ -125,9 +125,10 @@ pub trait HarnessBindings: Send + Sync + 'static {
 
 /// Loads facts for the domain to resolve a bot's permission policy.
 ///
-/// Resolved at attach time and again before every turn, so changing the
-/// agent's setting or its harness's bypass consent takes effect on its live
-/// sessions from their next prompt.
+/// Resolved at attach time, again before every turn, and whenever a person
+/// answers a permission request, so changing the agent's setting or its
+/// harness's bypass consent takes effect on its live sessions from their next
+/// prompt or answer.
 pub trait PermissionPolicySource: Send + Sync + 'static {
     /// The persona choice and harness limit for `bot` right now.
     fn permission_policy(

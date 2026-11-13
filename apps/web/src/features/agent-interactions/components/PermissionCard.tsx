@@ -1,5 +1,8 @@
+import Lightning from '@icon/system/regular/lightning.svg';
 import ShieldCheck from '@icon/system/regular/shield-check.svg';
+import { Button } from '@ui';
 import { Show } from 'solid-js';
+import type { StopAskingAction } from '../context/interaction';
 import {
   PermissionOptions,
   type PermissionOptionsProps,
@@ -11,6 +14,7 @@ export function PermissionCard(
     action?: string;
     detail?: string;
     canAnswer: boolean;
+    stopAsking?: StopAskingAction;
   }
 ) {
   return (
@@ -49,11 +53,31 @@ export function PermissionCard(
         <Show when={props.canAnswer}>
           <PermissionOptions
             options={props.options}
-            disabled={props.disabled}
+            disabled={props.disabled || props.stopAsking?.running}
             onSelect={props.onSelect}
           />
         </Show>
       </div>
+      {/* Set apart from the per-tool choices: this changes the runtime, not
+          one tool's approval. */}
+      <Show when={props.canAnswer && props.stopAsking}>
+        {(stopAsking) => (
+          <div class="border-t border-edge-muted px-3 py-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="danger-ghost"
+              class="h-auto max-w-full whitespace-normal py-1.5 text-left"
+              loading={stopAsking().running}
+              disabled={props.disabled}
+              onClick={() => stopAsking().onSelect()}
+            >
+              <Lightning class="size-3.5 shrink-0" />
+              Allow, and stop asking on this runtime
+            </Button>
+          </div>
+        )}
+      </Show>
     </section>
   );
 }

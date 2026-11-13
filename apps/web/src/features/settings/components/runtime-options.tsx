@@ -5,14 +5,9 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { usePatchHarnessMutation } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import {
-  Button,
-  confirmDialog,
-  Dropdown,
-  type OpenDialogOptions,
-  ToggleSwitch,
-} from '@ui';
+import { Button, Dropdown, type OpenDialogOptions, ToggleSwitch } from '@ui';
 import { createSignal, getOwner, Show } from 'solid-js';
+import { confirmPermissionBypass } from '../confirm-permission-bypass';
 
 /**
  * Turns "Don't ask before acting" (the runtime's permission bypass) on or off.
@@ -25,18 +20,8 @@ export function createBypassControl(
   const patchHarness = usePatchHarnessMutation();
   const canChange = () => harness().access === 'owner';
   const set = async (allowed: boolean) => {
-    if (allowed) {
-      const confirmed = await confirmDialog(
-        {
-          title: t('runtimeSharing.dontAskConfirmTitle'),
-          body: t('runtimeSharing.dontAskConfirmBody'),
-          confirmLabel: t('runtimeSharing.dontAskConfirm'),
-          tone: 'danger',
-        },
-        dialogOptions
-      );
-      if (!confirmed) return;
-    }
+    if (allowed && !(await confirmPermissionBypass(undefined, dialogOptions)))
+      return;
     try {
       await patchHarness.mutateAsync({
         harnessId: harness().id,

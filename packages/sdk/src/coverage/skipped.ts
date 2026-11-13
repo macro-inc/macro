@@ -36,6 +36,11 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  // A permission card's "stop asking on this runtime"; the runtime and agent
+  // settings it changes are app settings, and it only makes sense beside a
+  // live request a person is answering.
+  'getAgentSessionRuntimeBypass',
+  'stopAgentSessionRuntimeAsking',
   'claudeSignOut', // Computer account credentials are managed in the app.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.

@@ -89,6 +89,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     auto_archive: Router,
     work_registrations: Router,
     tool_approvals: Router,
+    runtime_bypass: Router,
     app_connections: Router,
     code_executions: Router,
     activity: Router,
@@ -145,6 +146,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             auto_archive: Router::new(),
             work_registrations: Router::new(),
             tool_approvals: Router::new(),
+            runtime_bypass: Router::new(),
             app_connections: Router::new(),
             code_executions: Router::new(),
             activity: Router::new(),
@@ -282,6 +284,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes answering tool calls held for the owner's approval.
     pub fn with_tool_approvals(mut self, router: Router) -> Self {
         self.tool_approvals = router;
+        self
+    }
+
+    /// Attach the routes stopping a session's permission requests on its runtime.
+    pub fn with_runtime_bypass(mut self, router: Router) -> Self {
+        self.runtime_bypass = router;
         self
     }
 
@@ -426,6 +434,7 @@ where
         .merge(states.session_tasks)
         .merge(states.updates)
         .merge(states.tool_approvals)
+        .merge(states.runtime_bypass)
         .merge(states.app_connections)
         .merge(states.code_executions)
         .merge(states.activity)

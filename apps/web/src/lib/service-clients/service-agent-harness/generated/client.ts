@@ -71,6 +71,7 @@ import type {
   RetryAgentConversationTurnRequest,
   ReviewDecision,
   ReviewRecord,
+  RuntimeBypassOfferResponse,
   SandboxSizeBody,
   SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
@@ -78,6 +79,7 @@ import type {
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
+  StoppedAskingDto,
   UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
@@ -3807,6 +3809,156 @@ export const decideSessionReview = async (
     status: res.status,
     headers: res.headers,
   } as decideSessionReviewResponse;
+};
+
+/**
+ * @summary What stopping this session's permission requests would change - its
+runtime's bypass, and the agent's own choice when that asks too - when
+the caller may make every change.
+ */
+export type getAgentSessionRuntimeBypassResponse200 = {
+  data: RuntimeBypassOfferResponse;
+  status: 200;
+};
+
+export type getAgentSessionRuntimeBypassResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionRuntimeBypassResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionRuntimeBypassResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentSessionRuntimeBypassResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionRuntimeBypassResponseSuccess =
+  getAgentSessionRuntimeBypassResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionRuntimeBypassResponseError = (
+  | getAgentSessionRuntimeBypassResponse401
+  | getAgentSessionRuntimeBypassResponse403
+  | getAgentSessionRuntimeBypassResponse404
+  | getAgentSessionRuntimeBypassResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionRuntimeBypassResponse =
+  | getAgentSessionRuntimeBypassResponseSuccess
+  | getAgentSessionRuntimeBypassResponseError;
+
+export const getGetAgentSessionRuntimeBypassUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/runtime-bypass`;
+};
+
+export const getAgentSessionRuntimeBypass = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionRuntimeBypassResponse> => {
+  const res = await fetch(getGetAgentSessionRuntimeBypassUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionRuntimeBypassResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionRuntimeBypassResponse;
+};
+
+/**
+ * @summary Turn on the session's runtime bypass, and the agent's own choice to
+bypass when that asks too. The session stops asking once a person answers
+the request in front of them, or from its next turn.
+ */
+export type stopAgentSessionRuntimeAskingResponse200 = {
+  data: StoppedAskingDto;
+  status: 200;
+};
+
+export type stopAgentSessionRuntimeAskingResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopAgentSessionRuntimeAskingResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type stopAgentSessionRuntimeAskingResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopAgentSessionRuntimeAskingResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type stopAgentSessionRuntimeAskingResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopAgentSessionRuntimeAskingResponseSuccess =
+  stopAgentSessionRuntimeAskingResponse200 & {
+    headers: Headers;
+  };
+export type stopAgentSessionRuntimeAskingResponseError = (
+  | stopAgentSessionRuntimeAskingResponse401
+  | stopAgentSessionRuntimeAskingResponse403
+  | stopAgentSessionRuntimeAskingResponse404
+  | stopAgentSessionRuntimeAskingResponse409
+  | stopAgentSessionRuntimeAskingResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopAgentSessionRuntimeAskingResponse =
+  | stopAgentSessionRuntimeAskingResponseSuccess
+  | stopAgentSessionRuntimeAskingResponseError;
+
+export const getStopAgentSessionRuntimeAskingUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/runtime-bypass`;
+};
+
+export const stopAgentSessionRuntimeAsking = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<stopAgentSessionRuntimeAskingResponse> => {
+  const res = await fetch(getStopAgentSessionRuntimeAskingUrl(sessionId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopAgentSessionRuntimeAskingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopAgentSessionRuntimeAskingResponse;
 };
 
 /**

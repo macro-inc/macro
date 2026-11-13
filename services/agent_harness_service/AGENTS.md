@@ -26,6 +26,9 @@ Pulumi stacks; they do not host extra agent processes.
   `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
   `ahs.tokio.alive_tasks`); no per-session attributes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
+- `src/runtime_bypass.rs`: the `RuntimeBypassSettings` adapter that turns on a
+  runtime's bypass and an agent's auto-accept through the harnesses and bots
+  services, so each change is authorized by its own settings rule.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
   linked pull requests finished (`agent_session::domain::auto_archive`), and

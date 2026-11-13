@@ -16,6 +16,9 @@ use agent_harness::inbound::model_load::{
 use agent_harness::inbound::repositories::{
     self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
 };
+use agent_harness::inbound::runtime_bypass::{
+    self, AgentChoiceChangeDto, RuntimeBypassOfferDto, RuntimeBypassOfferResponse, StoppedAskingDto,
+};
 use agent_harness::inbound::tool_approvals::{
     self, AnswerToolApprovalRequest, AnswerToolApprovalResponse, ToolApprovalAnswerDto,
     ToolApprovalStatusDto,
@@ -133,6 +136,8 @@ impl Modify for SecurityAddon {
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
         tool_approvals::answer_tool_approval_handler,
+        runtime_bypass::get_runtime_bypass_offer_handler,
+        runtime_bypass::stop_asking_on_runtime_handler,
         app_connections::app_connected_handler,
         crate::computers::claude::claude_sign_in_handler,
         crate::computers::claude::claude_sign_in_complete_handler,
@@ -212,6 +217,10 @@ impl Modify for SecurityAddon {
         ChangesetSourceDto,
         FileChangeKindDto,
         AnswerToolApprovalRequest,
+        RuntimeBypassOfferDto,
+        StoppedAskingDto,
+        AgentChoiceChangeDto,
+        RuntimeBypassOfferResponse,
         AppConnectedRequest,
         AnswerToolApprovalResponse,
         ToolApprovalAnswerDto,

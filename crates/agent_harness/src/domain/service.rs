@@ -26,6 +26,7 @@ mod open;
 mod present;
 mod queue;
 mod reattach;
+mod runtime_bypass;
 mod session_mcp;
 mod warm;
 
@@ -149,6 +150,7 @@ struct AgentHarnessInner<
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
     coding_agents: Box<dyn ErasedCodingAgentSource>,
+    runtime_bypass: Arc<dyn crate::domain::runtime_bypass::RuntimeBypassSettings>,
     conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
     conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
@@ -393,6 +395,7 @@ where
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
                 coding_agents: Box::new(coding_agents),
+                runtime_bypass: Arc::new(crate::domain::runtime_bypass::NoRuntimeBypass),
                 conversations,
                 conversation_turns: None,
                 external_replies: None,
@@ -686,6 +689,19 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure admission before sharing the harness")
             .admission = admission;
+        self
+    }
+
+    /// Offer to stop permission requests on registered runtimes, reading and
+    /// changing their settings through `settings`. Configure before sharing
+    /// the harness.
+    pub fn with_runtime_bypass(
+        mut self,
+        settings: Arc<dyn crate::domain::runtime_bypass::RuntimeBypassSettings>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure runtime bypass before sharing the harness")
+            .runtime_bypass = settings;
         self
     }
 

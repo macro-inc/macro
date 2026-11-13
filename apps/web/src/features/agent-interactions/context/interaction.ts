@@ -32,6 +32,17 @@ export type InteractionSource = {
   onFailure: (message: string) => void;
 };
 
+/**
+ * Answers Allow and stops the session's runtime asking for the rest of the
+ * session. Only offered where it would stop the asking and every change it
+ * makes is the viewer's.
+ */
+export type StopAskingAction = {
+  /** The change is on the wire; Allow follows it either way. */
+  running: boolean;
+  onSelect: () => void;
+};
+
 export type InteractionController = {
   pending: Accessor<readonly PendingInteraction[]>;
   canAnswer: Accessor<boolean>;

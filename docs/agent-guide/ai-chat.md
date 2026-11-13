@@ -2313,6 +2313,18 @@ must stay hidden; subsequent live messages must still appear.
   Viewers and commenters see a waiting notice without
   action buttons. Stopping a turn cancels open requests; answered requests show
   a compact outcome such as `Allowed once` or `Denied` in the transcript.
+  When the viewer manages the session's paired runtime (and its agent, if the
+  agent is set to ask), the card adds a separate `Allow, and stop asking on this
+  runtime` row below the choices. It asks the same confirmation as the
+  runtime's bypass switch in Settings, then `POST
+  /agent-sessions/{id}/runtime-bypass` turns on the runtime's bypass (and the
+  agent's `Always bypass`), then answers `Allow once` whether or not that
+  worked; answering refreshes the live session's policy, so later requests in
+  the same turn are approved without a card. A failed change shows a toast
+  saying bypass wasn't turned on. `GET` on the same path decides whether the
+  row shows; a direct conversation that started while its agent asked never
+  shows it. To exercise it, pair a macrod runtime with bypass off, bind an
+  agent set to ask, and trigger a command.
   Permission requests and questions both put the agent in a waiting state.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or

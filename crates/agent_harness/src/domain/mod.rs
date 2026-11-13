@@ -18,6 +18,8 @@ pub mod ports;
 pub mod presenter;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;
+/// Turning on a runtime's permission bypass from a session's permission request.
+pub mod runtime_bypass;
 /// Archiving a session once its runtime session is deliberately closed.
 pub mod runtime_closed;
 /// Compute resources for a sandbox size.

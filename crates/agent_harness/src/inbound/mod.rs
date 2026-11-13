@@ -16,6 +16,8 @@ pub mod mode_choice;
 pub mod model_load;
 /// Authenticated repository and branch listing.
 pub mod repositories;
+/// Stopping a session's permission requests on its runtime.
+pub mod runtime_bypass;
 pub mod runtime_gateway;
 /// Answering tool calls held for the session owner's approval.
 pub mod tool_approvals;

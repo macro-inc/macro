@@ -15,6 +15,7 @@ mod permission_refresh;
 mod presentation;
 mod quota;
 mod runtime_access;
+mod runtime_bypass;
 mod user_cleanup;
 mod warm;
 
@@ -587,6 +588,58 @@ fn harness_with_journal_and_policy(
     notifications: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
     idle_release_flags: Option<feature_flags::outbound::fake::FakeFeatureFlags>,
 ) -> (TestBench, TurnSignals) {
+    harness_with_all_ports(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        coding_agents,
+        mentions,
+        egress,
+        journal,
+        policy,
+        notifications,
+        idle_release_flags,
+        None,
+    )
+}
+
+/// A harness whose runtime bypass settings are `settings`.
+fn harness_with_runtime_bypass(
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    settings: Arc<dyn crate::domain::runtime_bypass::RuntimeBypassSettings>,
+) -> (TestBench, TurnSignals) {
+    harness_with_all_ports(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        permission_policies,
+        HarnessDefaultCodingAgents,
+        PromptMentionsMock::new(),
+        EgressProvisionerMock::new(),
+        None,
+        None,
+        None,
+        None,
+        Some(settings),
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the test harness accepts independently replaceable ports"
+)]
+fn harness_with_all_ports(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+    egress: EgressProvisionerMock,
+    journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+    policy: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
+    notifications: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    idle_release_flags: Option<feature_flags::outbound::fake::FakeFeatureFlags>,
+    runtime_bypass: Option<Arc<dyn crate::domain::runtime_bypass::RuntimeBypassSettings>>,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -644,6 +697,10 @@ fn harness_with_journal_and_policy(
     };
     let service = match notifications {
         Some(store) => service.with_notifications(store),
+        None => service,
+    };
+    let service = match runtime_bypass {
+        Some(settings) => service.with_runtime_bypass(settings),
         None => service,
     };
     let service = service.with_idle_release_flags(idle_release_flags);

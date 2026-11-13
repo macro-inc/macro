@@ -27,6 +27,7 @@ export default {
   dontAskConfirmBody:
     'Agents set to bypass can run commands and edit files on this machine without approval. Only turn this on if you trust everyone who can create agents on this machine.',
   dontAskConfirm: 'Turn on',
+  dontAskConfirmAlsoSetsAgent: 'This agent will also be set to Always bypass.',
   dontAskFailed: 'Could not change this setting. Try again.',
   explain:
     'Users can run agents on this computer, using its files and credentials. Readers can see what is on it but cannot run agents. You can only share it with teammates.',

@@ -423,6 +423,14 @@ where
             self.refresh_mcp_servers(session_id).await;
             self.refresh_permission_policy(session_id).await;
         }
+        // A person answering may have just changed what the session may
+        // approve on its own (bypass turned on from this very request), and
+        // the rest of the turn should not wait for the next prompt to know.
+        // The session's commands are ordered, so the policy lands before the
+        // answer lets the agent ask again.
+        if matches!(action, AgentAction::RespondToPermission(_)) {
+            self.refresh_permission_policy(session_id).await;
+        }
 
         match self
             .sessions

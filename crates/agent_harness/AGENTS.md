@@ -25,6 +25,11 @@ between the sandbox and the rest of the product.
 - `src/domain/runtime_closed.rs`: the turn observer that hands a runtime's
   `_session/closed` (a deliberate close, never a disconnect) to auto-archive.
 - `src/inbound/kafka.rs`: trigger ingestion.
+- `src/domain/runtime_bypass.rs` + `src/inbound/runtime_bypass.rs`:
+  `/agent-sessions/{id}/runtime-bypass`, "Allow, and stop asking on this
+  runtime" from a permission card. The harness and bots domains authorize each
+  change (adapter in `agent_harness_service`); answering a permission request
+  refreshes the live session's policy, so the rest of the turn stops asking.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
   composer's Auto mode, `POST /agent-mode-choice`, which asks Clef Flash
   (`jev`) whether a prompt goes to a chat or a coding agent.

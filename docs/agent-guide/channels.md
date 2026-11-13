@@ -258,8 +258,9 @@ channel does not rerun completed messages. A disconnected live display offers
 The conversation has no control for resetting the agent's context; it
 continues in one context. A context keeps the persona instructions, model,
 tools, and permission choice it started with, across reconnects; later persona
-edits do not reach it. A
-harness operator can still revoke permission bypass. Contexts started earlier
+edits do not reach it. The harness operator's current bypass setting still
+applies: revoking it makes the context ask, and allowing it lets a context that
+started set to bypass stop asking. Contexts started earlier
 through the API stay marked by a divider before their first message.
 
 If access to the persona is revoked or the persona is deleted, the transcript
