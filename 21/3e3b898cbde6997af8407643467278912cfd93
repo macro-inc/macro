@@ -1,0 +1,21 @@
+.agents/rules/web/mobile.md
+  s_37f8afe51098dd::t_804f826e69e917 129-132
+docs/agent-guide/channels.md
+  s_37f8afe51098dd::t_e6cc5217ac41f4 468-471
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "213e3b898cbde6997af8407643467278912cfd93",
+  "prompts": {},
+  "sessions": {
+    "s_37f8afe51098dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7a23327-45dc-49e8-a50b-c18a75448505",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
