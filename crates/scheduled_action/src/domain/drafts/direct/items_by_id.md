@@ -1,1 +1,1 @@
-- Use each item listed under "Found" by its id: in a trigger filter's `ids`, as the value of a `text` knob that the code reads (`knobs.channelId`), and in an Ask AI step's instructions. Never look it up again in code.
+- Use each item listed under "Found" by its id: in a trigger filter's `ids`, as the value of a `text` knob that the code reads (`knobs.channelId`), and in an Ask AI step's instructions. The code uses a knob's id as it is, instead of resolving a name as the code-step guide says.

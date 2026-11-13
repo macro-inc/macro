@@ -66,8 +66,10 @@ each run.
   `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
   writer changed it and only if it changed nothing, and a placeholder left
   unfilled goes back to the writer, never to the check. A draft that may
-  not write code (`DraftContext::code`) has no `setup`: the writer isn't
-  told of it (`direct/setup.md`) and it never runs (`Setup::Unavailable`).
+  not write code (`code_available` is false: it needs the SDK, and
+  `DraftContext::code` or a request changing a code step) has no `setup`: the writer is
+  told never to write one instead of `direct/setup.md`, and it never runs
+  (`Setup::Unavailable`).
   Saving's checks (`DraftChecks`, the service's `check_draft`) run on the result; only
   their problems, with the SDK declarations they name, go back to the
   model, at most `DirectTuning::max_fixes` times. A whole routine needs a
