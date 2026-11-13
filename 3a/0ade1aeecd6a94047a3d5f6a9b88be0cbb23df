@@ -1,0 +1,278 @@
+apps/web/src/features/dynamic-ui/core/spend.test.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-77
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 291-292
+apps/web/src/features/dynamic-ui/widgets/panes/agent-pane.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-78
+crates/ai_usage/src/inbound/models.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 4,174-223,226
+  s_48270cd6f8d6f1::t_e3487350882f0b 224-225,227
+crates/macro_db_client/migrations/20261113071745_index_scheduled_action_top_level_owner_concurrently.up.sql
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-18
+crates/activity/src/domain/service/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 38
+crates/ai_usage/src/outbound/pg_agent_spend_repo/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-325
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 285,289-297
+crates/ai_usage/src/inbound/axum_router.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1,3-5,7-8,12,15,24,151,269-363
+  s_48270cd6f8d6f1::t_b1c6a6e796d50d 364
+crates/ai_usage/src/domain/mod.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 8
+apps/web/src/features/dynamic-ui/generated/types.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 687,689,708,725,727,746,769,771,806,826,847,849,868,885,887,906,927,929,949,964,966,985,1008-1009,1025,1265-1266,1270-1273,1276-1277,1280-1282,1284-1289,1291,1294-1299,1301-1302,1307,1311,1313-1314,1319,1322-1323,1326,1329-1333,1335,1381-1383,1387-1388,1392,1394-1401,1403-1406,1423-1425,1449,1451,1470,1487,1489,1508,1531,1533,1568,1588,1609,1611,1630,1647,1649,1668,1689,1691,1711,1726,1728,1747,1770-1771,1787,2027,2034-2035,2038-2039,2042-2044,2046-2051,2053,2056-2061,2063-2064,2069,2073,2075-2076,2081,2084-2085,2088,2091-2095,2097,2143-2145,2149-2150,2154,2156-2163,2165-2168,2185-2187,2198
+  s_48270cd6f8d6f1::t_3c5e707aec2f66 512-514,789,808,1057,1059,1075,1085,1087,1107,1128,1130,1147,1168,1170,1186,1204,1206,1225,1244,1246,1267-1269,1274-1275,1278-1279,1283,1290,1292-1293,1300,1303-1306,1308-1310,1312,1315-1318,1320-1321,1324-1325,1327-1328,1334,1336-1349,1355-1380,1384-1386,1389-1391,1393,1402,1407-1422,1426-1435,1551,1570,1819,1821,1837,1847,1849,1869,1890,1892,1909,1930,1932,1948,1966,1968,1987,2006,2008,2036-2037,2040-2041,2045,2052,2054-2055,2062,2065-2068,2070-2072,2074,2077-2080,2082-2083,2086-2087,2089-2090,2096,2098-2142,2146-2148,2151-2153,2155,2164,2169-2184,2188-2197
+apps/web/src/features/dynamic-ui/queries/agent-panes.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-71
+apps/web/src/features/dynamic-ui/core/spend.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-81
+crates/activity/src/domain/activity_range/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 74
+crates/ai_usage/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 449-451
+crates/ai_usage/src/outbound/pg_agent_spend_repo.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-100
+crates/scheduled_action/src/inbound/agent_routine_router.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-83
+packages/sdk/generated/scheduled-action/index.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 4
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 5,84-85
+  s_48270cd6f8d6f1::t_08a66d8e2b18d7 86-87
+crates/graphql_activity/src/feed.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 56-59,121-134
+packages/sdk/tests/users.test.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 2,86-183
+crates/scheduled_action/src/outbound/pg_agent_routines.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-99
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_48270cd6f8d6f1::t_29ef564cdf0cee 176-177
+  s_48270cd6f8d6f1::t_05efdb42d130be 178-183
+crates/dynamic_ui/src/test.rs
+  s_48270cd6f8d6f1::t_fc953e091b88a9 295-297,301-310,465-513,522
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 514-521
+crates/initiative/src/domain/personal_activity.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 116,123
+crates/scheduled_action/src/domain/agent_routines/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-255
+crates/scheduled_action/src/swagger.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 81,90-93
+apps/web/src/features/dynamic-ui/context/agent-scope.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-28
+static_assets/schema.graphql
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 18-23
+crates/scheduled_action/src/domain/agent_routines.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-201
+crates/ai_usage/AGENTS.md
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 8,23-26,36,71-79
+crates/scheduled_action/src/inbound/agent_routine_router/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-81
+apps/web/src/features/dynamic-ui/widgets/agent-panes/agent-panes.test.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-260
+apps/web/src/lib/i18n/locales/en/dynamic-ui.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 16-43
+crates/activity/src/outbound/pg_activity_repo/team_feed.sql
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 6-7,31
+crates/scheduled_action/src/domain.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1
+crates/scheduled_action/src/outbound.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 6
+apps/web/src/features/dynamic-ui/render.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 13-16,55-58,81-83
+crates/scheduled_action/AGENTS.md
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 196-199,218-225,238-243
+apps/web/src/features/dynamic-ui/Gallery.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 3,5,7,566,583-641
+  s_48270cd6f8d6f1::t_ab5121fc5873da 642-643
+packages/sdk/src/entities/users/user.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 2-10,16,22-60,208-265
+  s_48270cd6f8d6f1::t_52a04ac2972db1 266
+apps/web/src/features/dynamic-ui/core/session-tree.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-67
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Activity.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-229
+crates/dynamic_ui/AGENTS.md
+  s_48270cd6f8d6f1::t_6361f7b19908fd 20-22
+packages/lexical-core/generated/dynamic-ui.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 687,689,708,725,727,746,769,771,806,826,847,849,868,885,887,906,927,929,949,964,966,985,1008-1009,1025,1265-1266,1270-1273,1276-1277,1280-1282,1284-1289,1291,1294-1299,1301-1302,1307,1311,1313-1314,1319,1322-1323,1326,1329-1333,1335,1381-1383,1387-1388,1392,1394-1401,1403-1406,1423-1425,1449,1451,1470,1487,1489,1508,1531,1533,1568,1588,1609,1611,1630,1647,1649,1668,1689,1691,1711,1726,1728,1747,1770-1771,1787,2027,2034-2035,2038-2039,2042-2044,2046-2051,2053,2056-2061,2063-2064,2069,2073,2075-2076,2081,2084-2085,2088,2091-2095,2097,2143-2145,2149-2150,2154,2156-2163,2165-2168,2185-2187,2198
+  s_48270cd6f8d6f1::t_3c5e707aec2f66 512-514,789,808,1057,1059,1075,1085,1087,1107,1128,1130,1147,1168,1170,1186,1204,1206,1225,1244,1246,1267-1269,1274-1275,1278-1279,1283,1290,1292-1293,1300,1303-1306,1308-1310,1312,1315-1318,1320-1321,1324-1325,1327-1328,1334,1336-1349,1355-1380,1384-1386,1389-1391,1393,1402,1407-1422,1426-1435,1551,1570,1819,1821,1837,1847,1849,1869,1890,1892,1909,1930,1932,1948,1966,1968,1987,2006,2008,2036-2037,2040-2041,2045,2052,2054-2055,2062,2065-2068,2070-2072,2074,2077-2080,2082-2083,2086-2087,2089-2090,2096,2098-2142,2146-2148,2151-2153,2155,2164,2169-2184,2188-2197
+packages/sdk/src/utils/verbs.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 94,141
+crates/scheduled_action/src/inbound.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1
+crates/activity/src/outbound/pg_activity_repo/team_feed.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 78,84,101
+crates/activity/src/outbound/pg_activity_repo/test/teammate_feed.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 279-282,301-322,324,394
+crates/ai_usage/src/domain/spend.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-218
+crates/feature_flags/AGENTS.md
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 30
+crates/macro_db_client/migrations/20261113071144_drop_ai_usage_user_id_created_at_idx_concurrently.sql
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-5
+packages/sdk/src/macro.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 600-607
+packages/sdk/specs/cognition.json
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 76-137,3750-3781,4560-4564,7279-7300
+.github/workspace-dep-closures.json
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 17,69,164,212,1241,1736,1832,2296,2345,2756,2813,3660,3718,3801,4240,4333,4416,4683,4726,4803,4880,4964,5318,5387,5654,5747,6024,6061,6127,6250,6360,6849,7240,7293,7375,7441,7527,7567,7619,7837,7936,8003,8134,8286,8397,9510,9554,10384,10485,10772,10840,10989,11094,11164,11315,11424,11502,11554,11593,11629,11838,11898,12315,12709,12784,12837,12879,13063,13168,13226,13466,13553,14188,14363,15353,15403,15477,15578,15657,15779,15864,15908,16013,16098,16317,16380,16425
+crates/ai_usage/src/inbound.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 6-8
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Routines.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-143
+services/agent_harness_service/src/cognition/api.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 80,177-179
+  s_48270cd6f8d6f1::t_63d78bde97ed1f 180-182
+crates/activity/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 194-195,199
+crates/complete_graph/src/schema/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1008,1019
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Sessions.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-162
+services/agent_harness_service/AGENTS.md
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 198-201,312-313
+crates/ai_usage/src/outbound.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 3-4,9-10
+apps/web/src/features/dynamic-ui/queries/keys.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-9
+crates/scheduled_action/src/outbound/pg_agent_routines/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-158
+crates/macro_db_client/migrations/20261113071143_ai_usage_user_id_created_at_total_idx_concurrently.sql
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-14
+packages/sdk/AGENTS.md
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 158-159
+packages/sdk/generated/cognition/index.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 4
+packages/sdk/generated/cognition/sdk.gen.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 5,70-77
+  s_48270cd6f8d6f1::t_b9e3dd325b309e 78-79
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 104-136,796-804,1489-1493,1598-1628
+  s_48270cd6f8d6f1::t_0f8cc723a5090a 1629
+crates/graphql_activity/src/loaders.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 84,88,138,250,255
+crates/ai_usage/src/outbound/agent_dashboards_gate.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-25
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 679-685,784
+crates/macro_db_client/migrations/20261113071745_index_scheduled_action_top_level_owner_concurrently.down.sql
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-2
+apps/web/src/features/dynamic-ui/core/session-tree.test.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-77
+docs/agent-guide/ai-chat.md
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1933-1939
+  s_48270cd6f8d6f1::t_6361f7b19908fd 1932,1940,1946-1947
+services/agent_harness_service/src/cognition/server.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 998-1022,1193
+packages/sdk/generated/agent-fold/index.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 3053-3056,3058-3060,3062-3065,3067-3071,3073,3075,3077-3080,3082-3084,3187-3190,3192-3194,3196-3199,3201-3205,3207,3209,3211-3214,3216-3218
+  s_48270cd6f8d6f1::t_3c5e707aec2f66 2153-2155,2962,2964,2973,2979,2985,2993,3000,3007,3011,3030,3032,3038,3045,3047,3052,3057,3061,3066,3072,3074,3076,3081,3085,3096,3098,3107,3113,3119,3127,3134,3141,3145,3164,3166,3172,3179,3181,3186,3191,3195,3200,3206,3208,3210,3215,3219
+packages/sdk/specs/scheduled-action.json
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 222-280,2063-2119,3368-3385,4599-4603
+crates/dynamic_ui/src/pane.rs
+  s_48270cd6f8d6f1::t_f3d2368ca4ea8b 23-27,52-56,77-81
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 66-98
+apps/web/src/features/activity/queries/feed-query.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 19-20,24-25,28-31,36-38,42-46,58-60
+crates/ai_usage/Cargo.toml
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 12
+services/agent_harness_service/src/cognition/api/swagger.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 130,306-309
+services/agent_harness_service/src/cognition/api/context.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 99-108,184
+apps/web/src/features/dynamic-ui/widgets/agent-panes/Spend.tsx
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-190
+services/agent_harness_service/src/scheduling.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 24,45-47,66,527-536,561
+crates/scheduled_action/src/domain/ports.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1,624-653
+  s_48270cd6f8d6f1::t_77e98dfef4f24f 654
+crates/ai_usage/src/domain/spend/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 1-161
+crates/dynamic_ui/src/lib.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 42-43
+  s_48270cd6f8d6f1::t_5b07db027961b6 92-94,99,105
+crates/scheduled_action/src/domain/service/test.rs
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 47
+crates/dynamic_ui/src/view.rs
+  s_48270cd6f8d6f1::t_5690fe8a3498d9 272-295,300-303,324-326,328,330,346-349,677
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 296-299,304-323,327,329,331-345,350-364,678-694
+  s_48270cd6f8d6f1::t_32e31597fc5979 695
+packages/sdk/generated/cognition/types.gen.ts
+  s_48270cd6f8d6f1::t_0c3b33cc8bbd43 53-79,525-529,2174-2192,2930-2971
+  s_48270cd6f8d6f1::t_c750f6e98a8164 2972
+.sqlx/query-44a614021fe78f0fa72130525e31a1abfae76e75a303a2d81cb147f67b66a10f.json
+  s_48270cd6f8d6f1::t_822c339ef7cbd7 1-23
+.sqlx/query-7348569c6df947761dbdb4706d0eef930e657230a520f8e2f028c297fb206c86.json
+  s_48270cd6f8d6f1::t_fc9457dd7b9a3f 1-23
+.sqlx/query-dc4fe15b546e212dc1332f7ad29c0b9a676665f6ead1f8b31d602510ac00078b.json
+  s_48270cd6f8d6f1::t_0808343b735876 3,69-70,87
+.sqlx/query-e8dad925830aa35d92855ac23e7ccc15a3dd15525c55c9bf0eac159a6c649309.json
+  s_48270cd6f8d6f1::t_bffd34bce7f1ba 1-31
+.sqlx/query-f36010afb84423592a6c0a5b7ddaa5b66a6d7eaa295d740cc93d84e42867bd13.json
+  s_48270cd6f8d6f1::t_b5138160b0fd00 1-54
+Cargo.lock
+  s_48270cd6f8d6f1::t_c54766b8aa8daf 1340
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_48270cd6f8d6f1::t_4c893840f77fba 2870-2872,4156,4158,4177,4194,4196,4215,4238,4240,4258,4275,4277,4295,4316,4318,4337,4354,4356,4375,4396,4398,4418,4433,4435,4454,4477-4478,4494,4526,4528,4544,4554,4556,4576,4597,4599,4616,4637,4639,4655,4673,4675,4694,4713,4715,4734-4818,4824-4904,4918,4920,4939,4956,4958,4977,5000,5002,5020,5037,5039,5057,5078,5080,5099,5116,5118,5137,5158,5160,5180,5195,5197,5216,5239-5240,5256,5288,5290,5306,5316,5318,5338,5359,5361,5378,5399,5401,5417,5435,5437,5456,5475,5477,5496,5503-5667
+apps/web/src/lib/service-clients/service-cognition/generated/client.ts
+  s_48270cd6f8d6f1::t_57fc08975c217e 11,39,176-258
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/agentSpendResponse.ts
+  s_48270cd6f8d6f1::t_5de6fecf215b43 1-27
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/currency.ts
+  s_48270cd6f8d6f1::t_9541216e74bc59 1-16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/getAgentSpendHandlerParams.ts
+  s_48270cd6f8d6f1::t_c5d3bdf31e24aa 1-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/index.ts
+  s_48270cd6f8d6f1::t_7605462c3097bf 13,104,157,335-336
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/spendBucket.ts
+  s_48270cd6f8d6f1::t_322da929bf1515 1-19
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/spendBucketTotal.ts
+  s_48270cd6f8d6f1::t_5578b774b8a00b 1-16
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_48270cd6f8d6f1::t_8fe4a1fd9d514b 76-137,3750-3781,4560-4564,7279-7300
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_48270cd6f8d6f1::t_d1944f9d338bbb 11,253-310
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutine.ts
+  s_48270cd6f8d6f1::t_44efc30e6b5bc4 1-27
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutineLastRun.ts
+  s_48270cd6f8d6f1::t_cb906a5b8465b5 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutineNextRunAt.ts
+  s_48270cd6f8d6f1::t_6f98a3f39710bf 1-13
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/agentRoutines.ts
+  s_48270cd6f8d6f1::t_ee4c22607514d0 1-18
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_48270cd6f8d6f1::t_f8dba0f1a649d6 29-32,141,266
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/lastRun.ts
+  s_48270cd6f8d6f1::t_18a2d194b1d41f 1-16
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/triggerKind.ts
+  s_48270cd6f8d6f1::t_ec76fbdb3109d4 1-20
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_48270cd6f8d6f1::t_2d9ab45cc7c282 222-280,2063-2119,3368-3385,4599-4603
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_48270cd6f8d6f1::t_bca455f15bb45e 8-13
+crates/dynamic_ui/src/snapshots/dynamic_ui__test__the_dashboard_schema_is_pinned.snap
+  s_48270cd6f8d6f1::t_c8070942321e80 176-185,2064-2261,2267
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_48270cd6f8d6f1::t_d509001f9cb72b 105
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_48270cd6f8d6f1::t_68579edf1b6bef 827,829
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3a0ade1aeecd6a94047a3d5f6a9b88be0cbb23df",
+  "prompts": {},
+  "sessions": {
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
