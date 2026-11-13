@@ -1,0 +1,30 @@
+crates/call/src/outbound/livekit_rtc_client.rs
+  s_fb3e62830425eb::t_7c9264bfc4648d 549
+  s_061418458d8623::t_eee6be2769cd99 19-20,612-633
+crates/call/src/outbound/livekit_rtc_client/test.rs
+  s_fb3e62830425eb::t_eb972cade972ed 211-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "efe89b6de95d22a8f04659f2657a64e39e867d28",
+  "prompts": {},
+  "sessions": {
+    "s_061418458d8623": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "809ca561-a68d-4d17-a61d-130dd232a19a",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fb3e62830425eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fcdff70-f5b1-4849-9585-6d4147c7231a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
