@@ -64,11 +64,12 @@ const PROMPTS = [
 
 function Fixture() {
   const count = Number(params.get('count') ?? 3);
+  // Past the samples, prompts repeat so a long queue can still be rendered.
   const [items, setItems] = createSignal<QueuedPromptItem[]>(
-    PROMPTS.slice(0, count).map((prompt, index) => ({
+    Array.from({ length: count }, (_, index) => ({
       actionId: `queued-${index + 1}`,
       kind: 'prompt',
-      prompt,
+      prompt: PROMPTS[index % PROMPTS.length] ?? '',
     }))
   );
   const [log, setLog] = createSignal<string[]>([]);

@@ -30,6 +30,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
 import { Button, Surface, Tooltip } from '@ui';
+import { COMMAND_PRIORITY_NORMAL, KEY_ESCAPE_COMMAND } from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -373,12 +374,18 @@ function PromptBody(
   let synced = stripAgentContext(props.item.prompt ?? '');
   // The editor's own serialization of `synced`, taken as the row opens. It
   // can differ from `synced` in markup alone, so a save compares against it
-  // to tell a real edit from an untouched round trip.
+  // to tell a real edit from an untouched round trip. After the editor is
+  // set from outside (a restore, a server snapshot) it is unknown until the
+  // next read, since the editor may not have applied the text yet.
   let baseline: string | undefined;
 
   const save = () => {
     if (props.disabled) return;
     const text = editor.controls.getMarkdown();
+    if (baseline === undefined) {
+      baseline = text;
+      return;
+    }
     // An emptied row is not an edit to send — the server refuses empty
     // prompts and "delete the text" has the remove affordance for it — so
     // the saved text comes back.
@@ -398,7 +405,7 @@ function PromptBody(
   const restore = () => {
     if (editor.controls.getMarkdown() !== synced)
       editor.controls.setMarkdown(synced);
-    baseline = editor.controls.getMarkdown();
+    baseline = undefined;
     props.onDraftChange(synced);
   };
 
@@ -412,7 +419,9 @@ function PromptBody(
     .withHistory({ timeGap: 400 })
     .withCode()
     .onChange((markdown) => props.onDraftChange(markdown))
-    .onEnter(() => {
+    .onEnter((event) => {
+      // Enter that confirms an IME composition is not a save.
+      if (event.isComposing || event.keyCode === 229) return false;
       // On a virtual keyboard Enter is a newline, as in the composer; the
       // edit saves when focus leaves the row.
       if (isTouchDevice()) return false;
@@ -420,15 +429,22 @@ function PromptBody(
       props.onClose();
       return true;
     })
-    .onEscape((event) => {
-      // A mention or emoji menu takes the first Escape for itself.
-      if (editor.controls.isInlineMenuOpen()) return false;
-      // Consumed here, so the row's own Escape handler does not close again.
-      event.preventDefault();
-      restore();
-      props.onClose();
-      return true;
-    })
+    // Below the priority of the editor's own menus (mentions, emoji, the
+    // link popup), so an open menu takes the Escape and the row only closes
+    // when none of them did. The builder's `onEscape` would run first.
+    .use((lexical) =>
+      lexical.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        (event) => {
+          // Consumed here, so the row's own Escape handler does not run.
+          event?.preventDefault();
+          restore();
+          props.onClose();
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      )
+    )
     .onFocusLeave({
       onStart: (event) => {
         event.preventDefault();
@@ -467,7 +483,7 @@ function PromptBody(
     editor.controls.setMarkdown(server);
     props.onDraftChange(server);
     synced = server;
-    baseline = editor.controls.getMarkdown();
+    baseline = undefined;
   });
 
   return (
@@ -476,6 +492,16 @@ function PromptBody(
       tabindex="-1"
       class="text-sm text-ink outline-none"
       onFocusOut={save}
+      // Escape inside the editor or one of its menus is theirs (the command
+      // above decides); the row's handler only serves focus the body holds.
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const root = editor.lexical.getRootElement();
+        if (root?.contains(target) || target.closest('.menu-surface'))
+          event.stopPropagation();
+      }}
     >
       <MarkdownShell
         config={editor}

@@ -114,6 +114,50 @@ test('Up edits the next-to-send message; Enter saves, Escape restores, focus ret
   await expect(editor).toBeHidden();
 });
 
+test('Escape closes an open editor menu before it closes the row', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Keyboard-only');
+  await page.goto('/queued.html?count=3');
+  await expect(queue(page).getByRole('button', { name: FIRST })).toBeVisible({
+    timeout: 30_000,
+  });
+  await composer(page).click();
+  await page.keyboard.press('ArrowUp');
+  const editor = queue(page).locator('[contenteditable="true"]:visible');
+  await expect(editor).toBeFocused();
+
+  // The emoji menu takes the first Escape; the typing stays.
+  await page.keyboard.press('End');
+  await page.keyboard.type(' :bir');
+  await expect(page.locator('.menu-surface')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.menu-surface')).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(editor).toContainText(':bir');
+  await expect(log(page)).toHaveText('');
+
+  // The link popup takes the first Escape too, and keeps the typing.
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(editor).toContainText('the field guide');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' kept');
+  await editor.getByText('the field guide').click();
+  await expect(page.locator('.menu-surface')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.menu-surface')).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(editor).toContainText('kept');
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
+  await expect(queue(page)).not.toContainText('kept');
+  await expect(log(page)).toHaveText('');
+});
+
 test('tapping a queued message edits it in place and saves on leaving', async ({
   page,
   isMobile,

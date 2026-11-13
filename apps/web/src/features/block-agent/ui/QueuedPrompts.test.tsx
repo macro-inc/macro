@@ -5,14 +5,13 @@ import { QueuedPrompts } from './QueuedPrompts';
 
 const editor = vi.hoisted(() => ({
   change: undefined as ((markdown: string) => void) | undefined,
-  enter: undefined as (() => boolean) | undefined,
+  enter: undefined as ((event: KeyboardEvent) => boolean) | undefined,
   escape: undefined as ((event: KeyboardEvent) => boolean) | undefined,
   markdown: 'Queued request',
   focus: vi.fn(),
   setMarkdown: vi.fn((markdown: string) => {
     editor.markdown = markdown;
   }),
-  inlineMenuOpen: false,
 }));
 const touch = vi.hoisted(() => ({ value: false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -35,12 +34,26 @@ vi.mock(
           return builder;
         },
         onFocusLeave: () => builder,
-        onEnter: (callback: () => boolean) => {
+        onEnter: (callback: (event: KeyboardEvent) => boolean) => {
           editor.enter = callback;
           return builder;
         },
-        onEscape: (callback: (event: KeyboardEvent) => boolean) => {
-          editor.escape = callback;
+        onEscape: () => builder,
+        use: (
+          plugin: (lexical: {
+            registerCommand: (
+              command: unknown,
+              callback: (event: KeyboardEvent) => boolean,
+              priority: number
+            ) => () => void;
+          }) => () => void
+        ) => {
+          plugin({
+            registerCommand: (_command, callback) => {
+              editor.escape = callback;
+              return () => {};
+            },
+          });
           return builder;
         },
         lexical: { getRootElement: () => null },
@@ -48,7 +61,6 @@ vi.mock(
           focus: editor.focus,
           getMarkdown: () => editor.markdown,
           setMarkdown: editor.setMarkdown,
-          isInlineMenuOpen: () => editor.inlineMenuOpen,
         },
       };
       return builder;
@@ -117,7 +129,6 @@ beforeEach(() => {
   editor.markdown = 'Queued request';
   editor.focus.mockClear();
   editor.setMarkdown.mockClear();
-  editor.inlineMenuOpen = false;
   touch.value = false;
 });
 afterEach(() => {
@@ -231,7 +242,9 @@ describe('queued prompt keys', () => {
     editor.change?.(editor.markdown);
     expect(onEdit).not.toHaveBeenCalled();
 
-    expect(editor.enter?.()).toBe(true);
+    expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(
+      true
+    );
     expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'Updated request');
     expect(document.activeElement).toBe(composer);
     expect(screen.queryByRole('textbox')).toBeNull();
@@ -268,6 +281,29 @@ describe('queued prompt keys', () => {
     expect(screen.getByRole('button', { name: 'Queued request' })).toBeTruthy();
   });
 
+  it('ignores the Enter that confirms an IME composition', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Queued request 日本';
+    editor.change?.(editor.markdown);
+    const composing = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+    });
+    expect(editor.enter?.(composing)).toBe(false);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toBeTruthy();
+  });
+
   it('lets Enter stay a newline on touch and saves when focus leaves', () => {
     touch.value = true;
     const onEdit = vi.fn();
@@ -283,7 +319,9 @@ describe('queued prompt keys', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
     editor.markdown = 'Updated request';
     editor.change?.(editor.markdown);
-    expect(editor.enter?.()).toBe(false);
+    expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(
+      false
+    );
     expect(onEdit).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toBeTruthy();
 
@@ -397,7 +435,9 @@ describe('queued prompt access', () => {
     const textbox = screen.getByRole('textbox');
     editor.markdown = 'Updated request';
     editor.change?.(editor.markdown);
-    expect(editor.enter?.()).toBe(true);
+    expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(
+      true
+    );
     expect(screen.queryByRole('textbox')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Updated request' }));
     expect(screen.getByRole('textbox')).toBe(textbox);
@@ -434,7 +474,7 @@ describe('queued prompt access', () => {
     fireEvent.click(remove);
     editor.markdown = 'Attempted edit';
     editor.change?.(editor.markdown);
-    editor.enter?.();
+    editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }));
     fireEvent.focusOut(textbox);
 
     expect(onEdit).not.toHaveBeenCalled();
@@ -455,41 +495,12 @@ describe('queued prompt access', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
     editor.markdown = '   ';
     editor.change?.(editor.markdown);
-    editor.enter?.();
+    editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }));
     expect(onEdit).not.toHaveBeenCalled();
     expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
       'Queued request'
     );
     expect(screen.getByRole('button', { name: 'Queued request' })).toBeTruthy();
-  });
-
-  it('leaves Escape to an open mention menu', () => {
-    const onEdit = vi.fn();
-    render(() => (
-      <QueuedPrompts
-        items={[
-          { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
-        ]}
-        onEdit={onEdit}
-        onRemove={vi.fn()}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
-    editor.markdown = 'Queued request @bo';
-    editor.change?.(editor.markdown);
-    editor.inlineMenuOpen = true;
-    expect(
-      editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }))
-    ).toBe(false);
-    expect(editor.setMarkdown).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox').textContent).toBe('Queued request');
-    editor.inlineMenuOpen = false;
-    expect(
-      editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }))
-    ).toBe(true);
-    expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
-      'Queued request'
-    );
   });
 
   it('does not send an edit for text that only re-serialized', () => {
@@ -504,7 +515,7 @@ describe('queued prompt access', () => {
     // The editor writes the same link out with extra markup.
     editor.markdown = 'See [a](b "")';
     fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
-    editor.enter?.();
+    editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }));
     fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
     editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }));
     fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
@@ -585,13 +596,11 @@ it('hides private context in the queue and preserves it when editing', () => {
       onRemove={() => {}}
     />
   ));
-  expect(view.getByRole('button', { name: 'Queued request' })).toBeTruthy();
-  expect(view.getByRole('textbox', { hidden: true }).textContent).toBe(
-    'Queued request'
-  );
+  fireEvent.click(view.getByRole('button', { name: 'Queued request' }));
+  expect(view.getByRole('textbox').textContent).toBe('Queued request');
   editor.markdown = 'Updated request';
   editor.change?.('Updated request');
-  fireEvent.focusOut(view.getByRole('textbox', { hidden: true }));
+  fireEvent.focusOut(view.getByRole('textbox'));
   expect(onEdit).toHaveBeenCalledWith(
     'queued-context',
     prefix + 'Updated request'
