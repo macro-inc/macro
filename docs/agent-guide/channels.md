@@ -765,9 +765,10 @@ Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, then writes a
 `<!-- macro-agent-links -->` block into the PR description as the session owner
 (their linked GitHub account): the session's `/app/agent/<id>` URL and the
-source that started it, from the session's recorded origin (the channel message,
-`/app/task/<id>`, `/app/routines/<id>`, or the session itself for a direct
-prompt). It returns that block as `description_links` with `description`
+source that started it, from the session's recorded origin (the channel message;
+the task for an assignment or a mention in its thread; the project for a mention
+in its thread; `/app/routines/<id>`; the session itself, labelled with what it
+was, for a direct prompt, a dispatch, or a document, CRM, or call thread). It returns that block as `description_links` with `description`
 `added`, `already_linked`, or `not_written`; on `not_written` (no GitHub link, or
 GitHub refused) the agent pastes the block itself.
 Macro Internal MCP's server instructions ask coding agents to register PRs with

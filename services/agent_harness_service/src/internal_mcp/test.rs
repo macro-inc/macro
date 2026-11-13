@@ -218,6 +218,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 )),
                 backlinks: Arc::new(PullRequestBacklinkService::new(
                     repo.clone(),
+                    agent_session::testing::FixedTaskDirectory::default(),
                     Arc::new(held.clone()),
                     "https://macro.com",
                 )),
@@ -398,17 +399,17 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         assert_ne!(called["result"]["isError"], true, "{called}");
         let output: serde_json::Value =
             serde_json::from_str(called["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
-        // The fixture records no origin, so the session's own prompt is its source.
+        // The fixture records no origin, so the source says so and links the session.
         let session_url = format!("https://macro.com/app/agent/{}", session.id);
         let block = format!(
-            "<!-- macro-agent-links -->\nMacro agent session: {session_url}\nSource (agent session prompt): {session_url}\n<!-- /macro-agent-links -->"
+            "<!-- macro-agent-links -->\nMacro agent session: {session_url}\n\nSource (not recorded, see the session): {session_url}\n<!-- /macro-agent-links -->"
         );
         assert_eq!(
             output,
             serde_json::json!({
                 "pull_request_url": "https://github.com/org/repo/pull/1",
                 "session_url": session_url,
-                "source_kind": "session_prompt",
+                "source_kind": "not_recorded",
                 "source_url": session_url,
                 "description_links": block,
                 "description": "added",

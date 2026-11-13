@@ -990,6 +990,13 @@ async fn run() -> anyhow::Result<()> {
             backlinks: Arc::new(
                 agent_session::domain::pull_request_backlinks::PullRequestBacklinkService::new(
                     session_repo.clone(),
+                    agent_harness::outbound::session_tasks::DocumentTaskDirectory::new(
+                        tool_context.document_tool_context.service.clone(),
+                        tool_context
+                            .document_tool_context
+                            .entity_access_service
+                            .clone(),
+                    ),
                     Arc::new(
                         pull_request_descriptions::GithubPullRequestDescriptions::new(
                             config.linked_github_tokens()?,

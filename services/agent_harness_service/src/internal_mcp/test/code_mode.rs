@@ -98,6 +98,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             )),
             backlinks: Arc::new(PullRequestBacklinkService::new(
                 repo.clone(),
+                agent_session::testing::FixedTaskDirectory::default(),
                 Arc::new(HeldDescription::default()),
                 "https://macro.com",
             )),

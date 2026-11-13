@@ -4,7 +4,7 @@ use trigger_context::origin::{Caller, RoutineCause};
 use uuid::Uuid;
 
 use super::*;
-use crate::testing::{InMemoryAgentSessionRepo, test_agent_session};
+use crate::testing::{FixedTaskDirectory, InMemoryAgentSessionRepo, test_agent_session};
 
 const APP: &str = "https://macro.com/";
 
@@ -33,7 +33,7 @@ fn a_mention_links_its_channel_message_and_thread() {
     });
     session.thread_parent = Some(MessageParent::Channel(channel));
     session.thread_id = Some(thread);
-    let links = PullRequestBacklinks::for_session(&session, APP);
+    let links = PullRequestBacklinks::for_session(&session, APP, None);
     assert_eq!(
         links.session_url,
         format!("https://macro.com/app/agent/{}", session.id)
@@ -51,7 +51,9 @@ fn a_mention_links_its_channel_message_and_thread() {
     // A thread's own root message needs no thread parameter.
     session.thread_id = Some(message);
     assert_eq!(
-        PullRequestBacklinks::for_session(&session, APP).source.url,
+        PullRequestBacklinks::for_session(&session, APP, None)
+            .source
+            .url,
         format!("https://macro.com/app/channel/{channel}?channel_message_id={message}")
     );
 }
@@ -87,36 +89,155 @@ fn tasks_routines_and_prompts_link_what_started_them() {
         ),
     ];
     for (origin, kind, url) in cases {
-        let links = PullRequestBacklinks::for_session(&session_with(origin), APP);
+        let links = PullRequestBacklinks::for_session(&session_with(origin), APP, None);
         assert_eq!(links.source, PullRequestSource { kind, url });
     }
 
     let prompted = session_with(TriggerOrigin::Requested { by: owner() });
-    let links = PullRequestBacklinks::for_session(&prompted, APP);
+    let links = PullRequestBacklinks::for_session(&prompted, APP, None);
     assert_eq!(links.source.kind, PullRequestSourceKind::SessionPrompt);
     assert_eq!(links.source.url, links.session_url);
 }
 
 #[test]
-fn an_unrecorded_origin_falls_back_to_the_linked_task_then_the_message() {
+fn an_unrecorded_origin_falls_back_to_the_message_then_the_linked_task() {
     let mut session = session_with(TriggerOrigin::Unknown);
     let message = Uuid::from_u128(3);
     session.thread_parent = Some(MessageParent::Channel(Uuid::from_u128(1)));
     session.originating_message_id = Some(message);
     session.task_id = Some("task-1".into());
+    // A task the agent linked later does not replace the message that opened it.
     assert_eq!(
-        PullRequestBacklinks::for_session(&session, APP).source.kind,
-        PullRequestSourceKind::Task
-    );
-    session.task_id = None;
-    assert_eq!(
-        PullRequestBacklinks::for_session(&session, APP).source.kind,
+        PullRequestBacklinks::for_session(&session, APP, None)
+            .source
+            .kind,
         PullRequestSourceKind::ChannelMessage
     );
     session.thread_parent = None;
     assert_eq!(
-        PullRequestBacklinks::for_session(&session, APP).source.kind,
-        PullRequestSourceKind::SessionPrompt
+        PullRequestBacklinks::for_session(&session, APP, None)
+            .source
+            .kind,
+        PullRequestSourceKind::Task
+    );
+    session.task_id = None;
+    let links = PullRequestBacklinks::for_session(&session, APP, None);
+    assert_eq!(links.source.kind, PullRequestSourceKind::NotRecorded);
+    assert_eq!(links.source.url, links.session_url);
+
+    let dispatched = session_with(TriggerOrigin::Dispatched {
+        on_behalf_of: owner(),
+    });
+    assert_eq!(
+        PullRequestBacklinks::for_session(&dispatched, APP, None)
+            .source
+            .kind,
+        PullRequestSourceKind::Dispatched
+    );
+}
+
+#[test]
+fn a_mention_in_another_entitys_thread_links_that_entity_or_names_it() {
+    let message = Uuid::from_u128(3);
+    let mut session = session_with(TriggerOrigin::Mentioned {
+        by: person(),
+        message_id: message,
+    });
+    session.thread_id = Some(message);
+    let task = "0198a1b2-0000-7000-8000-00000000000a";
+    session.thread_parent = Some(MessageParent::Document(task.to_owned().try_into().unwrap()));
+
+    // A task's thread links the task.
+    assert_eq!(
+        PullRequestBacklinks::for_session(&session, APP, Some(task)).source,
+        PullRequestSource {
+            kind: PullRequestSourceKind::TaskThread,
+            url: format!("https://macro.com/app/task/{task}"),
+        }
+    );
+    // Another document's thread has no link of its own and says so.
+    let links = PullRequestBacklinks::for_session(&session, APP, None);
+    assert_eq!(links.source.kind, PullRequestSourceKind::DocumentThread);
+    assert_eq!(links.source.url, links.session_url);
+    assert!(
+        links
+            .block()
+            .contains("Source (a document thread, see the session)")
+    );
+
+    let project = Uuid::from_u128(5);
+    session.thread_parent = Some(MessageParent::Initiative(project));
+    assert_eq!(
+        PullRequestBacklinks::for_session(&session, APP, None).source,
+        PullRequestSource {
+            kind: PullRequestSourceKind::ProjectThread,
+            url: format!("https://macro.com/app/tasks/projects/{project}/overview"),
+        }
+    );
+    for (parent, kind) in [
+        (
+            MessageParent::CrmCompany(Uuid::from_u128(6)),
+            PullRequestSourceKind::CrmThread,
+        ),
+        (
+            MessageParent::CrmContact(Uuid::from_u128(7)),
+            PullRequestSourceKind::CrmThread,
+        ),
+        (
+            MessageParent::Call(Uuid::from_u128(8)),
+            PullRequestSourceKind::CallThread,
+        ),
+    ] {
+        session.thread_parent = Some(parent);
+        let links = PullRequestBacklinks::for_session(&session, APP, None);
+        assert_eq!(links.source.kind, kind);
+        assert_eq!(links.source.url, links.session_url);
+    }
+}
+
+#[tokio::test]
+async fn the_service_links_the_task_whose_thread_started_the_session() {
+    let task = "0198a1b2-0000-7000-8000-00000000000a";
+    let message = Uuid::from_u128(3);
+    let mut session = session_with(TriggerOrigin::Mentioned {
+        by: person(),
+        message_id: message,
+    });
+    session.thread_parent = Some(MessageParent::Document(task.to_owned().try_into().unwrap()));
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(session.clone());
+    let descriptions = Arc::new(FakeDescriptions::default());
+    let service = PullRequestBacklinkService::new(
+        repo.clone(),
+        FixedTaskDirectory {
+            tasks: vec![task.to_owned()],
+        },
+        descriptions,
+        APP,
+    );
+    let linked = service
+        .link_description(session.id, &owner(), PR)
+        .await
+        .unwrap();
+    assert_eq!(
+        linked.backlinks.source.kind,
+        PullRequestSourceKind::TaskThread
+    );
+
+    // A document that is not a task.
+    let service = PullRequestBacklinkService::new(
+        repo,
+        FixedTaskDirectory::default(),
+        Arc::new(FakeDescriptions::default()),
+        APP,
+    );
+    let linked = service
+        .link_description(session.id, &owner(), PR)
+        .await
+        .unwrap();
+    assert_eq!(
+        linked.backlinks.source.kind,
+        PullRequestSourceKind::DocumentThread
     );
 }
 
@@ -126,12 +247,12 @@ fn the_block_is_appended_once_and_replaced_in_place() {
         by: person(),
         task: "task-1".into(),
     });
-    let links = PullRequestBacklinks::for_session(&session, APP);
+    let links = PullRequestBacklinks::for_session(&session, APP, None);
     let block = links.block();
     assert_eq!(
         block,
         format!(
-            "{BLOCK_START}\nMacro agent session: https://macro.com/app/agent/{}\nSource (task): https://macro.com/app/task/task-1\n{BLOCK_END}",
+            "{BLOCK_START}\nMacro agent session: https://macro.com/app/agent/{}\n\nSource (task): https://macro.com/app/task/task-1\n{BLOCK_END}",
             session.id
         )
     );
@@ -140,10 +261,13 @@ fn the_block_is_appended_once_and_replaced_in_place() {
     assert_eq!(added, format!("## Why\n\nBecause.\n\n{block}\n"));
     assert!(links.linked_in(&added));
     assert!(!links.linked_in("## Why\n\nBecause."));
+    // The same links outside a block are not enough.
+    assert!(!links.linked_in(&format!("{} {}", links.session_url, links.source.url)));
+    assert!(links.linked_in(&added.replace('\n', "\r\n")));
 
     // This session's earlier block, with a stale source, is replaced in place.
     let stale = format!(
-        "Intro\n\n{BLOCK_START}\nMacro agent session: {}\nSource (task): old\n{BLOCK_END}\n\nOutro",
+        "Intro\n\n{BLOCK_START}\nMacro agent session: {}\n\nSource (task): old\n{BLOCK_END}\n\nOutro",
         links.session_url
     );
     assert_eq!(
@@ -158,7 +282,7 @@ fn other_text_and_other_sessions_blocks_are_kept() {
         by: person(),
         task: "task-1".into(),
     });
-    let links = PullRequestBacklinks::for_session(&session, APP);
+    let links = PullRequestBacklinks::for_session(&session, APP, None);
     let block = links.block();
     let other = format!(
         "{BLOCK_START}\nMacro agent session: https://macro.com/app/agent/other\nSource (task): https://macro.com/app/task/task-0\n{BLOCK_END}"
@@ -253,7 +377,12 @@ async fn writes_the_links_into_the_description_once() {
         body: Mutex::new("## Why\n\nBecause.".into()),
         ..Default::default()
     });
-    let service = PullRequestBacklinkService::new(repo, descriptions.clone(), APP);
+    let service = PullRequestBacklinkService::new(
+        repo,
+        FixedTaskDirectory::default(),
+        descriptions.clone(),
+        APP,
+    );
 
     let linked = service
         .link_description(session.id, &owner(), PR)
@@ -281,6 +410,7 @@ async fn a_description_macro_cannot_edit_is_left_to_the_agent() {
     repo.insert_session(session.clone());
     let service = PullRequestBacklinkService::new(
         repo,
+        FixedTaskDirectory::default(),
         Arc::new(FakeDescriptions {
             refuse: true,
             ..Default::default()

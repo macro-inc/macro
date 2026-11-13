@@ -17,6 +17,7 @@ use trigger_context::TriggerOrigin;
 use super::error::{AgentSessionError, Result};
 use super::model::{AgentSession, AgentSessionId};
 use super::ports::AgentSessionRepo;
+use super::session_task::{SessionTaskError, TaskDirectory, TaskDocumentId};
 
 #[cfg(test)]
 mod test;
@@ -36,10 +37,26 @@ pub enum PullRequestSourceKind {
     ChannelMessage,
     /// The agent was assigned a task.
     Task,
+    /// A message in a task's thread mentioned the agent; the link is the task.
+    TaskThread,
+    /// A message in a project's thread mentioned the agent; the link is the project.
+    ProjectThread,
     /// A routine fired.
     Routine,
     /// A person prompted the session itself.
     SessionPrompt,
+    /// A message in a document's thread, which has no link Macro puts in pull
+    /// requests; the link is the session.
+    DocumentThread,
+    /// A message in a CRM record's thread; the link is the session.
+    CrmThread,
+    /// A message in a call's thread; the link is the session.
+    CallThread,
+    /// Another agent dispatched the session and did not record what started
+    /// its own work; the link is the session.
+    Dispatched,
+    /// Nothing recorded what started the session; the link is the session.
+    NotRecorded,
 }
 
 impl PullRequestSourceKind {
@@ -47,8 +64,15 @@ impl PullRequestSourceKind {
         match self {
             Self::ChannelMessage => "channel message",
             Self::Task => "task",
+            Self::TaskThread => "task thread",
+            Self::ProjectThread => "project thread",
             Self::Routine => "routine",
             Self::SessionPrompt => "agent session prompt",
+            Self::DocumentThread => "a document thread, see the session",
+            Self::CrmThread => "a CRM thread, see the session",
+            Self::CallThread => "a call thread, see the session",
+            Self::Dispatched => "dispatched by another agent, see the session",
+            Self::NotRecorded => "not recorded, see the session",
         }
     }
 }
@@ -58,7 +82,8 @@ impl PullRequestSourceKind {
 pub struct PullRequestSource {
     /// What kind of thing it is.
     pub kind: PullRequestSourceKind,
-    /// Its link in the Macro app.
+    /// Its link in the Macro app: the session itself when the source has no
+    /// link of its own.
     pub url: String,
 }
 
@@ -72,75 +97,99 @@ pub struct PullRequestBacklinks {
 }
 
 impl PullRequestBacklinks {
-    /// The links for `session`, from what its origin recorded: a session a
-    /// person prompted directly is its own source. A session whose origin
-    /// names nothing linkable (dispatched by a tool, or not recorded) falls
-    /// back to the task it was linked to, the channel message that opened it,
-    /// and finally its own prompt.
+    /// The links for `session`, from what its origin recorded. A message in a
+    /// thread links where the thread lives: the channel message, or the task
+    /// or project whose thread it is (`thread_task` is the session's thread
+    /// document when that document is a task). A session a person prompted
+    /// directly is its own source. A session whose origin names nothing
+    /// linkable (dispatched by a tool, or not recorded) falls back to the
+    /// message that opened it, then the task it was linked to.
     #[must_use]
-    pub fn for_session(session: &AgentSession, app_url: &str) -> Self {
+    pub fn for_session(session: &AgentSession, app_url: &str, thread_task: Option<&str>) -> Self {
         let app = app_url.trim_end_matches('/');
         let session_url = format!("{app}/app/agent/{}", session.id);
-        let task = |task: &str| PullRequestSource {
-            kind: PullRequestSourceKind::Task,
-            url: format!("{app}/app/task/{task}"),
+        let source = |kind, url| PullRequestSource { kind, url };
+        let unlinked = |kind| source(kind, session_url.clone());
+        let task = |task: &str| {
+            source(
+                PullRequestSourceKind::Task,
+                format!("{app}/app/task/{task}"),
+            )
         };
         let message = |message_id: uuid::Uuid| {
-            let Some(MessageParent::Channel(channel)) = &session.thread_parent else {
-                return None;
-            };
-            let mut url = format!("{app}/app/channel/{channel}?channel_message_id={message_id}");
-            if let Some(thread) = session.thread_id.filter(|thread| *thread != message_id) {
-                url.push_str(&format!("&channel_thread_id={thread}"));
-            }
-            Some(PullRequestSource {
-                kind: PullRequestSourceKind::ChannelMessage,
-                url,
+            Some(match session.thread_parent.as_ref()? {
+                MessageParent::Channel(channel) => {
+                    let mut url =
+                        format!("{app}/app/channel/{channel}?channel_message_id={message_id}");
+                    if let Some(thread) = session.thread_id.filter(|thread| *thread != message_id) {
+                        url.push_str(&format!("&channel_thread_id={thread}"));
+                    }
+                    source(PullRequestSourceKind::ChannelMessage, url)
+                }
+                MessageParent::Document(_) => match thread_task {
+                    Some(task) => source(
+                        PullRequestSourceKind::TaskThread,
+                        format!("{app}/app/task/{task}"),
+                    ),
+                    None => unlinked(PullRequestSourceKind::DocumentThread),
+                },
+                MessageParent::Initiative(project) => source(
+                    PullRequestSourceKind::ProjectThread,
+                    format!("{app}/app/tasks/projects/{project}/overview"),
+                ),
+                MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
+                    unlinked(PullRequestSourceKind::CrmThread)
+                }
+                MessageParent::Call(_) => unlinked(PullRequestSourceKind::CallThread),
             })
         };
-        let recorded = match &session.origin {
-            TriggerOrigin::Mentioned { message_id, .. }
-            | TriggerOrigin::Conversation { message_id, .. } => message(*message_id),
-            TriggerOrigin::TaskAssigned { task: id, .. }
-            | TriggerOrigin::ProjectInherited { task: id, .. } => Some(task(id)),
-            TriggerOrigin::Routine { routine, .. } => Some(PullRequestSource {
-                kind: PullRequestSourceKind::Routine,
-                url: format!("{app}/app/routines/{routine}"),
-            }),
-            TriggerOrigin::Requested { .. } => Some(PullRequestSource {
-                kind: PullRequestSourceKind::SessionPrompt,
-                url: session_url.clone(),
-            }),
-            TriggerOrigin::Dispatched { .. } | TriggerOrigin::Unknown => None,
+        let fallback = |kind| {
+            session
+                .originating_message_id
+                .and_then(message)
+                .or_else(|| session.task_id.as_deref().map(task))
+                .unwrap_or_else(|| unlinked(kind))
         };
-        let source = recorded
-            .or_else(|| session.task_id.as_deref().map(task))
-            .or_else(|| session.originating_message_id.and_then(message))
-            .unwrap_or_else(|| PullRequestSource {
-                kind: PullRequestSourceKind::SessionPrompt,
-                url: session_url.clone(),
-            });
+        let source = match &session.origin {
+            TriggerOrigin::Mentioned { message_id, .. }
+            | TriggerOrigin::Conversation { message_id, .. } => {
+                message(*message_id).unwrap_or_else(|| fallback(PullRequestSourceKind::NotRecorded))
+            }
+            TriggerOrigin::TaskAssigned { task: id, .. }
+            | TriggerOrigin::ProjectInherited { task: id, .. } => task(id),
+            TriggerOrigin::Routine { routine, .. } => source(
+                PullRequestSourceKind::Routine,
+                format!("{app}/app/routines/{routine}"),
+            ),
+            TriggerOrigin::Requested { .. } => unlinked(PullRequestSourceKind::SessionPrompt),
+            TriggerOrigin::Dispatched { .. } => fallback(PullRequestSourceKind::Dispatched),
+            TriggerOrigin::Unknown => fallback(PullRequestSourceKind::NotRecorded),
+        };
         Self {
             session_url,
             source,
         }
     }
 
-    /// The block to put in a pull request description, markers included.
+    /// The block to put in a pull request description, markers included. The
+    /// links are separate paragraphs so GitHub renders them on their own lines.
     #[must_use]
     pub fn block(&self) -> String {
         format!(
-            "{BLOCK_START}\nMacro agent session: {}\nSource ({}): {}\n{BLOCK_END}",
+            "{BLOCK_START}\nMacro agent session: {}\n\nSource ({}): {}\n{BLOCK_END}",
             self.session_url,
             self.source.kind.label(),
             self.source.url
         )
     }
 
-    /// Whether `description` already links both the session and the source.
+    /// Whether `description` already has a block linking both the session and
+    /// the source. Links outside a block do not count: the privacy check
+    /// allows a channel or routine link only inside one.
     #[must_use]
     pub fn linked_in(&self, description: &str) -> bool {
-        description.contains(&self.session_url) && description.contains(&self.source.url)
+        self.own_block(description)
+            .is_some_and(|(start, end)| description[start..end].contains(&self.source.url))
     }
 
     /// `description` with this session's block in it. A block of this
@@ -309,20 +358,48 @@ pub trait SessionPullRequestBacklinks: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<LinkedDescription>> + Send + 'a>>;
 }
 
-/// [`SessionPullRequestBacklinks`] over the session store and GitHub.
-pub struct PullRequestBacklinkService<R> {
+/// [`SessionPullRequestBacklinks`] over the session store, the task
+/// directory (to tell a task's thread from another document's), and GitHub.
+pub struct PullRequestBacklinkService<R, D> {
     repo: R,
+    tasks: D,
     descriptions: Arc<dyn PullRequestDescriptions>,
     app_url: String,
 }
 
-impl<R> PullRequestBacklinkService<R> {
+impl<R, D: TaskDirectory> PullRequestBacklinkService<R, D> {
     /// Links point into the Macro app at `app_url`.
-    pub fn new(repo: R, descriptions: Arc<dyn PullRequestDescriptions>, app_url: &str) -> Self {
+    pub fn new(
+        repo: R,
+        tasks: D,
+        descriptions: Arc<dyn PullRequestDescriptions>,
+        app_url: &str,
+    ) -> Self {
         Self {
             repo,
+            tasks,
             descriptions,
             app_url: app_url.to_owned(),
+        }
+    }
+
+    /// The session's thread document, when it is a task the owner can view.
+    async fn thread_task(
+        &self,
+        session: &AgentSession,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Option<String> {
+        let Some(MessageParent::Document(document)) = &session.thread_parent else {
+            return None;
+        };
+        let task = TaskDocumentId::from_stored(String::from(document.clone()));
+        match self.tasks.task(owner, &task).await {
+            Ok(facts) => Some(facts.id.as_str().to_owned()),
+            Err(SessionTaskError::NotATask | SessionTaskError::TaskNotFound) => None,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not tell whether the session's thread is a task");
+                None
+            }
         }
     }
 
@@ -345,7 +422,9 @@ impl<R> PullRequestBacklinkService<R> {
     }
 }
 
-impl<R: AgentSessionRepo> SessionPullRequestBacklinks for PullRequestBacklinkService<R> {
+impl<R: AgentSessionRepo, D: TaskDirectory> SessionPullRequestBacklinks
+    for PullRequestBacklinkService<R, D>
+{
     fn link_description<'a>(
         &'a self,
         session: AgentSessionId,
@@ -364,7 +443,12 @@ impl<R: AgentSessionRepo> SessionPullRequestBacklinks for PullRequestBacklinkSer
                 if !stored.owner_id.is_user(owner) {
                     return Err(AgentSessionError::Forbidden);
                 }
-                let backlinks = PullRequestBacklinks::for_session(&stored, &self.app_url);
+                let thread_task = self.thread_task(&stored, owner).await;
+                let backlinks = PullRequestBacklinks::for_session(
+                    &stored,
+                    &self.app_url,
+                    thread_task.as_deref(),
+                );
                 tracing::Span::current().record("source_kind", backlinks.source.kind.as_ref());
                 let description =
                     self.ensure(owner, url, &backlinks)

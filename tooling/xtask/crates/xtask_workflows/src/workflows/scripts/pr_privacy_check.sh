@@ -29,8 +29,9 @@ report() {
 # (MODE outside). A block that never closes counts as outside.
 agent_links_block() {
   awk -v mode="$1" '
-    $0 == "<!-- macro-agent-links -->" && !open { open = 1; held = ""; next }
-    $0 == "<!-- /macro-agent-links -->" && open { open = 0; if (mode == "inside") printf "%s", held; next }
+    { line = $0; sub(/\r$/, "", line) }
+    line == "<!-- macro-agent-links -->" && !open { open = 1; held = ""; next }
+    line == "<!-- /macro-agent-links -->" && open { open = 0; if (mode == "inside") printf "%s", held; next }
     open { held = held $0 "\n"; next }
     mode == "outside" { print }
     END { if (open && mode == "outside") printf "%s", held }
@@ -60,8 +61,12 @@ scan() {
   links='https?://([a-z0-9-]+\.)?macro\.com/app/[a-z-]+/[A-Za-z0-9-]+[^[:space:])>`]*'
   report "$source" "Macro workspace link" "$(agent_links_block outside <<<"$text" \
     | grep -oiE "$links" | grep -viE '^https?://([a-z0-9-]+\.)?macro\.com/app/(tasks?|agent)/' || true)"
+  # Inside it, a channel or routine link must have exactly the shape Macro
+  # writes: ids only, no other path or query.
+  local uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
   report "$source" "Macro workspace link" "$(agent_links_block inside <<<"$text" \
-    | grep -oiE "$links" | grep -viE '^https?://([a-z0-9-]+\.)?macro\.com/app/(tasks?|agent|channel|routines)/' || true)"
+    | grep -oiE "$links" | grep -viE '^https?://([a-z0-9-]+\.)?macro\.com/app/(tasks?|agent)/' \
+    | grep -vxiE "https?://([a-z0-9-]+\\.)?macro\\.com/app/(channel/$uuid(\\?channel_message_id=$uuid(&channel_thread_id=$uuid)?)?|routines/$uuid)" || true)"
   # `@scope/package` names end in a slash and are not mentions.
   report "$source" "@mention" "$(grep -oE '(^|[[:space:](])@[A-Za-z0-9][A-Za-z0-9-]*/?' <<<"$prose" \
     | sed -E 's/^[[:space:](]*//' | grep -v '/$' \
