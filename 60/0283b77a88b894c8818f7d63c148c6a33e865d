@@ -1,0 +1,29 @@
+crates/event_exposure/src/test.rs
+  s_6c441025453223::t_975596b1ce05a2 16-37
+crates/event_exposure/src/lib.rs
+  s_b12ee129ce3fac::t_d1ade8e050a9be 160,166,170-177,182-185,194-197,230-235,242-244,307-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "600283b77a88b894c8818f7d63c148c6a33e865d",
+  "prompts": {},
+  "sessions": {
+    "s_6c441025453223": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e3cf052-1aab-4a10-a528-0b9992b29113",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_b12ee129ce3fac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2933dfe4-656a-4f35-b942-c6676e134c3c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
