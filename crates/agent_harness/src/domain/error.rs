@@ -60,6 +60,9 @@ pub enum HarnessError {
     /// The session link could not be posted back to the mention's thread.
     #[error("failed to announce the agent session: {0}")]
     Announce(rootcause::Report),
+    /// Reply admission is saturated; retain the durable command for recovery.
+    #[error("agent reply is busy; retry the request")]
+    ReplyBusy(rootcause::Report),
     /// Required context for a channel-originated prompt could not be loaded.
     #[error("failed to load channel prompt context: {0}")]
     PromptContext(rootcause::Report),

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE((SELECT seq FROM channel_change_counters WHERE channel_id = $1), 0) AS \"seq!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "seq!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0b4801f0e8d70573454747e69f989bcda78a010dc668224d26a5c6fbc4c633d6"
+}

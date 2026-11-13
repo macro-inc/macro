@@ -6,12 +6,17 @@ use std::sync::{Arc, Mutex};
 
 mod call_retries;
 mod call_roots;
+mod changes;
 mod event_posts;
 mod guest_chat;
 mod initiative;
+mod sequences;
 
 #[derive(Clone)]
 struct Repo {
+    change_log: crate::domain::changes::ChannelChangeLog,
+    changed_messages: Vec<crate::domain::changes::ChannelMessageChange>,
+    change_reads: Arc<Mutex<Vec<Vec<Uuid>>>>,
     message: Message,
     replies: Vec<Message>,
     state: ThreadState,
@@ -20,6 +25,7 @@ struct Repo {
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
     reaction_changed: bool,
+    mutation_seq: Option<i64>,
     file_type: Option<String>,
     concurrent_create: bool,
     client_message_id: Option<Uuid>,
@@ -28,6 +34,13 @@ struct Repo {
 }
 
 impl Repo {
+    fn committed_seq(&self, parent: &MessageParent) -> Option<i64> {
+        match parent {
+            MessageParent::Channel(_) => self.mutation_seq,
+            _ => None,
+        }
+    }
+
     /// A committed teardown tombstones the root and every reply in one
     /// statement, so reads that follow it see the whole discussion gone.
     fn torn_down(&self, root: Uuid) -> bool {
@@ -36,6 +49,45 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn channel_seq(&self, _: Uuid) -> Result<i64, MessageError> {
+        Ok(self.change_log.seq)
+    }
+
+    async fn channel_change_log(
+        &self,
+        _: Uuid,
+        after: i64,
+    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
+        let mut log = self.change_log.clone();
+        log.changes.retain(|change| change.seq > after);
+        Ok(log)
+    }
+
+    async fn load_channel_message_changes(
+        &self,
+        _: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
+        use crate::domain::changes::ChannelMessageChange;
+        self.change_reads.lock().unwrap().push(ids.to_vec());
+        let roots: Vec<_> = self
+            .changed_messages
+            .iter()
+            .filter_map(|change| match change {
+                ChannelMessageChange::Reply { message } if ids.contains(&message.id) => {
+                    message.thread_id
+                }
+                _ => None,
+            })
+            .collect();
+        Ok(self
+            .changed_messages
+            .iter()
+            .filter(|change| ids.contains(&change.id()) || roots.contains(&change.id()))
+            .cloned()
+            .collect())
+    }
+
     async fn account_display_names(
         &self,
         _: &[String],
@@ -169,7 +221,7 @@ impl MessageRepository for Repo {
             previous_cursor: None,
         })
     }
-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+    async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
         if command
             .canonical_root_id
             .is_some_and(|root| self.torn_down(root))
@@ -192,46 +244,58 @@ impl MessageRepository for Repo {
         message.triggered_by = command.triggered_by.clone();
         message.thread_id = command.input.thread_id;
         self.creates.lock().unwrap().push(command);
-        Ok(message)
+        let seq = self.committed_seq(&message.parent);
+        Ok((message, seq))
     }
     async fn edit(
         &self,
         _: &MessageParent,
         _: Uuid,
         command: EditMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<(Message, Option<i64>), MessageError> {
         let mut message = self.message.clone();
         message.content = command.content.clone();
         message.mentions = command.mentions.clone();
         self.edits.lock().unwrap().push(command);
-        Ok(message)
+        let seq = self.committed_seq(&message.parent);
+        Ok((message, seq))
     }
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(Message, Option<i64>), MessageError> {
         self.deletes.lock().unwrap().push(id);
         let mut message = self.get(parent, id).await?.ok_or(MessageError::NotFound)?;
         message.deleted_at = Some(Utc::now());
         message.content.clear();
-        Ok(message)
+        let seq = self.committed_seq(&message.parent);
+        Ok((message, seq))
     }
     async fn react(
         &self,
-        _: &MessageParent,
+        parent: &MessageParent,
         _: Uuid,
         _: &str,
         _: &str,
         _: bool,
     ) -> Result<ReactionResult, MessageError> {
         Ok(ReactionResult {
+            seq: if self.reaction_changed {
+                self.committed_seq(parent)
+            } else {
+                None
+            },
             message: self.message.clone(),
             changed: self.reaction_changed,
         })
     }
     async fn patch_thread(
         &self,
-        _: &MessageParent,
+        parent: &MessageParent,
         _: Uuid,
         patch: ThreadPatch,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         let mut state = self.state.clone();
         if let Some(resolved) = patch.resolved {
             state.resolved = resolved;
@@ -239,13 +303,13 @@ impl MessageRepository for Repo {
         if patch.detach_anchor {
             state.anchor = None;
         }
-        Ok(state)
+        Ok((state, self.committed_seq(parent)))
     }
     async fn delete_thread(
         &self,
-        _: &MessageParent,
+        parent: &MessageParent,
         root: Uuid,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         self.thread_deletes.lock().unwrap().push(root);
         let mut state = self.state.clone();
         state.deleted_at = Some(Utc::now());
@@ -254,7 +318,7 @@ impl MessageRepository for Repo {
         if !matches!(state.anchor, Some(ThreadAnchor::Markdown { .. })) {
             state.anchor = None;
         }
-        Ok(state)
+        Ok((state, self.committed_seq(parent)))
     }
     async fn resolve_legacy(
         &self,
@@ -279,6 +343,9 @@ fn fixture() -> Repo {
     let id = Uuid::from_u128(1);
     let user = "macro|author@example.com";
     Repo {
+        change_log: Default::default(),
+        changed_messages: Vec::new(),
+        change_reads: Arc::default(),
         message: Message {
             kind: MessageKind::Message,
             id,
@@ -319,6 +386,7 @@ fn fixture() -> Repo {
         creates: Arc::default(),
         edits: Arc::default(),
         reaction_changed: true,
+        mutation_seq: None,
         file_type: Some("md".into()),
         concurrent_create: false,
         client_message_id: None,
@@ -1370,6 +1438,26 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn channel_seq(&self, id: Uuid) -> Result<i64, MessageError> {
+        self.inner.channel_seq(id).await
+    }
+
+    async fn channel_change_log(
+        &self,
+        id: Uuid,
+        after: i64,
+    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
+        self.inner.channel_change_log(id, after).await
+    }
+
+    async fn load_channel_message_changes(
+        &self,
+        id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
+        self.inner.load_channel_message_changes(id, ids).await
+    }
+
     async fn account_display_names(
         &self,
         ids: &[String],
@@ -1436,7 +1524,7 @@ impl MessageRepository for StrictRepo {
     ) -> Result<MessagePage, MessageError> {
         self.inner.timeline(parent, query).await
     }
-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+    async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
         self.inner.create(command).await
     }
     async fn edit(
@@ -1444,10 +1532,14 @@ impl MessageRepository for StrictRepo {
         parent: &MessageParent,
         id: Uuid,
         command: EditMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<(Message, Option<i64>), MessageError> {
         self.inner.edit(parent, id, command).await
     }
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(Message, Option<i64>), MessageError> {
         self.inner.delete(parent, id).await
     }
     async fn react(
@@ -1465,14 +1557,14 @@ impl MessageRepository for StrictRepo {
         parent: &MessageParent,
         root: Uuid,
         patch: ThreadPatch,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         self.inner.patch_thread(parent, root, patch).await
     }
     async fn delete_thread(
         &self,
         parent: &MessageParent,
         root: Uuid,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         self.inner.delete_thread(parent, root).await
     }
     async fn resolve_legacy(
@@ -1688,6 +1780,33 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
 #[derive(Clone)]
 struct TimelineFacts(Vec<activity::domain::timeline::TimelineActivity>);
 impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
+    fn read_ids<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineIdsQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            assert_eq!(query.entity_type, activity::EntityType::Channel);
+            assert_eq!(query.entity_id, Uuid::from_u128(20).to_string());
+            assert_eq!(query.selection, CHANNEL_TIMELINE);
+            Ok(self
+                .0
+                .iter()
+                .filter(|row| query.ids.contains(&row.id))
+                .cloned()
+                .collect())
+        })
+    }
+
     fn read<'a>(
         &'a self,
         query: activity::domain::timeline::ActivityTimelineQuery,
@@ -1735,6 +1854,23 @@ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
 #[derive(Clone)]
 struct CountedFacts(TimelineFacts, Arc<Mutex<Vec<u16>>>);
 impl activity::domain::timeline::ActivityTimeline for CountedFacts {
+    fn read_ids<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineIdsQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        self.0.read_ids(query)
+    }
+
     fn read<'a>(
         &'a self,
         query: activity::domain::timeline::ActivityTimelineQuery,

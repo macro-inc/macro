@@ -105,6 +105,7 @@ fn send_error(err: MessageError) -> ToolCallError {
             "not allowed to send this message: it attaches an item the user cannot view".to_string()
         }
         MessageError::NotFound => "thread not found in this channel".to_string(),
+        MessageError::Contended(_) => err.to_string(),
         MessageError::Conflict | MessageError::Repository(_) => {
             "failed to send message".to_string()
         }

@@ -46,7 +46,7 @@ async fn intent(pool: &PgPool, context: &ClaimedConversation) -> HistoricalMessa
 async fn settlement_waits_for_atomic_references_then_required_search(pool: PgPool) {
     let (repo, team, event) = fixture(&pool, None).await;
     let context = claim(&repo, &event).await;
-    intent(&pool, &context).await;
+    let message = intent(&pool, &context).await;
     repo.finalize(team, event.job_id).await.unwrap();
     let mut tx = pool.begin().await.unwrap();
     assert!(next_in(&mut tx).await.unwrap().is_none());
@@ -62,8 +62,13 @@ async fn settlement_waits_for_atomic_references_then_required_search(pool: PgPoo
             .status,
         JobStatus::Processing
     );
+    let discovered = peek_next(&pool, None).await.unwrap().unwrap();
+    assert_eq!(discovered.job, event.job_id);
+    assert_eq!(discovered.message, message.id);
+    assert_eq!(discovered.channel, message.channel_id);
     let mut tx = pool.begin().await.unwrap();
     let fenced = next_in(&mut tx).await.unwrap().unwrap();
+    assert_eq!(fenced.work().message, discovered.message);
     let mut concurrent = pool.begin().await.unwrap();
     assert!(
         next_in(&mut concurrent).await.unwrap().is_none(),

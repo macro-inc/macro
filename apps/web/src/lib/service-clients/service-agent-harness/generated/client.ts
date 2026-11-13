@@ -1065,8 +1065,13 @@ export type createAgentSessionResponse500 = {
   status: 500;
 };
 
-export type createAgentSessionResponse503 = {
+export type createAgentSessionResponse503ApplicationJson = {
   data: AiAdmissionErrorBody;
+  status: 503;
+};
+
+export type createAgentSessionResponse503TextPlain = {
+  data: string;
   status: 503;
 };
 
@@ -1081,7 +1086,8 @@ export type createAgentSessionResponseError = (
   | createAgentSessionResponse404
   | createAgentSessionResponse422
   | createAgentSessionResponse500
-  | createAgentSessionResponse503
+  | createAgentSessionResponse503ApplicationJson
+  | createAgentSessionResponse503TextPlain
 ) & {
   headers: Headers;
 };

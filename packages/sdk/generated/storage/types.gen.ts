@@ -14138,6 +14138,10 @@ export type MessageEvent = {
      * Changed parent, used for subscriptions and cache invalidation.
      */
     parent: MessageParent;
+    /**
+     * Committed channel change position; absent for other parents and typing.
+     */
+    seq?: number | null;
 };
 
 /**
@@ -26702,6 +26706,10 @@ export type PostChannelBotWebhookErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: ErrorResponse;
 };
 
 export type PostChannelBotWebhookError = PostChannelBotWebhookErrors[keyof PostChannelBotWebhookErrors];
@@ -29990,6 +29998,10 @@ export type CommentOnDocumentTextErrors = {
      * The comment could not be anchored; nothing was posted
      */
     502: ErrorResponse;
+    /**
+     * Message storage is busy; retry after Retry-After seconds
+     */
+    503: ErrorResponse;
 };
 
 export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
@@ -33253,6 +33265,13 @@ export type EntityMessageCreateData = {
     url: '/messages/{parent_type}/{parent_id}';
 };
 
+export type EntityMessageCreateErrors = {
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: unknown;
+};
+
 export type EntityMessageCreateResponses = {
     200: Message;
 };
@@ -33273,6 +33292,13 @@ export type EntityMessageDeleteMessageData = {
         nonce?: string | null;
     };
     url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageDeleteMessageErrors = {
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: unknown;
 };
 
 export type EntityMessageDeleteMessageResponses = {
@@ -33309,6 +33335,13 @@ export type EntityMessageEditData = {
     url: '/messages/{parent_type}/{parent_id}/items/{id}';
 };
 
+export type EntityMessageEditErrors = {
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: unknown;
+};
+
 export type EntityMessageEditResponses = {
     200: Message;
 };
@@ -33324,6 +33357,13 @@ export type EntityMessageReactData = {
     };
     query?: never;
     url: '/messages/{parent_type}/{parent_id}/items/{id}/reactions';
+};
+
+export type EntityMessageReactErrors = {
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: unknown;
 };
 
 export type EntityMessageReactResponses = {
@@ -33370,6 +33410,13 @@ export type EntityMessageDeleteThreadData = {
     url: '/messages/{parent_type}/{parent_id}/threads/{id}';
 };
 
+export type EntityMessageDeleteThreadErrors = {
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: unknown;
+};
+
 export type EntityMessageDeleteThreadResponses = {
     200: ThreadState;
 };
@@ -33402,6 +33449,13 @@ export type EntityMessagePatchThreadData = {
     };
     query?: never;
     url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessagePatchThreadErrors = {
+    /**
+     * Channel is busy; retry after Retry-After seconds
+     */
+    503: unknown;
 };
 
 export type EntityMessagePatchThreadResponses = {

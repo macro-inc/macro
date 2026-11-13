@@ -19,6 +19,7 @@ pub struct AnnouncerMock {
     presented: Arc<Mutex<Vec<ReplyPresentation>>>,
     typed: Arc<Mutex<Vec<AgentTypingUpdate>>>,
     present_failure: Arc<Mutex<Option<String>>>,
+    admission_failure: Arc<Mutex<Option<String>>>,
     /// When set, every announce fails with this message.
     failure: Arc<Mutex<Option<String>>>,
 }
@@ -47,8 +48,20 @@ impl AnnouncerMock {
             .expect("announcer mock lock should not be poisoned") = Some(message.to_owned());
     }
 
+    /// Reject reply admission before the operation can acquire its journal lease.
+    pub fn refuses_write_admission(&self, message: &str) {
+        *self
+            .admission_failure
+            .lock()
+            .expect("announcer mock lock should not be poisoned") = Some(message.to_owned());
+    }
+
     /// Stop failing: the next announce, resolve or presentation succeeds.
     pub fn recovers(&self) {
+        *self
+            .admission_failure
+            .lock()
+            .expect("announcer mock lock should not be poisoned") = None;
         *self
             .present_failure
             .lock()
@@ -120,6 +133,26 @@ impl AnnouncerMock {
 }
 
 impl SessionAnnouncer for AnnouncerMock {
+    async fn with_write_admission<F>(
+        &self,
+        _parent: &messages::domain::models::MessageParent,
+        operation: F,
+    ) -> Result<F::Output>
+    where
+        F: std::future::Future + Send,
+        F::Output: Send,
+    {
+        if let Some(message) = self
+            .admission_failure
+            .lock()
+            .expect("announcer mock lock should not be poisoned")
+            .clone()
+        {
+            return Err(HarnessError::ReplyBusy(rootcause::report!("{message}")));
+        }
+        Ok(operation.await)
+    }
+
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         if let Some(message) = self
             .failure

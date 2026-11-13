@@ -26,13 +26,14 @@ async fn channel_parent_fk_rejects_missing_channels_and_cascades(pool: PgPool) {
         width: None,
         height: None,
     });
-    let root = repo.create(post.clone()).await.unwrap();
+    let root = repo.create(post.clone()).await.unwrap().0;
     post.input.thread_id = Some(root.id);
-    let reply = repo.create(post.clone()).await.unwrap();
+    let reply = repo.create(post.clone()).await.unwrap().0;
     let document = repo
         .create(command("message-doc-a", None, "keep"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     sqlx::query!("DELETE FROM comms_channels WHERE id = $1", channel)
         .execute(&pool)
         .await

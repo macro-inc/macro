@@ -66,6 +66,15 @@ pub struct ActivityRange {
     pub truncated: bool,
 }
 
+/// Commit metadata supplied by the timeline domain hosting an activity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActivityReceipt {
+    /// The activity whose write committed.
+    pub activity_id: Uuid,
+    /// Its position in the owning timeline's change sequence, when one exists.
+    pub seq: Option<i64>,
+}
+
 /// Announces durably recorded activities to realtime subscribers.
 ///
 /// Best-effort: implementations bound delivery time and log failures instead
@@ -74,6 +83,16 @@ pub struct ActivityRange {
 pub trait ActivityRealtimePublisher: Send + Sync {
     /// Announces recorded activities to their subjects and current accessors.
     fn publish_recorded(&self, activities: &[Activity]) -> impl Future<Output = ()> + Send;
+
+    /// Announces committed rows with optional metadata from their owning
+    /// timelines. Publishers without timeline sequences use the ordinary path.
+    fn publish_recorded_with_receipts(
+        &self,
+        activities: &[Activity],
+        _receipts: &[ActivityReceipt],
+    ) -> impl Future<Output = ()> + Send {
+        self.publish_recorded(activities)
+    }
 
     /// Announces the durable removal of activity rows.
     fn publish_invalidated(&self) -> impl Future<Output = ()> + Send;
@@ -86,6 +105,19 @@ impl<A: ActivityRealtimePublisher, B: ActivityRealtimePublisher> ActivityRealtim
     async fn publish_recorded(&self, activities: &[Activity]) {
         self.0.publish_recorded(activities).await;
         self.1.publish_recorded(activities).await;
+    }
+
+    async fn publish_recorded_with_receipts(
+        &self,
+        activities: &[Activity],
+        receipts: &[ActivityReceipt],
+    ) {
+        self.0
+            .publish_recorded_with_receipts(activities, receipts)
+            .await;
+        self.1
+            .publish_recorded_with_receipts(activities, receipts)
+            .await;
     }
 
     async fn publish_invalidated(&self) {
@@ -149,7 +181,7 @@ pub trait ActivityRepo {
     fn insert_activities(
         &self,
         activities: &[Activity],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ActivityReceipt>, Self::Err>> + Send;
 
     /// Hard-deletes every activity for the purged entities.
     fn purge_entities(

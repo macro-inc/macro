@@ -1039,9 +1039,13 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        let (admitted_channel, _permit) =
+            lifecycle::admit_channel_write(&self.pool, call_id).await?;
         let mut tx = self.pool.begin().await?;
+        let channel_id = lifecycle::channel_thread_in(tx.as_mut(), call_id).await?;
+        lifecycle::check_admitted_channel(admitted_channel, channel_id)?;
 
-        sqlx::query!(
+        let deleted = sqlx::query!(
             r#"
             DELETE FROM calls WHERE id = $1
             "#,
@@ -1057,6 +1061,16 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
+        if deleted.rows_affected() > 0
+            && let Some(channel_id) = channel_id
+        {
+            channel_change_db_utils::append_in(
+                &mut tx,
+                channel_id,
+                channel_change_db_utils::Change::Message(*call_id),
+            )
+            .await?;
+        }
         tx.commit().await?;
         Ok(())
     }
@@ -2230,8 +2244,12 @@ impl CallRepository for PgCallRepo {
     async fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> Result<Option<DeletedCallRecordStorageKeys>, Self::Err> {
+    ) -> Result<Option<DeletedCallRecordStorageKeys>, CallError> {
+        let (admitted_channel, _permit) =
+            lifecycle::admit_channel_write(&self.pool, call_record_id).await?;
         let mut tx = self.pool.begin().await?;
+        let channel_id = lifecycle::channel_thread_in(tx.as_mut(), call_record_id).await?;
+        lifecycle::check_admitted_channel(admitted_channel, channel_id)?;
 
         let row = sqlx::query!(
             r#"
@@ -2249,6 +2267,16 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
+        if row.is_some()
+            && let Some(channel_id) = channel_id
+        {
+            channel_change_db_utils::append_in(
+                &mut tx,
+                channel_id,
+                channel_change_db_utils::Change::Message(*call_record_id),
+            )
+            .await?;
+        }
         tx.commit().await?;
         Ok(row.map(|r| DeletedCallRecordStorageKeys {
             recording_key: r.recording_key,

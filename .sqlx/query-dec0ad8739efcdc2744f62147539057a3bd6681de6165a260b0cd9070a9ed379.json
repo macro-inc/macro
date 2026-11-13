@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, actor_id, occurred_at, action, action_payload AS payload\n            FROM activity_events\n            WHERE id = ANY($1) AND entity_type = $2 AND entity_id = $3\n                AND action = ANY($4)\n                AND (action <> 'property_changed' OR cardinality($5::text[]) = 0\n                    OR action_payload->>'property' = ANY($5::text[]))\n            ORDER BY array_position($1, id)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "dec0ad8739efcdc2744f62147539057a3bd6681de6165a260b0cd9070a9ed379"
+}

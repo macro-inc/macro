@@ -366,7 +366,16 @@ where
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> BoxFuture<'_, Result<CommandOutcome>> {
-        Box::pin(self.execute_unboxed(session_id, command))
+        Box::pin(async move {
+            if let HarnessCommand::ConversationMessage(open) = &command {
+                let parent = open.origin.announcement().parent;
+                self.announcer
+                    .with_write_admission(&parent, self.execute_unboxed(session_id, command))
+                    .await?
+            } else {
+                self.execute_unboxed(session_id, command).await
+            }
+        })
     }
 
     async fn execute_unboxed(
@@ -377,6 +386,10 @@ where
         // A conversation reserves its identity before startup. Commands are serialized
         // under that identity, so only the first opens; every later post is a
         // regular queued turn, including after the runtime has disconnected.
+        let admitted_parent = match &command {
+            HarnessCommand::ConversationMessage(open) => Some(open.origin.announcement().parent),
+            _ => None,
+        };
         let mut _delivery_lease = None;
         let command = match command {
             HarnessCommand::ConversationMessage(mut open) => {
@@ -406,6 +419,11 @@ where
                     }
                     open = record.command;
                     origin = open.origin.announcement();
+                    if Some(&origin.parent) != admitted_parent.as_ref() {
+                        return Err(HarnessError::ReplyBusy(rootcause::report!(
+                            "conversation parent changed before bootstrap admission"
+                        )));
+                    }
                     action_id = record.action_id;
                 }
                 // Only a bootstrap takes the delivery lease: until the session
@@ -1857,13 +1875,15 @@ pub(super) fn queue_result<T>(
 }
 
 /// Whether a conversation message that failed to execute stays queued for
-/// recovery, because the failure means another replica will run it.
+/// recovery, because delivery is retryable or another replica will run it.
 fn leaves_turn_queued(error: &HarnessError) -> bool {
     matches!(
         error,
         HarnessError::Forward(_)
+            | HarnessError::ReplyBusy(_)
             | HarnessError::Session(
-                AgentSessionError::Draining(_)
+                AgentSessionError::ReplyBusy(_)
+                    | AgentSessionError::Draining(_)
                     | AgentSessionError::ManagedElsewhere(_)
                     | AgentSessionError::FencedOut(_)
             )

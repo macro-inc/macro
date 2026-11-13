@@ -1157,7 +1157,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
-        let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        let activity_repo = crate::service::activity::PgChannelActivityRepo::new(db.clone());
         let activity_realtime = activity::domain::announcements::ActivityAnnouncements::new(
             activity::KafkaActivityRealtimePublisher::new(macro_event_broker.clone()),
             crate::service::activity::EntityAccessActivityAudience::new(
