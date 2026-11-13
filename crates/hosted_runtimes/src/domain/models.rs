@@ -363,7 +363,9 @@ impl Reservation {
         format!("computer-add:{}", self.id)
     }
 
-    /// A reservation as its team sees it: purchasing, setup step Creating.
+    /// A reservation as its team sees it: purchasing, setup step
+    /// Billing, since a reservation exists only while its charge is
+    /// being confirmed.
     pub fn status(&self) -> ComputerStatus {
         ComputerStatus {
             id: self.id,
@@ -379,7 +381,8 @@ impl Reservation {
                 Funding::Comped { reason } => Some(reason.clone()),
                 Funding::Stripe { .. } => None,
             },
-            setup: Some(SetupProgress::of(SetupStep::Creating)),
+            setup: Some(SetupProgress::of(SetupStep::Billing, Some(self.created_at))),
+            failure_reason: None,
             powered_on: true,
             cancels_at: None,
             can_undo_cancel: false,
@@ -550,6 +553,19 @@ pub struct HostAllocation {
     pub disk_gib: u32,
 }
 
+impl HostAllocation {
+    /// Whether a computer of `units` fits on the host while awake.
+    pub fn runs(&self, units: u32) -> bool {
+        units <= self.host.awake_capacity_units
+    }
+
+    /// Whether the host can sell a computer of `units`: it runs it and has
+    /// that much sold capacity left, as `ComputerRepo::reserve` decides.
+    pub fn sells(&self, units: u32) -> bool {
+        self.runs(units) && self.sold_units + units <= self.host.sold_capacity_units
+    }
+}
+
 /// What a host reports when it registers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostRegistration {
@@ -626,6 +642,10 @@ pub enum BillingStatus {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SetupStep {
+    /// The purchase is being charged on the team's subscription: a
+    /// reservation whose subscription change is not confirmed yet (it may be
+    /// waiting on another change to the subscription to finish).
+    Billing,
     /// Creating the guest.
     Creating,
     /// Starting the guest operating system.
@@ -647,15 +667,18 @@ pub struct SetupProgress {
     pub position: u8,
     /// Number of setup stages.
     pub total: u8,
+    /// When `step` began; null when it is not recorded.
+    pub step_started_at: Option<DateTime<Utc>>,
 }
 
 impl SetupProgress {
-    /// Progress at `step`.
-    pub fn of(step: SetupStep) -> Self {
+    /// Progress at `step`, which began at `step_started_at`.
+    pub fn of(step: SetupStep, step_started_at: Option<DateTime<Utc>>) -> Self {
         Self {
             step,
             position: step as u8 + 1,
             total: SetupStep::Ready as u8 + 1,
+            step_started_at,
         }
     }
 }
@@ -689,6 +712,9 @@ pub struct ComputerStatus {
     pub comp_reason: Option<String>,
     /// Present until the computer first connects.
     pub setup: Option<SetupProgress>,
+    /// Why the computer failed, as a short sentence safe to show; present
+    /// when it failed and the cause is known. The full error is only in the logs.
+    pub failure_reason: Option<String>,
     /// Whether validated state requests power on; false for quarantined records.
     pub powered_on: bool,
     /// When billing stops, for a computer canceled at period end.
@@ -788,7 +814,27 @@ impl Computer {
             status,
             billing: Some(billing),
             comp_reason: self.comp_reason().map(str::to_owned),
-            setup: setup_step.map(SetupProgress::of),
+            setup: setup_step.map(|step| {
+                let timeline = self.state.setup.as_ref();
+                SetupProgress::of(
+                    step,
+                    match step {
+                        SetupStep::Billing => timeline.map(|setup| setup.reserved_at),
+                        SetupStep::Creating => {
+                            timeline.map(|setup| setup.paid_at.unwrap_or(setup.reserved_at))
+                        }
+                        SetupStep::Connecting => timeline.and_then(|setup| setup.booting_at),
+                        SetupStep::Booting | SetupStep::Ready => None,
+                    },
+                )
+            }),
+            failure_reason: match self.state.phase {
+                Phase::Crashed { retry: None, .. } => self
+                    .state
+                    .failure
+                    .map(|failure| failure.reason().to_owned()),
+                _ => None,
+            },
             powered_on: self.state.power == Power::On,
             cancels_at,
             can_undo_cancel: live && billing == BillingStatus::Ending,
@@ -832,6 +878,7 @@ impl ComputerRecord {
                 billing: None,
                 comp_reason: None,
                 setup: None,
+                failure_reason: None,
                 powered_on: false,
                 cancels_at: None,
                 can_undo_cancel: false,

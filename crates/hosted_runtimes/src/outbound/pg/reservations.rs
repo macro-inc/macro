@@ -96,6 +96,7 @@ impl PgComputerRepo {
             SELECT host.id
             FROM hosted_runtime_host host
             LEFT JOIN held ON held.host_id = host.id
+            WHERE host.awake_capacity_units >= $1::BIGINT
             GROUP BY host.id, host.sold_capacity_units
             HAVING host.sold_capacity_units - COALESCE(SUM(held.units), 0) >= $1::BIGINT
             ORDER BY host.sold_capacity_units - COALESCE(SUM(held.units), 0) DESC

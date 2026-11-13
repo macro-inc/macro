@@ -148,6 +148,10 @@ Pulumi stacks; they do not host extra agent processes.
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
+- `src/computers/setup_notice.rs`: `IngressSetupNotices`, the operator's
+  `SetupNotices` port: sends the buyer `computer_setup` (ready, or failed with
+  the status's failure reason; inbox, gateway, push) on the team entity, with
+  an id derived from computer and outcome (plus `failed_at` for a failure).
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only
@@ -201,6 +205,11 @@ Pulumi stacks; they do not host extra agent processes.
   `scheduled_action_draft` store, the check's code-mode invocation lookup
   (`CorrelationSessions`), what a session created from its agent activity
   (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  Background drafts (`/scheduled-actions/draft-jobs`, `DraftJobs`) run on
+  the scheduling `workers` tracker under `stop_workers`, so shutdown fails
+  the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they
+  share the draft store, push `routine_draft_update` through the connection
+  gateway, and the same minute's sweep fails drafts whose replica died.
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):
@@ -211,9 +220,12 @@ Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected
-  Pipedream apps; their hidden sessions run on the free tier's model, gated
-  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
-  sessions a stopped process left open every minute.
+  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  suggestions and routines sessions hidden on the free tier's model, each kind
+  gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
+  `scheduling.rs` sweeps generation sessions a stopped process left open
+  every minute and starts nightly generations every five minutes, once the
+  process is ready.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).

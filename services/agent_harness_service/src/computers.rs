@@ -41,6 +41,7 @@ pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod presence;
+pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
@@ -56,7 +57,17 @@ const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// sign-in or sign-out made on the computer itself.
 const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
-pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+/// The notification ingress the operator's setup notices go through.
+pub type SetupNotifications =
+    notification::domain::service::SqsNotificationIngress<notification::outbound::queue::SqsQueue>;
+
+pub type Operator = ComputerOperator<
+    PgComputerRepo,
+    ConfiguredFleet,
+    HostedHarnesses,
+    SystemClock,
+    setup_notice::IngressSetupNotices<SetupNotifications>,
+>;
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
@@ -66,6 +77,7 @@ pub(crate) async fn operator(
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    notifications: Arc<SetupNotifications>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -141,12 +153,13 @@ pub(crate) async fn operator(
     ServiceDeployment.deployment()?;
 
     let operator = ComputerOperator::start(
-        PgComputerRepo::new(pool.clone(), config.computer_billing_policy()?),
+        PgComputerRepo::new(operator_pool(pool), config.computer_billing_policy()?),
         fleet,
         HostedHarnesses {
             service: harnesses,
             default_agents,
         },
+        setup_notice::IngressSetupNotices::new(notifications),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
@@ -158,6 +171,25 @@ pub(crate) async fn operator(
         &config.internal_api_key,
     )?));
     Ok(Some(Arc::new(operator)))
+}
+
+/// One connection per concurrent pass. The control plane gets its own pool
+/// so a burst of session traffic (or macrod reconnecting after a deploy)
+/// cannot starve it, and its waits stay short: a pass that cannot get a
+/// connection skips its tick instead of queueing behind the burst.
+const OPERATOR_CONNECTIONS: u32 = 5;
+/// How long a pass waits for a connection before skipping its tick.
+const OPERATOR_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Return idle connections; the database is shared by every service.
+const OPERATOR_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// The operator's own pool, on connections made like `pool`'s.
+fn operator_pool(pool: &PgPool) -> PgPool {
+    PgPoolOptions::new()
+        .max_connections(OPERATOR_CONNECTIONS)
+        .acquire_timeout(OPERATOR_ACQUIRE_TIMEOUT)
+        .idle_timeout(OPERATOR_IDLE_TIMEOUT)
+        .connect_lazy_with(pool.connect_options().as_ref().clone())
 }
 
 /// The deployment a computer joins: this service's own typed addresses,
@@ -255,6 +287,8 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
 ) {
     let mut interval = tokio::time::interval(pass.tick());
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // Consecutive passes skipped because the database had no connection to give.
+    let mut skipped: u32 = 0;
     loop {
         tokio::select! {
             biased;
@@ -300,11 +334,36 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map(|_| ())
                     .map_err(anyhow::Error::from),
             };
-        if let Err(error) = outcome {
-            let name: &'static str = pass.into();
-            tracing::error!(pass = name, error = ?error, "computer pass failed");
+        let name: &'static str = pass.into();
+        match outcome {
+            Ok(()) => {
+                if skipped > 0 {
+                    tracing::info!(pass = name, skipped, "computer pass resumed");
+                }
+                skipped = 0;
+            }
+            // A busy pool is not a failure: skip this tick and try the next,
+            // warning once per outage rather than on every tick.
+            Err(error) if storage_unavailable(&error) => {
+                if skipped == 0 {
+                    tracing::warn!(
+                        pass = name,
+                        "computer storage unavailable; skipping passes until it recovers"
+                    );
+                }
+                skipped = skipped.saturating_add(1);
+            }
+            Err(error) => {
+                tracing::error!(pass = name, error = ?error, "computer pass failed");
+            }
         }
     }
+}
+
+fn storage_unavailable(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<hosted_runtimes::domain::service::ComputerError>()
+        .is_some_and(hosted_runtimes::domain::service::ComputerError::is_storage_unavailable)
 }
 
 /// The slice of [`HarnessService`] the control plane uses; object-safe so

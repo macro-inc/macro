@@ -173,6 +173,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
             "config": {
                 "limits.cpu": "8",
                 "limits.memory": "16GiB",
+                "migration.stateful": "false",
                 "user.macro.computer_id": "01900000-0000-7000-8000-000000000001",
                 "user.macro.enrollment": "{\"x\":1}",
                 "user.macro.control_plane": "test-a",
@@ -427,6 +428,35 @@ fn not_found_is_lost_but_a_host_failure_is_not() {
         })
         .is_missing()
     );
+}
+
+#[test]
+fn invalid_requests_fail_for_good_but_host_trouble_is_retried() {
+    let permanent = |error: IncusError| IncusFleetError::Incus(error).is_permanent();
+    assert!(permanent(IncusError::OperationFailed {
+        operation_id: "op".to_owned(),
+        message: "Failed creating instance record: Failed initializing instance: Failed add validation for device \"data\": Only additional disks coming from a shared storage pool are supported with migration.stateful=true".to_owned(),
+    }));
+    assert!(permanent(IncusError::Rejected {
+        status: 400,
+        message: "Invalid config".to_owned(),
+    }));
+    assert!(!permanent(IncusError::OperationFailed {
+        operation_id: "op".to_owned(),
+        message: "Failed to run: qemu exited".to_owned(),
+    }));
+    assert!(!permanent(IncusError::Rejected {
+        status: 409,
+        message: "Instance is busy running a start operation".to_owned(),
+    }));
+    assert!(!permanent(IncusError::Rejected {
+        status: 503,
+        message: "Unavailable".to_owned(),
+    }));
+    assert!(!permanent(IncusError::OperationTimedOut {
+        operation_id: "op".to_owned(),
+    }));
+    assert!(IncusFleetError::DiskTooSmall { disk_gib: 16 }.is_permanent());
 }
 
 #[test]

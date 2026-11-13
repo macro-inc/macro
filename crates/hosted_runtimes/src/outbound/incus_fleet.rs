@@ -9,6 +9,10 @@
 //! Incus does not delete custom volumes with their instance, so destroy
 //! deletes it afterwards. A guest recreated after a loss reuses the volume.
 //!
+//! The VM is created with `migration.stateful=false`: Incus attaches
+//! extra disks to a stateful VM only from a shared pool, and stop is
+//! always a cold shutdown, so nothing here needs stateful migration.
+//!
 //! Verbs check the instance's status first so a retried effect is a no-op
 //! instead of an Incus "already running" error.
 
@@ -220,6 +224,43 @@ impl FleetError for IncusFleetError {
             self,
             Self::Missing { .. } | Self::Incus(IncusError::NotFound { .. })
         )
+    }
+
+    fn is_permanent(&self) -> bool {
+        match self {
+            Self::Incus(error) => incus_rejected_for_good(error),
+            Self::Encode(_) | Self::Name(_) | Self::Image(_) | Self::DiskTooSmall { .. } => true,
+            Self::Enrollment(_)
+            | Self::EnrollmentMismatch
+            | Self::Missing { .. }
+            | Self::UnknownImage { .. }
+            | Self::UnknownStatus { .. }
+            | Self::BadComputerId { .. } => false,
+        }
+    }
+}
+
+/// Whether Incus refused the request itself, so sending it again fails the
+/// same way: a 4xx other than timeout, conflict, lock and rate limit, or an
+/// operation that failed validating its config or devices (operations
+/// report every failure as 400, so their text decides).
+fn incus_rejected_for_good(error: &IncusError) -> bool {
+    match error {
+        IncusError::Rejected { status, .. } => {
+            (400..500).contains(status) && !matches!(status, 408 | 409 | 423 | 425 | 429)
+        }
+        IncusError::OperationFailed { message, .. } => {
+            let message = message.to_lowercase();
+            message.contains("validation") || message.contains("invalid ")
+        }
+        IncusError::InvalidCredentials(_)
+        | IncusError::NotFound { .. }
+        | IncusError::OperationCancelled { .. }
+        | IncusError::OperationTimedOut { .. }
+        | IncusError::ExecFailed { .. }
+        | IncusError::MalformedResponse(_)
+        | IncusError::WebSocket(_)
+        | IncusError::Transport(_) => false,
     }
 }
 
@@ -572,6 +613,9 @@ fn instance_config(
         ),
         (CREATED_AT_KEY.to_owned(), created_at.to_rfc3339()),
         (INCUS_ENROLLMENT_KEY.to_owned(), enrollment_json.to_owned()),
+        // The data volume sits on a local pool, which Incus refuses to
+        // attach to a stateful VM; this overrides any profile that sets it.
+        ("migration.stateful".to_owned(), "false".to_owned()),
         ("limits.cpu".to_owned(), resources.vcpus.get().to_string()),
         (
             "limits.memory".to_owned(),

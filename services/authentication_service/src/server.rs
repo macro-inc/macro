@@ -1007,8 +1007,15 @@ async fn run_computer_billing_effects(
             () = stop.cancelled() => return,
             _ = interval.tick() => {}
         }
-        if let Err(error) = service.run_billing_effects().await {
-            tracing::error!(error = ?error, "computer billing effects pass failed");
+        match service.run_billing_effects().await {
+            Ok(_) => {}
+            // A busy pool is not a failure; the next tick tries again.
+            Err(error) if error.is_storage_unavailable() => {
+                tracing::warn!("computer storage unavailable; billing effects pass skipped");
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "computer billing effects pass failed");
+            }
         }
     }
 }

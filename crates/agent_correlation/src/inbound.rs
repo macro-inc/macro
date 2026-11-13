@@ -2,7 +2,7 @@
 
 use crate::{
     context::Attribution,
-    domain::{CorrelationError, CorrelationRepository, validate},
+    domain::{Correlation, CorrelationError, CorrelationRepository, validate},
 };
 use axum::{
     Json,
@@ -59,7 +59,14 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
         let token = verified_api_token(parts, &state.jwt).await;
-        let id = accept_correlation(&state, token.as_ref()).await?;
+        let correlation = accept_correlation(&state, token.as_ref()).await?;
+        if let Some((_, correlation)) = correlation
+            && let Some(scope) = correlation.scope
+            && !scope.allows(parts.method.as_str(), parts.uri.path())
+        {
+            return Err(CorrelationRejection(CorrelationError::OutOfScope));
+        }
+        let id = correlation.map(|(id, _)| id);
         Ok(Self(id, id.and_then(|_| sdk_verb(parts))))
     }
 }
@@ -102,7 +109,7 @@ fn sdk_verb(parts: &Parts) -> Option<crate::AgentVerb> {
 async fn accept_correlation(
     state: &CorrelationState,
     token: Option<&MacroApiToken>,
-) -> Result<Option<Uuid>, CorrelationRejection> {
+) -> Result<Option<(Uuid, Correlation)>, CorrelationRejection> {
     let Some((id, agent)) =
         token.and_then(|token| Some((token.agent_correlation_id?, token.agent_id)))
     else {
@@ -112,7 +119,7 @@ async fn accept_correlation(
         .await
         .map_err(CorrelationRejection)?;
     tracing::info!(agent_correlation_id = %id, agent_session_id = %correlation.session_id, "accepted agent attribution");
-    Ok(Some(id))
+    Ok(Some((id, correlation)))
 }
 
 /// A client-safe attribution failure, separate from authorization failures.
@@ -128,7 +135,7 @@ impl IntoResponse for CorrelationRejection {
         let status = match &self.0 {
             CorrelationError::MissingAgent => StatusCode::BAD_REQUEST,
             CorrelationError::NotFound => StatusCode::NOT_FOUND,
-            CorrelationError::AgentMismatch => StatusCode::FORBIDDEN,
+            CorrelationError::AgentMismatch | CorrelationError::OutOfScope => StatusCode::FORBIDDEN,
             CorrelationError::Unavailable(error) => {
                 tracing::error!(?error, "agent correlation lookup failed");
                 StatusCode::SERVICE_UNAVAILABLE
@@ -161,14 +168,30 @@ async fn propagate_request(
 ) -> Response {
     let (mut parts, body) = request.into_parts();
     let token = verified_api_token(&mut parts, &state.jwt).await;
-    let correlation_id = match accept_correlation(&state, token.as_ref()).await {
-        Ok(id) => id,
+    let correlation = match accept_correlation(&state, token.as_ref()).await {
+        Ok(correlation) => correlation,
         Err(error) => return error.into_response(),
     };
+    // A session minted with a scope makes only the requests inside it, on
+    // every service that accepts its credential.
+    if let Some((_, correlation)) = correlation
+        && let Some(scope) = correlation.scope
+        && !scope.allows(parts.method.as_str(), parts.uri.path())
+    {
+        tracing::warn!(
+            scope = scope.as_str(),
+            method = %parts.method,
+            "refused a request outside its session's scope"
+        );
+        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
+    }
+    let correlation_id = correlation.map(|(id, _)| id);
     // The routine claim needs no lookup: the token's signature is its authority.
     let attribution = Attribution {
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
+        session_id: correlation.map(|(_, correlation)| correlation.session_id),
+        scope: correlation.and_then(|(_, correlation)| correlation.scope),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
     crate::context::scope_attribution(attribution, next.run(Request::from_parts(parts, body)))

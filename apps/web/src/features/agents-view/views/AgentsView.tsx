@@ -69,7 +69,11 @@ import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
-import { NewChatPage, type StartConversation } from './NewChatPage';
+import {
+  type AgentRequest,
+  NewChatPage,
+  type StartConversation,
+} from './NewChatPage';
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;
@@ -103,7 +107,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // The composer's Auto/Chat/Code choice; an open conversation keeps its own mode.
   const workspace = createWorkspaceMode();
   // A coding agent another surface asked the composer to start with.
-  const [requestedAgentId, setRequestedAgentId] = createSignal<string>();
+  const [requestedAgent, setRequestedAgent] = createSignal<AgentRequest>();
   const listView = createConversationListView(userId());
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
@@ -284,9 +288,14 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         if (content.type !== 'component') return;
         const next = parseAgentsPage(content.params?.agentPage);
         const agent = content.params?.composerAgentId;
-        if (next === 'new' && typeof agent === 'string') {
+        const request = content.params?.agentPageRequest;
+        if (
+          next === 'new' &&
+          typeof agent === 'string' &&
+          typeof request === 'string'
+        ) {
           workspace.setMode('code');
-          setRequestedAgentId(agent);
+          setRequestedAgent({ agentId: agent, request });
         }
         if (next) openPage(next);
       }
@@ -502,7 +511,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                 }}
                                 mode={workspace.mode()}
                                 onModeChange={workspace.setMode}
-                                requestedAgentId={requestedAgentId()}
+                                requestedAgent={requestedAgent()}
                                 active={
                                   !isTouchDevice() ||
                                   (!mobileList() && page() === 'new')

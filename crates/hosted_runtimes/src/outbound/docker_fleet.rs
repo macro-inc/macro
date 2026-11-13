@@ -227,6 +227,10 @@ impl FleetError for DockerFleetError {
         matches!(self, Self::Missing { .. })
             || matches!(self, Self::Command { stderr, .. } if stderr.contains("No such container"))
     }
+
+    fn is_permanent(&self) -> bool {
+        matches!(self, Self::NotLocal(_) | Self::Encode(_))
+    }
 }
 
 impl Fleet for DockerFleet {

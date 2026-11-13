@@ -380,8 +380,9 @@ Left nav (feature and platform gates still apply):
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
-date card in the desktop app. Build date is when the running JavaScript was
-built, not when it was installed on the computer. Bundle date is when the active
+date card in the desktop app. Build date is when the installed native binary
+was built (from `get_native_build_time`), not when it was installed or when the
+running JavaScript was built, so OTA updates don't change it. Bundle date is when the active
 OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
 the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
@@ -870,8 +871,8 @@ purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progres
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
-charge is still being confirmed (`purchasing`) reads `Setting up · Creating the
-computer (1 of 3)`. Then the billing state: `Payment past due` while the team
+charge is still being confirmed (`purchasing`, or the API's billing setup
+step) reads `Setting up · Updating billing… · 0:12`. Then the billing state: `Payment past due` while the team
 subscription is past due, `Cancels <date>` while a cancellation is pending
 (`billing: ending`), or `Kept until <date>` once billing has ended and the disk
 is retained (`billing: ended`). The list polls every 3 seconds while any
@@ -907,44 +908,88 @@ To buy one as a team admin:
    Agents**, a team without a computer also sees **Run coding agents on a Macro
    computer** in the agents list, and **Where it runs** ends with **New Macro
    computer**. Computers are for paying teams: on a trialing subscription the
-   row instead reads "Computers are available on paid plans. Your team is on a
-   trial." with **Go to Billing**, and the Agents entries are hidden. The API
+   row instead reads "Computers can be added once your trial ends and your
+   team is on a paid plan." and on a team with no paid plan (offers answers
+   422) "Computers need a paid Macro plan. Your team does not have one yet.",
+   each with **Go to Billing**, and the Agents entries are hidden. The API
    answers 403 with `code: "team_on_trial"` to offers, purchase, undo and
-   restore.
+   restore. Showing the row loads the offers, so the dialog opens with the
+   sizes already there.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
-   step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
-   to Try it. The Computer step has the size radios (**Standard**, **Large**,
-   **XL**) with price per interval, a sold-out size disabled and marked
-   **Sold out**; **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
-   name); the price breakdown; and under **Buy** the heads-up "Next you'll name
-   your agent and sign in to Claude (Pro or Max) — have claude.ai handy."
+   step header, **Buy computer → Configure agent → Bring your AI → Create agent**
+   (**Buy → Agent → Your AI → Create** on phones, so it stays on one line;
+   done steps carry a check, the current one is in ink), that stays open from
+   Buy to Try it. The Buy computer step has the size radios (**Standard**,
+   **Large**, **XL**) with price per interval, a sold-out size disabled and
+   marked **Sold out**, a size too large for every host left out (none left
+   says "No computer sizes are available right now."); **Name**, prefilled "<first name>'s Agent Box" (**Agent
+   Box** without a first name); the price breakdown; and under **Buy** the
+   heads-up "Next you'll name your agent and sign in to Claude (Pro or Max) —
+   have claude.ai handy." While the sizes load, three shimmering size cards
+   stand in for the radios and **Buy** is disabled. Every computer request
+   gives up after 15 seconds; the sizes request retries once on a 5xx or a
+   dropped connection and never on a 4xx or a timeout. When the sizes cannot
+   load the step says why, in place of the cards: no paid plan (422) or a
+   trial (403 `team_on_trial`) with **Go to Billing**; an account outside the
+   rollout (any other 403, "Computers aren't available for this account yet.")
+   with only **Close**; computers unavailable (503, "Computers aren't
+   available right now. Try again later."), the billing provider failing (502,
+   "Macro's billing provider didn't answer. Try again in a moment."), a
+   timeout ("Loading computer sizes took too long. Try again.") or a dropped
+   connection ("Couldn't reach Macro. Check your connection and try again."),
+   each with **Retry**.
 3. **Buy · <price>/month** (or **Buy** for an included offer) adds it. Each
    opening of the modal makes one `purchaseKey`, sent again on every retry, so
    a retried Buy never charges twice. Any error means nothing was charged and
    stays in the step for a retry: sold out or a key used for another purchase
    (409), payment declined (402), a team on a trial (403 `team_on_trial`), a
-   subscription that can't add computers (422), or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
+   subscription that can't add computers (422), the billing provider failing
+   (502), a timeout, or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
    purchased. Provisioning now."; a 202 (`state: confirming`) is a success too
    and toasts "Confirming your payment. Setup starts once it goes through.",
    with the computer listed as `purchasing`. Either way the modal moves
-   straight to **Agent**.
+   straight to **Configure agent**.
 
-While the computer provisions, a thin bar at the top of the modal follows the
-same three phases the row shows (Creating the computer → Starting up →
-Connecting to Macro). **Let's set up an agent on it** names the agent Macro
+While the computer provisions, a **Setup progress** list under the step bar
+follows the same phases the row shows (Updating billing…, Creating the
+computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
+on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
+"Not needed", once Macro's Claude is chosen): done stages carry a check and
+read as done (Billing updated, Computer created, Started up, Connected to
+Macro, Signed in to Claude), the current one a spinner and how long it
+has taken (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
+else from when the step was first seen here, the billing wait from the
+purchase), and a stuck one says why (waiting for capacity, or
+`failed` with "The computer could not be set up…" and **Retry setup**, which is
+`POST .../retry`; a server `failureReason`, once the API sends one, is shown
+before that copy). No control in the flow is disabled without a line beside it
+saying why (**Continue**: name the agent / choose which Claude; **Buy**: sizes
+loading; **Complete sign-in**: paste the code; **Try it** and **Create an
+agent on this computer**: setup finishing). The row in Machines shows the same live line, `Setting up ·
+Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
+carries on; the row's **Finish setup** reopens the same dialog where it left
+off. **Let's set up an agent on it** names the agent Macro
 creates on the computer ("<buyer first name>'s Agent", a coding agent that
 bypasses permission prompts) and asks for an explicit choice between **Your
 Claude account** and **Macro's Claude**; nothing is preselected. The name and
 choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
 Claude, then setup-complete.
 
-- **Your Claude account** goes to **Sign in to Claude**. Until the computer
-  connects it says "Your sign-in link will be ready in a moment. Keep this
-  open; you'll open claude.ai, sign in, and paste a code back here." Then
-  **Open claude.ai** turns primary and the tab title becomes "● Sign in to
-  Claude — Macro". Closed meanwhile, a toast "<computer> is ready — sign in to
-  Claude" reopens the modal on that step. The code is pasted in the same modal.
-- **Macro's Claude** skips the Claude step.
+- **Your Claude account** goes to **Bring your AI**, titled **Sign in to
+  Claude**. The sign-in link is minted by harnessd inside the computer, so
+  nothing of it can start before the computer connects: until then the step
+  explains that, shows a live status line ("Preparing sign-in… Starting up ·
+  0:42") instead of a greyed button, lists the sign-in as a later stage that
+  unlocks by itself, and offers only **Close** and **Use Macro credits
+  instead**. Once connected, **Open claude.ai** appears and the tab title
+  becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
+  (below) reopens the modal on that step. The code is pasted in the same modal.
+- **Macro's Claude** skips **Bring your AI**, shown muted with a dash as
+  "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
+  through.
+- A **failed** or stuck setup stops the **Bring your AI** step: it says setup
+  stopped before the computer came up and to use **Retry setup** above, with
+  no spinner, no elapsed time and no **Use Macro credits instead**.
 
 Macro creates that agent once, on the computer's first connection, with the
 handle `@<first-name>-s-agent` (`-2`, `-3`… when taken), on Claude Code's
@@ -954,12 +999,38 @@ can create one under **Agents**. Agents created later on a computer also
 default to bypassing permission prompts. Releasing a computer, or its disk
 being destroyed, deletes every agent on it.
 
-**Ready** follows by itself once the computer is connected and Claude is set;
-the computer status is refreshed first. **Try it** opens a new Agents
-conversation in Code with that agent selected (`openAgentsPage` with
-`composerAgentId`). Closing at any step keeps its place; the row's **Finish
-setup** reopens it. Bought from **Where it runs**, the editor selects the new
-computer when the modal closes.
+**Create agent**, the last step ("<agent> is ready"), follows by itself once
+the computer is connected and Claude is set; the computer status is refreshed
+first. It offers **Done**, **Create an agent on this computer** and **Try it**:
+
+- **Try it** opens a new Agents conversation in Code with the configured agent
+  selected (`openAgentsPage` with `composerAgentId`; the Agents view hands the
+  composer an agent request keyed by the page request, so every Try it
+  selects it again). The agent is created server-side when the computer first
+  comes up, so the setup steps refetch a cached agents list that lacks it; the
+  composer's roster reads the same list and selects the agent once it is there.
+- **Create an agent on this computer** opens **Settings → Agents** on the
+  **New agent** form with this computer chosen under **Where it runs**
+  (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
+  agent's **Where it runs**, it reads **Use for this agent** and only closes:
+  the editor selects the new computer when the modal closes.
+
+Closing at any step keeps its place; the row's **Finish setup** reopens it.
+
+**Setup notices.** Buying is asynchronous: the dialog closes at any step and
+nothing is cancelled. When the computer first connects, its buyer gets a
+`computer_setup` notification ("Your computer is ready: connect your AI and
+finish setup", in-app notice, browser and phone push); when first setup fails,
+one titled "<computer> could not be set up" with the failure reason. In the
+app it shows as a one-minute notice whose **Finish setup** / **Retry setup**
+reopens the setup dialog for that computer on **Bring your AI** (a failed
+computer shows **Retry setup** in its progress list there), on desktop and in
+the phone settings sheet. Clicking the notification or tapping the push does
+the same, also on a cold start; the link is
+`/settings/runtimes?computerSetup=<computer id>`
+(`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
+shown when it was closed while waiting for the sign-in link, is the same
+notice, so the two never stack.
 
 **Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
 **Open claude.ai** is a plain new-tab link (the desktop app hands it to the

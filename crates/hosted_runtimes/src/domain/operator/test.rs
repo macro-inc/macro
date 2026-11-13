@@ -2,6 +2,7 @@ use std::str::FromStr;
 mod agent;
 mod data_disk;
 mod redeploy;
+mod setup_notice;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
@@ -14,7 +15,7 @@ use crate::domain::models::ComputerName;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
+use crate::domain::fakes::{FakeError, FakeRepo, FakeSetupNotices, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::{ControlPlaneId, HostRegistration, NewReservation};
 use crate::domain::ports::{DefaultAgent, GuestProcess, HostedPairing};
@@ -33,11 +34,17 @@ enum FakeFleetError {
     Enrollment(#[from] EnrollmentIssueError),
     #[error("instance missing")]
     Missing,
+    #[error("request rejected")]
+    Rejected,
 }
 
 impl FleetError for FakeFleetError {
     fn is_missing(&self) -> bool {
         matches!(self, Self::Missing)
+    }
+
+    fn is_permanent(&self) -> bool {
+        matches!(self, Self::Rejected)
     }
 }
 
@@ -48,6 +55,8 @@ struct FakeFleet {
     host_failures: Mutex<u32>,
     host_attempts: AtomicU32,
     failures: Mutex<u32>,
+    /// `create` is refused as invalid.
+    rejects: bool,
     missing: bool,
     lose_during_create: std::sync::atomic::AtomicBool,
     calls: Mutex<Vec<String>>,
@@ -77,6 +86,9 @@ impl Fleet for FakeFleet {
         start: bool,
     ) -> Result<GuestImage, FakeFleetError> {
         let image = GuestImage::try_new(BASE_IMAGE).unwrap();
+        if self.rejects {
+            return Err(FakeFleetError::Rejected);
+        }
         {
             let mut failures = self.failures.lock().unwrap();
             if *failures > 0 {
@@ -214,6 +226,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
             ..Default::default()
         },
         FakeHarnesses::default(),
+        FakeSetupNotices::default(),
         TestClock(Mutex::new(now())),
         std::sync::Arc::new(crate::domain::fakes::FixedDeployment),
     )
@@ -270,7 +283,7 @@ impl Harnesses for FakeHarnesses {
         let generation = enrollments.len() as u128;
         enrollments.push(computer.harness_id);
         if self.lose_response.swap(false, Ordering::SeqCst) {
-            return Err(FakeError);
+            return Err(FakeError::Storage);
         }
         Ok(HostedPairing {
             pairing_id: PairingId::new_from_uuid(Uuid::from_u128(
@@ -306,7 +319,7 @@ impl Harnesses for FakeHarnesses {
             .unwrap()
             .push((computer.id, harness_id));
         if self.fail_default_agent.load(Ordering::SeqCst) {
-            return Err(FakeError);
+            return Err(FakeError::Storage);
         }
         Ok(DefaultAgent::Created {
             agent_id: DEFAULT_AGENT,
@@ -316,7 +329,7 @@ impl Harnesses for FakeHarnesses {
 
 async fn operator(
     fleet: FakeFleet,
-) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock> {
+) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices> {
     ComputerOperator::start(
         FakeRepo {
             sold_units: 9,
@@ -324,6 +337,7 @@ async fn operator(
         },
         fleet,
         FakeHarnesses::default(),
+        FakeSetupNotices::default(),
         FixedClock,
         std::sync::Arc::new(crate::domain::fakes::FixedDeployment),
     )
@@ -332,7 +346,7 @@ async fn operator(
 }
 
 async fn paid_computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
 ) -> ComputerId {
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     operator
@@ -529,6 +543,38 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
     );
 }
 
+/// A pool timeout is not the effect's failure: the pass reports storage
+/// unavailable, the effect keeps its attempts and runs on the next pass.
+#[tokio::test]
+async fn a_pool_timeout_never_spends_an_effect_attempt() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    let gets = operator.repo.gets.load(std::sync::atomic::Ordering::SeqCst);
+    // The pass's read, the effect's read, then Create's own read times out.
+    *operator.repo.unavailable_gets.lock().unwrap() = vec![gets + 3];
+
+    let error = operator.run_fleet_effects().await.unwrap_err();
+
+    assert!(error.is_storage_unavailable(), "{error:?}");
+    let effects = operator.repo.effects.lock().unwrap().clone();
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].attempts, 0);
+    assert_eq!(
+        operator.repo.effect_run_after.lock().unwrap()[&effects[0].id],
+        now()
+    );
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    let booting = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(booting.state.phase, Phase::Booting);
+}
+
 #[tokio::test]
 async fn an_effect_that_keeps_failing_fails_the_computer() {
     let operator = operator(FakeFleet {
@@ -558,7 +604,49 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
             retry: None,
         }
     );
-    // The page goes out, then nothing is left to do.
+    // The page and the buyer's notice go out, then nothing is left to do.
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn a_rejected_create_fails_the_computer_without_retrying() {
+    let operator = operator(FakeFleet {
+        rejects: true,
+        ..FakeFleet::default()
+    })
+    .await;
+    let id = paid_computer(&operator).await;
+
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
+
+    let failed = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(
+        failed.state.phase,
+        Phase::Crashed {
+            restarts: 0,
+            retry: None,
+        }
+    );
+    let status = failed.status(0, now(), crate::domain::fakes::policy());
+    assert_eq!(
+        status.status,
+        crate::domain::models::ComputerStatusKind::Failed
+    );
+    assert_eq!(
+        status.failure_reason.as_deref(),
+        Some("The computer couldn't be created on the host.")
+    );
+    // The page and the buyer's notice go out, then nothing is left to do.
+    assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
 }
@@ -625,11 +713,13 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
     operator.macrod_connected(HARNESS).await.unwrap();
+    operator.run_fleet_effects().await.unwrap(); // The ready notice.
     operator
         .repo
         .apply(
             id,
             Event::EffectFailed {
+                failure: crate::domain::lifecycle::Failure::Power,
                 reason: "guest lost".to_owned(),
             },
             now(),
@@ -746,6 +836,7 @@ async fn a_lost_guest_is_recreated_with_a_fresh_pairing() {
     operator.run_fleet_effects().await.unwrap();
     // Connecting happens after the guest claims its approved pairing.
     operator.macrod_connected(HARNESS).await.unwrap();
+    operator.run_fleet_effects().await.unwrap(); // The ready notice.
 
     operator.fleet.created.lock().unwrap().remove(&id);
     operator

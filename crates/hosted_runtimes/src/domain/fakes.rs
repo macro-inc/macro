@@ -24,7 +24,7 @@ use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
 };
 use crate::domain::service::Clock;
-use crate::domain::size::{ComputerResources, ComputerSize};
+use crate::domain::size::ComputerResources;
 
 #[cfg(test)]
 mod test;
@@ -71,20 +71,39 @@ impl Clock for FixedClock {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("fake storage error")]
-pub struct FakeError;
+pub enum FakeError {
+    #[error("fake storage error")]
+    Storage,
+    /// A pool timeout, as the Postgres adapter reports one.
+    #[error("{0}")]
+    Unavailable(#[source] crate::domain::ports::StorageUnavailable),
+}
 
-/// One host with `sold_units` of sold capacity; every computer awake fits.
+impl FakeError {
+    pub fn unavailable() -> Self {
+        Self::Unavailable(crate::domain::ports::StorageUnavailable(
+            "pool timed out".into(),
+        ))
+    }
+}
+
+/// One host with `sold_units` of sold capacity and `awake_units` of awake
+/// capacity (`sold_units` when unset, so every computer awake fits).
 #[derive(Default)]
 pub struct FakeRepo {
     pub calls: AtomicUsize,
     pub sold_units: u32,
+    pub awake_units: Option<u32>,
     pub reserve_calls: Mutex<usize>,
     pub reservations: Mutex<HashMap<ComputerId, Reservation>>,
     pub purchase_keys: Mutex<HashMap<PurchaseKey, ComputerId>>,
     pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
+    /// `get` calls so far.
+    pub gets: AtomicUsize,
+    /// The 1-based `get` calls that fail as if no connection could be had.
+    pub unavailable_gets: Mutex<Vec<usize>>,
     pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub billing_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
@@ -147,6 +166,10 @@ impl FakeRepo {
         } else {
             computer.into()
         }
+    }
+
+    fn awake_units(&self) -> u32 {
+        self.awake_units.unwrap_or(self.sold_units)
     }
 
     fn live_units(&self) -> u32 {
@@ -242,7 +265,8 @@ impl ComputerRepo for FakeRepo {
                 return Ok(Reserved::Pending(pending.clone()));
             }
         }
-        if self.live_units() + reservation.resources.units() > self.sold_units {
+        let units = reservation.resources.units();
+        if units > self.awake_units() || self.live_units() + units > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let held = Reservation {
@@ -390,7 +414,7 @@ impl ComputerRepo for FakeRepo {
     ) -> Result<Option<Applied>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_next_apply.swap(false, Ordering::SeqCst) {
-            return Err(FakeError);
+            return Err(FakeError::Storage);
         }
         self.events
             .lock()
@@ -411,10 +435,19 @@ impl ComputerRepo for FakeRepo {
                 policy: policy(),
             },
         );
-        let (state, effects) = match transitioned {
+        let (mut state, effects) = match transitioned {
             Ok(next) => next,
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
+        // Latch setup milestones like the Postgres applier.
+        let (phase, connected, waiting) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.waiting_for_capacity(),
+        );
+        if let Some(setup) = state.setup.as_mut() {
+            setup.advance(&phase, connected, waiting, now);
+        }
         computer.state = state;
         self.push_effects(computer, effects, now);
         Ok(Some(Applied::Changed(Box::new(computer.clone()))))
@@ -422,6 +455,10 @@ impl ComputerRepo for FakeRepo {
 
     async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let call = self.gets.fetch_add(1, Ordering::SeqCst) + 1;
+        if self.unavailable_gets.lock().unwrap().contains(&call) {
+            return Err(FakeError::unavailable());
+        }
         Ok(self
             .computers
             .lock()
@@ -737,7 +774,7 @@ impl ComputerRepo for FakeRepo {
             host: Host {
                 id: HOST,
                 name: "fake".to_owned(),
-                awake_capacity_units: self.sold_units,
+                awake_capacity_units: self.awake_units(),
                 sold_capacity_units: self.sold_units,
             },
             sold_units: held.iter().map(|resources| resources.units()).sum(),
@@ -748,20 +785,6 @@ impl ComputerRepo for FakeRepo {
                 .sum(),
             disk_gib: held.iter().map(|resources| resources.disk_gib.get()).sum(),
         }])
-    }
-
-    async fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        _now: DateTime<Utc>,
-    ) -> Result<Vec<ComputerSize>, FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        let sold = self.live_units();
-        Ok(catalog
-            .iter()
-            .filter(|entry| entry.resources.units() > self.sold_units.saturating_sub(sold))
-            .map(|entry| entry.size)
-            .collect())
     }
 }
 
@@ -782,6 +805,7 @@ pub fn state(phase: crate::domain::lifecycle::Phase) -> crate::domain::lifecycle
         power_on_requested: false,
         capacity_wait: None,
         retried_by_team: false,
+        failure: None,
     }
 }
 
@@ -806,6 +830,26 @@ impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
         crate::domain::enrollment::DeploymentUnavailable,
     > {
         Ok(deployment())
+    }
+}
+
+/// Records every setup notice sent; `fail` refuses every send after
+/// recording it.
+#[derive(Default)]
+pub struct FakeSetupNotices {
+    pub sent: Mutex<Vec<crate::domain::ports::SetupNotice>>,
+    pub fail: AtomicBool,
+}
+
+impl crate::domain::ports::SetupNotices for FakeSetupNotices {
+    type Err = FakeError;
+
+    async fn send(&self, notice: crate::domain::ports::SetupNotice) -> Result<(), FakeError> {
+        self.sent.lock().unwrap().push(notice);
+        if self.fail.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
+        Ok(())
     }
 }
 
