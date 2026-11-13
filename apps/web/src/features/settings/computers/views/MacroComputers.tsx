@@ -2,7 +2,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { enableMacroComputers } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -12,7 +11,6 @@ import {
 } from '@queries/computers/claude';
 import {
   useCancelComputerMutation,
-  useComputerOffersQuery,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
   useRetryComputerMutation,
@@ -25,10 +23,7 @@ import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import {
-  MachineCardError,
-  MachineRow,
-} from '../../components/connected-runtimes-section';
+import { MachineCardError } from '../../components/connected-runtimes-section';
 import { HarnessIcon } from '../../integration-ui';
 import { IntegrationRow, SettingsCard } from '../../primitives';
 import type { ComputerMenuItem } from '../components/computer-actions-menu';
@@ -54,21 +49,6 @@ import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
 import { ComputerBuyFlow } from './computer-buy-flow';
 import type { SetupStepId } from './computer-setup-dialog';
-
-/** Opens Billing, where a trialing team ends its trial or a team subscribes. */
-function BillingButton() {
-  const settings = useSettingsState();
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      onClick={() => settings.openSettings('Billing')}
-    >
-      {t('computers.trialBillingAction')}
-    </Button>
-  );
-}
 
 /**
  * The offers failed for a reason Billing settles: a trial, or no paid plan.
@@ -411,16 +391,16 @@ function ManagedComputerRow(props: {
  */
 export function MacroComputers(props: {
   harnesses: readonly RegisteredHarness[];
+  /** Get a computer, at the top of Machines, opened the buy flow. */
+  buying: boolean;
+  onBuyingChange: (buying: boolean) => void;
 }) {
   const isAdmin = useIsTeamAdmin();
-  const { enabled, canPurchase, computers, failed } = useTeamComputers();
-  // Runs as soon as the buy row shows, so the dialog opens with the sizes.
-  const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
+  const { enabled, computers, failed } = useTeamComputers();
   const release = useReleaseComputerMutation();
   const agents = useAgentsQuery();
-  const planBlock = () => offersBlockedByPlan(offers);
-
-  const [buying, setBuying] = createSignal(false);
+  const buying = () => props.buying;
+  const setBuying = (value: boolean) => props.onBuyingChange(value);
   const [settingUp, setSettingUp] = createSignal<string>();
   // Set when a setup notification reopens the flow: it lands on Bring your AI.
   const [resumeAt, setResumeAt] =
@@ -446,9 +426,6 @@ export function MacroComputers(props: {
   // The computer's team owner and admins own its harness, not its buyer.
   const canManageClaude = (computer: ComputerStatus) =>
     harnessFor(computer)?.access === 'owner';
-
-  const fromPriceLine = () =>
-    fromPriceText(offers.isSuccess ? offers.data : undefined, 'inline');
 
   const releaseNow = async (computer: ComputerStatus, typedName: string) => {
     setReleaseError(undefined);
@@ -485,11 +462,7 @@ export function MacroComputers(props: {
 
   return (
     <Show when={enabled()}>
-      <Show
-        when={
-          computers().length > 0 || failed() || (canPurchase() && isAdmin())
-        }
-      >
+      <Show when={computers().length > 0 || failed()}>
         <div data-settings-target="macro-computer">
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
             {t('computers.title')}
@@ -515,29 +488,6 @@ export function MacroComputers(props: {
                 />
               )}
             </For>
-            <Show when={canPurchase() && isAdmin()}>
-              <MachineRow
-                name={t('computers.getComputer')}
-                meta={
-                  planBlock()?.message ??
-                  [t('computers.getComputerLine'), fromPriceLine()]
-                    .filter(Boolean)
-                    .join(' · ')
-                }
-                actions={
-                  <Show when={!planBlock()} fallback={<BillingButton />}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setBuying(true)}
-                    >
-                      {t('computers.getComputerAction')}
-                    </Button>
-                  </Show>
-                }
-              />
-            </Show>
             <Show when={failed()}>
               <MachineCardError>{t('computers.loadFailed')}</MachineCardError>
             </Show>

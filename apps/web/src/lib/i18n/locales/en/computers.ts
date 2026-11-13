@@ -185,6 +185,9 @@ export default {
   done: 'Done',
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
+  getComputerValue:
+    "A hosted computer where your team's agents run, always on.",
+  getComputerValueShort: 'Hosted, always on',
   getComputerLine:
     'A full computer, with your Claude sub, and a Macro agent, ready to go',
   trialBlocked:
