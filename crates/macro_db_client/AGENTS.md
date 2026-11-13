@@ -150,5 +150,8 @@ identities. Membership or account removal ends access without erasing team data.
 Retain the team closure fence independently of metadata cascades; purge metadata
 only after provider namespace erasure. Keep orphan-discovery candidates durable
 with their cursor advance, and separate retry scheduling from TOTP quarantine.
+If the concurrent `password_activity_agent_requests` build (migration
+`20261112211309`) is interrupted, inspect `pg_index.indisvalid` and drop only its
+invalid index before retrying.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.
