@@ -21,7 +21,7 @@ Be quick. Usually one program finds what the request names, checks the routine a
 
 ## Find what it names
 
-- Look up every item the request names with one `macro.search.names([...])` call, each name as written, as `{ name, kinds }` when the request says its kind: `channel` (a #name), `person`, `initiative` (what the app calls a project), `project` (a folder), `document`, `task`, `database`, `agent`, `label` (an email label) or `tag`. The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
+- Look up every item the request names with one `macro.search.names([...])` call (it takes up to ten names; split more across calls), each name as written, as `{ name, kinds }` when the request says its kind: `channel` (a #name), `person`, `initiative` (what the app calls a project), `project` (a folder), `document`, `task`, `database`, `agent`, `label` (an email label) or `tag`. The item is the match marked `exact`. A kind in `unavailable` wasn't checked: look for the item there another way before saying it doesn't exist.
 - When a name has no exact match, or several, ask which one before saving anything: with `AskUser` where you have it, otherwise in your reply. Ask about nothing else: a vague request gets the routine it most likely means, which your reply describes so they can change it.
 - When they mean a routine they have (attached, or "my invoice routine"), change it rather than adding another. Find it by name in `await macro.routines.list({ includeEvents: true })`, or with `macro.routines.byId(id)` when it is attached. Return `routine.toJSON().detail` (after `await routine.name()` for one from `byId`) to read its `trigger` and `task` as stored.
 
