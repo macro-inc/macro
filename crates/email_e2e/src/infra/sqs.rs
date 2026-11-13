@@ -162,9 +162,26 @@ impl Queues {
 
     /// Adds the calendar backfill queue, named like the others.
     pub(crate) async fn add_calendar_backfill(&mut self, prefix: &str) -> Result<(), Report> {
-        let queue = create_queue(&self.client, prefix, &CALENDAR_BACKFILL).await?;
-        self.queues.push(queue);
-        Ok(())
+        match create_queue(&self.client, prefix, &CALENDAR_BACKFILL).await {
+            Ok(queue) => {
+                self.queues.push(queue);
+                Ok(())
+            }
+            Err(error) => {
+                // The queue that failed may have left its dead-letter queue,
+                // which `delete` does not know of.
+                let leftovers = self
+                    .client
+                    .list_queues()
+                    .queue_name_prefix(format!("{prefix}-{}", CALENDAR_BACKFILL.name))
+                    .send()
+                    .await;
+                for url in leftovers.iter().flat_map(|listed| listed.queue_urls()) {
+                    self.client.delete_queue().queue_url(url).send().await.ok();
+                }
+                Err(error)
+            }
+        }
     }
 
     /// Every queue of the scenario.
