@@ -1259,11 +1259,10 @@ Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
 when opening the picker. Rows stay in place while selecting or deselecting.
 Initially selected outsiders remain visible and removable, including references
-absent from contacts. They stay searchable for re-adding during that editing
-session without contact discovery. Once the editor closes without them, they
-cannot be added again unless they join the team.
+absent from contacts. They stay searchable for re-adding while the record stays
+mounted, even after the picker closes. Unrelated non-team contacts stay excluded.
 
-The same scope applies to task/project creation and editing, bulk Set assignee,
+The same roster scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
 keep their semantics; Created by and custom people fields keep their contact lists.
 Check that a teammate absent from contacts appears and can be selected, that
