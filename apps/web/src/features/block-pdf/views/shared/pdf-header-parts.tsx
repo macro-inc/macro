@@ -1,5 +1,4 @@
 import {
-  ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -10,25 +9,12 @@ import {
   downloadPdfDocument,
   printPdfDocument,
 } from '@block-pdf/util/pdf-file-actions';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -39,11 +25,15 @@ import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import Printer from '@icon/system/regular/printer.svg';
 import { blockNameToItemType } from '@service-storage/itemType';
 import { createCallback } from '@solid-primitives/rootless';
-import { usePdfDocument } from '../context/pdf-document-context';
-import { LocationType, useCreateShareUrl } from '../signal/location';
-import { PdfSplitToolbar } from './PdfSplitToolbar';
+import { usePdfDocument } from '../../context/pdf-document-context';
+import { LocationType, useCreateShareUrl } from '../../signal/location';
 
-export function TopBar() {
+/**
+ * The PDF block's title menu operations and named header actions.
+ * `itemType` is undefined for a block name storage doesn't know, and then the
+ * block shows no header.
+ */
+export function usePdfHeaderTools() {
   const pdf = usePdfDocument();
   const documentProxy = pdf.documentProxy;
   const isAuth = useIsAuthenticated();
@@ -67,8 +57,6 @@ export function TopBar() {
   const copyEntityLink = useCopyLink();
 
   const itemType = blockNameToItemType(blockName);
-  if (!itemType) return null;
-
   const fileType = blockMetadataSignal()?.fileType;
 
   const copyLink = () => copyEntityLink(createShareUrl(LocationType.General));
@@ -132,76 +120,25 @@ export function TopBar() {
     { op: 'delete' },
   ];
 
-  const tools: BlockTool[] = [
-    {
-      label: 'Chat',
-      icon: ChatWithAgentIcon,
-      action: () =>
-        openChatWithAgent({
-          type: 'document',
-          id: documentId,
-          name: fileName(),
-          fileType,
-        }),
-      buttonComponent: (control) => (
-        <ChatWithAgentButton
-          grouped={control.grouped}
-          entity={{
-            type: 'document',
-            id: documentId,
-            name: fileName(),
-            fileType,
-          }}
-        />
-      ),
-    },
-    {
-      group: 'sharing',
-      label: 'Share',
-      icon: IconShared,
-      action: openShare,
-      buttonComponent: () => (
-        <ShareTrigger onClick={openShare} copyLink={copyLink} />
-      ),
-      focusTarget: getShareDrawerRecipientInput,
-    },
-  ];
+  const askMacro: BlockTool = {
+    label: 'Ask Macro',
+    icon: ChatWithAgentIcon,
+    action: () =>
+      openChatWithAgent({
+        type: 'document',
+        id: documentId,
+        name: fileName(),
+        fileType,
+      }),
+  };
 
-  const menuTools: BlockTool[] = [
-    {
-      label: 'Ask Macro',
-      icon: ChatWithAgentIcon,
-      action: () =>
-        openChatWithAgent({
-          type: 'document',
-          id: documentId,
-          name: fileName(),
-          fileType,
-        }),
-    },
-  ];
+  const share: BlockTool = {
+    group: 'sharing',
+    label: 'Share',
+    icon: IconShared,
+    action: openShare,
+    focusTarget: getShareDrawerRecipientInput,
+  };
 
-  return (
-    <>
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel />
-      </SplitHeaderLeft>
-      <SplitHeaderRight>
-        {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 touch:hidden">
-          <BlockLiveIndicators />
-        </div>
-      </SplitHeaderRight>
-      <PdfSplitToolbar />
-      <ResponsivePermissionsBadge />
-      <ResponsiveBlockToolbar
-        tools={tools}
-        menuTools={menuTools}
-        ops={ops}
-        id={documentId}
-        itemType={itemType}
-        name={fileName()}
-      />
-    </>
-  );
+  return { itemType, ops, openShare, copyLink, actions: { askMacro, share } };
 }
