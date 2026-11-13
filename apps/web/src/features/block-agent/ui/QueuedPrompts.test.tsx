@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueuedPrompts } from './QueuedPrompts';
 
@@ -305,6 +305,36 @@ describe('queued prompt keys', () => {
     expect(editor.enter?.(composing)).toBe(false);
     expect(onEdit).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toBeTruthy();
+  });
+
+  it('applies a server snapshot to an untouched row and sends the next edit', () => {
+    const [prompt, setPrompt] = createSignal('Queued request');
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[{ actionId: 'first', kind: 'prompt', prompt: prompt() }]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+      />
+    ));
+    // Another user's edit lands while the row is closed.
+    setPrompt('Queued request, revised');
+    expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
+      'Queued request, revised'
+    );
+    const revised = screen.getByRole('button', {
+      name: 'Queued request, revised',
+    });
+    fireEvent.click(revised);
+    editor.markdown = 'Queued request, revised again';
+    editor.change?.(editor.markdown);
+    expect(editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(
+      true
+    );
+    expect(onEdit).toHaveBeenCalledExactlyOnceWith(
+      'first',
+      'Queued request, revised again'
+    );
   });
 
   it('still sends an edit typed after an in-row restore', () => {

@@ -37,6 +37,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -483,22 +484,30 @@ function PromptBody(
 
   // A server snapshot may carry someone else's edit. Apply it only while
   // this row is untouched — never over a focused editor or unsaved local
-  // changes, which are about to become the server's text anyway.
-  createEffect(() => {
-    const server = stripAgentContext(props.item.prompt ?? '');
-    if (server === synced) return;
-    const root = editor.lexical.getRootElement();
-    const focused = root?.contains(document.activeElement) ?? false;
-    const dirty = editor.controls.getMarkdown() !== synced;
-    if (focused || dirty) return;
-    baseline = undefined;
-    editor.controls.setMarkdown(server);
-    // Outside a Lexical update the set has applied by now; a snapshot that
-    // only differs in markup reports no change, so read it here.
-    if (baseline === undefined) baseline = editor.controls.getMarkdown();
-    props.onDraftChange(server);
-    synced = server;
-  });
+  // changes, which are about to become the server's text anyway. Only the
+  // prompt is tracked: reading the editor's text must not subscribe this
+  // effect to it, or it would re-run inside the editor's own update, where
+  // the set is deferred and the read below would be stale.
+  createEffect(
+    on(
+      () => props.item.prompt,
+      (prompt) => {
+        const server = stripAgentContext(prompt ?? '');
+        if (server === synced) return;
+        const root = editor.lexical.getRootElement();
+        const focused = root?.contains(document.activeElement) ?? false;
+        const dirty = editor.controls.getMarkdown() !== synced;
+        if (focused || dirty) return;
+        baseline = undefined;
+        editor.controls.setMarkdown(server);
+        // Inside a Solid effect the change is reported after the set, so
+        // the applied text is read here.
+        if (baseline === undefined) baseline = editor.controls.getMarkdown();
+        props.onDraftChange(server);
+        synced = server;
+      }
+    )
+  );
 
   return (
     <div
