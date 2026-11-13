@@ -16,6 +16,12 @@
   installer.cloneConfig = false;
   documentation.enable = lib.mkForce false;
 
+  # incus-agent's setup script is `#!/bin/sh`, and /bin is envfs's FUSE
+  # mount. With DefaultDependencies=no the agent starts before that mount,
+  # fails with "No such file or directory" and only retries after its 5 s
+  # RestartSec, which delays /dev/incus/sock and so enrollment.
+  systemd.services.incus-agent.unitConfig.RequiresMountsFor = [ "/bin" ];
+
   boot.loader.timeout = 0;
   # `quiet` keeps kernel messages off the slow serial console, which remains
   # the recovery console.

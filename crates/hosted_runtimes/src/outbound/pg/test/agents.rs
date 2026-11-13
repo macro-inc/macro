@@ -31,10 +31,11 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
     host(&repo, "runtime-dev-1", 31, 7, 3).await;
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
 
+    // Bought first: a team buys one unpaid computer at a time.
+    bought(&repo, 2).await;
     let mut for_agent = standard(1);
     for_agent.agent = Some(agent.clone());
     let reservation = reserve(&repo, for_agent).await;
-    bought(&repo, 2).await;
 
     // Confirming: the reservation carries the link.
     assert_eq!(repo.agent_of(id).await.unwrap(), Some(agent.clone()));
@@ -45,7 +46,7 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
     // A purchase still confirming is not a computer yet.
     assert!(!repo.has_live_computer(TEAM, &agent).await.unwrap());
 
-    repo.convert_reservation(reservation.id, active(1), now())
+    repo.convert_reservation(reservation.id, now())
         .await
         .unwrap()
         .unwrap();
@@ -103,6 +104,10 @@ async fn an_agent_gets_only_one_computer(pool: PgPool) {
     reserve(&repo, first).await;
     let mut second = standard(2);
     second.agent = Some(agent);
+    // Comped, so the team's unpaid first purchase does not refuse it first.
+    second.funding = Funding::Comped {
+        reason: "internal team".to_owned(),
+    };
 
     assert!(matches!(
         repo.reserve(second, now(), now() + Duration::minutes(15))

@@ -43,8 +43,8 @@ fn purchase_error(error: ComputerError) -> TeamAgentError {
             "Macro computers are unavailable right now".to_owned(),
         ),
         ComputerError::RolloutDisabled => TeamAgentError::NotEnabled,
-        sold_out @ ComputerError::SoldOut(_) => {
-            TeamAgentError::ComputerUnavailable(sold_out.to_string())
+        refused @ (ComputerError::SoldOut(_) | ComputerError::UnpaidComputer) => {
+            TeamAgentError::ComputerUnavailable(refused.to_string())
         }
         ComputerError::SizeNotOffered => {
             TeamAgentError::ComputerUnavailable("this computer size isn't offered".to_owned())

@@ -12,9 +12,7 @@ use super::*;
 use crate::domain::fakes::MovingClock;
 use crate::domain::lifecycle::SubscriptionItemId;
 use crate::domain::models::{Purchase, PurchaseBilling, PurchaseRequest, Quote, SubscriptionItem};
-use crate::domain::ports::{
-    Billing as _, BillingError, ChargeStatus, ItemCharge, StaticFleetAttachment,
-};
+use crate::domain::ports::{BillingError, ChargeStatus, ItemCharge, StaticFleetAttachment};
 use crate::domain::service::{Clock, ComputerError, ComputerService, TeamComputerRelease};
 
 /// How the next add goes wrong.
@@ -292,12 +290,15 @@ fn purchase_request(key: &str) -> PurchaseRequest {
     }
 }
 
-/// Buy a computer through the service, so its item is on the subscription.
+/// Buy a computer through the service and settle its charge, so its item
+/// is on the subscription.
 async fn buy(service: &Service, key: &str) -> ComputerId {
-    match service.purchase(purchase_request(key)).await.unwrap() {
+    let id = match service.purchase(purchase_request(key)).await.unwrap() {
         Purchase::Ready(id) => id,
         other => panic!("expected a bought computer, got {other:?}"),
-    }
+    };
+    service.run_billing_effects().await.unwrap();
+    id
 }
 
 async fn billing_of(repo: &PgComputerRepo, id: ComputerId) -> Billing {
@@ -423,17 +424,20 @@ async fn a_lost_restore_answer_is_retried_on_the_same_key(pool: PgPool) {
 }
 
 /// Should-fix S7 and team deletion mid-purchase: the team is deleted while
-/// the purchase is charging. The deleted reservation never becomes a
-/// computer, and the purchase answers Confirming, never an error after a charge.
+/// the purchase's charge is in flight. The computer is released, and the
+/// item the charge added is taken back, so nothing bills a deleted computer.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_deletion_during_a_charge_leaves_no_computer(pool: PgPool) {
+async fn team_deletion_during_a_charge_leaves_no_billed_computer(pool: PgPool) {
     let stripe = Arc::new(Stripe::default());
     let gate = stripe.gate();
     let (service, repo, clock) = service(pool, stripe.clone()).await;
+    let Purchase::Ready(id) = service.purchase(purchase_request("buy-1")).await.unwrap() else {
+        panic!("expected a ready purchase");
+    };
     let service = Arc::new(service);
-    let purchase = tokio::spawn({
+    let charge = tokio::spawn({
         let service = service.clone();
-        async move { service.purchase(purchase_request("buy-1")).await }
+        async move { service.run_billing_effects().await }
     });
     stripe.entered.notified().await;
 
@@ -442,29 +446,86 @@ async fn team_deletion_during_a_charge_leaves_no_computer(pool: PgPool) {
         .await
         .unwrap();
     gate.add_permits(1);
-    let outcome = purchase.await.unwrap().unwrap();
+    charge.await.unwrap().unwrap();
 
-    assert!(matches!(outcome, Purchase::Confirming(_)), "{outcome:?}");
-    assert!(repo.list_for_team(TEAM).await.unwrap().is_empty());
+    let released = repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
+    assert_eq!(released.state.phase, Phase::Destroying);
+    assert!(stripe.items_for(id).await.is_empty());
     assert!(repo.team_reservations(TEAM).await.unwrap().is_empty());
 }
 
-/// Should-fix S1 and S2: an expired reservation keeps holding capacity
-/// until it settles, and settling it fences its charge, so a send still on
-/// its way (another replica) cannot charge after the reservation is gone.
+/// A charge whose answer was lost, released before its retry: the retry
+/// fences the add and takes the landed item back, so the team is never
+/// billed for a computer it no longer has.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_expired_reservation_settles_fenced_and_holds_capacity_until_then(pool: PgPool) {
+async fn a_charge_that_lands_after_release_is_taken_back(pool: PgPool) {
+    let stripe = Arc::new(Stripe::default());
+    let (service, repo, clock) = service(pool, stripe.clone()).await;
+    let Purchase::Ready(id) = service.purchase(purchase_request("buy-1")).await.unwrap() else {
+        panic!("expected a ready purchase");
+    };
+    // The add lands at Stripe, but its answer is lost: the computer stays charging.
+    *stripe.fail_next_add.lock().unwrap() = Some(Fail::LostAnswer { landed: true });
+    service.run_billing_effects().await.unwrap();
+    assert_eq!(billing_of(&repo, id).await, Billing::Charging);
+    assert_eq!(stripe.items_for(id).await.len(), 1);
+
+    // Released before the retry learns the charge was paid.
+    changed(&repo, id, Event::ReleaseNow, clock.now()).await;
+    clock.advance(Duration::minutes(1));
+    service.run_billing_effects().await.unwrap();
+
+    assert!(stripe.items_for(id).await.is_empty());
+    assert_eq!(
+        repo.get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
+        Phase::Destroying
+    );
+    // Nothing is left to retry, and a later pass charges nothing.
+    clock.advance(Duration::hours(2));
+    service.run_billing_effects().await.unwrap();
+    assert!(stripe.items_for(id).await.is_empty());
+    assert_eq!(
+        stripe
+            .keys()
+            .iter()
+            .filter(|key| **key == crate::domain::models::charge_key(id))
+            .count(),
+        1
+    );
+}
+
+/// A purchase dropped between reserving and converting: its reservation
+/// holds capacity until the confirm worker converts it, and the converted
+/// computer is charged once, under the purchase's key.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reservation_left_behind_is_converted_and_charged_once(pool: PgPool) {
     let stripe = Arc::new(Stripe::default());
     let (service, repo, clock) = service(pool, stripe.clone()).await;
     let reservation = reserve(&repo, standard(1)).await;
-    clock.advance(Duration::minutes(16));
-    // Sold 9 units; the expired reservation still holds one.
+    // Sold 9 units; the reservation holds one.
     for id in 2..=9 {
-        reserve(&repo, NewReservation { ..standard(id) }).await;
+        reserve(
+            &repo,
+            NewReservation {
+                team_id: Uuid::from_u128(id),
+                ..standard(id)
+            },
+        )
+        .await;
     }
     assert!(matches!(
         repo.reserve(
-            standard(10),
+            NewReservation {
+                team_id: Uuid::from_u128(10),
+                ..standard(10)
+            },
             clock.now(),
             clock.now() + Duration::minutes(15)
         )
@@ -472,23 +533,21 @@ async fn an_expired_reservation_settles_fenced_and_holds_capacity_until_then(poo
         Err(ReserveError::SoldOut)
     ));
 
-    service.confirm_reservations().await.unwrap();
+    clock.advance(Duration::minutes(16));
+    service.run_billing_effects().await.unwrap();
+    service.run_billing_effects().await.unwrap();
+
     assert!(repo.reservation(reservation.id).await.unwrap().is_none());
-    // The late send from another replica finds its key fenced.
-    assert!(matches!(
-        stripe
-            .add_computer(
-                TEAM,
-                reservation.id,
-                &"price_standard".parse().unwrap(),
-                &[],
-                ItemCharge::Prorated,
-                &reservation.charge_key(),
-            )
-            .await,
-        Err(BillingError::PaymentFailed)
-    ));
-    assert!(stripe.items_for(reservation.id).await.is_empty());
+    let item = stripe.items_for(reservation.id).await;
+    assert_eq!(item.len(), 1);
+    assert_eq!(
+        billing_of(&repo, reservation.id).await,
+        Billing::Active {
+            subscription_item: item[0].clone(),
+        }
+    );
+    let key = crate::domain::models::charge_key(reservation.id);
+    assert_eq!(stripe.keys().iter().filter(|sent| **sent == key).count(), 1);
 }
 
 /// Blocker B3 and should-fix S8: reconcile removes items naming a computer

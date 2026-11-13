@@ -167,6 +167,11 @@ in
       anyInterface = true;
       timeout = 30;
     };
+    # The link is configured, and so online, only once its IPv6 link-local
+    # address passes duplicate address detection, ~1 s after DHCPv4 already
+    # answered. The NIC is alone on its Incus bridge, so skip DAD.
+    systemd.network.networks."99-ethernet-default-dhcp".networkConfig.IPv6DuplicateAddressDetection =
+      0;
     time.timeZone = "UTC";
     i18n.defaultLocale = "en_US.UTF-8";
 
@@ -295,6 +300,9 @@ in
 
     virtualisation.docker = {
       enable = true;
+      # Started by docker.socket on first use, so dockerd and containerd stay
+      # out of first boot, where they compete with enrollment for the CPU.
+      enableOnBoot = false;
       # Images and containers survive image updates on the data disk.
       daemon.settings = lib.mkIf (cfg.dataDisk != null) {
         data-root = "/home/.system/docker";

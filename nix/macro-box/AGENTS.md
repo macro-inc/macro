@@ -247,10 +247,17 @@ The control plane, per computer:
 
 - OVMF → systemd-boot (timeout 0) → kernel + initrd; Secure Boot is off in
   the `macro-box` profile, so nothing is signed.
-- `systemd-networkd-wait-online` waits for any link (30 s cap), not all.
+- `systemd-networkd-wait-online` waits for any link (30 s cap), not all. The
+  NIC skips IPv6 duplicate address detection, which otherwise held the link
+  unconfigured (so not online) ~1 s after DHCPv4 answered.
 - The kernel command line has `quiet`; `ttyS0` stays the recovery console.
 - `check-enrollment-source` waits up to 60 s for the Incus socket to appear,
-  then gives the request 2 s.
+  checking every 0.1 s, then gives the request 2 s.
+- `incus-agent` waits for envfs's `/bin` mount (`_image.nix`): its setup
+  script is `#!/bin/sh`, and started before the mount it fails and retries
+  only after its 5 s RestartSec.
+- Docker is socket-activated (`enableOnBoot = false`): dockerd starts on the
+  first `docker` call, not during first boot.
 - To measure, boot `disk.qcow2` under QEMU with OVMF and read
   `systemd-analyze` from the serial console.
 - Not done: a UKI as `\EFI\BOOT\BOOTX64.EFI` (skips systemd-boot) or

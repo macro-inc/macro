@@ -11,8 +11,8 @@ runs ([Macro computers: Observability](../architecture/macro-computers.md#observ
 | Span | Service | Meaning |
 | --- | --- | --- |
 | `purchase` → `reserve` | authentication_service | Purchase; `reserve` holds the persisted parent. |
-| `computer.setup.payment` | authentication_service | Reservation until payment or comp confirmation. |
-| `computer.billing.effect` | authentication_service | Delayed payment recovery, when the normal path did not finish. |
+| `computer.setup.payment` | authentication_service | Reservation until conversion; the charge no longer delays it. |
+| `computer.billing.effect` | authentication_service | The purchase's charge, run beside creation (and its retries). |
 | `computer.setup.create` | agent_harness_service | Confirmation until the guest boots: outbox wait, fleet create, capacity wait (`capacity_waited`). |
 | `computer.fleet.work` → `incus_fleet.create` / `docker_fleet.create` → `computer.enrollment.issue` | agent_harness_service | The fleet create effect itself. |
 | `computer.setup.boot` | agent_harness_service | Guest boot until macrod first connects (boot, `macrod enroll`, harness claim, connect). |

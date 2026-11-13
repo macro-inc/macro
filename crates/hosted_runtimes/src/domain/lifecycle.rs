@@ -144,6 +144,27 @@ pub enum Billing {
         /// Why the computer is free.
         reason: String,
     },
+    /// Bought and provisioning while the purchase's charge settles in the
+    /// billing worker ([`Effect::Charge`]); a failed charge releases it.
+    Charging,
+}
+
+/// How a just-bought computer is paid for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Payment {
+    /// Charge the computer's own item at `price_id`, plus `extra_items`,
+    /// while it provisions.
+    Charge {
+        /// The saved price.
+        price_id: stripe::PriceId,
+        /// Joined into the same subscription update.
+        extra_items: Vec<crate::domain::models::SubscriptionItem>,
+    },
+    /// Provided without a charge.
+    Comped {
+        /// Why the computer is free.
+        reason: String,
+    },
 }
 
 impl Billing {
@@ -154,7 +175,7 @@ impl Billing {
             | Self::PastDue {
                 subscription_item, ..
             } => Some(subscription_item),
-            Self::EndsAt { .. } | Self::Comped { .. } => None,
+            Self::EndsAt { .. } | Self::Comped { .. } | Self::Charging => None,
         }
     }
 }
@@ -213,6 +234,8 @@ pub enum Failure {
     HostLost,
     /// No enrollment generation is left to recreate the guest with.
     SetupExhausted,
+    /// The purchase's charge was refused, so the computer was released.
+    Payment,
 }
 
 impl Failure {
@@ -224,6 +247,7 @@ impl Failure {
             Self::KeptCrashing => "The computer kept crashing.",
             Self::HostLost => "The computer's host stopped responding.",
             Self::SetupExhausted => "The computer couldn't be set up again.",
+            Self::Payment => "The payment for the computer didn't go through, so it was released.",
         }
     }
 }
@@ -289,15 +313,28 @@ pub struct Context {
     pub policy: BillingPolicy,
 }
 
-/// The first state of a computer whose purchase was just confirmed, with
-/// the effects that start provisioning it.
+/// The first state of a just-bought computer, with the effects that start
+/// provisioning it and, for a charged purchase, charge it alongside.
 pub fn provision(
-    billing: Billing,
+    payment: Payment,
     setup: crate::domain::setup::SetupTimeline,
     provision_traceparent: Option<String>,
     context: Context,
 ) -> (ComputerState, Vec<Effect>) {
     let start = context.host_has_room;
+    let (billing, charge) = match payment {
+        Payment::Charge {
+            price_id,
+            extra_items,
+        } => (
+            Billing::Charging,
+            Some(Effect::Charge {
+                price_id,
+                extra_items,
+            }),
+        ),
+        Payment::Comped { reason } => (Billing::Comped { reason }, None),
+    };
     let mut state = ComputerState {
         provision_traceparent,
         setup: Some(setup),
@@ -321,6 +358,7 @@ pub fn provision(
         start,
         context.enrollment_generation,
     );
+    effects.extend(charge);
     (state, effects)
 }
 
@@ -350,6 +388,17 @@ pub fn transition(
             | Event::ReleaseNow => Err(Rejected::Released),
             _ => Ok((next, effects)),
         };
+    }
+
+    // Nothing is billed yet to cancel, undo or restore while the charge
+    // settles. Releasing is allowed: the charge effect then fences the add
+    // and takes back an item that landed.
+    let billing_request = matches!(
+        event,
+        Event::CancelAtPeriodEnd { .. } | Event::UndoCancel { .. } | Event::Restore { .. }
+    );
+    if state.billing == Billing::Charging && billing_request {
+        return Err(Rejected::PaymentPending);
     }
 
     match event {
@@ -571,6 +620,7 @@ pub fn transition(
             }
             Billing::Comped { .. } => end_billing(&mut next, &mut effects, host, now, policy),
             Billing::EndsAt { .. } => return Err(Rejected::AlreadyCanceled),
+            Billing::Charging => return Err(Rejected::PaymentPending),
         },
 
         Event::UndoCancel { subscription_item } => {
@@ -584,7 +634,7 @@ pub fn transition(
             restore_allowed(state, now)?;
             match billing {
                 Billing::Active { .. } | Billing::Comped { .. } => next.billing = billing.clone(),
-                Billing::PastDue { .. } | Billing::EndsAt { .. } => {
+                Billing::PastDue { .. } | Billing::EndsAt { .. } | Billing::Charging => {
                     return Err(Rejected::InvalidRestore);
                 }
             }
@@ -655,7 +705,7 @@ pub fn transition(
                             subscription_item: subscription_item.clone(),
                         };
                     }
-                    Billing::EndsAt { .. } | Billing::Comped { .. } => {}
+                    Billing::EndsAt { .. } | Billing::Comped { .. } | Billing::Charging => {}
                 }
             }
         }
@@ -680,6 +730,30 @@ pub fn transition(
                 && now >= at + policy.retention
             {
                 destroy(&mut next, &mut effects, host);
+            }
+        }
+
+        Event::ChargeSucceeded { subscription_item } => {
+            if state.billing == Billing::Charging {
+                next.billing = Billing::Active {
+                    subscription_item: subscription_item.clone(),
+                };
+            }
+        }
+
+        // Nothing was charged, so there is no item to remove. The buyer hears
+        // even after setup finished: the computer is gone.
+        Event::ChargeFailed => {
+            if state.billing == Billing::Charging {
+                next.billing = Billing::EndsAt { at: now };
+                next.failure = Some(Failure::Payment);
+                destroy(&mut next, &mut effects, host);
+                effects.push(Effect::NotifySetup {
+                    outcome: SetupOutcome::Failed {
+                        failure: Failure::Payment,
+                        failed_at: now,
+                    },
+                });
             }
         }
     }
@@ -727,6 +801,7 @@ pub fn undo_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), Rej
         Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
             Err(Rejected::NotCanceled)
         }
+        Billing::Charging => Err(Rejected::PaymentPending),
     }
 }
 
@@ -740,6 +815,7 @@ pub fn restore_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), 
         Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
             Err(Rejected::NotCanceled)
         }
+        Billing::Charging => Err(Rejected::PaymentPending),
     }
 }
 

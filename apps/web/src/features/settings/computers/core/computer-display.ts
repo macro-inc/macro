@@ -206,6 +206,7 @@ export function computerFailureMessage(
   return match(error.errors[0]?.code)
     .with('TEAM_ON_TRIAL', () => t('computers.trialBlocked'))
     .with('PURCHASE_CONFLICT', () => t('computers.errorPurchaseConflict'))
+    .with('UNPAID_COMPUTER', () => t('computers.errorUnpaidComputer'))
     .with('PAYMENT_FAILED', () => t('computers.errorPaymentFailed'))
     .with('NOT_PURCHASABLE', () => t('computers.errorNotPurchasable'))
     .with('SALES_UNAVAILABLE', () => t('computers.errorSalesUnavailable'))

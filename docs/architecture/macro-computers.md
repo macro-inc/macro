@@ -168,22 +168,37 @@ attempt, so a busy database never fails a computer or abandons a removal.
   the key already led to (`Reserved::{New, Pending, Purchased}`), so a retry
   never charges twice or buys a second computer; a key used by another team
   or size is `PurchaseKeyConflict`. A `computer_reservation` row (id = the
-  future computer id) holds the units until `expires_at` (`RESERVATION_TTL`,
-  15 minutes). The charge is ONE subscription update adding the computer's
-  own item (`computer_id` metadata, a price of its own) plus `extra_items`,
-  `always_invoice` + `error_if_incomplete`, Stripe idempotency key
-  `computer-add:{reservation id}`. Definite success converts the reservation
-  (`convert_reservation`: delete it, insert the computer in Provisioning with
-  `Billing::Active{item}`, enqueue Create, in one transaction); a definite
-  refusal deletes it and returns the typed error; an unknown outcome answers
-  `Confirming` (HTTP 202). `confirm_reservations` (run by the billing worker)
-  replays the same idempotent update for reservations older than
-  `CONFIRM_DELAY` until expiry, then `settle_computer_add` abandons the change
-  for good and converts only if the subscription carries an item with the
-  computer's id; otherwise the reservation is deleted. An error shown to the
-  buyer therefore always means nothing was charged. Status/list show a
-  reservation as status `purchasing` (setup step `billing`); every request on
-  it is `ComputerError::NotPurchased` (409).
+  future computer id) holds the units under the purchase key, and the
+  purchase converts it at once (`convert_reservation`: delete it, insert the
+  computer in Provisioning, enqueue Create, in one transaction), so creation
+  never waits on Stripe. A comped computer starts `Billing::Comped`; a charged
+  one starts `Billing::Charging` with an `Effect::Charge` beside its Create.
+  The billing worker runs the charge while the guest is created: ONE
+  subscription update adding the computer's own item (`computer_id`
+  metadata, a price of its own) plus `extra_items`, `always_invoice` +
+  `error_if_incomplete`, Stripe idempotency key `computer-add:{computer id}`
+  (`models::charge_key`), the same on every retry. Success applies
+  `ChargeSucceeded{item}` (`Billing::Active`); a definite refusal applies
+  `ChargeFailed`, which releases the computer (`EndsAt{now}`, Destroy and
+  RevokeHarness, so its units free up; nothing was charged, so no item is
+  removed) and sends the buyer `NotifySetup{Failed{Payment}}`, even after
+  setup finished. An unknown outcome retries with `BILLING_BACKOFF`; the
+  charge is never abandoned: its `MAX_BILLING_ATTEMPTS`th attempt calls
+  `settle_computer_add`, which fences the add and answers whether an item
+  landed (success) or not (failure). While `Charging`, cancel, undo, restore
+  and release are `Rejected::PaymentPending` (409), and subscription
+  snapshots skip the computer, so a webhook never strips or bills the item the
+  charge just added. A team has at most one unpaid computer: `reserve`, under
+  the host locks, refuses a charged purchase while the team has a Stripe
+  reservation or a `Charging` computer (`ComputerError::UnpaidComputer`, 409
+  with code `unpaid_computer`, which the web shows); the partial unique index
+  `hosted_runtime_charging_team_idx` backs it. Comped purchases never wait. A
+  conversion that fails answers `Confirming` (HTTP 202);
+  `confirm_reservations` (run by the billing worker) converts reservations
+  older than `CONFIRM_DELAY`. Status/list show a reservation as status
+  `purchasing` (setup step `billing`), and a `Charging` computer with billing
+  `purchasing` and its setup step; every request on a reservation is
+  `ComputerError::NotPurchased` (409).
 - **Billing**: cancel removes the item at once without proration (the period
   is paid) → `EndsAt{at = period end}` and a `BillingEnds` timer at `at` that
   stops the computer and starts retention (`RetentionExpired` at `at +
@@ -283,9 +298,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
 - **Status**: `ComputerService::list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Billing →
   Creating → Booting → Connecting → Ready, positions 1–5) until macrod first
-  connects. A purchase being confirmed (its subscription change not settled,
-  possibly waiting on another change in flight) reports status `purchasing`,
-  step `billing` (1 of 5); a converted computer starts at Creating.
+  connects. A reservation not converted yet reports status `purchasing`,
+  step `billing` (1 of 5); a converted computer starts at Creating, its
+  billing `purchasing` until its charge settles.
   Billing is `billing` (`purchasing`, `active`, `past_due`, `ending`,
   `ended`, `comped`) with `cancelsAt`, `canUndoCancel`, `retainedUntil`,
   `canRestore`, `pastDueSince` and `compReason`. Readable by any team member.
@@ -374,7 +389,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
 - **Setup notices**: `transition` emits `Effect::NotifySetup` when first setup
   ends: `Ready` on the first macrod connection (before `setup.connected_at`
   latches), `Failed` when a not-yet-connected computer gives up, once per
-  attempt. The fleet worker sends it to the buyer (`created_by`) through the
+  attempt, and `Failed{Payment}` when a refused charge releases the
+  computer. The fleet worker sends it to the buyer (`created_by`) through the
   `SetupNotices` port as a `computer_setup` notification; a send that keeps
   failing is dropped after its retries and never fails the computer.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
@@ -430,8 +446,6 @@ effects, no fleet access or name confirmation, team ownership still checked.
   only owned instances are reconciled. Local stacks use `local-<instance>`.
 - Scope Docker fleet listing to both its configured network and control-plane
   label; never reconcile foreign or unlabelled guests on shared hosts.
-- A purchase whose charge cannot be settled at expiry logs `computer payment
-  unresolved` at error level and keeps its reservation for the next pass.
 
 ## Observability
 
@@ -447,7 +461,8 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   never grow the setup trace. Already-entered callbacks use `resume` (link).
 - `apply_locked` advances the timeline after each transition and exports the
   waits that ended, with their recorded start and end, through the global
-  tracer: `computer.setup.payment` (reservation → conversion),
+  tracer: `computer.setup.payment` (reservation → conversion, which no
+  longer waits for the charge),
   `computer.setup.create` (→ guest booting, including outbox and capacity
   waits), `computer.setup.boot` (→ first macrod connection) and the total
   `computer.setup`. They carry `computer_id`, `team_id`, `size`, `host_id`,

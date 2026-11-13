@@ -135,7 +135,7 @@ fn setup_waits_export_recorded_times_under_the_purchase_trace() {
 #[test]
 fn work_joins_the_purchase_trace_only_while_setup_runs() {
     use crate::domain::ids::HostId;
-    use crate::domain::lifecycle::{Billing, BillingPolicy, Context, Phase, provision};
+    use crate::domain::lifecycle::{BillingPolicy, Context, Payment, Phase, provision};
 
     global::set_text_map_propagator(opentelemetry_sdk::propagation::TraceContextPropagator::new());
     let exporter = InMemorySpanExporter::default();
@@ -147,7 +147,7 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
     let host = HostId::new(uuid::Uuid::from_u128(3));
     let now = chrono::Utc::now();
     let (mut state, _) = provision(
-        Billing::Comped {
+        Payment::Comped {
             reason: "telemetry".to_owned(),
         },
         crate::domain::setup::SetupTimeline::started(now),

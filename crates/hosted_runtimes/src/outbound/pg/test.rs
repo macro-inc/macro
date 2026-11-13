@@ -11,7 +11,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
-use crate::domain::lifecycle::{Phase, Rejected};
+use crate::domain::lifecycle::{Billing, Phase, Rejected};
 use crate::domain::models::{ComputerName, PurchaseKey};
 use crate::domain::size::{DiskGib, MemoryGib, Vcpus};
 
@@ -78,12 +78,6 @@ fn standard(id: u128) -> NewReservation {
     }
 }
 
-fn active(id: u128) -> Billing {
-    Billing::Active {
-        subscription_item: format!("si_{id}").parse().unwrap(),
-    }
-}
-
 async fn reserve(repo: &PgComputerRepo, purchase: NewReservation) -> Reservation {
     match repo
         .reserve(purchase, now(), now() + Duration::minutes(15))
@@ -95,13 +89,39 @@ async fn reserve(repo: &PgComputerRepo, purchase: NewReservation) -> Reservation
     }
 }
 
-/// Reserve and convert a standard computer billed on item `si_{id}`.
+/// Reserve and convert a standard computer, and settle its charge on item `si_{id}`.
 async fn bought(repo: &PgComputerRepo, id: u128) -> Computer {
     let reservation = reserve(repo, standard(id)).await;
-    repo.convert_reservation(reservation.id, active(id), now())
+    repo.convert_reservation(reservation.id, now())
         .await
         .unwrap()
+        .unwrap();
+    // The billing worker charges it: its Charge effect is done.
+    for pending in repo
+        .lease_effects(
+            EffectWorker::Billing,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
+        .await
         .unwrap()
+    {
+        assert!(
+            matches!(pending.effect, Effect::Charge { .. }),
+            "{pending:?}"
+        );
+        repo.complete_effect(pending.id).await.unwrap();
+    }
+    changed(
+        repo,
+        reservation.id,
+        Event::ChargeSucceeded {
+            subscription_item: format!("si_{id}").parse().unwrap(),
+        },
+        now(),
+    )
+    .await
 }
 
 async fn changed(
@@ -157,8 +177,16 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
     for id in 1..=4 {
         bought(&repo, id).await;
     }
+    // Other teams' purchases, each unpaid (a team has one at a time).
     for id in 5..=9 {
-        reserve(&repo, standard(id)).await;
+        reserve(
+            &repo,
+            NewReservation {
+                team_id: Uuid::from_u128(id),
+                ..standard(id)
+            },
+        )
+        .await;
     }
     let tenth = repo
         .reserve(standard(10), now(), now() + Duration::minutes(15))
@@ -205,7 +233,7 @@ async fn a_reused_purchase_key_finds_its_reservation_then_its_computer(pool: PgP
         .unwrap();
     assert_eq!(pending, Reserved::Pending(reservation.clone()));
 
-    repo.convert_reservation(reservation.id, active(1), now())
+    repo.convert_reservation(reservation.id, now())
         .await
         .unwrap()
         .unwrap();
@@ -242,19 +270,19 @@ async fn converting_a_reservation_inserts_the_computer_and_its_creation_once(poo
     assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
 
     let computer = repo
-        .convert_reservation(reservation.id, active(1), now())
+        .convert_reservation(reservation.id, now())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(
-        repo.convert_reservation(reservation.id, active(1), now())
+        repo.convert_reservation(reservation.id, now())
             .await
             .unwrap(),
         None
     );
 
     assert_eq!(computer.state.phase, Phase::Provisioning { start: true });
-    assert_eq!(computer.state.billing, active(1));
+    assert_eq!(computer.state.billing, Billing::Charging);
     assert_eq!(computer.host, host.id);
     let stored = repo
         .get(reservation.id)
@@ -549,13 +577,7 @@ async fn a_comped_reservation_converts_with_its_reason(pool: PgPool) {
     };
     let reservation = reserve(&repo, purchase).await;
     let comped = repo
-        .convert_reservation(
-            reservation.id,
-            Billing::Comped {
-                reason: "internal team".to_owned(),
-            },
-            now(),
-        )
+        .convert_reservation(reservation.id, now())
         .await
         .unwrap()
         .unwrap();
@@ -603,7 +625,7 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
     };
     let reservation = reserve(&repo, purchase).await;
     let stored = repo
-        .convert_reservation(reservation.id, active(50), now())
+        .convert_reservation(reservation.id, now())
         .await
         .unwrap()
         .unwrap();
@@ -617,6 +639,15 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
         }
     );
     assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
+    changed(
+        &repo,
+        stored.id,
+        Event::ChargeSucceeded {
+            subscription_item: "si_50".parse().unwrap(),
+        },
+        now(),
+    )
+    .await;
     assert_eq!(
         sold_out(&repo).await,
         vec![ComputerSize::Large, ComputerSize::Xl]
@@ -661,10 +692,19 @@ async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
     )
     .await;
     let computer = repo
-        .convert_reservation(reservation.id, active(70), now())
+        .convert_reservation(reservation.id, now())
         .await
         .unwrap()
         .unwrap();
+    changed(
+        &repo,
+        computer.id,
+        Event::ChargeSucceeded {
+            subscription_item: "si_70".parse().unwrap(),
+        },
+        now(),
+    )
+    .await;
     let pending = reserve(
         &repo,
         NewReservation {
@@ -690,6 +730,73 @@ async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
             .as_ref(),
         "macro|buyer@example.com"
     );
+}
+
+/// A team has one unpaid computer at a time: a charged purchase waits while
+/// a reservation or a still-charging computer of the team is unpaid; comped
+/// purchases, other teams and a settled charge do not wait.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_team_buys_one_unpaid_computer_at_a_time(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    host(&repo, "unpaid-host", 64, 0, 1).await;
+
+    let first = reserve(&repo, standard(80)).await;
+    assert!(matches!(
+        repo.reserve(standard(81), now(), now() + Duration::minutes(15))
+            .await,
+        Err(ReserveError::UnpaidComputer)
+    ));
+
+    let charging = repo
+        .convert_reservation(first.id, now())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(charging.state.billing, Billing::Charging);
+    assert!(matches!(
+        repo.reserve(standard(81), now(), now() + Duration::minutes(15))
+            .await,
+        Err(ReserveError::UnpaidComputer)
+    ));
+    // The same purchase key still answers with what it led to.
+    assert!(matches!(
+        repo.reserve(standard(80), now(), now() + Duration::minutes(15))
+            .await,
+        Ok(Reserved::Purchased(_))
+    ));
+    // Comped purchases charge nothing, so they never wait.
+    let mut comped = standard(82);
+    comped.funding = Funding::Comped {
+        reason: "internal team".to_owned(),
+    };
+    reserve(&repo, comped).await;
+
+    changed(
+        &repo,
+        charging.id,
+        Event::ChargeSucceeded {
+            subscription_item: "si_80".parse().unwrap(),
+        },
+        now(),
+    )
+    .await;
+    reserve(&repo, standard(81)).await;
+
+    // The index backs the check: a second charging computer cannot be stored.
+    let second = repo
+        .convert_reservation(ComputerId::new_from_uuid(Uuid::from_u128(81)), now())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.state.billing, Billing::Charging);
+    let duplicate = sqlx::query!(
+        r#"UPDATE hosted_runtime SET state = jsonb_set(state, '{billing}', '{"billing":"charging"}') WHERE id = $1"#,
+        Uuid::from_u128(80),
+    )
+    .execute(&pool)
+    .await;
+    assert!(duplicate.is_err());
 }
 
 mod enrollment;

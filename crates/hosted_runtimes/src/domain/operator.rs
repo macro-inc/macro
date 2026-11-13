@@ -446,11 +446,11 @@ where
                     .map_err(internal)?;
                 Ok(None)
             }
-            Effect::RemoveBillingItem { .. } | Effect::ScheduleTimer { .. } => {
-                Err(ComputerError::Internal(rootcause::report!(
-                    "a non-fleet effect reached the fleet worker"
-                )))
-            }
+            Effect::RemoveBillingItem { .. }
+            | Effect::Charge { .. }
+            | Effect::ScheduleTimer { .. } => Err(ComputerError::Internal(rootcause::report!(
+                "a non-fleet effect reached the fleet worker"
+            ))),
         }
     }
 
@@ -822,6 +822,7 @@ fn effect_failure(effect: &Effect) -> Option<Failure> {
         | Effect::RevokeHarness
         | Effect::PageOperator { .. }
         | Effect::RemoveBillingItem { .. }
+        | Effect::Charge { .. }
         | Effect::ScheduleTimer { .. } => Some(Failure::Power),
         Effect::NotifySetup { .. } => None,
     }
@@ -842,6 +843,7 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::RestartMacrod { host }
         | Effect::Destroy { host } => Some(*host),
         Effect::RemoveBillingItem { .. }
+        | Effect::Charge { .. }
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. }

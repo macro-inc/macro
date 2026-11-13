@@ -357,10 +357,24 @@ pub struct Reservation {
     pub created_at: DateTime<Utc>,
 }
 
+/// The Stripe idempotency key of a purchase's charge, the same on every
+/// retry. A reservation's id is its computer's.
+pub fn charge_key(computer_id: ComputerId) -> String {
+    format!("computer-add:{computer_id}")
+}
+
 impl Reservation {
-    /// The Stripe idempotency key of this purchase's charge.
-    pub fn charge_key(&self) -> String {
-        format!("computer-add:{}", self.id)
+    /// How the computer this reservation becomes is paid for.
+    pub fn payment(&self) -> crate::domain::lifecycle::Payment {
+        match &self.funding {
+            Funding::Stripe { price_id } => crate::domain::lifecycle::Payment::Charge {
+                price_id: price_id.clone(),
+                extra_items: self.extra_items.clone(),
+            },
+            Funding::Comped { reason } => crate::domain::lifecycle::Payment::Comped {
+                reason: reason.clone(),
+            },
+        }
     }
 
     /// A reservation as its team sees it: purchasing, setup step
@@ -800,6 +814,8 @@ impl Computer {
                 None,
             ),
             Billing::Comped { .. } => (BillingStatus::Comped, None, None, None),
+            // Provisioning already; the purchase's charge has not settled.
+            Billing::Charging => (BillingStatus::Purchasing, None, None, None),
         };
         let live = self.state.is_live();
 

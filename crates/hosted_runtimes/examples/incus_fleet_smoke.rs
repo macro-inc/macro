@@ -28,7 +28,7 @@ use chrono::Utc;
 use clap::Parser;
 use hosted_runtimes::domain::enrollment::Enrollment;
 use hosted_runtimes::domain::image::GuestImages;
-use hosted_runtimes::domain::lifecycle::{Billing, BillingPolicy, Context, provision};
+use hosted_runtimes::domain::lifecycle::{BillingPolicy, Context, Payment, provision};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
 use hosted_runtimes::domain::size::ComputerSize;
@@ -130,7 +130,7 @@ async fn main() -> Result<(), rootcause::Report> {
     let now = Utc::now();
     let host = HostId::new(Uuid::now_v7());
     let (state, _) = provision(
-        Billing::Comped {
+        Payment::Comped {
             reason: "fleet smoke test".to_owned(),
         },
         hosted_runtimes::domain::setup::SetupTimeline::started(now),

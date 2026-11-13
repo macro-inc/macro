@@ -57,6 +57,10 @@ pub enum ComputerError {
     /// Comped purchases cannot carry subscription items.
     #[error("comped purchases cannot add subscription items")]
     CompedExtraItems,
+    /// The team already has a bought computer whose charge has not settled;
+    /// it buys the next once that one is paid for (or released).
+    #[error("another computer's payment is still being confirmed; try again in a minute")]
+    UnpaidComputer,
     /// The purchase key belongs to another team's or another size's purchase.
     #[error("this purchase key was used for a different purchase")]
     PurchaseKeyConflict,

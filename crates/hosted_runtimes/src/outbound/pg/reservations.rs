@@ -110,6 +110,29 @@ impl PgComputerRepo {
         let Some(host) = host else {
             return Err(ReserveError::SoldOut);
         };
+        // One unpaid computer per team: a charged purchase waits for the
+        // team's last one to settle. The host locks serialize purchases, so
+        // two cannot both pass; `hosted_runtime_charging_team_idx` backs it.
+        if matches!(reservation.funding, Funding::Stripe { .. }) {
+            let unpaid = sqlx::query_scalar!(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1 FROM hosted_runtime
+                    WHERE team_id = $1 AND (state->'billing'->>'billing') = 'charging'
+                ) OR EXISTS (
+                    SELECT 1 FROM computer_reservation
+                    WHERE team_id = $1 AND price_id IS NOT NULL
+                ) AS "unpaid!"
+                "#,
+                reservation.team_id,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|error| storage(error.into()))?;
+            if unpaid {
+                return Err(ReserveError::UnpaidComputer);
+            }
+        }
 
         let (price_id, comp_reason) = match &reservation.funding {
             Funding::Stripe { price_id } => (Some(price_id.as_str()), None),

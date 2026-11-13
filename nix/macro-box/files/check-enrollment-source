@@ -5,12 +5,14 @@ enrolled() {
   [ -s "$MACRO_ENROLLED_MARKER" ]
 }
 
-# incus-agent creates the socket a few seconds after it starts.
+# incus-agent creates the socket before it reports ready when its config
+# share asks for the guest API, else a few seconds later. Checked every
+# 0.1 s so enrollment starts as soon as it appears.
 wait_for_incus_socket() {
-  waited=0
-  while [ ! -S /dev/incus/sock ] && [ "$waited" -lt "${MACRO_INCUS_SOCKET_WAIT:-60}" ]; do
-    sleep 1
-    waited=$((waited + 1))
+  tenths=0
+  while [ ! -S /dev/incus/sock ] && [ "$tenths" -lt "$((${MACRO_INCUS_SOCKET_WAIT:-60} * 10))" ]; do
+    sleep 0.1
+    tenths=$((tenths + 1))
   done
 }
 

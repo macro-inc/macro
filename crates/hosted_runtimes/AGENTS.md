@@ -63,6 +63,10 @@ read it before changing behaviour.
 - A pool timeout is `ports::StorageUnavailable`
   (`ComputerError::is_storage_unavailable`): passes skip the tick and effects
   keep their attempts. Never count it as an effect failure.
+- A purchase provisions at once and charges in the billing worker
+  (`Effect::Charge`, `Billing::Charging`); the charge is never abandoned (its
+  last attempt settles), a refusal releases the computer, and a team has one
+  unpaid computer at a time (`ComputerError::UnpaidComputer`).
 - A billing removal keeps one idempotency key across retries; see
   `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
 - `PageOperator` is the log event `computer needs an operator` (error level);

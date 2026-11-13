@@ -582,6 +582,7 @@ impl IntoResponse for ComputersHttpError {
             ComputerError::RolloutDisabled => StatusCode::FORBIDDEN,
             ComputerError::NotFound => StatusCode::NOT_FOUND,
             ComputerError::SoldOut(_)
+            | ComputerError::UnpaidComputer
             | ComputerError::NotPurchased
             | ComputerError::PurchaseKeyConflict
             | ComputerError::NeedsAttention
@@ -612,6 +613,7 @@ impl IntoResponse for ComputersHttpError {
             ComputerError::Billing(BillingError::TeamOnTrial) => {
                 Some(ComputersErrorCode::TeamOnTrial)
             }
+            ComputerError::UnpaidComputer => Some(ComputersErrorCode::UnpaidComputer),
             _ => None,
         };
         (
@@ -640,6 +642,9 @@ struct ComputersErrorBody {
 enum ComputersErrorCode {
     /// The team's subscription is trialing; computers are for paying teams.
     TeamOnTrial,
+    /// The team's last bought computer is not paid for yet; buy the next
+    /// once it is.
+    UnpaidComputer,
 }
 
 #[cfg(test)]

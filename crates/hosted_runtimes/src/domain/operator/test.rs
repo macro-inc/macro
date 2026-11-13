@@ -385,9 +385,15 @@ async fn paid_computer(
         .unwrap();
     operator
         .repo
-        .convert_reservation(
+        .convert_reservation(id, now())
+        .await
+        .unwrap()
+        .unwrap();
+    operator
+        .repo
+        .apply(
             id,
-            crate::domain::lifecycle::Billing::Active {
+            Event::ChargeSucceeded {
                 subscription_item: "si_1".parse().unwrap(),
             },
             now(),
@@ -395,6 +401,13 @@ async fn paid_computer(
         .await
         .unwrap()
         .unwrap();
+    // The billing worker's charge is done; only fleet work is left.
+    operator
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .retain(|pending| !matches!(pending.effect, Effect::Charge { .. }));
     id
 }
 

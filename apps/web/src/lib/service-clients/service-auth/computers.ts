@@ -61,6 +61,7 @@ type OffersErrorCode = ComputerRequestErrorCode | typeof COMPUTERS_UNAVAILABLE;
 type PurchaseComputerErrorCode =
   | ComputerRequestErrorCode
   | 'PURCHASE_CONFLICT'
+  | 'UNPAID_COMPUTER'
   | 'PAYMENT_FAILED'
   | 'NOT_PURCHASABLE'
   | 'SALES_UNAVAILABLE';
@@ -174,7 +175,10 @@ async function offersError(
   return (await sharedComputerError(response)) ?? statusError(response.status);
 }
 
-/** 409 is a sold-out size, or a purchase key that belongs to another purchase. */
+/**
+ * 409 is the team's last computer still being paid for (`unpaid_computer`),
+ * a sold-out size, or a purchase key that belongs to another purchase.
+ */
 async function purchaseError(
   response: Response
 ): Promise<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>> {
@@ -182,11 +186,19 @@ async function purchaseError(
     .returnType<
       Promise<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>>
     >()
-    .with(409, async () => ({
-      code: 'PURCHASE_CONFLICT',
-      message:
-        'That size just sold out, or an earlier attempt is still being confirmed.',
-    }))
+    .with(409, async () =>
+      (await errorCode(response)) === 'unpaid_computer'
+        ? {
+            code: 'UNPAID_COMPUTER',
+            message:
+              "Your team's last computer is still being paid for. Try again in a minute.",
+          }
+        : {
+            code: 'PURCHASE_CONFLICT',
+            message:
+              'That size just sold out, or an earlier attempt is still being confirmed.',
+          }
+    )
     .with(402, async () => ({
       code: 'PAYMENT_FAILED',
       message: "Your team's payment method was declined.",

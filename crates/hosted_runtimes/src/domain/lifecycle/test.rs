@@ -6,6 +6,7 @@ use proptest::prelude::*;
 use super::*;
 
 mod billing;
+mod charging;
 mod comped;
 mod instance_lost;
 mod setup_notice;
@@ -112,10 +113,10 @@ fn stopped_computer_starts_on_power_on() {
 }
 
 #[test]
-fn a_confirmed_purchase_provisions_with_room() {
+fn a_purchase_provisions_with_room() {
     let (state, effects) = provision(
-        Billing::Active {
-            subscription_item: item(),
+        Payment::Comped {
+            reason: "staff".to_owned(),
         },
         crate::domain::setup::SetupTimeline::started(now() - Duration::seconds(5)),
         None,
@@ -137,10 +138,10 @@ fn a_confirmed_purchase_provisions_with_room() {
 }
 
 #[test]
-fn a_confirmed_purchase_on_a_full_host_creates_stopped_and_waits() {
+fn a_purchase_on_a_full_host_creates_stopped_and_waits() {
     let (state, effects) = provision(
-        Billing::Active {
-            subscription_item: item(),
+        Payment::Comped {
+            reason: "staff".to_owned(),
         },
         crate::domain::setup::SetupTimeline::started(now()),
         None,
@@ -907,6 +908,10 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::PastDueGrace),
         Just(Event::ReleaseNow),
         Just(Event::RetentionExpired),
+        Just(Event::ChargeSucceeded {
+            subscription_item: "si_charged".parse().unwrap()
+        }),
+        Just(Event::ChargeFailed),
         Just(Event::OperatorRetry),
         Just(Event::EffectFailed {
             failure: Failure::Create,
@@ -961,19 +966,26 @@ proptest! {
             capacity: 4,
             computers: sizes
                 .iter()
-                .map(|units| {
+                .enumerate()
+                .map(|(index, units)| {
+                    let context = Context {
+                        host: HOST,
+                        enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(0),
+                        now: now(),
+                        host_has_room: false,
+                        policy: policy(),
+                    };
                     let (state, _) = provision(
-                        active(),
+                        Payment::Charge { price_id: "price_computer".parse().unwrap(), extra_items: vec![] },
                         crate::domain::setup::SetupTimeline::started(now()),
                         None,
-                        Context {
-                            host: HOST,
-                            enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(0),
-                            now: now(),
-                            host_has_room: false,
-                            policy: policy(),
-                        },
+                        context,
                     );
+                    // Every other computer's charge has settled; the rest are still charging.
+                    if index % 2 == 0 {
+                        return (*units, state);
+                    }
+                    let (state, _) = transition(&state, &Event::ChargeSucceeded { subscription_item: item() }, context).unwrap();
                     (*units, state)
                 })
                 .collect(),
@@ -1008,6 +1020,9 @@ proptest! {
             if after.phase == Phase::Destroying && before.phase != Phase::Destroying {
                 prop_assert!(effects.contains(&Effect::Destroy { host: HOST }), "destroying always destroys the guest and its volume");
                 prop_assert!(effects.contains(&Effect::RevokeHarness));
+            }
+            if before.billing == Billing::Charging && after.phase == Phase::Destroying {
+                prop_assert!(matches!(event, Event::ChargeFailed | Event::ReleaseNow), "only its charge or a release ends a charging computer");
             }
             if effects.iter().any(|effect| matches!(effect, Effect::Start { .. })) {
                 prop_assert_eq!(&before.phase, &Phase::Stopped, "start begins from a stopped computer");
