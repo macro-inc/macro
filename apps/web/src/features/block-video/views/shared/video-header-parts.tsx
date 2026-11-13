@@ -1,17 +1,7 @@
-import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -24,9 +14,13 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import IconShared from '@icon/share.svg';
 import Download from '@icon/system/regular/download.svg';
-import { useGetFileBlob } from '../signal/blockData';
+import { useGetFileBlob } from '../../signal/blockData';
 
-export function TopBar() {
+/**
+ * The video block's title menu operations, named header actions, and the
+ * download that the menu and the header's Download control share.
+ */
+export function useVideoHeaderTools() {
   const blockId = useBlockId();
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
@@ -64,33 +58,13 @@ export function TopBar() {
     { op: 'delete' },
   ];
 
-  const tools: BlockTool[] = [
-    {
-      group: 'sharing',
-      label: 'Share',
-      icon: IconShared,
-      action: openShare,
-      buttonComponent: () => <ShareTrigger onClick={openShare} />,
-      focusTarget: getShareDrawerRecipientInput,
-    },
-  ];
+  const share: BlockTool = {
+    group: 'sharing',
+    label: 'Share',
+    icon: IconShared,
+    action: openShare,
+    focusTarget: getShareDrawerRecipientInput,
+  };
 
-  return (
-    <>
-      <FileDownloadHeader download={download} />
-      <SplitHeaderLeft>
-        <BlockItemSplitLabel />
-      </SplitHeaderLeft>
-
-      <ResponsivePermissionsBadge />
-
-      <ResponsiveBlockToolbar
-        tools={tools}
-        ops={ops}
-        id={blockId}
-        itemType="document"
-        name={name()}
-      />
-    </>
-  );
+  return { ops, download, openShare, actions: { share } };
 }
