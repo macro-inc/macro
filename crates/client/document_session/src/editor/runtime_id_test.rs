@@ -154,9 +154,12 @@ fn a_colliding_draw_is_retried_with_a_fresh_one() -> TestResult {
     Ok(())
 }
 
-/// Existing accepted-main/failed-follow-up semantics: the main commit stays and
-/// the id round is rolled back. 17 draws = the first node's accepted draw plus
-/// sixteen refused redraws for the second; nothing is written twice.
+/// Source nodeIdPlugin's transform order (nodeIdPlugin.ts:120-131): Lexical 0.45
+/// $applyAllTransforms runs dirty leaves before dirty elements, so the TEXT node takes the only
+/// draw; the paragraph's transform cannot mint a free id, so it stays without one and the update
+/// still commits. The follow-up then reports the bounded mint error once and
+/// rolls back its own round. Draws: 1 accepted (first transform) + 16 refused (second
+/// transform) + 16 refused (the follow-up's mint for that same node) = 33.
 #[test]
 fn exhausted_draws_leave_new_nodes_without_ids_instead_of_a_duplicate() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -168,7 +171,6 @@ fn exhausted_draws_leave_new_nodes_without_ids_instead_of_a_duplicate() -> TestR
         tx.append(NodeKey::ROOT, &[paragraph.key()])?;
         Ok((paragraph.key(), text.key()))
     })?;
-    // The reported follow-up failure is the bounded mint error, on this plugin.
     let failure = commit.follow_up_error.expect("follow-up error");
     assert_eq!(failure.plugin, "session-node-id");
     assert!(
@@ -179,15 +181,18 @@ fn exhausted_draws_leave_new_nodes_without_ids_instead_of_a_duplicate() -> TestR
         "{:?}",
         failure.error
     );
-    assert_eq!(calls.load(Ordering::SeqCst), 17);
-    assert_eq!(id(&editor, paragraph)?, None);
-    assert_eq!(id(&editor, text)?, None);
+    assert_eq!(calls.load(Ordering::SeqCst), 33);
+    assert_eq!(
+        [id(&editor, paragraph)?, id(&editor, text)?],
+        [None, Some(repeated(0))]
+    );
     assert_eq!(editor.state().view().children_keys(NodeKey::ROOT)?.len(), 2);
     Ok(())
 }
 
-/// A node minted earlier in a commit cannot take the stored id of an incoming
-/// node the index has not seen yet; the minted node redraws instead.
+/// Source nodeIdPlugin's transform order (nodeIdPlugin.ts:120-131): the minted node is
+/// transformed first and takes the first draw; the incoming node then finds its stored id owned
+/// by another key in this update's map and regenerates ($regenId) with the next draw.
 #[test]
 fn incoming_stored_ids_are_reserved_before_minting_in_the_same_commit() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -200,8 +205,8 @@ fn incoming_stored_ids_are_reserved_before_minting_in_the_same_commit() -> TestR
         tx.append(NodeKey::ROOT, &[minted.key(), imported.key()])?;
         Ok((minted.key(), imported.key()))
     })?;
-    assert_eq!(id(&editor, imported)?, Some(zeros));
-    assert_eq!(id(&editor, minted)?, Some(repeated(1)));
+    assert_eq!(id(&editor, minted)?, Some(zeros));
+    assert_eq!(id(&editor, imported)?, Some(repeated(1)));
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     Ok(())
 }
@@ -229,4 +234,18 @@ fn duplicate_incoming_ids_keep_the_existing_first_seen_policy() -> TestResult {
     );
     assert!(ids.contains(&Some(repeated(3))), "{ids:?}");
     Ok(())
+}
+
+/// The in-update id transform runs on exactly Source SupportedNodeTypes (lexical-core
+/// node-list.ts:75-133, 57 classes): the core types plus every native supported registration.
+#[test]
+fn transform_scope_is_the_source_supported_node_types() {
+    use super::builder::SOURCE_ID_TYPES;
+    let scope: std::collections::BTreeSet<&str> = SOURCE_ID_TYPES.iter().copied().collect();
+    let source: std::collections::BTreeSet<&str> = ["paragraph", "text", "linebreak", "tab"]
+        .into_iter()
+        .chain(macro_document_model::supported_node_types())
+        .collect();
+    assert_eq!(scope, source);
+    assert_eq!(SOURCE_ID_TYPES.len(), 57);
 }

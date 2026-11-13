@@ -361,3 +361,320 @@ fn the_editing_peer_writes_the_trailing_paragraph_in_its_own_update() {
     );
     assert_eq!(types.len(), 2, "{types:?}");
 }
+
+/// Counts every tokenizer call by kind; call number `throw_at` (1-based) fails instead.
+struct CountingTokens {
+    calls: std::sync::Mutex<Vec<&'static str>>,
+    throw_at: usize,
+}
+impl CountingTokens {
+    fn call(&self, kind: &'static str) -> Result<(), CodeTokenError> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.push(kind);
+        if calls.len() == self.throw_at {
+            return Err(CodeTokenError::Host);
+        }
+        Ok(())
+    }
+}
+impl CodeTokenProvider for CountingTokens {
+    fn is_loaded(&self, _: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        self.call("loaded").map(|()| true)
+    }
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
+        self.call("tokenize")?;
+        Ok(if request.text.is_empty() {
+            Vec::new()
+        } else {
+            vec![CodeToken::Text {
+                text: request.text.to_owned(),
+                highlight_type: None,
+            }]
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct SetStateRun {
+    calls: Vec<&'static str>,
+    main_error: bool,
+    follow_up_failed: bool,
+    stored_version: Option<Value>,
+    /// Non-root nodes without an id after the SetState.
+    nodes_without_id: usize,
+}
+
+/// A local SetState of one custom-code block, with or without node ids and with the root
+/// documentMetadata absent, stale (1) or current (10), the app's load shape.
+fn set_state_run(ids: bool, metadata: Option<u32>, throw_at: usize) -> SetStateRun {
+    let provider = Arc::new(CountingTokens {
+        calls: std::sync::Mutex::new(Vec::new()),
+        throw_at,
+    });
+    let doc = lexical_loro::new_doc(7).unwrap();
+    let mut local = EditorSurface::new(
+        config(CodeTokens::new(provider.clone(), "counting")),
+        7,
+        now(),
+    )
+    .unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let mut state = local.state().to_json().unwrap();
+    let mut code = serde_json::json!({"type":"custom-code","language":"rust","previewEnabled":false,
+        "children":[{"type":"text","text":"fn main() {}"}]});
+    if ids {
+        code["$"] = serde_json::json!({"id":"codeid01"});
+        code["children"][0]["$"] = serde_json::json!({"id":"textid01"});
+    }
+    state
+        .root
+        .insert("children".into(), serde_json::json!([code]));
+    if let Some(version) = metadata {
+        state.root.insert(
+            "$".into(),
+            serde_json::json!({"documentMetadata":{"version":version}}),
+        );
+    }
+    let before = provider.calls.lock().unwrap().len();
+    let mut view = Vec::new();
+    let _ = local.apply(
+        &doc,
+        Input::SetState {
+            state,
+            tags: TagSet::default(),
+        },
+        now(),
+        Access::Edit,
+        &mut view,
+    );
+    let calls = provider.calls.lock().unwrap()[before..].to_vec();
+    fn missing(node: &Value) -> usize {
+        let own = usize::from(node["$"]["id"].as_str().is_none_or(str::is_empty));
+        own + node["children"]
+            .as_array()
+            .map_or(0, |children| children.iter().map(missing).sum())
+    }
+    let nodes_without_id = local.state().to_json().unwrap().root["children"]
+        .as_array()
+        .map_or(0, |children| children.iter().map(missing).sum());
+    SetStateRun {
+        nodes_without_id,
+        calls,
+        main_error: view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Error(_))),
+        follow_up_failed: view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. }))),
+        stored_version: local.state().to_json().unwrap().root["$"]["documentMetadata"]
+            .get("version")
+            .cloned(),
+    }
+}
+
+// Source control (app composition, apps/web source-setstate-tokenize.source-control.test.ts):
+// setEditorState runs no transform; nodeIdPlugin's created-mutation update writes ids only to
+// id-less nodes, and that update tokenizes the code block once; documentMetadataPlugin's
+// history-merge update dirties ROOT only and follows only an update with mutated nodes.
+// Ids present: 0 tokenizer calls. Ids missing: 1 tokenize, in the follow-up (id assignment).
+#[test]
+fn set_state_tokenizes_exactly_as_the_source_app() {
+    let mut actual = Vec::new();
+    let mut expected = Vec::new();
+    for ids in [false, true] {
+        for metadata in [None, Some(1), Some(10)] {
+            let run = set_state_run(ids, metadata, 0);
+            let tokenize = run.calls.iter().filter(|kind| **kind == "tokenize").count();
+            // Each tokenize call's phase: failing it must give a follow-up failure, never a
+            // main-update error.
+            let phases: Vec<(bool, bool)> = run
+                .calls
+                .iter()
+                .enumerate()
+                .filter(|(_, kind)| **kind == "tokenize")
+                .map(|(index, _)| {
+                    let failed = set_state_run(ids, metadata, index + 1);
+                    (failed.main_error, failed.follow_up_failed)
+                })
+                .collect();
+            eprintln!(
+                "ids={ids} metadata={metadata:?} calls={:?} tokenize={tokenize} phases(main,follow_up)={phases:?} stored_version={:?}",
+                run.calls, run.stored_version
+            );
+            // The follow-up half still covers nodes created outside transforms (this SetState's
+            // main update runs none).
+            assert_eq!(run.nodes_without_id, 0, "ids={ids} metadata={metadata:?}");
+            actual.push((ids, metadata, tokenize, phases));
+            expected.push((
+                ids,
+                metadata,
+                usize::from(!ids),
+                if ids { vec![] } else { vec![(false, true)] },
+            ));
+        }
+    }
+    assert_eq!(actual, expected);
+}
+
+/// Counts tokenizer calls; the call numbered `throw_at` (1-based, set after setup) fails.
+struct ArmedTokens {
+    calls: std::sync::Mutex<Vec<&'static str>>,
+    throw_at: AtomicUsize,
+}
+impl ArmedTokens {
+    fn call(&self, kind: &'static str) -> Result<(), CodeTokenError> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.push(kind);
+        if calls.len() == self.throw_at.load(Ordering::Relaxed) {
+            return Err(CodeTokenError::Host);
+        }
+        Ok(())
+    }
+}
+impl CodeTokenProvider for ArmedTokens {
+    fn is_loaded(&self, _: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        self.call("loaded").map(|()| true)
+    }
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
+        self.call("tokenize")?;
+        Ok(if request.text.is_empty() {
+            Vec::new()
+        } else {
+            vec![CodeToken::Text {
+                text: request.text.to_owned(),
+                highlight_type: None,
+            }]
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct TypingRun {
+    calls: Vec<&'static str>,
+    main_error: bool,
+    follow_up_failed: bool,
+    /// Loro changes the typing produced; follow-up rounds commit as their own changes.
+    loro_changes: Option<usize>,
+    /// Code-highlight children of the block without a node id after the typing.
+    highlights_without_id: usize,
+}
+
+/// Load one custom-code block with node ids, then type one character at the end of its last
+/// text (a shipping flow). Setup calls are excluded; `throw_at` counts typing calls (1-based).
+fn type_into_code(throw_at: usize) -> TypingRun {
+    let provider = Arc::new(ArmedTokens {
+        calls: std::sync::Mutex::new(Vec::new()),
+        throw_at: AtomicUsize::new(0),
+    });
+    let doc = lexical_loro::new_doc(7).unwrap();
+    let mut local =
+        EditorSurface::new(config(CodeTokens::new(provider.clone(), "armed")), 7, now()).unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
+    let mut state = local.state().to_json().unwrap();
+    state.root.insert(
+        "children".into(),
+        serde_json::json!([{"type":"custom-code","language":"rust","previewEnabled":false,
+            "$":{"id":"codeid01"},
+            "children":[{"type":"text","text":"fn main() {}","$":{"id":"textid01"}}]}]),
+    );
+    local
+        .apply(
+            &doc,
+            Input::SetState {
+                state,
+                tags: TagSet::default(),
+            },
+            now(),
+            Access::Edit,
+            &mut Vec::new(),
+        )
+        .unwrap();
+    let code = local.state().first_child_or_err(NodeKey::ROOT).unwrap();
+    let last = local.state().last_child_or_err(code).unwrap();
+    let end = local
+        .state()
+        .view()
+        .text(last)
+        .map_or(Utf16Offset(0), |text| text.text.utf16_len());
+    let point = Point::text(last, end);
+    let before = provider.calls.lock().unwrap().len();
+    let version = doc.oplog_vv();
+    if throw_at > 0 {
+        provider
+            .throw_at
+            .store(before + throw_at, Ordering::Relaxed);
+    }
+    let mut view = Vec::new();
+    let _ = local.apply(
+        &doc,
+        Input::Command {
+            command: Command::InsertText("x".into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        now(),
+        Access::Edit,
+        &mut view,
+    );
+    let updates =
+        serde_json::to_value(doc.export_json_updates(&version, &doc.oplog_vv()).unwrap()).unwrap();
+    let children = local.state().to_json().unwrap().root["children"][0]["children"].clone();
+    let highlights_without_id = children
+        .as_array()
+        .map(|children| {
+            children
+                .iter()
+                .filter(|child| child["type"] == "code-highlight" && child["$"]["id"].is_null())
+                .count()
+        })
+        .unwrap_or(0);
+    TypingRun {
+        loro_changes: updates["changes"].as_array().map(Vec::len),
+        highlights_without_id,
+        calls: provider.calls.lock().unwrap()[before..].to_vec(),
+        main_error: view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Error(_))),
+        follow_up_failed: view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Editor(Effect::FollowUpFailed { .. }))),
+    }
+}
+
+// Source control (apps/web source-setstate-tokenize.source-control.test.ts, typing case): one
+// typed character in a loaded code block tokenizes ONCE, inside the typing update itself; the ids
+// of the highlight nodes it creates are assigned in that same update (nodeIdPlugin transform).
+#[test]
+fn typing_into_a_loaded_code_block_tokenizes_once_in_the_typing_update() {
+    let run = type_into_code(0);
+    let tokenize: Vec<usize> = run
+        .calls
+        .iter()
+        .enumerate()
+        .filter(|(_, kind)| **kind == "tokenize")
+        .map(|(index, _)| index + 1)
+        .collect();
+    let phases: Vec<(bool, bool)> = tokenize
+        .iter()
+        .map(|call| {
+            let failed = type_into_code(*call);
+            (failed.main_error, failed.follow_up_failed)
+        })
+        .collect();
+    eprintln!(
+        "typing calls={:?} tokenize at={tokenize:?} phases(main,follow_up)={phases:?} loro_changes={:?} highlights_without_id={}",
+        run.calls, run.loro_changes, run.highlights_without_id
+    );
+    assert_eq!(phases, vec![(true, false)]);
+    // The cause, as in Source: the new highlight nodes get their ids inside the typing update,
+    // so the typing is one change and no follow-up round re-dirties the code block.
+    assert_eq!(run.highlights_without_id, 0);
+    assert_eq!(run.loro_changes, Some(1));
+}
