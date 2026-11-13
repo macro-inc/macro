@@ -6,6 +6,8 @@ mod desktop_test;
 mod menu_test;
 #[cfg(test)]
 mod row_test;
+#[cfg(test)]
+mod select_test;
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum Headers {
@@ -89,6 +91,7 @@ enum TableAction {
     },
     /// Touch handle menu item (Source TableMoveHandle runMenuAction).
     MenuAction(super::controls::MenuAction),
+    SelectCells(super::controls::SelectCells),
 }
 #[derive(Clone, Debug)]
 struct TableCommand {
@@ -99,7 +102,9 @@ static PICKER: EventKey<()> = EventKey::new("group-b.table-picker");
 pub(in crate::plugins_group_b) fn event_payload(
     event: &PluginEvent,
 ) -> Result<Option<serde_json::Value>, Error> {
-    Ok(event.payload(&PICKER).map(|_| serde_json::Value::Null))
+    let picker = event.payload(&PICKER).is_some();
+    let select_cells = event.payload(&super::controls::SELECT_CELLS).is_some();
+    Ok((picker || select_cells).then_some(serde_json::Value::Null))
 }
 static TABLE: CommandKey<TableCommand> = CommandKey::new("group-b.table");
 const MENU_ACTION: &str = "menu-action";
@@ -148,6 +153,19 @@ impl Plugin for Actions {
     }
     fn commands(&self) -> &[CommandRegistration] {
         &COMMANDS
+    }
+    /// Source reports a straddling select-cells through the app onError once;
+    /// native reports it as this plugin's follow-up failure after the commit
+    /// (with its event) is published, leaving selection and document unchanged.
+    fn after_commit(&self, _tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
+        let straddled = commit.events.iter().any(|event| {
+            event.payload(&super::controls::SELECT_CELLS)
+                == Some(&super::controls::SelectCellsOutcome::Straddled)
+        });
+        if straddled {
+            return Err(Error::invariant(super::controls::SELECT_CELLS_STRADDLED));
+        }
+        Ok(())
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         let Command::Extension(extension) = command else {
@@ -264,6 +282,9 @@ impl Plugin for Actions {
             }
             TableAction::MenuAction(menu) => {
                 super::controls::menu_action(tx, menu.tracked.map(key), menu.item)?
+            }
+            TableAction::SelectCells(cells) => {
+                super::controls::select_cells(tx, cells.anchor.map(key), cells.focus.map(key))?
             }
             TableAction::RestoreRow { row, height } => {
                 let row = key(*row);

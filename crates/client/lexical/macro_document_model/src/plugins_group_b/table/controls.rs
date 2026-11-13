@@ -104,6 +104,64 @@ pub(super) enum MenuItem {
     SplitCell,
     DeleteTable,
 }
+/// Closed `select-cells` payload: the handle's tracked corners, each optional.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SelectCells {
+    #[serde(default)]
+    pub(super) anchor: Option<u32>,
+    #[serde(default)]
+    pub(super) focus: Option<u32>,
+}
+/// What one `select-cells` input did; the view sees only the event name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SelectCellsOutcome {
+    /// Both cells attached in one table: the TableSelection was set.
+    Selected,
+    /// A tracked cell is missing or detached: Source's update is a no-op.
+    Unchanged,
+    /// The cells sit in two tables: Source's table plugin reports Lexical's
+    /// same-table invariant and discards the update.
+    Straddled,
+}
+/// Fired once per `select-cells` input, like Source's unconditional
+/// SELECTION_CHANGE_COMMAND after `selectHandleCells`' update.
+pub(super) static SELECT_CELLS: EventKey<SelectCellsOutcome> =
+    EventKey::new("group-b.table-select-cells");
+/// Source's message for the straddling selection (Lexical's $getCellNodes invariant).
+pub(super) const SELECT_CELLS_STRADDLED: &str =
+    "Expected TableSelection anchor and focus to be in the same table";
+/// Source TableMoveHandle `selectHandleCells`: when both tracked cells are attached
+/// table cells, a TableSelection over the anchor's table; otherwise the update is a
+/// no-op. The notification fires either way, in the same transaction.
+pub(super) fn select_cells(
+    tx: &mut Transaction<'_>,
+    anchor: Option<NodeKey>,
+    focus: Option<NodeKey>,
+) -> Result<bool, Error> {
+    let attached = |tx: &Transaction<'_>, key: Option<NodeKey>| {
+        key.and_then(|key| tx.view().cast::<TableCellNode>(key))
+            .filter(|cell| tx.is_attached(cell.key()))
+    };
+    let mut outcome = SelectCellsOutcome::Unchanged;
+    if let (Some(anchor), Some(focus)) = (attached(tx, anchor), attached(tx, focus)) {
+        let table = get_table_node_from_lexical_node(tx.view(), anchor.key())?;
+        if get_table_node_from_lexical_node(tx.view(), focus.key())? == table {
+            tx.set_selection(Some(Selection::Table(TableSelection::new(
+                table.key(),
+                anchor.key(),
+                focus.key(),
+            ))))?;
+            outcome = SelectCellsOutcome::Selected;
+        } else {
+            // Reported after this commit publishes (Actions::after_commit), so the
+            // event still reaches the view and nothing changes, as in Source.
+            outcome = SelectCellsOutcome::Straddled;
+        }
+    }
+    tx.emit(&SELECT_CELLS, outcome);
+    Ok(true)
+}
 /// Closed `menu-action` payload: no unknown fields, `tracked` optional.
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
