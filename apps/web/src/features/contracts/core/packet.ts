@@ -109,6 +109,7 @@ export type PacketEventType =
   | 'audit.disclosure_accepted'
   | 'audit.reminder_sent'
   | 'audit.documents_replaced'
+  | 'audit.packets_merged'
   | 'audit.status_overridden';
 
 export type PacketEvent = {
@@ -135,6 +136,14 @@ type StatusOverride = {
 
 export type PacketOwner = { id: string; name: string };
 
+/** A packet that was merged into another, with the log it had, kept whole. */
+export type MergedPacket = {
+  id: string;
+  title: string;
+  mergedAt: string;
+  events: PacketEvent[];
+};
+
 export type Packet = {
   id: string;
   title: string;
@@ -160,6 +169,8 @@ export type Packet = {
   lastReminderAt?: string;
   statusOverride?: StatusOverride;
   events: PacketEvent[];
+  /** Packets merged into this one, oldest first. */
+  merged?: MergedPacket[];
 };
 
 export const DEFAULT_EXPIRATION_DAYS = 30;

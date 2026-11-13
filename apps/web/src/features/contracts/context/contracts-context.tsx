@@ -80,6 +80,14 @@ export type ContractsContext = {
     documentId: string,
     replacement: PacketDocument
   ): ResultAsync<Packet, ContractsError>;
+  /**
+   * Fold one packet into another and remove the one folded in. The target
+   * keeps both packets' documents, recipients, fields, and databases.
+   */
+  mergePackets(
+    targetId: string,
+    sourceId: string
+  ): ResultAsync<Packet, ContractsError>;
   /** Remove a packet that was never sent, and its documents. */
   deleteDraft(packetId: string): ResultAsync<void, ContractsError>;
   /** Whether every entry of the packet's audit log follows from the last. */

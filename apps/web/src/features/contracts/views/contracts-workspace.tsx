@@ -16,6 +16,7 @@ import { useContractsContext } from '../context/contracts-context';
 import type { Packet } from '../core/packet';
 import { allRows, databaseRows, matchesFilter } from '../core/packet-row';
 import { CertificateDialog } from './certificate-dialog';
+import { MergePacketDialog } from './merge-packet-dialog';
 import { NewDatabaseDialog } from './new-database-dialog';
 import { NewPacketDialog } from './new-packet-dialog';
 import { PacketPane } from './packet-pane';
@@ -28,6 +29,7 @@ type Overlay =
   | { t: 'new-database' }
   | { t: 'review'; packetId: string }
   | { t: 'certificate'; packetId: string }
+  | { t: 'merge'; packetId: string }
   | { t: 'document'; packetId: string; documentId: string };
 
 /**
@@ -74,6 +76,10 @@ export function ContractsWorkspace() {
   const reviewing = () => {
     const current = overlay();
     return current?.t === 'review' ? packet(current.packetId) : undefined;
+  };
+  const merging = () => {
+    const current = overlay();
+    return current?.t === 'merge' ? packet(current.packetId) : undefined;
   };
   const certified = () => {
     const current = overlay();
@@ -218,6 +224,7 @@ export function ContractsWorkspace() {
                     row={row()}
                     onClose={() => setSelectedId(undefined)}
                     onPlaceFields={setPlacingId}
+                    onMerge={(packetId) => setOverlay({ t: 'merge', packetId })}
                     onCertificate={(packetId) =>
                       setOverlay({ t: 'certificate', packetId })
                     }
@@ -266,6 +273,18 @@ export function ContractsWorkspace() {
                 setOverlay(undefined);
                 setPlacingId(undefined);
                 setSelectedId(sent.id);
+              }}
+            />
+          )}
+        </Match>
+        <Match when={merging()}>
+          {(target) => (
+            <MergePacketDialog
+              packet={target()}
+              onClose={() => setOverlay(undefined)}
+              onMerged={(merged) => {
+                setOverlay(undefined);
+                setSelectedId(merged.id);
               }}
             />
           )}

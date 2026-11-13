@@ -27,6 +27,9 @@ export function describeEvent(event: CertificateEvent): string {
     .with('audit.documents_replaced', () =>
       t('contracts.activityDocumentsReplaced', { actor })
     )
+    .with('audit.packets_merged', () =>
+      t('contracts.activityMerged', { actor, title: event.note ?? '' })
+    )
     .with('audit.status_overridden', () =>
       t('contracts.activityOverridden', { actor })
     )

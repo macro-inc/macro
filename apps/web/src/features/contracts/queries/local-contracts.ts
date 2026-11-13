@@ -23,8 +23,10 @@ import {
   expireIfDue,
   type LifecycleContext,
   markSignedOffline,
+  mergePackets,
   type PacketError,
   recordView,
+  remindIfDue,
   remindPending,
   replaceDocument,
   sendPacket,
@@ -348,24 +350,28 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     }
   }
 
-  /** Record every signing window that closed since the last look. */
-  function recordExpiries() {
+  /** What the clock alone changes: a window that closed, a reminder due. */
+  const onSchedule = (packet: Packet, context: LifecycleContext): Packet =>
+    remindIfDue(expireIfDue(packet, context), context);
+
+  /** Record every expiry and reminder that came due since the last look. */
+  function recordDue() {
     const due = snapshot().packets.filter(
-      (packet) => expireIfDue(packet, lifecycle()) !== packet
+      (packet) => onSchedule(packet, lifecycle()) !== packet
     );
     for (const packet of due) {
       fireAndForget(
         transition(packet.id, (current, context) =>
-          ok(expireIfDue(current, context))
+          ok(onSchedule(current, context))
         ),
-        'contracts.expire'
+        'contracts.schedule'
       );
     }
   }
 
   const clock = setInterval(() => {
     setNow(deps.clock());
-    recordExpiries();
+    recordDue();
   }, CLOCK_INTERVAL_MS);
   const unsubscribe = deps.changes.subscribe(refresh);
   onCleanup(() => {
@@ -373,7 +379,7 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
     clearInterval(clock);
     unsubscribe();
   });
-  recordExpiries();
+  recordDue();
 
   async function loadPdf(documentId: string): Promise<PdfDocument> {
     const bytes = await deps.blobs.get(documentId);
@@ -499,6 +505,22 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
             () => packet
           )
         ),
+
+      mergePackets: (targetId, sourceId) =>
+        mutate<Packet>(async (current) => {
+          const target = current.packets.find((each) => each.id === targetId);
+          const source = current.packets.find((each) => each.id === sourceId);
+          if (!target || !source) return err({ kind: 'not_found' });
+
+          const merged = mergePackets(target, source, lifecycle());
+          if (merged.isErr()) return err(merged.error);
+          const sealed = await sealEvents(merged.value, deps.digestText);
+          // The source is gone; every database it was in now lists the target.
+          const packets = current.packets
+            .filter((each) => each.id !== sourceId)
+            .map((each) => (each.id === targetId ? sealed : each));
+          return ok({ next: { ...current, packets }, value: sealed });
+        }),
 
       deleteDraft: (packetId) =>
         mutate<PacketDocument[]>(async (current) => {

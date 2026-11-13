@@ -21,6 +21,7 @@ export function PacketPane(props: {
   onClose: () => void;
   onPlaceFields: (packetId: string) => void;
   onCertificate: (packetId: string) => void;
+  onMerge: (packetId: string) => void;
   onOpenDocument: (packet: Packet, documentId: string) => void;
 }) {
   const context = useContractsContext();
@@ -88,6 +89,13 @@ export function PacketPane(props: {
               {t('contracts.continuePlacing')}
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => props.onMerge(packet().id)}
+            >
+              {t('contracts.mergePacket')}
+            </Button>
+            <Button
               variant="danger-ghost"
               size="sm"
               onClick={() => fireAndForget(remove(), 'contracts.delete-draft')}
@@ -143,6 +151,15 @@ export function PacketPane(props: {
               <ShieldCheckIcon class="size-3.5" />
               {t('contracts.auditCertificate')}
             </Button>
+            <Show when={isInFlight(props.row.status)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => props.onMerge(packet().id)}
+              >
+                {t('contracts.mergePacket')}
+              </Button>
+            </Show>
             <Show
               when={
                 props.row.status !== 'signed' && props.row.status !== 'voided'

@@ -61,6 +61,7 @@ const event = z.object({
     'audit.disclosure_accepted',
     'audit.reminder_sent',
     'audit.documents_replaced',
+    'audit.packets_merged',
     'audit.status_overridden',
   ]),
   at: z.string(),
@@ -109,6 +110,16 @@ const packet = z.object({
     })
     .optional(),
   events: z.array(event),
+  merged: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        mergedAt: z.string(),
+        events: z.array(event),
+      })
+    )
+    .optional(),
 });
 
 /** Everything the browser-local Contracts store keeps. */

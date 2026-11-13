@@ -1,5 +1,5 @@
 import { createRoot } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ContractsData } from '../context/contracts-context';
 import { findRecipient } from '../core/packet';
 import { packetStatus } from '../core/status';
@@ -272,6 +272,59 @@ describe('deleteDraft', () => {
     expect((await contracts.deleteDraft('missing'))._unsafeUnwrapErr()).toEqual(
       { kind: 'not_found' }
     );
+  });
+});
+
+describe('mergePackets', () => {
+  it('folds one packet into another and removes the one folded in', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const target = (await contracts.createDraft(ACME_DRAFT))._unsafeUnwrap();
+    const source = (
+      await contracts.createDraft({
+        ...ACME_DRAFT,
+        title: 'Acme MSA, second copy',
+        databaseIds: ['ndas'],
+      })
+    )._unsafeUnwrap();
+
+    const merged = (
+      await contracts.mergePackets(target.id, source.id)
+    )._unsafeUnwrap();
+
+    expect(contracts.packets().map((packet) => packet.id)).toEqual([target.id]);
+    expect(merged.databaseIds).toEqual(['customer-agreements', 'ndas']);
+    // The merge is sealed into the target's log like any other entry.
+    expect(merged.events.at(-1)?.type).toBe('audit.packets_merged');
+    expect(await contracts.verifyLog(merged)).toBe(true);
+    expect(merged.merged?.[0].id).toBe(source.id);
+  });
+
+  it('reports a packet that is not there', async () => {
+    const contracts = open(fakeBrowser()).context(VIEWER);
+    const target = (await contracts.createDraft(ACME_DRAFT))._unsafeUnwrap();
+    expect(
+      (await contracts.mergePackets(target.id, 'missing'))._unsafeUnwrapErr()
+    ).toEqual({ kind: 'not_found' });
+  });
+});
+
+describe('scheduled reminders', () => {
+  it('records a reminder when a store opens after the cadence has passed', async () => {
+    const browser = fakeBrowser();
+    const sent = await sendAcme(open(browser).context(VIEWER));
+
+    browser.setNow('2026-11-13T09:00:00.000Z');
+    const later = open(browser).context(VIEWER);
+    await vi.waitFor(() =>
+      expect(later.packets()[0].events.at(-1)).toMatchObject({
+        type: 'audit.reminder_sent',
+        actor: 'Macro',
+        recipientId: SARAH,
+      })
+    );
+    expect(later.packets()[0].lastReminderAt).toBe('2026-11-13T09:00:00.000Z');
+    expect(later.packets()[0].id).toBe(sent.id);
   });
 });
 

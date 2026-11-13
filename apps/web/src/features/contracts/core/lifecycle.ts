@@ -11,6 +11,7 @@ import {
   type AdoptedSignature,
   DEFAULT_EXPIRATION_DAYS,
   DEFAULT_REMINDER_DAYS,
+  type FieldBox,
   type Packet,
   type PacketDocument,
   type PacketEvent,
@@ -36,6 +37,7 @@ export type PacketError =
   | { kind: 'not_draft' }
   | { kind: 'not_in_flight' }
   | { kind: 'cannot_send' }
+  | { kind: 'cannot_merge' }
   | { kind: 'no_database' }
   | { kind: 'not_your_turn' }
   | { kind: 'disclosure_required' }
@@ -424,9 +426,13 @@ export function expireIfDue(packet: Packet, context: LifecycleContext): Packet {
 }
 
 /** Nudge every signer whose turn it is. */
+/** Who an automatic step is recorded as, where no person caused it. */
+export const SYSTEM_ACTOR = 'Macro';
+
 export function remindPending(
   packet: Packet,
-  context: LifecycleContext
+  context: LifecycleContext,
+  actor: string = packet.owner.name
 ): Result<Packet, PacketError> {
   if (!isInFlight(packetStatus(packet, context.now))) {
     return err({ kind: 'not_in_flight' });
@@ -438,7 +444,7 @@ export function remindPending(
     events: [
       ...packet.events,
       ...pending.map((signer) =>
-        event(context, 'audit.reminder_sent', packet.owner.name, {
+        event(context, 'audit.reminder_sent', actor, {
           recipientId: signer.id,
         })
       ),
@@ -509,6 +515,149 @@ export function replaceDocument(
     return err({ kind: 'signature_field_lost' });
   }
   return ok(invite(revised, context));
+}
+
+/**
+ * Remind the pending signers when the packet's cadence says a reminder is
+ * due. The packet is returned unchanged when none is.
+ */
+export function remindIfDue(packet: Packet, context: LifecycleContext): Packet {
+  if (!isInFlight(packetStatus(packet, context.now))) return packet;
+  const due = nextReminderAt(packet);
+  if (!due || due > context.now) return packet;
+  return remindPending(packet, context, SYSTEM_ACTOR).unwrapOr(packet);
+}
+
+const sameEmail = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const sameBox = (a: FieldBox, b: FieldBox) =>
+  a.xPct === b.xPct &&
+  a.yPct === b.yPct &&
+  a.widthPct === b.widthPct &&
+  a.heightPct === b.heightPct;
+
+/** Whether a packet can still take part in a merge: a draft or in flight. */
+export function canMerge(packet: Packet, now: string): boolean {
+  const status = packetStatus(packet, now);
+  return status === 'draft' || isInFlight(status);
+}
+
+/**
+ * Fold `source` into `target`, for a packet that was created by mistake
+ * instead of updating an existing one. The target gains the source's
+ * documents, recipients, fields, and databases; a document with the same
+ * bytes and a recipient with the same email are kept once. The source's
+ * log is kept whole under `merged`, and the caller removes the source.
+ *
+ * A draft target stays a draft. An in-flight target now covers documents
+ * its signers have not seen, so, as when a document is replaced, every link
+ * is voided, signatures are cleared, and the first signers are invited
+ * again; that is refused if a signer would have nowhere to sign.
+ */
+export function mergePackets(
+  target: Packet,
+  source: Packet,
+  context: LifecycleContext
+): Result<Packet, PacketError> {
+  if (target.id === source.id) return err({ kind: 'cannot_merge' });
+  if (!canMerge(target, context.now) || !canMerge(source, context.now)) {
+    return err({ kind: 'cannot_merge' });
+  }
+  const inFlight = packetStatus(target, context.now) !== 'draft';
+
+  const documents = [...target.documents];
+  const documentIds = new Map<string, string>();
+  for (const document of source.documents) {
+    const same = documents.find(
+      (each) => each.id === document.id || each.sha256 === document.sha256
+    );
+    documentIds.set(document.id, same?.id ?? document.id);
+    if (!same) documents.push(document);
+  }
+
+  const recipients = inFlight
+    ? target.recipients.map(resetRecipient)
+    : [...target.recipients];
+  const recipientIds = new Map<string, string>();
+  for (const recipient of source.recipients) {
+    const index = recipients.findIndex((each) =>
+      sameEmail(each.email, recipient.email)
+    );
+    const same = recipients[index];
+    if (same) {
+      recipientIds.set(recipient.id, same.id);
+      // Someone who signs in either packet signs the merged one.
+      if (recipient.role === 'signer' && same.role === 'copy') {
+        recipients[index] = { ...same, role: 'signer' };
+      }
+      continue;
+    }
+    const taken = recipients.some((each) => each.id === recipient.id);
+    const id = taken ? context.newId() : recipient.id;
+    recipientIds.set(recipient.id, id);
+    recipients.push({ ...resetRecipient(recipient), id });
+  }
+
+  const fields: PacketField[] = target.fields.map((field) =>
+    inFlight ? withoutValue(field) : field
+  );
+  for (const sourceField of source.fields) {
+    const field: PacketField = {
+      ...withoutValue(sourceField),
+      documentId:
+        documentIds.get(sourceField.documentId) ?? sourceField.documentId,
+      recipientId:
+        recipientIds.get(sourceField.recipientId) ?? sourceField.recipientId,
+    };
+    // The same field placed in both packets is one field.
+    const duplicate = fields.some(
+      (each) =>
+        each.documentId === field.documentId &&
+        each.page === field.page &&
+        each.recipientId === field.recipientId &&
+        each.kind === field.kind &&
+        sameBox(each.box, field.box)
+    );
+    if (duplicate) continue;
+    const taken = fields.some((each) => each.id === field.id);
+    fields.push(taken ? { ...field, id: context.newId() } : field);
+  }
+
+  const merged: Packet = {
+    ...target,
+    documents,
+    recipients,
+    fields,
+    databaseIds: [...new Set([...target.databaseIds, ...source.databaseIds])],
+    company: target.company ?? source.company,
+    events: [
+      ...target.events,
+      event(context, 'audit.packets_merged', target.owner.name, {
+        note: source.title,
+      }),
+    ],
+    merged: [
+      ...(target.merged ?? []),
+      ...(source.merged ?? []),
+      {
+        id: source.id,
+        title: source.title,
+        mergedAt: context.now,
+        events: source.events,
+      },
+    ],
+  };
+  if (!inFlight) return ok(merged);
+
+  if (placementProblems(merged).some(blocksSending)) {
+    return err({ kind: 'cannot_send' });
+  }
+  return ok(invite(merged, context));
+}
+
+function withoutValue({ value: _value, ...field }: PacketField): PacketField {
+  return field;
 }
 
 function resetRecipient(recipient: Recipient): Recipient {

@@ -15,8 +15,10 @@ import {
   expireIfDue,
   MAX_MARK_LENGTH,
   markSignedOffline,
+  mergePackets,
   nextReminderAt,
   recordView,
+  remindIfDue,
   remindPending,
   replaceDocument,
   sendPacket,
@@ -516,5 +518,223 @@ describe('reminders', () => {
   it('has no next reminder when the cadence is off', () => {
     const { packet } = sent({ reminderDays: null });
     expect(nextReminderAt(packet)).toBeUndefined();
+  });
+});
+
+describe('remindIfDue', () => {
+  it('reminds pending signers once the cadence has passed, as Macro', () => {
+    const { context, packet } = sent();
+    // Three days is the default cadence; nothing is due before it.
+    const early = remindIfDue(packet, context.at('2026-11-11T21:05:40.000Z'));
+    expect(early).toBe(packet);
+
+    const reminded = remindIfDue(
+      packet,
+      context.at('2026-11-12T21:05:40.000Z')
+    );
+    const reminder = reminded.events.at(-1);
+    expect(reminder).toMatchObject({
+      type: 'audit.reminder_sent',
+      actor: 'Macro',
+      recipientId: SARAH,
+    });
+    // The next one counts from this reminder.
+    expect(remindIfDue(reminded, context.at('2026-11-13T21:05:40.000Z'))).toBe(
+      reminded
+    );
+  });
+
+  it('leaves a packet alone when reminders are off or it is closed', () => {
+    const { context, packet } = sent({ reminderDays: null });
+    const later = context.at('2026-11-20T00:00:00.000Z');
+    expect(remindIfDue(packet, later)).toBe(packet);
+
+    const voided = voidPacket(
+      sent().packet,
+      'Superseded',
+      later
+    )._unsafeUnwrap();
+    expect(remindIfDue(voided, later)).toBe(voided);
+  });
+});
+
+describe('mergePackets', () => {
+  const NDA: Parameters<typeof acmeDraft>[1] = {
+    title: 'Acme NDA',
+    databaseIds: ['ndas'],
+    documents: [
+      {
+        id: 'nda',
+        name: 'Mutual NDA',
+        pageCount: 3,
+        source: 'upload',
+        sha256: 'd'.repeat(64),
+      },
+    ],
+    recipients: [
+      {
+        id: 'sarah-again',
+        name: 'Sarah Chen',
+        email: 'Sarah.Chen@acme.example',
+        role: 'signer',
+        isSender: false,
+      },
+      {
+        id: 'lee',
+        name: 'Lee Okafor',
+        email: 'lee.okafor@acme.example',
+        role: 'signer',
+        isSender: false,
+      },
+    ],
+  };
+  const NDA_FIELDS = [
+    {
+      id: 'nda-sarah',
+      documentId: 'nda',
+      page: 2,
+      recipientId: 'sarah-again',
+      kind: 'signature' as const,
+      required: true,
+      box: { xPct: 0.1, yPct: 0.7, widthPct: 0.3, heightPct: 0.05 },
+    },
+    {
+      id: 'nda-lee',
+      documentId: 'nda',
+      page: 2,
+      recipientId: 'lee',
+      kind: 'signature' as const,
+      required: true,
+      box: { xPct: 0.55, yPct: 0.7, widthPct: 0.3, heightPct: 0.05 },
+    },
+  ];
+  function ndaDraft(context: ReturnType<typeof testContext>) {
+    const draft = createDraft(
+      { ...ACME_DRAFT, ...NDA },
+      context
+    )._unsafeUnwrap();
+    return setFields(draft, NDA_FIELDS, context)._unsafeUnwrap();
+  }
+
+  it('unifies documents, recipients, fields, and databases of two drafts', () => {
+    const context = testContext();
+    const target = acmeDraft(context);
+    const source = ndaDraft(context);
+
+    const merged = mergePackets(target, source, context)._unsafeUnwrap();
+
+    expect(merged.id).toBe(target.id);
+    expect(merged.documents.map((document) => document.id)).toEqual([
+      'order-form',
+      'msa',
+      'nda',
+    ]);
+    // Sarah is in both packets under one email: she is one recipient.
+    expect(merged.recipients.map((recipient) => recipient.id)).toEqual([
+      SARAH,
+      AVERY,
+      'dana',
+      'lee',
+    ]);
+    expect(
+      merged.fields.find((field) => field.id === 'nda-sarah')?.recipientId
+    ).toBe(SARAH);
+    expect(merged.databaseIds).toEqual(['customer-agreements', 'ndas']);
+    expect(packetStatus(merged, context.now)).toBe('draft');
+  });
+
+  it('keeps the merged packet’s history and records the merge', () => {
+    const context = testContext();
+    const source = ndaDraft(context);
+    const merged = mergePackets(
+      acmeDraft(context),
+      source,
+      context
+    )._unsafeUnwrap();
+
+    expect(merged.events.at(-1)).toMatchObject({
+      type: 'audit.packets_merged',
+      note: 'Acme NDA',
+    });
+    expect(merged.merged).toEqual([
+      {
+        id: source.id,
+        title: 'Acme NDA',
+        mergedAt: context.now,
+        events: source.events,
+      },
+    ]);
+  });
+
+  it('keeps one copy of a document both packets hold', () => {
+    const context = testContext();
+    const target = acmeDraft(context);
+    const twin = createDraft(
+      {
+        ...ACME_DRAFT,
+        title: 'Acme MSA (copy)',
+        documents: [{ ...ACME_DRAFT.documents[1], id: 'msa-uploaded-again' }],
+      },
+      context
+    )._unsafeUnwrap();
+
+    const merged = mergePackets(target, twin, context)._unsafeUnwrap();
+
+    expect(merged.documents.map((document) => document.id)).toEqual([
+      'order-form',
+      'msa',
+    ]);
+  });
+
+  it('starts signing over when the target was already out for signature', () => {
+    const { context, packet } = sent();
+    const afterSarah = signAs(
+      packet,
+      token(packet, SARAH),
+      { ...TYPED_SIGNATURE, values: { 'sarah-title': 'VP, Operations' } },
+      context.at(SARAH_SIGNS_AT)
+    )._unsafeUnwrap();
+    const later = context.at('2026-11-11T09:00:00.000Z');
+
+    const merged = mergePackets(
+      afterSarah,
+      ndaDraft(context),
+      later
+    )._unsafeUnwrap();
+
+    // Sarah signed before the NDA was part of the packet: she signs again.
+    const sarah = findRecipient(merged, SARAH);
+    expect(sarah?.signedAt).toBeUndefined();
+    expect(sarah?.access?.issuedAt).toBe(later.now);
+    expect(sarah?.access?.token).not.toBe(token(packet, SARAH));
+    expect(packetStatus(merged, later.now)).toBe('sent');
+  });
+
+  it('refuses a packet that is closed, and a packet with itself', () => {
+    const { context, packet } = sent();
+    const voided = voidPacket(packet, 'Superseded', context)._unsafeUnwrap();
+    const draft = ndaDraft(context);
+
+    expect(mergePackets(draft, voided, context)._unsafeUnwrapErr()).toEqual({
+      kind: 'cannot_merge',
+    });
+    expect(mergePackets(voided, draft, context)._unsafeUnwrapErr()).toEqual({
+      kind: 'cannot_merge',
+    });
+    expect(mergePackets(draft, draft, context)._unsafeUnwrapErr()).toEqual({
+      kind: 'cannot_merge',
+    });
+  });
+
+  it('refuses to merge into a sent packet a signer who has nowhere to sign', () => {
+    const { context, packet } = sent();
+    const unplaced = createDraft(
+      { ...ACME_DRAFT, ...NDA },
+      context
+    )._unsafeUnwrap();
+
+    expect(mergePackets(packet, unplaced, context)._unsafeUnwrapErr()).toEqual({
+      kind: 'cannot_send',
+    });
   });
 });

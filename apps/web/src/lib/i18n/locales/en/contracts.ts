@@ -90,6 +90,18 @@ export default {
   voidBody:
     'Every signing link stops working and signatures collected so far no longer count. This cannot be undone.',
   actionFailed: 'That didn’t work. Try again.',
+  mergePacket: 'Merge packet',
+  mergeTitle: 'Merge into “{{title}}”',
+  mergeDescription:
+    'Choose a packet created by mistake. Its documents, recipients, fields, and databases move into this packet, its history is kept here, and it is removed.',
+  mergeChoose: 'Packet to merge in',
+  mergeNothing: 'There is no other open packet to merge.',
+  mergeRestartsSigning:
+    'This packet is out for signature. Merging adds documents its signers have not seen, so signatures are cleared and new signing links are issued.',
+  mergeConfirm: 'Merge',
+  merged: 'Packets merged',
+  mergeNeedsSignature:
+    'A signer in that packet has no signature field. Place its fields first, then merge.',
   placementNotSaved:
     'Your field placement couldn’t be saved. Open the draft and place the fields again.',
   loadFailed:
@@ -157,6 +169,7 @@ export default {
   activityDisclosure: '{{name}} agreed to sign electronically',
   activityReminder: 'Reminder sent to {{name}}',
   activityDocumentsReplaced: '{{actor}} replaced a document',
+  activityMerged: '{{actor}} merged “{{title}}” into this packet',
   activityOverridden: '{{actor}} marked the packet signed offline',
 
   stepSetUp: '1 · Set up',
