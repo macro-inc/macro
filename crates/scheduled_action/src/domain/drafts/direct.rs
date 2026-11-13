@@ -443,7 +443,9 @@ fn kind_words(kind: ItemKind) -> &'static str {
 /// Settle each name on the one item of its likeliest kind that has it
 /// exactly; a name no item has, or several items of that kind do, is left.
 /// A name a likelier kind that couldn't be searched might have is left
-/// unknown, as is one that matched nothing while any kind couldn't be.
+/// unknown, as is a name of no likely kind that fewer than two items have
+/// while any kind couldn't be searched. With no likely kind, items of every
+/// kind compete.
 pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
     let NameAnswers {
         answers,
@@ -466,8 +468,9 @@ pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
                     items.push(item.clone());
                 }
             }
-            unknown = items.is_empty() && !unavailable.is_empty();
-            chosen = (!items.is_empty()).then_some(items);
+            // A kind it couldn't search might hold the one item, or a second.
+            unknown = items.len() < 2 && !unavailable.is_empty();
+            chosen = (!unknown && !items.is_empty()).then_some(items);
         } else {
             for kind in &asked.kinds {
                 if unavailable.contains(kind) {
@@ -1153,10 +1156,7 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                         so_far.setting_up = true;
                         let ran = self.set_up(owner, &run, context, &routine, &source).await;
                         so_far.setting_up = false;
-                        if self.cancelled(&run).await {
-                            return Ok(None);
-                        }
-                        match ran {
+                        let problem = match ran {
                             Ok((ids, items)) => {
                                 so_far.created.extend(items);
                                 so_far.setup = Setup::Ran(ids);
@@ -1177,7 +1177,13 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
                                 };
                                 Some(WriterProblem::new(problem))
                             }
+                        };
+                        // Read once what setup did is kept, so a timeout
+                        // during the read still reports it.
+                        if self.cancelled(&run).await {
+                            return Ok(None);
                         }
+                        problem
                     }
                     _ => None,
                 },

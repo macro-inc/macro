@@ -805,6 +805,9 @@ struct SetsUp {
     hangs: Option<CancellationToken>,
     /// Whose background drafts its owner cancels while setup runs.
     cancels: Option<Arc<Rows>>,
+    /// Once it has run, makes reading the draft's row hang and cancels this
+    /// token, as a shutdown landing on that read.
+    interrupts_after: Option<(Arc<Rows>, CancellationToken)>,
     ran: Mutex<Vec<(String, Uuid)>>,
     /// The areas each reference was asked for.
     areas: Mutex<Vec<Vec<String>>>,
@@ -818,6 +821,7 @@ impl SetsUp {
             fails: Mutex::new(VecDeque::new()),
             hangs: None,
             cancels: None,
+            interrupts_after: None,
             ran: Mutex::new(Vec::new()),
             areas: Mutex::new(Vec::new()),
         }
@@ -863,6 +867,10 @@ impl RoutineCode for SetsUp {
                 job.phase = jobs::DraftJobPhase::Cancelled;
             }
         }
+        if let Some((rows, interrupt)) = &self.interrupts_after {
+            rows.stalls.store(true, std::sync::atomic::Ordering::SeqCst);
+            interrupt.cancel();
+        }
         let fails = self.fails.lock().unwrap().pop_front();
         match fails {
             None => CodeOutcome {
@@ -901,6 +909,10 @@ impl RoutineCode for SetsUp {
 
     fn declarations(&self, problems: &[String]) -> String {
         self.checker.declarations(problems)
+    }
+
+    fn sdk_areas(&self) -> String {
+        SDK_AREAS.join("\n")
     }
 
     fn area_reference(&self, areas: &[String]) -> String {
@@ -1253,6 +1265,39 @@ async fn a_draft_cancelled_while_setup_runs_stops_when_setup_ends() {
 }
 
 #[tokio::test]
+async fn a_draft_cut_off_reading_its_row_after_setup_still_says_what_setup_made() {
+    let rows = Arc::new(Rows::default());
+    let interrupt = CancellationToken::new();
+    let database = Uuid::now_v7().to_string();
+    let code = Arc::new(SetsUp {
+        interrupts_after: Some((Arc::clone(&rows), interrupt.clone())),
+        ..SetsUp::returning(json!({ "orders": { "type": "database", "id": database } }))
+    });
+    let model = Arc::new(Model::new(
+        named(&[]),
+        vec![with_setup(posted_in(&[]), add_row("good", ORDERS), "first")],
+    ));
+    let drafts = setting_up_in(&code, &model, &rows);
+
+    let draft = draft_until(
+        &drafts,
+        routine(ORDERS_REQUEST),
+        Uuid::now_v7(),
+        &Milestones::default(),
+        interrupt,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let Draft::Failed { created, .. } = draft else {
+        panic!("expected a failure, got {draft:?}");
+    };
+    let made: Vec<&str> = created.iter().map(|item| item.entity_id.as_str()).collect();
+    assert_eq!(made, [database.as_str()]);
+}
+
+#[tokio::test]
 async fn a_placeholder_with_no_setup_goes_back_to_the_writer() {
     let database = Uuid::now_v7().to_string();
     let model = Arc::new(Model::new(
@@ -1434,6 +1479,7 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
             asked("Finance", vec![ItemKind::Label, ItemKind::Project]),
             asked("design", vec![ItemKind::Channel, ItemKind::Label]),
             asked("Ops", Vec::new()),
+            asked("Billing", Vec::new()),
             asked("Nobody", vec![ItemKind::Person]),
         ],
         NameAnswers {
@@ -1451,6 +1497,10 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
                     matches: Vec::new(),
                 },
                 NameAnswer {
+                    name: "Billing".into(),
+                    matches: vec![item(ItemKind::Channel, "Billing", "billing")],
+                },
+                NameAnswer {
                     name: "Nobody".into(),
                     matches: Vec::new(),
                 },
@@ -1460,7 +1510,8 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
     );
 
     // Not the folder: the label it more likely names couldn't be searched.
-    assert_eq!(lookup.failed, ["Finance", "Ops"]);
+    // Nor the one channel named Billing: a label might be named so too.
+    assert_eq!(lookup.failed, ["Finance", "Ops", "Billing"]);
     let found: Vec<&str> = lookup
         .found
         .iter()
@@ -1634,7 +1685,14 @@ fn code_the_host_may_not_have_still_gives_the_writer_its_sdk_areas() {
             .area_reference(&["tasks".to_owned()])
             .is_empty()
     );
+    assert!(None::<SetsUp>.sdk_areas().is_empty());
     let prompts = DirectPrompts::new(&code, "the guide", ItemKnobs::Names);
+    // The find call picks from the areas, and the writer has `ai`'s reference.
+    assert!(
+        prompts
+            .find
+            .contains("<sdk-areas>\nai\nchannels\ntasks\nemail\ndatabases\n</sdk-areas>")
+    );
     assert!(prompts.write(true, false).contains("the reference of ai"));
 }
 

@@ -49,7 +49,8 @@ each run.
   or several have is left for the person to pick, never guessed (unless no
   item has it and the request asks to make it, which `setup` may do). A name a
   likelier kind the lookup couldn't search (`NameAnswers::unavailable`)
-  might have is left as unknown, and names the lookup would refuse (empty
+  might have (for a name of no likely kind, any kind it couldn't search,
+  unless two items already have it) is left as unknown, and names the lookup would refuse (empty
   past a leading `#`/`@`, over 200 characters) are never asked. One call
   on the person's Ask AI model (`DraftContext::agent_model`) writes the
   whole routine as JSON from its own system prompt (`direct/write.md`: the
