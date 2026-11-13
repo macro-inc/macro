@@ -58,9 +58,9 @@ pub enum PgComputerError {
 impl From<sqlx::Error> for PgComputerError {
     fn from(error: sqlx::Error) -> Self {
         match error {
-            sqlx::Error::PoolTimedOut => Self::Unavailable(
-                crate::domain::ports::StorageUnavailable(Box::new(error)),
-            ),
+            sqlx::Error::PoolTimedOut => {
+                Self::Unavailable(crate::domain::ports::StorageUnavailable(Box::new(error)))
+            }
             error => Self::Sqlx(error),
         }
     }

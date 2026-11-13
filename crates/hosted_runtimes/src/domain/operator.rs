@@ -137,8 +137,10 @@ where
                 readiness.failures = readiness.failures.saturating_add(1);
                 readiness.retry_at = Some(self.clock.now() + delay);
                 if error.is_storage_unavailable() {
-                    tracing::warn!(retry_seconds,
-                        "computer storage unavailable; retrying host registration");
+                    tracing::warn!(
+                        retry_seconds,
+                        "computer storage unavailable; retrying host registration"
+                    );
                 } else {
                     tracing::error!(error = ?error, healthy = false, retry_seconds,
                         "computer host unavailable; retrying registration");

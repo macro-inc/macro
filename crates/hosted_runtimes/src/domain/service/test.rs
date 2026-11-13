@@ -828,7 +828,9 @@ async fn removing_an_item_whose_subscription_is_gone_completes() {
 }
 
 /// A removal released with one billed item, and its effect's id.
-async fn released_with_removal(billing: FakeBilling) -> (
+async fn released_with_removal(
+    billing: FakeBilling,
+) -> (
     ComputerService<FakeRepo, FakeBilling, std::sync::Arc<MovingClock>, StaticFleetAttachment>,
     std::sync::Arc<MovingClock>,
     i64,

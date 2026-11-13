@@ -1,5 +1,7 @@
 use super::*;
-use crate::outbound::customer_repo::test::{computer, mount, repo, subscription, subscription_update};
+use crate::outbound::customer_repo::test::{
+    computer, mount, repo, subscription, subscription_update,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde_json::json;
 use wiremock::{
@@ -398,7 +400,14 @@ async fn a_change_whose_sender_died_is_finished_under_its_own_key(pool: sqlx::Pg
     let requests = server.received_requests().await.unwrap();
     let keys: Vec<&str> = subscription_update(&requests)
         .into_iter()
-        .map(|request| request.headers.get("Idempotency-Key").unwrap().to_str().unwrap())
+        .map(|request| {
+            request
+                .headers
+                .get("Idempotency-Key")
+                .unwrap()
+                .to_str()
+                .unwrap()
+        })
         .collect();
     assert_eq!(keys, vec!["computer-remove:2:0", "computer-add:next"]);
 }

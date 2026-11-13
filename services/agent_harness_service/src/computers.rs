@@ -320,7 +320,10 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
             // warning once per outage rather than on every tick.
             Err(error) if storage_unavailable(&error) => {
                 if skipped == 0 {
-                    tracing::warn!(pass = name, "computer storage unavailable; skipping passes until it recovers");
+                    tracing::warn!(
+                        pass = name,
+                        "computer storage unavailable; skipping passes until it recovers"
+                    );
                 }
                 skipped = skipped.saturating_add(1);
             }

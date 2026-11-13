@@ -516,7 +516,10 @@ async fn a_pool_timeout_never_spends_an_effect_attempt() {
     let effects = operator.repo.effects.lock().unwrap().clone();
     assert_eq!(effects.len(), 1);
     assert_eq!(effects[0].attempts, 0);
-    assert_eq!(operator.repo.effect_run_after.lock().unwrap()[&effects[0].id], now());
+    assert_eq!(
+        operator.repo.effect_run_after.lock().unwrap()[&effects[0].id],
+        now()
+    );
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     let booting = operator
         .repo

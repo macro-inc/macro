@@ -556,7 +556,10 @@ impl<
             match self.run_billing_effect(pending, now).await {
                 Ok(()) => {}
                 Err(error) if error.is_storage_unavailable() => {
-                    tracing::warn!(effect_id, "computer storage unavailable; billing effect retried later");
+                    tracing::warn!(
+                        effect_id,
+                        "computer storage unavailable; billing effect retried later"
+                    );
                 }
                 Err(error) => {
                     tracing::error!(effect_id, error = ?error, "billing effect could not be recorded");
