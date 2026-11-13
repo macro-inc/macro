@@ -25,15 +25,18 @@ import {
   createSignal,
   on,
   onCleanup,
+  Show,
 } from 'solid-js';
-import { TopBar } from './component/TopBar';
-import {
-  EmailThreadHostView,
-  type EmailThreadHostViewProps,
-} from './EmailThreadHostView';
+import type { EmailThreadHostViewProps } from './EmailThreadHostView';
 import { useEmailListNavigation } from './use-email-list-navigation';
 import { registerEmailHotkeys } from './util/emailHotkeys';
+import { EmailThread } from './views/email-thread';
+import { MobileEmailThread } from './views/mobile/email-thread';
 
+/**
+ * The email block's entry: it owns the thread's target, focus and keyboard,
+ * then picks the desktop or the mobile view.
+ */
 export function EmailBlockAdapter(props: {
   title: string;
   threadId: Accessor<string>;
@@ -106,7 +109,7 @@ export function EmailBlockAdapter(props: {
       registerEmailHotkeys(hotkeyScope(), handlers);
       registerScopeSignalHotkey(hotkeyScope, {
         hotkey: 'enter',
-        description: 'Reply to message',
+        description: 'Reply all to message',
         keyDownHandler: handlers.activate,
         hotkeyToken: TOKENS.block.focus,
         hide: true,
@@ -122,22 +125,25 @@ export function EmailBlockAdapter(props: {
   };
 
   return (
-    <EmailThreadHostView
-      title={props.title}
-      threadId={props.threadId}
-      source={props.source}
-      threadTransport={props.threadTransport}
-      host={host}
-      sidePanelHeaderToggle={isTouchDevice()}
-      topBar={({ createTask, createEvent, canCreateEvent }) => (
-        <TopBar
-          id={props.threadId()}
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <EmailThread
           title={props.title}
-          onCreateTask={createTask}
-          onCreateEvent={createEvent}
-          canCreateEvent={canCreateEvent}
+          threadId={props.threadId}
+          source={props.source}
+          threadTransport={props.threadTransport}
+          host={host}
         />
-      )}
-    />
+      }
+    >
+      <MobileEmailThread
+        title={props.title}
+        threadId={props.threadId}
+        source={props.source}
+        threadTransport={props.threadTransport}
+        host={host}
+      />
+    </Show>
   );
 }

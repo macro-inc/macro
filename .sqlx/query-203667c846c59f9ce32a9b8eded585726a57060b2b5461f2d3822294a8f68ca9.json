@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_run SET checked_at = $2 WHERE session_id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "203667c846c59f9ce32a9b8eded585726a57060b2b5461f2d3822294a8f68ca9"
+}

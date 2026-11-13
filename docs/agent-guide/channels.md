@@ -465,6 +465,10 @@ Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
 for `text-xs`, with accessibility text scaling preserved.
 
+In the iOS app, a swipe down from the conversation into the keyboard
+dismisses it. A drag that starts inside a long draft scrolls the draft instead,
+and dismisses only once the draft is at its top and the drag keeps going down.
+
 Desktop message text uses a 16px horizontal inset and a compact gap above the
 toolbar, consistent at narrow and wide composer widths.
 
@@ -1491,6 +1495,19 @@ channel show **Conversation unavailable** with **Retry**, never permanent loadin
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 
+Channel rows also show how many unread `channel_mention` notifications the viewer
+has there, thread replies included, from a second filtered edge (`unreadMentions`,
+limit 10, shown as **9+** above nine). The edge reads notification state, so a
+mention clears when it is marked seen: opening the channel clears top-level
+mentions, and a thread mention stays counted until its thread is read. On desktop
+the count replaces the row's unread dot, including Favorites; on phones the list
+row keeps its leading dot and puts the count under the timestamp, and pinned
+favorites show the count in place of the dot. Rows from other projections, and
+the REST list, show no count. To check, have another account mention you in a
+channel you are not viewing: the row shows **1** without a reload, and opening the
+channel clears it. Then mention yourself in a thread reply, open the channel
+without the thread, and the count should stay.
+
 A backend-free cache regression runs on desktop and phone viewports:
 `bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
 It uses the production normalized exchange, query adapter, and detail state with a
@@ -1575,9 +1592,9 @@ indicators live on conversation rows; the separate `Live` list is only for
 standalone quick calls. See [Calls](calls.md) for controls and sharing semantics.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
-panel. Guest chat is turned off for now: a guest in a quick or scheduled call
-sees only the participants list, with the **Chat** tab disabled, and cannot read
-or send messages. Each call session has one persistent message thread;
+panel. Guests in quick and scheduled calls use that same chat without signing
+in, while they are connected to the call; see [Calls](calls.md) for what a guest
+can do and see. Each call session has one persistent message thread;
 signed-in participants use the
 shared message composer, attachments, reactions, and message actions. The `@`
 menu offers Macro and available owned and team agents. Mention an agent and send

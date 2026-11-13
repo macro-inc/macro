@@ -8,8 +8,15 @@ members = [
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
+  "crates/agent_credentials",
+  "crates/agent_git",
+  "crates/team_agents",
   "crates/routines",
   "crates/routine_program",
+  "crates/shown_text",
+  "crates/suggestions",
+  "crates/suggestions_db_utils",
+  "crates/suggestion_generation",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
@@ -75,6 +82,7 @@ members = [
   "crates/generic_email_domains",
   "crates/git_patch",
   "crates/gmail_client",
+  "crates/gmail_emulator",
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
@@ -134,6 +142,7 @@ members = [
   "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
+  "crates/outlook_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -154,6 +163,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/single_flight",
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
@@ -320,6 +330,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -354,6 +365,8 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
   "services-tokio",
   "webhooks",
 ] }
+mail-builder = "0.4.3"
+mailparse = "0.16.1"
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
@@ -417,6 +430,8 @@ reqwest = { version = "0.13", default-features = false, features = [
 rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
+rrule = "0.14.0"
+rsa = "0.9.10"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs"] }
 # Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
@@ -548,7 +563,7 @@ zip = { version = "9.0.5", default-features = false, features = [
   "xz",
   "zstd",
 ] }
-ammonia = "4.1.8"
+ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
 

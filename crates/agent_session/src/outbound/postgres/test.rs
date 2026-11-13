@@ -3595,3 +3595,88 @@ async fn system_action_history_and_loads_retain_trusted_provenance(pool: PgPool)
         2
     );
 }
+
+/// A notification that lands after a load still reopens the original frames,
+/// including through the batch writer, and readers see it with the frame.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_notification_after_a_load_reads_across_the_boundary(pool: PgPool) {
+    use agent_client_protocol::schema::v1::SessionId;
+    use agent_runtime_protocol::domain::{
+        action::{AgentAction, AgentActionId},
+        notification::{Notification, NotificationEvent},
+    };
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let flagged = || async {
+        sqlx::query_scalar!(
+            "SELECT has_trusted_notifications FROM agent_session WHERE id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let original = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    let init = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    repo.create_fenced_with_boundary(
+        fenced_log(session.id),
+        &claim,
+        Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id: init.id,
+        }),
+    )
+    .await
+    .unwrap();
+    assert!(!flagged().await, "ordinary prompts are not notifications");
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()[0]
+            .id,
+        init.id
+    );
+
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), AgentActionId::mint().to_request_id())
+    .unwrap();
+    let entry = |content: Message| StoredAgentSessionLog {
+        id: macro_uuid::generate_uuid_v7(),
+        created_at: chrono::Utc::now(),
+        entry: AgentSessionLog {
+            agent_session_id: session.id,
+            user_id: None,
+            content,
+            logged_at: None,
+        },
+    };
+    repo.create_batch_fenced(
+        vec![
+            entry(fenced_log(session.id).content),
+            entry(Message::Notification(request)),
+        ],
+        &claim,
+    )
+    .await
+    .unwrap();
+    assert!(flagged().await);
+    let history = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(history.len(), 5);
+    assert_eq!(history[0].id, original.id);
+}
