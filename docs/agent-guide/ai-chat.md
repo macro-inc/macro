@@ -1929,7 +1929,7 @@ panes, each for an agent account (its `agentId`, or the view's agent from
 Agents list rows, sub-agents nested under the session that started them, with
 how many wait for input), `activity` (the Activity feed narrowed to the agent,
 or one session's activity panel), `routines` (Routines list rows with next
-run and last result, read-only) and `spend` (AI cost bars by day, week, month
+run and last result, read-only; only the agent itself can open a row) and `spend` (AI cost bars by day, week, month
 or year, switchable in the pane). Routines and spend are readable by the agent
 and by owners and admins of its teams; anyone else sees **No access**. Panes
 load when scrolled near. Without the flag the model is never told about them
