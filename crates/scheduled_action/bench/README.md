@@ -62,7 +62,8 @@ draft on a busy machine can be told apart.
   workspace only: the message it posted in a channel they're in (a mentioned
   document or task read with its name, as the person sees it), the task it
   made for them with its body, its own notifications, what its run
-  returned; mail it sent isn't read. A run whose condition wasn't met did
+  returned. Mail it sent and rows it added to a database aren't read, so
+  the two database cases pass on a run without error. A run whose condition wasn't met did
   nothing. A fired event the trigger doesn't match is never admitted, so the
   check stops after 90 s with none; any other run gets four minutes. A draft
   that moved the task the check changes fails, saying so.
