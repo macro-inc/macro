@@ -57,8 +57,9 @@ Components, styling, and interaction conventions.
 
 ## Components
 
-- Place skeletons at the loaded content's position and dimensions; use the shared
-  Macro `LoadingSpinner` when that geometry is unknown.
+- Place skeletons at the loaded content's position and dimensions; use them for
+  menu and picker loading instead of the Macro-logo `LoadingSpinner`, which is
+  reserved for dedicated branded loading surfaces.
 - Prefer composition over configurability. Follow slot-based patterns (see
   src/features/channel, src/features/entity, or Kobalte).
 - Keep reusable components small, atomic, and decoupled from queries/complex

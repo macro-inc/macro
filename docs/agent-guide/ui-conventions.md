@@ -86,7 +86,8 @@ visible, including public/read-only views; API/SDK access and permissions do not
 change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
 
 Desktop header icons use a compact 344px anchored popover; desktop menu entries
-use the same picker inside a submenu. Phones retain a bottom sheet with
+use the same picker inside a submenu, with a matching skeleton while its code
+loads instead of the branded logo loader. Phones retain a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
 stays open. Escape, outside clicks, and Done close without undoing saved choices.
 There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
