@@ -749,6 +749,16 @@ service_url! {
 }
 
 service_url! {
+    /// GitHub REST and GraphQL API root. GitHub's host in every environment;
+    /// tests point an adapter at a fake through its constructor.
+    pub struct GithubApiUrl {
+        local: "https://api.github.com",
+        dev: "https://api.github.com",
+        prod: "https://api.github.com",
+    }
+}
+
+service_url! {
     /// Microsoft Graph v1.0 API root. Microsoft's host in every environment;
     /// override it to run against `crates/outlook_emulator`.
     pub struct MicrosoftGraphUrl {
