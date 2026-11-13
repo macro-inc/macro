@@ -154,6 +154,11 @@ pub fn resolve(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
                 "http://otel-collector:4317".into(),
             );
+            // Forwarded to the hosted Grafana, a machine's stacks share one
+            // `host.name`: the instance tells them apart.
+            if let Some(attributes) = super::grafana_forwarder::resource_attributes(instance) {
+                env.insert("OTEL_RESOURCE_ATTRIBUTES".into(), attributes);
+            }
         }
     }
 
