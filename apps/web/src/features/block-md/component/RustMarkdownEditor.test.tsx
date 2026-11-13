@@ -20,6 +20,11 @@ const control = vi.hoisted(() => ({
   report: vi.fn(),
   status: vi.fn(),
   overlays: vi.fn(),
+  gifRequestOpen: vi.fn(() => true),
+  gifBindView: vi.fn(),
+  gifDispose: vi.fn(),
+  gifHost: { gif: 'host' },
+  gifMenu: vi.fn(),
 }));
 vi.mock('@app/observability/flow', () => ({
   useFlow: () => ({
@@ -578,6 +583,26 @@ vi.mock(
   () => ({ NodeAccessoryLayer: () => null })
 );
 vi.mock(
+  '@core/component/LexicalMarkdown/editing/overlay-hosts/native-gif',
+  () => ({
+    createNativeGifContext: () => ({
+      host: control.gifHost,
+      requestOpen: control.gifRequestOpen,
+      bindView: control.gifBindView,
+      dispose: control.gifDispose,
+    }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/component/menu/FloatingGifMenu',
+  () => ({
+    HostedFloatingGifMenu: (props: unknown) => {
+      control.gifMenu(props);
+      return null;
+    },
+  })
+);
+vi.mock(
   '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight',
   () => ({ NativeLocationHighlight: () => null })
 );
@@ -1124,4 +1149,38 @@ it('passes the Source Prism code tokenizer into the native session (code highlig
     )
   ).toEqual({ kind: 'loaded', loaded: true });
   rendered.unmount();
+});
+
+it('wires the native GIF picker: slash request, post-projection bind, hosted menu, disposal', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+  control.create.mock.calls[0][0].installOverlays(mounted.view);
+  const [options] = control.overlays.mock.calls[0] ?? [];
+  const actions =
+    options && typeof options === 'object' && 'actions' in options
+      ? options.actions
+      : undefined;
+  const requestGif =
+    actions && typeof actions === 'object' && 'requests' in actions
+      ? Reflect.get(Object(actions.requests), 'requestGif')
+      : undefined;
+  expect(typeof requestGif).toBe('function');
+  expect(control.gifBindView).not.toHaveBeenCalled();
+  mounted.initialize();
+  await waitFor(() =>
+    expect(control.gifBindView).toHaveBeenCalledWith(mounted.view)
+  );
+  if (typeof requestGif === 'function') expect(requestGif()).toBe(true);
+  expect(control.gifRequestOpen).toHaveBeenCalledOnce();
+  await waitFor(() => expect(control.gifMenu).toHaveBeenCalled());
+  expect(control.gifMenu.mock.lastCall?.[0]).toMatchObject({
+    host: control.gifHost,
+    portalScope: 'global',
+  });
+  rendered.unmount();
+  await waitFor(() => expect(control.gifDispose).toHaveBeenCalledOnce());
 });
