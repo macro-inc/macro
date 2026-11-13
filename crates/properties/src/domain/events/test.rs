@@ -582,7 +582,7 @@ mod definition_exposure {
                 PropertyOwner::User {
                     user_id: "macro|owner@example.com".to_string(),
                 },
-                Audience::Owner {
+                Audience::Recipient {
                     user_id: user_id("macro|owner@example.com"),
                 },
             ),

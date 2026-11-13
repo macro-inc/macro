@@ -170,7 +170,9 @@ pub(super) fn exposure(
         return Ok(Exposure::internal_by_design(OWNER_NOT_RECORDED));
     };
     let audience = match owner {
-        PropertyOwner::User { user_id } => Audience::Owner {
+        // A user's own definitions (such as their personal labels) are
+        // theirs alone: never their teams' webhooks.
+        PropertyOwner::User { user_id } => Audience::Recipient {
             user_id: parse_user_id(user_id)?,
         },
         PropertyOwner::Team { team_id } => Audience::Team {

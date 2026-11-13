@@ -272,7 +272,7 @@ fn team_bots_reach_their_team_and_user_bots_their_owner() {
         team_id: Uuid::parse_str(TEAM_ID).unwrap(),
         min_role: MinTeamRole::Member,
     };
-    let owner = Audience::Owner {
+    let owner = Audience::Recipient {
         user_id: user_id("macro|owner@example.com"),
     };
     for (event, name, audience) in [

@@ -127,7 +127,8 @@ impl TopicEvent for BotTopicEvent {
             ),
         };
         let audience = match owner {
-            BotOwner::User { user_id } => Audience::Owner {
+            // A personal bot is its owner's alone: never their teams'.
+            BotOwner::User { user_id } => Audience::Recipient {
                 user_id: parse_user_id(user_id)?,
             },
             BotOwner::Team { team_id } => Audience::Team {

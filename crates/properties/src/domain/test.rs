@@ -4415,6 +4415,11 @@ async fn promote_tag_publishes_the_moved_option_and_every_retagged_entity() {
         "the entity events carry the entities, not the label"
     );
     assert_eq!(events[2].envelope["metadata"]["entity_id"], "thread1");
+    assert_eq!(
+        events[0].envelope["metadata"]["owner"],
+        serde_json::json!({ "scope": "team", "team_id": team_id() }),
+        "the promoted label now belongs to the team"
+    );
 }
 
 #[tokio::test]
@@ -4608,6 +4613,11 @@ async fn merge_tag_publishes_the_retired_label_and_every_retagged_entity() {
         events[0].envelope["metadata"]["option_id"],
         option_id.to_string(),
         "the retired label is the personal one"
+    );
+    assert_eq!(
+        events[0].envelope["metadata"]["owner"],
+        serde_json::json!({ "scope": "user", "user_id": caller_user_id().to_string() }),
+        "the retired label belonged to the caller"
     );
 }
 

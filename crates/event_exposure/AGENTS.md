@@ -46,7 +46,8 @@ envelope. Producers reach these types through `macro_event_broker::exposure`.
 - A public payload is an explicit projection that derives `utoipa::ToSchema`;
   routing fields (recipients, snapshots) go on the `Audience`, never in the
   payload.
-- Personal data (mail, calendar, notifications, activity) uses
+- Personal data (mail, calendar, notifications, activity, a user's own bots
+  and property definitions) uses
   `Audience::Recipient`, which never reaches the user's team webhooks.
   `Owner` resolves like an accessor (personal and team workspaces); keep it
   for the existing events that rely on that.
