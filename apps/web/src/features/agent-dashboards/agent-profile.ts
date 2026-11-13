@@ -1,3 +1,4 @@
+import { useOptionalFlagEnabled } from '@app/lib/analytics/posthog';
 import { beginInteraction } from '@app/observability/flow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -33,18 +34,22 @@ export type AgentProfile = {
  * opens its profile: the agent account page with its dashboard. The
  * navigation is an interaction the routed `view.agent-dashboard` flow joins.
  *
- * Every avatar and mention calls this, including pages and fixtures without
- * the PostHog provider, so the flag is read with `isFeatureEnabled` inside
- * `profileOf`, at each read, rather than with `useFeatureFlag`.
+ * `profileOf` tracks the flag, so a name rendered before PostHog answers
+ * becomes a link when it does. Every avatar and mention calls this, including
+ * pages and fixtures without the PostHog provider; there the flag is read
+ * with `isFeatureEnabled` at each call.
  */
 export function useAgentProfile(): AgentProfile {
   const { openWithSplit } = useSplitLayout();
+  const trackedFlag = useOptionalFlagEnabled(enableAgentDashboards);
+  const flagEnabled = () =>
+    trackedFlag ? trackedFlag() : isFeatureEnabled(enableAgentDashboards);
 
   return {
     profileOf: (userId) =>
       agentProfileTarget({
         userId,
-        flagEnabled: isFeatureEnabled(enableAgentDashboards),
+        flagEnabled: flagEnabled(),
         isAgentAccount: (id) => isAgentAccount(tryMacroId(id)),
       }),
     open: (userId, surface, event) => {

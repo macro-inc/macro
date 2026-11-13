@@ -23,6 +23,8 @@ vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
+  // As without the provider: agent profiles read the flag snapshot.
+  useOptionalFlagEnabled: () => undefined,
   useFeatureFlag: () => () => ({
     enabled: mocks.crmFlagEnabled,
     payload: undefined,
