@@ -174,9 +174,6 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [vi.fn(), 'share-scope'],
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({ all: () => [] }),
-}));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
@@ -926,7 +923,7 @@ describe('agent session sharing', () => {
     expect(mocks.sendToChannel).toHaveBeenCalledOnce();
   });
   it('keeps context identity for existing forwarding callers without overrides', async () => {
-    render(() => <ForwardToChannel name="Document" hideAccessLevelSelector />);
+    render(() => <ForwardToChannel name="Document" />);
     await selectChannel();
     share();
     expect(mocks.sendToChannel).toHaveBeenCalledWith(
@@ -940,12 +937,7 @@ describe('agent session sharing', () => {
   it('uses the current explicit identity if it changes while mounted', async () => {
     const [id, setId] = createSignal('old-session');
     render(() => (
-      <ForwardToChannel
-        name="Session"
-        blockName="agent"
-        blockId={id()}
-        hideAccessLevelSelector
-      />
+      <ForwardToChannel name="Session" blockName="agent" blockId={id()} />
     ));
     setId('new-session');
     await selectChannel();

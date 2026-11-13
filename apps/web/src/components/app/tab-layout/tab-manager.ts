@@ -417,6 +417,16 @@ export function createTabManager(options: TabManagerOptions) {
     activeTabId,
     ...layers,
 
+    /**
+     * Which tab a block mounting now belongs to, so each tab gets its own
+     * instance of a shared entity. The first tab keeps the unscoped blocks that
+     * were already mounted when tabs turned on.
+     */
+    blockScope(): string | undefined {
+      const live = liveTabId();
+      return live === INITIAL_LAYER_ID ? undefined : live;
+    },
+
     /** Live title for the strip: the active tab reads the layout manager.
      * Undefined when the tab has no title yet; the strip renders the
      * translated placeholder. */
@@ -496,6 +506,12 @@ export function createTabManager(options: TabManagerOptions) {
         // The intercepted navigation is still settling; activate after it.
         queueMicrotask(() => fireAndForget(activateTab(tab.id), SURFACE));
       }
+    },
+
+    /** The tab Cmd+`number` opens: the Nth, except 9, which is always the last. */
+    tabByNumber(number: number): DesktopTab | undefined {
+      const list = tabs();
+      return number === 9 ? list.at(-1) : list[number - 1];
     },
 
     activateNextTab(step: 1 | -1): void {

@@ -5,6 +5,7 @@ import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflict
 import { onboardingPathWithStep } from '@app/features/onboarding/core/next-target';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AppEvents } from '@app/lib/analytics/app-events';
+import { t } from '@app/lib/i18n';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { publishLoginSuccess } from '@core/auth/login-events';
@@ -25,6 +26,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { whenSettled } from '@core/util/whenSettled';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
@@ -162,11 +165,16 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
   const toastId = toast.custom(
     {
       title: 'Email access required',
+      icon: EnvelopeIcon,
+      color: 'var(--color-failure)',
+      titleColor: 'var(--color-failure)',
+      dismissLabel: t('common.maybeLater'),
       content: () =>
         "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
       actions: [
         {
           label: 'Try again',
+          icon: ArrowCounterClockwise,
           onClick: () => {
             toast.dismiss(toastId);
             openAddInboxDialog({ scopes });
@@ -254,7 +262,8 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     if (
       !isMobile() &&
       !isNativeMobilePlatform() &&
-      userInfoQuery.data?.tutorialComplete === false
+      userInfoQuery.data?.tutorialComplete === false &&
+      !userInfoQuery.data.isAgent
     ) {
       navigate(onboardingPathWithStep(searchParams.step), { replace: true });
       return;

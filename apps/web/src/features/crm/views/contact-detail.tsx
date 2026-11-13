@@ -3,8 +3,8 @@ import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
-import { RecordVisibilityAction } from '../components/record-visibility-action';
 import { useCrmContext } from '../context/crm-context';
+import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
@@ -13,24 +13,19 @@ import {
 import { ContactDiscussionSection } from './contact-discussion-section';
 import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
-import { ContactSharingSection } from './contact-sharing-section';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
-import {
-  useContactQuery,
-  useIsTeamAdmin,
-  useSetContactHiddenMutation,
-} from './use-crm';
+import { RecordDetailsSection } from './record-details-section';
+import { useContactQuery } from './use-crm';
 
 /**
  * Root of the contact detail view, laid out like a project: the host's top
  * bar picks the section, Overview shows the contact and its discussion, and
- * the other sections list its emails, files, tasks and calls. Sharing and
- * references stay in the floating information panel.
+ * the other sections list its emails, files, tasks and calls. References
+ * stay in the floating information panel.
  */
 type ContactProps = {
   contactId: string;
@@ -68,8 +63,6 @@ function ContactContent(props: ContactProps) {
       companyId: contact()?.companyId,
     }))
   );
-  const isTeamAdmin = useIsTeamAdmin();
-  const hiddenMutation = useSetContactHiddenMutation();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -78,7 +71,7 @@ function ContactContent(props: ContactProps) {
       return {
         type: 'contact',
         id: current.id,
-        email: current.email,
+        emails: contactEmails(current),
         companyId: current.companyId,
       };
     },
@@ -101,37 +94,6 @@ function ContactContent(props: ContactProps) {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
-                <Show when={contact()}>
-                  {(current) => (
-                    <RecordVisibilityAction
-                      recordId={current().id}
-                      kind="contact"
-                      name={current().name ?? current().email ?? 'Contact'}
-                      hidden={current().hidden}
-                      canManage={isTeamAdmin()}
-                      pending={hiddenMutation.isPending}
-                      onChange={(hidden, onSuccess) =>
-                        hiddenMutation.mutate(
-                          { contactId: current().id, hidden },
-                          {
-                            onSuccess: () => {
-                              onSuccess();
-                              context.feedback.success(
-                                hidden
-                                  ? 'Person removed from CRM'
-                                  : 'Person restored to CRM'
-                              );
-                            },
-                            onError: () =>
-                              context.feedback.failure(
-                                'Could not update contact visibility'
-                              ),
-                          }
-                        )
-                      }
-                    />
-                  )}
-                </Show>
                 <Show when={pipelinesEnabled()}>
                   <context.PipelineEntries
                     record={{ type: 'contact', id: props.contactId }}
@@ -157,9 +119,6 @@ function ContactContent(props: ContactProps) {
                 </Show>
               </Suspense>
             </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
-            </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />
             </Match>
@@ -167,14 +126,11 @@ function ContactContent(props: ContactProps) {
         </div>
       </div>
 
-      {/* Sharing is admin-only; hide the whole section for non-admins
-          rather than rendering it empty. */}
-      <Show when={isTeamAdmin()}>
-        <SidePanel.Section id="contact-sharing" title="Sharing" order={25}>
-          <ContactSharingSection contact={contact()} />
-        </SidePanel.Section>
-      </Show>
-      <SidePanel.Section id="contact-references" title="References" order={30}>
+      <RecordDetailsSection
+        contact={contact()}
+        onOpenCompany={props.onOpenCompany}
+      />
+      <SidePanel.Section id="contact-references" title="References" order={20}>
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

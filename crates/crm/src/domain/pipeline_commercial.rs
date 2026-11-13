@@ -98,6 +98,12 @@ pub(super) fn provision(columns: &mut Vec<ProvisionedColumn>) -> CommercialField
 }
 
 impl CommercialFields {
+    /// Whether the pipeline owns any system field. A generic pipeline, and one
+    /// created by a pre-migration writer, has none.
+    pub fn has_system_fields(&self) -> bool {
+        self.outcome.is_some() || !self.money.is_empty()
+    }
+
     /// Whether this column has fixed select options owned by CRM.
     pub fn is_system_select(&self, column: ColumnId) -> bool {
         self.outcome == Some(column) || self.money.iter().any(|pair| pair.currency == column)
@@ -173,7 +179,7 @@ impl CommercialFields {
                     ViewChange::Update { layout: None, .. } => {}
                 },
                 DatabaseOp::Rows { change, .. } => match change {
-                    RowsChange::Insert { rows } => {
+                    RowsChange::Insert { rows, .. } => {
                         for cells in rows {
                             self.validate(cells)?;
                             if let Some(column) = self.outcome {

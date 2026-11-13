@@ -133,6 +133,8 @@ pub struct RequestedExternalSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session, told to the runtime on the event.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -297,6 +299,9 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
     /// Instructions the session's runtime works under, when any were stated.
     pub instructions: Option<String>,
+    /// What opened the session, as the runtime was told on the trigger event.
+    /// A description only: it never decides visibility or notifications.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -333,6 +338,12 @@ pub struct OpenManagedSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    /// Only an in-process session reads it; a non-billable session never
+    /// claims a warm session, whose row is billable.
+    pub billing: crate::domain::model::SessionBilling,
 }
 
 /// The prompt a managed session opens with, delivered as soon as it can run.
@@ -345,15 +356,21 @@ pub struct FirstPrompt {
     pub prompt: String,
     /// Files the prompt refers to, in the order the user attached them.
     pub attachments: Vec<PromptAttachment>,
+    /// The app tab the person typed the prompt in, already admitted by
+    /// [`super::control::ControlPrincipal::admit_client`]. Recorded on the
+    /// first turn like a control prompt's, so the turn can show them things
+    /// in that tab.
+    pub client: Option<super::model::UiClientId>,
 }
 
 impl FirstPrompt {
-    /// A plain text prompt under a minted id.
+    /// A plain text prompt under a minted id, typed in no tab.
     pub fn text(prompt: impl Into<String>) -> Self {
         Self {
             action_id: None,
             prompt: prompt.into(),
             attachments: Vec::new(),
+            client: None,
         }
     }
 
@@ -435,6 +452,18 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Whether the session's persisted turn projection shows a turn that has
+    /// not finished: one starting, running, stopping, or blocked on an
+    /// answer, or one that was when the session disconnected. Durable, so it
+    /// holds for a turn any replica, or a process since restarted, started.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner.
+    fn billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
+
     /// The agent session with this id, or `None` when there is none.
     fn find(&self, id: AgentSessionId)
     -> impl Future<Output = Result<Option<AgentSession>>> + Send;
@@ -464,6 +493,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them. Idempotent; grants
+    /// nothing.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Who prompted the turn `id` is running or last ran; `None` before its
@@ -1013,6 +1051,14 @@ pub trait AgentSessionRealtime {
         async { Ok(()) }
     }
 
+    /// Publish a running session's newest activity summary to its viewers.
+    fn publish_activity_summarized(
+        &self,
+        _event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a session's changed queue - the whole queue, every time - to
     /// its viewers.
     fn publish_queue_changed(
@@ -1266,6 +1312,9 @@ pub struct ControlEvent {
     /// Why the agent is being asked, when a runtime forwards a triggered
     /// prompt. Users driving a session directly supply none.
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab a person typed the prompt in; see
+    /// [`UiClientId`](super::model::UiClientId).
+    pub client: Option<super::model::UiClientId>,
 }
 
 /// What accepting a control operation did with it.
@@ -1451,4 +1500,16 @@ impl SessionViewAccess for NoInheritedSessionAccess {
     ) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
         Box::pin(async { Ok(false) })
     }
+}
+
+/// Trusted runtime reconciliation reads, separate from user-authorized session reads.
+pub trait RuntimeSessionLookup: Send + Sync {
+    /// Resolve reported ACP sessions restricted to the supplied agents.
+    fn sessions_for_bots(
+        &self,
+        bots: &[BotId],
+        sessions: &[SessionId],
+    ) -> impl Future<Output = std::result::Result<Vec<AgentSessionId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
 }

@@ -3,7 +3,11 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, on, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import { decisionWakesAgent, type Review } from '../core/review';
-import { useReview, useReviewActions } from '../queries/reviews';
+import {
+  type ReviewUpdates,
+  useReview,
+  useReviewActions,
+} from '../queries/reviews';
 import { ImportReview } from './import-review';
 import { ReviewStack } from './review-stack';
 
@@ -12,7 +16,7 @@ export function PersistedReview(props: {
   sessionId: string;
   reviewId: string;
   canAct: boolean;
-  ownerId?: string;
+  updates: ReviewUpdates;
   eventId?: string;
   onDecision?: () => void;
   onDecisionFailed?: () => void;
@@ -20,7 +24,8 @@ export function PersistedReview(props: {
   const userId = useUserId();
   const query = useReview(
     () => props.sessionId,
-    () => props.reviewId
+    () => props.reviewId,
+    () => props.updates
   );
   const actions = useReviewActions(
     () => props.sessionId,
@@ -63,16 +68,19 @@ export function PersistedReview(props: {
       </Show>
       <Show when={query.isSuccess ? query.data : undefined}>
         {(record) => {
-          const canAct = () =>
-            props.canAct && userId() === (record().actingUser ?? props.ownerId);
-          // A review's kind is fixed when it is saved.
+          const canAct = () => props.canAct && userId() === record().actingUser;
+          // A review's kind is fixed when it is saved; `updates` keeps its status live.
           return match(record().kind)
             .with('import', () => (
-              <ImportReview
-                review={record()}
-                canAct={canAct()}
-                actions={decisions('import')}
-              />
+              <Show when={importReview(record())}>
+                {(review) => (
+                  <ImportReview
+                    review={review()}
+                    canAct={canAct()}
+                    actions={decisions('import')}
+                  />
+                )}
+              </Show>
             ))
             .with('email', 'calendar', (kind) => (
               <ReviewStack
@@ -86,4 +94,7 @@ export function PersistedReview(props: {
       </Show>
     </Suspense>
   );
+}
+function importReview(review: Review) {
+  return review.kind === 'import' ? review : undefined;
 }

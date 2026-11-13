@@ -2,7 +2,7 @@ import { type Accessor, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 /** Region render order in the host, top to bottom. Add new regions here. */
-export const FLOAT_REGIONS = ['accessory', 'dock'] as const;
+export const FLOAT_REGIONS = ['accessory', 'call', 'dock'] as const;
 
 export type FloatRegionName = (typeof FLOAT_REGIONS)[number];
 

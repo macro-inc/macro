@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
@@ -50,6 +51,7 @@ import {
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
+import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 import { createPredicateQuery } from './create-predicate-query';
@@ -58,6 +60,7 @@ import {
   type SoupEntityRef,
   soupEntityRefKey,
 } from './entity-input';
+import { crmExternalWriteTypes } from './external-write-scope';
 import { isCachedMailView } from './mail-view';
 import {
   usePendingGraphqlSoupDeleteKeys,
@@ -105,6 +108,7 @@ export function createSoupLiveQuery(
 ) {
   const owner = getOwner();
   const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
+  const pendingAppearance = usePendingEntityAppearance();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
   // The position of the last local Mail row loaded (a page's `endCursor`).
@@ -319,6 +323,13 @@ export function createSoupLiveQuery(
         // Keep network data usable while the local cache is unavailable.
       }
     };
+    let latestRevision: CacheRevision | undefined;
+    // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+    // instead of evaluating this list on each revision or engine replacement.
+    const deferral = createHiddenDeferral(() => {
+      if (latestRevision !== undefined) setCurrentCacheRevision(latestRevision);
+      else fireAndForget(observeCurrentRevision(), 'soup-live-query');
+    });
     const unsubscribeChanges = host.onCacheChanged(
       (revision) => {
         cacheObservation += 1;
@@ -330,7 +341,8 @@ export function createSoupLiveQuery(
           staleFallbackStartedAt = performance.now();
           recordAuthority('stale-fallback');
         }
-        setCurrentCacheRevision(revision);
+        latestRevision = revision;
+        deferral.request();
       },
       // The authority watermark must observe the same writes as the live view.
       { includeHydration: true }
@@ -339,12 +351,14 @@ export function createSoupLiveQuery(
       soupCacheTelemetry.record('generation');
       cacheGeneration += 1;
       invalidateGeneration();
-      fireAndForget(observeCurrentRevision(), 'soup-live-query');
+      latestRevision = undefined;
+      deferral.request();
     });
     fireAndForget(observeCurrentRevision(), 'soup-live-query');
     onCleanup(() => {
       finishStaleFallback(true);
       cacheGeneration += 1;
+      deferral.dispose();
       unsubscribeChanges();
       unsubscribeGeneration();
     });
@@ -385,6 +399,11 @@ export function createSoupLiveQuery(
       query: queryDocument(),
       client: getGraphqlSoupClient(),
       initialPageParam: null,
+      context: {
+        externalCacheWriteTypes: crmExternalWriteTypes(
+          networkInput()?.initial?.filters
+        ),
+      },
       variables: (cursor) => {
         const input = inputForCursor(cursor);
         if (!input) {
@@ -1094,7 +1113,21 @@ export function createSoupLiveQuery(
       const records = displayData();
       return (
         records &&
-        withoutPendingSoupEntities(records, pendingDeleteKeys(), soupItemKey)
+        withoutPendingSoupEntities(
+          records.map((record) => {
+            const type =
+              record.__typename === 'GraphqlSoupDocument'
+                ? 'document'
+                : record.__typename === 'GraphqlSoupInitiative'
+                  ? 'initiative'
+                  : undefined;
+            const appearance =
+              type && pendingAppearance(type, record.id, Boolean(query.error));
+            return appearance ? { ...record, appearance } : record;
+          }),
+          pendingDeleteKeys(),
+          soupItemKey
+        )
       );
     }),
     fetchedRecords: () => query.data?.records() ?? [],

@@ -4,10 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMenuOperations } from '../../../shared/inlineMenu';
 import { SnippetsMenu } from './SnippetsMenu';
 
-const mocks = vi.hoisted(() => ({ readSnippets: vi.fn(() => []) }));
+const mocks = vi.hoisted(() => ({
+  readSnippets: vi.fn(() => []),
+  searchEnabled: undefined as (() => boolean) | undefined,
+}));
 
 vi.mock('../MentionsMenu/hooks/useEntityMention', () => ({
-  useEntityMention: () => ({ entities: mocks.readSnippets }),
+  useEntityMention: (options: { enabled?: () => boolean }) => {
+    mocks.searchEnabled = options.enabled;
+    return { entities: mocks.readSnippets };
+  },
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
@@ -31,8 +37,11 @@ describe('SnippetsMenu', () => {
     const menu = createMenuOperations();
     render(() => <SnippetsMenu editor={editor} menu={menu} />);
     expect(mocks.readSnippets).not.toHaveBeenCalled();
+    // A closed menu's cache search would otherwise re-run on every cache change.
+    expect(mocks.searchEnabled?.()).toBe(false);
 
     menu.openMenu();
     await vi.waitFor(() => expect(mocks.readSnippets).toHaveBeenCalled());
+    expect(mocks.searchEnabled?.()).toBe(true);
   });
 });

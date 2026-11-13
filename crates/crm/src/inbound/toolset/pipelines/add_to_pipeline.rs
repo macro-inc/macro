@@ -1,4 +1,5 @@
-//! AddToPipeline: put companies or contacts into a pipeline as new deals.
+//! AddToPipeline: put companies or contacts into a pipeline as new deals, or
+//! free-form rows into a generic pipeline.
 
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
@@ -9,16 +10,16 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{PipelineToolContext, ToolEntry, ToolFieldValue, pairs, record_name, workflow_error};
+use super::{PipelineToolContext, ToolEntry, ToolFieldValue, entry_name, pairs, workflow_error};
 use crate::domain::pipeline_workflows::{EntryAddition, PipelineWorkflowService, RecordTarget};
 
-/// One company or contact to add.
+/// One company or contact to add, or one row of a generic pipeline.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolNewEntry {
     /// The record's id.
     #[schemars(
-        description = "The CRM company or contact id to add (company ids come from ListCompanies). Give this or email."
+        description = "The CRM company or contact id to add (company ids come from ListCompanies). Give this or email; leave both out in a generic pipeline, which tracks no records."
     )]
     #[serde(default)]
     pub record_id: Option<Uuid>,
@@ -30,7 +31,7 @@ pub struct ToolNewEntry {
     pub email: Option<String>,
     /// Fields to fill in.
     #[schemars(
-        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount. New entries default to Open and USD."
+        description = "Fields to fill in on the new entry, e.g. [{\"field\": \"Stage\", \"value\": \"Lead\"}, {\"field\": \"Owner\", \"value\": \"me\"}]. In a pipeline that tracks a record, Outcome is Open, Won or Lost independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{\"field\": \"Name\", \"value\": \"Launch site\"}]."
     )]
     #[serde(default)]
     pub set: Vec<ToolFieldValue>,
@@ -41,14 +42,16 @@ pub struct ToolNewEntry {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "AddToPipeline",
-    description = "Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`). A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved."
+    description = "Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`); a generic pipeline, with no `tracks`, takes rows that name only their fields. A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved."
 )]
 pub struct AddToPipeline {
     /// The pipeline.
     #[schemars(description = "The pipeline's id from ListPipelines.")]
     pub pipeline_id: Uuid,
     /// What to add.
-    #[schemars(description = "The companies or contacts to add, each with its starting fields.")]
+    #[schemars(
+        description = "The companies or contacts to add, each with its starting fields, or a generic pipeline's new rows."
+    )]
     pub entries: Vec<ToolNewEntry>,
     /// Whether to add a record that is already in the pipeline.
     #[schemars(
@@ -95,13 +98,14 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
             .iter()
             .map(|entry| {
                 let record = match (entry.record_id, &entry.email) {
-                    (Some(id), None) => RecordTarget::Id(id),
-                    (None, Some(email)) => RecordTarget::Email(email.trim().to_owned()),
-                    _ => {
+                    (Some(id), None) => Some(RecordTarget::Id(id)),
+                    (None, Some(email)) => Some(RecordTarget::Email(email.trim().to_owned())),
+                    (None, None) => None,
+                    (Some(_), Some(_)) => {
                         return Err(ToolCallError {
                             description: "Give each entry exactly one of recordId or email."
                                 .to_owned(),
-                            internal_error: anyhow::anyhow!("entry without one record"),
+                            internal_error: anyhow::anyhow!("entry with two records"),
                         });
                     }
                 };
@@ -130,7 +134,7 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                 "Added {}.",
                 entries
                     .iter()
-                    .map(|entry| record_name(&entry.record))
+                    .map(|entry| entry_name(entry.record.as_ref(), entry.entry_id))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -140,7 +144,7 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                 " Already in the pipeline, so not added again: {}.",
                 present
                     .iter()
-                    .map(|entry| record_name(&entry.record))
+                    .map(|entry| entry_name(entry.record.as_ref(), entry.entry_id))
                     .collect::<Vec<_>>()
                     .join(", ")
             ));

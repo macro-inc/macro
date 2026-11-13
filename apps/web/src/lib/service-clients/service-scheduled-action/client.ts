@@ -10,16 +10,54 @@ import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
+
+/** Draft failures the dialog words on its own, beside usage limits. */
+export type DraftErrorCode =
+  | typeof AI_USAGE_LIMIT_ERROR
+  | 'PAYLOAD_TOO_LARGE'
+  | 'TIMEOUT';
+
+async function draftErrorResponseHandler(
+  response: Response
+): Promise<ResultError<DraftErrorCode | FetchWithTokenErrorCode>> {
+  if (response.status === 413) {
+    return { code: 'PAYLOAD_TOO_LARGE', message: 'Request too large' };
+  }
+  if (response.status === 408 || response.status === 504) {
+    return { code: 'TIMEOUT', message: 'Request timed out' };
+  }
+  return aiUsageErrorResponseHandler(response);
+}
+
+/** Why a background draft didn't start, beside the blocking draft's reasons. */
+export type DraftJobErrorCode = DraftErrorCode | 'TOO_MANY';
+
+async function draftJobErrorResponseHandler(
+  response: Response
+): Promise<ResultError<DraftJobErrorCode | FetchWithTokenErrorCode>> {
+  if (response.status === 409) {
+    return { code: 'TOO_MANY', message: 'Too many drafts in progress' };
+  }
+  return draftErrorResponseHandler(response);
+}
+
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
-  ActionExecutionRecord,
+  CatalogEntry,
+  CodeUpgrade,
+  Draft,
+  DraftJob,
+  DraftRoutineRequest,
+  ExecutionRecordResponse,
   InProgressExecution,
+  RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartDraftJobRequest,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -55,11 +93,52 @@ export const scheduledActionClient = {
       }
     ),
 
-  createSchedule: async (body: ActionConfiguration) =>
-    scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+  /** `suggestionId` records the routine suggestion it is saved from. */
+  /**
+   * The caller's active sub-routines: the routines other routines' runs
+   * created, which `listSchedules` leaves out, without one-time ones that
+   * have run.
+   */
+  listSubRoutines: async () => {
+    const all = await scheduledActionFetch<ScheduledActionResponse[]>(
+      '/scheduled-actions?include_events=true&include_children=true',
+      { method: 'GET' }
+    );
+    return all.map((routines) =>
+      routines.filter((routine) => routine.sub_routine)
+    );
+  },
+
+  /**
+   * One routine's sub-routines: the active ones and its newest finished
+   * one-time ones.
+   */
+  listChildren: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledActionResponse[]>(
+      `/scheduled-actions?${new URLSearchParams({ include_events: 'true', parent: args.scheduleId })}`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * Keep a sub-routine as the owner's own routine: it moves to the main
+   * list and stops following the routine whose run created it.
+   */
+  detach: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/detach`,
+      { method: 'POST' }
+    ),
+
+  createSchedule: async (
+    body: ActionConfiguration,
+    options: { suggestionId?: string } = {}
+  ) =>
+    scheduledActionFetch<ScheduledAction>(
+      options.suggestionId
+        ? `/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
+        : '/scheduled-actions',
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
 
   updateSchedule: async (args: {
     scheduleId: string;
@@ -99,8 +178,78 @@ export const scheduledActionClient = {
     ),
 
   listHistory: async (args: { scheduleId: string }) =>
-    scheduledActionFetch<ActionExecutionRecord[]>(
+    scheduledActionFetch<ExecutionRecordResponse[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * Macro's catalog routines, with schedules in `timezone`; code steps only
+   * where code can be saved.
+   */
+  catalog: async (args: { timezone: string }) =>
+    scheduledActionFetch<CatalogEntry[]>(
+      `/scheduled-actions/catalog?${new URLSearchParams({ timezone: args.timezone })}`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * The caller's routine suggestions on every surface: AI's first, then
+   * Macro's templates. 404 while suggestions are off for them.
+   */
+  routineSuggestions: async () =>
+    scheduledActionFetch<RoutineSuggestions>('/scheduled-actions/suggestions', {
+      method: 'GET',
+    }),
+
+  /** The caller isn't interested in a suggestion; it isn't suggested again. */
+  dismissRoutineSuggestion: (args: { suggestionId: string }) =>
+    scheduledActionFetch(
+      `/scheduled-actions/suggestions/${args.suggestionId}/dismiss`,
+      { method: 'POST' }
+    ),
+
+  /** Have AI draft a routine or one of its steps, its code checked as saving would. */
+  draftRoutine: async (body: DraftRoutineRequest) =>
+    fetchWithToken<Draft, DraftErrorCode>(
+      `${scheduledActionHost}/scheduled-actions/drafts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: draftErrorResponseHandler,
+      }
+    ),
+
+  /**
+   * Start drafting in the background; the answer comes once drafting is
+   * under way. Sent again with the same `clientId`, it answers with the job
+   * that start began.
+   */
+  startRoutineDraftJob: async (body: StartDraftJobRequest) =>
+    fetchWithToken<DraftJob, DraftJobErrorCode>(
+      `${scheduledActionHost}/scheduled-actions/draft-jobs`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: draftJobErrorResponseHandler,
+      }
+    ),
+
+  /** The caller's background drafts, newest first: drafting, ready and failed. */
+  listRoutineDraftJobs: async () =>
+    scheduledActionFetch<DraftJob[]>('/scheduled-actions/draft-jobs', {
+      method: 'GET',
+    }),
+
+  /** Cancel a background draft still drafting, or discard a finished one. */
+  discardRoutineDraftJob: async (args: { draftId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/draft-jobs/${args.draftId}`, {
+      method: 'DELETE',
+    }),
+
+  listCodeUpgrades: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<CodeUpgrade[]>(
+      `/scheduled-actions/${args.scheduleId}/code-upgrades`,
       { method: 'GET' }
     ),
 

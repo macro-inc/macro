@@ -18,7 +18,7 @@ use crate::domain::{
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreatePipeline",
-    description = "Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks either a company or a contact. Every pipeline starts with the tracked record, Stage, Outcome, Owner, Revenue and Revenue currency fields; Outcome defaults to Open and currency to USD. Stage starts with the team's default stages unless `stages` gives others. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields."
+    description = "Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Outcome, Owner, Revenue and Revenue currency fields; Outcome defaults to Open and currency to USD. Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: look up the existing pipelines first so you do not create a duplicate. Returns the pipeline with its id and fields."
 )]
 pub struct CreatePipeline {
     /// Its name.
@@ -26,9 +26,10 @@ pub struct CreatePipeline {
     pub name: String,
     /// What entries track.
     #[schemars(
-        description = "\"company\" for deals with organizations, \"contact\" for deals with individual people (candidates, investors, partners)."
+        description = "\"company\" for deals with organizations, \"contact\" for deals with individual people (candidates, investors, partners). Leave out for a generic pipeline whose entries need no company or contact."
     )]
-    pub tracks: ToolRecordType,
+    #[serde(default)]
+    pub tracks: Option<ToolRecordType>,
     /// Team sharing.
     #[schemars(
         description = "Let the user's team see and edit it. Defaults to false: only the user can see it."
@@ -43,7 +44,7 @@ pub struct CreatePipeline {
     pub stages: Vec<String>,
     /// More fields.
     #[schemars(
-        description = "Fields to add after the standard record, stage, outcome, owner and monetary fields."
+        description = "Fields to add after the standard record, stage, outcome, owner and monetary fields, or after a generic pipeline's Name."
     )]
     #[serde(default)]
     pub fields: Vec<ToolNewField>,
@@ -82,7 +83,7 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                 &viewer,
                 NewPipeline {
                     name: self.name.clone(),
-                    record_type: self.tracks.into(),
+                    record_type: self.tracks.map(Into::into),
                     sharing: if self.shared_with_team.unwrap_or(false) {
                         PipelineSharing::Team
                     } else {

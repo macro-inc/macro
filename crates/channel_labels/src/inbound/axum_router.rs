@@ -86,7 +86,7 @@ impl<S, Eas, Auth> FromRef<ChannelLabelsRouterState<S, Eas, Auth>>
 /// Routes:
 /// - `GET /` — list the caller's shared or private labels.
 /// - `POST /` — create a label, optionally moving channels into it.
-/// - `PATCH /{label_id}` — rename a label.
+/// - `PATCH /{label_id}` — rename or transfer a label.
 /// - `DELETE /{label_id}` — delete a label.
 /// - `PUT /channels/{channel_id}` — move a channel into or out of a label.
 pub fn channel_labels_router<S, Eas, Auth, T>(
@@ -117,6 +117,38 @@ where
         .with_state(state)
 }
 
+/// Build the additive channel sections router with the same authenticated handlers.
+pub fn channel_sections_router<S, Eas, Auth, T>(
+    state: ChannelLabelsRouterState<S, Eas, Auth>,
+) -> Router<T>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+{
+    Router::new()
+        .route("/", get(list_channel_sections_handler::<S, Eas, Auth>))
+        .route("/", post(create_channel_section_handler::<S, Eas, Auth>))
+        .route(
+            "/preview",
+            post(preview_channel_section_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{label_id}",
+            patch(update_channel_section_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{label_id}",
+            delete(delete_channel_section_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/channels/{channel_id}",
+            put(set_channel_section_handler::<S, Eas, Auth>),
+        )
+        .with_state(state)
+}
+
 /// Optional scope shared by every label endpoint.
 #[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -139,7 +171,7 @@ pub struct CreateChannelLabelRequest {
     pub channel_ids: Vec<Uuid>,
 }
 
-/// Request body for renaming a label.
+/// Request body for updating a label's name, smart rule, or sharing scope.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameChannelLabelRequest {
@@ -148,6 +180,9 @@ pub struct RenameChannelLabelRequest {
     /// Automatic name-matching rule; omitted for manual labels or a name-only rename.
     #[serde(default)]
     pub rule: Option<ChannelLabelRule>,
+    /// Destination namespace; omitted to preserve the current scope.
+    #[serde(default)]
+    pub target_scope: Option<ChannelLabelScopeSelection>,
 }
 
 /// Request body for moving a channel between labels.
@@ -264,7 +299,7 @@ where
     Ok(Json(label))
 }
 
-/// Rename a label of the caller's authorized scope.
+/// Update a label, optionally moving it to another authorized scope.
 #[utoipa::path(
     patch,
     tag = "channel_labels",
@@ -296,14 +331,28 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let receipt = ChannelLabelsReceipt::from_access(
-        user.authorization.macro_user_id,
-        access.entity_access_receipt,
-        scope.scope,
-    )?;
+    let actor = user.authorization.macro_user_id;
+    let target = req
+        .target_scope
+        .map(|selection| {
+            ChannelLabelsReceipt::from_access(
+                actor.clone(),
+                access.entity_access_receipt.clone(),
+                Some(selection),
+            )
+        })
+        .transpose()?;
+    let receipt =
+        ChannelLabelsReceipt::from_access(actor, access.entity_access_receipt, scope.scope)?;
     let label = state
         .service
-        .rename_label(&receipt, params.label_id, req.name, req.rule)
+        .update_label(
+            &receipt,
+            target.as_ref(),
+            params.label_id,
+            req.name,
+            req.rule,
+        )
         .await?;
     Ok(Json(label))
 }
@@ -426,6 +475,217 @@ where
         scope.scope,
     )?;
     Ok(Json(state.service.preview_smart_tag(&receipt, rule).await?))
+}
+
+/// List the caller's shared or private labels.
+#[utoipa::path(
+    get,
+    tag = "channel_sections",
+    operation_id = "list_channel_sections",
+    path = "/channel-sections",
+    params(ChannelLabelScopeQuery),
+    responses(
+        (status = 200, body = ChannelLabelsList),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_channel_sections_handler<S, Eas, Auth>(
+    State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
+) -> Result<Json<ChannelLabelsList>, ChannelLabelsError>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    list_channel_labels_handler(State(state), access, user, Query(scope)).await
+}
+
+/// Create a label for the caller's authorized scope.
+#[utoipa::path(
+    post,
+    tag = "channel_sections",
+    operation_id = "create_channel_section",
+    path = "/channel-sections",
+    params(ChannelLabelScopeQuery),
+    request_body = CreateChannelLabelRequest,
+    responses(
+        (status = 200, body = ChannelLabel),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn create_channel_section_handler<S, Eas, Auth>(
+    State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
+    Json(req): Json<CreateChannelLabelRequest>,
+) -> Result<Json<ChannelLabel>, ChannelLabelsError>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    create_channel_label_handler(State(state), access, user, Query(scope), Json(req)).await
+}
+
+/// Update a label, optionally moving it to another authorized scope.
+#[utoipa::path(
+    patch,
+    tag = "channel_sections",
+    operation_id = "update_channel_section",
+    path = "/channel-sections/{label_id}",
+    params(ChannelLabelPathParams, ChannelLabelScopeQuery),
+    request_body = RenameChannelLabelRequest,
+    responses(
+        (status = 200, body = ChannelLabel),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn update_channel_section_handler<S, Eas, Auth>(
+    State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
+    Path(params): Path<ChannelLabelPathParams>,
+    Json(req): Json<RenameChannelLabelRequest>,
+) -> Result<Json<ChannelLabel>, ChannelLabelsError>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    rename_channel_label_handler(
+        State(state),
+        access,
+        user,
+        Query(scope),
+        Path(params),
+        Json(req),
+    )
+    .await
+}
+
+/// Delete a label of the caller's authorized scope. Its channels return to the plain list.
+#[utoipa::path(
+    delete,
+    tag = "channel_sections",
+    operation_id = "delete_channel_section",
+    path = "/channel-sections/{label_id}",
+    params(ChannelLabelPathParams, ChannelLabelScopeQuery),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn delete_channel_section_handler<S, Eas, Auth>(
+    State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
+    Path(params): Path<ChannelLabelPathParams>,
+) -> Result<StatusCode, ChannelLabelsError>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    delete_channel_label_handler(State(state), access, user, Query(scope), Path(params)).await
+}
+
+/// Move a channel into a label of the caller's authorized scope, or out of any label.
+#[utoipa::path(
+    put,
+    tag = "channel_sections",
+    operation_id = "set_channel_section",
+    path = "/channel-sections/channels/{channel_id}",
+    params(ChannelLabelChannelPathParams, ChannelLabelScopeQuery),
+    request_body = SetChannelLabelRequest,
+    responses(
+        (status = 204),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_channel_section_handler<S, Eas, Auth>(
+    State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
+    Path(params): Path<ChannelLabelChannelPathParams>,
+    Json(req): Json<SetChannelLabelRequest>,
+) -> Result<StatusCode, ChannelLabelsError>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    set_channel_label_handler(
+        State(state),
+        access,
+        user,
+        Query(scope),
+        Path(params),
+        Json(req),
+    )
+    .await
+}
+
+/// Preview visible channels matched by a smart tag, without creating it.
+#[utoipa::path(
+    post,
+    tag = "channel_sections",
+    operation_id = "preview_channel_section",
+    path = "/channel-sections/preview",
+    params(ChannelLabelScopeQuery),
+    request_body = ChannelLabelRule,
+    responses(
+        (status = 200, body = SmartTagPreview),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn preview_channel_section_handler<S, Eas, Auth>(
+    State(state): State<ChannelLabelsRouterState<S, Eas, Auth>>,
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(scope): Query<ChannelLabelScopeQuery>,
+    Json(rule): Json<ChannelLabelRule>,
+) -> Result<Json<SmartTagPreview>, ChannelLabelsError>
+where
+    S: ChannelLabelsService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    preview_smart_tag_handler(State(state), access, user, Query(scope), Json(rule)).await
 }
 
 impl IntoResponse for ChannelLabelsError {

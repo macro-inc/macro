@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import type { FoldInput } from '@core/agent-fold/client';
+import { holdMobile, MOBILE_DEVICES } from '@core/agent-session/tests/device';
 import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import type {
   AgentSessionLogEntryDto,
@@ -15,7 +16,10 @@ const fold = vi.hoisted(() => ({
   readSession: vi.fn(),
   closeSession: vi.fn(),
 }));
-const flags = vi.hoisted(() => ({ firstPromptOnCreate: true }));
+const flags = vi.hoisted(() => ({
+  firstPromptOnCreate: true,
+  agentNavigation: false,
+}));
 const harness = vi.hoisted(() => ({
   create: vi.fn(),
   get: vi.fn(),
@@ -28,14 +32,30 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     await importOriginal<typeof import('@core/constant/featureFlags')>();
   return {
     ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableFirstPromptOnCreate
-        ? flags.firstPromptOnCreate
-        : actual.isFeatureEnabled(flag),
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) => {
+      if (flag === actual.enableFirstPromptOnCreate) {
+        return flags.firstPromptOnCreate;
+      }
+      if (flag === actual.enableAgentNavigation) return flags.agentNavigation;
+      return actual.isFeatureEnabled(flag);
+    },
   };
 });
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
+}));
+// These cases count the pending navigation's own acquisitions; holding the
+// session open after a view is `recently-viewed.test.ts`'s concern.
+vi.mock('@core/agent-session/recently-viewed', () => ({
+  isRecentlyViewed: () => false,
+  retainRecentlyViewed: () => {},
 }));
 vi.mock('@queries/soup/normalized-cache', () => ({
   refetchSoupEntity: vi.fn(async () => {}),
@@ -113,6 +133,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   flags.firstPromptOnCreate = true;
+  flags.agentNavigation = false;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -165,6 +186,7 @@ describe('pending navigation ownership', () => {
         kind: 'update',
         message: {
           agentSessionId: id,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'me' },
           requestId: request.actionId ?? null,
@@ -180,6 +202,7 @@ describe('pending navigation ownership', () => {
         kind: 'new',
         message: {
           agentSessionId: id,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,
@@ -421,6 +444,7 @@ describe('first prompt on the create', () => {
         kind: 'update',
         message: {
           agentSessionId: id,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'me' },
           requestId: actionId,
@@ -436,6 +460,7 @@ describe('first prompt on the create', () => {
         kind: 'new',
         message: {
           agentSessionId: id,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,
@@ -470,6 +495,31 @@ describe('first prompt on the create', () => {
     expect(AgentSession.get(id)).toBeUndefined();
     expect(fold.closeSession).toHaveBeenCalledExactlyOnceWith(id);
   });
+
+  it('names the tab the first prompt was typed in while agent navigation is on', async () => {
+    flags.agentNavigation = true;
+    startPendingSession({ prompt: 'Open the plan', userId: 'me' });
+    await settle();
+
+    const [request] = harness.create.mock.calls[0];
+    expect(request.promptClientId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+  });
+
+  it.each(MOBILE_DEVICES)(
+    'names no tab for a first prompt typed on $on',
+    async (mobile) => {
+      flags.agentNavigation = true;
+      holdMobile(device, mobile);
+      startPendingSession({ prompt: 'Open the plan', userId: 'me' });
+      await settle();
+
+      const [request] = harness.create.mock.calls[0];
+      expect(request.prompt).toBe('Open the plan');
+      expect(request).not.toHaveProperty('promptClientId');
+    }
+  );
 
   it("keeps an effort's first prompt for after the session is configured", async () => {
     const id = startPendingSession({

@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { Dropdown } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../../constants';
@@ -28,16 +29,29 @@ vi.mock('@core/user', () => ({
   useAugmentUserWithDmActivity: () => (user: unknown) => user,
 }));
 vi.mock('@core/user/util', () => ({
-  idToEmail: (id: string) => id,
-  idToDisplayName: (id: string) => id,
+  idToEmail: (id: string) => id.replace('macro|', ''),
+  idToDisplayName: (id: string) => {
+    if (id === 'macro|alice@example.com') return 'Alice';
+    if (id === 'macro|teammate@example.com') return 'Teammate';
+    return id.replace('macro|', '');
+  },
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  usePinnedContactUsers: () => () => [],
+}));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     isLoading: () => false,
-    useList: (...buckets: string[]) => ({
+    useList: (options: { buckets: string[]; searchTerm?: () => string }) => ({
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      hasMore: () => false,
+      error: () => undefined,
+      windowKey: () => undefined,
+      loadMore: async () => {},
       items: () =>
-        buckets.includes('initiative')
+        (options.buckets.includes('initiative')
           ? [
               {
                 kind: 'initiative',
@@ -59,7 +73,21 @@ vi.mock('@core/context/quickAccess', () => ({
                   email: 'alice@example.com',
                 },
               },
-            ],
+              {
+                kind: 'user',
+                id: 'macro|outside@example.com',
+                data: {
+                  id: 'macro|outside@example.com',
+                  name: 'Outside',
+                  email: 'outside@example.com',
+                },
+              },
+            ]
+        ).filter((item) =>
+          item.data.name
+            .toLowerCase()
+            .includes(options.searchTerm?.().toLowerCase() ?? '')
+        ),
     }),
   }),
 }));
@@ -81,7 +109,16 @@ vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ status: 'pending', isFetching: false }),
 }));
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: null }),
+  useCurrentTeamQuery: () => ({
+    isPending: false,
+    isError: false,
+    data: {
+      members: [
+        { user_id: 'macro|alice@example.com' },
+        { user_id: 'macro|teammate@example.com' },
+      ],
+    },
+  }),
 }));
 vi.mock('../../queries/agent-assignees', () => ({
   useAgentAssignees: (enabled: () => boolean) => () =>
@@ -168,9 +205,94 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+});
+
+describe('popover keyboard dismissal', () => {
+  it('leaves composing Escape to the IME and closes on ordinary Escape', async () => {
+    const { EditorPopover } =
+      await vi.importActual<typeof import('./EditorPopover')>(
+        './EditorPopover'
+      );
+    const onClose = vi.fn();
+    render(() => (
+      <Dropdown defaultOpen>
+        <EditorPopover onClose={onClose}>
+          <input aria-label="Picker search" />
+        </EditorPopover>
+      </Dropdown>
+    ));
+    const input = screen.getByRole('textbox');
+    for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+        ...composition,
+      });
+      input.dispatchEvent(event);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    }
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});
 
 describe('assigning an agent through task and project properties', () => {
+  it.each([
+    { Editor: EntityEditor, search: false },
+    { Editor: EntitySheetEditor, search: false },
+    { Editor: EntityEditor, search: true },
+    { Editor: EntitySheetEditor, search: true },
+  ])(
+    'supports keyboard agent assignment (search: $search)',
+    async ({ Editor, search }) => {
+      const onSave = setup(undefined, property, Editor);
+      if (search) {
+        const input = screen.getByRole('textbox');
+        fireEvent.input(input, { target: { value: 'research' } });
+        await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
+        await screen.findByText('Research assistant');
+      }
+      fireEvent.keyDown(screen.getByRole('textbox'), {
+        key: 'ArrowDown',
+      });
+      // Confirming an IME candidate must not select the highlighted assignee.
+      for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+        expect(
+          fireEvent.keyDown(screen.getByRole('textbox'), {
+            key: 'Enter',
+            ...composition,
+          })
+        ).toBe(true);
+        expect(screen.getByRole('textbox')).toHaveProperty(
+          'value',
+          search ? 'research' : ''
+        );
+      }
+      fireEvent.keyDown(screen.getByRole('textbox'), {
+        key: 'Enter',
+      });
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          property,
+          {
+            valueType: 'ENTITY',
+            refs: [
+              { entity_id: userId, entity_type: 'USER' },
+              { entity_id: agentId, entity_type: 'USER' },
+            ],
+          },
+          new Map([[agentId, 'Research assistant']])
+        )
+      );
+    }
+  );
   it.each([
     { name: 'new task', selfFilter: undefined },
     {
@@ -193,7 +315,7 @@ describe('assigning an agent through task and project properties', () => {
           'Agents assigned to this project automatically take on tasks created in or moved into it. Use a shared team agent for tasks added by teammates.'
         ) !== null
       ).toBe(selfFilter?.entityType === 'INITIATIVE');
-      fireEvent.input(screen.getByPlaceholderText('Add assignees...'), {
+      fireEvent.input(screen.getByRole('textbox'), {
         target: { value: 'research' },
       });
       await waitFor(() => expect(screen.queryByText('Alice')).toBeNull());
@@ -258,11 +380,143 @@ describe('assigning an agent through task and project properties', () => {
   });
 });
 
+describe('team-first assignees', () => {
+  it.each([EntityEditor, EntitySheetEditor])(
+    'keeps selected rows in place until the picker reopens',
+    async (Editor) => {
+      const onSave = setup(undefined, property, Editor);
+      const teammateRow = screen
+        .getByText('Teammate')
+        .closest('[data-entity-index]')!;
+      const originalIndex = teammateRow.getAttribute('data-entity-index');
+      fireEvent.click(screen.getByText('Teammate'));
+      const selectedRow = screen
+        .getByText('Teammate')
+        .closest('[data-entity-index]')!;
+      expect(selectedRow.getAttribute('data-entity-index')).toBe(originalIndex);
+      expect(selectedRow.querySelector('input')?.checked).toBe(true);
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      const selected: EntityProperty = {
+        ...property,
+        value: [
+          { entity_id: userId, entity_type: 'USER' },
+          { entity_id: 'macro|teammate@example.com', entity_type: 'USER' },
+        ],
+      };
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledWith(
+          property,
+          { valueType: 'ENTITY', refs: selected.value },
+          new Map([['macro|teammate@example.com', 'Teammate']])
+        )
+      );
+      cleanup();
+      setup(undefined, selected, Editor);
+      expect(
+        Number(
+          screen
+            .getByText('Teammate')
+            .closest('[data-entity-index]')!
+            .getAttribute('data-entity-index')
+        )
+      ).toBeLessThan(
+        Number(
+          screen
+            .getByText('Research assistant')
+            .closest('[data-entity-index]')!
+            .getAttribute('data-entity-index')
+        )
+      );
+    }
+  );
+  it.each([EntityEditor, EntitySheetEditor])(
+    'keeps a removed assignee searchable for re-adding in the same editor',
+    async (Editor) => {
+      const assigned: EntityProperty = {
+        ...property,
+        value: [
+          { entity_id: 'macro|outside@example.com', entity_type: 'USER' },
+        ],
+      };
+      const onSave = setup(undefined, assigned, Editor);
+      fireEvent.click(screen.getByText('Outside'));
+
+      const input = screen.getByRole('textbox');
+      fireEvent.input(input, { target: { value: 'outside' } });
+      const option = await screen.findByText('Outside');
+      fireEvent.click(option);
+      expect(
+        option.closest('[data-entity-index]')?.querySelector('input')
+      ).toHaveProperty('checked', true);
+
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([EntityEditor, EntitySheetEditor])(
+    'does not assign a non-team contact through search or Enter',
+    async (Editor) => {
+      const onSave = setup(undefined, property, Editor);
+      const input = screen.getByRole('textbox');
+      expect(screen.getByText('Teammate')).toBeTruthy();
+      expect(screen.queryByText('Outside')).toBeNull();
+      fireEvent.input(input, { target: { value: 'outside' } });
+      await waitFor(() => expect(screen.queryByText('Teammate')).toBeNull());
+      expect(screen.queryByText('Outside')).toBeNull();
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
+
+  it('removes a selected outsider missing from contacts', async () => {
+    const assigned: EntityProperty = {
+      ...property,
+      value: [{ entity_id: 'macro|former@example.com', entity_type: 'USER' }],
+    };
+    const onSave = setup(undefined, assigned);
+    fireEvent.click(screen.getByText('former@example.com'));
+    expect(
+      screen
+        .getByText('former@example.com')
+        .closest('[data-entity-index]')
+        ?.querySelector('input')
+    ).toHaveProperty('checked', false);
+    fireEvent.click(screen.getByText('Dismiss'));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        assigned,
+        { valueType: 'ENTITY', refs: null },
+        new Map([['macro|former@example.com', 'former@example.com']])
+      )
+    );
+  });
+
+  it('keeps custom people fields broad and company owners strictly team-only', () => {
+    setup(undefined, { ...property, propertyDefinitionId: 'custom-people' });
+    expect(screen.getByText('Outside')).toBeTruthy();
+    cleanup();
+    setup(undefined, {
+      ...property,
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
+    });
+    expect(screen.getByText('Teammate')).toBeTruthy();
+    expect(screen.queryByText('Outside')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Find contacts' })).toBeNull();
+  });
+});
 describe('people in a picker sheet', () => {
   it('drops the picks on Escape and saves them on Done', async () => {
     const dropped = setup(undefined, property, EntitySheetEditor);
     fireEvent.click(screen.getByText('Research assistant'));
-    fireEvent.keyDown(screen.getByPlaceholderText('Add assignees...'), {
+    fireEvent.keyDown(screen.getByRole('textbox'), {
       key: 'Escape',
     });
     expect(screen.queryByRole('dialog')).toBeNull();

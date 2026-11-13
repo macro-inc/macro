@@ -330,6 +330,7 @@ where
                 title: String::new(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             }],
         };
         self.store_new_form(
@@ -436,6 +437,7 @@ where
                 title: String::new(),
                 description: String::new(),
                 questions,
+                show_when: None,
             }],
         };
         self.store_new_form(
@@ -472,6 +474,7 @@ where
         let now = self.now();
         let database_id = table.table.database_id;
         let form = Form {
+            appearance: None,
             id,
             name,
             description: String::new(),

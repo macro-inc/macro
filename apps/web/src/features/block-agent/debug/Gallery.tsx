@@ -49,9 +49,9 @@ import {
   TodoList,
   ToolCard,
   ToolErrorCard,
+  ToolGroup,
   ToolStatusTitle,
 } from '../ui';
-import { LiveToolGroup } from '../views/LiveToolGroup';
 
 /**
  * A Cursor-shaped catalog: long enough to scroll, with one grouped tail. Auto
@@ -255,13 +255,9 @@ function QueuedInFlightDemo() {
       />
       <AgentInput
         busy
-        hasQueuedMessages={items().length > 0}
         onSend={() => setNote('Typed text still sends as a new queued prompt.')}
         onStop={() =>
-          setNote('Flush stops the turn so the queue drains, oldest first.')
-        }
-        onSendNext={() =>
-          setNote('Flush stops the turn so the queue drains, oldest first.')
+          setNote('Stop ends the turn so the queue drains, oldest first.')
         }
       />
     </div>
@@ -413,6 +409,7 @@ function ToolReplayDemo() {
   onCleanup(() => clearInterval(timer));
   const message = (): FoldedMessage => ({
     agentSessionId: 'tool-replay',
+    key: '0:agent',
     requestId: null,
     pending: false,
     segments: [],
@@ -463,6 +460,7 @@ function DisplayResultsDemo() {
   const [pending, setPending] = createSignal(false);
   const message = (): FoldedMessage => ({
     agentSessionId: 'display-results-demo',
+    key: '0:agent',
     requestId: null,
     pending: false,
     segments: [],
@@ -544,6 +542,7 @@ function presentViewPart(id: string): MessagePart {
 function PresentViewDemo() {
   const message: FoldedMessage = {
     agentSessionId: 'present-view-demo',
+    key: '0:agent',
     requestId: null,
     pending: false,
     segments: [],
@@ -591,6 +590,7 @@ function PresentViewDmDemo() {
 
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
+  key: '0:agent',
   requestId: null,
   pending: false,
   segments: [],
@@ -840,6 +840,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
 /** A live Cursor-shaped turn: earlier reasoning has settled, the tail has not. */
 const FIXTURE_IN_FLIGHT: FoldedMessage = {
   agentSessionId: 'demo',
+  key: '1:agent',
   requestId: null,
   pending: false,
   segments: [],
@@ -886,6 +887,7 @@ const FIXTURE_IN_FLIGHT: FoldedMessage = {
  */
 const FIXTURE_UNCLOSED: FoldedMessage = {
   agentSessionId: 'demo',
+  key: '2:agent',
   requestId: null,
   pending: false,
   segments: [],
@@ -955,6 +957,7 @@ function PromptAuthorDemo() {
   const userId = useUserId();
   const prompt = (userId: string | null, text: string): FoldedMessage => ({
     agentSessionId: 'demo',
+    key: '0:user',
     requestId: null,
     pending: false,
     segments: [],
@@ -1307,8 +1310,20 @@ export default function AgentUiGallery() {
             </ToolCard>
           </Item>
 
-          <Item label="ToolGroup (active / settled)">
-            <LiveToolGroup count={3} active={pulse()}>
+          <Item label="ToolGroup (live / settled)">
+            <ToolGroup
+              count={3}
+              live={pulse()}
+              steps={[
+                { id: 'read', label: 'Read fold.rs', status: 'completed' },
+                { id: 'edit', label: 'Edited model.rs', status: 'completed' },
+                {
+                  id: 'shell',
+                  label: 'Running cargo test -p agent_fold',
+                  status: 'running',
+                },
+              ]}
+            >
               <ToolCard
                 title="Read"
                 subtitle="crates/agent_fold/src/domain/fold.rs"
@@ -1324,16 +1339,16 @@ export default function AgentUiGallery() {
                 subtitle="cargo test -p agent_fold"
                 status={pulse() ? 'running' : 'completed'}
               />
-            </LiveToolGroup>
-            <LiveToolGroup count={2} active={false} defaultOpen>
+            </ToolGroup>
+            <ToolGroup count={2} failed={1} defaultOpen>
               <ToolCard
                 title="Search"
                 subtitle="fold"
                 status="completed"
                 trailing="3 results"
               />
-              <ToolCard title="Read" status="completed" />
-            </LiveToolGroup>
+              <ToolCard title="Read" status="failed" />
+            </ToolGroup>
           </Item>
 
           <Item label="Thought (active / settled)">

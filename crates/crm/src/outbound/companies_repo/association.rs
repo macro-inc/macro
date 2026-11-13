@@ -1,8 +1,8 @@
 //! Resolve CRM records and activity scope to the records their items match.
 //!
-//! Record visibility mirrors viewer-scoped contact listing, including hidden
-//! rows for admins and owners. Activity always excludes hidden companies and
-//! contacts. Both require CRM-enabled teams and membership or a team receipt.
+//! Record visibility follows team membership and record visibility.
+//! Activity excludes hidden records, including for admins. Email consent
+//! and exclusions do not hide CRM records.
 
 use uuid::Uuid;
 
@@ -50,35 +50,77 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
+        // The read's cost follows the team's record count, so bound it.
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        // Every step is a probe by key, so the cost stays with the team's own
+        // records whatever the planner knows about the tables. The teams are
+        // collected into an array first, so every arm starts from its team
+        // index. Each contact's addresses and each company's domains are read
+        // behind an `OFFSET 0` fence: unfenced, the planner can hash the whole
+        // address or domain table, which holds every team's rows. Contacts
+        // without a company are narrowed to the team behind a fence too, so
+        // the scan cannot start from every team's company-less contacts.
+        // Domains and contacts are separate arms so neither is read once per
+        // row of the other.
         let rows = sqlx::query!(
             r#"
-            SELECT co.id AS "company_id?", ct.id AS "contact_id?",
-                   LOWER(BTRIM(d.domain)) AS "domain?", LOWER(BTRIM(ct.email)) AS "email?"
+            WITH scope AS (
+                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
+                UNION ALL
+                SELECT $2::uuid
+            )
+            SELECT co.id AS "company_id?", NULL::uuid AS "contact_id?",
+                   LOWER(BTRIM(d.domain)) AS "domain?", NULL::text AS "email?"
             FROM crm_companies co
-            JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
-            LEFT JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
-            LEFT JOIN crm_contacts ct ON ct.company_id = co.id AND NOT ct.hidden
-            LEFT JOIN crm_domains d ON d.company_id = co.id
+            LEFT JOIN LATERAL (
+                SELECT d.domain FROM crm_domains d WHERE d.company_id = co.id OFFSET 0
+            ) d ON TRUE
             WHERE NOT co.hidden
-              AND (($1::text IS NOT NULL AND tu.user_id IS NOT NULL)
-                   OR ($2::uuid IS NOT NULL AND co.team_id = $2))
+              AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+            UNION ALL
+            -- Contacts under a visible company.
+            SELECT NULL, ct.id, NULL, address.email
+            FROM crm_companies co
+            JOIN crm_contacts ct
+                ON ct.company_id = co.id AND ct.team_id = co.team_id AND NOT ct.hidden
+            LEFT JOIN LATERAL (
+                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
+            ) address ON TRUE
+            WHERE NOT co.hidden
+              AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
             UNION ALL
             -- Contacts without a company.
-            SELECT NULL, ct.id, NULL, LOWER(BTRIM(ct.email))
-            FROM crm_contacts ct
-            JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
-            LEFT JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+            SELECT NULL, ct.id, NULL, address.email
+            FROM (
+                SELECT ct.id, ct.company_id, ct.hidden
+                FROM crm_contacts ct
+                WHERE ct.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+                OFFSET 0
+            ) ct
+            LEFT JOIN LATERAL (
+                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
+            ) address ON TRUE
             WHERE ct.company_id IS NULL
               AND NOT ct.hidden
-              AND (($1::text IS NOT NULL AND tu.user_id IS NOT NULL)
-                   OR ($2::uuid IS NOT NULL AND ct.team_id = $2))
             "#,
             viewer,
             team_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await
         .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
         let mut company_ids = std::collections::BTreeSet::new();
         let mut contact_ids = std::collections::BTreeSet::new();
         let mut domains = std::collections::BTreeSet::new();
@@ -108,7 +150,6 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
                     JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
@@ -131,7 +172,6 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id AND (NOT ct.hidden OR $3)
                     WHERE co.id = $1
@@ -163,7 +203,6 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
                         JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
                         WHERE ct.id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
@@ -185,7 +224,6 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
                         WHERE ct.id = $1
                           AND ct.team_id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)

@@ -1,10 +1,12 @@
 import { listOwnedSlotName } from '@app/components/list';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
   type FacetSelection,
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import type { TutorialId } from '@app/features/video-tutorials';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -16,7 +18,12 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import {
+  type KnownFolder,
+  KnownFoldersProvider,
+  ListEntityMetadataQueryProvider,
+} from '@entity';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import {
   createEffect,
@@ -61,6 +68,16 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const userId = useUserId();
   const databasesFlag = useFeatureFlag(enableDatabases);
   const formsFlag = useFeatureFlag(enableForms);
+  const spreadsheetsEnabled = useSpreadsheetAccess();
+  // Docs, and the Blocks listed in Drive that are rolled out to this person.
+  const tutorials = () => {
+    const ids: TutorialId[] = ['docs'];
+
+    if (spreadsheetsEnabled()) ids.push('spreadsheets');
+    if (databasesFlag().enabled) ids.push('databases');
+
+    return ids;
+  };
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
@@ -78,6 +95,21 @@ function DriveComposition(props: { route: DriveRouteState }) {
     databasesEnabled: () => databasesFlag().enabled,
     formsEnabled: () => formsFlag().enabled,
   });
+  // Rows show their folder's path from the folders the sidebar already holds.
+  const knownFolders = createMemo(
+    () =>
+      new Map<string, KnownFolder>(
+        sidebar.folders().map((folder) => [
+          folder.id,
+          {
+            id: folder.id,
+            name: folder.name,
+            parentId: folder.parentId,
+            ownerId: folder.userId,
+          },
+        ])
+      )
+  );
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,
@@ -170,6 +202,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
       controller: list.controller,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
         fireAndForget(
           openEntityInSplitFromUnifiedList(entity, {
             splitHandle: panel.handle,
@@ -190,9 +223,12 @@ function DriveComposition(props: { route: DriveRouteState }) {
         list,
         sidebar,
         actions,
+        tutorials,
       }}
     >
-      <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+      <KnownFoldersProvider value={knownFolders}>
+        <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+      </KnownFoldersProvider>
     </DriveProvider>
   );
 }

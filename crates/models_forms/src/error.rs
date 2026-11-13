@@ -70,6 +70,8 @@ pub enum FormErrorCode {
     InvalidName,
     /// A sharing change was refused.
     InvalidSharing,
+    /// Icon or color metadata failed validation.
+    InvalidAppearance,
     /// The form's owner keeps its tallies from respondents.
     TallyHidden,
     /// A logo or cover image is not an image the caller uploaded.
@@ -137,6 +139,21 @@ pub enum LayoutProblem {
     /// A gate's rule does not fit its column.
     #[error("a gate rule does not fit its column: {reason}")]
     GateRule {
+        /// Why.
+        reason: String,
+    },
+    /// A section's show-when rules test a column no earlier section asks.
+    #[error(
+        "a section can only be shown on answers to questions of earlier sections; column {column} is not one"
+    )]
+    ConditionNamesLaterColumn {
+        /// The column.
+        #[schema(value_type = Uuid)]
+        column: ColumnId,
+    },
+    /// A section's show-when rule does not fit its column.
+    #[error("a show-when rule does not fit its column: {reason}")]
+    ConditionRule {
         /// Why.
         reason: String,
     },

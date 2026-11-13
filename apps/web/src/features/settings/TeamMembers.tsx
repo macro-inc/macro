@@ -1,10 +1,21 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { AgentTag } from '@core/component/AgentTag';
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableAiUsageBilling,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import {
+  getDisplayName,
+  isAgentAccount,
+  macroIdToEmail,
+  tryMacroId,
+} from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
@@ -28,13 +39,27 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
+import {
+  useRemoveTeamAgentMutation,
+  useTeamAgentsQuery,
+} from '@queries/team-agents/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
+import type { TeamAgent } from '@service-auth/team-agents';
 import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
-import { createMemo, createSignal, For, mapArray, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  mapArray,
+  Show,
+} from 'solid-js';
+import { AgentVoiceDialog } from './components/agent-voice-dialog';
+import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import {
@@ -44,6 +69,7 @@ import {
   SettingsSection,
 } from './primitives';
 import { InviteToTeamDialog, useTeamViewer } from './Team';
+import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
   canInviteToTeam,
   canRemoveTeamMember,
@@ -156,11 +182,16 @@ function MemberRow(props: {
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium text-ink truncate">
-            {displayName()}
-            {props.isCurrentUser && (
-              <span class="text-ink-muted font-normal"> (you)</span>
-            )}
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div class="text-sm font-medium text-ink truncate">
+              {displayName()}
+              {props.isCurrentUser && (
+                <span class="text-ink-muted font-normal"> (you)</span>
+              )}
+            </div>
+            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+              <AgentTag />
+            </Show>
           </div>
           <Show when={showEmail()}>
             <div class="text-xs text-ink-muted truncate">{email()}</div>
@@ -260,6 +291,26 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const [showCancelInviteModal, setShowCancelInviteModal] =
     createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
+  const [agentToRemove, setAgentToRemove] = createSignal<TeamAgent | null>(
+    null
+  );
+
+  // Agent teammates: listed with their status once the flag is on. Loading
+  // is not on, and off leaves the roster exactly as it was.
+  const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const agentsOn = () => !agentFlag().loading && agentFlag().enabled;
+  const agentsQuery = useTeamAgentsQuery(() => props.team.id, agentsOn);
+  const removeAgentMutation = useRemoveTeamAgentMutation();
+  const agents = () =>
+    agentsOn() && agentsQuery.isSuccess ? agentsQuery.data.agents : [];
+  const agentUserIds = () => agents().map((agent) => agent.userId);
+  // Voices are team-admin only on the server, like the rest of agent management.
+  const canChangeVoice = () => agentsOn() && isAdminOrOwner();
+  const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
+  // Losing access closes the dialog for good, not until access returns.
+  createEffect(() => {
+    if (!canChangeVoice()) setVoiceAgent(undefined);
+  });
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
@@ -299,6 +350,19 @@ export function TeamMembers(props: { team: TeamSummary }) {
     // Shared uFuzzy-backed filter (ranks by relevance, favoring contiguity).
     return fuzzyFilter(q, memberSearchIndex(), (entry) => entry.haystack()).map(
       (entry) => entry.member
+    );
+  });
+
+  // Agents are team members too; they get their own rows, with status.
+  const filteredPeople = () =>
+    filteredMembers().filter(
+      (member) => !agentUserIds().includes(member.user_id)
+    );
+  const filteredAgents = createMemo(() => {
+    const q = debouncedMemberQuery().trim().toLowerCase();
+    if (!q) return agents();
+    return fuzzyFilter(q, agents(), (agent) =>
+      `${agent.name} ${agent.jobDescription}`.toLowerCase()
     );
   });
 
@@ -359,6 +423,20 @@ export function TeamMembers(props: { team: TeamSummary }) {
     );
   };
 
+  const handleRemoveAgent = () => {
+    const agent = agentToRemove();
+    if (!props.team.id || !agent) return;
+
+    removeAgentMutation.mutate(
+      { teamId: props.team.id, userId: agent.userId },
+      {
+        onSuccess: () => setAgentToRemove(null),
+        onError: () =>
+          toast.failure(t('teamAgents.removeFailed', { name: agent.name })),
+      }
+    );
+  };
+
   const handleCancelInvite = () => {
     const invite = showCancelInviteModal();
     if (!props.team.id || !invite) return;
@@ -380,16 +458,24 @@ export function TeamMembers(props: { team: TeamSummary }) {
           <Show
             when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
           >
-            {/* Inverted (black on light, white on dark) so inviting is the
-                page's primary action. */}
-            <Button
-              variant="primary"
-              class="text-[15px]"
-              onClick={() => setShowInviteModal(true)}
-            >
-              <PlusIcon class="size-4" />
-              Invite
-            </Button>
+            <div class="flex items-center gap-2">
+              {/* A link someone sends themselves gets opened; keep it one
+                  click from the page alongside the email invite. */}
+              <CopyTeamInviteLinkButton
+                teamId={props.team.id}
+                class="text-[15px]"
+              />
+              {/* Inverted (black on light, white on dark) so inviting is the
+                  page's primary action. */}
+              <Button
+                variant="primary"
+                class="text-[15px]"
+                onClick={() => setShowInviteModal(true)}
+              >
+                <PlusIcon class="size-4" />
+                Invite
+              </Button>
+            </div>
           </Show>
         }
       >
@@ -439,7 +525,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
             }
           >
             <Show
-              when={filteredMembers().length > 0}
+              when={filteredPeople().length + filteredAgents().length > 0}
               fallback={
                 <SettingsCard>
                   <div class="px-6 py-8 text-center text-sm text-ink-muted">
@@ -452,7 +538,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                   below stay in reach. The height cuts a row in half so the
                   list visibly continues. */}
               <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
-                <For each={filteredMembers()}>
+                <For each={filteredPeople()}>
                   {(member) => (
                     <MemberRow
                       member={member}
@@ -494,6 +580,20 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           },
                         });
                       }}
+                    />
+                  )}
+                </For>
+                <For each={filteredAgents()}>
+                  {(agent) => (
+                    <TeamAgentRow
+                      agent={agent}
+                      canRemove={isAdminOrOwner()}
+                      onRemove={() => setAgentToRemove(agent)}
+                      onChangeVoice={
+                        canChangeVoice()
+                          ? () => setVoiceAgent(agent)
+                          : undefined
+                      }
                     />
                   )}
                 </For>
@@ -591,6 +691,18 @@ export function TeamMembers(props: { team: TeamSummary }) {
         }
       />
       <ConfirmDialog
+        open={!!agentToRemove()}
+        onOpenChange={(open) => !open && setAgentToRemove(null)}
+        title={t('teamAgents.removeTitle')}
+        tone="danger"
+        confirmLabel={t('teamAgents.removeConfirm')}
+        pending={removeAgentMutation.isPending}
+        onConfirm={handleRemoveAgent}
+        body={t('teamAgents.removeBody', {
+          name: agentToRemove()?.name ?? '',
+        })}
+      />
+      <ConfirmDialog
         open={!!showCancelInviteModal()}
         onOpenChange={(open) => !open && setShowCancelInviteModal(null)}
         title="Cancel Invitation"
@@ -607,9 +719,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
         }
       />
 
+      <AgentVoiceDialog
+        teamId={props.team.id}
+        agent={canChangeVoice() ? voiceAgent() : undefined}
+        onClose={() => setVoiceAgent(undefined)}
+      />
       <InviteToTeamDialog
         teamId={props.team.id}
         canManageLink={isAdminOrOwner()}
+        canInviteAgents={isAdminOrOwner()}
         open={showInviteModal()}
         onClose={() => setShowInviteModal(false)}
       />

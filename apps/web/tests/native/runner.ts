@@ -172,6 +172,20 @@ try {
     capabilities,
   });
   console.log(`Native session ${browser.sessionId}; opening Email`);
+  // The app only checks identity when a login hint exists (user-info-gate.ts),
+  // and the gate reads it once at startup. A fresh profile has none, so leave
+  // the hint as a completed sign-in does and reload to let the app see it.
+  await browser.waitUntil(
+    async () =>
+      browser!.execute(
+        () =>
+          location.origin.startsWith('http') &&
+          document.readyState === 'complete'
+      ),
+    { timeout: 120_000 }
+  );
+  await browser.execute(() => localStorage.setItem('macro:login', 'true'));
+  await browser.refresh();
   const emailNavigation = browser.$('button[aria-label="Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
@@ -183,7 +197,7 @@ try {
     await browser.waitUntil(
       async () => {
         const lanes = await checkpoints(browser!);
-        return lanes.length === 7 && lanes.every((lane) => lane.completed);
+        return lanes.length === 9 && lanes.every((lane) => lane.completed);
       },
       { timeout: 60_000 }
     );

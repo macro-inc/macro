@@ -13,11 +13,18 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
+import type {
+  GraphqlEmailFocusCategory,
+  GraphqlEmailImportanceTrend,
+} from '@service-storage/graphql/generated/graphql';
 
 export type EntityBase = {
   id: string;
   name: string;
   ownerId: string;
+  /** Shared entity-owned icon and palette overrides. */
+  appearance?: EntityAppearance | null;
   frecencyScore?: number;
   /** Viewer-owned favorite state from Soup; absent on search-only results. */
   isFavorited?: boolean;
@@ -137,6 +144,13 @@ export type ChannelEntity = EntityBase & {
     id: string;
     state: 'unseen' | 'seen' | 'done';
     createdAt: DateValue;
+  }[];
+  /** The viewer's unread mentions, thread replies included, from an edge
+   * limited to `CHANNEL_MENTION_EDGE_LIMIT` rows. Undefined on rows from other
+   * projections. Never use for bulk reads. */
+  unreadMentions?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
   }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   teamId?: string;
@@ -301,10 +315,14 @@ export type EmailAttachment = {
 
 /** A thread's Focus classification; present only on Focus list rows. */
 export type EmailFocus = {
+  category: GraphqlEmailFocusCategory;
   /** 0 to 100. */
   importance: number;
   needsReply: boolean;
   needsFollowUp: boolean;
+  importanceTrend: GraphqlEmailImportanceTrend;
+  /** The day the thread's mail says it is due, as a `YYYY-MM-DD` calendar date. */
+  dueOn?: string | null;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
@@ -454,6 +472,14 @@ export type DatabaseEntity = EntityBase & {
   projectId?: string;
 };
 
+/**
+ * A paired runtime (a macrod machine). Only the notifications inbox lists it,
+ * for the access notifications filed under it; it opens in Settings → Machines.
+ */
+export type HarnessEntity = EntityBase & {
+  type: 'harness';
+};
+
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
 export type FormEntity = EntityBase & {
   type: 'form';
@@ -519,6 +545,7 @@ export type EntityData =
   | CrmContactEntity
   | DatabaseEntity
   | FormEntity
+  | HarnessEntity
   | RoutineEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -538,6 +565,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'database',
   'form',
+  'harness',
   'routine',
   'calendar_event',
   'foreign',

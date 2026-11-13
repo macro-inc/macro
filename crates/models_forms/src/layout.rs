@@ -64,6 +64,15 @@ pub enum FormSection {
         description: String,
         /// Its questions, in order.
         questions: Vec<QuestionLayout>,
+        /// When to show it: the rules answers of earlier shown sections must
+        /// pass, naming only their columns. A section whose rules fail is
+        /// skipped: its questions are not required and their answers are
+        /// not written. Absent, it is always shown.
+        // utoipa does not apply `rename_all_fields`, so the wire name is explicit.
+        #[serde(rename = "showWhen", default, skip_serializing_if = "Option::is_none")]
+        #[schema(nullable = false)]
+        #[specta(optional)]
+        show_when: Option<FilterGroup>,
     },
     /// A check of earlier answers: a respondent whose answers fail the rules
     /// is stopped here with the message, and nothing is written.

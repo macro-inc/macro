@@ -14,16 +14,18 @@ use entity_access::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::sync::Arc;
 use tracing::Instrument as _;
 use utoipa::ToSchema;
 
+mod drafts;
 mod views;
 pub use views::{PresentView, PresentedView};
 
 #[cfg(test)]
 mod test;
+
+pub use drafts::*;
 
 const MAX_REVIEWS_PER_SESSION: u16 = 100;
 const MAX_DRAFT_BYTES: usize = 128 * 1024;
@@ -31,18 +33,39 @@ const MAX_RECORD_BYTES: usize = 2 * 1024 * 1024;
 const MAX_INPUT_BYTES: usize = 1024 * 1024;
 const STALE_SUBMISSION_MS: i64 = 300_000;
 const ACTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
-const MAX_RESULT_BYTES: usize = 8192;
 
 /// Persisted review identity.
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    schemars::JsonSchema,
+    specta::Type,
 )]
 #[serde(transparent)]
-pub struct ReviewId(#[schemars(with = "String")] pub Uuid);
+pub struct ReviewId(
+    #[schemars(with = "String")]
+    #[specta(type = String)]
+    pub Uuid,
+);
 
 /// The component and action used to finish a review.
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    schemars::JsonSchema,
+    specta::Type,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewKind {
@@ -63,86 +86,75 @@ pub struct ReviewReference {
     pub id: ReviewId,
 }
 
-/// Review creation. Drafts are validated by the action's owning adapter.
-#[derive(Clone, Deserialize, Serialize, ToSchema, schemars::JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Review creation. Decoding it validates every draft; creating a review only
+/// presents the drafts, and the account holder acts separately.
+#[derive(Clone, Deserialize, Serialize, ToSchema, schemars::JsonSchema, specta::Type)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateReview {
     /// Optional code execution that prepared these drafts.
     #[serde(default)]
     pub execution_id: Option<ExecutionId>,
-    /// Existing UI and action to use.
-    pub kind: ReviewKind,
     /// Stack label.
-    pub title: String,
-    /// One to one hundred independent drafts. Email: {subject, body: Markdown,
-    /// to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
-    /// replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
-    /// time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
-    /// timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
-    /// endDate: exclusive ISO date}, description?, location?, attendees?:
-    /// [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
-    /// presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
-    /// Creating any review only presents these drafts; the user acts separately.
-    pub drafts: Vec<Value>,
+    #[schema(value_type = String)]
+    pub title: ReviewTitle,
+    /// The review's kind (email, calendar, import) and its drafts: 1–100
+    /// SendEmail or CreateCalendarEvent arguments, or exactly one import
+    /// plan selection.
+    #[serde(flatten)]
+    #[schema(value_type = Object)]
+    pub drafts: ReviewDrafts,
 }
 
 /// Persisted review item state shared with typed system notifications.
 pub use agent_runtime_protocol::domain::notification::ItemStatus as ReviewItemStatus;
 
-/// One editable item and its durable outcome.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewItem {
-    /// Stable item identity across stack navigation and edits.
-    pub id: Uuid,
-    /// Validated arguments for the existing composer/action.
-    pub draft: Value,
-    /// Whether the account holder edited this draft before deciding.
-    #[serde(default)]
-    pub edited: bool,
-    /// Current outcome.
-    pub status: ReviewItemStatus,
-    /// Actual backend response, never a model assertion.
-    pub result: Option<Value>,
-    /// Failure or uncertainty description.
-    pub error: Option<String>,
-}
-
 /// Full UI record, fetched outside the model context.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewRecord {
     /// Review identity.
     pub id: ReviewId,
     /// Owning session.
     #[schema(value_type = Uuid)]
+    #[specta(type = String)]
     pub session_id: AgentSessionId,
-    /// Account whose email/calendar the drafts use; historical records use the session owner.
-    #[serde(default)]
-    #[schema(value_type = Option<String>)]
-    pub acting_user: Option<MacroUserIdStr<'static>>,
+    /// Account whose email/calendar the drafts use.
+    #[schema(value_type = String)]
+    #[specta(type = String)]
+    pub acting_user: MacroUserIdStr<'static>,
     /// Originating code execution, absent for directly presented reviews.
     pub execution_id: Option<ExecutionId>,
     /// Durable presentation acknowledgment, separate from user decisions.
     #[serde(default)]
+    #[specta(type = Option<i32>)]
     pub presented_at: Option<i64>,
-    /// Component kind.
-    pub kind: ReviewKind,
     /// Stack label.
-    pub title: String,
+    #[schema(value_type = String)]
+    pub title: ReviewTitle,
     /// Compare-and-swap revision for edits and submissions.
+    #[specta(type = i32)]
     pub revision: i64,
     /// Milliseconds since epoch of the last state change.
+    #[specta(type = i32)]
     pub updated_at: i64,
-    /// Drafts and per-item outcomes.
-    pub items: Vec<ReviewItem>,
+    /// Component kind, drafts and per-item outcomes.
+    #[serde(flatten)]
+    #[schema(value_type = Object)]
+    pub items: ReviewItems,
     /// Current batch's authenticated decision, preserved for interrupted work.
     #[serde(default)]
     pub decision: Option<ReviewDecisionContext>,
 }
 
+impl ReviewRecord {
+    /// The component and action used to finish this review.
+    pub fn kind(&self) -> ReviewKind {
+        self.items.kind()
+    }
+}
+
 /// Facts about the most recent account-holder decision.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewDecisionContext {
     /// Authenticated account holder.
@@ -150,36 +162,45 @@ pub struct ReviewDecisionContext {
     /// Entry surface.
     pub via: DecisionVia,
     /// Revision claimed by this batch, used in notification deduplication.
+    #[specta(type = i32)]
     pub revision: i64,
     /// Items selected by this decision.
+    #[specta(type = Vec<String>)]
     pub items: Vec<Uuid>,
 }
 
 /// One atomic user decision against the displayed revision.
-#[derive(Clone, Deserialize, Serialize, ToSchema, schemars::JsonSchema)]
-#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Deserialize, Serialize, ToSchema, schemars::JsonSchema, specta::Type)]
+#[serde(tag = "action", rename_all = "snake_case")]
 pub enum ReviewDecision {
     /// Save one edited draft.
     Edit {
         /// Revision displayed by the caller.
+        #[specta(type = i32)]
         revision: i64,
         /// Pending item to update.
+        #[specta(type = String)]
         item: Uuid,
-        /// Replacement action arguments.
-        draft: Value,
+        /// Replacement action arguments, keyed by the review's kind.
+        #[schema(value_type = Object)]
+        draft: Box<ReviewDraft>,
     },
     /// Send/create selected items, or all pending items when empty.
     Submit {
         /// Revision displayed by the caller.
+        #[specta(type = i32)]
         revision: i64,
         /// Pending items, or an empty list to select all pending items.
+        #[specta(type = Vec<String>)]
         items: Vec<Uuid>,
     },
     /// Dismiss selected pending items, or all pending items when empty.
     Dismiss {
         /// Revision displayed by the caller.
+        #[specta(type = i32)]
         revision: i64,
         /// Pending items, or an empty list to select all pending items.
+        #[specta(type = Vec<String>)]
         items: Vec<Uuid>,
     },
 }
@@ -229,8 +250,6 @@ pub struct ReviewSession {
 pub trait ReviewActions: Send + Sync + 'static {
     /// Read current ownership and lifecycle facts without applying review policy.
     async fn session(&self, session: AgentSessionId) -> Result<ReviewSession, CodeModeError>;
-    /// Validate draft structure without performing the action.
-    fn validate(&self, kind: ReviewKind, draft: &Value) -> Result<(), CodeModeError>;
     /// Whether `record`'s action can start now. A kind whose action depends on
     /// work still in progress refuses until it is ready.
     async fn approvable(
@@ -240,15 +259,26 @@ pub trait ReviewActions: Send + Sync + 'static {
     ) -> Result<bool, CodeModeError> {
         Ok(true)
     }
-    /// Execute the reviewed draft of `record` as its saved, authenticated
-    /// account holder. An import only starts here: its background write
-    /// reports its own end as a `review.settled` event once it stops.
-    async fn execute(
+    /// Send a reviewed email as the record's saved, authenticated account holder.
+    async fn send_email(
         &self,
-        owner: &MacroUserIdStr<'static>,
+        account_holder: &MacroUserIdStr<'static>,
+        draft: &EmailDraft,
+    ) -> Result<EmailResult, CodeModeError>;
+    /// Create a reviewed calendar event as the record's account holder.
+    async fn create_calendar_event(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
+        draft: &CalendarDraft,
+    ) -> Result<CalendarResult, CodeModeError>;
+    /// Start writing `record`'s approved import plan. Its background write
+    /// reports its own end as a `review.settled` event once it stops.
+    async fn start_import(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
-        draft: Value,
-    ) -> Result<Value, CodeModeError>;
+        draft: &ImportDraft,
+    ) -> Result<ImportResult, CodeModeError>;
     /// Persist and stream a completed presentation without waiting for user action.
     /// Repeated calls with the same review ID must not duplicate its ACP frames.
     async fn present(
@@ -256,6 +286,10 @@ pub trait ReviewActions: Send + Sync + 'static {
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError>;
+    /// Tell the session's viewers that `record` was saved at its current
+    /// revision, so open cards fetch it instead of polling. Carries no draft
+    /// content.
+    async fn announce_update(&self, record: &ReviewRecord) -> Result<(), CodeModeError>;
     /// Stream a checked view as a completed `PresentView` call. Nothing is
     /// saved: the presented call is the view's only record.
     async fn present_view(
@@ -301,8 +335,8 @@ impl ReviewService {
         &self,
         record: &ReviewRecord,
     ) -> Result<MacroUserIdStr<'static>, CodeModeError> {
-        let owner = self.owner(record.session_id).await?;
-        Ok(record.acting_user.clone().unwrap_or(owner))
+        self.owner(record.session_id).await?;
+        Ok(record.acting_user.clone())
     }
     async fn authorize(
         &self,
@@ -364,40 +398,22 @@ impl ReviewService {
         if let Some(execution) = input.execution_id {
             self.executions.get(session, execution).await?;
         }
-        if input.title.trim().is_empty()
-            || input.title.len() > 256
-            || !(1..=100).contains(&input.drafts.len())
-            || (input.kind == ReviewKind::Import && input.drafts.len() != 1)
-            || serde_json::to_vec(&input).map_err(|_| invalid())?.len() > MAX_INPUT_BYTES
+        if serde_json::to_vec(&input).map_err(|_| invalid())?.len() > MAX_INPUT_BYTES
+            || !input.drafts.each_within(MAX_DRAFT_BYTES)
         {
             return Err(invalid());
-        }
-        for draft in &input.drafts {
-            self.validate_draft(input.kind, draft)?;
         }
         let record = ReviewRecord {
             id: ReviewId(macro_uuid::generate_uuid_v7()),
             session_id: session,
-            acting_user: Some(actor.clone()),
+            acting_user: actor.clone(),
             execution_id: input.execution_id,
             presented_at: None,
-            kind: input.kind,
             title: input.title,
             revision: 0,
             updated_at: chrono::Utc::now().timestamp_millis(),
             decision: None,
-            items: input
-                .drafts
-                .into_iter()
-                .map(|draft| ReviewItem {
-                    id: macro_uuid::generate_uuid_v7(),
-                    draft,
-                    edited: false,
-                    status: ReviewItemStatus::Pending,
-                    result: None,
-                    error: None,
-                })
-                .collect(),
+            items: input.drafts.into(),
         };
         self.store.create(&record, MAX_REVIEWS_PER_SESSION).await?;
         self.present(record).await
@@ -449,25 +465,11 @@ impl ReviewService {
         if chrono::Utc::now().timestamp_millis() - record.updated_at > STALE_SUBMISSION_MS
             && record
                 .items
+                .states()
                 .iter()
                 .any(|item| item.status == ReviewItemStatus::Submitting)
         {
-            // Old review records predate typed decision context. Preserve their
-            // interrupted batch when replacing the former mini-outbox.
-            if record.decision.is_none() {
-                record.decision = Some(ReviewDecisionContext {
-                    by: self.record_actor(&record).await?.to_string(),
-                    via: DecisionVia::Card,
-                    revision: record.revision,
-                    items: record
-                        .items
-                        .iter()
-                        .filter(|item| item.status == ReviewItemStatus::Submitting)
-                        .map(|item| item.id)
-                        .collect(),
-                });
-            }
-            for item in &mut record.items {
+            for item in record.items.states_mut() {
                 if item.status == ReviewItemStatus::Submitting {
                     item.status = ReviewItemStatus::Unknown;
                     item.error = Some(
@@ -488,12 +490,6 @@ impl ReviewService {
         }
         Ok(record)
     }
-    fn validate_draft(&self, kind: ReviewKind, draft: &Value) -> Result<(), CodeModeError> {
-        if serde_json::to_vec(draft).map_err(|_| invalid())?.len() > MAX_DRAFT_BYTES {
-            return Err(invalid());
-        }
-        self.actions.validate(kind, draft)
-    }
     async fn save(
         &self,
         record: &mut ReviewRecord,
@@ -509,7 +505,7 @@ impl ReviewService {
             .map(|event| {
                 // An approved import only started: its write settles later, and
                 // that wakes the session instead.
-                let wake = !(record.kind == ReviewKind::Import
+                let wake = !(record.kind() == ReviewKind::Import
                     && matches!(&event, NotificationEvent::ReviewDecided(outcome) if outcome.outcome != DecisionOutcome::Dismissed));
                 PendingNotification::new(ProduceNotification {
                     session_id: record.session_id,
@@ -529,7 +525,18 @@ impl ReviewService {
                 .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))
             })
             .transpose()?;
-        self.store.save(previous, record, pending.as_ref()).await
+        self.store.save(previous, record, pending.as_ref()).await?;
+        // Best effort: the save stands either way, and a card that misses
+        // this revision fetches it with the next one or on reload.
+        if let Err(error) = self.actions.announce_update(record).await {
+            tracing::error!(
+                error = ?error,
+                review_id = %record.id.0,
+                revision = record.revision,
+                "could not announce a saved review"
+            );
+        }
+        Ok(())
     }
     /// Claim the exact saved revision, then complete independently of the request.
     /// Persisted submitting states become unknown after interrupted work.
@@ -616,77 +623,77 @@ impl ReviewService {
             || record.presented_at.is_none()
             || record
                 .items
+                .states()
                 .iter()
                 .any(|item| item.status == ReviewItemStatus::Submitting)
         {
             return Err(CodeModeError::Conflict);
         }
-        if let ReviewDecision::Edit { item, draft, .. } = decision {
-            self.validate_draft(record.kind, &draft)?;
-            let target = record
-                .items
-                .iter_mut()
-                .find(|entry| entry.id == item && entry.status == ReviewItemStatus::Pending)
-                .ok_or(CodeModeError::Conflict)?;
-            target.draft = draft;
-            target.edited = true;
-            if record
-                .items
-                .iter()
-                .map(|item| {
-                    serde_json::to_vec(&item.draft)
-                        .map(|bytes| bytes.len())
-                        .unwrap_or(MAX_INPUT_BYTES + 1)
-                })
-                .sum::<usize>()
-                > MAX_INPUT_BYTES
-            {
-                return Err(invalid());
-            }
-            self.save(&mut record, None).await?;
-            return Ok(record);
-        }
         let (ids, submit) = match decision {
+            ReviewDecision::Edit { item, draft, .. } => {
+                if serde_json::to_vec(&draft).map_err(|_| invalid())?.len() > MAX_DRAFT_BYTES {
+                    return Err(invalid());
+                }
+                record.items.edit(item, *draft)?;
+                if serde_json::to_vec(&record.items)
+                    .map_err(|_| invalid())?
+                    .len()
+                    > MAX_INPUT_BYTES
+                {
+                    return Err(invalid());
+                }
+                self.save(&mut record, None).await?;
+                return Ok(record);
+            }
             ReviewDecision::Submit { items, .. } => (items, true),
             ReviewDecision::Dismiss { items, .. } => (items, false),
-            ReviewDecision::Edit { .. } => unreachable!(),
         };
+        let states = record.items.states();
         if ids.iter().any(|id| {
-            !record
-                .items
+            !states
                 .iter()
                 .any(|item| item.id == *id && item.status == ReviewItemStatus::Pending)
         }) {
             return Err(CodeModeError::Conflict);
         }
-        let selected: Vec<usize> = record
-            .items
+        let selected: Vec<(usize, Uuid)> = states
             .iter()
             .enumerate()
             .filter(|(_, item)| {
                 item.status == ReviewItemStatus::Pending
                     && (ids.is_empty() || ids.contains(&item.id))
             })
-            .map(|(index, _)| index)
+            .map(|(index, item)| (index, item.id))
             .collect();
         if selected.is_empty() {
             return Ok(record);
         }
-        for index in &selected {
-            record.items[*index].status = if submit {
-                ReviewItemStatus::Submitting
-            } else {
-                ReviewItemStatus::Dismissed
-            };
+        if submit {
+            for (position, (index, _)) in selected.iter().enumerate() {
+                if let Some(problem) = record.items.submission_problem(*index) {
+                    return Err(CodeModeError::Invalid(if selected.len() == 1 {
+                        problem.to_string()
+                    } else {
+                        format!("Draft {} of {}: {problem}", position + 1, selected.len())
+                    }));
+                }
+            }
+        }
+        let mut states = record.items.states_mut();
+        for (index, _) in &selected {
+            if let Some(item) = states.get_mut(*index) {
+                item.status = if submit {
+                    ReviewItemStatus::Submitting
+                } else {
+                    ReviewItemStatus::Dismissed
+                };
+            }
         }
         record.decision = Some(ReviewDecisionContext {
             by: actor.to_string(),
             via,
             revision,
-            items: selected
-                .iter()
-                .map(|index| record.items[*index].id)
-                .collect(),
+            items: selected.iter().map(|(_, id)| *id).collect(),
         });
         let event = NotificationEvent::ReviewDecided(review_outcome(&record));
         self.save(&mut record, Some(event)).await?;
@@ -695,42 +702,29 @@ impl ReviewService {
         let actor = actor.clone();
         tokio::spawn(async move {
             if submit {
-                let last = selected.last().copied();
-                for index in selected {
+                let last = selected.last().map(|(index, _)| *index);
+                for (index, _) in selected {
                     let outcome = tokio::time::timeout(ACTION_TIMEOUT, async {
                         if service.record_actor(&record).await? != actor {
                             return Err(CodeModeError::Forbidden);
                         }
-                        service
-                            .actions
-                            .execute(&actor, &record, record.items[index].draft.clone())
-                            .await
+                        service.perform(&actor, &record, index).await
                     })
                     .await;
-                    let item = &mut record.items[index];
-                    match outcome {
-                        Ok(Ok(result)) => {
-                            item.status = ReviewItemStatus::Completed;
-                            item.result = Some(
-                                if serde_json::to_vec(&result)
-                                    .is_ok_and(|bytes| bytes.len() <= MAX_RESULT_BYTES)
-                                {
-                                    result
-                                } else {
-                                    serde_json::json!({"outputOmitted": true, "reason": "Review action succeeded; result exceeded the saved detail limit."})
-                                },
-                            );
-                        }
-                        _ => {
-                            item.status = ReviewItemStatus::Unknown;
-                            item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
-                        }
+                    let completed = match outcome {
+                        Ok(Ok(result)) => record.items.complete(index, result).is_ok(),
+                        _ => false,
+                    };
+                    if !completed
+                        && let Some(item) = record.items.states_mut().get_mut(index)
+                    {
+                        item.status = ReviewItemStatus::Unknown;
+                        item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
                     }
                     // A started import settles when its write ends; only one that
                     // could not start settles here.
                     let event = (Some(index) == last
-                        && !(record.kind == ReviewKind::Import
-                            && record.items[index].status == ReviewItemStatus::Completed))
+                        && !(record.kind() == ReviewKind::Import && completed))
                         .then(|| {
                             NotificationEvent::ReviewSettled(ReviewSettlement::Actions(
                                 review_outcome(&record),
@@ -744,8 +738,40 @@ impl ReviewService {
         }.in_current_span());
         Ok(response)
     }
+
+    /// Run the existing action for the item at `index` with its typed draft.
+    async fn perform(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+        index: usize,
+    ) -> Result<ReviewResult, CodeModeError> {
+        match &record.items {
+            ReviewItems::Email(items) => {
+                let item = items.get(index).ok_or(CodeModeError::Conflict)?;
+                let result = self.actions.send_email(account_holder, &item.draft).await?;
+                Ok(ReviewResult::Email(result))
+            }
+            ReviewItems::Calendar(items) => {
+                let item = items.get(index).ok_or(CodeModeError::Conflict)?;
+                let result = self
+                    .actions
+                    .create_calendar_event(account_holder, &item.draft)
+                    .await?;
+                Ok(ReviewResult::Calendar(result))
+            }
+            ReviewItems::Import(items) => {
+                let item = items.get(index).ok_or(CodeModeError::Conflict)?;
+                let result = self
+                    .actions
+                    .start_import(account_holder, record, &item.draft)
+                    .await?;
+                Ok(ReviewResult::Import(result))
+            }
+        }
+    }
 }
-fn session_id(kind: EntityType, id: &str) -> Result<AgentSessionId, CodeModeError> {
+pub(super) fn session_id(kind: EntityType, id: &str) -> Result<AgentSessionId, CodeModeError> {
     if kind != EntityType::AgentSession {
         return Err(CodeModeError::Forbidden);
     }
@@ -754,7 +780,9 @@ fn session_id(kind: EntityType, id: &str) -> Result<AgentSessionId, CodeModeErro
         .map_err(|_| CodeModeError::Forbidden)
 }
 fn invalid() -> CodeModeError {
-    CodeModeError::Invalid("Provide a title and 1–100 valid drafts within 1 MiB.".into())
+    CodeModeError::Invalid(
+        "Keep a review's drafts within 1 MiB, and each draft within 128 KiB.".into(),
+    )
 }
 
 /// Bounded outcome facts; final drafts and provider results stay on the review.
@@ -762,7 +790,8 @@ pub fn review_outcome(record: &ReviewRecord) -> ReviewOutcome {
     let decision = record.decision.as_ref();
     let items: Vec<_> = record
         .items
-        .iter()
+        .states()
+        .into_iter()
         .filter(|item| decision.is_some_and(|decision| decision.items.contains(&item.id)))
         .map(|item| ReviewItemOutcome {
             id: item.id,

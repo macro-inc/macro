@@ -6,9 +6,11 @@ import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDr
 import { ChannelThread } from '@channel/Thread/ChannelThread';
 import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -19,11 +21,17 @@ import {
 } from '@queries/messages/reactions';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import type {
+  Message,
   MessageListItem,
   MessageParent,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
 import { createEffect, createSignal, Show } from 'solid-js';
+import { MessageLoadError } from './MessageLoadError';
+import {
+  useMessageTransport,
+  useMessageViewerOverride,
+} from './message-transport';
 import type { MessageActionHandler, MessageData } from './types';
 
 export function threadListItem(thread: ThreadData): MessageListItem {
@@ -39,8 +47,22 @@ export function threadListItem(thread: ThreadData): MessageListItem {
   };
 }
 
+async function reportGuestMutation(
+  work: Promise<void>,
+  failure: string
+): Promise<void> {
+  try {
+    await work;
+  } catch (error) {
+    toast.failure(failure);
+    throw error;
+  }
+}
+
 type ThreadOptions = {
   canWrite: boolean;
+  /** Complete replies from an already loaded thread. */
+  replies?: Message[];
   /** Delete comments the caller did not write. Document owners set this. */
   canModerate?: boolean;
   buildLink?: (message: MessageData) => string;
@@ -67,7 +89,9 @@ type ThreadOptions = {
 export function MessageThread(
   props: ThreadOptions & { data: MessageListItem }
 ) {
-  const userId = useUserId();
+  const accountUserId = useUserId();
+  const userId = useMessageViewerOverride() ?? accountUserId;
+  const transport = useMessageTransport();
   const [expanded, setExpanded] = createSignal(props.expanded ?? false);
   const [replying, setReplying] = createSignal(false);
   const [draft, setDraft] = createSignal<InputSnapshot>();
@@ -76,13 +100,41 @@ export function MessageThread(
   let scopeElement: HTMLDivElement | undefined;
   const focus = createFocusRequest();
   const remove = useDeleteMessageMutation();
-  const confirm = createDeleteMessageConfirmation(remove.mutate);
+  const confirm = createDeleteMessageConfirmation((input) => {
+    if (transport) {
+      fireAndForget(
+        reportGuestMutation(
+          transport.remove({ parent: input.parent, id: input.messageID }),
+          'Failed to delete message'
+        ),
+        'message-thread'
+      );
+      return;
+    }
+    remove.mutate(input);
+  });
   const patch = usePatchMessageMutation();
   const addReaction = useAddReactionMutation();
   const removeReaction = useRemoveReactionMutation();
   const editor = createMessageEditor({
     parent: () => props.data.parent,
-    patchMessage: patch.mutate,
+    patchMessage: (input) => {
+      if (transport) {
+        fireAndForget(
+          reportGuestMutation(
+            transport.patch({
+              parent: input.parent,
+              id: input.messageID,
+              content: input.content,
+            }),
+            'Failed to update message'
+          ),
+          'message-thread'
+        );
+        return;
+      }
+      patch.mutate(input);
+    },
     onEditEnded: (message) => props.onEditingChange?.(message.id, false),
   });
   const startReply = () => {
@@ -107,8 +159,42 @@ export function MessageThread(
         ? buildMessageLink(message.parent.id, message.id, message.thread_id)
         : (props.buildLink?.(message) ?? window.location.href),
     deleteMessage: confirm.requestDelete,
-    addReaction: addReaction.mutate,
-    removeReaction: removeReaction.mutate,
+    addReaction: (input) => {
+      if (transport) {
+        fireAndForget(
+          reportGuestMutation(
+            transport.react({
+              parent: input.parent,
+              id: input.messageId,
+              emoji: input.emoji,
+              add: true,
+            }),
+            'Failed to add reaction'
+          ),
+          'message-thread'
+        );
+        return;
+      }
+      addReaction.mutate(input);
+    },
+    removeReaction: (input) => {
+      if (transport) {
+        fireAndForget(
+          reportGuestMutation(
+            transport.react({
+              parent: input.parent,
+              id: input.messageId,
+              emoji: input.emoji,
+              add: false,
+            }),
+            'Failed to remove reaction'
+          ),
+          'message-thread'
+        );
+        return;
+      }
+      removeReaction.mutate(input);
+    },
     onEdit: ({ message }) => {
       editor.start(message);
       props.onEditingChange?.(message.id, true);
@@ -160,6 +246,7 @@ export function MessageThread(
         <confirm.ConfirmationDialog />
         <ChannelThread
           data={() => props.data}
+          replies={props.replies ? () => props.replies ?? [] : undefined}
           parent={() => props.data.parent}
           getMessageActions={(message) => {
             const value = actions(message);
@@ -223,16 +310,24 @@ export function MessageThreadById(
     () => props.parent,
     () => props.rootId
   );
+  const missing = () => thrownResultErrorHasCode(query.error, 'NOT_FOUND');
   return (
     <Show
       when={query.isSuccess && !query.data.state.deleted_at}
       fallback={
         <Show when={query.isError}>
-          <button
-            onClick={() => fireAndForget(query.refetch(), 'message-thread')}
+          <MessageLoadError
+            retrying={query.isFetching}
+            onRetry={
+              missing()
+                ? undefined
+                : () => fireAndForget(query.refetch(), 'message-thread')
+            }
           >
-            Could not load thread. Retry
-          </button>
+            {missing()
+              ? 'This thread is unavailable.'
+              : 'Could not load thread.'}
+          </MessageLoadError>
         </Show>
       }
     >

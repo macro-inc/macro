@@ -1,3 +1,4 @@
+import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
  *
@@ -40,6 +41,7 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
+  createRequest,
   type Exchange,
   makeOperation,
   type Operation,
@@ -118,6 +120,35 @@ const QUERY_MUTATION_VERSION_CONTEXT_KEY =
   'normalizedCacheQueryMutationVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
+
+// Below every hashed operation key, so a link repair shares none of them.
+let lastLinkRepairKey = -(2 ** 40);
+
+/**
+ * A link repair gets its own operation key, because the mutation queue waits for
+ * it. urql drops a query whose key has a dispatch outstanding, and an affected
+ * reread this exchange fences never reports back, so on a shared key the repair
+ * was never sent and held the whole queue until its timeout. Other revalidations
+ * aren't waited on, and share the mounted reader's key and scope.
+ */
+function revalidationQuery(
+  client: Client,
+  document: DocumentNode,
+  variables: Record<string, unknown>,
+  isLinkRepair: boolean
+) {
+  if (!isLinkRepair) {
+    return client.query(document, variables, { requestPolicy: 'network-only' });
+  }
+  lastLinkRepairKey -= 1;
+  return client.executeRequestOperation(
+    client.createRequestOperation(
+      'query',
+      { ...createRequest(document, variables), key: lastLinkRepairKey },
+      { requestPolicy: 'network-only' }
+    )
+  );
+}
 /** Prevents a replacement-registration cache read from forwarding the API again. */
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
@@ -127,6 +158,8 @@ declare module '@urql/core' {
   interface OperationContext {
     /** Publish the network result without storing it in the cache. */
     persistResult?: false;
+    /** Types that can change this query's membership, even in an empty response. */
+    externalCacheWriteTypes?: readonly string[];
   }
 }
 
@@ -392,6 +425,8 @@ function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Advances after writes made outside GraphQL, fencing older network responses. */
+  externalMutationVersion?: () => number;
   /**
    * Best-effort startup recovery before per-mutation admission. Resolve
    * `false` when it cannot run yet; the next drain asks again.
@@ -416,6 +451,8 @@ export interface NormalizedCacheExchangeOptions {
   /** Return true to transfer a committed query refresh to an active reader's queue.
    * Persisted descriptors without an owner retain the normal network fallback. */
   delegateRevalidation?: (client: Client, query: QueryRevalidation) => boolean;
+  /** Recover membership dependencies for imperative or durably replayed queries. */
+  externalWriteTypes?: (operation: Operation) => readonly string[] | undefined;
   /** Schema-typed singular entity relations derived from field arguments. */
   entityResolvers?: EntityResolverConfig;
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
@@ -432,11 +469,22 @@ export interface NormalizedCacheExchangeOptions {
   /**
    * Decides whether a failed optimistic mutation remains queued. The caller
    * receives a `queued` disposition; `true` retains the optimistic layer for
-   * a later background attempt. Defaults to `false`.
+   * a later background attempt. Defaults to `false`. `mutation` is the claimed
+   * attempt, with the server failures counted before it.
    */
-  shouldRetryMutation?: (error: CombinedError) => boolean | Promise<boolean>;
+  shouldRetryMutation?: (
+    error: CombinedError,
+    mutation?: ClaimedMutation
+  ) => boolean | Promise<boolean>;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
+  /**
+   * True for a subscription whose payloads no reader takes from the cache,
+   * such as a signal that only tells queries to refetch. Its results are
+   * delivered without a cache write: every write advances the revision, and
+   * open lists and broadly registered live queries then read again.
+   */
+  isUncachedSubscription?: (operation: Operation) => boolean;
 }
 
 export function normalizedCacheExchange(
@@ -456,6 +504,8 @@ export function normalizedCacheExchange(
     };
     let cacheGeneration = 0;
     let mutationVersion = 0;
+    const currentMutationVersion = () =>
+      mutationVersion + (options.externalMutationVersion?.() ?? 0);
     host.onMutationSettled((settlement) => {
       // Another tab's durable queue runner can commit into this same cache.
       if (settlement.status !== 'permanently-failed') mutationVersion += 1;
@@ -670,11 +720,10 @@ export function normalizedCacheExchange(
       const operation = activeOps.get(key);
       if (!operation) return;
       const state = queryState(key);
-      // Supersede the initial cache snapshot. An affected reread carries newer
-      // local/optimistic state, so let it complete even if network persistence
-      // finishes first; only teardown/remount may discard that update.
-      state.cacheReadVersion += 1;
-      const generation = cacheGeneration;
+      // Supersede the initial cache snapshot, but let a newer published result
+      // supersede this read too. Pending local edits are reconciled against the
+      // new server snapshot after persistence, never through an older snapshot.
+      const readVersion = beginCacheRead(key);
       await documentReader
         .read({
           opKey: operation.key,
@@ -686,12 +735,7 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (
-            generation !== cacheGeneration ||
-            read.kind !== 'hit' ||
-            !active ||
-            queryStates.get(key) !== state
-          )
+          if (!readVersion.isCurrent() || read.kind !== 'hit' || !active)
             return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
@@ -818,7 +862,11 @@ export function normalizedCacheExchange(
       const atMutationVersion = (op: Operation): Operation =>
         makeOperation('query', op, {
           ...op.context,
-          [QUERY_MUTATION_VERSION_CONTEXT_KEY]: mutationVersion,
+          [QUERY_MUTATION_VERSION_CONTEXT_KEY]: currentMutationVersion(),
+          externalCacheWriteVersion: externalWriteVersion(host),
+          externalCacheWriteTypes:
+            op.context.externalCacheWriteTypes ??
+            options.externalWriteTypes?.(op),
         });
 
       const enqueueHydrationForward = (op: Operation): void => {
@@ -837,7 +885,9 @@ export function normalizedCacheExchange(
 
       const predatesMutation = (op: Operation): boolean => {
         const version: unknown = op.context[QUERY_MUTATION_VERSION_CONTEXT_KEY];
-        return typeof version === 'number' && version < mutationVersion;
+        return (
+          typeof version === 'number' && version < currentMutationVersion()
+        );
       };
 
       // A response from before an acknowledged write cannot safely replace
@@ -950,11 +1000,12 @@ export function normalizedCacheExchange(
               })
             )
               return;
-            const result = await client
-              .query(document, variables as Record<string, unknown>, {
-                requestPolicy: 'network-only',
-              })
-              .toPromise();
+            const result = await revalidationQuery(
+              client,
+              document,
+              variables as Record<string, unknown>,
+              revalidation.onlyOnLinkFailure === true
+            ).toPromise();
             if (result.error)
               reportError(result.error, mutation ?? result.operation);
             const metadata = normalizedCacheResultMetadata(result);
@@ -1305,7 +1356,15 @@ export function normalizedCacheExchange(
           await invalidateOlderRetainedFallback(state, resultVersion);
           // A previous write turn may have delayed this response until after
           // mutation settlement, even though publication happened earlier.
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data,
+              op.context.externalCacheWriteTypes
+            )
+          ) {
             refreshObsoleteQuery(op);
             return undefined;
           }
@@ -1427,7 +1486,11 @@ export function normalizedCacheExchange(
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
             : result;
-        if (op.kind === 'subscription' && result.data != null) {
+        if (
+          op.kind === 'subscription' &&
+          result.data != null &&
+          options.isUncachedSubscription?.(op) !== true
+        ) {
           // Serialize effects across every emission for this operation, as
           // well as within buffered payloads, so a slower earlier write cannot
           // overtake a later delete. Subscribers still receive each original
@@ -1461,7 +1524,15 @@ export function normalizedCacheExchange(
             }
           }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data,
+              op.context.externalCacheWriteTypes
+            )
+          ) {
             if (!result.hasNext && hydrationRequests.has(op.key)) {
               enqueueHydrationForward(op);
             }
@@ -1503,7 +1574,15 @@ export function normalizedCacheExchange(
           }
         } else if (op.kind === 'query') {
           const state = queryState(op.key);
-          if (predatesMutation(op)) {
+          if (
+            predatesMutation(op) ||
+            predatesExternalWrite(
+              host,
+              op.context.externalCacheWriteVersion,
+              result.data,
+              op.context.externalCacheWriteTypes
+            )
+          ) {
             if (result.hasNext !== true) {
               state.networkRequestsInFlight = Math.max(
                 0,
@@ -1561,9 +1640,21 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
-          if (!isHydrateOnly(op)) activeOps.set(op.key, op);
+          // A contextless same-key revalidation shares the mounted reader's scope.
+          const types =
+            op.context.externalCacheWriteTypes ??
+            activeOps.get(op.key)?.context.externalCacheWriteTypes;
+          const operation =
+            types === undefined
+              ? op
+              : makeOperation('query', op, {
+                  ...op.context,
+                  externalCacheWriteTypes: types,
+                });
+          if (!isHydrateOnly(operation))
+            activeOps.set(operation.key, operation);
           return pipe(
-            fromPromise(readThenRoute(op)),
+            fromPromise(readThenRoute(operation)),
             mergeMap((result) =>
               result ? fromValue(result) : (empty as Source<OperationResult>)
             )

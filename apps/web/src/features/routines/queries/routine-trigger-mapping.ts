@@ -65,6 +65,7 @@ function serializeFilter(trigger: EventTriggerDraft): EventFilter {
     ...(trigger.match?.length
       ? { match: trigger.match.map(serializePayloadTest) }
       : {}),
+    ...(trigger.property ? { property: trigger.property } : {}),
     ...(condition ? { condition } : {}),
   };
 }
@@ -76,16 +77,7 @@ export function serializeTrigger(trigger: RoutineTriggerDraft) {
       filters: [serializeFilter(trigger)],
     };
   const [hour, minute] = trigger.time.split(':').map(Number);
-  if (trigger.frequency === 'once') {
-    const date = new Date(trigger.onceAt);
-    if (!Number.isFinite(date.getTime()))
-      throw new Error('Choose a date and time.');
-    return {
-      type: 'cron' as const,
-      timezone: 'UTC',
-      schedule: `${date.getUTCSeconds()} ${date.getUTCMinutes()} ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} * ${date.getUTCFullYear()}`,
-    };
-  }
+  if (trigger.frequency === 'once') return onceTrigger(trigger.onceAt);
   const schedule = match(trigger.frequency)
     .with('hour', () => '0 0 * * * *')
     .with('day', () => `0 ${minute} ${hour} * * *`)
@@ -121,10 +113,22 @@ export function parseRoutineTriggers(
 ): RoutineTriggerDraft[] | undefined {
   const values = trigger.type === 'multiple' ? trigger.triggers : [trigger];
   if (
-    !values.every((value) => value.type === 'cron' || value.type === 'events')
+    !values.every(
+      (value) =>
+        value.type === 'cron' ||
+        value.type === 'once' ||
+        value.type === 'events'
+    )
   )
     return undefined;
   return values.flatMap((value): RoutineTriggerDraft[] => {
+    if (value.type === 'once')
+      return [
+        {
+          ...newScheduleTrigger('once'),
+          onceAt: localDateTime(new Date(value.at)),
+        },
+      ];
     if (value.type === 'events')
       return value.filters.map((filter) => ({
         id: crypto.randomUUID(),
@@ -140,6 +144,12 @@ export function parseRoutineTriggers(
             }
           : undefined,
         match: filter.match?.map(parsePayloadTest),
+        property: filter.property
+          ? {
+              definitionId: filter.property.definitionId,
+              values: filter.property.values ?? [],
+            }
+          : undefined,
         condition: filter.condition ?? undefined,
       }));
     const draft = {
@@ -176,9 +186,21 @@ export function onceFromCron(
   const [second, minute, hour, day, month, , year] = parts.map(Number);
   const date = new TZDate(year, month - 1, day, hour, minute, second, timezone);
   if (Number.isNaN(date.getTime())) return;
-  const instant = new Date(date.getTime());
+  return { frequency: 'once', onceAt: localDateTime(new Date(date.getTime())) };
+}
+
+/** An instant as the `datetime-local` value the once picker edits. */
+function localDateTime(instant: Date): string {
   const local = new Date(
     instant.getTime() - instant.getTimezoneOffset() * 60000
   );
-  return { frequency: 'once', onceAt: local.toISOString().slice(0, 19) };
+  return local.toISOString().slice(0, 19);
+}
+
+/** A single run at the picked local date and time. */
+export function onceTrigger(onceAt: string) {
+  const date = new Date(onceAt);
+  if (!Number.isFinite(date.getTime()))
+    throw new Error('Choose a date and time.');
+  return { type: 'once' as const, at: date.toISOString() };
 }

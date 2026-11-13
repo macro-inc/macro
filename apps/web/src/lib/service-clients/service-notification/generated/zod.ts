@@ -60,6 +60,7 @@ export const unsubscribeItemParams = zod.object({
     'crm_contact',
     'crm_pipeline',
     'reminder',
+    'harness',
     'skill',
     'agent_session',
     'scheduled_action',
@@ -106,6 +107,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'crm_contact',
     'crm_pipeline',
     'reminder',
+    'harness',
     'skill',
     'agent_session',
     'scheduled_action',
@@ -149,6 +151,7 @@ export const unsubscribeItemsBody = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -198,6 +201,7 @@ export const removeUnsubscribeItemsBody = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -311,6 +315,7 @@ export const listTypedNotificationsResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -1064,6 +1069,18 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -2221,6 +2238,44 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -2240,6 +2295,129 @@ export const listTypedNotificationsResponse = zod
                     })
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's agent sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['agent_sign_in_expiry']),
+                    })
+                    .describe(
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
                     ),
                 ])
                 .describe(
@@ -2277,6 +2455,50 @@ export const listTypedNotificationsResponse = zod
       .describe('The next page cursor if it exists.'),
   })
   .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * @summary Soft-delete multiple user notifications.
+ */
+export const bulkDeleteUserNotificationsV2Body = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as done.
+ */
+export const bulkMarkNotificationsDoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as seen.
+ */
+export const bulkMarkNotificationsSeenBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as not done.
+ */
+export const bulkMarkNotificationsUndoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
 
 /**
  * Rows that fail to deserialize are dropped with a warning log.
@@ -2360,6 +2582,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -3113,6 +3336,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -4270,6 +4505,44 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -4289,6 +4562,129 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     })
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's agent sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['agent_sign_in_expiry']),
+                    })
+                    .describe(
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
                     ),
                 ])
                 .describe(
@@ -4403,6 +4799,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -5156,6 +5553,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -6313,6 +6722,44 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -6332,6 +6779,129 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     })
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's agent sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['agent_sign_in_expiry']),
+                    })
+                    .describe(
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          computerId: zod
+                            .uuid()
+                            .describe('The computer that was set up.'),
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              "The computer's harness, once macrod has connected."
+                            ),
+                          outcome: zod
+                            .union([
+                              zod
+                                .object({
+                                  kind: zod.enum(['ready']),
+                                })
+                                .describe(
+                                  'macrod connected for the first time: the computer is ready.'
+                                ),
+                              zod
+                                .object({
+                                  failureReason: zod
+                                    .string()
+                                    .describe(
+                                      "Why, in the words the computer's status shows."
+                                    ),
+                                  kind: zod.enum(['failed']),
+                                })
+                                .describe(
+                                  'Setup gave up before the computer was ready.'
+                                ),
+                            ])
+                            .describe("How a computer's first setup ended."),
+                        })
+                        .describe(
+                          "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                        ),
+                      tag: zod.enum(['computer_setup']),
+                    })
+                    .describe(
+                      'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
                     ),
                 ])
                 .describe(
@@ -6451,6 +7021,7 @@ export const getTypedNotificationByIdResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -7138,6 +7709,16 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  inviterName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                    ),
+                  isAgent: zod
+                    .boolean()
+                    .optional()
+                    .describe('Whether the invite creates an agent account.'),
                   reminder: zod
                     .boolean()
                     .optional()
@@ -8206,6 +8787,40 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    requestId: zod
+                      .uuid()
+                      .describe(
+                        "The attempt to join, which is also this notification's id."
+                      ),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional requester profile picture URL.'),
+                  })
+                )
+                .describe(
+                  'A person asked to join a channel the recipient participates in.'
+                ),
+              tag: zod.enum(['channel_access_requested']),
+            })
+            .describe(
+              'Someone asked to join a channel the user participates in.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
                   outcome: zod
                     .enum(['succeeded', 'failed'])
                     .describe(
@@ -8223,6 +8838,121 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               "One of the user's routines finished a run, successfully or not."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agent: zod
+                    .enum(['claude'])
+                    .describe(
+                      'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                    ),
+                  computerName: zod
+                    .string()
+                    .describe("The computer's name when the notice was sent."),
+                  expiresAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the sign-in expires or expired; absent when the agent rejected it.'
+                    ),
+                  harnessId: zod
+                    .uuid()
+                    .describe(
+                      "The computer's harness, whose runtime row holds the sign-in."
+                    ),
+                  stage: zod
+                    .enum(['expires_soon', 'expires_today', 'expired'])
+                    .describe(
+                      "How close a computer's agent sign-in is to no longer working."
+                    ),
+                })
+                .describe(
+                  "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                ),
+              tag: zod.enum(['agent_sign_in_expiry']),
+            })
+            .describe(
+              "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  computerId: zod
+                    .uuid()
+                    .describe('The computer that was set up.'),
+                  computerName: zod
+                    .string()
+                    .describe("The computer's name when the notice was sent."),
+                  harnessId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      "The computer's harness, once macrod has connected."
+                    ),
+                  outcome: zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['ready']),
+                        })
+                        .describe(
+                          'macrod connected for the first time: the computer is ready.'
+                        ),
+                      zod
+                        .object({
+                          failureReason: zod
+                            .string()
+                            .describe(
+                              "Why, in the words the computer's status shows."
+                            ),
+                          kind: zod.enum(['failed']),
+                        })
+                        .describe(
+                          'Setup gave up before the computer was ready.'
+                        ),
+                    ])
+                    .describe("How a computer's first setup ended."),
+                })
+                .describe(
+                  "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow."
+                ),
+              tag: zod.enum(['computer_setup']),
+            })
+            .describe(
+              'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agents: zod
+                    .array(
+                      zod
+                        .object({
+                          botId: zod.uuid().describe("The agent's bot id."),
+                          name: zod
+                            .string()
+                            .describe("The agent's display name."),
+                        })
+                        .describe(
+                          "One of the recipient's agents that stopped with their runtime access."
+                        )
+                    )
+                    .describe(
+                      "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                    ),
+                  runtimeName: zod.string().describe("The runtime's name."),
+                })
+                .describe(
+                  "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                ),
+              tag: zod.enum(['runtime_access_removed']),
+            })
+            .describe(
+              "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
             ),
         ])
         .describe(
@@ -8248,50 +8978,6 @@ export const getTypedNotificationByIdResponse = zod
         .describe('When the notification was viewed\/seen.'),
     })
   );
-
-/**
- * @summary Soft-delete multiple user notifications.
- */
-export const bulkDeleteUserNotificationsV2Body = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as done.
- */
-export const bulkMarkNotificationsDoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as seen.
- */
-export const bulkMarkNotificationsSeenBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as not done.
- */
-export const bulkMarkNotificationsUndoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
 
 /**
  * @summary Soft-delete a single user notification.

@@ -17,10 +17,16 @@ import {
   notFoundRoute,
 } from '@app/routes/routes';
 import { setGlobalTabManager } from '@app/signal/tabLayout';
-import { SplitLayoutContext } from '@components/app/split-layout/context';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
 import {
   createSplitLayout,
   type SplitManager,
+  splitOf,
 } from '@components/app/split-layout/layoutManager';
 import { SplitLayout } from '@components/app/split-layout/SplitLayout';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
@@ -28,6 +34,7 @@ import {
   resolveContentLocation,
   splitContentFromLocation,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
 import { onCleanup } from 'solid-js';
@@ -66,7 +73,9 @@ const routes: SplitRoutes = {
 function setup(url: string) {
   let router!: SplitRouter;
   let manager!: SplitManager;
-  let tabManager!: TabManager;
+  let tabManager: TabManager | undefined;
+  /** The tab each block instance was created for. */
+  const blockScopes: (string | undefined)[] = [];
   render(() => {
     router = createSplitRouter({
       routes,
@@ -81,7 +90,10 @@ function setup(url: string) {
     });
     const orchestrator = {
       isBlockMounted: () => false,
-      createBlockInstance: vi.fn(),
+      createBlockInstance: () => {
+        blockScopes.push(tabManager?.blockScope());
+        return { element: () => null };
+      },
     } as unknown as BlockOrchestrator;
     manager = createSplitLayout(orchestrator, {
       router,
@@ -103,7 +115,27 @@ function setup(url: string) {
       </SplitRouterProvider>
     );
   });
-  return { router, tabManager };
+  return { router, tabManager: tabManager!, manager, blockScopes };
+}
+
+/** A view's preview guard, as a host mounted in the router's first open pane creates it. */
+function guardInFirstPane(router: SplitRouter, manager: SplitManager) {
+  const handle = manager.getSplit(splitOf(router.panes()[0]!));
+  let guard!: ReturnType<typeof createPreviewSelectionGuard>;
+  function Host() {
+    guard = createPreviewSelectionGuard();
+    return null;
+  }
+  render(() => (
+    <SplitLayoutContext.Provider value={{ manager }}>
+      <SplitPanelContext.Provider
+        value={{ handle } as unknown as SplitPanelContextType}
+      >
+        <Host />
+      </SplitPanelContext.Provider>
+    </SplitLayoutContext.Provider>
+  ));
+  return guard;
 }
 
 async function flush(router: SplitRouter) {
@@ -128,6 +160,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   setGlobalTabManager(undefined);
   cleanup();
   panels.mounted = 0;
@@ -164,6 +197,64 @@ describe('desktop tab layers', () => {
     expect(document.querySelector('[data-panel]')).toBe(firstPanel);
     expect(layer(first)?.inert).toBe(false);
     expect(layer(second)?.inert).toBe(true);
+  });
+
+  it('selecting a preview held by a background tab opens it in this tab', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, tabManager, manager } = setup('/channels');
+    await flush(router);
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+    expect(manager.findOpenView(channel)).toBeUndefined();
+
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+    await flush(router);
+
+    expect(tabManager.activeTabId()).toBe(second);
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('a preview held in the same tab still blocks a second one', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, manager } = setup('/channels');
+    await flush(router);
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(false);
+    expect(alert).toHaveBeenCalledOnce();
+  });
+
+  it('a document open in a background tab mounts again in this tab', async () => {
+    const { router, tabManager, manager, blockScopes } = setup('/md/doc-one');
+    await flush(router);
+    expect(blockScopes).toEqual([undefined]);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+
+    const result = manager.openWithSplit({ type: 'md', id: 'doc-one' });
+    await flush(router);
+
+    expect(result.status).not.toBe('reused');
+    expect(blockScopes).toEqual([undefined, second]);
+    expect(tabManager.activeTabId()).toBe(second);
+  });
+
+  it('a tab mounting onto a document another tab holds gets its own instance', async () => {
+    const { router, tabManager, blockScopes } = setup('/md/doc-one');
+    await flush(router);
+    const entry = router.entry(router.panes()[0]!)!;
+
+    tabManager.openEntryInNewTab(entry, { activate: true });
+    await flush(router);
+
+    expect(blockScopes).toEqual([undefined, tabManager.activeTabId()]);
   });
 
   it('a stacked tab parks and comes back stacked without remounting', async () => {

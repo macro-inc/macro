@@ -131,8 +131,13 @@ impl GraphqlCrmPipeline {
     }
 
     /// Which CRM record its rows reference.
-    async fn record_type(&self) -> GraphqlCrmPipelineRecordType {
-        self.0.pipeline.record_type.into()
+    async fn record_type(&self) -> async_graphql::Result<GraphqlCrmPipelineRecordType> {
+        // Reached only through a record's entries, which a generic pipeline never has.
+        self.0
+            .pipeline
+            .record_type
+            .map(Into::into)
+            .ok_or_else(|| "This pipeline tracks no CRM records".into())
     }
 
     /// Whether the pipeline is shared with its team.

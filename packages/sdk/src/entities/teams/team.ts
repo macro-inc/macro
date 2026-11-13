@@ -68,6 +68,8 @@ export class Team extends MacroEntity<TeamRecord> {
   /**
    * The team's members, with their roles. The API only exposes members for
    * the caller's current team, so this rejects for any other team.
+   *
+   * @readonly
    */
   async members(): Promise<TeamMembership[]> {
     const res = await this.requireCurrent('members');
@@ -91,11 +93,24 @@ export class Team extends MacroEntity<TeamRecord> {
    * inviting to admins rejects other members, and teams without an
    * enterprise plan accept a limited number of invites per day.
    *
+   * Pass `{ agent: true }` to invite the addresses as agents. An agent invite
+   * to an address with no account creates an agent account when that address
+   * signs in: it skips onboarding, gets an SDK token, and joins this team, using
+   * a paid seat when the team has a subscription. An existing account keeps its
+   * type and accepts like any other invite.
+   *
    * @param emails - One address or a list of addresses to invite.
+   * @param options - `agent` invites the addresses as agents.
    * @returns `true` when at least one new invite was sent, `false` when every
    *   address was already a member or already invited.
+   *
+   * @destructive
+   * @openworld
    */
-  async invite(emails: string | readonly string[]): Promise<boolean> {
+  async invite(
+    emails: string | readonly string[],
+    options?: { agent?: boolean },
+  ): Promise<boolean> {
     const addresses: string[] = [];
     const seen = new Set<string>();
     for (const raw of typeof emails === 'string' ? [emails] : emails) {
@@ -114,6 +129,7 @@ export class Team extends MacroEntity<TeamRecord> {
       body: {
         invites: addresses.map((email) => ({ email })),
         team_id: this.id,
+        ...(options?.agent && { is_agent: true }),
       },
     });
     // The API answers 304 when it created no invite: every address was
@@ -127,6 +143,8 @@ export class Team extends MacroEntity<TeamRecord> {
    * Pending invites to this team; only a team admin or owner may list them.
    * Only the caller's current team lists invites (see `Team.current`); the
    * API refuses any other team with a 409.
+   *
+   * @readonly
    */
   async invites(): Promise<TeamInvite[]> {
     return unwrap(

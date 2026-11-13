@@ -51,6 +51,12 @@ export {
   InlineCheckbox,
   SingleSelectCheck,
 } from './components/Checkbox';
+export type {
+  ChipComboboxDisplay,
+  ChipComboboxOption,
+  ChipComboboxProps,
+} from './components/ChipCombobox';
+export { ChipCombobox } from './components/ChipCombobox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
 export type {
@@ -185,6 +191,8 @@ export type {
   SliderTrackProps,
 } from './components/Slider';
 export { Slider } from './components/Slider';
+export type { SpinnerProps, SpinnerSize } from './components/Spinner';
+export { Spinner } from './components/Spinner';
 export { Surface } from './components/Surface';
 export { TabSelector } from './components/TabSelector';
 export type {

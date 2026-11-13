@@ -1,6 +1,7 @@
 use super::super::*;
 use super::{configuration, user};
 use crate::domain::event_runs::ClaimToken;
+use crate::domain::models::ActionExecutionRecord;
 use entity_access::domain::{models::AccessError, ports::ScheduledActionGrants};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use macro_uuid::Uuid;
@@ -23,7 +24,45 @@ struct FakeRepo {
     fail_delete: Mutex<bool>,
 }
 
+impl SubRoutines for FakeRepo {
+    async fn running_run(&self, _: &Uuid) -> Result<Option<RunningRun>> {
+        unreachable!()
+    }
+    async fn running_run_of_session(&self, _: &Uuid) -> Result<Option<RunningRun>> {
+        unreachable!()
+    }
+    async fn children(&self, _: &Uuid) -> Result<Vec<ScheduledAction>> {
+        Ok(Vec::new())
+    }
+    async fn active_children(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn top_level_by_ids(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn child_by_key(&self, _: &Uuid, _: &SubRoutineKey) -> Result<Option<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn detach(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn created_by_runs(
+        &self,
+        _: &Uuid,
+        _: &[Uuid],
+    ) -> Result<Vec<(Uuid, crate::domain::models::CreatedRoutine)>> {
+        unreachable!()
+    }
+}
+
 impl ScheduledActionRepo for FakeRepo {
+    async fn set_appearance(
+        &self,
+        _change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        anyhow::bail!("appearance writes are not supported by this cleanup-only adapter")
+    }
+
     async fn get_owned_actions(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -79,7 +118,7 @@ impl ScheduledActionRepo for FakeRepo {
     async fn last_runs(
         &self,
         _: &[Uuid],
-    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
         unreachable!()
     }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
@@ -104,7 +143,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         id: Some(macro_uuid::generate_uuid_v7()),
         owner,
         name: config.name,
-        next_run_at: next_run(&config.trigger).unwrap(),
+        next_run_at: next_run(&config.trigger, now, |_| false).unwrap(),
         trigger: config.trigger,
         kind: config.kind,
         created_at: now,
@@ -116,6 +155,10 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         enabled: true,
         run_visibility: config.run_visibility,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
+        suggestion_id: None,
+        description: String::new(),
+        sub_routine: None,
     }
 }
 

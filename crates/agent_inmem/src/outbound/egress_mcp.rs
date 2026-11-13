@@ -71,7 +71,7 @@ pub type InternalMcpHandler =
 /// service with the same pools, not two configured alike.
 pub struct EgressMcpClient<Egress> {
     egress: Arc<Egress>,
-    base_url: String,
+    base_urls: Vec<String>,
     internal_mcp: Option<InternalMcpHandler>,
 }
 
@@ -86,9 +86,17 @@ impl<Egress> EgressMcpClient<Egress> {
     pub fn new(egress: Arc<Egress>, base_url: &str) -> Self {
         Self {
             egress,
-            base_url: base_url.trim_end_matches('/').to_owned(),
+            base_urls: vec![base_url.trim_end_matches('/').to_owned()],
             internal_mcp: None,
         }
+    }
+
+    /// Accept the explicit external address advertised to paired runtimes too.
+    pub fn with_external_base_url(mut self, url: Option<&str>) -> Self {
+        if let Some(url) = url {
+            self.base_urls.push(url.trim_end_matches('/').to_owned());
+        }
+        self
     }
 
     /// Route the internal endpoint through its authenticated HTTP handler.
@@ -104,7 +112,7 @@ impl<Egress> Clone for EgressMcpClient<Egress> {
     fn clone(&self) -> Self {
         Self {
             egress: Arc::clone(&self.egress),
-            base_url: self.base_url.clone(),
+            base_urls: self.base_urls.clone(),
             internal_mcp: self.internal_mcp.clone(),
         }
     }
@@ -117,7 +125,7 @@ impl<Egress: EgressService + 'static> EgressMcpClient<Egress> {
         auth_header: Option<String>,
         mut request: ProxyRequest,
     ) -> Result<ProxyResponse, CallError> {
-        if uri.strip_prefix(&self.base_url) == Some("/mcp/internal") {
+        if route(&self.base_urls, uri) == Some("/mcp/internal") {
             let handler = self
                 .internal_mcp
                 .as_ref()
@@ -136,7 +144,7 @@ impl<Egress: EgressService + 'static> EgressMcpClient<Egress> {
             *request.uri_mut() = http::Uri::from_static("/mcp/internal");
             return Ok(handler(request).await);
         }
-        let Addressed { token, target } = address(&self.base_url, uri, auth_header)?;
+        let Addressed { token, target } = address(&self.base_urls, uri, auth_header)?;
         self.egress
             .proxy(&token, target, request)
             .await
@@ -163,10 +171,12 @@ struct Addressed {
 /// whole and the gateway strips the prefix, so the router only ever reads
 /// `/mcp/{slug}`. Nothing strips anything on the way here, so the base comes
 /// off first and what is left is read the way the router reads it.
-fn address(base_url: &str, uri: &str, auth_header: Option<String>) -> Result<Addressed, CallError> {
-    let route = uri
-        .strip_prefix(base_url)
-        .ok_or_else(|| not_an_egress_url(uri))?;
+fn address(
+    base_urls: &[String],
+    uri: &str,
+    auth_header: Option<String>,
+) -> Result<Addressed, CallError> {
+    let route = route(base_urls, uri).ok_or_else(|| not_an_egress_url(uri))?;
     let destination = McpDestination::from_path(route).ok_or_else(|| not_an_egress_url(uri))?;
     let token = auth_header
         .map(SessionToken::new)
@@ -174,6 +184,14 @@ fn address(base_url: &str, uri: &str, auth_header: Option<String>) -> Result<Add
     Ok(Addressed {
         token,
         target: EgressTarget::McpServer(destination),
+    })
+}
+
+/// Match only a configured base followed by one of this service's routes.
+fn route<'uri>(base_urls: &[String], uri: &'uri str) -> Option<&'uri str> {
+    base_urls.iter().find_map(|base| {
+        uri.strip_prefix(base)
+            .filter(|path| *path == "/mcp/internal" || McpDestination::from_path(path).is_some())
     })
 }
 
@@ -239,7 +257,7 @@ fn event_stream(body: ProxyBody) -> BoxStream<'static, Result<Sse, SseError>> {
     let bytes = body
         .into_data_stream()
         .map(|chunk| chunk.map_err(std::io::Error::other));
-    SseStream::from_byte_stream(bytes).boxed()
+    SseStream::from_bytes_stream(bytes).boxed()
 }
 
 async fn read_body(body: ProxyBody) -> Result<Bytes, CallError> {
@@ -352,7 +370,7 @@ where
     async fn get_stream(
         &self,
         uri: Arc<str>,
-        session_id: Arc<str>,
+        session_id: Option<Arc<str>>,
         last_event_id: Option<String>,
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
@@ -360,7 +378,7 @@ where
         let mut request = build_request(
             Method::GET,
             &uri,
-            Some(&session_id),
+            session_id.as_deref(),
             custom_headers,
             empty_body(),
         )?;

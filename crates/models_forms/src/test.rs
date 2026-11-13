@@ -44,6 +44,7 @@ const TEAM_QUESTION: FormQuestionId = FormQuestionId::from_uuid(Uuid::from_u128(
 fn a_form_detail_reads_as_the_web_client_expects() {
     let detail = FormDetail {
         form: Form {
+            appearance: None,
             id: FORM,
             name: "Q4 offsite RSVP".into(),
             description: "Tell us if you can make it.".into(),
@@ -86,6 +87,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                     required: true,
                     widget: Some(Widget::Choice),
                 }],
+                show_when: None,
             },
             FormSectionDetail::Gate {
                 id: ELIGIBILITY,
@@ -225,6 +227,7 @@ fn a_layout_put_reads_sections_by_kind_and_a_missing_widget_as_default() {
                         required: false,
                         widget: None,
                     }],
+                    show_when: None,
                 },
                 FormSection::Gate {
                     id: ELIGIBILITY,
@@ -408,6 +411,7 @@ fn an_error_names_its_code_question_and_layout_problem() {
 fn a_form_takes_responses_while_open_and_before_it_closes() {
     let now = Utc.with_ymd_and_hms(2026, 10, 1, 12, 0, 0).unwrap();
     let form = |status, closes_at| Form {
+        appearance: None,
         id: FORM,
         name: "RSVP".into(),
         description: "".into(),
@@ -442,6 +446,7 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
     let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
     let listed = ListedForm {
         form: Form {
+            appearance: None,
             id: FORM,
             name: "RSVP".into(),
             description: "".into(),
@@ -539,6 +544,7 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
 
     let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
     let form = Form {
+        appearance: None,
         id: FORM,
         name: "RSVP".into(),
         description: "".into(),
@@ -598,6 +604,7 @@ fn a_form_sends_its_branding_with_its_facts() {
         id: FORM,
         name: "Site intake".into(),
         description: "".into(),
+        appearance: None,
         owner_id: "macro|owner@macro.com".into(),
         database_id: DATABASE,
         table_id: TABLE,

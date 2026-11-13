@@ -12,7 +12,7 @@ vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
-  ChatWithAgentButton: () => null,
+  openChatWithAgent: vi.fn(),
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
   toSingleEntityActionListState: () => ({}),
@@ -54,6 +54,10 @@ vi.mock('@channel/Call/ChannelCallButton', () => ({
   ChannelCallButton: () => null,
 }));
 vi.mock('@channel/Call/ChannelCallTab', () => ({ ChannelCallTab: () => null }));
+vi.mock('../../Call/views/ActiveCallHeader', () => ({
+  ActiveCallHeader: () => null,
+  JoinableCallStatus: () => null,
+}));
 vi.mock('@channel/Call/use-call', () => ({
   useCall: () => ({ isInThisChannel: () => false }),
 }));

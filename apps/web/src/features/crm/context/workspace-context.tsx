@@ -26,7 +26,7 @@ export type CrmRecordNavigation = {
   setSection(section: CrmRecordSection): void;
   item: Accessor<
     | {
-        itemType: 'document' | 'email' | 'call' | 'database';
+        itemType: 'document' | 'email' | 'call';
         itemId: string;
         itemFileType?: string;
         itemSubType?: 'task' | 'snippet' | 'skill';
@@ -55,8 +55,16 @@ export type CrmRoute = CrmRecordNavigation & {
   setTab(tab: string, options?: { replace?: boolean }): void;
 };
 
+export type PeopleVisibility = {
+  canShowRemoved: Accessor<boolean>;
+  showRemoved: Accessor<boolean>;
+  removedTeamId: Accessor<string | undefined>;
+  setShowRemoved(value: boolean): void;
+};
+
 /** Collection capabilities consumed by CRM views, supplied by the host adapter. */
 export type CrmWorkspace = {
+  peopleVisibility: PeopleVisibility;
   host: {
     scopeId: string;
     isActive: Accessor<boolean>;

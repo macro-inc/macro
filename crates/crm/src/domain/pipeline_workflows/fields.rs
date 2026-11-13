@@ -72,8 +72,11 @@ pub struct PipelineField {
 impl PipelineField {
     /// The field `column` of `pipeline`.
     pub(crate) fn new(column: &ColumnDetail, pipeline: &Pipeline) -> Self {
-        let kind = if column.column.id == pipeline.primary_column_id {
-            FieldKind::Record(pipeline.record_type)
+        let tracked = pipeline
+            .record_type
+            .filter(|_| column.column.id == pipeline.primary_column_id);
+        let kind = if let Some(record_type) = tracked {
+            FieldKind::Record(record_type)
         } else if column.column.formula().is_some() {
             FieldKind::Formula
         } else if column.column.is_relation() {

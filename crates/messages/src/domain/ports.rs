@@ -3,6 +3,7 @@ use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -106,13 +107,49 @@ pub enum MessageTimelineEntry {
         /// The recorded activity.
         activity: activity::domain::timeline::TimelineActivity,
     },
+    /// A channel call and its thread. The root message's id is the call id.
+    Call {
+        /// The call's root message, its thread state and its reply preview.
+        message: Box<MessageListItem>,
+        /// Where the call is in its life.
+        status: CallEntryStatus,
+    },
+}
+
+/// A channel call's life, as its timeline row shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum CallEntryStatus {
+    /// The call has not ended.
+    Live,
+    /// The call ended.
+    Ended {
+        /// When it ended.
+        ended_at: DateTime<Utc>,
+        /// How long it lasted.
+        duration_ms: i64,
+    },
+    /// The call's record was deleted; its discussion stays in the channel.
+    RecordDeleted,
+}
+
+/// What a channel call's record says about the thread that belongs to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallThreadFacts {
+    /// Channel holding the thread.
+    pub channel_id: Uuid,
+    /// The caller, who is the root's sender.
+    pub created_by: String,
 }
 
 impl MessageTimelineEntry {
     /// Position on the `(timestamp, id)` keyset shared by both kinds.
     pub fn position(&self) -> (DateTime<Utc>, Uuid) {
         match self {
-            Self::Message { message } => (message.message.created_at, message.message.id),
+            Self::Message { message } | Self::Call { message, .. } => {
+                (message.message.created_at, message.message.id)
+            }
             Self::Activity { activity } => (activity.occurred_at, activity.id),
         }
     }
@@ -165,6 +202,9 @@ pub struct CreateMessage {
     pub actor: ChannelSender<'static>,
     /// Server-verified guest display name; absent for account authors.
     pub guest_name: Option<String>,
+    /// What this message is. Only the server's call root path sets anything
+    /// other than [`MessageKind::Message`].
+    pub kind: MessageKind,
     /// User who triggered a bot message, if applicable.
     pub triggered_by: Option<String>,
     /// Label of the client the user triggered it through, if any.
@@ -282,6 +322,13 @@ pub enum MessageChange {
         /// Whether the reaction was added (`true`) or removed (`false`).
         added: bool,
     },
+    /// A channel call's thread root was created. It stands for the call, so it
+    /// reaches viewers and moves the channel up without any of what a post
+    /// causes: no notifications, agents, routines, webhooks or search documents.
+    CallRootPosted {
+        /// Persisted root.
+        message: Message,
+    },
     /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {
         /// Persisted thread state.
@@ -366,11 +413,26 @@ pub struct ReactionResult {
 
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
+    /// Profile display names for account senders in a guest-visible thread.
+    fn account_display_names(
+        &self,
+        sender_ids: &[String],
+    ) -> impl Future<Output = Result<HashMap<String, String>, MessageError>> + Send;
     /// Whether the parent still exists and permits messaging lifecycle-wise.
     fn parent_exists(
         &self,
         parent: &MessageParent,
     ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    /// The channel thread a call owns, when its discussion is one.
+    fn call_thread_facts(
+        &self,
+        call_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CallThreadFacts>, MessageError>> + Send;
+    /// Each call's life, for those whose record still exists.
+    fn call_entry_statuses(
+        &self,
+        call_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, CallEntryStatus>, MessageError>> + Send;
     /// File type of a live document, for document-specific anchor validation.
     fn document_file_type(
         &self,
@@ -594,6 +656,7 @@ pub const CHANNEL_TIMELINE: TimelineSelection = TimelineSelection::new(
         ActionTag::ParticipantAdded,
         ActionTag::ParticipantRemoved,
         ActionTag::CallEnded,
+        ActionTag::AccessRequested,
     ],
     &[],
 );

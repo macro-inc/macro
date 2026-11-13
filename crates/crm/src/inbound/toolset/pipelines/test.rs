@@ -13,11 +13,11 @@ fn currency_metadata_is_optional_for_historical_and_nonmonetary_entries() {
     );
     let entry = ToolEntry {
         entry_id: Uuid::nil(),
-        record: ToolRecord {
+        record: Some(ToolRecord {
             id: Uuid::nil(),
             name: None,
             detail: None,
-        },
+        }),
         fields: BTreeMap::new(),
         currencies: BTreeMap::new(),
     };

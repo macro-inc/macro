@@ -4,15 +4,27 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/passwords",
+  "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
+  "crates/agent_credentials",
+  "crates/agent_git",
+  "crates/team_agents",
   "crates/routines",
+  "crates/routine_program",
+  "crates/shown_text",
+  "crates/suggestions",
+  "crates/suggestions_db_utils",
+  "crates/suggestion_generation",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/trigger_context",
   "crates/agent_preview",
   "crates/agent_code_mode",
+  "crates/agent_correlation",
+  "crates/code_mode_assets",
   "crates/dynamic_ui",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
@@ -20,6 +32,7 @@ members = [
   "crates/ai_billing",
   "crates/ai_projections",
   "crates/ai_usage",
+  "crates/attention_feed",
   "crates/bot_id",
   "crates/bot_token",
   "crates/bots",
@@ -55,6 +68,7 @@ members = [
   "crates/models_forms",
   "crates/embedding",
   "crates/image_generation",
+  "crates/web_search",
   "crates/dictation",
   "crates/email_api_client",
   "crates/entity_mutation",
@@ -68,9 +82,11 @@ members = [
   "crates/generic_email_domains",
   "crates/git_patch",
   "crates/gmail_client",
+  "crates/gmail_emulator",
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
+  "crates/graphql_contacts",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_databases",
@@ -80,16 +96,24 @@ members = [
   "crates/graphql_crm",
   "crates/graphql_initiative",
   "crates/graphql_notification",
+  "crates/graphql_notification_inbox",
   "crates/graphql_permission",
   "crates/graphql_properties",
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
+  "crates/computer_id",
+  "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd",
+  "crates/harnessd_protocol",
   "crates/harnesses",
+  "crates/hosted_runtimes",
+  "crates/incus_client",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -112,10 +136,13 @@ members = [
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
+  "crates/natural_time",
+  "crates/notification_inbox",
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
+  "crates/outlook_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -126,6 +153,7 @@ members = [
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",
+  "crates/subsequence_match",
   "crates/skills",
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
@@ -135,8 +163,11 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/single_flight",
   "crates/upstream_error",
+  "crates/account_manager",
   "crates/user_api_key",
+  "crates/user_events",
   "crates/user_language",
   "crates/webhook_signature",
   "crates/whatsapp_e2e",
@@ -203,6 +234,11 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+harnessd_protocol = { path = "crates/harnessd_protocol" }
+pairing_id = { path = "crates/pairing_id" }
+openbao_client = { path = "crates/openbao_client" }
+macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -273,6 +309,7 @@ determinator = "0.12.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+emojis = "0.9.1"
 eventsource-stream = "0.2.3"
 flate2 = "1"
 fractional_index = { version = "2.0.2", default-features = false }
@@ -285,6 +322,7 @@ glob = "0.3.3"
 # CI always run the identical generator; guppy is pinned to the version the
 # hakari release is built against.
 guppy = "0.17.24"
+h2 = "0.4"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -292,6 +330,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -317,6 +356,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
+libc = "0.2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -325,6 +365,8 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
   "services-tokio",
   "webhooks",
 ] }
+mail-builder = "0.4.3"
+mailparse = "0.16.1"
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
@@ -332,6 +374,7 @@ lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
 md-5 = "0.10.6"
+mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
@@ -359,6 +402,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"
@@ -383,9 +427,11 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
-rmcp = "1.6.0"
+rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
+rrule = "0.14.0"
+rsa = "0.9.10"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs"] }
 # Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
@@ -398,8 +444,8 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
-serde_json = { version = "1.0.132" }
 serde_path_to_error = "0.1.20"
+serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
@@ -416,6 +462,7 @@ sqlx = { version = "0.8.6", features = [
 ] }
 sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+strsim = "0.11"
 strum = { version = "0.27.1", features = ["derive"] }
 symphonia = { version = "0.6.1", default-features = false, features = [
   "isomp4",
@@ -430,6 +477,7 @@ time = "0.3.37"
 tiny-skia = { version = "0.11.4", default-features = false, features = ["simd", "std"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-retry = { version = "0.3.2", default-features = false }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs"] }
 tokio-stream = { version = "0.1.17" }
 tokio-tungstenite = { version = "0.28", default-features = false, features = [
   "connect",
@@ -458,7 +506,6 @@ tui-input = { version = "0.14.0", default-features = false }
 # deferred transactions so browser WASM does not initialize Turso's temp database.
 turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }
 tungstenite = { version = "0.28", features = ["url"] }
-unsynn = "0.3"
 urlencoding = "2.1.3"
 utoipa = { version = "5.4.0", features = [
   "axum_extras",
@@ -471,6 +518,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -495,14 +545,9 @@ async-stripe = { version = "0.41", default-features = false, features = [
 ] }
 axum-macros = "0.5"
 bytes = "1.11.1"
-bzip2 = { version = "0.5.1", default-features = false, features = [
-  "libbz2-rs-sys",
-] }
-derive_builder = "0.20.2"
 doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
-once_cell = "1.21.3"
 scraper = "0.18"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
@@ -518,7 +563,7 @@ zip = { version = "9.0.5", default-features = false, features = [
   "xz",
   "zstd",
 ] }
-ammonia = "4.1.8"
+ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
 

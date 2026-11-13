@@ -130,9 +130,10 @@ local-email: ensure-cache-wasm
 #
 # The two wasm-pack crates do not share artifacts. Build them in parallel
 # with distinct CARGO_TARGET_DIR values so they do not serialize on the
-# workspace cargo lock. CI still always rebuilds (schema/engine changes can
-# alter wasm without a version bump); Namespace `web-ci` sccache makes the
-# rustc invocations cheap across deploys.
+# workspace cargo lock. CI reuses a package only when nothing it is built from
+# changed (scripts/cached-wasm-build.sh keys on its sources, not on a version
+# bump); in PR checks the Namespace `web-ci` sccache makes the rustc
+# invocations cheaper when it does rebuild, and deploy builds use a local one.
 #
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
@@ -140,6 +141,7 @@ node_heap := "--max-old-space-size=8192"
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
+natural_time_wasm_target := justfile_directory() / "../../target/natural-time-wasm"
 pptx_engine_wasm_target := justfile_directory() / "../../target/pptx-engine-wasm"
 docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm"
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
@@ -147,15 +149,11 @@ psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
 ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-natural-time-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
 
-build-dev: build-wasm
-    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+build-dev: build-wasm (bundle "development")
 
-build-staging: build-wasm
-    MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+build-staging: build-wasm (bundle "staging")
 
 # Production bundles carry the native build floors checked in at
 # min-native-build.json (schema 3 manifest, see scripts/write-bundle-manifest.mjs);
@@ -166,8 +164,24 @@ build-prod: build-wasm
     set -euo pipefail
     export MIN_NATIVE_BUILD_ANDROID="${MIN_NATIVE_BUILD_ANDROID:-$(bun -e "console.log(require('./min-native-build.json').android)")}"
     export MIN_NATIVE_BUILD_IOS="${MIN_NATIVE_BUILD_IOS:-$(bun -e "console.log(require('./min-native-build.json').ios)")}"
-    MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    just --justfile "{{justfile()}}" bundle production
+
+# The Vite build into dist, plus the cache WASM's Brotli sidecar (package-dist).
+# Quality 11 takes about 20 s, so the sidecar is compressed from the wasm-pack
+# output while Vite runs: Vite copies that file into dist unchanged, and
+# package-dist uses the copy only if it decompresses to the bytes there.
+[private]
+bundle mode:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sidecar="{{cache_wasm_target}}/precompressed/cache_wasm_bg.wasm.br"
+    bun scripts/cache-wasm/cli.ts precompress --wasm src/lib/graphql-cache/wasm/cache_wasm_bg.wasm --out "$sidecar" &
+    precompress=$!
+    trap 'kill "$precompress" 2>/dev/null || true' EXIT
+    MODE="$1" NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    wait "$precompress" || echo "precompressing the cache WASM failed; package-dist compresses it instead" >&2
+    trap - EXIT
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist --precompressed "$sidecar"
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
@@ -294,8 +308,9 @@ cycles-ci:
     bunx --bun biome lint --changed --only=suspicious/noImportCycles
 
 # Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
-# (gitignored). Unconditional — CI app builds must never skip it (schema or
-# engine changes alter the wasm without a cache-wasm version bump).
+# (gitignored). Unconditional: CI app builds must never gate it on the
+# cache-wasm version (schema or engine changes alter the wasm without a bump).
+# cached-wasm-build.sh reuses an earlier build only when its inputs match.
 build-cache-wasm:
     scripts/cached-wasm-build.sh cache-wasm {{justfile_directory()}}/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 
@@ -372,6 +387,23 @@ ensure-database-sql-wasm:
     done
     if [ -n "$(find "${SOURCES[@]}" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-database-sql-wasm
+    fi
+
+# Build the natural-time wasm module (English date phrases, read in the
+# browser) into src/lib/core/natural-time/wasm (gitignored).
+build-natural-time-wasm:
+    scripts/cached-wasm-build.sh natural_time {{justfile_directory()}}/src/lib/core/natural-time/wasm -- env CARGO_TARGET_DIR="{{natural_time_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/natural_time --target web --release --out-dir {{justfile_directory()}}/src/lib/core/natural-time/wasm
+
+# Dev fast path: build the natural-time wasm pkg only when it is missing or
+# any crate source is newer than the built artifact. The crate has no
+# workspace dependencies, so its own sources are the whole closure.
+ensure-natural-time-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/natural-time/wasm/natural_time_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/natural_time"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-natural-time-wasm
     fi
 
 # Build the pptx-engine wasm module (PPTX rendering and editing, hosted in a
@@ -468,8 +500,18 @@ ensure-ai-engine-wasm:
 # that, every regeneration would be a diff-format mismatch even with no real
 # change.
 gen-agent-fold-types:
-    cargo run -p agent_fold --bin export_types
+    if [ -n "${SPECTA_BIN_DIR:-}" ]; then "$SPECTA_BIN_DIR/agent_fold_types"; else cargo run -p agent_fold --bin agent_fold_types; fi
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
+
+# Regenerate src/lib/service-clients/service-agent-reviews/generated/types.ts
+# (and the SDK's packages/sdk/generated/agent-reviews/index.ts) from
+# agent_code_mode's review types with specta. Run after changing a review type
+# or a type a review draft or result reuses (SendEmail, CreateCalendarEvent,
+# their responses, the import report); biome reformats specta's output for the
+# same reason as gen-agent-fold-types.
+gen-agent-review-types:
+    if [ -n "${SPECTA_BIN_DIR:-}" ]; then "$SPECTA_BIN_DIR/export_review_types"; else SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types; fi
+    bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-reviews/generated/types.ts
 
 # Regenerate the dynamic-UI view types (src/features/dynamic-ui/generated/types.ts
 # and lexical-core's copy) from `crates/dynamic_ui` with specta. Run after
@@ -488,6 +530,17 @@ gen-database-sql-types:
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
-# dev machines). See tooling/xtask/crates/xtask_cache_wasm/src/main.rs.
+# dev machines). CI app builds run `build-cache-wasm`, whose cache keys on the
+# sources, so deploys never depend on that bump. Runs no cargo, so it doesn't wait on a service
+# build holding the workspace target dir.
 ensure-cache-wasm:
-    cd {{justfile_directory()}}/../.. && SQLX_OFFLINE=true cargo run -q -p xtask -- cache-wasm
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CRATE="{{justfile_directory()}}/../../crates/client/cache-wasm/Cargo.toml"
+    PKG="{{justfile_directory()}}/src/lib/graphql-cache/wasm/package.json"
+    WANT=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$CRATE" | head -1)
+    HAVE=$(jq -r '.version // empty' "$PKG" 2>/dev/null || true)
+    if [ "$HAVE" != "$WANT" ]; then
+        echo "cache-wasm: built '${HAVE:-none}', crate $WANT; building"
+        just --justfile "{{justfile()}}" build-cache-wasm
+    fi

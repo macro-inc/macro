@@ -3,8 +3,10 @@ import { analytics } from '@app/lib/analytics';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import {
@@ -17,6 +19,12 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listCanIncludeCrm } from './list-refresh';
+import {
+  updateVisibilityDetails,
+  visibilityDetailsFilter,
+  visibilityQueryFilter,
+} from './visibility-refresh';
 
 const COMPANY_STALE_TIME = 60 * 1000;
 
@@ -145,7 +153,7 @@ function wipeCompanyEmailCache(
  * display name + optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
  * Customers listings. Server-side failures worth surfacing: 409 when the
- * team already tracks the domain, 403 when CRM is disabled for the team,
+ * team already tracks the domain, 403 without team membership,
  * 400 on a malformed/generic-provider domain.
  */
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
@@ -202,8 +210,7 @@ export function createCompanyImporter(
  * optional email). Invalidates the company detail query (contacts arrive
  * embedded there) and soup so contact listings refresh. Server-side
  * failures worth surfacing: 409 when the email is already tracked, 404 when
- * the company isn't visible to the caller, 403 when CRM is disabled for the
- * team.
+ * the company isn't visible to the caller, 403 without team membership.
  */
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -319,24 +326,65 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.record_id', companyId);
           span.setAttr('crm.hidden', hidden);
           try {
-            const result = await throwOnErr(() =>
-              deps.storage.setCompanyHidden({ companyId, hidden })
+            const cacheWrite = prepareCrmVisibilityWrite();
+            // The write returns no affected contact IDs. A stale or empty roster
+            // would leave cascaded contacts eligible in normalized search.
+            const company = await throwOnErr(() =>
+              deps.storage.getCompany({ companyId })
             );
+            if (!cacheWrite.isCurrent()) throw new Error('Session changed');
+            const result = await span.run(() =>
+              throwOnErr(() =>
+                deps.storage.setCompanyHidden({ companyId, hidden })
+              )
+            );
+            if (!cacheWrite.isCurrent()) return result;
             await span.span(
               'crm.visibility_change.refresh',
               async (refresh) => {
                 try {
-                  await invalidateCachedCrmContacts();
+                  const change = {
+                    kind: 'company' as const,
+                    id: companyId,
+                    hidden,
+                  };
+                  await Promise.all([
+                    cacheWrite.commit({
+                      companyId,
+                      contactIds: company.contacts.map((contact) => contact.id),
+                      hidden,
+                    }),
+                    updateVisibilityDetails(
+                      deps.client,
+                      change,
+                      cacheWrite.isCurrent
+                    ),
+                  ]);
+                  if (!cacheWrite.isCurrent()) return;
                   wipeCompanyEmailCache(deps, companyId);
                   await Promise.all([
-                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    refreshActiveGraphqlSoupQueries({
+                      where: listCanIncludeCrm,
+                      unmaintainedOnly: true,
+                    }),
                     deps.client.invalidateQueries({
-                      queryKey: crmKeys.company(companyId).queryKey,
+                      predicate: visibilityQueryFilter(change),
+                    }),
+                    deps.client.invalidateQueries({
+                      predicate: visibilityDetailsFilter(change),
+                      // Confirmed flags are already patched; refresh on the next visit.
+                      refetchType: 'none',
+                    }),
+                    deps.client.refetchQueries({
+                      type: 'active',
+                      predicate: (query) =>
+                        query.state.data === undefined &&
+                        visibilityDetailsFilter(change)(query),
                     }),
                   ]);
                 } catch (error) {
                   refresh.error('Company visibility refresh failed');
-                  throw error;
+                  Telemetry.error(error);
                 }
               }
             );
@@ -355,9 +403,9 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
 
 /**
  * Toggles `crm_companies.email_sync` via `PUT /crm/companies/{id}/email-sync`.
- * Purely a read-side visibility gate controlling whether the team can see each
- * other's emails with this company — existing CRM data is never destroyed and
- * re-enabling needs no backfill.
+ * Blocks ingestion and CRM email visibility for the company's domains while
+ * preserving its records. Re-enabling schedules a backfill for consenting
+ * contributors.
  */
 export function useSetEmailSyncMutation(deps: CrmRecordDependencies) {
   return useMutation(

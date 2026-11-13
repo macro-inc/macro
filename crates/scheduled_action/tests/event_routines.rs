@@ -201,7 +201,7 @@ impl ScheduledAgentRunner for FakeRunner {
     async fn run(
         &self,
         action: &ScheduledAction,
-        _: &ExecutionHandle,
+        _: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> anyhow::Result<()> {
         let event = firing.event();
@@ -232,7 +232,16 @@ impl ScheduledActionLiveUpdate for NoLiveUpdates {
 type ActionRepo = PgScheduledActionRepo<PgBotsRepo>;
 type Executor = InProcessExecutor<ActionRepo, NoLiveUpdates, FakeRunner>;
 type Admission = EventAdmissionService<PgEventRunRepo, FakeAccess>;
-type Dispatch = EventDispatchService<PgEventRunRepo, FakeAccess, Executor>;
+type Dispatch = EventDispatchService<PgEventRunRepo, FakeAccess, Executor, Everyone>;
+
+/// Every owner is in the event routines rollout.
+#[derive(Clone, Copy)]
+struct Everyone;
+impl scheduled_action::domain::event_rollout::EventRoutineRollout for Everyone {
+    async fn enabled_for(&self, _: &MacroUserIdStr<'_>) -> Result<bool, rootcause::Report> {
+        Ok(true)
+    }
+}
 
 struct Harness {
     pool: PgPool,
@@ -280,7 +289,7 @@ impl Harness {
         )));
         let service =
             ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx, access.clone())
-                .with_event_management_enabled(true);
+                .with_event_routines(Everyone);
         let app = scheduled_action_router(ScheduledActionRouterState {
             service: Arc::new(service),
             access_service: access,
@@ -310,6 +319,7 @@ impl Harness {
             Arc::new(PgEventRunRepo::new(self.pool.clone())),
             Arc::new(FakeAccess),
             self.executor.clone(),
+            Everyone,
         )
     }
     async fn create(&self, body: Value) -> Value {
@@ -459,6 +469,7 @@ fn incoming(name: &str, actor: &str) -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: if name.starts_with("document.") {
             EventPayload::Document(serde_json::from_value(envelope).unwrap())
         } else if name == "channel.message_posted" {

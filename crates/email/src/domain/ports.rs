@@ -559,8 +559,10 @@ pub trait EmailRepo: Send + Sync + 'static {
 }
 
 /// Read-only capability for fetching email thread previews. The composition
-/// root supplies the replica-backed service for ordinary REST/GraphQL Soup.
-/// Mutation replies reload through the primary-backed email writer instead.
+/// root supplies the replica-backed service for ordinary REST/GraphQL Soup,
+/// but CRM-scoped eligibility must read the primary so replica lag cannot
+/// retain withdrawn or excluded contributions. Mutation replies also reload
+/// through the primary-backed email writer.
 pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     fn get_email_thread_previews(
         &self,
@@ -592,7 +594,9 @@ pub trait EmailThreadMailProjectionService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr>> + Send;
 }
 
-/// Read-only domain service used to hydrate Soup previews of authorized threads.
+/// Read-only domain service used to hydrate Soup previews of threads looked
+/// up by id. A thread renders as All Mail shows it, or, when every message is
+/// in spam or trash, as its Spam or Trash row does.
 pub trait EmailThreadPreviewService: Send + Sync + 'static {
     /// Fetch the Soup preview of each authorized thread in one batch, as the
     /// thread's own inbox renders it. A thread without a row is absent.
@@ -601,6 +605,14 @@ pub trait EmailThreadPreviewService: Send + Sync + 'static {
         viewer: MacroUserIdStr<'static>,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<Vec<EnrichedEmailThreadPreview>, EmailErr>> + Send;
+
+    /// Fetch the preview of a thread in the caller's own or delegated inboxes.
+    /// A thread outside them, or without a row, is `None`.
+    fn get_owned_email_thread_preview(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EnrichedEmailThreadPreview>, EmailErr>> + Send;
 }
 
 /// Read-only domain service used to hydrate lightweight email content edges.
@@ -664,6 +676,14 @@ impl<T: EmailThreadPreviewService> EmailThreadPreviewService for ReadonlyEmailPr
         self.0
             .get_email_thread_previews_by_receipts(viewer, receipts)
     }
+
+    fn get_owned_email_thread_preview(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EnrichedEmailThreadPreview>, EmailErr>> + Send {
+        self.0.get_owned_email_thread_preview(macro_id, thread_id)
+    }
 }
 
 /// User-scoped read operations consumed by email inbound adapters.
@@ -718,12 +738,14 @@ pub trait EmailService: Send + Sync + 'static {
         request: super::models::mailbox_operation::MessageResolutionRequest,
     ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
     /// Set semantic mailbox state without requiring a provider system-label ID.
+    /// The number of the thread's messages it changed; none when they were
+    /// already in that state.
     fn change_thread_mailbox_state(
         &self,
         _macro_id: MacroUserIdStr<'static>,
         _thread_id: Uuid,
         _action: crate::domain::models::mailbox_action::MailboxAction,
-    ) -> impl Future<Output = Result<(), EmailErr>> + Send {
+    ) -> impl Future<Output = Result<usize, EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
     /// Authorize the caller's sending inbox, resolve client handles, and enqueue
@@ -1497,6 +1519,14 @@ impl EmailThreadPreviewService for NoOpEmailService {
         _viewer: MacroUserIdStr<'static>,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<Vec<EnrichedEmailThreadPreview>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
         Err(no_op_email_err())
     }
 }

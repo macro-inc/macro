@@ -39,8 +39,9 @@ updates over WebSocket.
 
 ## Recipes
 
-- Change the wire protocol: `bebop/schema.bop` → `cd bebop && npx bebop-tools build`
-  (TS bindings) → `worker-build` regenerates Rust bindings via `build.rs`.
+- Change the wire protocol with the repository-pinned Bebop generator; update
+  both service and collaboration package bindings (see README), then
+  `worker-build` regenerates Rust bindings via `build.rs`.
 - Add a storage backend: `src/outbound/storage/backends/` (new file + `mod.rs`) → gate
   it behind a new feature in `Cargo.toml` → wire into `src/outbound/storage.rs`.
 - Add a non-document surface: `src/inbound/durable_object/surface_api.rs` →
@@ -68,6 +69,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 
 ## Gotchas
 
+- Preserve the Docker worker's empty OTLP default and explicit launcher `--var` forwarding; local tracing policy and shell-precedence controls are documented in `docs/development/running-locally.md`.
+
 - Bumping `loro-crdt` touches three lockfiles: `bun.lock`, the workspace
   `Cargo.lock`, and this directory's `package-lock.json` — update all three.
 - Durable Object in-memory state (including the loro document) evicts after
@@ -87,7 +90,11 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   A new write path does the same (`tests/peer_authors.test.ts`).
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
+- Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.
+- Deploy `PeerCommentUpdate` support before clients send it; validate these frames as comment-only for editors as well as commenters, and reject viewers.
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
+- Wait at least five minutes after a manual worker deployment before publishing clients that require its new protocol; the CI worker job waits out Durable Objects' default 300-second code-update deferral.
+- A new input to the worker's bundle that lives outside its workspace closure must be added to `.github/scripts/sync-worker-key.sh`, or CI can skip deploying a changed worker.
 
 ## Related
 
@@ -97,3 +104,5 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   connection. To regress connect-before-initialize, build without
   `create-default-state` and run `SYNC_TEST_UNINITIALIZED_ROOMS=true npx vitest run
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
+
+- Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.

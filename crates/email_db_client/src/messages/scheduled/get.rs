@@ -1,4 +1,3 @@
-use crate::messages::get::convert_db_messages_to_service_concurrent;
 use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -17,7 +16,7 @@ where
     let record = sqlx::query_as!(
         service::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent, processing, actor_id
+        SELECT link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
         FROM email_scheduled_messages
         WHERE link_id = $1 AND message_id = $2
         "#,
@@ -60,7 +59,7 @@ pub async fn get_and_start_processing_scheduled_message(
           AND delivery_claim_id IS NULL AND delivery_started_at IS NULL AND delivery_status = 'ready'
           AND NOT EXISTS(SELECT 1 FROM email_attachments_drafts WHERE draft_id=$2 AND upload_pending)
           AND NOT EXISTS(SELECT 1 FROM email_draft_transfers WHERE (destination_id=$2 AND state NOT IN ('ready','retained','preparing')) OR (source_id=$2 AND state<>'preparing'))
-        RETURNING link_id, message_id, send_time, sent, processing, actor_id
+        RETURNING link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
         "#,
         link_id,
         message_id,
@@ -81,7 +80,7 @@ pub async fn get_scheduled_message_no_auth(
     let record = sqlx::query_as!(
         db::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent, processing, actor_id
+        SELECT link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
         FROM email_scheduled_messages
         WHERE message_id = $1 and sent = false
         "#,
@@ -91,22 +90,6 @@ pub async fn get_scheduled_message_no_auth(
     .await?;
 
     Ok(record)
-}
-
-/// Fetches unsent scheduled messages for a link with pagination
-#[tracing::instrument(skip(pool), err)]
-pub async fn get_scheduled_messages_by_link_id(
-    pool: &PgPool,
-    link_id: Uuid,
-    offset: u32,
-    limit: u32,
-) -> anyhow::Result<Vec<service::message::Message>> {
-    if limit == 0 {
-        anyhow::bail!("limit must be positive");
-    }
-
-    let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
-    convert_db_messages_to_service_concurrent(pool, db_messages).await
 }
 
 /// Fetches scheduled messages for multiple message IDs, returning a map keyed by message_id.
@@ -123,7 +106,7 @@ pub async fn fetch_scheduled_messages_in_bulk(
     let records = sqlx::query_as!(
         db::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent, processing, actor_id
+        SELECT link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
         FROM email_scheduled_messages
         WHERE message_id = ANY($1) AND sent = false
         "#,

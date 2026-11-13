@@ -1,6 +1,8 @@
 import { useCallContext } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
 import { getMeetingUrl } from '@channel/Call/call-link';
+import { CallDiscussionContent } from '@channel/Call/discussion/CallDiscussionContent';
+import { callDiscussionOf } from '@channel/Call/discussion/call-discussion';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
@@ -35,6 +37,7 @@ function NewMeetingSetup(props: {
   onLeave: (path: string) => void;
 }) {
   const call = useCallContext();
+  const navigate = useNavigate();
   const lifecycle = useMeetingSessionLifecycle();
   const author = useAuthor();
   const people = useMeetingTeammatesSource(() => props.userId, idToDisplayName);
@@ -64,6 +67,7 @@ function NewMeetingSetup(props: {
   const shareToken = () => draft.meeting()?.shareToken ?? '';
   const meeting = useMeetingQuery(shareToken);
   const record = useCallRecordQuery(() => call.activeCallId() ?? '');
+  const discussion = () => callDiscussionOf(record, call.activeCallId());
   const canRename = () =>
     record.isSuccess &&
     record.data.callId === call.activeCallId() &&
@@ -87,7 +91,9 @@ function NewMeetingSetup(props: {
   return (
     <MeetingPage
       source={source}
+      startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
       onLeave={props.onLeave}
+      onBack={() => navigate('/app')}
       onCallStateChange={(connected) =>
         props.onCallStateChange(connected, shareToken())
       }
@@ -150,7 +156,7 @@ function NewMeetingSetup(props: {
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name) => (
+      renderCall={(onLeave, name, _credentials, copyButton) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>
             <div
@@ -172,7 +178,21 @@ function NewMeetingSetup(props: {
             <CallOverlay
               onLeave={onLeave}
               localName={name()}
+              footerLeading={copyButton}
               showTeamSharing={false}
+              discussion={{
+                label: () => undefined,
+                opensByDefault: () => false,
+                hasUpdates: () => false,
+                render: (panel) => (
+                  <CallDiscussionContent
+                    discussion={discussion}
+                    access={{ kind: 'member' }}
+                    panel={panel}
+                    onViewChannel={() => undefined}
+                  />
+                ),
+              }}
             />
           </div>
         </div>

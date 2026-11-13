@@ -6,6 +6,10 @@ export type GridCellControl = {
 export type GridCellEditorOptions = {
   /** Mount cell popups inside this element, such as a modal dialog. */
   popupMount?: HTMLElement;
+  /** Let a board or record field display its complete text value. */
+  wrap?: boolean;
+  /** Visible placeholder for an unset field. */
+  emptyLabel?: string;
   initialEdit?: boolean;
   /** Keeps an inline editor within the displayed value's bounds. */
   preserveSize?: boolean;

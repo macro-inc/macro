@@ -33,6 +33,10 @@ When a client updates a document via a WebSocket message, we apply the update to
 Unfortunately, query params are the best way to authenticate a websocket connection. Since we use tls, query params should be encrypted in transit.
 the `sync-service` will verify the jwt and ensure that the user has the correct permissions to access the document.
 
+Document grants may also carry signed `agent_correlation_id` attribution. The
+worker preserves it through editor metadata and pending activity batches so
+separate code-mode invocations remain distinct, without changing permissions.
+
 HTTP routes use Axum `FromRequestParts` extractors to authenticate before the
 handler runs. Document view/edit/admin routes declare their minimum grant;
 atomic state/update routes require an exact signed document grant, and internal
@@ -48,12 +52,42 @@ mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot
-write. The HTTP API schema is generated with `just openapi`; WebSocket messages
+write. `PeerCommentUpdate` requires comment-only validation even on an editor's
+connection, so a staged annotation cannot alter document text. Deploy support
+for this message before deploying clients that send it; the dev push and
+production release workflows enforce this order while building the web app in
+parallel. The worker deployment job waits 300 seconds after deployment for
+[active Durable Objects to adopt the new code](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+When the live version was built from the same inputs, recorded in its deployment
+message, the job skips migrations and deployment and waits only for what remains
+of those 300 seconds.
+Manual deployments must preserve the same order and wait at least five minutes
+before publishing clients. Keep the workflow wait aligned with any future
+`code_update_strategy` change. Older workers refuse
+the unknown variant without acknowledging or applying it. The HTTP API schema
+is generated with `just openapi`; WebSocket messages
 continue to use the Bebop schema. Regenerate the HTTP types from
 `apps/web/src/lib/service-clients` with
 `bun run orval --config orval.config.ts --project syncService`. The existing web
 transport handles binary payloads and permission tokens; Orval generates shared
 models only.
+
+## Comment validation configuration
+
+Document commenters authenticate to lexical-service with the worker secret
+`LEXICAL_SERVICE_AUTH_KEY`. Provision it in each deployed environment with the
+matching lexical-service `INTERNAL_AUTH_KEY` through `wrangler secret put`.
+Never store its value in Wrangler vars or source control. Missing or invalid
+credentials fail closed. Current clients stage anchors outside the live editor,
+wait for acknowledgement, and retain the draft instead of posting a message when
+validation fails. Older clients can create the message independently while the
+anchor remains unacknowledged in their WAL and local snapshot; another browser
+then cannot display that inline comment.
+
+CI and the `just deploy-*` recipes run `check-secrets` before migrations or
+worker deployment. This checks binding names only, not credential validity;
+validate comment-only writes after provisioning or rotating a key. Rejected
+validation spans include `document.id` and `op.id` for correlation with clients.
 
 ## Bebop
 The bebop schema is defined in `./bebop/schema.bop`.
@@ -61,8 +95,15 @@ The bebop schema is defined in `./bebop/schema.bop`.
 #### Generating typescript bindings locally
 The typescript bindings are primarily used for testing and QA environemnt.
 ```bash
-cd bebop && npx bebop-tools build
+\cd bebop
+../../../node_modules/.bin/bebopc build
 ```
+
+Use the repository-pinned generator. Copy `schema.bop` to
+`packages/collaboration/src/sync-service/generated/schema.bop` and run
+`../../node_modules/.bin/bebopc build` from `packages/collaboration` to update
+the web bindings from the same schema. The package's `generate-sync-schema`
+command fetches the deployed schema and is unsuitable for an unreleased change.
 
 #### Generating rust bindings locally
 Rust bindings get automatically generated when building the worker.
@@ -114,6 +155,13 @@ just dev
 CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --local
 npx wrangler dev
 ```
+
+The Docker-local worker defaults to an empty OTLP endpoint. The local stack
+launcher enables its HTTP exporter only for runs requesting tracing with a
+collector available; see [local tracing](../../docs/development/running-locally.md).
+The Docker command forwards the resolved endpoint with Wrangler `--var`, so
+`--traces off` cannot fall back to a collector hostname. Deployed Worker
+configuration is unchanged.
 
 If you run into build errors related to clang, follow [this fix](https://github.com/briansmith/ring/issues/1824#issuecomment-2059955073):
 

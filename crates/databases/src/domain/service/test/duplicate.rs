@@ -132,6 +132,7 @@ async fn source() -> Source {
                         column: title_column,
                         value: CellValue::Text("Keynote".into()),
                     }]],
+                    ids: None,
                 },
             }]),
         )
@@ -210,14 +211,31 @@ async fn a_viewer_duplicates_every_table_column_view_and_row_into_a_database_the
     let source_status = seeded.status_column.property_definition_id;
     let source_going = option_id(&seeded.world, source_status, "Going");
 
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🚀".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Indigo),
+    };
+    seeded
+        .service
+        .set_appearance(edit(seeded.database_id), appearance.clone())
+        .await
+        .unwrap();
     let copy = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
 
     assert_eq!(copy.name, "Offsite copy");
     assert_eq!(copy.owner_id, VIEWER);
+    assert_eq!(copy.appearance, Some(appearance));
     assert_ne!(copy.id, seeded.database_id);
     let w = seeded.world.lock().unwrap();
     // One write batch: the copy commits whole or not at all.
@@ -416,6 +434,7 @@ async fn a_named_duplicate_takes_the_name_given() {
         .duplicate_database(
             view_receipt(seeded.database_id, VIEWER),
             user(VIEWER),
+            None,
             Some("  Offsite 2027 ".into()),
         )
         .await
@@ -440,7 +459,12 @@ async fn the_source_is_left_as_it_was() {
 
     seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
 
@@ -494,7 +518,12 @@ async fn a_trashed_database_is_not_duplicated() {
 
     let error = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap_err();
 
@@ -509,7 +538,12 @@ async fn a_refused_write_leaves_no_copy_behind() {
 
     let error = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap_err();
 
@@ -591,7 +625,12 @@ async fn relations_into_other_databases_follow_what_the_duplicator_can_see() {
     // VIEWER cannot see Venues.
     let hidden = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(copied_names(&hidden), vec![]);
@@ -606,7 +645,12 @@ async fn relations_into_other_databases_follow_what_the_duplicator_can_see() {
         .push((other.id, AccessLevel::View));
     let seen = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -626,7 +670,12 @@ async fn a_name_at_the_limit_is_cut_short_to_fit_its_copy_suffix() {
 
     let copy = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
 
@@ -655,7 +704,12 @@ async fn a_relation_naming_a_removed_row_is_copied_without_it() {
 
     let copy = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
 
@@ -770,7 +824,12 @@ async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_cop
 
     let bound = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
     let (definition, value) = priority(&bound);
@@ -780,7 +839,12 @@ async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_cop
     seeded.world.lock().unwrap().unbindable.push(shared_id);
     let owned = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
     let (definition, value) = priority(&owned);
@@ -831,7 +895,12 @@ async fn a_formula_column_is_copied_with_its_values_computed_in_the_copy() {
 
     let copy = seeded
         .service
-        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            None,
+            None,
+        )
         .await
         .unwrap();
 
@@ -856,5 +925,36 @@ async fn a_formula_column_is_copied_with_its_values_computed_in_the_copy() {
     assert_eq!(
         w.cells[&sam].get(&copied.property_definition_id),
         Some(&PropertyValue::Num(4.0))
+    );
+}
+
+#[tokio::test]
+async fn a_copy_an_agent_makes_is_announced_as_the_agents_creation() {
+    let seeded = seeded().await;
+    seeded.world.lock().unwrap().broker_events.clear();
+    let agent = bot_id::MACRO_AI_BOT_ID;
+
+    seeded
+        .service
+        .duplicate_database(
+            view_receipt(seeded.database_id, VIEWER),
+            user(VIEWER),
+            Some(agent),
+            None,
+        )
+        .await
+        .unwrap();
+
+    let events = seeded.world.lock().unwrap().broker_events.clone();
+    let created = events
+        .iter()
+        .find(|event| event["event_type"] == "database.created")
+        .expect("the copy is announced");
+    assert_eq!(
+        created["metadata"]["attribution"],
+        serde_json::json!({
+            "actor": "bot|00000000-0000-0000-0000-00000000a1a1",
+            "on_behalf_of": VIEWER,
+        })
     );
 }

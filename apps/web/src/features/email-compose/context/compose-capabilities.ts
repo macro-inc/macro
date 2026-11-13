@@ -1,3 +1,4 @@
+import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -292,6 +293,12 @@ export interface EmailDelivery {
   }): Promise<void>;
 }
 
+/**
+ * The working-copy version a send from this browser carried. Absent when the
+ * draft was sent from another device.
+ */
+export type SentWorkingCopy = Pick<LocalDraft, 'generation' | 'revision'>;
+
 export type EmailDraftLifecycleState =
   | {
       type: 'editing';
@@ -314,6 +321,7 @@ export type EmailDraftLifecycleState =
       draftId: string;
       threadId: string;
       inboxId: string;
+      sentCopy?: SentWorkingCopy;
       observedAt: number;
     }
   | {
@@ -413,8 +421,20 @@ export interface EmailEditorFiles {
   }): void;
 }
 
+/** Opens a calendar event drafted from an email. */
+export interface EmailCalendarEvents {
+  enabled: Accessor<boolean>;
+  open(email: { subject: string; guests: string[]; text: string }): boolean;
+}
+
+export type EmailRecipientSourceFactory = RecipientSourceFactory<
+  EmailRecipient['kind']
+>;
+
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
+  /** Absent where the composer has no calendar, such as isolated tests. */
+  calendarEvents?: EmailCalendarEvents;
   operations?: MessageOperationSourceFactory;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -426,7 +446,10 @@ export interface EmailComposeContext {
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;
+  /** Explicit host-scoped extras, never the full personal directory. */
   recipients: Accessor<EmailRecipient[]>;
+  /** Each open To/Cc/Bcc selector owns its personal suggestion source. */
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   recipientName(id: string): string;
   hasPaidAccess: Accessor<boolean>;
   recordMention(sourceId: string, targetId: string): void;
@@ -437,7 +460,12 @@ export interface ComposeNoticeOptions {
   duration?: number;
   persistent?: boolean;
   /** `kind` picks the action's icon; actions default to undo. */
-  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
+  actions?: {
+    label: string;
+    onClick: () => void;
+    kind?: 'undo' | 'open' | 'save';
+    variant?: 'primary' | 'secondary';
+  }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

@@ -1,8 +1,43 @@
+import type { JSX } from 'solid-js';
 import { useCallContext } from '../CallContext';
+import { LK_TRACK_SOURCE } from '../livekit-loader';
 import { CallMediaControls } from './CallMediaControls';
 
 export function CallControlsDefaultAndPanelRow(props: {
   onLeave: () => void | Promise<void>;
+  onSettingsOpenChange?: (open: boolean) => void;
+  compact?: boolean;
+  children?: JSX.Element;
 }) {
-  return <CallMediaControls media={useCallContext()} onLeave={props.onLeave} />;
+  const call = useCallContext();
+  const screenUnavailable = () => {
+    call.trackVersion();
+    if (call.isScreenSharing()) return false;
+    return Array.from(call.remoteParticipants().values()).some(
+      (participant) => {
+        const publication = participant.getTrackPublication(
+          LK_TRACK_SOURCE.ScreenShare
+        );
+        return (
+          !!publication?.track &&
+          publication.isSubscribed &&
+          !publication.isMuted
+        );
+      }
+    );
+  };
+  return (
+    <CallMediaControls.Root
+      showShortcuts
+      compact={props.compact}
+      media={call}
+      onSettingsOpenChange={props.onSettingsOpenChange}
+    >
+      <CallMediaControls.Microphone />
+      <CallMediaControls.Camera />
+      <CallMediaControls.Screen unavailable={screenUnavailable()} />
+      {props.children}
+      <CallMediaControls.Leave onLeave={props.onLeave} />
+    </CallMediaControls.Root>
+  );
 }

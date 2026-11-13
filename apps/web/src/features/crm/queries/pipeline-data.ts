@@ -89,7 +89,7 @@ export function trackPipelineEntryWrites(
     return;
   analytics.track('crm_pipeline_entries_edited', {
     pipelineId: pipeline.id,
-    recordType: pipeline.recordType,
+    recordType: pipeline.recordType === null ? 'generic' : pipeline.recordType,
     surface,
     ...counts,
   });

@@ -17,6 +17,7 @@ const [metadata, setMetadata] = createSignal<SessionMetadata>({
   pendingInteractions: [],
   turn: 'idle',
   notifications: [],
+  reviewRevisions: [],
   noopTurn: null,
 });
 export const session = {
@@ -26,6 +27,8 @@ export const session = {
   metadata,
   messages,
   turn: () => metadata().turn,
+  quoteSelection: () => undefined,
+  runtimeRefusal: () => undefined,
 };
 export const useOptionalAgentSession = () => session;
 export const useAgentSession = () => session;
@@ -58,6 +61,7 @@ export function receiveText(turn: number) {
     ...values,
     {
       agentSessionId: session.sessionId(),
+      key: `${turn}:agent`,
       turn,
       author: { kind: 'agent' },
       parts: [
@@ -77,6 +81,14 @@ export function receiveText(turn: number) {
       postedAt: null,
     },
   ]);
+}
+/** Replace the transcript, as a fold that just loaded or reconciled would. */
+export function showTranscript(
+  next: FoldedMessage[],
+  turn: SessionMetadata['turn']
+) {
+  setMessages(next);
+  setMetadata((value) => ({ ...value, turn }));
 }
 export function receiveNoop() {
   setMetadata((value) => ({ ...value, noopTurn: 1, turn: 'idle' }));

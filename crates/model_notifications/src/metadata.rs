@@ -1,11 +1,17 @@
 mod access_request;
+mod agent_sign_in;
 mod calendar_join_request;
 mod channel_push;
+mod computer_setup;
 pub use access_request::{
-    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
+    ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
+    RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
 };
+pub use agent_sign_in::{AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
+pub use computer_setup::{ComputerSetupMetadata, ComputerSetupOutcome};
+pub use harnessd_protocol::AgentProvider;
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };
@@ -1741,14 +1747,14 @@ impl notification::domain::models::NotificationExtEmail for CalendarEventReminde
             .format_title(None)
             .unwrap_or_else(|_| "Calendar reminder".into());
         let when = self.format_body(None).unwrap_or_default();
-        notification::domain::models::queue_message::EmailContent {
-            subject: format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
-            body: format!(
+        notification::domain::models::queue_message::EmailContent::new(
+            format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
+            format!(
                 "<p>{}</p><p>{}</p><p>Calendar reminder from Macro.</p>",
                 html_escape::encode_text(&title),
                 html_escape::encode_text(&when)
             ),
-        }
+        )
     }
     fn rate_limit_config() -> notification::domain::models::RateLimitConfig {
         notification::domain::models::RateLimitConfig {

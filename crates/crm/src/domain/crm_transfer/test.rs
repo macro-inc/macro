@@ -46,7 +46,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
                 team_id: Uuid::now_v7(),
                 user_id: "macro|me@example.com".into(),
                 name: "Deals".into(),
-                record_type,
+                record_type: Some(record_type),
                 database_id: DatabaseId::new(),
                 table_id: TableId::new(),
                 primary_column_id: ColumnId::new(),
@@ -77,11 +77,11 @@ fn entry(id: Uuid) -> PipelineEntryView {
     PipelineEntryView {
         currencies: Default::default(),
         entry_id: RowId::new(),
-        record: PipelineRecord {
+        record: Some(PipelineRecord {
             id,
             name: None,
             detail: None,
-        },
+        }),
         fields: Vec::new(),
     }
 }
@@ -180,8 +180,8 @@ impl PipelineWorkflowService for Workflows {
         let added = additions
             .iter()
             .map(|addition| match addition.record {
-                RecordTarget::Id(id) => entry(id),
-                RecordTarget::Email(_) => unreachable!("imports add records by id"),
+                Some(RecordTarget::Id(id)) => entry(id),
+                _ => unreachable!("imports add records by id"),
             })
             .collect();
         self.added.lock().unwrap().extend(additions);
@@ -370,12 +370,12 @@ async fn a_companies_export_restores_stage_and_owner_on_a_new_private_pipeline()
         [("Stage".to_owned(), vec!["Churned".to_owned()])]
     );
     let added = service.workflows.added.lock().unwrap();
-    assert_eq!(added[0].record, RecordTarget::Id(acme));
+    assert_eq!(added[0].record, Some(RecordTarget::Id(acme)));
     assert_eq!(
         added[0].set,
         [("Stage".to_owned(), FieldInput::One("Lead".into()))]
     );
-    assert_eq!(added[1].record, RecordTarget::Id(id_of("beta.io")));
+    assert_eq!(added[1].record, Some(RecordTarget::Id(id_of("beta.io"))));
     assert_eq!(
         added[1].set,
         [
@@ -689,10 +689,13 @@ async fn ambiguous_contacts_are_unresolved_without_blocking_other_csv_rows() {
         [(id_of("new.example.com"), "new@new.example.com".into())]
     );
     let added = service.workflows.added.lock().unwrap();
-    assert_eq!(added[0].record, RecordTarget::Id(known));
+    assert_eq!(added[0].record, Some(RecordTarget::Id(known)));
     assert_eq!(
         added[1].record,
-        RecordTarget::Id(Uuid::new_v5(&Uuid::NAMESPACE_OID, b"new@new.example.com"))
+        Some(RecordTarget::Id(Uuid::new_v5(
+            &Uuid::NAMESPACE_OID,
+            b"new@new.example.com"
+        )))
     );
 }
 
@@ -758,11 +761,11 @@ async fn an_export_writes_people_as_emails_and_reimports() {
     workflows.exported = vec![PipelineEntryView {
         currencies: Default::default(),
         entry_id: RowId::new(),
-        record: PipelineRecord {
+        record: Some(PipelineRecord {
             id: Uuid::now_v7(),
             name: Some("=Acme".into()),
             detail: Some("acme.com".into()),
-        },
+        }),
         fields: vec![
             ("Stage".into(), FieldValue::Labels(vec!["Lead".into()])),
             (
@@ -816,4 +819,35 @@ async fn an_export_writes_people_as_emails_and_reimports() {
         "Contract period".into(),
         FieldInput::One("2026-11-01T00:00:00Z/2026-11-30T00:00:00Z".into())
     )));
+}
+
+#[tokio::test]
+async fn a_generic_pipeline_exports_its_fields_and_refuses_a_record_import() {
+    let mut generic = overview(PipelineRecordType::Company);
+    generic.pipeline.pipeline.record_type = None;
+    generic.fields = vec![field("Name", FieldKind::Text)];
+    let id = generic.pipeline.pipeline.id;
+    let mut workflows = Workflows::new(generic);
+    workflows.exported = vec![PipelineEntryView {
+        entry_id: RowId::new(),
+        record: None,
+        fields: vec![("Name".into(), FieldValue::Text("Launch site".into()))],
+        currencies: Default::default(),
+    }];
+    let service =
+        CrmTransferServiceImpl::new(Arc::new(workflows), Records::default(), Files::default());
+
+    let refused = service
+        .import_to_pipeline(&viewer(), id, CsvInput::Text("Name\nLaunch site\n".into()))
+        .await;
+    assert!(matches!(refused, Err(TransferError::Invalid(_))));
+    assert!(service.workflows.added.lock().unwrap().is_empty());
+
+    service.export_pipeline(&viewer(), id).await.unwrap();
+    let saved = service.files.saved.lock().unwrap();
+    let (_, csv) = saved.last().unwrap();
+    assert_eq!(
+        csv.trim_start_matches('\u{feff}').trim(),
+        "Name\nLaunch site"
+    );
 }

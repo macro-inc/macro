@@ -16,6 +16,7 @@ use crate::domain::ports::{ChannelLabelsRepo, ChannelLabelsService};
 #[derive(Debug, Clone)]
 pub struct ChannelLabelsServiceImpl<R> {
     repo: R,
+    sections: bool,
 }
 
 impl<R> ChannelLabelsServiceImpl<R>
@@ -25,7 +26,18 @@ where
 {
     /// Create a service backed by the provided repository.
     pub fn new(repo: R) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            sections: false,
+        }
+    }
+
+    /// Enable section semantics without changing the existing service port.
+    pub fn for_sections(repo: R) -> Self {
+        Self {
+            repo,
+            sections: true,
+        }
     }
 
     async fn apply_channel_label(
@@ -165,7 +177,7 @@ where
     ) -> Result<ChannelLabel, ChannelLabelsError> {
         let name = validate_name(&name)?;
         let rule = rule.map(validate_rule).transpose()?;
-        if rule.is_some() {
+        if rule.is_some() && !self.sections {
             let existing = self
                 .repo
                 .get_label(receipt.scope(), label_id, receipt.user_id())
@@ -185,6 +197,63 @@ where
                     label_id,
                     &name,
                     receipt.user_id(),
+                    rule.as_ref(),
+                )
+                .await
+                .map_err(anyhow::Error::from)?,
+            &name,
+        )
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        err,
+        fields(
+            label.id = %label_id,
+            source.scope = ?source.scope().selection(),
+            target.scope = ?target.map(|receipt| receipt.scope().selection()),
+        ),
+    )]
+    async fn update_label(
+        &self,
+        source: &ChannelLabelsReceipt,
+        target: Option<&ChannelLabelsReceipt>,
+        label_id: Uuid,
+        name: String,
+        rule: Option<ChannelLabelRule>,
+    ) -> Result<ChannelLabel, ChannelLabelsError> {
+        let Some(target) = target else {
+            return self.rename_label(source, label_id, name, rule).await;
+        };
+        if source.user_id() != target.user_id() {
+            return Err(ChannelLabelsError::Unauthorized);
+        }
+        if source.scope() == target.scope() {
+            return self.rename_label(source, label_id, name, rule).await;
+        }
+        let name = validate_name(&name)?;
+        let rule = rule.map(validate_rule).transpose()?;
+        if rule.is_some() && !self.sections {
+            let existing = self
+                .repo
+                .get_label(source.scope(), label_id, source.user_id())
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or(ChannelLabelsError::NotFound("label not found"))?;
+            if existing.rule.is_none() {
+                return Err(ChannelLabelsError::BadRequest(
+                    "only smart tags have editable rules".into(),
+                ));
+            }
+        }
+        written(
+            self.repo
+                .transfer_label(
+                    source.scope(),
+                    target.scope(),
+                    label_id,
+                    &name,
+                    source.user_id(),
                     rule.as_ref(),
                 )
                 .await

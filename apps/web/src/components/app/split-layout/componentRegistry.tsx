@@ -3,6 +3,10 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  composePropsFromParams,
+  recipientsFromLink,
+} from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -10,9 +14,7 @@ import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  enableChatV3Agents,
   enableProjects,
-  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -34,9 +36,17 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+const NotificationsRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsRouteView'
 );
 const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
@@ -321,18 +331,21 @@ registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
-  'routines',
-  () => <AgentsRouteView />,
+  'passwords',
+  () => <PasswordsRouteView />,
   () => composableLayout()
 );
 registerComponent(
-  'agents',
-  () => <AgentsRouteView />,
-  () =>
-    isFeatureEnabled(enableChatV3Agents)
-      ? { splitPanelLayout: 'composable' }
-      : undefined
+  'notifications',
+  () => <NotificationsRouteView />,
+  () => composableLayout()
 );
+registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
 registerComponent(
   'mail',
   () => <MailRouteView />,
@@ -390,54 +403,23 @@ registerComponent('channel-compose', () => {
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  // mailto: links land here as
+  // `component/email-compose?to=a@example.com,b@example.com` on touch;
+  // desktop carries `to` into its `/mail/new` route.
   const toParam = new URLSearchParams(window.location.search).get('to');
-  const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
-  const initialTo =
-    paramsInitialTo ??
-    toParam
-      ?.split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-  const draftID =
-    typeof params.draftID === 'string' ? params.draftID : undefined;
-  const initialInboxId =
-    typeof params.initialInboxId === 'string'
-      ? params.initialInboxId
-      : undefined;
-  const initialSubject =
-    typeof params.initialSubject === 'string'
-      ? params.initialSubject
-      : undefined;
-  const initialBodyText =
-    typeof params.initialBodyText === 'string'
-      ? params.initialBodyText
-      : undefined;
-  const initialAttachments = Array.isArray(params.initialAttachments)
-    ? params.initialAttachments.filter(
-        (value): value is File => value instanceof File
-      )
-    : undefined;
+  const props = composePropsFromParams(params);
   return (
     <EmailCompose
-      draftId={draftID}
-      initialTo={initialTo}
-      initialInboxId={initialInboxId}
-      initialSubject={initialSubject}
-      initialBodyText={initialBodyText}
-      initialAttachments={initialAttachments}
+      {...props}
+      initialTo={props.initialTo ?? recipientsFromLink(toParam)}
     />
   );
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
-    onCreated={
-      typeof params.onCreated === 'function'
-        ? (params.onCreated as (id: string) => void)
+    onStart={
+      typeof params.onStart === 'function'
+        ? (params.onStart as () => void)
         : undefined
     }
   />
@@ -462,6 +444,11 @@ registerComponent('calendar-event-compose', (params) => {
       event={params?.event as CalendarEvent | undefined}
       initialValues={
         params?.initialValues as EventEditorInitialValues | undefined
+      }
+      suggestedValues={
+        params?.suggestedValues as
+          | Promise<Partial<EventEditorInitialValues>>
+          | undefined
       }
       onCalendarChange={
         params?.onCalendarChange as
@@ -535,16 +522,8 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'chat-attachment',
-    lazy(() => import('@core/component/AI/component/debug/Attachment'))
-  );
-  registerComponent(
     'chat-tool',
     lazy(() => import('@core/component/AI/component/debug/Tool'))
-  );
-  registerComponent(
-    'http-stream',
-    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
     'static-markdown-stream',

@@ -44,6 +44,32 @@ it('keeps three desktop notices and queues the next until a slot opens', () => {
   expect(screen.getByText('Fourth saved')).toBeTruthy();
 });
 
+it('preserves an earlier failure action when the next failure opts out of deduplication', () => {
+  render(() => <ToastRegion />);
+  const retryFirst = vi.fn();
+  const retrySecond = vi.fn();
+  toast.failure('Folder creation failed', {
+    actions: [{ label: 'Retry first', onClick: retryFirst }],
+  });
+  toast.failure('Folder creation failed', {
+    stack: true,
+    actions: [{ label: 'Retry second', onClick: retrySecond }],
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Retry first' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry second' }));
+  expect(retryFirst).toHaveBeenCalledOnce();
+  expect(retrySecond).toHaveBeenCalledOnce();
+});
+
+it('still replaces stacked failure notices on mobile', () => {
+  mobile.value = true;
+  render(() => <ToastRegion />);
+  toast.failure('Earlier failure', { stack: true });
+  toast.failure('Latest failure', { stack: true });
+  expect(screen.queryByText('Earlier failure')).toBeNull();
+  expect(screen.getByText('Latest failure')).toBeTruthy();
+});
+
 it('keeps persistent prompts separate from transient notices', () => {
   render(() => <ToastRegion />);
   toast.custom(
@@ -110,7 +136,7 @@ it('keeps keyboard-focused actions alive until focus leaves the list', () => {
   ).toBe(true);
 });
 
-it('preserves actions and only reports explicit close as a user dismissal', () => {
+it('preserves actions and only reports explicit dismissal as a user dismissal', () => {
   render(() => <ToastRegion />);
   const action = vi.fn();
   const onUserDismiss = vi.fn();
@@ -125,7 +151,8 @@ it('preserves actions and only reports explicit close as a user dismissal', () =
   fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
   expect(action).toHaveBeenCalledOnce();
   expect(onUserDismiss).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
   expect(onUserDismiss).toHaveBeenCalledOnce();
   expect(
     screen

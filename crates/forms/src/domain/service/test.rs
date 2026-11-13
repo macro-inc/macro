@@ -25,8 +25,10 @@ use crate::domain::models::{
 };
 
 mod anonymous;
+mod authoring_branching;
 mod authoring_workflow;
 mod booking;
+mod branching;
 mod catalog;
 mod create;
 mod drafts;
@@ -193,6 +195,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: Some(Widget::Date),
                     },
                 ],
+                show_when: None,
             },
             FormSection::Gate {
                 id: ELIGIBILITY,
@@ -230,6 +233,7 @@ fn rsvp_layout() -> FormLayout {
                         widget: None,
                     },
                 ],
+                show_when: None,
             },
         ],
     }
@@ -283,6 +287,7 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
     let now = world.now;
     world.forms.push(StoredForm {
         form: Form {
+            appearance: None,
             id: RSVP_FORM,
             name: "Q4 offsite RSVP".into(),
             description: "".into(),

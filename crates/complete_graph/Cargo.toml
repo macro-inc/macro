@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+activity = { path = "../activity", default-features = false, features = ["realtime"] }
+agent_correlation = { path = "../agent_correlation", features = ["postgres"] }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
@@ -26,6 +28,7 @@ entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
 graphql_calendar = { path = "../graphql_calendar" }
+graphql_contacts = { path = "../graphql_contacts" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
 graphql_crm = { path = "../graphql_crm" }
@@ -35,8 +38,10 @@ graphql_favorite = { path = "../graphql_favorite" }
 graphql_initiative = { path = "../graphql_initiative" }
 graphql_databases = { path = "../graphql_databases" }
 graphql_notification = { path = "../graphql_notification" }
+graphql_notification_inbox = { path = "../graphql_notification_inbox" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
+graphql_registered_work = { path = "../graphql_registered_work" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
 graphql_work_feed = { path = "../graphql_work_feed" }
@@ -54,6 +59,7 @@ soup-filter-projection = { path = "../soup_filter_projection", default-features 
 soup_realtime = { path = "../soup_realtime", default-features = false, features = [
   "ports",
 ] }
+sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
@@ -62,12 +68,15 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 saved_views = { path = "../saved_views" }
 
 [dev-dependencies]
+contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }
 databases = { path = "../databases", default-features = false, features = ["ports"] }
 databases_sql = { path = "../databases_sql" }
+macro_db_migrator = { path = "../macro_db_migrator" }
 models_databases = { path = "../models_databases" }
-activity = { path = "../activity", default-features = false, features = ["realtime"] }
+attention_feed = { path = "../attention_feed", features = ["inbound"] }
+notification_inbox = { path = "../notification_inbox" }
 work_feed = { path = "../work_feed" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }

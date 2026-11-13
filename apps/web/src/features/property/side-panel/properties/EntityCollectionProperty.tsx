@@ -49,7 +49,10 @@ export function EntityCollectionProperty(props: {
   property: Property;
   onSave: (property: Property, values: PropertyApiValues) => Promise<void>;
   saving: Signal<boolean>;
-  children: JSX.Element;
+  /** Row actions shown before the add button; the trash goes here. */
+  actionsBeforeAdd: JSX.Element;
+  /** Row actions shown after the add button; the pin goes here. */
+  actionsAfterAdd: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const [isSaving, setIsSaving] = props.saving;
@@ -141,9 +144,9 @@ export function EntityCollectionProperty(props: {
         onSave={saveProperty}
         property={displayedProperty()}
         saving={props.saving}
-      >
-        {props.children}
-      </EntityCollectionPropertyBody>
+        actionsBeforeAdd={props.actionsBeforeAdd}
+        actionsAfterAdd={props.actionsAfterAdd}
+      />
       <PropertyNS.PopoverEditor
         entitySelfFilter={{
           entityType: ctx.entityType,
@@ -166,7 +169,8 @@ function EntityCollectionPropertyBody(props: {
   ) => Promise<void>;
   property: Property;
   saving: Signal<boolean>;
-  children: JSX.Element;
+  actionsBeforeAdd: JSX.Element;
+  actionsAfterAdd: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
@@ -249,14 +253,13 @@ function EntityCollectionPropertyBody(props: {
       >
         <span class="min-w-0 truncate">{props.property.displayName}</span>
         <Show when={canDrop()}>
-          <DropIcon
-            class="size-3.5 shrink-0"
-            aria-hidden="true"
-            data-icon-motion="none"
-          />
+          <DropIcon class="size-3.5 shrink-0" aria-hidden="true" />
         </Show>
       </span>
-      <div class="flex min-w-0 items-center">
+      {/* The add button stays one element when the first item arrives, since
+          an open picker is anchored to it; only the trash moves. */}
+      <div class="flex min-w-0 items-center gap-0.5">
+        <Show when={hasItems()}>{props.actionsBeforeAdd}</Show>
         <Show when={!isReadOnly()}>
           <Button
             type="button"
@@ -264,7 +267,6 @@ function EntityCollectionPropertyBody(props: {
             size={hasItems() ? 'icon-xs' : 'xs'}
             class={cn(
               'text-ink-extra-muted not-data-disabled:focus-visible:text-ink',
-              hasItems() && 'ml-auto',
               isDragging() && 'invisible'
             )}
             aria-label={`Add ${props.property.displayName}`}
@@ -278,8 +280,14 @@ function EntityCollectionPropertyBody(props: {
             <Show when={!hasItems()}>{t('common.add')}</Show>
           </Button>
         </Show>
-        <div class={cn('flex shrink-0 items-center', !hasItems() && 'ml-auto')}>
-          {props.children}
+        <div
+          class={cn(
+            'flex shrink-0 items-center gap-0.5',
+            !hasItems() && 'ml-auto'
+          )}
+        >
+          <Show when={!hasItems()}>{props.actionsBeforeAdd}</Show>
+          {props.actionsAfterAdd}
         </div>
       </div>
       <div class="col-span-2 min-w-0">
@@ -337,11 +345,7 @@ function EntityCollectionPropertyBody(props: {
           >
             <div class="min-h-0 overflow-hidden">
               <div class="mt-1 flex h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-accent bg-accent/10 text-xs text-accent">
-                <DropIcon
-                  class="size-4 shrink-0"
-                  aria-hidden="true"
-                  data-icon-motion="none"
-                />
+                <DropIcon class="size-4 shrink-0" aria-hidden="true" />
                 <span>{t('common.dropToAdd')}</span>
               </div>
             </div>
@@ -386,7 +390,7 @@ export function NonUserEntityChip(props: {
     <Layer depth={3}>
       <div
         ref={containerRef}
-        class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
+        class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 touch:h-9 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
         aria-busy={props.pending || undefined}
       >
         <Show
@@ -426,7 +430,9 @@ export function NonUserEntityChip(props: {
             />
           </Show>
           <Show when={props.canEdit && props.onRemove}>
-            <div class="absolute inset-y-0 right-0 flex border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:pointer-events-auto touch:opacity-100">
+            {/* Overlays the name's end on hover; on touch it is always shown, so it
+                takes its own space instead of covering the name. */}
+            <div class="absolute inset-y-0 right-0 flex shrink-0 border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:static touch:pointer-events-auto touch:opacity-100">
               <Button
                 variant="ghost"
                 type="button"
@@ -438,7 +444,7 @@ export function NonUserEntityChip(props: {
                 }}
                 aria-label={`Remove ${name()}`}
               >
-                <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                <DeleteIcon class="size-3.5 touch:size-4 shrink-0 pointer-events-none" />
               </Button>
             </div>
           </Show>

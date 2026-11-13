@@ -43,6 +43,8 @@ const EMAIL_VIEW_EXCLUDES_DONE: Record<PreviewViewStandardLabel, boolean> = {
   starred: false,
   sent: false,
   drafts: false,
+  spam: false,
+  trash: false,
 };
 
 /**

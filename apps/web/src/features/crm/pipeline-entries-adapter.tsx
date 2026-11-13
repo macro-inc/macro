@@ -2,6 +2,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { createSignal } from 'solid-js';
 import {
+  DatabaseLinkValue,
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
@@ -85,6 +86,7 @@ export function createCrmPipelineEntries(
               canEdit={entry().pipeline.canEdit}
               renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
               renderTextValue={(value) => <DatabaseTextValue value={value} />}
+              renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
               renderMentionPicker={(picker) => (
                 <DatabaseMentionPicker {...picker} />
               )}

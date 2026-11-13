@@ -13,11 +13,17 @@ export interface ReferralLink {
 /**
  * Invite people to Macro with the caller's referral link. A new account that
  * signs up through the link earns the caller a referral reward.
+ *
+ * @routing Use when sharing the user's referral link or inviting people to join Macro; not team membership.
  */
 export class ReferralNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** The caller's referral link, to share wherever the user wants. */
+  /**
+   * The caller's referral link, to share wherever the user wants.
+   *
+   * @readonly
+   */
   async link(): Promise<ReferralLink> {
     const code = unwrap(await this.client.auth.getReferralCode());
     const url = new URL('/app/signup', this.client.webAppUrl);
@@ -36,6 +42,9 @@ export class ReferralNamespace {
    * instead, use `Team.invite`.
    *
    * @param email - The address to invite.
+   *
+   * @destructive
+   * @openworld
    */
   async invite(email: string): Promise<void> {
     const recipient = email.trim();

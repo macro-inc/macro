@@ -30,6 +30,7 @@ impl From<DatabaseError> for EntityMutationErrorCode {
             error @ DatabaseError::NotFound => Self::not_found(rootcause::report!(error)),
             error @ DatabaseError::Unauthorized => Self::forbidden(rootcause::report!(error)),
             error @ (DatabaseError::InvalidSchemaOperation(_)
+            | DatabaseError::InvalidAppearance(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_)
             | DatabaseError::OptionInUse
@@ -120,9 +121,14 @@ where
         user_id: MacroUserIdStr<'static>,
         display_name: Option<String>,
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
-        let copy =
-            DatabaseDuplicateService::duplicate_database(self, receipt, user_id, display_name)
-                .await?;
+        let copy = DatabaseDuplicateService::duplicate_database(
+            self,
+            receipt,
+            user_id,
+            None,
+            display_name,
+        )
+        .await?;
         Ok(vec![EntityMutationEffect::updated(
             EntityType::Database.with_entity_string(copy.id.to_string()),
         )])

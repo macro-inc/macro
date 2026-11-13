@@ -101,7 +101,9 @@ test('accepts a dropped image and lets an upload failure recover', async ({
     );
     const item = data.items.add(file);
     // Hold filesystem preparation so the send guard is exercised before an
-    // attachment has reached the uploader.
+    // attachment has reached the uploader. Hiding the direct file read makes
+    // the drop go through this held entry.
+    Object.defineProperty(item, 'getAsFile', { value: () => null });
     Object.defineProperty(item, 'webkitGetAsEntry', {
       value: () => ({
         isFile: true,

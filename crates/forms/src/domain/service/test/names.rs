@@ -116,6 +116,7 @@ async fn which_name_a_new_form_goes_by_is_recorded_from_where_it_was_created() {
         stored(&world, standalone),
         StoredForm {
             form: Form {
+                appearance: None,
                 id: standalone,
                 name: "Offsite RSVP".into(),
                 description: "".into(),
@@ -358,6 +359,7 @@ async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
                     title: "".into(),
                     description: "".into(),
                     questions: vec![],
+                    show_when: None,
                 }],
             },
         )

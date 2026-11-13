@@ -56,6 +56,41 @@ impl TurnEngine for CancelledEngine {
     }
 }
 
+/// A turn whose model spoke, thought, then called a tool the loop refused.
+struct UnknownToolEngine;
+
+impl TurnEngine for UnknownToolEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(3);
+        tokio::spawn(async move {
+            let _ = parts
+                .send(Ok(StreamPart::Content(
+                    "I'm checking your access on that project.".into(),
+                )))
+                .await;
+            let _ = parts
+                .send(Ok(StreamPart::Thinking("Read the project next.".into())))
+                .await;
+            let unknown = PromptError::UnknownToolCall {
+                tool_name: "ReadInitiative".to_owned(),
+                available_tools: vec!["LoadTools".to_owned()],
+                allowed_tools: vec!["LoadTools".to_owned()],
+                chat_history: Box::default(),
+            };
+            let error = agent::AgentError::Streaming(StreamingError::Prompt(Box::new(unknown)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
+}
+
 /// Drive the served agent as a scripted ACP client: initialize, open a
 /// session, then hand the connection to `scenario`.
 async fn with_agent<Engine, Out>(
@@ -142,6 +177,7 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -157,6 +193,7 @@ async fn record<Engine: TurnEngine, Out>(
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         client_renders_forms: AtomicBool::new(false),
         enable_dev_commands: true,
     });
@@ -782,20 +819,14 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
 
 /// Every tool call is stamped with the tool's name under `_meta.macro`, the
 /// way Claude Code stamps `_meta.claudeCode.toolName`: an MCP tool as
-/// `mcp__<server>__<tool>`, a delegation flagged `subagent`.
+/// `mcp__<server>__<tool>`.
 #[tokio::test]
-async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
+async fn tool_calls_are_stamped_with_their_names() {
     let engine = Arc::new(ScriptedEngine::new(vec![
         StreamPart::ToolCall(agent::ToolCall {
             id: "call-1".into(),
             name: "ReadContent".into(),
             json: serde_json::json!({"documentId": "d"}),
-            mcp: None,
-        }),
-        StreamPart::ToolCall(agent::ToolCall {
-            id: "call-2".into(),
-            name: "Subagent".into(),
-            json: serde_json::json!({"task": "count the beans"}),
             mcp: None,
         }),
         StreamPart::ToolCall(agent::ToolCall {
@@ -832,7 +863,6 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
         metas,
         vec![
             serde_json::json!({"macro": {"toolName": "ReadContent"}}),
-            serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
             serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
         ]
     );
@@ -1705,6 +1735,30 @@ async fn engine_cancellation_is_not_rendered_as_an_error_message() {
     );
 }
 
+/// A failed turn's reply is what a channel thread posts, so it says the turn
+/// failed in words; the raw error is the prompt's.
+#[tokio::test]
+async fn a_failed_turn_says_so_without_the_raw_error() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(UnknownToolEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "link these tasks"))
+                .block_task()
+                .await
+        })
+        .await;
+
+    assert_eq!(
+        spoken(&notifications),
+        format!("I'm checking your access on that project.\n\n{TURN_FAILED_REPLY}")
+    );
+    let error = response.expect_err("the turn failed");
+    assert!(
+        format!("{error:?}").contains("UnknownToolCall"),
+        "{error:?}"
+    );
+}
+
 #[tokio::test]
 async fn a_prompt_for_an_unknown_session_is_refused() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));
@@ -1815,6 +1869,7 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -1831,6 +1886,7 @@ async fn serve_with_mcp(
         mcp,
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         client_renders_forms: AtomicBool::new(false),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -1873,6 +1929,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -1889,6 +1946,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         mcp: Arc::new(Arc::clone(&spy)),
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         client_renders_forms: AtomicBool::new(false),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -1964,6 +2022,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -1980,6 +2039,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         mcp: Arc::new(Arc::clone(&connector)),
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         client_renders_forms: AtomicBool::new(false),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -2070,6 +2130,7 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -2086,6 +2147,7 @@ where
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         enable_dev_commands,
     });
 
@@ -2570,11 +2632,7 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
             || format!("{error:?}").contains("produced nothing"),
         "got {error:?}"
     );
-    assert!(
-        spoken(&notifications).contains("produced nothing"),
-        "got {:?}",
-        spoken(&notifications)
-    );
+    assert_eq!(spoken(&notifications), TURN_FAILED_REPLY);
 }
 
 /// An engine whose turn waits on a person for twice the idle timeout - the
@@ -2989,4 +3047,73 @@ fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
 
     output.observe(&StreamPart::Content("Found it.".to_owned()));
     assert!(output.replied);
+}
+
+/// A connect that left out the code-mode tools (here: no tools at all) is
+/// retried before each turn instead of failing every turn of the session.
+#[tokio::test]
+async fn turns_redial_a_session_whose_connect_lacks_code_mode_tools() {
+    let spy = Arc::new(SpyConnector {
+        asked: std::sync::Mutex::new(Vec::new()),
+    });
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp: Arc::new(Arc::clone(&spy)),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                let opened = connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(test_mcp_servers()))
+                    .block_task()
+                    .await?;
+                for _ in 0..2 {
+                    connection
+                        .send_request(text_prompt(&opened.session_id, "hi"))
+                        .block_task()
+                        .await?;
+                }
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    // session/new's connect, then one redial before each of the two turns.
+    let asked = spy.asked.lock().expect("asked lock");
+    assert_eq!(asked.len(), 3);
+    assert!(asked.iter().all(|servers| servers == &["linear", "notion"]));
 }

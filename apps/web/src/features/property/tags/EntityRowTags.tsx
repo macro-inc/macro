@@ -279,7 +279,8 @@ function TagOverflow(props: {
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
             size: 'xs',
-            class: 'max-w-[14ch] gap-1.5 touch:min-h-0',
+            class:
+              'max-w-[14ch] gap-1.5 border-edge bg-surface-2 touch:min-h-0',
           })}
           triggerLabel="Edit tags"
           onActiveChange={onActiveChange}
@@ -290,7 +291,10 @@ function TagOverflow(props: {
               {(tag, index) => (
                 <TagDot
                   color={tag.color}
-                  class={cn('size-2 ring ring-surface', index() > 0 && '-ml-1')}
+                  class={cn(
+                    'size-2 ring ring-surface-2',
+                    index() > 0 && '-ml-1'
+                  )}
                 />
               )}
             </For>
@@ -511,13 +515,16 @@ function InlineTagsPillFace(props: {
 }
 
 function inlineTagsTriggerClass(props: InlineTagsPillProps, count: number) {
+  const variant = props.variant ?? 'outline';
   return badgeTriggerClasses({
-    variant: props.variant ?? 'outline',
+    variant,
     size: props.size ?? 'xs',
     class: cn(
       // Capped so a long tag label truncates instead of squeezing
       // whatever shares the row with the pill (e.g. a task title).
       'min-w-0 max-w-35 gap-1.5 text-left touch:min-h-0',
+      // Outline tag pills share the email participant pill's softer frame.
+      variant === 'outline' && 'border-edge bg-surface-2',
       count === 0 && !props.showAddButton && 'text-ink-extra-muted',
       props.class
     ),

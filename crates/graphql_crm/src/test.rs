@@ -130,7 +130,7 @@ async fn one_read_per_record_type_answers_every_record_without_its_own_column() 
         team_id: Uuid::now_v7(),
         name: "Deals".into(),
         user_id: "macro|owner@macro.com".into(),
-        record_type: PipelineRecordType::Company,
+        record_type: Some(PipelineRecordType::Company),
         database_id: DatabaseId::new(),
         table_id: table,
         primary_column_id: primary.column.id,

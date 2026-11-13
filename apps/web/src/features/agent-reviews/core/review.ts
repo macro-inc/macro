@@ -1,28 +1,15 @@
+import type {
+  ReviewDecision_Deserialize,
+  ReviewDraft_Deserialize,
+  ReviewRecord_Serialize,
+} from '@service-agent-reviews/generated/types';
+
 /** A saved interaction is independent from the code run that prepared it. */
-export type Review = {
-  id: string;
-  sessionId: string;
-  actingUser?: string | null;
-  executionId?: string | null;
-  kind: 'email' | 'calendar' | 'import';
-  title: string;
-  revision: number;
-  updatedAt: number;
-  presentedAt?: number | null;
-  /** The most recent decision; `chat` when the agent acted on the account holder's word. */
-  decision?: { via: 'card' | 'chat' | 'inbox' } | null;
-  items: ReviewItem[];
-};
-export type ReviewItem = {
-  id: string;
-  draft: unknown;
-  status: 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
-  result?: unknown;
-  error?: string | null;
-};
-export type ReviewDecision =
-  | { action: 'edit'; revision: number; item: string; draft: unknown }
-  | { action: 'submit' | 'dismiss'; revision: number; items: string[] };
+export type Review = ReviewRecord_Serialize;
+export type ReviewItem = Review['items'][number];
+/** A replacement draft, keyed by its review's kind. */
+export type ReviewDraft = ReviewDraft_Deserialize;
+export type ReviewDecision = ReviewDecision_Deserialize;
 export type ReviewActions = {
   reload: () => Promise<Review>;
   decide: (decision: ReviewDecision) => Promise<Review>;

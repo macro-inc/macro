@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 
 use databases::domain::models::{RowId, TableDetail, TableVersion};
 use entity_access::domain::models::AccessError;
-use models_databases::EntityKind;
 use uuid::Uuid;
 
 use super::super::{
@@ -21,7 +20,7 @@ pub const MAX_SCANNED_ROWS: usize = 5_000;
 pub struct PipelineOverview {
     /// The pipeline and the viewer's grant on it.
     pub pipeline: AccessiblePipeline,
-    /// Its fields, the record field first.
+    /// Its fields; a tracked pipeline's record field comes first.
     pub fields: Vec<PipelineField>,
     /// Its table's version when it was read.
     pub version: TableVersion,
@@ -56,28 +55,43 @@ impl PipelineOverview {
             })
     }
 
-    pub(super) fn record_field(&self) -> &PipelineField {
-        self.fields
-            .iter()
-            .find(|field| field.is_record())
-            .expect("a pipeline's table has its record column")
+    /// The field naming the tracked record; a generic pipeline has none.
+    pub(super) fn record_field(&self) -> Option<&PipelineField> {
+        self.fields.iter().find(|field| field.is_record())
     }
 
-    pub(super) fn record_kind(&self) -> EntityKind {
-        match self.pipeline.pipeline.record_type {
-            PipelineRecordType::Company => EntityKind::Company,
-            PipelineRecordType::Contact => EntityKind::Contact,
-        }
+    /// The field holding the currency code of a monetary field's amounts,
+    /// found through the stable column pairing so renames keep it.
+    pub fn currency_field(&self, amount: &PipelineField) -> Option<&PipelineField> {
+        let pair = self
+            .pipeline
+            .pipeline
+            .commercial_fields
+            .money
+            .iter()
+            .find(|pair| pair.amount == amount.id)?;
+        self.fields.iter().find(|field| field.id == pair.currency)
+    }
+
+    /// Whether every entry must hold a value: the field's own rule, or a
+    /// protected Outcome or currency field.
+    pub fn requires(&self, field: &PipelineField) -> bool {
+        field.required
+            || self
+                .pipeline
+                .pipeline
+                .commercial_fields
+                .is_system_select(field.id)
     }
 }
 
-/// One entry: the record it tracks and its filled-in fields.
+/// One entry: the record it tracks, if any, and its filled-in fields.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PipelineEntryView {
     /// The entry, a row of the pipeline.
     pub entry_id: RowId,
-    /// The company or contact it tracks.
-    pub record: PipelineRecord,
+    /// The company or contact it tracks; `None` in a generic pipeline.
+    pub record: Option<PipelineRecord>,
     /// Its other fields that hold a value, in column order.
     pub fields: Vec<(String, FieldValue)>,
     /// Denominations by monetary field name, resolved through stable column roles.
@@ -91,7 +105,8 @@ pub struct EntryQuery {
     pub filters: Vec<(String, FieldInput)>,
     /// Only entries tracking one of these records.
     pub records: Vec<Uuid>,
-    /// Text the record's name, domain or email must contain.
+    /// Text the record's name, domain or email must contain; in a generic
+    /// pipeline, one of the entry's text fields.
     pub search: Option<String>,
     /// The field to order by, and whether to put the largest first.
     pub sort: Option<(String, bool)>,
@@ -160,8 +175,8 @@ pub enum RecordTarget {
 /// One entry to add.
 #[derive(Debug, Clone)]
 pub struct EntryAddition {
-    /// The record it tracks.
-    pub record: RecordTarget,
+    /// The record it tracks; a generic pipeline's entries name none.
+    pub record: Option<RecordTarget>,
     /// Fields to fill in, by name.
     pub set: Vec<(String, FieldInput)>,
 }
@@ -215,8 +230,8 @@ pub struct FieldChange {
 pub struct UpdatedEntry {
     /// The entry.
     pub entry_id: RowId,
-    /// The record it tracks.
-    pub record: PipelineRecord,
+    /// The record it tracks; `None` in a generic pipeline.
+    pub record: Option<PipelineRecord>,
     /// The fields set, as they were and are.
     pub changes: Vec<FieldChange>,
 }
@@ -255,13 +270,15 @@ pub struct NewField {
 pub struct NewPipeline {
     /// Its name.
     pub name: String,
-    /// Whether entries track companies or contacts.
-    pub record_type: PipelineRecordType,
+    /// Whether entries track companies or contacts; `None` for a generic
+    /// pipeline, whose entries are free-form rows.
+    pub record_type: Option<PipelineRecordType>,
     /// Whether the team may edit it.
     pub sharing: PipelineSharing,
-    /// Its stages in order, replacing the team's default stages.
+    /// Its stages in order, replacing the team's default stages. A generic
+    /// pipeline starts without a Stage field, so these add one.
     pub stages: Vec<String>,
-    /// Fields to add after the standard ones.
+    /// Fields to add after the standard ones, or a generic pipeline's Name.
     pub fields: Vec<NewField>,
 }
 

@@ -6,6 +6,11 @@ Opening **Reviews** from the mobile dock or its **More** drawer starts on **Pull
 requests** (the **All** scope). Explicit review-tab links keep their selected
 scope; desktop's default scope remains **Involves me**.
 
+The sidebar **Labels** section lists GitHub labels, not Macro tags. Keep this
+section separate from Macro tag lists. GitHub labels are also available in
+**Filter pull requests → Label** on desktop and **Open pull request filters →
+Label** on phones.
+
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
 side panel below the top bar. An open PR has a split button in the top bar
@@ -22,6 +27,10 @@ a refusal appears as a toast with GitHub's reason, and a change refreshes the PR
 status in place. Without a linked GitHub account the toast points to Settings.
 Merged and closed PRs have no split button. PRs are not tasks and do not appear
 in the Tasks list. PRs cannot be favorited.
+**Ask Macro**, before Share, opens a new agent conversation whose unsent draft
+holds the PR chip with the PR's Macro id and GitHub URL; the agent reads the diff
+through the SDK's `githubPullRequests`. On touch screens the header's actions wrap
+onto their own row below the breadcrumb when it leaves no room for them.
 The **Share** button has a **Copy Share Link** button beside it, like other
 items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
 `/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
@@ -103,3 +112,10 @@ account. In the network panel, confirm the update arrives on the Soup GraphQL
 subscription without triggering a refetch of every Soup list. Replaying an
 unchanged webhook should not produce another Soup update. The PR detail's
 separate diff and discussion requests are outside this subscription behavior.
+
+Opening a pull request from Home clears its loaded unread notifications immediately,
+including desktop previews, keyboard activation, j/k navigation, and phone taps.
+Keyboard browsing marks the row when its debounced preview actually opens;
+marking a row done also marks the next PR read when it opens. A failed read
+write restores the unread dot; opening the row again retries it. The detail
+view also marks the whole pull request read on mount, without an extra delay.

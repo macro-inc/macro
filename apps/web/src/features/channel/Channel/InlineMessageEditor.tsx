@@ -1,5 +1,7 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { useMessageTransport } from '@core/messages/message-transport';
+import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
 import type { MessageParent } from '@service-storage/messages';
 import { cn } from '@ui';
@@ -31,8 +33,11 @@ type MessageEditorContentProps = {
  * differ in the chrome around it.
  */
 export function MessageEditorContent(props: MessageEditorContentProps) {
+  const guestTransport = useMessageTransport();
   const snapshot = () => props.messageEditor.state()?.snapshot;
-  const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
+  const channelBotMentionUsers = guestTransport
+    ? () => []
+    : useMessageBotMentionUsers(() => props.parent);
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: snapshot()?.attachments,
   });
@@ -66,6 +71,18 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         autofocus={props.autofocus}
         attachmentTracker={attachmentTracker}
         bots={channelBotMentionUsers}
+        features={
+          guestTransport
+            ? {
+                mentions: false,
+                createItems: false,
+                gifs: false,
+                richBlocks: false,
+                attachments: false,
+                dictation: false,
+              }
+            : undefined
+        }
         markdownNamespace={`edit-message-${props.parent.type}:${props.parent.id}-${props.message.id}`}
         onReady={props.onReady}
         onChange={(nextSnapshot) =>
@@ -76,15 +93,35 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
           props.messageEditor.save(props.message, nextSnapshot)
         }
       >
-        <Input.Layout.ActionsLeft>
-          <Show when={isPlatform('ios')} fallback={<Input.AttachFilesAction />}>
-            <Input.AttachNativeMediaAction />
-          </Show>
-          <Input.DiscardDraftAction />
-        </Input.Layout.ActionsLeft>
-        <Input.Layout.ActionsRight>
-          <Input.SendAction />
-        </Input.Layout.ActionsRight>
+        {(addMenu) => (
+          <>
+            <Input.Layout.ActionsLeft>
+              <Show
+                when={isMobile()}
+                fallback={
+                  <Show
+                    when={isPlatform('ios')}
+                    fallback={
+                      <Show when={!guestTransport}>
+                        <Input.AttachFilesAction />
+                      </Show>
+                    }
+                  >
+                    <Show when={!guestTransport}>
+                      <Input.AttachNativeMediaAction />
+                    </Show>
+                  </Show>
+                }
+              >
+                <Show when={!guestTransport}>{addMenu}</Show>
+              </Show>
+              <Input.DiscardDraftAction />
+            </Input.Layout.ActionsLeft>
+            <Input.Layout.ActionsRight>
+              <Input.SendAction />
+            </Input.Layout.ActionsRight>
+          </>
+        )}
       </ChannelInput>
     </div>
   );

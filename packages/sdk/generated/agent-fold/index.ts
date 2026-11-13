@@ -112,6 +112,21 @@ number |
 /**  A string id. */
 string;
 
+export type AgentSessionRef = {
+	id: string,
+};
+
+/**  One item of macro.agentSessions.updates(); its other fields are ignored. */
+export type AgentUpdateItem = {
+	session: AgentSessionRef,
+	sessionName: string,
+	harness: string,
+	kind: AgentUpdateKind,
+	since: string,
+};
+
+export type AgentUpdateKind = "permission" | "elicitation" | "tool_approval" | "stalled";
+
 /**  How a container aligns its children across its axis. */
 export type Align = "start" | "center" | "end" | "stretch";
 
@@ -678,7 +693,12 @@ export type FailureNoticeKind =
  *  The provider ended the run in failure; its own page for the run is
  *  where any detail it kept lives.
  */
-"provider_run_failed";
+"provider_run_failed" |
+/**
+ *  The runtime accepted the prompt but never handed it to the agent;
+ *  the fix is to send it again.
+ */
+"prompt_not_delivered";
 
 /**
  *  Every filter, each over one field of one kind of item. Id lists match any
@@ -853,6 +873,12 @@ export type FoldedMessage = FoldedMessage_Serialize | FoldedMessage_Deserialize;
 export type FoldedMessage_Deserialize = {
 	/**  Session that scopes this message id. */
 	agentSessionId: string,
+	/**
+	 *  The message's identity within its session, `<turn>:<author kind>`
+	 *  (`3:agent`): stable across streaming updates, rebases, and pending
+	 *  flipping off, so a reader can key and reconcile rows by it.
+	 */
+	key: string,
 	/**  The turn within the session, assigned in log order from zero. */
 	turn: number,
 	/**  Who produced the message. */
@@ -884,9 +910,10 @@ export type FoldedMessage_Deserialize = {
 	 */
 	phase: TurnPhase | null,
 	/**
-	 *  When a user's prompt was posted, RFC 3339. Absent on agent and control
-	 *  messages, until the log confirms a prompt, and on history a runtime
-	 *  replayed on load.
+	 *  When the message was sent, RFC 3339: a prompt when the log confirms it,
+	 *  an agent reply when its turn ends. Absent on control messages, on a
+	 *  reply still running, until the log confirms a prompt, and on history a
+	 *  runtime replayed on load.
 	 */
 	postedAt: string | null,
 };
@@ -895,6 +922,12 @@ export type FoldedMessage_Deserialize = {
 export type FoldedMessage_Serialize = {
 	/**  Session that scopes this message id. */
 	agentSessionId: string,
+	/**
+	 *  The message's identity within its session, `<turn>:<author kind>`
+	 *  (`3:agent`): stable across streaming updates, rebases, and pending
+	 *  flipping off, so a reader can key and reconcile rows by it.
+	 */
+	key: string,
 	/**  The turn within the session, assigned in log order from zero. */
 	turn: number,
 	/**  Who produced the message. */
@@ -926,9 +959,10 @@ export type FoldedMessage_Serialize = {
 	 */
 	phase: TurnPhase | null,
 	/**
-	 *  When a user's prompt was posted, RFC 3339. Absent on agent and control
-	 *  messages, until the log confirms a prompt, and on history a runtime
-	 *  replayed on load.
+	 *  When the message was sent, RFC 3339: a prompt when the log confirms it,
+	 *  an agent reply when its turn ends. Absent on control messages, on a
+	 *  reply still running, until the log confirms a prompt, and on history a
+	 *  runtime replayed on load.
 	 */
 	postedAt: string | null,
 };
@@ -1822,6 +1856,17 @@ import: ImportSettlement_Serialize } |
 /**  The decided actions' confirmed results. */
 ReviewOutcome_Serialize;
 
+/**
+ *  A review's saved record moved to `revision`: presented, edited, decided,
+ *  or an item's action finished.
+ */
+export type ReviewUpdatedNotification = {
+	/**  The review that changed. */
+	reviewId: string,
+	/**  Its saved revision after the change. */
+	revision: number,
+};
+
 /**  A run of a reply's parts that reads as one unit. */
 export type Segment = Segment_Serialize | Segment_Deserialize;
 
@@ -1926,6 +1971,11 @@ export type SessionMetadata = SessionMetadata_Serialize | SessionMetadata_Deseri
 export type SessionMetadata_Deserialize = {
 	/**  System events, projected independently of the conversation messages. */
 	notifications: SessionNotification_Deserialize[],
+	/**
+	 *  The newest saved revision of each review the log announced, in the
+	 *  order they were first announced.
+	 */
+	reviewRevisions: ReviewUpdatedNotification[],
 	/**  The last notification turn whose entire answer was suppressed. */
 	noopTurn: number | null,
 	/**  The agent that produced the log. See [`Harness`]. */
@@ -1978,6 +2028,11 @@ export type SessionMetadata_Deserialize = {
 export type SessionMetadata_Serialize = {
 	/**  System events, projected independently of the conversation messages. */
 	notifications: SessionNotification_Serialize[],
+	/**
+	 *  The newest saved revision of each review the log announced, in the
+	 *  order they were first announced.
+	 */
+	reviewRevisions: ReviewUpdatedNotification[],
 	/**  The last notification turn whose entire answer was suppressed. */
 	noopTurn: number | null,
 	/**  The agent that produced the log. See [`Harness`]. */
@@ -2856,6 +2911,13 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  table or a list in markdown.
  */
 ({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+/**
+ *  Live cards on which the user answers coding agents' waiting
+ *  permission requests and questions, and sees stalled sessions. Pass the
+ *  items macro.agentSessions.updates() returned, unchanged, whenever it
+ *  returns any: these cards are the only place the user can answer them.
+ */
+({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
 ({ type: "container"; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
@@ -2909,6 +2971,13 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  table or a list in markdown.
  */
 ({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+/**
+ *  Live cards on which the user answers coding agents' waiting
+ *  permission requests and questions, and sees stalled sessions. Pass the
+ *  items macro.agentSessions.updates() returned, unchanged, whenever it
+ *  returns any: these cards are the only place the user can answer them.
+ */
+({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
 ({ type: "container"; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */

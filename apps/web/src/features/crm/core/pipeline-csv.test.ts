@@ -266,3 +266,36 @@ it('round-trips a monetary amount with its currency and refuses unknown denomina
     )._unsafeUnwrapErr()
   ).toEqual({ kind: 'invalid-system-values' });
 });
+
+describe('a generic pipeline', () => {
+  it('exports its primary column like any other, with no record columns', () => {
+    const csv = encodePipelineCsv({
+      recordType: null,
+      primaryColumnId: 'name',
+      columns: [
+        {
+          id: 'name',
+          name: 'Name',
+          dataType: 'STRING',
+          isMultiSelect: false,
+          options: [],
+          writable: true,
+        },
+        {
+          id: 'stage',
+          name: 'Stage',
+          dataType: 'SELECT_STRING',
+          isMultiSelect: false,
+          options: [],
+          writable: true,
+        },
+      ],
+      rows: [{ cells: { name: 'Launch site', stage: 'Doing' } }],
+      record: () => undefined,
+    });
+    expect(csv.split(/\r?\n/).filter(Boolean)).toEqual([
+      'Name,Stage',
+      'Launch site,Doing',
+    ]);
+  });
+});

@@ -83,6 +83,7 @@ async fn a_form_over_a_table_asks_every_column_and_adds_the_managed_ones() {
         detail,
         FormDetail {
             form: Form {
+                appearance: None,
                 id: detail.form.id,
                 name: "Party RSVP".into(),
                 description: "".into(),
@@ -136,6 +137,7 @@ async fn a_form_over_a_table_asks_every_column_and_adds_the_managed_ones() {
                         widget: Some(Widget::Choice),
                     },
                 ],
+                show_when: None,
             }],
         }
     );

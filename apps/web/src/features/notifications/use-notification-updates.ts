@@ -2,8 +2,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshSharedAccess } from '@queries/access-requests/requests';
 import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
+import { computerKeys } from '@queries/computers/keys';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
+import { harnessKeys } from '@queries/harnesses/keys';
 import { messageKeys } from '@queries/messages/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { refreshEmailFollowup } from '@queries/reminders/email-refresh';
@@ -143,9 +145,13 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         'notifications'
       );
     })
-    .with({ tag: 'channel_invite' }, () => {
-      refreshChannel(notification);
-    })
+    .with(
+      { tag: 'channel_invite' },
+      { tag: 'channel_access_requested' },
+      () => {
+        refreshChannel(notification);
+      }
+    )
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
     })
@@ -174,6 +180,22 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
       queryClient.invalidateQueries({
         queryKey: scheduledActionKeys.list.queryKey,
       });
+    })
+    // The computer's row in Runtimes shows its Claude account.
+    .with({ tag: 'agent_sign_in_expiry' }, () => {
+      queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
+    })
+    // The computer's row and the setup dialog show its setup state.
+    .with({ tag: 'computer_setup' }, (metadata) => {
+      queryClient.invalidateQueries({ queryKey: computerKeys.list.queryKey });
+      queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
+      // Loaded on demand: the notice pulls in the settings UI.
+      fireAndForget(
+        import('./computer-setup-toast').then(({ showComputerSetupToast }) =>
+          showComputerSetupToast(metadata.content)
+        ),
+        'notifications'
+      );
     })
     .with({ tag: 'invite_to_team' }, () => {
       queryClient.invalidateQueries({

@@ -371,6 +371,7 @@ fn plan(
                     position: row.position.clone(),
                 })
                 .collect(),
+            ids: Vec::new(),
         });
     }
 
@@ -614,11 +615,12 @@ where
     Access: AccessDirectory,
     Broker: MacroEventBroker,
 {
-    #[tracing::instrument(skip(self, receipt, owner, name), fields(database_id = %receipt.entity().entity_id, copy_id = tracing::field::Empty, tables = tracing::field::Empty, rows = tracing::field::Empty), err)]
+    #[tracing::instrument(skip(self, receipt, owner, acting_bot, name), fields(database_id = %receipt.entity().entity_id, copy_id = tracing::field::Empty, tables = tracing::field::Empty, rows = tracing::field::Empty), err)]
     async fn duplicate_database(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         owner: MacroUserIdStr<'static>,
+        acting_bot: Option<bot_id::BotId>,
         name: Option<String>,
     ) -> Result<Database, DatabaseError> {
         let database_id = receipt_database_id(&receipt)?;
@@ -643,6 +645,7 @@ where
         let copy = Database {
             id: DatabaseId::new(),
             name,
+            appearance: source.database.appearance.clone(),
             owner_id: owner.to_string(),
             created_at: Utc::now(),
             trashed_at: None,
@@ -671,7 +674,7 @@ where
             owner: owner.clone(),
             name: copy.name.clone(),
             created_at: copy.created_at,
-            attribution: events::Attribution::acting(owner, None),
+            attribution: events::Attribution::acting(owner, acting_bot),
         }));
         let mut changes: Vec<(DatabaseId, TableId, TableVersion)> = table_versions
             .into_iter()

@@ -59,6 +59,7 @@ export function RecentConversationCard(props: { channel: ChannelEntity }) {
           currentUserId()
         )}
         unread={item().unread}
+        mentions={item().mentions}
         muted={item().muted}
         callStatus={item().callStatus}
         incomingCallId={item().incomingCallId}

@@ -1,4 +1,4 @@
-import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import { pickPhotoLibraryMediaOrFiles } from '@core/mobile/nativePhotoLibrary';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
@@ -6,14 +6,19 @@ import FormatIcon from '@icon/system/regular/text-aa.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
-import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import {
+  CHANNEL_FILE_PICKER_ACCEPT,
+  channelFilePickerAccept,
+  setFilePickerAccept,
+} from './accepted-file-types';
 import { useInput, useInputCommands } from './context';
 
 /**
  * The paperclip.
  *
  * `accept` narrows the picker, defaulting to the channel's own media and
- * document types. A surface whose upload path takes more than that — the
+ * document types (none in the desktop app; see `channelFilePickerAccept`). A
+ * surface whose upload path takes more than that — the
  * agent composer, where a source file is usually the point — passes `null`
  * to accept whatever it would accept on a drop.
  */
@@ -28,6 +33,10 @@ export function AttachFilesAction(
 ) {
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
+  const accept = () =>
+    props.accept === null
+      ? undefined
+      : (props.accept ?? channelFilePickerAccept());
 
   const onAttachFiles: JSX.EventHandlerUnion<HTMLInputElement, Event> = (
     event
@@ -47,11 +56,7 @@ export function AttachFilesAction(
         type="file"
         class="hidden"
         multiple
-        accept={
-          props.accept === null
-            ? undefined
-            : (props.accept ?? CHANNEL_FILE_PICKER_ACCEPT)
-        }
+        accept={accept()}
         onChange={onAttachFiles}
         disabled={props.disabled}
         data-input-attach-file-picker
@@ -60,9 +65,7 @@ export function AttachFilesAction(
         props.trigger(
           () => {
             if (!fileInputRef) return;
-            if (props.accept === null) fileInputRef.removeAttribute('accept');
-            else
-              fileInputRef.accept = props.accept ?? CHANNEL_FILE_PICKER_ACCEPT;
+            setFilePickerAccept(fileInputRef, accept());
             fileInputRef.click();
           },
           () => {
@@ -103,11 +106,9 @@ export function AttachNativeMediaAction() {
   };
 
   const onAttachMedia = async () => {
-    const files = await pickNativePhotoLibraryMedia();
-    if (files === null) {
-      fileInputRef?.click();
-      return;
-    }
+    const files = await pickPhotoLibraryMediaOrFiles(() =>
+      fileInputRef?.click()
+    );
     if (files.length > 0) {
       await commands.attachFiles(files);
     }

@@ -26,19 +26,23 @@ inbound = [
   "dep:serde_json",
   "dep:utoipa",
   "agent_session/schema",
+  "call/inbound",
   "channels/schema",
   "documents/schema",
   "messages/schema",
   "ports",
   "rate_limit/axum",
+  "user_events/schema",
 ]
 ingestion = [
   "dep:agent_session",
   "dep:agent_trigger",
   "dep:channels",
+  "dep:call",
   "dep:documents",
   "dep:entity_access",
   "dep:futures",
+  "dep:user_events",
   "dep:uuid",
   "ports",
 ]
@@ -71,6 +75,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 agent_session = { path = "../agent_session", default-features = false, optional = true }
 agent_trigger = { path = "../agent_trigger", optional = true }
+call = { path = "../call", default-features = false, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
@@ -103,6 +108,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
+user_events = { path = "../user_events", optional = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
@@ -116,6 +122,7 @@ agent_session = { path = "../agent_session", default-features = false, features 
 ] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
+trigger_context = { path = "../trigger_context" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 messages = { path = "../messages" }
 rate_limit = { path = "../rate_limit", default-features = false, features = [

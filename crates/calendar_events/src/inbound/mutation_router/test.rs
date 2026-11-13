@@ -148,7 +148,7 @@ fn attendee_body_defaults_to_required_attendance() {
 
 #[test]
 fn macro_call_failures_map_to_transport_semantics() {
-    let failed = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+    let failed = CalendarMutationApiError::from(MacroCallEventError::MeetingLink(
         MeetingLinkError::Failed("call service at 10.0.0.9 returned 502".to_string()),
     ));
     assert_eq!(
@@ -160,7 +160,7 @@ fn macro_call_failures_map_to_transport_semantics() {
     );
     assert!(!failed.message.contains("10.0.0.9"));
 
-    let invalid = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+    let invalid = CalendarMutationApiError::from(MacroCallEventError::MeetingLink(
         MeetingLinkError::InvalidInput("title too long".to_string()),
     ));
     assert_eq!(
@@ -172,7 +172,7 @@ fn macro_call_failures_map_to_transport_semantics() {
     );
     assert_eq!(invalid.message, "title too long");
 
-    let calendar = CalendarMutationApiError::from(CreateEventWithMacroCallError::Calendar(
+    let calendar = CalendarMutationApiError::from(MacroCallEventError::Calendar(
         CalendarMutationError::ReadOnly,
     ));
     assert_eq!(
@@ -227,12 +227,20 @@ fn a_copy_refusal_asks_the_caller_to_name_the_inbox() {
 }
 
 #[test]
-fn a_code_mode_program_or_an_agent_token_counts_as_an_agent_run() {
+fn a_program_cannot_create_an_event_the_user_has_not_seen() {
     let mut program = axum::http::HeaderMap::new();
-    program.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+    program.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
     let browser = axum::http::HeaderMap::new();
 
-    assert!(is_agent_run(false, &program), "a public MCP code-mode run");
-    assert!(is_agent_run(true, &browser), "an agent-attributed token");
-    assert!(!is_agent_run(false, &browser), "a person in the app");
+    let refusal = refuse_program_create(false, &program).unwrap_err();
+    assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        refusal.code,
+        CalendarMutationErrorCode::ConfirmationRequired
+    );
+    assert!(refuse_program_create(true, &browser).is_err());
+    assert!(refuse_program_create(false, &browser).is_ok());
 }

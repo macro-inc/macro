@@ -166,6 +166,9 @@ fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealti
         InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
             vec![update(EntityType::Initiative, change.initiative_id)]
         }
+        InitiativeTopicEvent::AppearanceChanged { change, .. } => {
+            vec![update(EntityType::Initiative, change.initiative_id)]
+        }
         InitiativeTopicEvent::Purged { initiative_id } => {
             vec![delete(EntityType::Initiative, initiative_id)]
         }
@@ -396,6 +399,8 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Deleted(metadata) => {
             vec![delete(EntityType::Channel, metadata.channel_id)]
         }
+        // A request to join changes neither the channel nor its membership.
+        ChannelTopicEvent::AccessRequested(_) => Vec::new(),
     }
 }
 

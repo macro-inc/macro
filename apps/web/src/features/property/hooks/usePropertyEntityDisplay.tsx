@@ -1,12 +1,15 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
+import {
+  EntityIcon as CoreEntityIcon,
+  type EntityIconProps,
+} from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -68,6 +71,8 @@ export function usePropertyEntityDisplay(
   options?: {
     /** Custom fallback icon for unknown entity types (null to show nothing) */
     fallbackIcon?: JSX.Element | null;
+    /** Size passed to the entity icon renderer; defaults to xs. */
+    iconSize?: EntityIconProps['size'];
     /** Specific message ID for THREAD/CHANNEL/CHAT entities */
     specificMessageId?: Accessor<string | null | undefined>;
     /** Name to show while the entity's own read loads, such as a picker's label. */
@@ -163,34 +168,80 @@ export function usePropertyEntityDisplay(
     match(entityType())
       .when(
         (type) => type === 'INITIATIVE' && projectSource(),
-        () => <ProjectIcon class="size-4" />
+        () => {
+          const source = projectSource();
+          return (
+            <CoreEntityIcon
+              targetType="initiative"
+              size="xs"
+              appearance={
+                source && !source.isPending && !source.isError
+                  ? source.data?.appearance
+                  : undefined
+              }
+            />
+          );
+        }
       )
       .with('USER', () => (
         <UserIcon id={entityId()} size="sm" photoUrl={user.photoUrl()} />
       ))
-      .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
-      .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
+      .with('CHANNEL', () => (
+        <CoreEntityIcon targetType="channel" size={options?.iconSize ?? 'xs'} />
+      ))
+      .with('TASK', () => (
+        <CoreEntityIcon targetType="task" size={options?.iconSize ?? 'xs'} />
+      ))
       .with('DOCUMENT', () => {
         const item = preview();
         if (!item || !isAccessiblePreviewItem(item)) {
-          return <CoreEntityIcon targetType="unknown" size="xs" />;
+          return (
+            <CoreEntityIcon
+              targetType="unknown"
+              size={options?.iconSize ?? 'xs'}
+            />
+          );
         }
         const { subType, fileType } = item;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType, true);
-        return <CoreEntityIcon targetType={blockName} size="xs" />;
+        return (
+          <CoreEntityIcon
+            targetType={blockName}
+            appearance={
+              supportsEntityAppearance(item) ? item.appearance : undefined
+            }
+            size={options?.iconSize ?? 'xs'}
+          />
+        );
       })
-      .with('PROJECT', () => <CoreEntityIcon targetType="project" size="xs" />)
-      .with('CHAT', () => <CoreEntityIcon targetType="chat" size="xs" />)
-      .with('COMPANY', () => (
-        <CoreEntityIcon targetType="crm_company" size="xs" />
+      .with('PROJECT', () => (
+        <CoreEntityIcon targetType="project" size={options?.iconSize ?? 'xs'} />
       ))
-      .with('CONTACT', () => <CoreEntityIcon targetType="contact" size="xs" />)
-      .with('THREAD', () => <CoreEntityIcon targetType="email" size="xs" />)
+      .with('CHAT', () => (
+        <CoreEntityIcon targetType="chat" size={options?.iconSize ?? 'xs'} />
+      ))
+      .with('COMPANY', () => (
+        <CoreEntityIcon
+          targetType="crm_company"
+          size={options?.iconSize ?? 'xs'}
+        />
+      ))
+      .with('CONTACT', () => (
+        <CoreEntityIcon targetType="contact" size={options?.iconSize ?? 'xs'} />
+      ))
+      .with('THREAD', () => (
+        <CoreEntityIcon targetType="email" size={options?.iconSize ?? 'xs'} />
+      ))
       .otherwise(() => {
         if (options && 'fallbackIcon' in options) {
           return options.fallbackIcon;
         }
-        return <CoreEntityIcon targetType="unknown" size="xs" />;
+        return (
+          <CoreEntityIcon
+            targetType="unknown"
+            size={options?.iconSize ?? 'xs'}
+          />
+        );
       })
   );
 

@@ -49,6 +49,8 @@ pub struct UserCodeModeToolContext {
     /// Who the authenticated request came from; the adapter builds a context
     /// per call, so there is no default.
     pub caller: ai_toolset::ToolCaller,
+    /// Session provenance verified by the managed MCP bearer middleware.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Code mode for clients outside agent sessions, such as the public MCP.
@@ -82,12 +84,14 @@ enum CodeHost {
     )
 )]
 pub struct ExecuteCode {
-    /// Fresh UUID for this execution, recorded in the tool input so results can
-    /// be recovered even if the session stops before the tool replies.
+    /// Optional caller-chosen ID, recorded in the tool input so a call whose
+    /// reply was lost can be retried without running twice. When absent, the
+    /// server assigns one; the receipt always reports the ID used.
+    #[serde(default)]
     #[schemars(
-        description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; different source is rejected. If an ID is unavailable, choose a fresh UUID."
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
     )]
-    pub execution_id: ExecutionId,
+    pub execution_id: Option<ExecutionId>,
     /// Choose whose account authenticates every SDK operation in this execution.
     pub acting_as: ai_toolset::actor::ToolActor,
     /// Copy the current server-issued turn_id from the prompt's execution context.
@@ -95,7 +99,7 @@ pub struct ExecuteCode {
     pub turn_id: macro_uuid::Uuid,
     /// A JavaScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token."
+        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -128,7 +132,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
             .service
             .execute(
                 &context.session,
-                self.execution_id,
+                self.execution_id.unwrap_or_else(ExecutionId::mint),
                 self.acting_as,
                 self.turn_id,
                 ExecuteRequest {
@@ -188,6 +192,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
             .execute(
                 &request.user_id,
                 &context.caller,
+                context.session,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
@@ -241,7 +246,8 @@ pub enum CodeGuideTopic {
 impl CodeGuideTopic {
     fn markdown(self) -> &'static str {
         match self {
-            Self::Search => include_str!("toolset/guides/search.md"),
+            // The search guide is the `core` entity's `@agent` guidance.
+            Self::Search => crate::domain::search_guide(),
             Self::Ai => include_str!("toolset/guides/ai.md"),
             Self::Templates => include_str!("toolset/guides/templates.md"),
             Self::Examples => include_str!("../../SKILL.md"),
@@ -380,6 +386,7 @@ impl DescribeCodeTools {
                 .iter()
                 .map(|doc| CodeToolDescription {
                     index: None,
+                    guide: None,
                     ..doc.clone()
                 })
                 .collect()

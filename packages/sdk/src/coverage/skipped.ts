@@ -36,6 +36,12 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  'claudeSignOut', // Computer account credentials are managed in the app.
+  'completeClaudeSignIn', // Computer account credentials are managed in the app.
+  'getClaudeMode', // Computer account credentials are managed in the app.
+  'startClaudeSignIn', // Computer account credentials are managed in the app.
+  'getAgentVoices', // The agent voice picker is an admin app flow.
+  'getAgentVoiceSample', // The agent voice picker is an admin app flow.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -115,14 +121,14 @@ export const authExcluded = [
   'patchUserOnboarding',
   'patchUserTutorial',
   'pollCodexLogin',
-  'postProfilePictures',
   'purchaseAiCredits',
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  // Internal to the web app's agent signup; the token is shown in its modal.
+  'agentSetup',
   'putUserLanguage',
-  'putUserName',
   'redeemGtmInviteLink',
   'refresh',
   'rejectInvitation',
@@ -148,7 +154,23 @@ export const authExcluded = [
   'verifyMergeRequest',
 ];
 
-export const authBacklog = [] as const satisfies readonly (keyof AuthSdk)[];
+export const authBacklog = [
+  'createTeamAgent', // Inviting an agent teammate buys a computer; an admin app flow for now.
+  'deleteTeamAgent', // Removing an agent teammate releases its computer; an admin app flow for now.
+  'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
+  'getTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
+  'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
+  'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
+  'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'purchaseTeamComputer', // Computer checkout belongs to the app.
+  'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'retryTeamComputer', // Computer provisioning recovery belongs to the app.
+  'setTeamComputerPower', // Computer lifecycle controls belong to the app.
+  'undoCancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
+] as const satisfies readonly (keyof AuthSdk)[];
 
 export const calendarExcluded = [
   // Health probe is infra, not SDK surface.
@@ -171,7 +193,6 @@ export const cognitionExcluded = [
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
-  'getChatPermissions',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',
@@ -223,6 +244,7 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
+  'getContacts',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =
@@ -257,11 +279,9 @@ export const notificationExcluded = [
   'getUnsubscribes',
   'healthHandler',
   'removeUnsubscribeAll',
-  'removeUnsubscribeItem',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
-  'unsubscribeItem',
   'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
@@ -269,7 +289,6 @@ export const notificationBacklog =
   [] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const propertiesExcluded = [
-  'ensureTagSet',
   'mergeTag',
   'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];
@@ -278,6 +297,20 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
+  'startRoutineDraftJob', // The routine editor's background drafting.
+  'listRoutineDraftJobs', // The routine editor's background drafting.
+  'getRoutineDraftJob', // The routine editor's background drafting.
+  'discardRoutineDraftJob', // The routine editor's background drafting.
+  'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'routineCatalog', // The new-routine flow's templates.
+  'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
+  'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
+  'recordSuggestionsSeen', // The app records each load; agents have no use for it.
+  'getSuggestionGeneration', // The app polls it while fresh suggestions generate.
+  'regenerateSuggestions', // The app's refresh button, at most hourly; generation sessions may not call it.
+  'recordSuggestionsViewed', // The app records the person opening the feed; an agent's read is not a visit.
+  'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -302,6 +335,19 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Superseded in the SDK by createCrmPipelineWithFields, which also takes
+  // stages and fields.
+  'createCrmPipeline',
+  // Chat sidebar section editing and discovery remain app-only navigation.
+  'createChannelSection',
+  'deleteChannelSection',
+  'listChannelSections',
+  'previewChannelSection',
+  'setChannelSection',
+  'updateChannelSection',
+  // Opening a host to a team takes its owner's own session: an agent can ask for
+  // access but never grant it.
+  'setHarnessTeamAccess',
   // Asking to join a channel-shared event, and its sharer's request list,
   // are web-app actions.
   'listJoinRequests',
@@ -318,13 +364,10 @@ export const storageExcluded = [
   'registerSlackImportUploads',
   'bulkWakeupSyncServiceDocuments',
   'callWebhook',
-  'checkActiveCall',
   'createChannelScopedBot',
   'createCollabSurfaceToken',
   'createInstructionsHandler',
   'createViewHandler',
-  // Declining a ringing call is a live-device session flow, like leaving.
-  'declineCall',
   'declineRing',
   'deleteCollabSurface',
   'ensureCollabSurface',
@@ -340,14 +383,11 @@ export const storageExcluded = [
   'entityMessageLegacy',
   'excludeDefaultViewHandler',
   'getAttachmentReferences',
-  'getBatchCallRecordPreview',
   'getBatchChannelPreview',
   'getActiveCalls',
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'getDatabaseQuery',
   // The web grid's incremental refresh after a version ping, not a user-facing surface.
   'getDatabaseTableChanges',
   'getDocumentListHandler',
@@ -358,15 +398,23 @@ export const storageExcluded = [
   'getInstructionsHandler',
   'getItemsSoup',
   'getLocationHandler',
+  // Legacy GET can start and ring a call; SDK starts use POST.
   'getOrCreateCall',
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Status of the web app's own folder upload; uploads aren't an SDK surface.
+  'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
   'getViewsHandler',
   // Guest chat uses a live RTC session token, not SDK account credentials.
+  'guestCallChatDeleteMessage',
+  'guestCallChatPatchMessage',
   'guestCallChatPost',
+  'guestCallChatPostMessage',
+  'guestCallChatReactMessage',
   'guestCallChatRead',
+  'guestCallChatReadThread',
   'handler',
   'healthHandler',
   'ingestTranscript',
@@ -374,23 +422,44 @@ export const storageExcluded = [
   'installSync',
   'jobProcessingResultHandler',
   'joinChannelByCode',
+  // Legacy channel-scoped leave could leave a newer call; SDK leaves by call id.
   'leaveOrEndCall',
-  // Live meeting admission and participant previews are app session flows.
-  'meetingGuestJoin',
+  // Live participant previews and browser session cleanup remain app flows.
   // Browser setup reserves an empty RTC room before creating a meeting.
   'meetingPrepare',
   'meetingCancelPreparation',
   'meetingGuestParticipants',
-  'meetingJoin',
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
+  // The v1 vault requires a normal human session and item access.
+  // Agent SDK credentials cannot access it.
+  'passwordsActivity',
+  'passwordsCopy',
+  'passwordsCopyUsername',
+  'passwordsCreate',
+  'passwordsCreateFolder',
+  'passwordsDetail',
+  'passwordsFolders',
+  'passwordsGrants',
+  'passwordsHistory',
+  'passwordsList',
+  'passwordsMoveFolder',
+  'passwordsPatch',
+  'passwordsRemove',
+  'passwordsRemoveFolder',
+  'passwordsRemoveTotp',
+  'passwordsRenameFolder',
+  'passwordsReveal',
+  'passwordsSetTotp',
+  'passwordsShare',
+  'passwordsTeams',
+  'passwordsTotp',
+  'passwordsUpdate',
+  'passwordsUsername',
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  'removeBotFromChannelByBot',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
@@ -415,8 +484,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // CRM privacy settings use the generated client.
+  'getCrmEmailPrivacy',
+  'updateCrmEmailPrivacy',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

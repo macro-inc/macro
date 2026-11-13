@@ -9,6 +9,7 @@ use anyhow::{Context, Result, ensure};
 use clap::{Args, ValueEnum};
 
 use super::cli::{BuildArgs, EnvArgs, InstanceArgs, RunArgs, TracesBackend};
+use super::computers::ComputersArgs;
 use super::instance::{Instance, Port};
 use super::{Mode, frontend, proxy, repo_root, stack};
 
@@ -32,7 +33,7 @@ pub struct LocalE2eArgs {
     /// Isolated stack name. Defaults to `LOCAL_E2E_INSTANCE` or `local-e2e`.
     #[arg(long)]
     pub instance: Option<String>,
-    /// Override the instance's derived port base.
+    /// Use this port window instead of an automatically allocated one.
     #[arg(long)]
     pub port_base: Option<u16>,
     /// Test suite to run after the stack is ready and seeded.
@@ -118,6 +119,11 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             },
             env: EnvArgs::default(),
             build: BuildArgs::default(),
+            // No computers: E2E suites do not exercise them.
+            computers: ComputersArgs {
+                no_computers: true,
+                ..ComputersArgs::default()
+            },
             no_frontend: true,
             // E2E stacks are ephemeral and throughput-sensitive; no collector,
             // and Playwright brings its own browsers.

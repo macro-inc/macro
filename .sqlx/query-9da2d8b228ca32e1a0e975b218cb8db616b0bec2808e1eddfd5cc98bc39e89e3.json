@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_code_upgrade\n            SET outcome = 'needs_update', reason = $3, task = $4, updated_at = now()\n            WHERE action_id = $1 AND to_sdk = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9da2d8b228ca32e1a0e975b218cb8db616b0bec2808e1eddfd5cc98bc39e89e3"
+}

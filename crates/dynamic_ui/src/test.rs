@@ -50,6 +50,16 @@ fn a_view_of_every_widget_decodes() {
                 }]
             },
             {
+                "type": "agentUpdates",
+                "items": [{
+                    "session": { "id": "session-1" },
+                    "sessionName": "Signing",
+                    "harness": "opencode",
+                    "kind": "tool_approval",
+                    "since": "2026-10-30T20:00:00Z"
+                }]
+            },
+            {
                 "type": "container",
                 "direction": "row",
                 "gap": 8,
@@ -66,6 +76,69 @@ fn a_view_of_every_widget_decodes() {
     });
     let decoded = decode_view(&view).expect("every widget decodes");
     assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
+}
+
+/// The model's schema negates only a clause, but a view that negates a
+/// combination, as the web's query can, still decodes.
+#[test]
+fn a_negated_combination_decodes() {
+    let view = json!({
+        "widgets": [{
+            "type": "list",
+            "source": {
+                "kind": "query",
+                "query": {
+                    "documentWhere": {
+                        "op": "not",
+                        "clause": {
+                            "op": "or",
+                            "clauses": [
+                                { "include": { "documentDone": true } },
+                                { "op": "not", "clause": { "op": "and", "clauses": [] } }
+                            ]
+                        }
+                    }
+                }
+            }
+        }]
+    });
+    let decoded = decode_view(&view).expect("a negated combination decodes");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
+}
+
+/// The model passes macro.agentSessions.updates() items unchanged.
+#[test]
+fn agent_updates_take_the_sdk_items_as_they_serialize() {
+    let view = json!({
+        "widgets": [{
+            "type": "agentUpdates",
+            "items": [{
+                "session": { "id": "session-1", "url": "https://macro.com/app/agent/session-1" },
+                "sessionName": "Signing",
+                "harness": "opencode",
+                "pullRequestUrl": "https://github.com/o/r/pull/1",
+                "kind": "permission",
+                "summary": "Signing wants to run codesign",
+                "since": "2026-10-30T20:00:00Z",
+                "options": ["Allow"]
+            }]
+        }]
+    });
+    assert_eq!(
+        serde_json::to_value(decode_view(&view).unwrap()).unwrap(),
+        json!({
+            "widgets": [{
+                "type": "agentUpdates",
+                "items": [{
+                    "session": { "id": "session-1" },
+                    "sessionName": "Signing",
+                    "harness": "opencode",
+                    "kind": "permission",
+                    "since": "2026-10-30T20:00:00Z"
+                }]
+            }]
+        })
+    );
 }
 
 #[test]
@@ -90,8 +163,7 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types =
-        "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`";
+    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),

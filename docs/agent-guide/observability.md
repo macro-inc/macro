@@ -54,10 +54,10 @@ trace context — timestamps + service are the only join for those.
 
 ## Known gaps (verified 2026-08-31, local)
 
-- `agent_harness_service` emits logs but **no traces at all**; AI-chat requests
-  (`POST /cognition/stream/chat/message`) produce a trace containing only the browser client
-  span — the cognition HTTP server layer emits no server span, so the entire agent loop
-  (tools, model calls) is invisible in Tempo.
+- `agent_harness_service` emits logs but **no traces at all**; requests to its cognition
+  routes (such as `POST /cognition/structured-completion`) produce a trace containing only the
+  browser client span — the cognition HTTP server layer emits no server span, so the work
+  behind them (tools, model calls) is invisible in Tempo.
 - The cognition surface in `agent_harness_service` emits orphaned single-span traces (`add_subtoolset`) and giant
   "root span not yet received" traces made of repeated 10-second spans (a polling loop traced
   per-iteration under a never-ending root).
@@ -66,8 +66,8 @@ trace context — timestamps + service are the only join for those.
 - Log lines from events outside spans (startup, pollers) have no trace_id; in-span events do
   (structured metadata), so prefer erroring *handlers* as log entry points.
 - Most frontend spans stop at the fetch: websocket-delivered results such as AI edits
-  applying and message fan-out remain untraced. Call joining now has a user-action
-  trace; see below.
+  applying and message fan-out remain untraced. Call joining and sharing now have
+  user-action traces; see below.
 - `email_service` wraps its routes in tower-http's default `TraceLayer`, not
   `macro_tower_layers`. Its request span is DEBUG level, below the INFO trace
   filter. The span also ignores `traceparent`, so browser traces of email_service
@@ -129,6 +129,41 @@ calls similarly launch `start_channel_call` for recording, transcription, and
 recipient notifications; these run concurrently outside the token response path.
 A slow recorder or push provider should not hold the creator on Connecting.
 
+## Sharing
+
+Press **Share** or **Retry** in `Share N items` for selected rows (see
+[Entity action dialogs](navigation.md#entity-action-dialogs)). Search Tempo for
+`{ name="share.submit" }`; `{ name="share.submit" && span.entity.ids = "<item id>" }`
+finds the shares of one item, and `{ span.message.id = "<message id>" }` the
+share that sent one message. An item's own Share dialog traces separately, as
+`share.forward` with a `share.deliver` per recipient. Each press is one browser
+trace:
+
+| Span | What it measures |
+| --- | --- |
+| `share.submit` | One attempt across every recipient. |
+| `share.target` | One recipient or channel: finding its channel, sending its message, and granting access. |
+| `share.find_channel` | Finding or creating the direct message or group for people, around `http POST /dss/channels/get_or_create_dm` or `get_or_create_private`. |
+| `share.send_message` | One message, around `http POST /dss/messages/channel/<channel.id>`. |
+| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. With `enable-graphql-soup` on, a grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
+
+Each `http …` span continues into the backend trace. The root records
+`share.location` (`bulk_share`), `entity.ids`, the `share.items` and `share.targets` counts,
+`share.retry` for a press after a partial share, and the outcome
+(`share.complete`, `share.retryable`). Each `share.target` records
+`channel.id`, its planned `share.messages` and `share.pending_grants`,
+`share.recipients` when it finds or creates a direct message or group,
+`share.sent`, and `share.grant_errors`. Each `share.send_message` records
+`message.id`, the id the server stores the message under, and its
+`share.items`. When no channel resolves or a message is not sent, that phase
+and its target are marked failed; the root is marked failed when a recipient's
+work throws. Never add item names, message text, or recipient emails to these
+spans.
+
+With bearer-token auth, each request waits for a token first and lands in a
+separate trace. Match those by `channel.id` in `/messages/channel/<channel.id>`,
+the item id in the grant path, and time.
+
 ## Email From switch
 
 The composer's From switch moves a saved draft to an inbox on another account.
@@ -152,6 +187,20 @@ the first attempt's `operation_id`, so search by it to join attempts across
 traces. Errors carry fixed messages. Never add addresses, subjects, bodies, or
 file names. The `http POST` spans carry `traceparent`, but email_service does not
 join the trace yet (see known gaps).
+
+## Email Focus live updates
+
+Search Tempo for `{ name="email_focus.classify" && span.thread_id="<id>" }`. One
+trace covers an email event from its Kafka publish to the browser's read:
+
+| Span | What it measures |
+| --- | --- |
+| `kafka.process` | One `macro.email` event in the `email-focus` group, until its classification ends. |
+| `email_focus.queue` | The wait for the thread's turn: mail for a thread being classified runs after that call. `event_age_ms` is the time from publish to receipt, which includes any time the consumer stopped reading because every slot was busy. |
+| `email_focus.classify` | One classification: `classify_thread`, with its mail reads, `jev.evaluate`, and `save`. `outcome` is `classified`, `redecided`, `up_to_date`, `missing`, `not_signal`, `not_enabled`, `unavailable`, `rejected`, or `failed`. `event_age_ms` is the time from publish to the end. |
+| `email_focus.notify` | One push to an inbox's readers, under the newest classification it covers. `coalesced` counts the classifications it covers, and 0 marks the repeat for the replica. `delivered` counts the websockets that got it. |
+| `connection_gateway.websocket_send` | The frame leaving the gateway. |
+| `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
 
 ## Agent sessions
 
@@ -406,6 +455,13 @@ Phases you will see:
   `quick_access.materialize` and the `search.page_count`,
   `search.materialized_count` and `search.index.count` attributes;
   `search.index.last_build_ms` is the latest index rebuild, not another phase.
+  `search.refresh` is false on the first answer for a query or category and
+  true when a cache change replays a window already on screen, so filter on
+  `search.refresh:false` with `search.query_length` above 0 for what a person
+  waited on after typing.
+  `search.engine_restarted` is true when the cache engine was replaced while
+  the search was pending, which is a search issued in the restart window after
+  returning to the tab.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel

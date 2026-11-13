@@ -3,6 +3,7 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
+import BellFillIcon from '@icon/system/fill/bell-fill.svg';
 import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
@@ -11,9 +12,11 @@ import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import LockFillIcon from '@icon/system/fill/lock-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
 import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
@@ -23,6 +26,7 @@ import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PasswordIcon from '@icon/system/regular/lock.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
@@ -71,6 +75,17 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'notifications',
+    get label() {
+      return t('nav.notifications');
+    },
+    href: '/notifications',
+    icon: BellIcon,
+    iconActive: BellFillIcon,
+    hotkey: 'i',
+    hotkeyToken: TOKENS.sidebar.goTo.notifications,
   },
   {
     id: 'documents',
@@ -126,6 +141,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: CalendarBlankFillIcon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
+  },
+  {
+    id: 'passwords',
+    get label() {
+      return t('passwords.title');
+    },
+    href: '/passwords',
+    icon: PasswordIcon,
+    iconActive: LockFillIcon,
   },
   {
     id: 'agents',
@@ -204,6 +228,7 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 
 /** Feature flag gates for sidebar destinations. */
 export type NavItemGates = {
+  showNotifications: boolean;
   showCalendar: boolean;
   showScheduling: boolean;
   showCustomers: boolean;
@@ -211,6 +236,7 @@ export type NavItemGates = {
   showReviews: boolean;
   showActivity: boolean;
   showExternal: boolean;
+  showPasswords: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -220,14 +246,32 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
+  if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'calendar') return gates.showCalendar;
   if (item.id === 'booking-links') return gates.showScheduling;
   if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
+  if (item.id === 'passwords') return gates.showPasswords;
   if (item.id === 'external') return gates.showExternal;
   return true;
+};
+
+/**
+ * Passwords joined the rail after people saved custom orders. A saved order
+ * without it places it right after Calendar, its default slot, instead of last;
+ * every other id keeps the user's order.
+ */
+const withPasswords = (order: readonly string[]): readonly string[] => {
+  if (order.includes('passwords')) return order;
+  const calendar = order.indexOf('calendar');
+  if (calendar === -1) return order;
+  return [
+    ...order.slice(0, calendar + 1),
+    'passwords',
+    ...order.slice(calendar + 1),
+  ];
 };
 
 /**
@@ -250,7 +294,7 @@ export const orderNavItems = (
     used.add('home');
   }
 
-  for (const id of order) {
+  for (const id of withPasswords(order)) {
     if (id === 'home' || used.has(id)) continue;
     const item = byId.get(id);
     if (item) {

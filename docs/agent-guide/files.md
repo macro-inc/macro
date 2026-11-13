@@ -15,6 +15,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -43,7 +44,8 @@ With `enable-databases` enabled, **My Files** includes owned databases and
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
 Database** creates and opens a database from file tabs or the folder overview;
-it is absent inside a folder because a new database starts at the root.
+it is absent inside a folder because a new database starts at the root; move
+it in afterwards.
 Database rows open their database block, including Enter and Open in new split.
 Right-click (or long-press) a database for the same entity actions as other
 Drive rows: Open in new split, Rename (edit or owner), Favorite, Copy Link,
@@ -55,7 +57,13 @@ the form's title menu. A filed database or form appears in that folder's
 contents for everyone who can open it, inherits the folder's sharing like a
 document, and stays in the file tabs. Verify moving one into a nested folder
 shared with another user, that user opening it from the folder, and moving it
-back to root. Databases have no view history and do not appear in **Recent** or
+back to root, by **Remove from folder** or a drop on the sidebar's **Drive**
+row. Each move toasts success once: databases and forms have no Soup record, so
+the move's result carries no cache patch for them. Deleting a folder trashes the
+documents and chats inside it but returns its databases and forms (and those in
+its subfolders) to the root, without the sharing the folder passed down; they show
+no folder chip, even after a reload, and restoring the folder does not file them
+again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 
@@ -64,7 +72,7 @@ strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with
 leading filter-drawer button, like Tasks. Opening Files from the mobile dock
 starts on **Recent**; explicit tab and folder links keep their destination. The
 first pill is Recent. The drawer holds Sort (hidden on Recent, where the viewer's own
-edit order applies) and, on tab locations only, the same filter groups as the
+edit order applies, and hidden on the touch folder tree) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
 and a `Clear all` action in the drawer. The single-row desktop list header orders the title, Filter, Sort, New, and an
 expandable Search icon. `Cmd/Ctrl+F` opens the search field. These list-header
@@ -72,7 +80,13 @@ controls are desktop-only — search on
 touch uses the global search overlay and creation uses the dock's New button.
 The **Folders** pill opens the folder overview and stays highlighted inside
 any folder; tapping it from inside a folder returns to the overview, and
-selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+selecting another pill leaves the folder tree. On a touch device whose Drive
+sidebar is off screen, that overview is the nested folder tree — name order,
+with a folder search field — rather than a date-sorted list of every folder.
+Tap a folder name to open its contents; the expand control reveals child
+folders without leaving the overview. Inside a folder, a path under the pills
+lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
+the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a collapsible Databases section
 listing every database the viewer owns or has been shared, by name (past ten,
 it scrolls within its own height; hidden when there are none or databases are
@@ -143,8 +157,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
-Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+unchanged. Folder menus also offer Favorite/Unfavorite, Mute/Unmute notifications
+with the shared timed-mute presets and custom time picker, Duplicate, Copy Link, Copy ID, Share, and
 owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
 **Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
 beside it (or at the top level without edit access to its parent), copying its
@@ -159,6 +173,13 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Created by uses a bounded searchable contact window on desktop and in the mobile
+drawer, with Me and persisted selections resolved independently of that window.
+Next options replaces the page; selected and unavailable IDs remain selected,
+and Only clears off-page selections in this group without changing other facets.
+Partial/offline cache data is labeled rather than treated as an empty directory.
+The source stays idle until the creator submenu/drawer section opens. Regression:
+`src/lib/core/internal/browser-test/list-filters.browser.e2e.ts` (stand-in data).
 The desktop Filter trigger shows the number of active filters, matching the
 mobile drawer; clearing all filters removes the badge. Use the left checkboxes
 (or Space) to combine Type options without closing. Row activation adds and
@@ -281,3 +302,49 @@ extension with the original. Repeat at 390px with touch enabled and at tablet
 width. Exercise a failed request, retry, cancellation, and changing selection.
 Native save/share dialogs require physical iOS/Android verification in addition
 to browser emulation.
+
+## Uploading folders
+
+Upload a folder with **Upload folders** in Cmd+K, Drive's **New** menu
+(**Upload folder**), or by dropping it on Drive or a folder. A folder may hold up
+to 10,000 files and 3 GB; past either limit a toast names the folder and the limit
+before anything is read. The app zips the folder without compression, streaming
+the picked files from disk, so in a browser memory stays flat however large the
+folder is. The desktop and mobile apps still send the zip through the native
+HTTP client, which holds it in memory while it uploads.
+
+The upload indicator above the toasts follows one folder through every stage:
+
+- **Preparing &lt;folder&gt;** with a percentage while the files are read and hashed.
+- **Uploading &lt;folder&gt;** with a percentage while the zip is sent.
+- **Processing &lt;folder&gt;** while the server unpacks it: a spinner until the
+  extractor has counted the files, then the share of files stored.
+- It ends in a toast: **Uploaded &lt;folder&gt;**; **Uploaded &lt;folder&gt;, but N of
+  M files could not be uploaded**; **Failed to upload &lt;folder&gt;**; or, when the
+  server cannot say or nothing has changed for longer than the extractor can run
+  (16 minutes), **Couldn't confirm that &lt;folder&gt; finished uploading**. It never
+  reports a failure just because processing is slow.
+
+The indicator polls the upload's status
+(`GET /projects/upload_extract/{request_id}`) as well as listening for the
+`bulk_upload` websocket result, so a dropped socket still ends in the true
+state. Once a folder is sent, the browser remembers it for the signed-in account
+until its end toast shows. After a reload or a crash, and in every other tab of
+the same account, whether opened while it processes or already open when it was
+sent, the indicator shows **Processing &lt;folder&gt;** and ends in the same
+toasts; each tab shows a folder's end once. Signing out keeps the record, and
+the folder resumes when that account signs in again; another account never
+sees it. A reload while a folder
+is still preparing or uploading cancels that upload. A folder sent more than a
+day earlier is dropped without a toast, and one still unfinished 90 minutes
+after it was sent, past every extractor retry, ends at once in **Couldn't
+confirm**.
+
+Verification: the shared headless Chrome runs in Docker and cannot read files on
+the host, so feed real folders through a private Playwright Chromium on the same
+machine: open **Upload folders**, catch the file chooser and pass the folder's
+path to `fileChooser.setFiles`. Check each stage's label and percentage, the
+end toast, and the uploaded tree in Drive. To check resuming, reload during
+**Processing**, open a second tab of the same account, and keep a tab of that
+account open while another sends a folder. Delete the uploaded folders
+afterwards.

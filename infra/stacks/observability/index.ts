@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { createCiTelemetryRole } from './ci';
+import { SOURCE_TAG_PREFIX, imageSourceKey } from './deploy/image-key';
 import { createNetwork } from './network';
 import { renderUserData } from './render';
 import {
@@ -25,11 +26,33 @@ const tags = { project: 'observability', environment: stack };
 const durable = { protect: true, retainOnDelete: true };
 const secretArn = config.require('secretArn');
 const alarmTopicArn = config.require('alarmTopicArn');
-// Built from this stack's pinned NixOS flake and published in Ohio.
-const amiId = config.require('amiId');
-if (!/^ami-[a-f0-9]+$/.test(amiId)) {
-  throw new Error('amiId must identify the reviewed observability NixOS image');
+// The AMI built from this checkout's image source, which the deploy workflow
+// tags once it passes its smoke boot. Source, not a committed ID, picks it:
+// reverting a commit redeploys the image it built. See README.
+if (config.get('amiId')) {
+  throw new Error(
+    'amiId is no longer read: the image is the one tagged for this source'
+  );
 }
+const imageKey = imageSourceKey(__dirname);
+const amiId = aws.ec2
+  .getAmiIdsOutput({
+    owners: ['self'],
+    filters: [
+      { name: 'tag-key', values: [`${SOURCE_TAG_PREFIX}${imageKey}`] },
+      { name: 'tag:project', values: ['observability'] },
+      { name: 'state', values: ['available'] },
+    ],
+  })
+  .ids.apply((ids) => {
+    if (ids.length !== 1) {
+      throw new Error(
+        `Expected one smoke-tested AMI for image source ${imageKey}, found ${ids.length}. ` +
+          'Run the Deploy Observability workflow (a dry run builds and tags it); see README "Deploying".'
+      );
+    }
+    return ids[0];
+  });
 // Validate operator input before registering any infrastructure resources.
 validateSettings({
   region,
@@ -487,6 +510,8 @@ export const grafanaUrl = `https://${grafanaHost}`;
 export const otlpHttpEndpoint = `https://${otlpHost}`;
 export const goalertUrl = `https://${oncallHost}`;
 export const instanceId = instance.id;
+export const imageId = amiId;
+export const imageSource = imageKey;
 export const dataVolumeId = data.id;
 export const logsBucket = logs.bucket;
 export const tracesBucket = traces.bucket;

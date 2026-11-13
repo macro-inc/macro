@@ -74,7 +74,7 @@ createEffect(() =>
   sessionStorage.setItem(FIXTURE_KEYS.events, JSON.stringify(events()))
 );
 
-/** Google sign-up creates the account and returns into onboarding. */
+/** Google or Microsoft sign-up creates the account and returns into onboarding. */
 const signUpWithGoogle = async () => {
   fake.update((draft) => {
     draft.viewer = defaultFakeWorld().viewer;
@@ -102,6 +102,8 @@ declare global {
       events: typeof events;
       calls: typeof fake.calls;
       notifications: typeof fake.notifications;
+      /** Changes the fake backend in place, e.g. to stream suggestions in. */
+      update: (patch: Partial<FakeOnboardingWorld>) => void;
     };
   }
 }
@@ -110,6 +112,10 @@ window.onboardingFixture = {
   events,
   calls: fake.calls,
   notifications: fake.notifications,
+  update: (patch) =>
+    fake.update((draft) => {
+      Object.assign(draft, patch);
+    }),
 };
 
 function Fixture() {
@@ -124,8 +130,10 @@ function Fixture() {
         <Match when={params.view === 'signup'}>
           <SignupJourneyView
             onGoogle={signUpWithGoogle}
+            onMicrosoft={signUpWithGoogle}
             onBackFromEmail={() => {}}
             onSignIn={() => land({ t: 'sign-in' })}
+            onAgentSignup={() => {}}
             showingEmail={false}
           />
         </Match>

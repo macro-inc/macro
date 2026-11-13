@@ -1,4 +1,5 @@
 import '@app/index.css';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import type { ColumnDetail } from '@service-storage/generated/schemas/columnDetail';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
@@ -9,6 +10,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { errAsync, okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import {
+  DatabaseLinkValue,
+  DatabaseTextEditor,
+  DatabaseTextValue,
+} from '../../block-database/database-mentions';
 import { DatabaseEditorToolbar } from '../../database/components/database-editor-toolbar';
 import { DatabaseProvider, useDatabase } from '../../database/context/database';
 import type {
@@ -138,6 +144,26 @@ function Fixture() {
   };
   let rows: StorageRow[] = [
     {
+      rowId: id(9),
+      cells: {
+        [id(4)]: {
+          type: 'EntityReference',
+          value: [
+            {
+              entity_id: id(8),
+              entity_type: 'COMPANY',
+              specific_message_id: null,
+            },
+          ],
+        },
+        [id(6)]: {
+          type: 'String',
+          value:
+            'Oct 21 emailed them a welcome note and a renewal quote, no reply yet',
+        },
+      },
+    },
+    {
       rowId: id(7),
       cells: {
         [id(4)]: {
@@ -160,6 +186,12 @@ function Fixture() {
           type: 'SelectOption',
           value: [table.columns[4].definition.property_options[0].id],
         },
+      },
+    },
+    {
+      rowId: id(11),
+      cells: {
+        [id(6)]: { type: 'String', value: 'Line one\nLine two\nLine three' },
       },
     },
   ];
@@ -334,50 +366,55 @@ function Fixture() {
           Toggle editing
         </button>
         <output aria-label="Pipeline writes">{writes()}</output>
-        <DatabaseProvider
-          api={api}
-          tableId={pipeline.tableId}
-          view={view()}
-          capabilities={{ editRows: editable(), editColumns: editable() }}
-        >
-          <DatabaseRecords
+        <StaticMarkdownContext>
+          <DatabaseProvider
+            api={api}
+            tableId={pipeline.tableId}
             view={view()}
-            stored={false}
-            renderToolbar={() => (
-              <>
-                <div class="flex gap-4 p-2">
-                  <button
-                    onClick={() =>
-                      setView({
-                        query: { filter: null },
-                        layout: {
-                          kind: 'board',
-                          groupBy: id(9),
-                          title: id(4),
-                          lanes: [],
-                          cardFields: [id(9), id(10), id(11)],
-                          hideEmptyLanes: false,
-                        },
-                      })
+            capabilities={{ editRows: editable(), editColumns: editable() }}
+          >
+            <DatabaseRecords
+              view={view()}
+              stored={false}
+              renderToolbar={() => (
+                <>
+                  <div class="flex gap-4 p-2">
+                    <button
+                      onClick={() =>
+                        setView({
+                          query: { filter: null },
+                          layout: {
+                            kind: 'board',
+                            groupBy: id(9),
+                            title: id(4),
+                            lanes: [],
+                            cardFields: [id(9), id(10), id(11)],
+                            hideEmptyLanes: false,
+                          },
+                        })
+                      }
+                    >
+                      Show board
+                    </button>
+                  </div>
+                  <FixtureToolbar
+                    view={view()}
+                    onChangeView={(change) =>
+                      setView((current) => ({ ...current, ...change }))
                     }
-                  >
-                    Show board
-                  </button>
-                </div>
-                <FixtureToolbar
-                  view={view()}
-                  onChangeView={(change) =>
-                    setView((current) => ({ ...current, ...change }))
-                  }
-                />
-              </>
-            )}
-            onViewChange={(change) =>
-              setView((view) => ({ ...view, ...change }))
-            }
-            renderMentionValue={() => <span>Acme</span>}
-          />
-        </DatabaseProvider>
+                  />
+                </>
+              )}
+              onViewChange={(change) =>
+                setView((view) => ({ ...view, ...change }))
+              }
+              renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
+              renderTextValue={(value) => <DatabaseTextValue value={value} />}
+              renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
+              renderMentionValue={() => <span>Acme</span>}
+            />
+          </DatabaseProvider>
+        </StaticMarkdownContext>
       </main>
     </QueryClientProvider>
   );

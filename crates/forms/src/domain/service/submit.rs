@@ -164,7 +164,7 @@ fn unlocked_booking(layout: &FormLayout) -> Option<UnlockedBooking> {
 }
 
 /// Whether a saved row's answers pass the form as it is now: every required
-/// question answered and every gate passed.
+/// question of a shown section answered and every gate passed.
 fn still_passes(
     layout: &FormLayout,
     columns: &HashMap<ColumnId, QuestionColumn>,
@@ -293,6 +293,7 @@ where
                     &respondent,
                     stamped,
                 )],
+                ids: None,
             },
         }];
         // The row first, under the form's receipt, then the ledger, in its
@@ -472,6 +473,7 @@ where
                     &Respondent::Member(user.clone()),
                     entry.submitted_at,
                 )],
+                ids: None,
             },
         }];
         let viewer = row_author(form, &Respondent::Member(user.clone()))?;

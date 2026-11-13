@@ -9,7 +9,7 @@ impl PgMailboxSync {
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                     AND s.kind = 'folder_catalog' AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -34,7 +34,7 @@ impl PgMailboxSync {
         &self,
         lease: &CatalogLease,
         folders: &[MailFolder],
-    ) -> Result<(), MailboxError> {
+    ) -> Result<Option<ImportCompleted>, MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         // Serialize against disconnect/reconnect before touching the shared catalog.
         let current = sqlx::query!(
@@ -102,11 +102,12 @@ impl PgMailboxSync {
         .map_err(db_error)?;
         for folder in folders {
             sqlx::query!(r#"
-                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation)
-                VALUES ($1,$2,$3,$4,$5,$6)
+                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation,total_item_count)
+                VALUES ($1,$2,$3,$4,$5,$6,$7)
                 ON CONFLICT (link_id,provider_id) DO UPDATE SET parent_id = EXCLUDED.parent_id,
-                    display_name = EXCLUDED.display_name,role = EXCLUDED.role,catalog_generation = EXCLUDED.catalog_generation,deleted_at = NULL
-            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence)
+                    display_name = EXCLUDED.display_name,role = EXCLUDED.role,catalog_generation = EXCLUDED.catalog_generation,deleted_at = NULL,
+                    total_item_count = EXCLUDED.total_item_count
+            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence,folder.total_items.map(i64::from))
                 .execute(&mut *tx).await.map_err(db_error)?;
             sqlx::query!(
                 r#"
@@ -148,8 +149,9 @@ impl PgMailboxSync {
             WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
-        Self::queue_attachment_recheck(&mut tx, lease.mailbox).await?;
-        tx.commit().await.map_err(db_error)
+        let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(import_completed)
     }
 
     pub(super) async fn release_catalog_lease(

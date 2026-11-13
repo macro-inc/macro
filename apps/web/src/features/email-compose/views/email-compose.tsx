@@ -162,6 +162,7 @@ function LoadedEmailComposeView(
   } = state;
   const ctxValue: ComposeContextValue = {
     ...state.context,
+    createRecipientSource: composeContext.createRecipientSource,
     bodyActions: {
       focusSibling: props.host?.focusSibling,
       recipientAdded: (email) =>
@@ -177,6 +178,7 @@ function LoadedEmailComposeView(
     },
     isMobile: composeContext.presentation.isMobile,
     scheduleEnabled: composeContext.presentation.scheduleEnabled,
+    calendarEvents: composeContext.calendarEvents,
     onUpgrade: composeContext.presentation.onUpgrade,
     viewerLoading: composeContext.presentation.viewerLoading,
     signaturePreview: () => (

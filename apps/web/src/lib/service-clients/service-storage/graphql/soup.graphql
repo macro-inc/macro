@@ -132,6 +132,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupInitiative {
+        appearance
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename
@@ -140,6 +141,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupDocument {
+        appearance
 		documentName: name
 		ownerId
 		fileType
@@ -318,6 +320,12 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties {
 			...SoupPropertyFields
 		}
+	}
+	... on GraphqlSoupHarness {
+		harnessName: name
+		ownerId
+		createdAt
+		updatedAt
 	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
@@ -556,6 +564,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		entityAccessGrantedFileType: fileType
 		entityAccessGrantedAccessLevel: accessLevel
 	}
+	... on GraphqlRuntimeAccessRemovedMetadata {
+		runtimeAccessRemovedRuntimeName: runtimeName
+		runtimeAccessRemovedAgents: agents {
+			botId
+			name
+		}
+	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
@@ -606,6 +621,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
@@ -632,6 +653,20 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		routineRunFinishedRoutineId: routineId
 		routineRunFinishedRoutineName: routineName
 		routineRunFinishedSucceeded: succeeded
+	}
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
+	}
+	... on GraphqlComputerSetupMetadata {
+		computerSetupComputerId: computerId
+		computerSetupHarnessId: harnessId
+		computerSetupComputerName: computerName
+		computerSetupOutcome: outcome
+		computerSetupFailureReason: failureReason
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
