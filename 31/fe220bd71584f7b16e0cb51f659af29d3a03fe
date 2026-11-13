@@ -1,0 +1,22 @@
+agent-teammates/starter-agent/behavior/capabilities/dashboard/index.ts
+  s_d122931162dc18::t_d11595545ad090 94-112,143,154
+agent-teammates/starter-agent/behavior/capabilities/dashboard/test/dashboard.test.ts
+  s_d122931162dc18::t_d11595545ad090 151-166,168-171
+  s_d122931162dc18::t_3f1e726d197b13 167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "31fe220bd71584f7b16e0cb51f659af29d3a03fe",
+  "prompts": {},
+  "sessions": {
+    "s_d122931162dc18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de5b8580-6a70-4f1c-94af-fe64860d5e36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
