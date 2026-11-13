@@ -184,6 +184,27 @@ pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::Computer
     hosted_runtimes::outbound::pg::PgComputerRepo,
 >;
 
+/// Agent teammates on the team's Macro computers.
+pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentServiceImpl<
+    team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    team_agents::outbound::team_membership::TeamsMembership<TeamsServiceType>,
+    team_agents::outbound::agent_api_keys::UserApiKeys<
+        user_api_key::domain::service::UserApiKeyServiceImpl<
+            user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+        >,
+    >,
+    team_agents::outbound::agent_git_repos::AgentGitRepos,
+    team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers<
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+        crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
+        hosted_runtimes::domain::service::SystemClock,
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+        hosted_runtimes::domain::ports::NoComps,
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+    >,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
+
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<
     favorites::outbound::pg_favorites_repo::PgFavoritesRepo,
 >;
@@ -278,6 +299,8 @@ pub(crate) struct ApiContext {
     pub computer_prices: crate::domain::computer_billing::ComputerPrices,
     /// Buys and manages Macro computers; also runs their billing effects.
     pub computer_service: Arc<ComputerServiceType>,
+    /// Invites and removes agent teammates, and issues their enrollments.
+    pub team_agents_service: Arc<TeamAgentsServiceType>,
     /// Cancels computers whose subscription items went away outside Macro.
     pub computer_billing_observer:
         Arc<dyn crate::domain::computer_billing::ComputerBillingObserver>,
@@ -286,6 +309,8 @@ pub(crate) struct ApiContext {
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
+    /// Google's OAuth authorization endpoint, where a Gmail link sends the browser.
+    pub google_authorization_url: url::Url,
     /// Signs and verifies the `state` on account-link OAuth round trips.
     pub account_link_state_key: AccountLinkStateKey,
 }

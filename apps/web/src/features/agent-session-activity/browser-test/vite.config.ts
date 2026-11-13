@@ -38,7 +38,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['loro-crdt'],
-    esbuildOptions: { target: 'esnext' },
+    rolldownOptions: { transform: { target: 'esnext' } },
   },
   server: { host: '127.0.0.1', strictPort: true },
 });

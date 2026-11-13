@@ -26,7 +26,7 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, repo_root};
+use super::{Mode, google_emulator, microsoft_emulator, repo_root};
 
 #[cfg(test)]
 mod test;
@@ -70,6 +70,34 @@ pub fn tls_certs_dir() -> PathBuf {
     repo_root().join("infra/local/certs")
 }
 
+/// The sidecars a stack's resolved env turns on. They are not Rust services
+/// of ours, so they have no modes in the inventory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Sidecars {
+    /// Forwards real Gmail watch notifications to the email service. On when
+    /// the env carries the forwarder's service-account key.
+    pub gmail_forwarder: bool,
+    /// The Gmail emulator, in place of Google. On when the stack runs its own
+    /// FusionAuth and the env names no real Google client.
+    pub gmail_emulator: bool,
+    /// The Outlook emulator, in place of Microsoft. On when the stack runs
+    /// its own FusionAuth and the env names no real Microsoft client.
+    pub outlook_emulator: bool,
+}
+
+impl Sidecars {
+    pub fn from_env(mode: Mode, env: &std::collections::BTreeMap<String, String>) -> Self {
+        Sidecars {
+            gmail_forwarder: mode.spec().runs_local_infra
+                && env
+                    .get("GMAIL_FORWARDER_SA_KEY")
+                    .is_some_and(|key| !key.trim().is_empty()),
+            gmail_emulator: google_emulator::stands_in(mode, env),
+            outlook_emulator: microsoft_emulator::stands_in(mode, env),
+        }
+    }
+}
+
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
@@ -78,7 +106,7 @@ pub fn generate(
     instance: &Instance,
     binaries: &BinariesDir,
     static_frontend: bool,
-    gmail_forwarder: bool,
+    sidecars: Sidecars,
     computers: &Computers,
 ) -> Result<PathBuf> {
     super::tls::issue(instance)?;
@@ -88,10 +116,16 @@ pub fn generate(
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
+        let mut environment = vec![("PORT", "8080")];
+        if sidecars.outlook_emulator
+            && svc.compose_name == microsoft_emulator::AUTHENTICATION_SERVICE
+        {
+            environment.extend(microsoft_emulator::authentication_service_env());
+        }
         let mut s = dct::Service {
             image: Some(runtime_image.clone()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
-            environment: kv(&[("PORT", "8080")]),
+            environment: kv(&environment),
             ..Default::default()
         };
         let ports = published_ports(mode, instance, svc);
@@ -124,7 +158,48 @@ pub fn generate(
     // stacks sync independently — a subscription is a queue, not a broadcast,
     // so sharing one would make instances steal each other's notifications.
     // Gated on the SA key being present in the resolved env.
-    if gmail_forwarder && mode.spec().runs_local_infra {
+    if sidecars.gmail_emulator {
+        let mut volumes = mounts.clone();
+        volumes.push(google_emulator::seed_volume());
+        services.insert(
+            google_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: volumes.into_iter().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(google_emulator::command())),
+                ports: dct::Ports::Short(vec![google_emulator::published_port(instance)]),
+                // The services call it on their network; FusionAuth, which
+                // exchanges sign-in codes with it, only joins `auth`.
+                networks: net_aliases(&[
+                    ("services", &[google_emulator::network_alias()]),
+                    ("auth", &[google_emulator::network_alias()]),
+                ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.outlook_emulator {
+        let mut volumes = mounts.clone();
+        volumes.push(microsoft_emulator::seed_volume());
+        services.insert(
+            microsoft_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: volumes.into_iter().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(microsoft_emulator::command(instance))),
+                ports: dct::Ports::Short(vec![microsoft_emulator::published_port(instance)]),
+                // The services call it on their network; FusionAuth, which
+                // discovers its endpoints and exchanges sign-in codes with
+                // it, only joins `auth`.
+                networks: net_aliases(&[
+                    ("services", &[microsoft_emulator::network_alias()]),
+                    ("auth", &[microsoft_emulator::network_alias()]),
+                ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.gmail_forwarder {
         services.insert(
             "gmail_forwarder".to_string(),
             Some(dct::Service {
@@ -220,10 +295,9 @@ fn add_computers(
             let dct::Environment::KvPair(env) = &mut harness.environment else {
                 anyhow::bail!("harness environment must be a key-value map");
             };
-            env.insert(
-                "COMPUTERS_FLEET".into(),
-                Some(dct::SingleValue::String("disabled".into())),
-            );
+            // The harness reads an absent `COMPUTERS_FLEET` as "no fleet" and
+            // rejects any other value, so drop every computer setting.
+            env.retain(|key, _| !key.starts_with("COMPUTERS_"));
         }
         Fleet::Docker => {
             // Same path on both sides: the harness writes enrollments here and

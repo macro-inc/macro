@@ -33,7 +33,13 @@ import { LocalRuntimeCard } from './components/local-runtime-card';
 import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
+import {
+  COMPUTER_SETUP_PARAM,
+  parseComputerSetupParam,
+  requestComputerSetup,
+} from './computers/primitives/setup-request';
 import { useTeamComputers } from './computers/primitives/team-computers';
+import { GetComputerEntry } from './computers/views/get-computer-entry';
 import { MacroComputers } from './computers/views/MacroComputers';
 import {
   CURSOR_KEY_FORMAT_ERROR,
@@ -92,6 +98,7 @@ export function Harness(
   // The runtime the page points out, and the one whose Share menu is open.
   const [highlight, setHighlight] = createSignal<{ target: string }>();
   const [sharing, setSharing] = createSignal<string>();
+  const [buyingComputer, setBuyingComputer] = createSignal(false);
   // Opened from an access-request notification: point out that runtime and,
   // for a request, open its Share menu, where the request waits.
   createEffect(
@@ -108,6 +115,14 @@ export function Harness(
     if (typeof pair === 'string' && pair.length > 0) {
       setPairingDialog({ initialCode: pair });
       setSearchParams({ pair: undefined }, { replace: true });
+    }
+    // A computer setup notification's link, opened cold.
+    const computerId = parseComputerSetupParam(
+      searchParams[COMPUTER_SETUP_PARAM]
+    );
+    if (computerId) {
+      requestComputerSetup(computerId);
+      setSearchParams({ [COMPUTER_SETUP_PARAM]: undefined }, { replace: true });
     }
   });
 
@@ -194,6 +209,7 @@ export function Harness(
               </Button>
             }
           >
+            <GetComputerEntry onGet={() => setBuyingComputer(true)} />
             <PendingRequestsSection />
             <ConnectedRuntimesSection
               harnesses={
@@ -221,7 +237,11 @@ export function Harness(
               canRemoveShared={isTeamOwner()}
               onRemove={setRemovingHarness}
             />
-            <MacroComputers harnesses={harnesses()} />
+            <MacroComputers
+              harnesses={harnesses()}
+              buying={buyingComputer()}
+              onBuyingChange={setBuyingComputer}
+            />
             <LocalRuntimeCard />
             <div>
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">

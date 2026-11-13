@@ -2,7 +2,6 @@ export interface EmailThreadKeyboardHandlers {
   activate: () => boolean;
   cancel: () => boolean;
   replyToFocusedMessage: () => boolean;
-  replyAllToFocusedMessage?: () => boolean;
   forwardFocusedMessage: () => boolean;
   /** Gates the sender actions, which have no target when every message is
    *  from the viewer. */

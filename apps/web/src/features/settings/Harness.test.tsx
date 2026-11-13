@@ -26,6 +26,7 @@ import {
 } from '@tanstack/solid-query';
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computerSetupRequest } from './computers/primitives/setup-request';
 import { Harness } from './Harness';
 import {
   requestRuntimeShare,
@@ -48,6 +49,10 @@ vi.mock('./components/pending-requests-section', () => ({
 
 vi.mock('./computers/views/MacroComputers', () => ({
   MacroComputers: () => null,
+}));
+
+vi.mock('./computers/views/get-computer-entry', () => ({
+  GetComputerEntry: () => null,
 }));
 
 vi.mock('./computers/primitives/team-computers', () => ({
@@ -118,7 +123,10 @@ const harnessMocks = vi.hoisted(() => ({
     },
     isError: false,
   },
-  searchParams: { pair: undefined as string | undefined },
+  searchParams: {
+    pair: undefined as string | undefined,
+    computerSetup: undefined as string | undefined,
+  },
   setSearchParams: vi.fn(),
 }));
 
@@ -253,6 +261,7 @@ beforeEach(() => {
   harnessMocks.deleteHarness.mockResolvedValue(undefined);
   harnessMocks.approve.mockResolvedValue(REGISTERED_HARNESS);
   harnessMocks.searchParams.pair = undefined;
+  harnessMocks.searchParams.computerSetup = undefined;
 });
 
 describe('Harness', () => {
@@ -683,6 +692,17 @@ describe('Harness', () => {
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(
       { pair: undefined },
+      { replace: true }
+    );
+  });
+  it('hands a computer setup link to Settings → Machines and clears it', () => {
+    harnessMocks.searchParams.computerSetup = 'computer-1';
+
+    render(() => <Harness />);
+
+    expect(computerSetupRequest()).toMatchObject({ computerId: 'computer-1' });
+    expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(
+      { computerSetup: undefined },
       { replace: true }
     );
   });

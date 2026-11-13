@@ -43,6 +43,7 @@ function Editor(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       data-input-editor-shell
+      data-composer-scroll
       class={cn(
         'transition-all duration-150 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm',
         'p-(--input-editor-padding) not-touch:max-h-[225px]',

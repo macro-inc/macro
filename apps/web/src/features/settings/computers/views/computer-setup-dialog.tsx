@@ -1,9 +1,14 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { requestCreateAgent } from '@app/features/settings/agentSettingsState';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import {
   type AgentWithHarnessId,
   invalidateAgents,
@@ -11,27 +16,37 @@ import {
 } from '@queries/agents/agents';
 import { useUpdateBotMutation } from '@queries/bots/bots';
 import { useClaudeSignOutMutation } from '@queries/computers/claude';
-import { useCompleteComputerSetupMutation } from '@queries/computers/computers';
+import {
+  useCompleteComputerSetupMutation,
+  useRetryComputerMutation,
+} from '@queries/computers/computers';
 import { invalidateHarnesses } from '@queries/harnesses/harnesses';
 import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus } from '@service-auth/computers';
-import { ActionDialogShell, Button, cn, Input } from '@ui';
+import { ActionDialogShell, Button, cn, Input, Spinner } from '@ui';
 import {
   createEffect,
   createUniqueId,
   For,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ChoiceRow } from '../../primitives';
+import { SetupProgressList } from '../components/setup-progress-list';
 import {
+  computerFailureMessage,
   isProvisioning,
-  SETUP_PHASES,
-  setupPhaseIndex,
-  setupStepLabel,
 } from '../core/computer-display';
+import {
+  type SignInPlan,
+  setupSettled,
+  setupStages,
+} from '../core/setup-progress';
+import { useSetupElapsed } from '../primitives/setup-elapsed';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
 export type SetupStepId = 'computer' | 'agent' | 'claude' | 'ready';
@@ -58,79 +73,125 @@ const STEP_ORDER: readonly SetupStepId[] = [
   'ready',
 ];
 
+/** Phones get Buy › Agent › Your AI › Create, so the bar stays on one line. */
 function stepLabel(step: SetupStepId): string {
-  if (step === 'computer') return t('computers.stepComputer');
-  if (step === 'agent') return t('computers.stepAgent');
-  if (step === 'claude') return t('computers.stepClaude');
-  return t('computers.stepReady');
+  return match([step, isMobile()] as const)
+    .with(['computer', true], () => t('computers.stepBuyShort'))
+    .with(['computer', false], () => t('computers.stepBuy'))
+    .with(['agent', true], () => t('computers.stepConfigureAgentShort'))
+    .with(['agent', false], () => t('computers.stepConfigureAgent'))
+    .with(['claude', true], () => t('computers.stepBringAiShort'))
+    .with(['claude', false], () => t('computers.stepBringAi'))
+    .with(['ready', true], () => t('computers.stepCreateAgentShort'))
+    .with(['ready', false], () => t('computers.stepCreateAgent'))
+    .exhaustive();
 }
 
-/** Computer · Agent · Claude · Ready, the current one in ink. */
-export function StepHeader(props: { step: SetupStepId; skipsClaude: boolean }) {
+/**
+ * How the step bar marks Bring your AI: as an ordinary step, skipped (Macro's
+ * Claude chosen up front), or done on Macro credits (the sign-in was opened,
+ * then Use Macro credits instead).
+ */
+export type ClaudeStepMark = 'step' | 'skipped' | 'credits';
+
+export function claudeStepMark(
+  choice: ClaudeMode | undefined,
+  signInVisited: boolean
+): ClaudeStepMark {
+  if (choice !== 'macro_credits') return 'step';
+  return signInVisited ? 'credits' : 'skipped';
+}
+
+/**
+ * Buy computer → Configure agent → Bring your AI → Create agent: done steps
+ * carry a check, the current one is in ink, and a step the choice skips is
+ * muted with a dash.
+ */
+export function StepHeader(props: {
+  step: SetupStepId;
+  claude: ClaudeStepMark;
+}) {
   const current = () => STEP_ORDER.indexOf(props.step);
   return (
     <ol
       aria-label={t('computers.setupSteps')}
-      class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+      class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs"
     >
       <For each={STEP_ORDER}>
-        {(step, index) => (
-          <li
-            class={cn(
-              'flex items-center gap-2',
-              index() === current()
-                ? 'font-medium text-ink'
-                : 'text-ink-extra-muted',
-              step === 'claude' && props.skipsClaude && 'line-through'
-            )}
-            aria-current={index() === current() ? 'step' : undefined}
-          >
-            <Show when={index() > 0}>
-              <span aria-hidden="true" class="text-ink-extra-muted">
-                ·
+        {(step, index) => {
+          // Skipped, not cancelled: muted with a dash, never struck through.
+          const skipped = () => step === 'claude' && props.claude === 'skipped';
+          const onCredits = () =>
+            step === 'claude' && props.claude === 'credits';
+          const done = () => index() < current() && !skipped();
+          const active = () => index() === current();
+          return (
+            <li
+              class={cn(
+                'flex items-center gap-1.5',
+                active() && 'font-medium text-ink',
+                done() && 'text-ink-muted',
+                !active() && !done() && 'text-ink-extra-muted'
+              )}
+              aria-current={active() ? 'step' : undefined}
+            >
+              <Show when={index() > 0}>
+                <CaretRightIcon
+                  aria-hidden="true"
+                  class="size-3 shrink-0 text-ink-extra-muted"
+                />
+              </Show>
+              <Show
+                when={!skipped()}
+                fallback={
+                  <MinusIcon
+                    aria-hidden="true"
+                    class="size-3 shrink-0 text-ink-extra-muted"
+                  />
+                }
+              >
+                <Show
+                  when={done()}
+                  fallback={
+                    <span
+                      aria-hidden="true"
+                      class={cn(
+                        'size-1.5 shrink-0 rounded-full',
+                        active() ? 'bg-accent' : 'border border-ink-extra-muted'
+                      )}
+                    />
+                  }
+                >
+                  <CheckIcon aria-hidden="true" class="size-3 shrink-0" />
+                </Show>
+              </Show>
+              <span>
+                {stepLabel(step)}
+                {/* Phones keep the short label; the word stays for assistive tech. */}
+                <Show when={skipped() || onCredits()}>
+                  <span class={isMobile() ? 'sr-only' : undefined}>
+                    {` · ${t(
+                      skipped()
+                        ? 'computers.skippedStep'
+                        : 'computers.creditsStep'
+                    )}`}
+                  </span>
+                </Show>
               </span>
-            </Show>
-            {stepLabel(step)}
-          </li>
-        )}
+            </li>
+          );
+        }}
       </For>
     </ol>
   );
 }
 
-/** A thin bar over Creating → Starting → Connecting, while provisioning. */
-function ProvisioningBar(props: { computer: ComputerStatus }) {
-  const phase = () => setupPhaseIndex(props.computer);
+/** Why the footer's primary action is disabled, beside it. */
+export function DisabledReason(props: { children: JSX.Element }) {
   return (
-    <div class="flex flex-col gap-1.5">
-      <div
-        role="progressbar"
-        aria-label={t('computers.settingUp')}
-        aria-valuemin={0}
-        aria-valuemax={SETUP_PHASES.length}
-        aria-valuenow={phase() + 1}
-        class="h-1 overflow-hidden rounded-full bg-ink/8"
-      >
-        <div
-          class="h-full rounded-full bg-accent transition-[width] duration-500"
-          style={{
-            width: `${((phase() + 1) / (SETUP_PHASES.length + 1)) * 100}%`,
-          }}
-        />
-      </div>
-      <p class="flex flex-wrap gap-x-1.5 text-xs text-ink-extra-muted">
-        <For each={SETUP_PHASES}>
-          {(step, index) => (
-            <span class={cn(index() === phase() && 'font-medium text-ink')}>
-              <Show when={index() > 0}>
-                <span aria-hidden="true">→ </span>
-              </Show>
-              {setupStepLabel(step)}
-            </span>
-          )}
-        </For>
-      </p>
-    </div>
+    <p class="basis-full text-right text-xs text-ink-muted text-pretty">
+      {props.children}
+    </p>
   );
 }
 
@@ -154,12 +215,20 @@ export function ComputerSetupSteps(props: {
   onChoice: (choice: ClaudeMode) => void;
   onStep: (step: SetupStepId) => void;
   onClose: () => void;
+  /**
+   * Opened from an agent's Where it runs: closing selects this computer for
+   * that agent, so the last step offers that instead of a new agent.
+   */
+  selectsForAgent?: boolean;
+  /** Bring your AI was opened, so choosing credits there completes it. */
+  signInVisited?: boolean;
 }) {
   const nameId = createUniqueId();
   const agents = useAgentsQuery();
   const renameBot = useUpdateBotMutation();
   const signOut = useClaudeSignOutMutation();
   const completeSetup = useCompleteComputerSetupMutation();
+  const retry = useRetryComputerMutation();
   const layout = useSplitLayout();
   const settings = useSettingsState();
 
@@ -175,6 +244,23 @@ export function ComputerSetupSteps(props: {
   const agentName = () =>
     props.name ?? agent()?.bot.name ?? defaultAgentName(props.firstName);
   const done = () => !!props.computer.setupCompletedAt;
+
+  // The computer's agent is created server-side once it first comes up, so
+  // a list cached before then lacks it; refetch once per agent id. The
+  // composer's roster reads the same list, so Try it can select it.
+  createEffect(
+    on(
+      () => props.computer.defaultAgentId,
+      (agentId) => {
+        if (
+          agentId &&
+          agents.isSuccess &&
+          !agents.data.some((item) => item.bot.id === agentId)
+        )
+          fireAndForget(invalidateAgents(), 'computer-setup');
+      }
+    )
+  );
 
   const rename = async (current: AgentWithHarnessId) => {
     const trimmed = agentName().trim();
@@ -232,6 +318,13 @@ export function ComputerSetupSteps(props: {
     props.onStep('ready');
   };
 
+  // A disabled Continue always says what it waits for.
+  const continueBlockedBy = (): string | undefined => {
+    if (!agentName().trim()) return t('computers.nameAgentToContinue');
+    if (!props.choice) return t('computers.chooseClaudeToContinue');
+    return undefined;
+  };
+
   const continueFromAgent = () => {
     props.onStep(props.choice === 'own_account' ? 'claude' : 'ready');
   };
@@ -244,17 +337,68 @@ export function ComputerSetupSteps(props: {
     openAgentsPage(layout, 'new', botId ? { composerAgentId: botId } : {});
   };
 
+  // The create form, with this computer chosen under Where it runs. The tab
+  // switches first, so the Agents page there takes the request.
+  const createAgentHere = () => {
+    const id = harnessId();
+    props.onClose();
+    if (props.selectsForAgent || !id) return;
+    settings.openSettings('Agents');
+    requestCreateAgent(id);
+  };
+
+  const retrySetup = async () => {
+    try {
+      await retry.mutateAsync(props.computer.id);
+    } catch (error) {
+      toast.failure(computerFailureMessage(error, t('computers.retryFailed')));
+    }
+  };
+
+  // Setup carries on behind every step: the list says where it is, how long
+  // the current stage has taken, and what to do when it is stuck.
+  const showProgress = () =>
+    !setupSettled(props.computer) ||
+    (props.choice === 'own_account' && !done());
+  const signInPlan = (): SignInPlan =>
+    match(props.choice)
+      .returnType<SignInPlan>()
+      .with('own_account', () => 'needed')
+      .with('macro_credits', () => 'skipped')
+      .with(undefined, () => 'undecided')
+      .exhaustive();
   const header = (): JSX.Element => (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-4">
       <StepHeader
         step={props.step}
-        skipsClaude={props.choice === 'macro_credits'}
+        claude={claudeStepMark(props.choice, props.signInVisited ?? false)}
       />
-      <Show when={isProvisioning(props.computer)}>
-        <ProvisioningBar computer={props.computer} />
+      <Show when={showProgress()}>
+        <SetupProgressList
+          computer={props.computer}
+          signIn={signInPlan()}
+          connected={props.connected}
+          signedIn={done()}
+          onRetry={() => fireAndForget(retrySetup(), 'computer-setup')}
+          retrying={retry.isPending}
+        />
       </Show>
     </div>
   );
+
+  // Failed, or stuck until someone acts: setup is not moving on its own.
+  const setupStopped = () =>
+    props.computer.status === 'failed' ||
+    props.computer.status === 'needs_attention';
+
+  // The stage the computer is on, for "Preparing sign-in… starting up · 0:42".
+  const elapsed = useSetupElapsed(() => props.computer);
+  const currentStage = () =>
+    setupStages(props.computer, {
+      signIn: 'needed',
+      connected: props.connected,
+      signedIn: done(),
+    }).find((stage) => stage.state === 'current' || stage.state === 'failed');
 
   return (
     <Switch>
@@ -309,17 +453,21 @@ export function ComputerSetupSteps(props: {
           <Button
             type="button"
             variant="primary"
-            disabled={!props.choice || !agentName().trim()}
+            disabled={!!continueBlockedBy()}
             onClick={continueFromAgent}
           >
             {t('computers.continue')}
           </Button>
+          <Show when={continueBlockedBy()}>
+            {(reason) => <DisabledReason>{reason()}</DisabledReason>}
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
       <Match when={props.step === 'claude' && up() && harnessId()}>
         {(id) => (
           <ClaudeSignInFlow
             harnessId={id()}
+            entry="computer_setup"
             header={header()}
             title={t('computers.signInToClaude')}
             onSignedIn={() => fireAndForget(signedIn(), 'computer-setup')}
@@ -335,20 +483,47 @@ export function ComputerSetupSteps(props: {
               {t('computers.signInToClaude')}
             </ActionDialogShell.Title>
             <ActionDialogShell.Description>
-              {t('computers.signInLinkWaiting')}
+              {setupStopped()
+                ? t('computers.signInWaitsForRetry')
+                : t('computers.signInWaitingBody')}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
-          <p class="text-sm text-ink-muted">
-            {t('computers.claudeSharedAccount')}
-          </p>
+          {/* No greyed button: the step says what it is waiting for. A
+              stopped setup is not progressing, so nothing spins or counts. */}
+          <Show when={!setupStopped()}>
+            <p
+              role="status"
+              class="flex items-center gap-2 text-sm font-medium text-ink"
+            >
+              <Spinner size="sm" decorative />
+              {t('computers.preparingSignInStatus', {
+                stage: currentStage()?.label ?? t('computers.computerStarting'),
+                elapsed: elapsed() ?? '0:00',
+              })}
+            </p>
+            <p class="text-sm text-ink-muted">
+              {t('computers.setupContinuesInBackground')}
+            </p>
+            {/* No sign-in can happen until setup is retried. */}
+            <p class="text-sm text-ink-muted">
+              {t('computers.claudeSharedAccount')}
+            </p>
+          </Show>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer>
-          <Button type="button" variant="ghost" onClick={useCreditsInstead}>
-            {t('computers.claudeUseCreditsInstead')}
+          <Button type="button" variant="ghost" onClick={props.onClose}>
+            {t('common.close')}
           </Button>
-          <Button type="button" variant="primary" disabled>
-            {t('computers.openClaudeSignIn')}
-          </Button>
+          {/* Choosing Macro's Claude cannot finish a computer that is not up. */}
+          <Show when={!setupStopped()}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={useCreditsInstead}
+            >
+              {t('computers.claudeUseCreditsInstead')}
+            </Button>
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
       <Match when={props.step === 'ready'}>
@@ -362,18 +537,40 @@ export function ComputerSetupSteps(props: {
             </ActionDialogShell.Title>
             <ActionDialogShell.Description>
               {done()
-                ? t('computers.setupDoneBody', {
-                    computer: props.computer.name,
-                  })
+                ? t(
+                    props.selectsForAgent
+                      ? 'computers.setupDoneBodyForAgent'
+                      : 'computers.setupDoneBody',
+                    {
+                      agent: agentName(),
+                      computer: props.computer.name,
+                    }
+                  )
                 : t('computers.almostReadyBody', {
                     computer: props.computer.name,
                   })}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
+          <Show when={!done()}>
+            <p class="text-sm text-ink-muted">
+              {t('computers.setupContinuesInBackground')}
+            </p>
+          </Show>
         </ActionDialogShell.Body>
-        <ActionDialogShell.Footer>
+        {/* Three actions do not fit one phone row: stack them, Try it on top. */}
+        <ActionDialogShell.Footer class="touch:flex-col-reverse touch:items-stretch">
           <Button type="button" variant="ghost" onClick={props.onClose}>
             {t('computers.done')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!done()}
+            onClick={createAgentHere}
+          >
+            {props.selectsForAgent
+              ? t('computers.useForThisAgent')
+              : t('computers.createAgentHere')}
           </Button>
           <Button
             type="button"
@@ -383,6 +580,9 @@ export function ComputerSetupSteps(props: {
           >
             {t('computers.tryIt')}
           </Button>
+          <Show when={!done()}>
+            <DisabledReason>{t('computers.tryItAfterSetup')}</DisabledReason>
+          </Show>
         </ActionDialogShell.Footer>
       </Match>
     </Switch>

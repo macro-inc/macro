@@ -4,6 +4,7 @@
 use super::*;
 
 mod call_session;
+mod telemetry;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
     BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -348,6 +349,18 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.document_access.lock().await)
+    }
+
+    async fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<String, AccessLevel>, AccessError> {
+        let level = *self.document_access.lock().await;
+        Ok(document_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (id.clone(), level)))
+            .collect())
     }
 
     async fn get_chat_access(

@@ -9,6 +9,8 @@ mod test;
 /// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk/**"),
+    // The SDK resolves its dependencies from the root workspace lockfile.
+    xtask_paths::repo_glob!("bun.lock"),
     xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
 ];
 
