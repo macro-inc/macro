@@ -48,7 +48,8 @@ file never leaves the device.
 - Hostile input stays bounded by counts, not just bytes: JSON lists are
   counted before they're kept (`bounded.rs`), per-item lists stop at 256
   entries, CSV records at 256 cells, URLs per item at 51, folders at 32 levels. Keep new lists behind
-  `Bounded` or `Count`.
+  `Bounded` or `Count`. Both read `null` as an empty list and leave out `null`
+  entries, which both exporters' schemas allow.
 - Not zeroized: intermediate parser buffers (CSV records, URL parsing) and
   serde_json's scratch buffer, which holds every JSON string with an escape
   (multi-line SSH keys, most notes) in plain text until it is reused or freed.
@@ -59,6 +60,19 @@ file never leaves the device.
   row), else `item:<n>`. They must stay unique within one export.
 - `ParsedExport::folders` holds only folders used by imported items, ancestors
   included; empty source folders are not carried over.
+
+## Format references
+
+Checked 2026-11-13; re-check these when an exporter changes.
+
+- 1PUX: <https://support.1password.com/1pux-format/>. 1Password 8 CSV:
+  <https://support.1password.com/export/> (names the columns, not the literal header).
+- Bitwarden: <https://bitwarden.com/help/export-your-data/>,
+  <https://bitwarden.com/help/condition-bitwarden-import/>.
+- Bitwarden's own importers and export models, read for format knowledge only
+  (never copy code or fixtures): `bitwarden/clients` at `0f93346a90bb`,
+  `libs/importer/src/importers/{onepassword,bitwarden}`, their `spec-data`, and
+  `libs/common/src/models/export`.
 
 ## Related
 

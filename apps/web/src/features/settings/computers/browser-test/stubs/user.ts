@@ -1,3 +1,5 @@
+// Everything else the app imports from it is the real module's.
+export * from '../../../../../lib/core/user';
 export function tryMacroId(id: string) {
   return id;
 }

@@ -1,13 +1,15 @@
 //! Bitwarden unencrypted JSON: `{ encrypted, folders: [{id, name}], items }`.
-//! Items have `type` 1–5 (login, note, card, identity, SSH key), `login`,
-//! `card`, `identity`, `sshKey`, `fields: [{name, value, type 0–3}]`,
+//! Items have `type` 1–8 (login, note, card, identity, SSH key, bank account,
+//! driver's license, passport), `login`, `card`, `identity`, `sshKey`,
+//! `bankAccount`, `driversLicense`, `passport`, `fields: [{name, value, type 0–3}]`,
 //! `organizationId`, `collectionIds`, `deletedDate`, `archivedDate`,
 //! `passwordHistory` and `attachments`. Folder names nest with `/`.
 //! `encrypted: true` fails with `EncryptedBitwarden`.
 use std::collections::HashMap;
+use std::fmt;
 
 use serde::Deserialize;
-use serde::de::IgnoredAny;
+use serde::de::{Deserializer, Error, IgnoredAny, SeqAccess, Visitor};
 use serde_json::value::RawValue;
 
 use crate::bounded::{Bounded, Count};
@@ -51,6 +53,9 @@ enum ItemType {
     Card,
     Identity,
     SshKey,
+    BankAccount,
+    DriversLicense,
+    Passport,
     Unknown,
 }
 
@@ -62,6 +67,9 @@ impl From<u8> for ItemType {
             3 => Self::Card,
             4 => Self::Identity,
             5 => Self::SshKey,
+            6 => Self::BankAccount,
+            7 => Self::DriversLicense,
+            8 => Self::Passport,
             _ => Self::Unknown,
         }
     }
@@ -95,7 +103,7 @@ impl From<u8> for FieldType {
 struct Item {
     id: Option<String>,
     organization_id: Option<String>,
-    collection_ids: Option<Vec<IgnoredAny>>,
+    collection_ids: Option<CollectionIds>,
     folder_id: Option<String>,
     #[serde(rename = "type")]
     item_type: Option<u8>,
@@ -108,10 +116,49 @@ struct Item {
     card: Option<Card>,
     identity: Option<Identity>,
     ssh_key: Option<SshKey>,
+    bank_account: Option<BankAccount>,
+    drivers_license: Option<DriversLicense>,
+    passport: Option<Passport>,
     password_history: Option<Vec<IgnoredAny>>,
     attachments: Option<Vec<IgnoredAny>>,
     deleted_date: Option<IgnoredAny>,
     archived_date: Option<IgnoredAny>,
+}
+
+/// Whether `collectionIds` names any collection. Bitwarden's import docs
+/// show it as an array and as one id; entries are read without being kept.
+struct CollectionIds {
+    any: bool,
+}
+
+impl<'de> Deserialize<'de> for CollectionIds {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(CollectionIdsVisitor)
+    }
+}
+
+struct CollectionIdsVisitor;
+
+impl<'de> Visitor<'de> for CollectionIdsVisitor {
+    type Value = CollectionIds;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a list of collection ids or one id")
+    }
+
+    fn visit_str<E: Error>(self, id: &str) -> Result<Self::Value, E> {
+        Ok(CollectionIds {
+            any: !id.is_empty(),
+        })
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut any = false;
+        while seq.next_element::<IgnoredAny>()?.is_some() {
+            any = true;
+        }
+        Ok(CollectionIds { any })
+    }
 }
 
 #[derive(Deserialize)]
@@ -126,7 +173,7 @@ struct Field {
 #[serde(rename_all = "camelCase")]
 struct Login {
     // Older mobile exports write `"uris": null` for a login without one.
-    #[serde(default, deserialize_with = "null_as_empty")]
+    #[serde(default)]
     uris: Bounded<Uri>,
     username: Option<Secret>,
     password: Option<Secret>,
@@ -179,6 +226,55 @@ struct SshKey {
     private_key: Option<Secret>,
     public_key: Option<Secret>,
     key_fingerprint: Option<Secret>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BankAccount {
+    bank_name: Option<Secret>,
+    name_on_account: Option<Secret>,
+    account_type: Option<Secret>,
+    account_number: Option<Secret>,
+    routing_number: Option<Secret>,
+    branch_number: Option<Secret>,
+    pin: Option<Secret>,
+    swift_code: Option<Secret>,
+    iban: Option<Secret>,
+    bank_contact_phone: Option<Secret>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DriversLicense {
+    first_name: Option<Secret>,
+    middle_name: Option<Secret>,
+    last_name: Option<Secret>,
+    date_of_birth: Option<Secret>,
+    license_number: Option<Secret>,
+    issuing_country: Option<Secret>,
+    issuing_state: Option<Secret>,
+    issue_date: Option<Secret>,
+    expiration_date: Option<Secret>,
+    issuing_authority: Option<Secret>,
+    license_class: Option<Secret>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Passport {
+    surname: Option<Secret>,
+    given_name: Option<Secret>,
+    date_of_birth: Option<Secret>,
+    sex: Option<Secret>,
+    birth_place: Option<Secret>,
+    nationality: Option<Secret>,
+    issuing_country: Option<Secret>,
+    passport_number: Option<Secret>,
+    passport_type: Option<Secret>,
+    national_identification_number: Option<Secret>,
+    issuing_authority: Option<Secret>,
+    issue_date: Option<Secret>,
+    expiration_date: Option<Secret>,
 }
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
@@ -237,16 +333,18 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
     let in_collection = item
         .collection_ids
         .as_ref()
-        .is_some_and(|collections| !collections.is_empty());
+        .is_some_and(|collections| collections.any);
     if item.organization_id.is_some() || in_collection {
         return parts.skip(Some(key), name, SkipReason::SharedCollection);
     }
 
-    let kind = match item.item_type.map_or(ItemType::Unknown, ItemType::from) {
+    let item_type = item.item_type.map_or(ItemType::Unknown, ItemType::from);
+    let kind = match item_type {
         ItemType::Login => ItemKind::Login,
-        ItemType::SecureNote => ItemKind::Note,
+        // A bank account is a note with fields, as 1Password's is.
+        ItemType::SecureNote | ItemType::BankAccount => ItemKind::Note,
         ItemType::Card => ItemKind::Card,
-        ItemType::Identity => ItemKind::Identity,
+        ItemType::Identity | ItemType::DriversLicense | ItemType::Passport => ItemKind::Identity,
         ItemType::SshKey => ItemKind::Api,
         ItemType::Unknown => {
             return parts.skip(Some(key), name, SkipReason::UnsupportedCategory);
@@ -264,28 +362,43 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
         draft.set_notes(notes);
     }
 
-    match kind {
-        ItemKind::Login => {
+    match item_type {
+        ItemType::Login => {
             if let Some(login) = item.login {
                 add_login(&mut draft, login);
             }
         }
-        ItemKind::Card => {
+        ItemType::Card => {
             if let Some(card) = item.card {
                 add_card(&mut draft, card);
             }
         }
-        ItemKind::Identity => {
+        ItemType::Identity => {
             if let Some(identity) = item.identity {
                 add_identity(&mut draft, identity);
             }
         }
-        ItemKind::Api => {
+        ItemType::SshKey => {
             if let Some(key) = item.ssh_key {
                 add_ssh_key(&mut draft, key);
             }
         }
-        ItemKind::Note | ItemKind::VerificationCode => {}
+        ItemType::BankAccount => {
+            if let Some(account) = item.bank_account {
+                add_bank_account(&mut draft, account);
+            }
+        }
+        ItemType::DriversLicense => {
+            if let Some(license) = item.drivers_license {
+                add_drivers_license(&mut draft, license);
+            }
+        }
+        ItemType::Passport => {
+            if let Some(passport) = item.passport {
+                add_passport(&mut draft, passport);
+            }
+        }
+        ItemType::SecureNote | ItemType::Unknown => {}
     }
 
     if item.fields.overflowed {
@@ -404,7 +517,85 @@ fn add_identity(draft: &mut Draft, identity: Identity) {
         ("Passport number", identity.passport_number, true),
         ("License number", identity.license_number, true),
     ];
-    for (label, value, concealed) in rest {
+    add_labeled(draft, rest);
+}
+
+fn add_bank_account(draft: &mut Draft, account: BankAccount) {
+    add_labeled(
+        draft,
+        [
+            ("Bank name", account.bank_name, false),
+            ("Name on account", account.name_on_account, false),
+            ("Account type", account.account_type, false),
+            ("Account number", account.account_number, true),
+            ("Routing number", account.routing_number, false),
+            ("Branch number", account.branch_number, false),
+            ("PIN", account.pin, true),
+            ("SWIFT code", account.swift_code, false),
+            ("IBAN", account.iban, true),
+            (draft::PHONE, account.bank_contact_phone, false),
+        ],
+    );
+}
+
+fn add_drivers_license(draft: &mut Draft, license: DriversLicense) {
+    draft.add_full_name(
+        [
+            &license.first_name,
+            &license.middle_name,
+            &license.last_name,
+        ]
+        .into_iter()
+        .flatten()
+        .map(Secret::expose_secret),
+    );
+    add_labeled(
+        draft,
+        [
+            ("License number", license.license_number, true),
+            ("License class", license.license_class, false),
+            ("Date of birth", license.date_of_birth, false),
+            ("Issuing country", license.issuing_country, false),
+            ("Issuing state", license.issuing_state, false),
+            ("Issuing authority", license.issuing_authority, false),
+            ("Issued on", license.issue_date, false),
+            (draft::EXPIRES, license.expiration_date, false),
+        ],
+    );
+}
+
+fn add_passport(draft: &mut Draft, passport: Passport) {
+    draft.add_full_name(
+        [&passport.given_name, &passport.surname]
+            .into_iter()
+            .flatten()
+            .map(Secret::expose_secret),
+    );
+    add_labeled(
+        draft,
+        [
+            ("Passport number", passport.passport_number, true),
+            ("Passport type", passport.passport_type, false),
+            (
+                "National identification number",
+                passport.national_identification_number,
+                true,
+            ),
+            ("Nationality", passport.nationality, false),
+            ("Sex", passport.sex, false),
+            ("Date of birth", passport.date_of_birth, false),
+            ("Place of birth", passport.birth_place, false),
+            ("Issuing country", passport.issuing_country, false),
+            ("Issuing authority", passport.issuing_authority, false),
+            ("Issued on", passport.issue_date, false),
+            (draft::EXPIRES, passport.expiration_date, false),
+        ],
+    );
+}
+
+/// `(label, value, concealed)` fields, for the values that are present.
+fn add_labeled<const N: usize>(draft: &mut Draft, fields: [(&str, Option<Secret>, bool); N]) {
+    for (label, value, concealed) in fields {
         if let Some(value) = value {
             draft.add_field(label, value, concealed);
         }
@@ -418,13 +609,4 @@ fn add_ssh_key(draft: &mut Draft, key: SshKey) {
         key.public_key,
         key.key_fingerprint,
     );
-}
-
-/// An explicit `null` reads as the empty value, as an absent field does.
-fn null_as_empty<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de> + Default,
-{
-    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }

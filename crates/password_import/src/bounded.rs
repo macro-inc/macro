@@ -11,7 +11,8 @@ pub(crate) const MAX_LIST_ENTRIES: usize = 256;
 
 /// A JSON array holding at most `MAX` entries. Entries past `MAX` are read
 /// and discarded without allocating, and `overflowed` is set so the item can
-/// be skipped rather than imported partially.
+/// be skipped rather than imported partially. A `null` list is empty and
+/// `null` entries are left out: both exporters' schemas allow them.
 pub(crate) struct Bounded<T, const MAX: usize = MAX_LIST_ENTRIES> {
     pub(crate) entries: Vec<T>,
     pub(crate) overflowed: bool,
@@ -28,7 +29,7 @@ impl<T, const MAX: usize> Default for Bounded<T, MAX> {
 
 impl<'de, T: Deserialize<'de>, const MAX: usize> Deserialize<'de> for Bounded<T, MAX> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_seq(BoundedVisitor(PhantomData))
+        deserializer.deserialize_option(NullAsEmpty(BoundedVisitor(PhantomData)))
     }
 }
 
@@ -45,13 +46,14 @@ impl<'de, T: Deserialize<'de>, const MAX: usize> Visitor<'de> for BoundedVisitor
         let mut bounded = Bounded::default();
 
         while bounded.entries.len() < MAX {
-            match seq.next_element()? {
-                Some(entry) => bounded.entries.push(entry),
+            match seq.next_element::<Option<T>>()? {
+                Some(Some(entry)) => bounded.entries.push(entry),
+                Some(None) => {}
                 None => return Ok(bounded),
             }
         }
-        while seq.next_element::<IgnoredAny>()?.is_some() {
-            bounded.overflowed = true;
+        while let Some(entry) = seq.next_element::<Option<IgnoredAny>>()? {
+            bounded.overflowed |= entry.is_some();
         }
 
         Ok(bounded)
@@ -94,7 +96,7 @@ impl<T> Default for Count<T> {
 
 impl<'de, T: Deserialize<'de> + Counted> Deserialize<'de> for Count<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_seq(CountVisitor(PhantomData))
+        deserializer.deserialize_option(NullAsEmpty(CountVisitor(PhantomData)))
     }
 }
 
@@ -109,9 +111,45 @@ impl<'de, T: Deserialize<'de> + Counted> Visitor<'de> for CountVisitor<T> {
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
         let mut count = Count::zero();
-        while let Some(entry) = seq.next_element::<T>()? {
-            count.total = count.total.saturating_add(1).saturating_add(entry.nested());
+        while let Some(entry) = seq.next_element::<Option<T>>()? {
+            let nested = entry.as_ref().map_or(0, Counted::nested);
+            count.total = count.total.saturating_add(1).saturating_add(nested);
         }
         Ok(count)
     }
+}
+
+/// Reads `null` as the list visitor's empty value, anything else as a list.
+struct NullAsEmpty<V>(V);
+
+impl<'de, V: Visitor<'de>> Visitor<'de> for NullAsEmpty<V>
+where
+    V::Value: Default,
+{
+    type Value = V::Value;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.expecting(formatter)
+    }
+
+    fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+        Ok(V::Value::default())
+    }
+
+    fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+        Ok(V::Value::default())
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_seq(self.0)
+    }
+}
+
+/// A plain `Vec` that reads `null` as empty, for lists `Count` already bounded.
+pub(crate) fn null_as_empty<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
 }

@@ -162,3 +162,102 @@ fn a_bitwarden_login_with_null_uris_keeps_its_credentials() {
     assert_eq!(item.password.expose_secret(), "secret-one");
     assert_eq!(item.url, None);
 }
+
+#[test]
+fn null_1password_lists_and_entries_read_as_empty() {
+    let export = pux(r#"{"accounts":[{"attrs":{"uuid":"account1"},"vaults":[
+            {"attrs":{"uuid":"vault0","name":"Empty"},"items":null},
+            {"attrs":{"uuid":"vault1","name":"Vault"},"items":[
+            {"uuid":"item1","categoryUuid":"001","overview":{"title":"Example","urls":null,"tags":[null,"tag-one"]},
+             "details":{"loginFields":[null,{"designation":"username","value":"user-one"}],
+                        "sections":[null,{"title":"Empty","fields":null}],"passwordHistory":null}}]}]}]}"#);
+
+    let export = parse(&export, SourceFormat::OnePasswordPux, &Limits::default()).expect("parses");
+
+    assert!(export.skipped.is_empty());
+    let item = export.items.first().expect("one item");
+    assert_eq!(item.username.expose_secret(), "user-one");
+    let fields: Vec<(&str, &str)> = item
+        .fields
+        .iter()
+        .map(|field| (field.label.as_str(), field.value.expose_secret()))
+        .collect();
+    assert_eq!(fields, vec![("Tags", "tag-one")]);
+}
+
+#[test]
+fn null_bitwarden_fields_read_as_empty() {
+    let json = r#"{"encrypted":false,"folders":null,"items":[
+        {"id":"item1","type":2,"name":"Example","notes":"note-one","fields":null,"secureNote":{"type":0}}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert!(export.skipped.is_empty());
+    assert_eq!(export.items.len(), 1);
+}
+
+#[test]
+fn a_bitwarden_csv_row_with_an_archived_date_is_skipped_as_archived() {
+    let csv = "folder,favorite,type,name,notes,fields,reprompt,archivedDate,login_uri,login_username,login_password,login_totp\n\
+               ,,login,Live,,,0,,https://live.example.com,user-one,secret-one,\n\
+               ,,login,Old,,,0,2026-01-02T03:04:05.000Z,https://old.example.com,user-two,secret-two,\n";
+
+    let export = parse(
+        csv.as_bytes(),
+        SourceFormat::BitwardenCsv,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert_eq!(export.items.len(), 1);
+    assert_eq!(export.items[0].name, "Live");
+    let skipped: Vec<_> = export
+        .skipped
+        .iter()
+        .map(|skipped| skipped.reason)
+        .collect();
+    assert_eq!(skipped, vec![password_import::SkipReason::Archived]);
+}
+
+#[test]
+fn a_bitwarden_item_with_one_collection_id_string_is_shared() {
+    let json = r#"{"encrypted":false,"items":[
+        {"id":"item1","type":2,"name":"Shared","collectionIds":"collection1"}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    let skipped: Vec<_> = export
+        .skipped
+        .iter()
+        .map(|skipped| skipped.reason)
+        .collect();
+    assert_eq!(skipped, vec![password_import::SkipReason::SharedCollection]);
+}
+
+#[test]
+fn a_null_after_a_full_list_does_not_overflow_it() {
+    let uris = vec![r#"{"uri":"https://example.com"}"#; 256].join(",");
+    let json = format!(
+        r#"{{"encrypted":false,"items":[{{"id":"item1","type":1,"name":"Example","login":{{"uris":[{uris},null],"username":"user-one"}}}}]}}"#
+    );
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert!(export.skipped.is_empty());
+    assert_eq!(export.items.len(), 1);
+}

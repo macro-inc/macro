@@ -16,9 +16,18 @@ function timestampDate(ms: number | undefined): Date | undefined {
     : undefined;
 }
 
-/** When the running JavaScript was built. */
-export function appBuildDate(): Date | undefined {
-  return timestampDate(import.meta.env.__APP_BUILD_TIME__);
+/**
+ * When the installed native binary was built. OTA bundle updates replace the
+ * JavaScript but not the binary, so this date stays fixed until the app itself
+ * is updated. Binaries older than the command (reached only through OTA) have
+ * no build date to report.
+ */
+export async function getNativeBuildDate(): Promise<Date | undefined> {
+  try {
+    return timestampDate(await invoke<number>('get_native_build_time'));
+  } catch {
+    return undefined;
+  }
 }
 
 /** When the active OTA bundle was built; undefined while the embedded bundle runs. */

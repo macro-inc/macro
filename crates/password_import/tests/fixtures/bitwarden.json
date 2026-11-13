@@ -108,6 +108,61 @@
       }
     },
     {
+      "id": "10000000-0000-4000-8000-000000000101",
+      "type": 6,
+      "name": "Bank account",
+      "bankAccount": {
+        "bankName": "Synthetic Bank",
+        "nameOnAccount": "Synthetic Holder",
+        "accountType": "checking",
+        "accountNumber": "000111222",
+        "routingNumber": "000000000",
+        "branchNumber": null,
+        "pin": "0000",
+        "swiftCode": "SYNTXX00",
+        "iban": "XX00SYNTHETIC",
+        "bankContactPhone": "555-0100"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000102",
+      "type": 7,
+      "name": "Driver's license",
+      "driversLicense": {
+        "firstName": "Synthetic",
+        "middleName": null,
+        "lastName": "Driver",
+        "dateOfBirth": "1990-01-02",
+        "licenseNumber": "D000000",
+        "issuingCountry": "XX",
+        "issuingState": "Synthetic State",
+        "issueDate": "2020-01-02",
+        "expirationDate": "2030-01-31",
+        "issuingAuthority": null,
+        "licenseClass": "C"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000103",
+      "type": 8,
+      "name": "Passport",
+      "passport": {
+        "surname": "Traveler",
+        "givenName": "Synthetic",
+        "dateOfBirth": "1990-01-02",
+        "sex": "X",
+        "birthPlace": "Synthetic City",
+        "nationality": "Synthetic",
+        "issuingCountry": "XX",
+        "passportNumber": "P0000000",
+        "passportType": "P",
+        "nationalIdentificationNumber": null,
+        "issuingAuthority": "Synthetic Authority",
+        "issueDate": "2020-01-02",
+        "expirationDate": "2030-01-02"
+      }
+    },
+    {
       "id": "10000000-0000-4000-8000-000000000008",
       "type": 2,
       "name": "Note at limit",

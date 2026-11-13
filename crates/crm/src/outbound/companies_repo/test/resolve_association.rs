@@ -238,3 +238,71 @@ async fn activity_preserves_duplicates_without_consent_and_excludes_hidden(pool:
         vec![id(103)]
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn activity_returns_every_address_of_visible_contacts(pool: PgPool) {
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // A visible contact without a company, in team 11.
+    sqlx::query!(
+        r#"INSERT INTO crm_contacts (id, team_id, email, first_interaction, last_interaction)
+           VALUES ($1, $2, 'lin@personal.example.com', now(), now())"#,
+        id(2001),
+        id(11)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Second addresses: a company contact (1004), the company-less contact,
+    // a hidden contact (1008) and a contact under a hidden company (1006).
+    for (contact, address) in [
+        (1004, "lone1.personal@personal.example.com"),
+        (2001, "lin@other.example.com"),
+        (1008, "hidden-admin.personal@personal.example.com"),
+        (1006, "hidden-parent.personal@personal.example.com"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO crm_contact_emails (contact_id, email) VALUES ($1, $2)",
+            id(contact),
+            address
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    for scope in [
+        CrmContactListScope::Viewer(VIEWER),
+        CrmContactListScope::Team {
+            team_id: id(11),
+            include_hidden: true,
+        },
+    ] {
+        let activity = repo.resolve_activity(scope).await.unwrap();
+        for address in [
+            "lone1@example.com",
+            "lone1.personal@personal.example.com",
+            "lin@personal.example.com",
+            "lin@other.example.com",
+        ] {
+            assert!(
+                activity.addresses.contains(&address.to_string()),
+                "{address}"
+            );
+        }
+        for address in [
+            "hidden-admin@example.com",
+            "hidden-admin.personal@personal.example.com",
+            "hidden-parent@example.com",
+            "hidden-parent.personal@personal.example.com",
+        ] {
+            assert!(
+                !activity.addresses.contains(&address.to_string()),
+                "{address}"
+            );
+        }
+        assert!(activity.contact_ids.contains(&id(2001)));
+    }
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"User\" (id, email, macro_user_id, \"isAgent\") VALUES ('macro|ada-1@agents.macro.invalid', 'ada-1@agents.macro.invalid', $1, TRUE)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d8d4646ac3bdefb640c5a11d0cb6b53b1557725c866d7c51fd13bc4ad40e80ba"
+}
