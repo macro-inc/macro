@@ -271,7 +271,7 @@ the authenticated `/app/*` routes. In standalone dev and preview servers,
 GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
 on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
 app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
-website fallback from rendering an empty shell for app links. Production routing
+website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phone clicks still open `/mobile-signup`. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha”, says “Available for macOS and
