@@ -1,7 +1,6 @@
 import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import LinkSimpleIcon from '@icon/system/regular/link-simple.svg';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { For, type JSX, Show } from 'solid-js';
 
@@ -24,7 +23,6 @@ export type ActivityRowProps = {
   /** Absent when the item can't be opened (no access, unknown kind). */
   onOpen?: (event: MouseEvent) => void;
   onToggle: () => void;
-  onCopyLink?: () => void;
   ref?: (element: HTMLDivElement) => void;
 };
 
@@ -38,11 +36,7 @@ export function ActivityRow(props: ActivityRowProps) {
   const expanded = () => props.expanded && multiple();
 
   return (
-    <div
-      ref={props.ref}
-      data-agent-activity-item
-      class="group/activity-row rounded-lg"
-    >
+    <div ref={props.ref} data-agent-activity-item class="rounded-lg">
       <div class="relative flex items-start gap-1 rounded-lg not-touch:hover:bg-hover not-touch:focus-within:bg-hover">
         <button
           type="button"
@@ -67,7 +61,7 @@ export function ActivityRow(props: ActivityRowProps) {
               </span>
             </span>
           </span>
-          <span class="flex h-4.5 shrink-0 items-center gap-1.5 text-[11.5px] tabular-nums text-ink-subtle not-touch:group-hover/activity-row:invisible not-touch:group-focus-within/activity-row:invisible">
+          <span class="flex h-4.5 shrink-0 items-center gap-1.5 text-[11.5px] tabular-nums text-ink-subtle">
             <Show when={props.unseen}>
               <span
                 class="size-1.5 rounded-full bg-accent"
@@ -78,22 +72,6 @@ export function ActivityRow(props: ActivityRowProps) {
             <span class="touch:hidden">{props.time}</span>
           </span>
         </button>
-        <Show when={props.onCopyLink}>
-          {(copy) => (
-            // Copy link is a desktop shortcut; on touch the row itself opens.
-            <div class="absolute top-1 right-1 hidden rounded-full bg-surface not-touch:group-hover/activity-row:flex not-touch:group-focus-within/activity-row:flex touch:hidden!">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('agentWork.copyLink')}
-                tooltip={t('agentWork.copyLink')}
-                onClick={copy()}
-              >
-                <LinkSimpleIcon class="size-3.5" />
-              </Button>
-            </div>
-          )}
-        </Show>
         <Show when={multiple()}>
           <button
             type="button"
