@@ -53,6 +53,25 @@ export async function openPdfDocument(
         await paintPage(pdfPage, canvas, cssWidth);
       }),
 
+    async pageSize(page) {
+      const viewport = (await pdf.getPage(page + 1)).getViewport({ scale: 1 });
+      return { width: viewport.width, height: viewport.height };
+    },
+
+    paintPage: (page, canvas, pixelWidth) =>
+      inTurn(async () => {
+        const pdfPage = await pdf.getPage(page + 1);
+        const unscaled = pdfPage.getViewport({ scale: 1 });
+        const viewport = pdfPage.getViewport({
+          scale: pixelWidth / unscaled.width,
+        });
+        const canvasContext = canvas.getContext('2d');
+        if (!canvasContext) return;
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        await pdfPage.render({ canvasContext, viewport }).promise;
+      }),
+
     async pageText(page) {
       const content = await (await pdf.getPage(page + 1)).getTextContent();
       return content.items

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
 
@@ -303,6 +304,64 @@ test.describe('contracts', () => {
 
     await page.getByRole('button', { name: 'Needs my signature' }).click();
     await expect(page.getByText('No packets here yet')).toBeVisible();
+  });
+
+  test('a signed packet downloads as one PDF with its certificate', async ({
+    page,
+  }) => {
+    await page.goto(`${FIXTURE}/workspace.html?seed=demo&now=${NOW}`, {
+      waitUntil: 'networkidle',
+    });
+    await page.getByRole('button', { name: /Contoso Renewal 2027/ }).click();
+    const drawer = page.getByRole('region', {
+      name: 'Packet: Contoso Renewal 2027',
+    });
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      drawer.getByRole('button', { name: 'Download PDF' }).click(),
+    ]);
+
+    expect(download.suggestedFilename()).toBe('Contoso Renewal 2027.pdf');
+    const file = await readFile(await download.path(), 'latin1');
+    expect(file.startsWith('%PDF-1.4')).toBe(true);
+    // Two pages of order form, three of agreement, one of certificate.
+    expect(file.match(/\/Type \/Page\b(?!s)/g)).toHaveLength(6);
+    await expect(page.getByText('PDF downloaded')).toBeVisible();
+  });
+
+  test('a packet created by mistake merges into the one it should have been', async ({
+    page,
+  }) => {
+    await page.goto(`${FIXTURE}/workspace.html?seed=demo&now=${NOW}`, {
+      waitUntil: 'networkidle',
+    });
+    await page.getByRole('button', { name: 'All packets' }).click();
+    const table = page.getByRole('table', { name: 'Packets' });
+    const before = await table.getByRole('row').count();
+
+    await table
+      .getByRole('button', { name: /Fabrikam Pilot Agreement/ })
+      .click();
+    const drawer = page.getByRole('region', {
+      name: 'Packet: Fabrikam Pilot Agreement',
+    });
+    await drawer.getByRole('button', { name: 'Merge packet' }).click();
+
+    const dialog = page.getByRole('dialog');
+    // Closed packets are not offered: only open ones can be folded in.
+    await expect(dialog.getByText('Contoso Renewal 2027')).toHaveCount(0);
+    await dialog.getByText('Northwind Order Form Q4').click();
+    await dialog.getByRole('button', { name: 'Merge', exact: true }).click();
+
+    await expect(page.getByText('Packets merged')).toBeVisible();
+    await expect(table.getByRole('row')).toHaveCount(before - 1);
+    await expect(
+      table.getByRole('button', { name: /Northwind Order Form Q4/ })
+    ).toHaveCount(0);
+    await expect(
+      drawer.getByText('merged “Northwind Order Form Q4” into this packet')
+    ).toBeVisible();
   });
 });
 

@@ -4,6 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { openExternalUrl } from '@core/util/url';
+import { downloadFile } from '@filesystem/download';
 import { Show } from 'solid-js';
 import { createBrowserContracts } from './browser-contracts';
 import { PerSignIn } from './components/per-sign-in';
@@ -29,6 +30,7 @@ function createAppContractsContext(userId: string): ContractsContext {
   return {
     ...data,
     copyText: (text) => writeClipboardData({ 'text/plain': text }),
+    saveFile: async (file, name) => (await downloadFile(file, name)).saved,
     openSigning: (token) => openExternalUrl(data.signingUrl(token)),
   };
 }

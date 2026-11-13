@@ -137,7 +137,7 @@ type StatusOverride = {
 export type PacketOwner = { id: string; name: string };
 
 /** A packet that was merged into another, with the log it had, kept whole. */
-export type MergedPacket = {
+type MergedPacket = {
   id: string;
   title: string;
   mergedAt: string;

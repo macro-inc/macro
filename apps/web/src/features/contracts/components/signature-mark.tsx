@@ -1,30 +1,6 @@
 import { Match, Switch } from 'solid-js';
-import { match } from 'ts-pattern';
-import type { AdoptedSignature, SignatureStyle } from '../core/packet';
-
-/** Ink for marks on a PDF page, which is white in every theme. */
-const SIGNATURE_INK = '#14213d';
-
-/**
- * Cursive faces already on people's devices. Each style prefers a different
- * one and falls back to the platform's generic script.
- */
-function signatureFontFamily(style: SignatureStyle): string {
-  return match(style)
-    .with(
-      'script-1',
-      () => "'Snell Roundhand', 'Segoe Script', 'Brush Script MT', cursive"
-    )
-    .with(
-      'script-2',
-      () => "'Brush Script MT', 'Lucida Handwriting', 'Apple Chancery', cursive"
-    )
-    .with(
-      'script-3',
-      () => "'Apple Chancery', 'Lucida Handwriting', 'Segoe Script', cursive"
-    )
-    .exhaustive();
-}
+import type { AdoptedSignature } from '../core/packet';
+import { SIGNATURE_INK, signatureFontFamily } from '../core/signature-style';
 
 /**
  * A recipient's adopted signature or initials. It fills the box it is put

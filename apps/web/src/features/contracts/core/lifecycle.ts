@@ -427,7 +427,7 @@ export function expireIfDue(packet: Packet, context: LifecycleContext): Packet {
 
 /** Nudge every signer whose turn it is. */
 /** Who an automatic step is recorded as, where no person caused it. */
-export const SYSTEM_ACTOR = 'Macro';
+const SYSTEM_ACTOR = 'Macro';
 
 export function remindPending(
   packet: Packet,
@@ -566,63 +566,22 @@ export function mergePackets(
   }
   const inFlight = packetStatus(target, context.now) !== 'draft';
 
-  const documents = [...target.documents];
-  const documentIds = new Map<string, string>();
-  for (const document of source.documents) {
-    const same = documents.find(
-      (each) => each.id === document.id || each.sha256 === document.sha256
-    );
-    documentIds.set(document.id, same?.id ?? document.id);
-    if (!same) documents.push(document);
-  }
-
-  const recipients = inFlight
-    ? target.recipients.map(resetRecipient)
-    : [...target.recipients];
-  const recipientIds = new Map<string, string>();
-  for (const recipient of source.recipients) {
-    const index = recipients.findIndex((each) =>
-      sameEmail(each.email, recipient.email)
-    );
-    const same = recipients[index];
-    if (same) {
-      recipientIds.set(recipient.id, same.id);
-      // Someone who signs in either packet signs the merged one.
-      if (recipient.role === 'signer' && same.role === 'copy') {
-        recipients[index] = { ...same, role: 'signer' };
-      }
-      continue;
-    }
-    const taken = recipients.some((each) => each.id === recipient.id);
-    const id = taken ? context.newId() : recipient.id;
-    recipientIds.set(recipient.id, id);
-    recipients.push({ ...resetRecipient(recipient), id });
-  }
-
-  const fields: PacketField[] = target.fields.map((field) =>
-    inFlight ? withoutValue(field) : field
+  const { documents, documentIds } = mergeDocuments(target, source);
+  const { recipients, recipientIds } = mergeRecipients(
+    target,
+    source,
+    inFlight,
+    context
   );
-  for (const sourceField of source.fields) {
-    const field: PacketField = {
-      ...withoutValue(sourceField),
-      documentId:
-        documentIds.get(sourceField.documentId) ?? sourceField.documentId,
-      recipientId:
-        recipientIds.get(sourceField.recipientId) ?? sourceField.recipientId,
-    };
-    // The same field placed in both packets is one field.
-    const duplicate = fields.some(
-      (each) =>
-        each.documentId === field.documentId &&
-        each.page === field.page &&
-        each.recipientId === field.recipientId &&
-        each.kind === field.kind &&
-        sameBox(each.box, field.box)
-    );
-    if (duplicate) continue;
-    const taken = fields.some((each) => each.id === field.id);
-    fields.push(taken ? { ...field, id: context.newId() } : field);
-  }
+  const fields = mergeFields(
+    target.fields.map((field) => (inFlight ? withoutValue(field) : field)),
+    source.fields.map((field) => ({
+      ...withoutValue(field),
+      documentId: documentIds.get(field.documentId) ?? field.documentId,
+      recipientId: recipientIds.get(field.recipientId) ?? field.recipientId,
+    })),
+    context
+  );
 
   const merged: Packet = {
     ...target,
@@ -654,6 +613,75 @@ export function mergePackets(
     return err({ kind: 'cannot_send' });
   }
   return ok(invite(merged, context));
+}
+
+/** The target's documents plus the source's; the same bytes are kept once. */
+function mergeDocuments(target: Packet, source: Packet) {
+  const documents = [...target.documents];
+  const documentIds = new Map<string, string>();
+  for (const document of source.documents) {
+    const same = documents.find(
+      (each) => each.id === document.id || each.sha256 === document.sha256
+    );
+    documentIds.set(document.id, same?.id ?? document.id);
+    if (!same) documents.push(document);
+  }
+  return { documents, documentIds };
+}
+
+/** Both packets' recipients; one email is one recipient. */
+function mergeRecipients(
+  target: Packet,
+  source: Packet,
+  inFlight: boolean,
+  context: LifecycleContext
+) {
+  const recipients = inFlight
+    ? target.recipients.map(resetRecipient)
+    : [...target.recipients];
+  const recipientIds = new Map<string, string>();
+  for (const recipient of source.recipients) {
+    const index = recipients.findIndex((each) =>
+      sameEmail(each.email, recipient.email)
+    );
+    const same = recipients[index];
+    if (same) {
+      recipientIds.set(recipient.id, same.id);
+      // Someone who signs in either packet signs the merged one.
+      if (recipient.role === 'signer' && same.role === 'copy') {
+        recipients[index] = { ...same, role: 'signer' };
+      }
+      continue;
+    }
+    const taken = recipients.some((each) => each.id === recipient.id);
+    const id = taken ? context.newId() : recipient.id;
+    recipientIds.set(recipient.id, id);
+    recipients.push({ ...resetRecipient(recipient), id });
+  }
+  return { recipients, recipientIds };
+}
+
+/** The same field placed in both packets is one field. */
+function mergeFields(
+  fields: PacketField[],
+  added: PacketField[],
+  context: LifecycleContext
+): PacketField[] {
+  const merged = [...fields];
+  for (const field of added) {
+    const duplicate = merged.some(
+      (each) =>
+        each.documentId === field.documentId &&
+        each.page === field.page &&
+        each.recipientId === field.recipientId &&
+        each.kind === field.kind &&
+        sameBox(each.box, field.box)
+    );
+    if (duplicate) continue;
+    const taken = merged.some((each) => each.id === field.id);
+    merged.push(taken ? { ...field, id: context.newId() } : field);
+  }
+  return merged;
 }
 
 function withoutValue({ value: _value, ...field }: PacketField): PacketField {

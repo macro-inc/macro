@@ -90,6 +90,9 @@ export default {
   voidBody:
     'Every signing link stops working and signatures collected so far no longer count. This cannot be undone.',
   actionFailed: 'That didn’t work. Try again.',
+  downloadPdf: 'Download PDF',
+  pdfDownloaded: 'PDF downloaded',
+  pdfFailed: 'The PDF could not be made. Try again.',
   mergePacket: 'Merge packet',
   mergeTitle: 'Merge into “{{title}}”',
   mergeDescription:

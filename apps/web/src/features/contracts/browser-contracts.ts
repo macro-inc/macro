@@ -4,6 +4,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { createBrowserChangeFeed } from './queries/change-feed';
 import { createIndexedDbDocumentBlobs } from './queries/document-blobs';
 import { createBrowserExclusive } from './queries/exclusive';
+import { buildExecutedPdf } from './queries/executed-pdf';
 import {
   createLocalContracts,
   type LocalContracts,
@@ -29,6 +30,7 @@ export function createBrowserContracts(scope: string): LocalContracts {
     changes: createBrowserChangeFeed(`macro-contracts:${scope}`, storageKey),
     exclusive: createBrowserExclusive(storageKey),
     openPdf: openPdfDocument,
+    buildExecutedPdf,
     digestText: (text) => contentHash(new TextEncoder().encode(text)),
     digestBytes: contentHash,
     clock: () => new Date().toISOString(),

@@ -42,6 +42,7 @@ import {
 import { isInFlight, packetStatus } from '../core/status';
 import type { ChangeFeed } from './change-feed';
 import type { DocumentBlobs } from './document-blobs';
+import type { ExecutedPdfInput } from './executed-pdf';
 import {
   type ContractsSnapshot,
   contractsSnapshotSchema,
@@ -74,6 +75,8 @@ export type LocalContractsDeps = {
    */
   exclusive<T>(work: () => Promise<T>): Promise<T>;
   openPdf(bytes: ArrayBuffer): Promise<PdfDocument>;
+  /** Draw a packet's pages and certificate into one PDF. */
+  buildExecutedPdf(input: ExecutedPdfInput): Promise<Blob>;
   digestText: Digest;
   digestBytes(bytes: ArrayBuffer): Promise<string>;
   clock(): string;
@@ -537,6 +540,18 @@ export function createLocalContracts(deps: LocalContractsDeps): LocalContracts {
         }).andThen((documents) =>
           ResultAsync.fromSafePromise(
             dropUnreferenced(documents.map((document) => document.id))
+          )
+        ),
+
+      executedPdf: ({ packet, sheet, formatDate }) =>
+        ResultAsync.combine(
+          packet.documents.map((document) =>
+            openDocument(document.id).map((pdf) => ({ document, pdf }))
+          )
+        ).andThen((documents) =>
+          ResultAsync.fromPromise(
+            deps.buildExecutedPdf({ packet, documents, sheet, formatDate }),
+            unreadable
           )
         ),
 

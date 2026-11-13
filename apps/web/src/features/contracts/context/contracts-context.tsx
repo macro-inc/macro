@@ -1,5 +1,6 @@
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { CertificateSheet } from '../core/certificate-sheet';
 import type { ContractDatabase } from '../core/database';
 import type { DraftInput, PacketError, SigningInput } from '../core/lifecycle';
 import type {
@@ -28,6 +29,23 @@ export type PdfDocument = {
   ): Promise<void>;
   /** The words on a page in reading order, for people who cannot see it. */
   pageText(page: number): Promise<string>;
+  /** A page's size in PDF points. */
+  pageSize(page: number): Promise<{ width: number; height: number }>;
+  /** Paint a page into a canvas this many pixels wide, for export. */
+  paintPage(
+    page: number,
+    canvas: HTMLCanvasElement,
+    pixelWidth: number
+  ): Promise<void>;
+};
+
+/** What goes into the downloadable PDF of a packet. */
+export type ExecutedPdfRequest = {
+  packet: Packet;
+  /** The certificate, already worded for the reader. */
+  sheet: CertificateSheet;
+  /** How a signing date prints in a Date Signed field. */
+  formatDate: (iso: string) => string;
 };
 
 export type DocumentError =
@@ -90,12 +108,19 @@ export type ContractsContext = {
   ): ResultAsync<Packet, ContractsError>;
   /** Remove a packet that was never sent, and its documents. */
   deleteDraft(packetId: string): ResultAsync<void, ContractsError>;
+  /**
+   * The packet as one PDF: its documents as signed so far, followed by the
+   * Certificate of Completion.
+   */
+  executedPdf(request: ExecutedPdfRequest): ResultAsync<Blob, DocumentError>;
   /** Whether every entry of the packet's audit log follows from the last. */
   verifyLog(packet: Packet): Promise<boolean>;
 
   /** The link a recipient opens to sign. */
   signingUrl(token: string): string;
 
+  /** Hand a file to the viewer to keep; resolves `false` if it was not saved. */
+  saveFile(file: Blob, name: string): Promise<boolean>;
   /** Put text on the clipboard; resolves `false` when the browser refuses. */
   copyText(text: string): Promise<boolean>;
   /** Show a signing link to the viewer, who is one of its signers. */
@@ -103,7 +128,10 @@ export type ContractsContext = {
 };
 
 /** The packets and documents themselves, without the host's capabilities. */
-export type ContractsData = Omit<ContractsContext, 'copyText' | 'openSigning'>;
+export type ContractsData = Omit<
+  ContractsContext,
+  'copyText' | 'openSigning' | 'saveFile'
+>;
 
 const Context = createContext<ContractsContext>();
 export const ContractsProvider = Context.Provider;

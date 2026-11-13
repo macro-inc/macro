@@ -1,6 +1,7 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ContractsData } from '../context/contracts-context';
+import type { CertificateSheet } from '../core/certificate-sheet';
 import { findRecipient } from '../core/packet';
 import { packetStatus } from '../core/status';
 import { fakeBrowser, TEST_STORAGE_KEY, VIEWER } from '../tests/local-store';
@@ -11,6 +12,20 @@ import {
   TYPED_SIGNATURE,
 } from '../tests/packets';
 import { scopeForSigningToken } from './local-contracts';
+
+const EMPTY_SHEET: CertificateSheet = {
+  title: '',
+  subtitle: '',
+  facts: [],
+  wideFacts: [],
+  signersHeading: '',
+  signers: [],
+  hashesHeading: '',
+  hashes: [],
+  eventsHeading: '',
+  events: [],
+  footer: '',
+};
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -325,6 +340,46 @@ describe('scheduled reminders', () => {
     );
     expect(later.packets()[0].lastReminderAt).toBe('2026-11-13T09:00:00.000Z');
     expect(later.packets()[0].id).toBe(sent.id);
+  });
+});
+
+describe('executedPdf', () => {
+  it('builds the PDF from every document of the packet, opened', async () => {
+    const browser = fakeBrowser();
+    const contracts = open(browser).context(VIEWER);
+    const first = (
+      await contracts.importDocument(pdf('%PDF-1.7 one', 'Order Form.pdf'))
+    )._unsafeUnwrap();
+    const second = (
+      await contracts.importDocument(pdf('%PDF-1.7 two', 'MSA.pdf'))
+    )._unsafeUnwrap();
+    const draft = (
+      await contracts.createDraft({ ...ACME_DRAFT, documents: [first, second] })
+    )._unsafeUnwrap();
+
+    const file = (
+      await contracts.executedPdf({
+        packet: draft,
+        sheet: EMPTY_SHEET,
+        formatDate: (iso) => iso,
+      })
+    )._unsafeUnwrap();
+
+    expect(file.type).toBe('application/pdf');
+    // The stand-in builder writes one byte per opened document.
+    expect(file.size).toBe(2);
+  });
+
+  it('reports a packet whose document bytes are gone', async () => {
+    const contracts = open(fakeBrowser()).context(VIEWER);
+    const draft = (await contracts.createDraft(ACME_DRAFT))._unsafeUnwrap();
+
+    const file = await contracts.executedPdf({
+      packet: draft,
+      sheet: EMPTY_SHEET,
+      formatDate: (iso) => iso,
+    });
+    expect(file._unsafeUnwrapErr()).toEqual({ kind: 'missing' });
   });
 });
 

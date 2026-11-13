@@ -4,6 +4,7 @@ import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegio
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { downloadFile } from '@filesystem/download';
 import { ImperativeDialogHost } from '@ui';
 import { render } from 'solid-js/web';
 import { ContractsProvider } from '../context/contracts-context';
@@ -26,6 +27,7 @@ function Fixture() {
     <ContractsProvider
       value={{
         ...data,
+        saveFile: async (file, name) => (await downloadFile(file, name)).saved,
         copyText: async (text) => {
           document.body.dataset.copied = text;
           return true;

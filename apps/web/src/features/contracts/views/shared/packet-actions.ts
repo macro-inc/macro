@@ -1,7 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { confirmDialog } from '@ui';
+import { certificateSheet } from '../../components/certificate-sheet';
+import { formatDayWithYear } from '../../components/format';
 import type { ContractsContext } from '../../context/contracts-context';
+import { buildCertificate } from '../../core/certificate';
 import type { Packet, Recipient } from '../../core/packet';
 
 /**
@@ -77,6 +80,28 @@ export function createPacketActions(context: ContractsContext) {
         return false;
       }
       return true;
+    },
+
+    /**
+     * Save the packet as one PDF: its documents as signed so far, with the
+     * Certificate of Completion as the last pages.
+     */
+    async downloadPdf(packet: Packet) {
+      const pdf = await context.executedPdf({
+        packet,
+        sheet: certificateSheet(buildCertificate(packet)),
+        formatDate: formatDayWithYear,
+      });
+      if (pdf.isErr()) {
+        toast.failure(t('contracts.pdfFailed'));
+        return;
+      }
+      // A file name cannot hold path separators or the characters Windows
+      // reserves; the title is otherwise kept as written.
+      const name = `${packet.title.replace(/[\\/:*?"<>|]+/g, '-').trim()}.pdf`;
+      if (await context.saveFile(pdf.value, name)) {
+        toast.success(t('contracts.pdfDownloaded'));
+      }
     },
 
     /** Swap one document for a revised PDF and tell signers to start over. */

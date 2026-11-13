@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { createBrowserChangeFeed } from '../queries/change-feed';
 import { createIndexedDbDocumentBlobs } from '../queries/document-blobs';
 import { createBrowserExclusive } from '../queries/exclusive';
+import { buildExecutedPdf } from '../queries/executed-pdf';
 import {
   createLocalContracts,
   localContractsStorageKey,
@@ -29,6 +30,7 @@ export function createFixtureContracts() {
     ),
     exclusive: createBrowserExclusive(FIXTURE_STORAGE_KEY),
     openPdf: openPdfDocument,
+    buildExecutedPdf,
     digestText: (text) => contentHash(new TextEncoder().encode(text)),
     digestBytes: contentHash,
     clock: () => pinned ?? new Date().toISOString(),

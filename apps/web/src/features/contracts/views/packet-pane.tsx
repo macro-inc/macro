@@ -1,12 +1,13 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import BellIcon from '@icon/system/regular/bell.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import ShieldCheckIcon from '@icon/system/regular/shield-check.svg';
 import SignatureIcon from '@icon/system/regular/signature.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dropdown } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { PacketStatusPill } from '../components/packet-status-pill';
 import { useContractsContext } from '../context/contracts-context';
 import type { Packet } from '../core/packet';
@@ -44,6 +45,13 @@ export function PacketPane(props: {
       actions.replaceDocument(packet(), documentId, file),
       'contracts.replace-document'
     );
+  }
+
+  const [downloading, setDownloading] = createSignal(false);
+  async function download() {
+    setDownloading(true);
+    await actions.downloadPdf(packet());
+    setDownloading(false);
   }
 
   async function remove() {
@@ -150,6 +158,15 @@ export function PacketPane(props: {
             >
               <ShieldCheckIcon class="size-3.5" />
               {t('contracts.auditCertificate')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={downloading()}
+              onClick={() => fireAndForget(download(), 'contracts.download')}
+            >
+              <DownloadIcon class="size-3.5" />
+              {t('contracts.downloadPdf')}
             </Button>
             <Show when={isInFlight(props.row.status)}>
               <Button

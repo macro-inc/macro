@@ -56,6 +56,8 @@ export function fakeBrowser(options: { locks: boolean } = { locks: true }) {
     pageAspectRatio: async () => 0.77,
     renderPage: async () => {},
     pageText: async () => 'Order Form',
+    pageSize: async () => ({ width: 612, height: 792 }),
+    paintPage: async () => {},
   };
 
   return {
@@ -99,6 +101,11 @@ export function fakeBrowser(options: { locks: boolean } = { locks: true }) {
           },
         },
         openPdf: async () => pdf,
+        // One byte per opened document, so a test can see what was drawn.
+        buildExecutedPdf: async (input) =>
+          new Blob(['x'.repeat(input.documents.length)], {
+            type: 'application/pdf',
+          }),
         digestText: async (text) => {
           await digests;
           return sha256(text);
