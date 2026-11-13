@@ -1,0 +1,70 @@
+docs/architecture/canvas.md
+  s_39eee246ac6b4a::t_c340377ec9c0f1 66-68
+apps/web/src/features/block-canvas/core/transitions/scene-geometry.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 23-28,39-41,74-78
+apps/web/src/features/block-canvas/views/transitions/slide-transition-inspector.tsx
+  s_39eee246ac6b4a::t_1bad2634eda71c 41
+apps/web/src/features/block-canvas/core/transitions/classic-keyframes.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 101-105,139-142,147
+apps/web/src/features/block-canvas/views/canvas-view.tsx
+  s_39eee246ac6b4a::t_1bad2634eda71c 83
+apps/web/src/features/block-canvas/components/transition-inspector.tsx
+  s_39eee246ac6b4a::t_8326222a4811a6 68,307
+  s_39eee246ac6b4a::t_1bad2634eda71c 34-41,49-52,56-60,109-113,120-123,171-173,177-178,216-217,221-225,236-238,243-246
+apps/web/src/features/block-canvas/browser-test/transitions-evidence.artifact.e2e.ts
+  s_39eee246ac6b4a::t_67889d86f98ce3 121-126,128-133,138-146
+  s_39eee246ac6b4a::t_90fd0af11e1752 2-45,49-78,81-120,127,147-153,159-167,175-180,183,187,194-197
+  s_39eee246ac6b4a::t_1bad2634eda71c 46-48,79-80,134-137,154-158,168-174,181-182,184-186,188-193
+  s_39eee246ac6b4a::t_47de0813406967 1
+apps/web/src/features/block-canvas/components/transition-thumbnail.tsx
+  s_39eee246ac6b4a::t_8326222a4811a6 27-32,39-40,44-46,65,195-196,256-257
+  s_39eee246ac6b4a::t_1bad2634eda71c 135-142,144-146,154-157,160-163,185-187,202-204
+apps/web/src/features/block-canvas/views/transitions/play-transition.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 1-4,63-65
+apps/web/src/features/block-canvas/browser-test/artifact.fixture.tsx
+  s_39eee246ac6b4a::t_dd5b1ad1c77115 17-19,137-151
+  s_39eee246ac6b4a::t_1bad2634eda71c 104-108,110-117
+  s_39eee246ac6b4a::t_0eee27e8154de0 152
+apps/web/src/features/block-canvas/views/transitions/slide-stage.tsx
+  s_39eee246ac6b4a::t_1bad2634eda71c 12,321-322
+docs/agent-guide/canvas.md
+  s_39eee246ac6b4a::t_c340377ec9c0f1 41-51
+apps/web/src/features/block-canvas/canvas-next.tsx
+  s_39eee246ac6b4a::t_1bad2634eda71c 138-139,144-167,170-175,177-179
+apps/web/src/features/block-canvas/browser-test/README.md
+  s_39eee246ac6b4a::t_cc6fa82b6ba372 39-53
+apps/web/src/features/block-canvas/core/transitions/camera-path.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 74-79,173-178,195-200,208-212
+  s_39eee246ac6b4a::t_bb9ba02c00745c 170-171,181
+apps/web/src/features/block-canvas/views/transitions/transition-preview.tsx
+  s_39eee246ac6b4a::t_1bad2634eda71c 35-37,40-41
+apps/web/src/features/block-canvas/core/transitions/easing.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 27-29,36-38
+apps/web/src/features/block-canvas/README.md
+  s_39eee246ac6b4a::t_c340377ec9c0f1 100-123
+apps/web/src/features/block-canvas/browser-test/artifact.e2e.ts
+  s_39eee246ac6b4a::t_8326222a4811a6 316
+  s_39eee246ac6b4a::t_1bad2634eda71c 169-172,183-186,227-229,244-246
+apps/web/src/features/block-canvas/core/transitions/transitions.test.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 1,89-91,138-147,155-160,183-190,196-200,228-230
+apps/web/src/features/block-canvas/core/transitions/camera-plan.ts
+  s_39eee246ac6b4a::t_1bad2634eda71c 15,24-28,74-79,82-84,103-107,135-139
+apps/web/src/features/block-canvas/views/transitions/canvas-flight.tsx
+  s_39eee246ac6b4a::t_1bad2634eda71c 109-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3f47c26029eddf000db7e5c943f8a106acbed6fa",
+  "prompts": {},
+  "sessions": {
+    "s_39eee246ac6b4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c77c728-b25b-459a-a9ad-4329807b2d86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
