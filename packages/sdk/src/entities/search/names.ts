@@ -88,8 +88,9 @@ export type NamesLookup = {
   /** One result per name. */
   results: NameResult[];
   /**
-   * Kinds that couldn't be looked in this time: a name with no match may
-   * still name an item of one of these kinds.
+   * Kinds that couldn't be looked in, or whose matched records couldn't be
+   * read, this time: a name with no match may still name an item of one of
+   * these kinds.
    */
   unavailable: NameKind[];
 };
@@ -102,20 +103,40 @@ export async function namesLookup(
   const items = response.results.flatMap((result) =>
     result.matches.map((m) => m.item),
   );
+  // A record read that fails drops only its kind's matches, which then count
+  // as unavailable, so the other kinds' matches still come back.
   const [tags, channelLabels] = await Promise.all([
-    tagOptions(client, items),
-    channelLabelsById(client, items),
+    hydrated(tagOptions(client, items)),
+    hydrated(channelLabelsById(client, items)),
   ]);
+  const failed: NameKind[] = [
+    ...(tags ? [] : (['tag'] as const)),
+    ...(channelLabels ? [] : (['channel_label'] as const)),
+  ];
   return {
     results: response.results.map((result) => ({
       name: result.name,
       matches: result.matches.flatMap((m) => {
-        const entity = namedEntity(client, m.item, tags, channelLabels);
+        const entity = namedEntity(
+          client,
+          m.item,
+          tags ?? new Map(),
+          channelLabels ?? new Map(),
+        );
         return entity ? [{ ...entity, name: m.name, exact: m.exact }] : [];
       }),
     })),
-    unavailable: response.unavailable,
+    unavailable: [...new Set([...response.unavailable, ...failed])],
   };
+}
+
+/** The records a read returned, or `undefined` when it failed. */
+async function hydrated<T>(read: Promise<T>): Promise<T | undefined> {
+  try {
+    return await read;
+  } catch {
+    return undefined;
+  }
 }
 
 function namedEntity(
