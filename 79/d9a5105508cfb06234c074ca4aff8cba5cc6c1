@@ -1,0 +1,25 @@
+docs/agent-guide/README.md
+  s_699e95788b47ad::t_d211fd018e21e8 28
+docs/agent-guide/agent-dashboards.md
+  s_699e95788b47ad::t_d211fd018e21e8 1-26,28-56
+  s_699e95788b47ad::t_90dbc298fae3d3 27
+docs/agent-guide/navigation.md
+  s_699e95788b47ad::t_3e555debca427a 265
+  s_699e95788b47ad::t_90dbc298fae3d3 266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "79d9a5105508cfb06234c074ca4aff8cba5cc6c1",
+  "prompts": {},
+  "sessions": {
+    "s_699e95788b47ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51aa3eb8-4a8e-4821-90ff-ca5429c178ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
