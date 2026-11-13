@@ -96,6 +96,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
 | `link*`, `notify` | connecting inboxes and calendars, the Mail badge | `harness/linking.ts` |
 | `calendar-invitation` | the invitation card in a thread | |
+| `journey-*` | whole user journeys for a Gmail and an Outlook inbox: a mail day, a new message, scheduled send, triage, a received attachment, phone width, Settings › Email | `harness/journeys.ts` |
 
 - `harness/linking.ts` stands in for the authentication service's link
   endpoints and the provider callback; the consent pages are the emulators'.
