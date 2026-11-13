@@ -102,6 +102,39 @@ export type AgentMcpServer = {
 };
 
 /**
+ * One routine, without its content.
+ */
+export type AgentRoutine = {
+    enabled: boolean;
+    id: string;
+    lastRun?: null | LastRun;
+    name: string;
+    /**
+     * The next scheduled firing; absent for event routines and finished
+     * one-time ones.
+     */
+    nextRunAt?: string | null;
+    /**
+     * A run is in progress: the routine is claimed and its claim has not
+     * expired.
+     */
+    running: boolean;
+    triggerKind: TriggerKind;
+};
+
+/**
+ * An agent's top-level routines, oldest first.
+ */
+export type AgentRoutines = {
+    routines: Array<AgentRoutine>;
+    /**
+     * True when the agent owns more than 50 top-level routines and the
+     * newest were left out.
+     */
+    truncated: boolean;
+};
+
+/**
  * Hand the run to a model running as Macro, or to an agent.
  */
 export type AgentStep = {
@@ -759,6 +792,15 @@ export type InProgressExecution = {
  * digits, e.g. `dueWithinDays`.
  */
 export type KnobName = string;
+
+/**
+ * When a routine's latest finished run ran and whether it succeeded.
+ */
+export type LastRun = {
+    endedAt: string;
+    startedAt: string;
+    succeeded: boolean;
+};
 
 /**
  * What a text knob's value names: one of its owner's items, which a client
@@ -1445,6 +1487,11 @@ export type TemplateVariable = {
 };
 
 /**
+ * What kind of trigger starts a routine, as `ActionTrigger` names it.
+ */
+export type TriggerKind = 'cron' | 'events' | 'once' | 'multiple';
+
+/**
  * How an upgrade went.
  */
 export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
@@ -1547,6 +1594,38 @@ export type CreateScheduledActionResponses = {
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type ListAgentRoutinesData = {
+    body?: never;
+    path: {
+        /**
+         * User ID of the agent account
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/agents/{agent_id}';
+};
+
+export type ListAgentRoutinesErrors = {
+    401: string;
+    /**
+     * Not the agent or an owner or admin of its team, not an agent account, or agent dashboards are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListAgentRoutinesError = ListAgentRoutinesErrors[keyof ListAgentRoutinesErrors];
+
+export type ListAgentRoutinesResponses = {
+    /**
+     * The agent's top-level routines, oldest first, summarized without their content
+     */
+    200: AgentRoutines;
+};
+
+export type ListAgentRoutinesResponse = ListAgentRoutinesResponses[keyof ListAgentRoutinesResponses];
 
 export type RoutineCatalogData = {
     body?: never;

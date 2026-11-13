@@ -91,7 +91,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory',
+    listed: 'listScheduledActions listScheduledActionHistory listAgentRoutines',
     read: 'getScheduledAction getScheduledActionTemplate',
     created: 'createScheduledAction',
     deleted: 'deleteScheduledAction',

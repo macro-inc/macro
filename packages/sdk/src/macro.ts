@@ -588,6 +588,9 @@ export type {
   ActivityReport,
   AgentSpend,
   AgentSpendBucket,
+  AgentRoutineList,
+  AgentRoutineSummary,
+  AgentRoutineTriggerKind,
 } from './entities/users/user';
 export type {
   WebFetchOptions,

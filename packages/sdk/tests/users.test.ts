@@ -115,3 +115,69 @@ test('agent spend reads one bucketed window for the agent account', async () => 
     'https://cognition.test/ai-cost/agents/macro%7Cagent%40example.com/spend?bucket=week',
   ]);
 });
+
+test('agent routines read one summary and hand back routine handles', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json({
+        routines: [
+          {
+            id: '0199a000-0000-7000-8000-000000000001',
+            name: 'Morning digest',
+            enabled: true,
+            running: false,
+            triggerKind: 'cron',
+            nextRunAt: '2026-11-14T09:00:00Z',
+            lastRun: {
+              startedAt: '2026-11-13T09:00:00Z',
+              endedAt: '2026-11-13T09:02:00Z',
+              succeeded: false,
+            },
+          },
+          {
+            id: '0199a000-0000-7000-8000-000000000002',
+            name: 'On new mail',
+            enabled: false,
+            running: true,
+            triggerKind: 'events',
+          },
+        ],
+        truncated: true,
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+
+  const { routines, truncated } = await macro.users
+    .byId('macro|agent@example.com')
+    .routines();
+
+  expect(requests.map((request) => request.url)).toEqual([
+    'https://routines.test/scheduled-actions/agents/macro%7Cagent%40example.com',
+  ]);
+  expect(truncated).toBe(true);
+  expect(routines.map((r) => r.routine.id)).toEqual([
+    '0199a000-0000-7000-8000-000000000001',
+    '0199a000-0000-7000-8000-000000000002',
+  ]);
+  expect(routines[0]?.lastRun).toEqual({
+    startedAt: '2026-11-13T09:00:00Z',
+    endedAt: '2026-11-13T09:02:00Z',
+    succeeded: false,
+  });
+  expect(routines[1]).toMatchObject({
+    name: 'On new mail',
+    enabled: false,
+    running: true,
+    triggerKind: 'events',
+    nextRunAt: undefined,
+    lastRun: undefined,
+  });
+});
