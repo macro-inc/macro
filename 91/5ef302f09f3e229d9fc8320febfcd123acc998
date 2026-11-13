@@ -1,0 +1,103 @@
+crates/email/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 530-541,554-556,568-569
+  s_800cdee5095ae4::t_3e2082c08291a9 542-553,557-567
+crates/webhook/src/domain/events.rs
+  s_800cdee5095ae4::t_b48372e775ef07 130-182
+  s_800cdee5095ae4::t_ee5006012a5de2 18-20
+  s_800cdee5095ae4::t_67c8446f0baa2f 267-286
+crates/call/src/domain/notification_events.rs
+  s_800cdee5095ae4::t_8b2b4397cb678a 177-188
+  s_800cdee5095ae4::t_b48372e775ef07 133-176,189-196
+crates/chat/src/domain/events.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 199-205
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 187-198,206-214
+crates/channels/src/domain/broker_events.rs
+  s_800cdee5095ae4::t_b48372e775ef07 193-229
+crates/macro_event_broker/src/domain/service/test.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 143-144,277-278
+crates/messages/src/outbound/broker.rs
+  s_800cdee5095ae4::t_b48372e775ef07 44-77
+crates/documents/src/domain/events.rs
+  s_800cdee5095ae4::t_b48372e775ef07 288-344
+crates/call/src/domain/events.rs
+  s_800cdee5095ae4::t_d864c7ae03ffc9 177,180-183
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 159-170,175-176,178-179,184-186
+  s_800cdee5095ae4::t_3e2082c08291a9 171-174
+crates/bots/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 94-111
+crates/agent_trigger/src/domain/broker_events.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 421-424,445-448
+  s_800cdee5095ae4::t_b48372e775ef07 379-403,411-417,425-441,449-457
+  s_800cdee5095ae4::t_8b2b4397cb678a 404-410,418-420,442-444
+crates/user_events/src/lib.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 53-55
+  s_800cdee5095ae4::t_b48372e775ef07 44-52,56-76
+crates/calendar_events/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 65-82
+crates/agent_session/src/domain/events.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 444-446
+  s_800cdee5095ae4::t_b48372e775ef07 435-443,447-491
+crates/channels/src/domain/mention_events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 72-89
+crates/github_pull_requests/src/broker.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 18-31,33-35
+  s_800cdee5095ae4::t_a6c47baafb411b 32
+crates/properties/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 222-233,237-243,250-251
+  s_800cdee5095ae4::t_3e2082c08291a9 234-236,244-249
+crates/databases/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 173-184,192-200
+  s_800cdee5095ae4::t_3e2082c08291a9 185-191
+crates/initiative/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 72-83,90-95
+  s_800cdee5095ae4::t_3e2082c08291a9 84-89
+crates/teams/src/domain/events.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 262-265,277-280
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 250-261,266-276,281-285
+crates/notification/src/domain/models/websocket_notification_event.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 128-143,146-150
+  s_800cdee5095ae4::t_3e2082c08291a9 144-145
+crates/soup_realtime/src/domain/models.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 89-105
+crates/macro_event_broker/src/domain/models/test.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 31-32,148-149
+crates/forms/src/domain/events.rs
+  s_800cdee5095ae4::t_3e2082c08291a9 162-167
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 150-161,168-180
+crates/activity/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 137-157
+crates/projects/src/domain/events.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 143-154,160-168
+  s_800cdee5095ae4::t_3e2082c08291a9 155-159
+crates/github/src/broker.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 20-33,35-37
+  s_800cdee5095ae4::t_98a9b6cf18fafe 34
+crates/channels/src/inbound/teammate_dms_consumer.rs
+  s_800cdee5095ae4::t_d2fd3c60ba01a3 98-114
+crates/macro_event_broker/AGENTS.md
+  s_3cb01144d29fa8::t_8239c9dd4c64c1 30-31,47-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "915ef302f09f3e229d9fc8320febfcd123acc998",
+  "prompts": {},
+  "sessions": {
+    "s_3cb01144d29fa8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b508d5d3-ac8a-4551-869b-7a9dfcb75cd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_800cdee5095ae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6822efd-7d5d-4623-8573-e63a3e9dc770",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
