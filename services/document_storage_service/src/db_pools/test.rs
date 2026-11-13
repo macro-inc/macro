@@ -4,8 +4,8 @@ use macro_env::Environment;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::{
-    ProbeOutcome, primary_limits, readonly_limits, replica_session_budget,
-    replica_sessions_at_full_overlap, time_acquire,
+    ProbeOutcome, connection_wait, primary_limits, readonly_limits, replica_session_budget,
+    replica_sessions_at_full_overlap,
 };
 
 #[test]
@@ -57,13 +57,31 @@ async fn probe_reports_the_wait_of_a_full_pool_as_a_timeout(
         .unwrap();
 
     let held = pool.acquire().await.unwrap();
-    let (waited, outcome) = time_acquire(&pool).await;
+    let (waited, outcome) = connection_wait(&pool).await;
 
     assert_eq!(outcome, ProbeOutcome::TimedOut);
     assert!(waited >= acquire_timeout);
 
     drop(held);
-    let (_, outcome) = time_acquire(&pool).await;
+    let (_, outcome) = connection_wait(&pool).await;
 
     assert_eq!(outcome, ProbeOutcome::Acquired);
+}
+
+#[sqlx::test(migrations = false)]
+async fn probe_leaves_an_idle_connection_in_the_pool(
+    _pool_options: PgPoolOptions,
+    connect_options: PgConnectOptions,
+) {
+    let pool = PgPoolOptions::new()
+        .min_connections(1)
+        .max_connections(1)
+        .connect_with(connect_options)
+        .await
+        .unwrap();
+    assert_eq!(pool.num_idle(), 1);
+
+    let (waited, outcome) = connection_wait(&pool).await;
+
+    assert_eq!((waited, outcome), (Duration::ZERO, ProbeOutcome::Acquired));
 }

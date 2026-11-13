@@ -33,6 +33,11 @@ pub(crate) struct PoolLimits {
     pub(crate) acquire_timeout: Duration,
 }
 
+/// sqlx bounds a pool's first connection by its acquire timeout. The replica
+/// gets this many tries, so a shorter timeout does not send a task to the
+/// primary sooner than the thirty seconds it had before.
+pub(crate) const READONLY_CONNECT_ATTEMPTS: u32 = 3;
+
 /// Per task. Normally each task runs about one query at a time; a larger
 /// max only lets a slow database pile up more sessions.
 pub(crate) fn primary_limits(environment: Environment) -> PoolLimits {
@@ -117,8 +122,17 @@ impl ProbeOutcome {
     }
 }
 
-/// Wait for a connection the way a query does, then give it straight back.
-pub(crate) async fn time_acquire(pool: &PgPool) -> (Duration, ProbeOutcome) {
+/// How long a query arriving now would queue for a connection.
+///
+/// An idle connection means no queue, and is left alone: checking it out
+/// would reset its idle time every second, so the pool would never shrink
+/// after a burst. With none idle, wait in line the way a query does, then
+/// give the connection straight back.
+pub(crate) async fn connection_wait(pool: &PgPool) -> (Duration, ProbeOutcome) {
+    if pool.num_idle() > 0 {
+        return (Duration::ZERO, ProbeOutcome::Acquired);
+    }
+
     let started = Instant::now();
 
     let outcome = match pool.acquire().await {
@@ -151,7 +165,7 @@ impl PoolInstruments {
                 .build(),
             wait_time: meter
                 .f64_histogram("db.client.connection.wait_time")
-                .with_description("Time a once-a-second probe waited for a pooled connection")
+                .with_description("Time a once-a-second probe queued for a pooled connection")
                 .with_unit("s")
                 .with_boundaries(WAIT_TIME_BOUNDARIES_SECONDS.to_vec())
                 .build(),
@@ -163,9 +177,8 @@ impl PoolInstruments {
 /// fires.
 ///
 /// sqlx waits for a connection inside each query and exposes no per-query
-/// hook, so the wait is sampled: the probe queues behind the same callers a
-/// query would. A high wait while the pool is below its limit means the task
-/// or the database is slow, not that the pool is full.
+/// hook, so the wait is sampled: with every connection in use, the probe
+/// queues behind the same callers a query would.
 pub(crate) async fn report_usage(pool_name: &'static str, pool: PgPool, cancel: CancellationToken) {
     let instruments = PoolInstruments::new();
     let pool_attribute = KeyValue::new(POOL_NAME, pool_name);
@@ -200,7 +213,7 @@ pub(crate) async fn report_usage(pool_name: &'static str, pool: PgPool, cancel: 
 
         let (waited, outcome) = tokio::select! {
             () = cancel.cancelled() => break,
-            sample = time_acquire(&pool) => sample,
+            sample = connection_wait(&pool) => sample,
         };
         instruments.wait_time.record(
             waited.as_secs_f64(),
