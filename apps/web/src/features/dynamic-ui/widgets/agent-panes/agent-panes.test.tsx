@@ -79,6 +79,7 @@ vi.stubGlobal(
 );
 
 beforeEach(() => {
+  fixture.viewer = 'macro|person@example.com';
   fixture.flag = { enabled: true, loading: false };
   fixture.openWithSplit.mockReset();
   fixture.fetch.mockReset();
@@ -93,27 +94,37 @@ afterEach(() => {
 const notFound = err([{ code: 'NOT_FOUND', message: 'not found' }]);
 
 describe('routines pane', () => {
-  it('lists the agent’s routines and opens one', async () => {
-    fixture.fetch.mockResolvedValue(
-      ok({
-        routines: [
-          {
-            id: 'routine-1',
-            name: 'Morning digest',
-            enabled: true,
-            running: false,
-            triggerKind: 'cron',
-            nextRunAt: '2026-11-14T14:00:00Z',
-            lastRun: {
-              startedAt: '2026-11-13T14:00:00Z',
-              endedAt: '2026-11-13T14:01:00Z',
-              succeeded: false,
-            },
+  const routines = () =>
+    ok({
+      routines: [
+        {
+          id: 'routine-1',
+          name: 'Morning digest',
+          enabled: true,
+          running: false,
+          triggerKind: 'cron',
+          nextRunAt: '2026-11-14T14:00:00Z',
+          lastRun: {
+            startedAt: '2026-11-13T14:00:00Z',
+            endedAt: '2026-11-13T14:01:00Z',
+            succeeded: false,
           },
-        ],
-        truncated: false,
-      })
-    );
+        },
+        {
+          id: 'routine-2',
+          name: 'Send the recap',
+          enabled: true,
+          running: false,
+          triggerKind: 'once',
+          nextRunAt: '2026-11-15T14:00:00Z',
+        },
+      ],
+      truncated: false,
+    });
+
+  it('lists the agent’s routines and lets the agent open one', async () => {
+    fixture.viewer = AGENT;
+    fixture.fetch.mockResolvedValue(routines());
     mount(() => <Routines agentId={AGENT} />);
     const name = await screen.findByText('Morning digest');
     expect(screen.getAllByText(/Next run/).length).toBeGreaterThan(0);
@@ -121,15 +132,27 @@ describe('routines pane', () => {
     expect(fixture.fetch.mock.calls[0]?.[0]).toContain(
       `/scheduled-actions/agents/${encodeURIComponent(AGENT)}`
     );
+    expect(screen.getAllByText('On a schedule').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Once').length).toBeGreaterThan(0);
     // Read-only here: the switch can't be flipped from a dashboard.
-    expect((screen.getByRole('switch') as HTMLInputElement).disabled).toBe(
-      true
-    );
+    for (const toggle of screen.getAllByRole('switch')) {
+      expect((toggle as HTMLInputElement).disabled).toBe(true);
+    }
     fireEvent.click(name);
     expect(fixture.openWithSplit.mock.calls[0]?.[0]).toMatchObject({
       id: 'routines',
       params: { routineId: 'routine-1' },
     });
+  });
+
+  it('shows an overseer a summary that opens nothing', async () => {
+    fixture.fetch.mockResolvedValue(routines());
+    mount(() => <Routines agentId={AGENT} />);
+    const name = await screen.findByText('Morning digest');
+    // Routine detail is owner-only, so there is nothing to open.
+    expect(name.closest('button')).toBeNull();
+    fireEvent.click(name);
+    expect(fixture.openWithSplit).not.toHaveBeenCalled();
   });
 
   it('says No access when the viewer does not oversee the agent', async () => {

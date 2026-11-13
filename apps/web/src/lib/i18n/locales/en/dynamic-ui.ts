@@ -30,6 +30,7 @@ export default {
   moreRoutines: 'Showing the first routines only.',
   nextRun: 'Next run {{time}}',
   onSchedule: 'On a schedule',
+  once: 'Once',
   onEvents: 'When something happens',
   runSucceeded: 'Succeeded',
   runFailed: 'Failed',

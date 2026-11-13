@@ -4,10 +4,12 @@ import { routineContent } from '@app/features/routines/routine-navigation';
 import { formatLocale, t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useUserId } from '@core/context/user';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { formatRelativeDate } from '@core/util/time';
 import { useQuery } from '@tanstack/solid-query';
 import { For, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type AgentRoutineSummary,
   agentRoutinesQueryOptions,
@@ -26,8 +28,9 @@ export type RoutinesProps = Omit<WidgetOf<'routines'>, 'type'>;
 
 /**
  * The routines an agent owns, in the Routines list's rows: when each runs
- * next and how its last run went. Read-only here: the switch stays off-limits
- * and each row opens its routine, where its owner can change it.
+ * next and how its last run went. Read-only here: the switch stays
+ * off-limits. Only the agent itself can open a routine (routine detail is
+ * owner-only), so for its overseers the rows are a summary that opens nothing.
  */
 export function Routines(props: RoutinesProps) {
   const dense = usePaneDense(() => props.dense);
@@ -45,6 +48,9 @@ export function Routines(props: RoutinesProps) {
 
 function RoutineRows(props: { agentId: string; dense: boolean }) {
   const { openWithSplit } = useSplitLayout();
+  const viewer = useUserId();
+  const openRoutine = (id: string) =>
+    openWithSplit(routineContent(id), { activate: true });
   const query = useQuery(() => agentRoutinesQueryOptions(props.agentId));
   usePending('dynamic_ui.pane.load', () => query.isPending);
   const noAccess = () =>
@@ -62,9 +68,7 @@ function RoutineRows(props: { agentId: string; dense: boolean }) {
                 <RoutineListRow
                   row={routineRow(routine)}
                   pending={false}
-                  onOpen={(id) =>
-                    openWithSplit(routineContent(id), { activate: true })
-                  }
+                  onOpen={viewer() === props.agentId ? openRoutine : undefined}
                   onToggle={() => {}}
                 />
               )}
@@ -107,10 +111,7 @@ function routineRow(routine: AgentRoutineSummary): RoutineRow {
     name: routine.name,
     description: next,
     createdAt: '',
-    when:
-      routine.triggerKind === 'events'
-        ? t('dynamicUi.onEvents')
-        : t('dynamicUi.onSchedule'),
+    when: whenLabel(routine.triggerKind),
     whenKind,
     does: '',
     group: routine.triggerKind === 'events' ? 'activity' : 'schedule',
@@ -129,6 +130,15 @@ function routineRow(routine: AgentRoutineSummary): RoutineRow {
     children: [],
     pausedByParent: false,
   };
+}
+
+function whenLabel(kind: AgentRoutineSummary['triggerKind']): string {
+  // A newer server's kind reads as a schedule rather than failing the pane.
+  return match(kind)
+    .with('events', () => t('dynamicUi.onEvents'))
+    .with('once', () => t('dynamicUi.once'))
+    .with('cron', 'multiple', () => t('dynamicUi.onSchedule'))
+    .exhaustive(() => t('dynamicUi.onSchedule'));
 }
 
 function nextRunLabel(at: string): string | undefined {
