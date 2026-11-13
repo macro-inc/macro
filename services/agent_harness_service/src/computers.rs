@@ -167,8 +167,9 @@ pub(crate) async fn operator(
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
     // Every computer asks: one bought for an agent teammate must never
     // enroll without its agent.
+    // The authentication service checks its own internal key, not ours.
     .with_agent_enrollment(Arc::new(agent_enrollment::AuthAgentEnrollment::new(
-        &config.internal_api_key,
+        config.authentication_service_secret_key.as_ref(),
     )?));
     Ok(Some(Arc::new(operator)))
 }
