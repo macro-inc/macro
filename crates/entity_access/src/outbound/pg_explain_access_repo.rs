@@ -4,7 +4,7 @@ use crate::domain::{
     },
     ports::ExplainAccessRepository,
 };
-use crate::outbound::pg_access_repo::{anyhow_access_error, queries};
+use crate::outbound::pg_access_repo::queries;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use models_entity_access_management::EntityAccessSourceType;
 use sqlx::PgPool;

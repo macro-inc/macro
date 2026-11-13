@@ -37,7 +37,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "account_manager": [
@@ -1259,7 +1258,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "agent_runtime_protocol": [
@@ -3669,7 +3667,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "channel_sender": [
@@ -3813,7 +3810,6 @@
       "crates/remote_env_var",
       "crates/roles_and_permissions",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "claude_fold": [
@@ -4687,7 +4683,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "connection_gateway": [
@@ -4738,7 +4733,6 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/secretsmanager_client",
-      "crates/single_flight",
       "crates/stream",
       "crates/workspace-hack",
       "services/connection_gateway"
@@ -5295,7 +5289,6 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -5363,7 +5356,6 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -7319,7 +7311,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "entity_access_db_utils": [
@@ -7384,7 +7375,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "entity_registry": [
@@ -7470,7 +7460,6 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "favorites": [
@@ -7508,7 +7497,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "feature_flags": [
@@ -7563,7 +7551,6 @@
       "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "forms": [
@@ -7883,7 +7870,6 @@
       "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "gmail_client": [
@@ -8079,7 +8065,6 @@
       "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "graphql_calendar": [
@@ -9444,7 +9429,6 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "graphql_properties": [
@@ -9504,7 +9488,6 @@
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -10259,7 +10242,6 @@
       "crates/pairing_id",
       "crates/prompt",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/workspace-hack"
     ],
     "image_generation": [
@@ -10717,7 +10699,6 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -11041,7 +11022,6 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/trigger_context",
       "crates/workspace-hack"
@@ -11111,7 +11091,6 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/trigger_context",
       "crates/workspace-hack"
@@ -11775,7 +11754,6 @@
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -13092,7 +13070,6 @@
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -13150,7 +13127,6 @@
       "crates/properties_service",
       "crates/rate_limit",
       "crates/remote_env_var",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/workspace-hack"
     ],
@@ -15502,7 +15478,6 @@
       "crates/remote_env_var",
       "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/system_properties",
       "crates/task_dedup",
       "crates/trigger_context",
@@ -16216,7 +16191,6 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/whatsapp_e2e",
       "crates/whatsapp_fake_server",
       "crates/whatsapp_linked",
@@ -16274,7 +16248,6 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/whatsapp_linked",
       "crates/workspace-hack"
     ],
@@ -16322,7 +16295,6 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
-      "crates/single_flight",
       "crates/whatsapp_linked",
       "crates/whatsapp_store_pg",
       "crates/whatsmeow",

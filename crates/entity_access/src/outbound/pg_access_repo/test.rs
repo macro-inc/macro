@@ -1400,14 +1400,14 @@ async fn direct_recipients_exclude_inherited_grants(pool: PgPool) -> anyhow::Res
 }
 
 #[test]
-fn an_outage_shared_between_concurrent_callers_is_still_unavailable() {
-    let pool_timeout = anyhow::Error::new(std::sync::Arc::new(sqlx::Error::PoolTimedOut));
+fn an_outage_behind_anyhow_is_still_unavailable() {
+    let pool_timeout = anyhow::Error::new(sqlx::Error::PoolTimedOut);
     assert!(matches!(
         anyhow_access_error(pool_timeout),
         AccessError::Unavailable(_)
     ));
 
-    let missing_row = anyhow::Error::new(std::sync::Arc::new(sqlx::Error::RowNotFound));
+    let missing_row = anyhow::Error::new(sqlx::Error::RowNotFound);
     assert!(matches!(
         anyhow_access_error(missing_row),
         AccessError::Internal(_)

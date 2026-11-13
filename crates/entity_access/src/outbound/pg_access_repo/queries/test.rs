@@ -118,8 +118,26 @@ async fn insert_bot_participant(pool: &PgPool, channel_id: Uuid, bot_id: BotId, 
     .unwrap();
 }
 
-fn source_id_set(source_ids: SourceIds) -> HashSet<String> {
-    source_ids.0.into_iter().collect()
+/// The sources a bot reaches in `team_id`: none unless it is live in that
+/// team.
+async fn team_scope_sources(
+    pool: &PgPool,
+    bot_principal: &bot_id::BotIdStr<'_>,
+    team_id: Uuid,
+) -> anyhow::Result<HashSet<String>> {
+    let viewer = team_bot_viewer(pool, bot_principal, team_id).await?;
+    if viewer.is_anonymous() {
+        return Ok(HashSet::new());
+    }
+    Ok(sqlx::query_scalar!(
+        r#"SELECT s.source AS "source!" FROM entity_access_viewer_sources($1, $2) s(source)"#,
+        viewer.id(),
+        viewer.scope_team(),
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .collect())
 }
 
 /// An empty link + thread owned by `owner_macro_id`. Returns `(link_id, thread_id)`.
@@ -151,7 +169,7 @@ async fn insert_thread(pool: &PgPool, owner_macro_id: &str, email: &str) -> (Uui
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_scope_source_ids_include_only_owning_team_and_active_bot_sources(
+async fn team_scope_sources_include_only_owning_team_and_active_bot_sources(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
@@ -183,9 +201,7 @@ async fn team_scope_source_ids_include_only_owning_team_and_active_bot_sources(
     insert_bot_participant(&pool, private_channel_id, bot_id, false).await;
     insert_bot_participant(&pool, departed_channel_id, bot_id, true).await;
 
-    let source_ids = get_team_scope_source_ids(&pool, &bot_principal, &team_id).await?;
-    let source_count = source_ids.0.len();
-    let actual = source_id_set(source_ids);
+    let actual = team_scope_sources(&pool, &bot_principal, team_id).await?;
     let expected = HashSet::from([
         team_id.to_string(),
         team_channel_id.to_string(),
@@ -194,18 +210,13 @@ async fn team_scope_source_ids_include_only_owning_team_and_active_bot_sources(
     ]);
 
     assert_eq!(actual, expected);
-    assert_eq!(
-        source_count,
-        actual.len(),
-        "source ids must be deduplicated"
-    );
     assert!(!actual.contains(&other_team_channel_id.to_string()));
     assert!(!actual.contains(&departed_channel_id.to_string()));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_scope_source_ids_reject_mismatched_team(pool: PgPool) -> anyhow::Result<()> {
+async fn team_scope_sources_reject_mismatched_team(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let bot_principal = bot_id.into_storage_id();
     let owning_team_id = Uuid::new_v4();
@@ -214,14 +225,14 @@ async fn team_scope_source_ids_reject_mismatched_team(pool: PgPool) -> anyhow::R
     insert_team(&pool, owning_team_id).await;
     insert_owned_bot(&pool, bot_id, None, Some(owning_team_id)).await;
 
-    let source_ids = get_team_scope_source_ids(&pool, &bot_principal, &supplied_team_id).await?;
+    let sources = team_scope_sources(&pool, &bot_principal, supplied_team_id).await?;
 
-    assert!(source_ids.0.is_empty());
+    assert!(sources.is_empty());
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_scope_source_ids_reject_soft_deleted_bot(pool: PgPool) -> anyhow::Result<()> {
+async fn team_scope_sources_reject_soft_deleted_bot(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let bot_principal = bot_id.into_storage_id();
     let team_id = Uuid::new_v4();
@@ -238,9 +249,9 @@ async fn team_scope_source_ids_reject_soft_deleted_bot(pool: PgPool) -> anyhow::
     .execute(&pool)
     .await?;
 
-    let source_ids = get_team_scope_source_ids(&pool, &bot_principal, &team_id).await?;
+    let sources = team_scope_sources(&pool, &bot_principal, team_id).await?;
 
-    assert!(source_ids.0.is_empty());
+    assert!(sources.is_empty());
     Ok(())
 }
 

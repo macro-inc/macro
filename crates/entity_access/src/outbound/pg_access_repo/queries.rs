@@ -6,19 +6,14 @@
 use cached::proc_macro::cached;
 
 use anyhow::Context;
-use bot_id::BotIdStr;
-use macro_user_id::{
-    cowlike::CowLike,
-    lowercased::Lowercase,
-    user_id::{MacroUserId, MacroUserIdStr},
-};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
-use single_flight::{DatabaseKey, SingleFlight};
 use sqlx::{Pool, Postgres};
-use std::sync::{Arc, LazyLock};
 
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessGrant, AccessLevel};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use models_entity_access_management::EntityAccessSourceType;
 
@@ -55,140 +50,6 @@ mod test;
 pub(crate) mod test_viewers;
 #[cfg(test)]
 mod typed_owner_test;
-
-/// Type safety for source ids for entity_access table
-#[derive(Debug, Clone)]
-pub struct SourceIds(pub Vec<String>);
-
-type UserSourceIdsKey = (DatabaseKey, String);
-type UserSourceIds = Result<SourceIds, Arc<sqlx::Error>>;
-
-static RUNNING_SOURCE_ID_LOOKUPS: LazyLock<SingleFlight<UserSourceIdsKey, UserSourceIds>> =
-    LazyLock::new(SingleFlight::new);
-
-/// Grabs the users source ids for the entity access table
-/// NOTE: This could return an empty list in the event the user is not logged in and attempting to review a resource
-///
-/// Callers that miss the cache at the same time for the same database and user
-/// share one run of the query. A failure reaches all of them as an
-/// `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(pool), err, fields(coalesced = tracing::field::Empty))]
-#[cfg_attr(
-    not(test),
-    cached(
-        time = 10,
-        result = true,
-        key = "String",
-        convert = r#"{format!("{}", user_id.map(AsRef::as_ref).unwrap_or(""))}"#,
-    )
-)]
-pub async fn get_user_source_ids(
-    pool: &Pool<Postgres>,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
-) -> anyhow::Result<SourceIds> {
-    let Some(user_id) = user_id else {
-        return Ok(SourceIds(vec![]));
-    };
-
-    let user_id = user_id.as_ref().to_string();
-    let key = (DatabaseKey::of(pool), user_id.clone());
-    let lookup = || {
-        let pool = pool.clone();
-        let user_id = user_id.clone();
-
-        async move {
-            query_user_source_ids(&pool, &user_id)
-                .await
-                .map_err(Arc::new)
-        }
-    };
-
-    // Boxed so the lookup adds one pointer, not its whole state machine, to
-    // the future of every caller up the stack: services near rustc's layout
-    // depth limit stop compiling otherwise.
-    Ok(Box::pin(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup)).await?)
-}
-
-async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
-    let source_ids = sqlx::query_scalar!(
-        r#"
-            SELECT cp.channel_id::text FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-            "#,
-        user_id
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(SourceIds(source_ids.into_iter().flatten().collect()))
-}
-
-/// Grabs the source ids available to a bot operating in its owning team's scope.
-///
-/// A direct agent conversation is not among them, although the persona takes
-/// part in it: what is shared there belongs to the person it is with.
-#[tracing::instrument(skip(pool), err)]
-#[cfg_attr(
-    not(test),
-    cached(
-        time = 10,
-        result = true,
-        key = "String",
-        convert = r#"{format!("{}:{}", bot_id, team_id)}"#,
-    )
-)]
-pub async fn get_team_scope_source_ids(
-    pool: &Pool<Postgres>,
-    bot_id: &BotIdStr<'_>,
-    team_id: &uuid::Uuid,
-) -> anyhow::Result<SourceIds> {
-    let source_ids = sqlx::query_scalar!(
-        r#"
-        WITH active_bot AS (
-            SELECT id
-            FROM bots
-            WHERE id = $2
-              AND team_id = $3
-              AND deleted_at IS NULL
-        )
-        SELECT $1::text AS "source_id!"
-        FROM active_bot
-        UNION
-        SELECT $3::text
-        FROM active_bot
-        UNION
-        SELECT c.id::text
-        FROM active_bot
-        JOIN comms_channels c
-          ON c.channel_type = 'team'
-         AND c.team_id = $3
-        UNION
-        SELECT cp.channel_id::text
-        FROM active_bot
-        JOIN comms_channel_participants cp
-          ON cp.user_id = $1
-         AND cp.left_at IS NULL
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM comms_channel_agents ca
-            WHERE ca.channel_id = cp.channel_id
-              AND ca.kind = 'direct'
-        )
-        "#,
-        bot_id.as_ref(),
-        bot_id.as_uuid(),
-        team_id,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(SourceIds(source_ids))
-}
 
 /// Grabs all user IDs with access to an entity via the entity_access table.
 #[tracing::instrument(skip(pool), err)]

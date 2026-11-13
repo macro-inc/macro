@@ -6,9 +6,6 @@ mod pg_access_repo;
 #[cfg(feature = "explain_binary")]
 mod pg_explain_access_repo;
 
-pub use pg_access_repo::{
-    PgAccessRepository, SourceIds, accessible_session_ids, get_team_scope_source_ids,
-    get_user_source_ids,
-};
+pub use pg_access_repo::{PgAccessRepository, accessible_session_ids};
 #[cfg(feature = "explain_binary")]
 pub use pg_explain_access_repo::PgExplainAccessRepository;
