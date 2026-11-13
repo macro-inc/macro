@@ -1,0 +1,21 @@
+scratch/agent-dashboards-seed/cdp.ts
+  s_48270cd6f8d6f1::t_31119571c82399 132-133
+apps/web/scripts/local-dev-server.ts
+  s_48270cd6f8d6f1::t_6a977c8e7a0294 29-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "88775228a40a992e3c66728547c0b63c7a354fd9",
+  "prompts": {},
+  "sessions": {
+    "s_48270cd6f8d6f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24977a5a-283d-4e9b-b8dd-e838fa030365",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
