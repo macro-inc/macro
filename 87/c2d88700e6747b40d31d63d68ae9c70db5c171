@@ -1,0 +1,23 @@
+packages/graphics/src/loro/README.md
+  s_467ffae7bfc0ed::t_45ce20001e4248 177-182
+services/ai-editing-worker/AI_EDITING.md
+  s_467ffae7bfc0ed::t_45ce20001e4248 302-305
+docs/architecture/canvas.md
+  s_467ffae7bfc0ed::t_45ce20001e4248 52,60-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "87c2d88700e6747b40d31d63d68ae9c70db5c171",
+  "prompts": {},
+  "sessions": {
+    "s_467ffae7bfc0ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08f1dd5d-1128-4aba-b991-7dd6dce0c816",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
