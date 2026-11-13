@@ -42,8 +42,9 @@ fn verified_owner_api_credentials_remain_distinct_from_sessions_and_bots() {
         (CredentialOrigin::Internal, None, SendAuthority::Automation),
     ] {
         let user = MacroUserAuthentication {
-            origin,
+            origin: origin.clone(),
             agent_id,
+            agent_via: None,
             macro_user_id: "macro|person@example.com".to_string().try_into().unwrap(),
             user_context: Default::default(),
         };

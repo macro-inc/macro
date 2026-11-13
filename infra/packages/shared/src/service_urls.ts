@@ -25,6 +25,8 @@ export enum ServiceUrl {
   AGENT_HARNESS_SERVICE_URL = 'AGENT_HARNESS_SERVICE_URL',
   AGENT_HARNESS_EGRESS_URL = 'AGENT_HARNESS_EGRESS_URL',
   MCP_SERVER_URL = 'MCP_SERVER_URL',
+  MCP_CHATGPT_SERVICE_URL = 'MCP_CHATGPT_SERVICE_URL',
+  CONNECT_API_URL = 'CONNECT_API_URL',
 }
 
 /**
@@ -61,6 +63,9 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
     'https://dev-gateway.macro.com/agent-harness-egress',
   [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
+  [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
+    'https://mcp-chatgpt-worker-dev.macroverse.workers.dev',
+  [ServiceUrl.CONNECT_API_URL]: 'https://connect-dev.macro.com',
 };
 
 /**
@@ -88,12 +93,15 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
     'https://gateway.macro.com/agent-harness-egress',
   [ServiceUrl.MCP_SERVER_URL]: 'https://gateway.macro.com/mcp',
+  [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
+    'https://mcp-chatgpt-worker.macroverse.workers.dev',
+  [ServiceUrl.CONNECT_API_URL]: 'https://connect.macro.com',
 };
 
 /**
  * Singleton for service URLs
  */
-let _SERVICE_URL_MAP: ServiceUrlMap | undefined = undefined;
+let _SERVICE_URL_MAP: ServiceUrlMap | undefined;
 
 /**
  * Gets the service URL map for the stack

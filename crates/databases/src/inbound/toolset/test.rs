@@ -70,11 +70,13 @@ const VIEW_ID: ViewId =
 
 fn database() -> Database {
     Database {
+        appearance: None,
         id: DATABASE_ID,
         name: "Offsite".to_string(),
         owner_id: USER.to_string(),
         created_at: Utc::now(),
         trashed_at: None,
+        project_id: None,
     }
 }
 
@@ -151,6 +153,13 @@ fn detail(grant: AccessLevel) -> DatabaseDetail {
 }
 
 impl DatabasesService for FakeService {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        Err(DatabaseError::Unauthorized)
+    }
     async fn create_database(
         &self,
         _command: crate::domain::models::CreateDatabase,

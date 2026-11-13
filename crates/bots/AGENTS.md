@@ -15,6 +15,8 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
 - `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,
   `src/inbound/toolset.rs`: HTTP, channel-webhook, and AI-tool adapters.
+  `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
+  `PUT` replaces the whole agent, ownership included.
 - `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
 
 ## Scope
@@ -42,6 +44,20 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Gotchas
 
+- Agent create/update/patch must persist `has_agent = true` atomically with
+  configuration writes; mention dispatch gates on this flag for every harness.
+- Soft-deleting a harness unbinds its agents (a trigger nulls
+  `agent_configs.harness_id`), leaving `macrod` agents unbound. A Macro
+  computer's harness keeps them bound, and its release then deletes them through
+  the trusted `HarnessAgentDeletion::delete_harness_agents` (no caller check;
+  never a route).
+- Agent create and update hold a chosen harness's row `FOR SHARE` in their
+  transaction and refuse a deleted one (`HarnessRemoved`, a 400), so no bind
+  slips past a concurrent harness delete.
+- An agent created on a Macro computer's harness without a permission choice
+  gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
+  `macrod`⇔`harness_id` pairing is checked only for a runtime the request
+  chooses; a patch that omits `harness` keeps an unbound agent editable.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).
@@ -49,3 +65,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+- Docs: [`docs/guides/bots.md`](../../docs/guides/bots.md) (setting up a bot
+  in the app and using it from the SDK)
+
+- `HarnessAssignments` exposes trusted agent-config routing reads without reading session or harness tables.

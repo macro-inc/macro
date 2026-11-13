@@ -70,6 +70,7 @@ function ParticipantWithTooltip(props: {
     <HoverCard
       open={open()}
       onOpenChange={setOpen}
+      isolateClicks
       triggerAs="span"
       trigger={
         <Show
@@ -167,6 +168,7 @@ function copyEmail(email: string, e: MouseEvent) {
 function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
   return (
     <HoverCard
+      isolateClicks
       triggerAs="span"
       trigger={<span class="opacity-60">+{props.hidden.length}</span>}
       content={

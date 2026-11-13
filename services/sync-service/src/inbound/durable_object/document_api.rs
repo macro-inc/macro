@@ -134,6 +134,7 @@ impl SyncSession {
         let editor = match document::DocumentAttribution::from_session_claims(
             claims.actor,
             claims.user_id,
+            claims.agent_correlation_id,
         ) {
             Ok(editor) => editor,
             Err(error) => return error_response(error),

@@ -4,6 +4,11 @@ import type {
 } from '@lexical/markdown';
 import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import {
+  ACCOUNT_MANAGER_REQUEST_TAG,
+  AccountManagerRequestNode,
+  isAccountManagerGrantId,
+} from '../nodes/AccountManagerRequestNode';
+import {
   $createAgentSessionMentionNode,
   AgentSessionMentionNode,
   buildAgentSessionMentionMarkdown,
@@ -21,7 +26,10 @@ import {
   isConnectAppTarget,
 } from '../nodes/ConnectAppNode';
 import { ContactMentionNode } from '../nodes/ContactMentionNode';
-import { DateMentionNode } from '../nodes/DateMentionNode';
+import {
+  DateMentionNode,
+  parseDateMentionBody,
+} from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
@@ -58,12 +66,20 @@ export const I_USER_MENTION: TextMatchTransformer = {
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['userId', 'email']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
+      if (typeof data?.userId !== 'string' || !data.userId.trim()) {
+        throw new Error('Missing or invalid userId');
       }
+      let email = typeof data.email === 'string' ? data.email : '';
+      if (!email && data.userId.startsWith('macro|')) {
+        email = data.userId.slice('macro|'.length);
+      }
+
       const displayName =
         typeof data.displayName === 'string' ? data.displayName : undefined;
-      const userMentionNode = new UserMentionNode(data.userId, data.email, {
+      if (!email && !displayName?.trim()) {
+        throw new Error('Missing user mention label');
+      }
+      const userMentionNode = new UserMentionNode(data.userId, email, {
         displayName,
       });
       node.replace(userMentionNode);
@@ -179,21 +195,15 @@ export const I_DATE_MENTION: TextMatchTransformer = {
     return `<m-date-mention>${data}</m-date-mention>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
-    try {
-      const data = JSON.parse(match[1]);
-      for (const field of ['date', 'displayFormat']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
-      }
-      const dateMentionNode = new DateMentionNode(
-        data.date,
-        data.displayFormat,
-        data.mentionUuid
-      );
-      node.replace(dateMentionNode);
-    } catch (e) {
-      console.error('Error in I_DATE_MENTION replace:', e);
+    const data = parseDateMentionBody(match[1]);
+    if (!data) {
+      console.error('Error in I_DATE_MENTION replace: not a date', match[1]);
       replaceTextWithUnknownMention(node, 'Unknown Date');
+      return;
     }
+    node.replace(
+      new DateMentionNode(data.date, data.displayFormat, data.mentionUuid)
+    );
   },
 };
 
@@ -244,12 +254,11 @@ export const I_DOCUMENT_MENTION: TextMatchTransformer = {
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['documentId', 'documentName']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
-      }
+      if (!('documentId' in data)) throw new Error('Missing field documentId');
+      // documentName only caches the label; the chip loads the real name.
       const documentMentionNode = new DocumentMentionNode(
         data.documentId,
-        data.documentName,
+        data.documentName ?? '',
         data.blockName ?? 'unknown',
         data.blockParams,
         undefined,
@@ -552,12 +561,12 @@ export const I_DOCUMENT_CARD: ElementTransformer = {
   ) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['documentId', 'documentName', 'blockName']) {
+      for (const field of ['documentId', 'blockName']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const documentCardNode = new DocumentCardNode(
         data.documentId,
-        data.documentName,
+        data.documentName ?? '',
         data.blockName,
         data.blockParams,
         data.previewBox,
@@ -647,6 +656,40 @@ export const I_CONNECT_APP: TextMatchTransformer = {
     } catch (e) {
       console.error('Error in I_CONNECT_APP replace:', e);
       replaceTextWithUnknownMention(node, 'Connect app');
+    }
+  },
+};
+
+// Account manager request cards. The payload is only a grant id: the card reads
+// everything it shows from the server.
+export const I_ACCOUNT_MANAGER_REQUEST: TextMatchTransformer = {
+  dependencies: [AccountManagerRequestNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: new RegExp(
+    `<${ACCOUNT_MANAGER_REQUEST_TAG}>(.*?)</${ACCOUNT_MANAGER_REQUEST_TAG}>`
+  ),
+  importRegExp: new RegExp(
+    `<${ACCOUNT_MANAGER_REQUEST_TAG}>(.*?)</${ACCOUNT_MANAGER_REQUEST_TAG}>`
+  ),
+  export: (node) => {
+    if (!(node instanceof AccountManagerRequestNode)) return null;
+    const data = JSON.stringify({ id: node.getGrantId() });
+    return `<${ACCOUNT_MANAGER_REQUEST_TAG}>${data}</${ACCOUNT_MANAGER_REQUEST_TAG}>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const parsed: unknown = JSON.parse(match[1]);
+      const id =
+        typeof parsed === 'object' && parsed !== null && 'id' in parsed
+          ? parsed.id
+          : undefined;
+      if (!isAccountManagerGrantId(id)) {
+        throw new Error('Invalid account manager request payload');
+      }
+      node.replace(new AccountManagerRequestNode(id));
+    } catch (e) {
+      console.error('Error in I_ACCOUNT_MANAGER_REQUEST replace:', e);
+      replaceTextWithUnknownMention(node, 'Account manager request');
     }
   },
 };

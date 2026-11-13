@@ -70,11 +70,13 @@ test.each([false, true])(
         (emailAddress, index) => ({
           id: fixtureId(1000 + index),
           macroId: USER_ID,
+          provider: 'GMAIL',
           emailAddress,
           photoUrl: null,
           isPrimary: index === 0,
           needsReauth: false,
           draftIsSignal: false,
+          sendAs: null,
           settings: { signature: null, signatureOnRepliesForwards: false },
         })
       )

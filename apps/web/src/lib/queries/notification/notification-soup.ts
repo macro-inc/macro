@@ -40,7 +40,8 @@ function notificationEntityTypeToSoupTag(
         'form',
         'scheduled_action',
         'initiative',
-        'external_chat'
+        'external_chat',
+        'harness'
       ),
       () => null
     )
@@ -62,7 +63,7 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
     }
   } else {
     fireAndForget(
-      refetchSoupEntity(notification.entity_id, soupTag),
+      refetchSoupEntity(notification.entity_id, soupTag, { notified: true }),
       'notification-soup'
     );
   }
@@ -78,7 +79,7 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
   }
   if (threadRootId && !hasSoupEntity(threadRootId)) {
     fireAndForget(
-      refetchSoupEntity(threadRootId, 'channelThread'),
+      refetchSoupEntity(threadRootId, 'channelThread', { notified: true }),
       'notification-soup'
     );
   }

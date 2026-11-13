@@ -9,6 +9,8 @@ reuse `models_databases` cells, gate rules reuse its filters, unchanged.
 ## Start here
 
 - `src/form.rs`: `Form`, `CreateForm`, `UpdateForm`, `Audience`, `FormStatus`.
+- `src/branding.rs`: `FormBranding` (logo, cover image, `AccentColor`), one
+  struct so it can be gated as a unit.
 - `src/layout.rs`: `FormLayout`/`FormSection` — how a table's columns map to
   form questions, including booking sections (`BookingTarget`).
 - `src/response.rs`: `FormResponse`, `Answer`, tallying (`FormTally`,
@@ -25,8 +27,8 @@ reuse `models_databases` cells, gate rules reuse its filters, unchanged.
 
 ## Boundaries
 
-- Depends on: `macro_uuid`, `models_databases` (feature `schema` forwards to
-  `models_databases/schema`).
+- Depends on: `macro_uuid`, `model-entity` (shared appearance), and
+  `models_databases` (feature `schema` forwards to `models_databases/schema`).
 - Used by: `forms`.
 
 ## Recipes

@@ -3,7 +3,12 @@ import type { ExternalChatReplyBlock } from '@service-storage/generated/schemas/
 import { match, P } from 'ts-pattern';
 import { chatProvider } from '../providers';
 import type { InboundAttachment } from './attachments';
-import { disappearingLabel, type Mention, type RichContent } from './rich';
+import {
+  disappearingLabel,
+  type Mention,
+  type Person,
+  type RichContent,
+} from './rich';
 
 /** Feature vocabulary; transport decoding lives in queries/. */
 export type ChatSummary = {
@@ -84,7 +89,8 @@ export type ChatMessage = {
   edited: boolean;
   deleted: boolean;
   replyTo?: string;
-  reactions: { emoji: string; count: number; mine: boolean }[];
+  /** Reactors earliest first; `mine` when the viewer is one of them. */
+  reactions: { emoji: string; reactors: Person[]; mine: boolean }[];
   attachments: InboundAttachment[];
   /** Sent from this page and not yet in WhatsApp; never openable. */
   pending?: boolean;
@@ -226,15 +232,16 @@ export function backfillStatus(
   viewerOwns: boolean
 ): string | undefined {
   if (!backfill) return undefined;
-  return match(backfill.state)
-    .with(P.union('pending', 'running'), () => 'Importing history…')
-    .with('waiting_for_phone', () =>
-      viewerOwns
-        ? 'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
-        : "Earlier messages wait for the owner's phone"
-    )
-    .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
-    .exhaustive();
+  return (
+    match(backfill.state)
+      .with(P.union('pending', 'running'), () => 'Importing history…')
+      // The owner gets the import bar with its button instead.
+      .with('waiting_for_phone', () =>
+        viewerOwns ? undefined : "Earlier messages wait for the owner's phone"
+      )
+      .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
+      .exhaustive()
+  );
 }
 
 /** "Launch · Design", or "Launch · Announcements" for its announcement group. */

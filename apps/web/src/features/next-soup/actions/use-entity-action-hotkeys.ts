@@ -1,7 +1,6 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
@@ -15,6 +14,7 @@ import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import { type Accessor, onCleanup } from 'solid-js';
 import type {
   EntityActionListState,
@@ -29,6 +29,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
+  makeDiscardDraftAction,
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
@@ -40,6 +41,7 @@ import {
   makeSetCompanyPropertyAction,
   makeShareAction,
 } from './index';
+import { makeBlockSenderAction } from './make-block-sender-action';
 import type { MarkDoneDelegate } from './mark-done-delegate';
 
 const reportEntityActionError = (error: unknown) =>
@@ -81,6 +83,7 @@ export const useEntityActionHotkeys = (
   } = options;
 
   const userId = useUserId();
+  const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
 
   const group = createHotkeyGroup();
@@ -100,8 +103,11 @@ export const useEntityActionHotkeys = (
   const markUnread = makeMarkUnreadAction();
 
   const deleteAction = makeDeleteAction({
+    isTeamAdmin,
     userId: () => userId(),
   });
+
+  const discardDraftAction = makeDiscardDraftAction();
 
   const renameAction = makeRenameAction({
     userId: () => userId(),
@@ -122,6 +128,7 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+  const blockSenderAction = makeBlockSenderAction();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
   });
@@ -293,6 +300,39 @@ export const useEntityActionHotkeys = (
         entities.length > 0 &&
         entities.every((e) => e.type === 'email') &&
         entities.some(markRead.canExecute)
+      );
+    },
+    displayPriority: 9,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Discard draft - the composer's discard keys, on rows with a draft. The
+  // thread keeps its row and place; only the draft goes.
+  registerHotkey({
+    hotkey: ['shift+cmd+.', 'shift+cmd+,', 'shift+cmd+d'],
+    hotkeyToken: TOKENS.email.discardDraft,
+    scopeId,
+    description: () =>
+      t('entityActions.discardDraftCommand', {
+        count: getEntitiesForAction().length,
+      }),
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(discardDraftAction.canExecute)) return false;
+
+      fireAndForget(
+        discardDraftAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 && entities.every(discardDraftAction.canExecute)
       );
     },
     displayPriority: 9,
@@ -502,6 +542,33 @@ export const useEntityActionHotkeys = (
     }).withGroup(group);
   }
 
+  // Block sender (command menu only, no keybinding)
+  registerHotkey({
+    scopeId,
+    description: () => t('entityActions.blockSender'),
+    keyDownHandler: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(blockSenderAction.canExecute)) return false;
+
+      fireAndForget(
+        blockSenderAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 && entities.every(blockSenderAction.canExecute)
+      );
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
   // Copy - 'cmd+d'
   registerHotkey({
     hotkey: ['cmd+d'],
@@ -676,11 +743,14 @@ export const useEntityActionHotkeys = (
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
-    description: () => t('entityActions.share'),
+    description: () =>
+      t('entityActions.shareCommand', {
+        count: getEntitiesForAction().length,
+      }),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!shareAction.canExecute(entities[0])) return false;
+      if (!entities.every(shareAction.canExecute)) return false;
       fireAndForget(
         shareAction.executeWithSoup(entities, list),
         'entity-actions'
@@ -690,7 +760,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length === 1 && isShareableEntityType(entities[0].type);
+      return entities.length > 0 && entities.every(shareAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

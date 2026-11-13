@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   mount: vi.fn(),
   navigate: vi.fn(),
+  focusInput: vi.fn(),
 }));
 
 vi.mock('@queries/messages/timeline', () => ({
@@ -30,6 +31,7 @@ vi.mock('../Channel', () => ({
       props.onHandleReady({
         goToMessage: mocks.navigate,
         getMessagesStateSnapshot: () => undefined,
+        focusInput: mocks.focusInput,
       })
     );
     return (
@@ -172,5 +174,31 @@ describe('channel message link startup', () => {
     expect(mocks.mount).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('textbox')).toBe(composer);
     expect(composer).toHaveProperty('value', 'Unsent draft');
+  });
+});
+
+describe('composer focus requests', () => {
+  it('focuses the composer for each new request, not for unrelated changes', () => {
+    const [request, setRequest] = createSignal(0);
+    const [unrelated, setUnrelated] = createSignal(0);
+    render(() => (
+      <ChannelSurface channelId="channel-1">
+        <ChannelMessages
+          composerFocusRequest={unrelated() >= 0 ? request() : 0}
+        />
+      </ChannelSurface>
+    ));
+    expect(mocks.focusInput).not.toHaveBeenCalled();
+
+    setRequest(1);
+    expect(mocks.focusInput).toHaveBeenCalledOnce();
+
+    // A host's getter can read other state, such as how a pane arrived.
+    setUnrelated(1);
+    setUnrelated(2);
+    expect(mocks.focusInput).toHaveBeenCalledOnce();
+
+    setRequest(2);
+    expect(mocks.focusInput).toHaveBeenCalledTimes(2);
   });
 });

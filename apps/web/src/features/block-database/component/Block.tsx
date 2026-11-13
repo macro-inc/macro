@@ -2,6 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -22,6 +23,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,
@@ -91,6 +93,7 @@ const Block: Component = () => {
   );
   useDatabaseTableChangedSync(() => databaseId);
   const detailQuery = useDatabaseDetailQuery(() => databaseId);
+  usePending('database.detail', () => detailQuery.isLoading);
   let gridEntry:
     | {
         tableId: string;
@@ -232,7 +235,13 @@ const Block: Component = () => {
       onCleanup(stop);
     },
     offer: (label, undo) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: undo }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
+          { label: 'Undo', icon: ArrowCounterClockwise, onClick: undo },
+        ],
+      }),
   });
   // Without input focus, so a cell editor keeps Ctrl+Z for its own text.
   registerHotkey({
@@ -450,6 +459,7 @@ const Block: Component = () => {
                           </Show>
                           <DatabaseGrid
                             host="block"
+                            schema="opened"
                             databaseId={databaseId}
                             table={table()}
                             canEdit={canEdit() && !activeCreation()}

@@ -36,6 +36,9 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             android::watch_drawer_opened,
             android::watch_participant_identities,
             android::get_active_call_state,
+            android::get_audio_output,
+            android::select_audio_output,
+            android::watch_audio_output,
             android::start_outgoing_call,
             android::prepare_join,
             android::abort_join,
@@ -46,7 +49,8 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             android::set_participant_display_name,
             android::switch_camera,
             android::can_use_full_screen_intent,
-            android::open_full_screen_intent_settings
+            android::open_full_screen_intent_settings,
+            android::open_microphone_settings
         ])
         .js_init_script(include_str!("android-init.js"));
     builder

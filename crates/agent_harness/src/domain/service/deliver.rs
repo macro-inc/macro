@@ -3,6 +3,37 @@
 
 use super::*;
 
+/// How long a session goes without user-visible activity before a runtime's
+/// dial stops restoring it.
+const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
+
+/// Whether neither Macro nor the runtime has seen activity in `session` for
+/// [`IDLE_SESSION_AFTER`]. `modified_at` moves when a turn starts, runs, is
+/// stopped or blocks, never when it ends, so an unfinished turn is read from
+/// the turn projection instead. `runtime_activity` is the runtime's own
+/// `updatedAt` for it, when its listing carries one; a runtime clock ahead of
+/// ours counts as now, never as the future.
+fn is_idle(
+    session: &AgentSession,
+    runtime_activity: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    let now = chrono::Utc::now();
+    let last_activity = runtime_activity.map_or(session.modified_at, |runtime| {
+        runtime.min(now).max(session.modified_at)
+    });
+    now - last_activity >= IDLE_SESSION_AFTER
+}
+
+/// What a runtime's dial does with a session it listed.
+pub(super) enum DialReattach {
+    /// Restore it now.
+    Eager,
+    /// Leave it to bind on its next prompt or delivery.
+    Lazy,
+    /// Archived, or not an external session.
+    Skip,
+}
+
 enum NotificationRecovery {
     Pending,
     Running,
@@ -109,6 +140,82 @@ where
             self.restore_queue(session_id).await?;
         }
         Ok(session)
+    }
+
+    /// Load a live external session onto its runtime's new connection.
+    ///
+    /// Safe to repeat: a session already attached here keeps its actor, and
+    /// an archived or managed one is never started by a runtime's dial.
+    /// Answers whether the session is attached here with its durable queue
+    /// loaded, so the caller can dispatch what it holds. That holds for a
+    /// session an earlier attempt attached before failing to load its queue,
+    /// so a retry finishes the job instead of stranding the queue.
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty))]
+    pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
+        let span = tracing::Span::current();
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived()
+            || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
+        {
+            span.record("agent.session.reattached", false);
+            return Ok(false);
+        }
+        if self.sessions.attached_mcp_servers(session_id).is_some() {
+            span.record("agent.session.reattached", false);
+            self.ensure_hydrated(session_id).await?;
+            return Ok(true);
+        }
+        self.reconnect(session_id).await?;
+        span.record("agent.session.reattached", true);
+        Ok(true)
+    }
+
+    /// What a runtime's dial does with one of the sessions it listed.
+    ///
+    /// Only work that would otherwise wait or go unseen is restored at dial
+    /// time: a command in flight here, a turn the durable projection shows
+    /// unfinished (still open, or open when the session disconnected, on any
+    /// replica), a durable queue nobody else dispatches, or a session that
+    /// Macro or the runtime (its listed `updatedAt`) saw active in the last
+    /// hour.
+    /// Everything else binds on its next prompt or delivery, which reconnects
+    /// a detached session anyway; durable notifications and conversation
+    /// recovery reach theirs through their own sweeps. Whether the session
+    /// is already attached is left to `reattach`, on the session's worker.
+    pub(super) async fn dial_reattach(
+        &self,
+        session_id: AgentSessionId,
+        runtime_activity: &std::collections::HashMap<
+            agent_client_protocol::schema::v1::SessionId,
+            chrono::DateTime<chrono::Utc>,
+        >,
+    ) -> Result<DialReattach> {
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived()
+            || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
+        {
+            return Ok(DialReattach::Skip);
+        }
+        let listed_activity = session
+            .acp_session_id
+            .as_ref()
+            .and_then(|acp| runtime_activity.get(acp))
+            .copied();
+        if self.busy.is_pending(session_id) || !is_idle(&session, listed_activity) {
+            return Ok(DialReattach::Eager);
+        }
+        if self.sessions.has_unfinished_turn(session_id).await? {
+            return Ok(DialReattach::Eager);
+        }
+        if !self
+            .sessions
+            .list_queued_actions(session_id)
+            .await?
+            .is_empty()
+        {
+            return Ok(DialReattach::Eager);
+        }
+        Ok(DialReattach::Lazy)
     }
 
     /// Reconcile a prior invocation before deciding whether a batch may run.
@@ -229,6 +336,7 @@ where
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
+                client: None,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
@@ -299,6 +407,7 @@ where
             actor,
             announce: _,
             context: _,
+            client: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)
@@ -312,6 +421,7 @@ where
         if action.occupies_turn() {
             self.admit_session_id(session_id).await?;
             self.refresh_mcp_servers(session_id).await;
+            self.refresh_permission_policy(session_id).await;
         }
 
         match self

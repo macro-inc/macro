@@ -20,8 +20,10 @@ export async function main({ macro, session, execution }) {
 }
 ```
 
-The context also exposes `token` and `hosts` for explicitly constructing
-`new Macro({ token, hosts })` after importing `Macro` from `@macro-inc/sdk`.
+The context also exposes `token`, `hosts` and `webAppUrl` for explicitly
+constructing `new Macro({ token, hosts, webAppUrl })` after importing `Macro`
+from `@macro-inc/sdk`. `webAppUrl` is the deployment's web app origin, so
+`webUrl()` links point at the environment the run is in.
 `session` and `execution` are handles supplied by the authenticated host.
 SDK methods perform normal authenticated HTTP requests. Promise concurrency is
 ordinary JavaScript concurrency: there is no per-call Rust tool dispatch or
@@ -38,6 +40,39 @@ The result is untrusted program output, not proof that an external write occurre
 Review cards load their separately saved records. Code completion does not wait
 for a user to submit those reviews.
 
+## Unattended programs
+
+A host can run a program with nobody watching (a routine step) by setting
+`RunEnvironment::unattended`. Then:
+
+- the source is TypeScript (`main.ts`); Deno strips its types on load;
+- `main` receives `macro` plus the host's `arguments`, never `token`, `hosts`
+  or trace context;
+- its result is kept whole; one larger than `Limits::max_result_bytes` as JSON
+  fails with a message naming its size, instead of being summarized;
+- it runs with the token's permissions, the owner's. A dry run (`dry_run`)
+  answers each SDK write with an empty result and reports it as `skipped`;
+  writes are the catalog's non-read operations (`operations.json` from
+  `crates/code_mode_assets`, with each operation's method, path and `write`), and an operation
+  missing from it counts as one. A dry run also refuses authenticated non-GET
+  requests at `fetch` unless a read matches; raw sockets (`Deno.connect`,
+  `connectTls`, `startTls`), workers and Node's networking and process modules
+  are unavailable.
+
+A dry run is held back inside the process, not by the APIs: code written to
+get around it can still write with the owner's permissions.
+
+`DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
+against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
+without running it, plus an ambient declaration module the host supplies (the
+type of `main`'s argument). `check_files` checks several modules together (up
+to 40), so one can import another's types, and attributes each diagnostic to
+its file. An import map sends every file URL outside the
+check and the declarations to a root that doesn't exist, so a program can't
+make the checker read, or quote, another file. `sdk_fingerprint()` is the
+SDK version plus a hash of those declarations: code that checked under one
+fingerprint stays valid until it changes.
+
 ## Limits and isolation
 
 | Limit | Default |
@@ -46,17 +81,22 @@ for a user to submit those reviews.
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing and API calls | 30 seconds |
 | JavaScript source | 64 KiB |
-| Model-facing result (larger `data` is summarized) | 64 KiB |
+| Model-facing result (larger `data` is summarized; an unattended one fails) | 64 KiB |
 | Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |
 | V8 old-space target per child | 128 MiB |
+| CPU time per child (`Limits::max_cpu`, off by default) | kernel stops it (SIGXCPU) |
+| Scheduling (`Limits::background`, off by default) | niceness 10 |
 
 The supervisor clears inherited environment variables and gives each process a
 private scratch directory. Deno permits reads only there and network connections
 only to the configured API host/port destinations. Remote and npm imports,
 writes, environment access, subprocesses, FFI, and system information are denied.
+Timers, workers and other sleep primitives throw an error that points programs
+at `macro.routines.create` for checking back later; this steers agents and is not
+a security boundary.
 The trusted bootstrap dynamically imports generated `main.mjs` so its module
 reads are subject to the scratch read permission. Both static and dynamic imports
 outside scratch are covered by real-runtime tests.

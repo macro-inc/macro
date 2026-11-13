@@ -50,9 +50,18 @@ vi.mock('@queries/bots/profiles', () => ({
     data: { name: 'Researcher', avatarUrl: undefined, deleted: false },
   }),
 }));
-vi.mock('@app/features/block-agent/ui', () => ({
+vi.mock('@app/features/block-agent/ui/TextShimmer', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
+}));
+vi.mock('@app/features/block-agent/ui/WorkingDots', () => ({
   WorkingDots: () => null,
+}));
+// The real line, over the plain text and dots above.
+vi.mock('@app/features/block-agent/ui', async () => ({
+  ActivityLine: (await import('@app/features/block-agent/ui/ActivityLine'))
+    .ActivityLine,
+  TextShimmer: (await import('@app/features/block-agent/ui/TextShimmer'))
+    .TextShimmer,
 }));
 vi.mock('@app/features/agent-dms/components/persona-avatar', () => ({
   PersonaAvatar: () => null,
@@ -126,6 +135,7 @@ function typing(phase: 'thinking' | 'writing' | 'working' | 'waiting') {
 function writing(text: string): FoldedMessage {
   return {
     agentSessionId: 'session',
+    key: '1:agent',
     turn: 1,
     author: { kind: 'agent' },
     requestId: null,

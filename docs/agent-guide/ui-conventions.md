@@ -29,8 +29,11 @@ materials while each segment keeps its own interaction states. Standalone Button
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars and touch
-layouts. Recent, Folders, and Agents lists use the same islands (filters,
+iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+belongs to its view's mobile view. Where one exists (the email thread is the
+first), the header shows Back, the title (tap it for the title menu), and Info,
+with other actions in the title menu; other touch headers keep their current
+controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)
@@ -47,6 +50,61 @@ Primary Buttons use solid monochrome emphasis (black in light themes, white in d
 Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
+
+## Entity icons and colors
+
+Ordinary Markdown, snippets, routines, task projects, forms, and databases support
+shared entity appearance. Users with edit access click the header icon or choose
+**Change icon** after Rename in an entity menu, without a leading menu icon.
+Document header icons open the picker separately from their breadcrumb name's
+navigation button. Header buttons are 24px with unchanged 16px glyphs and the
+shared larger touch targets. Row icons still navigate. Sidebar category icons do
+not change. Drive folders, tasks, skills, and internal descriptions do not have
+appearance editing.
+Document content titles have no leading icon. Without a custom icon, **Add icon**
+appears before the other title pills for editors.
+Editing requires `enable-entity-appearance`; disabled or loading flags hide all
+entry points, and disabling closes an open picker. Saved appearance remains
+visible, including public/read-only views; API/SDK access and permissions do not
+change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
+
+Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+**Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
+stays open. Escape, outside clicks, and Done close without undoing saved choices.
+There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
+the rejected choice without replacing a newer edit.
+
+The Icons tab shows Default (a ring in the entity's type color) and the same
+twelve fixed colors as tags, in tag-palette order. Swatches wrap in narrow panes.
+The Emoji tab hides the row; emoji retain native colors. **Remove** clears only
+the icon, while Default clears only color.
+Recent picks are stored per account and include only current picker choices.
+The dedicated entity catalog has fourteen sections; tooltips show icon nouns.
+Search matches names and nouns (for example, Idea and Dining), plus emoji.
+Retired icons and aliases remain renderable without appearing in the picker.
+Both catalogs render virtualized rows,
+including search results. Arrow keys traverse all rows, not only mounted cells;
+Enter picks, and typing focuses search. Recent reordering preserves focus. The
+Emoji category bar stays pinned and jumps to unmounted sections. Both tabs show
+the compact “Everyone with access sees this icon” footer.
+Opening the editor must not blank or remount the surrounding app.
+
+Readers, including public viewers, see saved appearance wherever an entity icon
+already appears. Appearance edits do not reorder content, update content recency,
+or send notifications. They create entity-history entries without entering
+broader activity feeds. Copies and template instances retain the appearance.
+
+## Responsive workspace navigation
+
+At the narrow breakpoint, docked ViewShell navigation closes over 140ms while
+Main expands to its narrow layout. The sidebar remains inert through the closing
+animation, then unmounts. Show navigation opens the dismissible overlay instead;
+required navigation opens that overlay immediately. Returning to wide restores
+the saved docked state without changing the sidebar preference. Reduced-motion
+settings and missing animation support skip the closing animation. A view whose
+aside is its entity list passes `asideList` instead: narrow, the list fills the
+shell until `open`, then Main does, with a Back button (calling `onBack`) in
+place of Show navigation. Chat and Notifications use it.
 
 ## Canonical desktop surfaces
 
@@ -66,6 +124,12 @@ In light mode a fine outline vanishes against near-white content, so controls
 draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
+
+Kanban boards advance one relative `Layer`: lanes use `bg-inset` and cards use
+`bg-surface`. Light themes add a subtle `border-edge-frame` and medium shadow;
+dark themes keep transparent card borders and the small resting shadow. Drag
+previews retain the source's resolved background and surface tokens so cards and
+whole lanes keep their appearance outside the board's layer context.
 
 Desktop view tabs share one flat rounded track, with a small inset and a fully
 rounded selected pill. Use borders and selected fills without raised edges,
@@ -117,12 +181,33 @@ settings sizes retain their existing geometry. Native keyboard behavior, form
 values, labels, disabled/read-only state, and surrounding row hit targets stay
 unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
+## Recipient suggestions
+
+New message/channel, main email, call, routine-template and sharing pickers search personal
+contacts through one bounded window. Type to find later contacts; **Next options**
+or PageDown replaces the window, and ArrowDown at its end advances it. An empty
+window can still have a next page. Touch Next preserves input focus. Closing and
+reopening starts at the first window, without clearing selected/custom chips.
+Explicit participant/agent/thread choices remain scoped extras. Matching addresses
+are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are migrating separately; these controls do not change the AI planner's people pool.
+
+## Property people pickers
+
+Personal user rows and calendar guest pickers use replaceable windows with Next
+options/PageDown. Selections and scoped extras stay independent of the page; names
+from a chosen row survive later searches. A returned person page is not capped a
+second time, and broader native/server matches are kept. Search changes immediately
+remove stale person results from keyboard selection while the source debounces its
+read. Explicit team/participant pools remain scoped rather than becoming directory
+search. Custom calendar addresses are added only by choosing their Add row; a
+complete address never resolves through another person's display-name alias.
+
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.
-Clicking the left checkbox toggles only that option and keeps the menu open.
-Clicking the rest of the row adds the option and closes the whole dropdown;
-clicking an already-selected row leaves it selected. Shift-click or **Only**
+Clicking an option's row or its checkbox toggles only that option and keeps
+the menu open. Shift-click or **Only**
 replaces that group's selection with the option and keeps the menu open, even
 when it is already the sole selection. Other filter groups stay unchanged.
 Only also clears persisted selections missing from the current options. Dynamic
@@ -134,10 +219,22 @@ whole group's selection in one write, without intermediate per-option writes.
 Arrow keys navigate. Space toggles a focused menu row; Enter adds and closes;
 Shift+Enter selects only that option without closing. Searchable filters retain
 input focus and use Enter/Shift+Enter on the highlighted search result.
+A searchable group's `createOption` turns typed text no option lists into a
+leading `Add “…”` row, so a typed address joins the selection like an option.
 **Only** sits at the right on hover or keyboard highlight and remains visible on
 touch devices. Touch rows and checkbox hit areas use the shared touch sizing.
 Existing mobile filter drawers retain their toggle-and-stay-open behavior.
 Inbox selectors retain their explicit **Only**/**All** reset action.
+
+Query-driven filter groups keep the existing menu/drawer controls but load only
+while open. Their source keeps all selected IDs in the collection (including
+unavailable values), separately from the current visible window. Do not apply a
+second substring filter to already matched source rows. Next options replaces
+the window; scroll and virtual focus reset only when a replacement is committed,
+not when selection labels or highlights change. Checkbox toggles keep row order
+stable within a window. A zero-result page can still offer Next options.
+`ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
+static groups keep their existing behavior.
 
 | Pointer dropdown | Touch dropdown |
 | --- | --- |
@@ -235,7 +332,7 @@ write shows failure feedback and leaves the card open for retry.
 Actions live in the top bar immediately before Share, with consistent compact
 buttons (labels collapse on narrow headers). There are no Actions sections in
 information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
-includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
+includes Ask Macro and Create task; PDF, calls, and pull requests include Ask Macro. Native
 projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata appears at the top of each panel, before the interactive
@@ -275,9 +372,8 @@ and contact views (both inside the CRM workspace and in standalone blocks).
 Interface glyphs use the original Macro SVG family. Open `/app/debug/icon-gallery`
 to review regular, filled, and bold variants at 14/16/20/24 px in light and dark
 themes. The Original icons tab is the default; Legacy animated icons remains
-available. Interactive icons provide brief press feedback and selective mouse
-hover feedback, respecting reduced motion. Control layouts and hit targets are
-independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
+available. Interface icons never animate on press or hover. Control layouts and
+hit targets are independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
 
 ![Original icons in the live gallery](images/icon-system.png)
 

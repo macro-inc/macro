@@ -36,15 +36,15 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
+import {
+  type PriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
-import {
-  type PriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from './PriorityCollapseOverflowSensor';
 import { SplitHeaderContextMenu } from './SplitHeaderContextMenu';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
@@ -79,6 +79,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
       }))
       // Reminders open their referenced entity rather than a block of their own.
       .with({ type: 'foreign' }, () => undefined)
+      // A runtime opens in Settings → Machines, not a block of its own.
+      .with({ type: 'harness' }, () => undefined)
       // The full calendar opening path supplies the event range to focus.
       .with({ type: 'calendar_event' }, () => ({
         type: 'component',
@@ -366,7 +368,9 @@ export function SplitHeader(props: {
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&
-        (content.id === 'booking-links' || content.id === 'external'))
+        (content.id === 'booking-links' ||
+          content.id === 'external' ||
+          content.id === 'passwords'))
     );
   };
 
@@ -517,7 +521,7 @@ export function SplitHeaderLeft(props: ParentProps) {
     throw new Error('<SplitHeaderLeft> must be used within a <SplitLayout>');
 
   return (
-    <Show when={ctx.layoutRefs.headerLeft}>
+    <Show when={!ctx.mobileHeaderOwner[0]() && ctx.layoutRefs.headerLeft}>
       <Portal
         mount={ctx.layoutRefs.headerLeft}
         ref={(div) => (div.style.display = 'contents')}
@@ -534,7 +538,7 @@ export function SplitHeaderRight(props: ParentProps) {
     throw new Error('<SplitHeaderRight> must be used within a <SplitLayout>');
 
   return (
-    <Show when={ctx.layoutRefs.headerRight}>
+    <Show when={!ctx.mobileHeaderOwner[0]() && ctx.layoutRefs.headerRight}>
       <Portal
         mount={ctx.layoutRefs.headerRight}
         ref={(div) => (div.style.display = 'contents')}

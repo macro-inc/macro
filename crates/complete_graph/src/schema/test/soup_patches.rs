@@ -71,11 +71,11 @@ async fn subscription_responses_from(
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
     );
-    let hydration_loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+    let hydration_loader = graphql_soup::PrimarySoupItemLoader::new(
         primary,
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema: RealtimeSchema = build_schema_with_services(
         replica,
         TestRealtimeSubscriptionService {
@@ -361,11 +361,11 @@ async fn hydration_service_failure_is_an_error_not_a_deletion() {
     assert_eq!(event.fields["user_id"], VALID_USER_ID);
 }
 
-struct MutationEffectsQuery;
+struct MutationEffectsQuery(model_entity::Entity<'static>);
 #[Object]
 impl MutationEffectsQuery {
     async fn result(&self) -> GraphqlEntityMutationResult<TestEdges> {
-        GraphqlEntityMutationResult::from_updated_entity(entity(1))
+        GraphqlEntityMutationResult::from_updated_entity(self.0.clone())
     }
 }
 
@@ -378,13 +378,17 @@ async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
     );
-    let schema = Schema::build(MutationEffectsQuery, EmptyMutation, EmptySubscription)
-        .data(loader)
-        .data(entity_mutation::EntityMutationActor {
-            user_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
-            organization_id: None,
-        })
-        .finish();
+    let schema = Schema::build(
+        MutationEffectsQuery(entity(1)),
+        EmptyMutation,
+        EmptySubscription,
+    )
+    .data(loader)
+    .data(entity_mutation::EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        organization_id: None,
+    })
+    .finish();
     let query = format!(
         "{{ result {{ ... on GraphqlMutationSuccess {{ effects {{ {PATCH_SELECTION} }} }} }} }}"
     );
@@ -400,6 +404,45 @@ async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert!(data["result"]["effects"].as_array().unwrap().is_empty());
+}
+
+/// Favoriting a database succeeds as a mutation whose effects cannot name a
+/// Soup record; that must not turn the committed write into a GraphQL error.
+#[tokio::test]
+async fn mutation_effects_omit_entities_soup_does_not_represent() {
+    for entity_type in [
+        ModelEntityType::Database,
+        ModelEntityType::Form,
+        ModelEntityType::ExternalChat,
+    ] {
+        let soup = CountingSoupService::default();
+        let calls = soup.raw_calls.clone();
+        let loader = graphql_soup::soup_item_loader(
+            soup,
+            Arc::new(NoOpEmailService),
+            NoOpEntityAccessService,
+        );
+        let schema = Schema::build(
+            MutationEffectsQuery(entity_type.with_entity_string(Uuid::from_u128(1).to_string())),
+            EmptyMutation,
+            EmptySubscription,
+        )
+        .data(loader)
+        .data(entity_mutation::EntityMutationActor {
+            user_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+            organization_id: None,
+        })
+        .finish();
+        let response = schema
+            .execute(format!(
+                "{{ result {{ ... on GraphqlMutationSuccess {{ effects {{ {PATCH_SELECTION} }} }} }} }}"
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        assert!(data["result"]["effects"].as_array().unwrap().is_empty());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[tokio::test]
@@ -453,7 +496,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
         SoupItem::AgentSession(SoupAgentSession {
             id: session_id,
             name: "Linked session".into(),
-            is_archived: false,
+            archived_by: None,
+            archived_at: None,
             owner_id: model_owner::Owner::from_principal_str(VALID_USER_ID).unwrap(),
             bot_id: Uuid::now_v7(),
             harness: "claude".into(),

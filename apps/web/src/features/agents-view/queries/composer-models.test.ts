@@ -10,7 +10,8 @@ const discovery = vi.hoisted(() => ({
   query: {} as object,
 }));
 
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'agent-harness': 'https://harness.example.com' },
   SYNC_SERVICE_HOSTS: { worker: 'https://sync.example.com' },
 }));
@@ -133,7 +134,7 @@ describe('composer model discovery', () => {
         harness: 'cursor',
         runtime: { label: 'Cursor', connected: true },
       }));
-      expect(source.message()).toBe('Could not load models from this runtime.');
+      expect(source.message()).toBe('Could not load models from this machine.');
       setError(
         new ThrownResultError([
           {

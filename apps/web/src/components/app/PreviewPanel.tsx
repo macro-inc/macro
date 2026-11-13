@@ -14,15 +14,15 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '../priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '../view-shell/ViewShell';
 import type {
   PreviewBlockTarget,
   PreviewPanelSelection,
 } from './previewTarget';
-import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from './split-layout/components/PriorityCollapseOverflowSensor';
 import {
   SplitPanelContext,
   type SplitPanelContextType,
@@ -34,10 +34,16 @@ export const [PreviewPanelContext, useMaybePreviewPanel] =
       previewTarget: PreviewBlockTarget;
       previewEntity?: PreviewPanelSelection;
       onFocusOut?: VoidFunction;
+      focusRequest?: number;
+      onEscapeToList?: () => boolean;
     }) => ({
       previewTarget: () => props.previewTarget,
       previewEntity: () => props.previewEntity,
       onFocusOut: () => props.onFocusOut?.(),
+      /** See {@link PreviewPanelProps.focusRequest}. */
+      focusRequest: () => props.focusRequest ?? 0,
+      /** See {@link PreviewPanelProps.onEscapeToList}. */
+      onEscapeToList: () => props.onEscapeToList?.() ?? false,
     })
   );
 
@@ -50,6 +56,8 @@ export type PreviewFrameProps = {
   hideHeader?: boolean;
   /** A new value marks a new location, which hands focus back to the host. */
   locationKey?: Accessor<unknown>;
+  /** While positive, focus may move into the preview. */
+  focusRequest?: number;
   children: JSX.Element;
 };
 
@@ -59,6 +67,7 @@ export type PreviewFrameProps = {
  */
 export function PreviewFrame(props: PreviewFrameProps) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
+  const mobileHeaderOwner = createSignal<symbol>();
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
   const [interactedWith, setInteractedWith] = createSignal(false);
@@ -80,7 +89,7 @@ export function PreviewFrame(props: PreviewFrameProps) {
       }}
       class="flex size-full min-h-0 flex-col"
       onFocusIn={(event) => {
-        if (interactedWith()) return;
+        if (interactedWith() || (props.focusRequest ?? 0) > 0) return;
         if (event.target.hasAttribute('data-allow-focus-in-preview')) {
           setInteractedWith(true);
           return;
@@ -155,6 +164,7 @@ export function PreviewFrame(props: PreviewFrameProps) {
             splitHotkeyScope: previewHotkeyScope,
             isInlinePreview: true,
             layoutRefs: scopedLayoutRefs,
+            mobileHeaderOwner,
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
           }}
@@ -172,6 +182,14 @@ export type PreviewPanelProps = {
   navigationRequest?: number;
   /** Live selection metadata when a row opened this route. */
   selectedEntity?: PreviewPanelSelection;
+  /**
+   * Positive when a click or Enter opened this target to work in: focus may
+   * move into the preview, and a conversation's composer takes it, again
+   * for each new value. Browsing the host's list leaves it at 0.
+   */
+  focusRequest?: number;
+  /** Esc from the preview's content hands focus back to the host's list. */
+  onEscapeToList?: () => boolean;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
@@ -241,11 +259,14 @@ function PreviewBlock(
       ref={props.ref}
       headerLeading={props.headerLeading}
       locationKey={navigation}
+      focusRequest={props.focusRequest}
     >
       <PreviewPanelContext
         previewTarget={props.target}
         previewEntity={props.selectedEntity}
         onFocusOut={props.onFocusOut}
+        focusRequest={props.focusRequest}
+        onEscapeToList={props.onEscapeToList}
       >
         <Show when={blockInstance()}>
           {(instance) => <Dynamic component={instance().element} />}

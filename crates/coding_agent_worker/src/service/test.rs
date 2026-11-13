@@ -1,16 +1,32 @@
 use super::*;
-use crate::config::HarnessScope;
 use harness_id::HarnessId;
 
-fn setup_options(workspace: &Path) -> ServiceOptions {
-    ServiceOptions {
-        config: None,
-        agent: Some("custom".to_owned()),
-        workspace: Some(workspace.to_owned()),
-        name: Some("Desk".to_owned()),
-        scope: Some(ServiceScope::Team),
-        allow_permission_bypass: Some(true),
-    }
+#[tokio::test]
+async fn closing_stdin_stops_an_embedded_service() {
+    use std::future::Future as _;
+    use std::task::Poll;
+
+    let (reader, writer) = tokio::io::duplex(1);
+    drop(writer);
+    let closed = stdin_closed(reader, false);
+    tokio::pin!(closed);
+
+    let state = std::future::poll_fn(|cx| Poll::Ready(closed.as_mut().poll(cx))).await;
+    assert!(state.is_ready());
+}
+
+#[tokio::test]
+async fn closing_stdin_does_not_stop_a_managed_system_service() {
+    use std::future::Future as _;
+    use std::task::Poll;
+
+    let (reader, writer) = tokio::io::duplex(1);
+    drop(writer);
+    let closed = stdin_closed(reader, true);
+    tokio::pin!(closed);
+
+    let state = std::future::poll_fn(|cx| Poll::Ready(closed.as_mut().poll(cx))).await;
+    assert!(state.is_pending());
 }
 
 #[test]
@@ -22,16 +38,24 @@ fn creates_a_config_from_setup_flags() {
     let workspace = directory.path().join("workspace");
     let agent = agent_catalog::custom("hermes acp").expect("custom agent");
 
-    configure(&path, &setup_options(&workspace), Some(agent)).expect("configure");
+    configure(
+        &path,
+        &ServiceOptions {
+            ignore_stdin_eof: false,
+            config: None,
+            profile: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace.clone()),
+        },
+        Some(agent),
+    )
+    .expect("configure");
 
     let config = Config::load(&path).expect("load created config");
     assert_eq!(config.harness.command, "hermes");
     assert_eq!(config.harness.args, ["acp"]);
     assert_eq!(config.workspace.path, workspace);
     assert!(workspace.is_dir());
-    assert_eq!(config.identity.name.as_deref(), Some("Desk"));
-    assert_eq!(config.identity.scope, IdentityScope::Team);
-    assert!(config.identity.allow_permission_bypass);
     assert!(config.credentials.is_none());
 }
 
@@ -41,12 +65,23 @@ fn reconfigures_without_dropping_credentials() {
     let path = directory.path().join("macrod.toml");
     let workspace = directory.path().join("workspace");
     let agent = agent_catalog::custom("hermes acp").expect("custom agent");
-    configure(&path, &setup_options(&workspace), Some(agent)).expect("configure");
+    configure(
+        &path,
+        &ServiceOptions {
+            ignore_stdin_eof: false,
+            config: None,
+            profile: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace),
+        },
+        Some(agent),
+    )
+    .expect("configure");
 
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "mhns_test_secret".to_owned(),
-        scope: HarnessScope::User,
+        pairing_id: None,
     };
     ConfigForm::load(&path)
         .expect("load form")
@@ -57,12 +92,11 @@ fn reconfigures_without_dropping_credentials() {
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: None,
             workspace: Some(moved.clone()),
-            name: None,
-            scope: Some(ServiceScope::Private),
-            allow_permission_bypass: None,
         },
         None,
     )
@@ -71,10 +105,67 @@ fn reconfigures_without_dropping_credentials() {
     let config = Config::load(&path).expect("load edited config");
     assert_eq!(config.credentials, Some(credentials));
     assert_eq!(config.workspace.path, moved);
-    assert_eq!(config.identity.scope, IdentityScope::Private);
     // Untouched settings survive the edit.
-    assert_eq!(config.identity.name.as_deref(), Some("Desk"));
-    assert!(config.identity.allow_permission_bypass);
+    assert_eq!(config.harness.command, "hermes");
+}
+
+#[test]
+fn reconfiguring_drops_settings_older_releases_wrote() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    let workspace = directory.path().join("workspace");
+    std::fs::write(
+        &path,
+        format!(
+            r#"[identity]
+name = "laptop"
+allow_permission_bypass = true
+
+[server]
+port = 8080
+
+[credentials]
+harness_id = "{harness_id}"
+token = "mhns_test_secret"
+scope = "personal"
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+path = "{workspace}"
+"#,
+            harness_id = HarnessId::TEST_A,
+            workspace = workspace.display(),
+        ),
+    )
+    .expect("write old config");
+    assert!(Config::load(&path).is_err());
+
+    configure(
+        &path,
+        &ServiceOptions {
+            ignore_stdin_eof: false,
+            config: None,
+            profile: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace.clone()),
+        },
+        Some(agent_catalog::custom("hermes acp").expect("custom agent")),
+    )
+    .expect("reconfigure an old config");
+
+    let config = Config::load(&path).expect("load migrated config");
+    assert_eq!(
+        config.credentials,
+        Some(HarnessCredentials {
+            harness_id: HarnessId::TEST_A,
+            token: "mhns_test_secret".to_owned(),
+            pairing_id: None,
+        })
+    );
+    assert_eq!(config.workspace.path, workspace);
 }
 
 #[test]
@@ -84,12 +175,11 @@ fn creating_a_config_requires_an_agent() {
     let error = configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: None,
             workspace: Some(directory.path().to_owned()),
-            name: None,
-            scope: None,
-            allow_permission_bypass: None,
         },
         None,
     )

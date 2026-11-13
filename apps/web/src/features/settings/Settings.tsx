@@ -8,7 +8,10 @@ import {
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import {
+  enableEmailSignatures,
+  enableMacroComputers,
+} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -94,6 +97,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
   const outlook = useOutlookAvailable();
+  const macroComputers = useFeatureFlag(enableMacroComputers);
 
   const activeNavigationTab = activeTabId;
 
@@ -104,6 +108,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     searchSettings(searchGroups(), searchQuery(), {
       emailSignatures: signatures().enabled,
       outlook: outlook(),
+      macroComputers: macroComputers().enabled,
     })
   );
 
@@ -265,7 +270,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   onSearchQueryChange={setSearchQuery}
                   isItemActive={isItemActive}
                   onSelect={selectRoutedTab}
-                  footer={<TeamSidebarAction />}
+                  action={<TeamSidebarAction />}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>

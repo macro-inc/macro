@@ -1,8 +1,10 @@
-import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
+vi.mock('@queries/email/read-state', () => ({ markEmailThreadSeen: vi.fn() }));
+
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import type { AgentSessionEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -106,10 +108,7 @@ describe('opening agent session notifications', () => {
   it('leaves rows without loaded notifications to the opened session', () => {
     const { source, dispose } = createSource();
     try {
-      markAgentSessionNotificationsSeenOnOpen(
-        { ...session, notifications: [] },
-        source
-      );
+      markRowNotificationsSeenOnOpen({ ...session, notifications: [] }, source);
       expect(mocks.seen).not.toHaveBeenCalled();
       expect(mocks.entitySeen).not.toHaveBeenCalled();
     } finally {
@@ -136,7 +135,7 @@ describe('opening agent session notifications', () => {
       const rendered = withEntityNotifications(row, source);
       try {
         expect(unreadFilterFn(rendered)).toBe(true);
-        markAgentSessionNotificationsSeenOnOpen(row, source);
+        markRowNotificationsSeenOnOpen(row, source);
         expect(unreadFilterFn(rendered)).toBe(false);
         expect(mocks.seen).toHaveBeenLastCalledWith({
           notificationIds: [`pending-${shape}`],
@@ -167,17 +166,17 @@ describe('opening agent session notifications', () => {
       source
     );
     try {
-      markAgentSessionNotificationsSeenOnOpen(row, source);
+      markRowNotificationsSeenOnOpen(row, source);
       expect(unreadFilterFn(row)).toBe(false);
       const error = new Error('offline');
       pending.reject(error);
       await reported.promise;
       expect(telemetry).toHaveBeenCalledWith(error, {
-        surface: 'agent-session-notification-read',
+        surface: 'row-notification-read',
       });
       expect(unreadFilterFn(row)).toBe(true);
       mocks.seen.mockResolvedValueOnce(undefined);
-      markAgentSessionNotificationsSeenOnOpen(row, source);
+      markRowNotificationsSeenOnOpen(row, source);
       expect(unreadFilterFn(row)).toBe(false);
     } finally {
       dispose();

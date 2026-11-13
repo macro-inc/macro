@@ -244,16 +244,18 @@ fn registry_protocol_error(error: impl ToString) -> sqlx::Error {
     sqlx::Error::Protocol(error.to_string())
 }
 
+pub(super) fn parse_entity_ids(ids: &[String]) -> Result<Vec<Uuid>, sqlx::Error> {
+    ids.iter().map(|id| parse_entity_id(id)).collect()
+}
+
 async fn mark_registered_entities_deleted(
     transaction: &mut Transaction<'_, Postgres>,
     ids: &[String],
     deleted_at: DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
-    for id in ids {
-        entity_registry_db_utils::mark_deleted(transaction, parse_entity_id(id)?, deleted_at)
-            .await
-            .map_err(registry_protocol_error)?;
-    }
+    entity_registry_db_utils::mark_deleted_many(transaction, &parse_entity_ids(ids)?, deleted_at)
+        .await
+        .map_err(registry_protocol_error)?;
     Ok(())
 }
 
@@ -261,10 +263,8 @@ async fn delete_registered_entities(
     transaction: &mut Transaction<'_, Postgres>,
     ids: &[String],
 ) -> Result<(), sqlx::Error> {
-    for id in ids {
-        entity_registry_db_utils::delete_entity(transaction, parse_entity_id(id)?)
-            .await
-            .map_err(registry_protocol_error)?;
-    }
+    entity_registry_db_utils::delete_entities(transaction, &parse_entity_ids(ids)?)
+        .await
+        .map_err(registry_protocol_error)?;
     Ok(())
 }

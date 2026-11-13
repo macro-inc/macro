@@ -1,3 +1,7 @@
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { parseCacheRevision } from '@graphql-cache/protocol';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
@@ -5,8 +9,9 @@ import {
   cacheExchange,
   createClient,
   type Exchange,
+  type Operation,
 } from '@urql/core';
-import { createRoot, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromPromise, mergeMap, pipe } from 'wonka';
 
@@ -20,7 +25,7 @@ vi.mock('@entity/extractors-property/property-helpers', () => ({
   soupPropertyToProperty: vi.fn(),
 }));
 
-import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
+import type { ProjectSoupQuery } from '@service-storage/graphql/generated/graphql';
 import type { ProjectFilters } from '../core/project';
 import {
   createProjectSoupSource,
@@ -32,7 +37,6 @@ const initiative = (id: string) => ({
   __typename: 'GraphqlSoupInitiative' as const,
   id,
   displayName: id,
-  entityType: 'INITIATIVE' as const,
   metadata: {
     ownerId: 'owner',
     updatedAt: '2026-09-27',
@@ -44,6 +48,8 @@ const initiative = (id: string) => ({
     accessLevel: 'EDIT' as const,
   },
   properties: [],
+  taskCount: 8,
+  completedTaskCount: 3,
   notifications: [],
   cacheProjection: null,
   frecencyScore: null,
@@ -310,8 +316,8 @@ describe('project Soup source', () => {
   it('maps initiatives with viewer permissions while keeping folders distinct', () => {
     const items = [
       initiative('launch'),
-      { __typename: 'GraphqlSoupProject', id: 'folder' },
-    ] as SoupQuery['user']['soup']['items'];
+      { __typename: 'GraphqlSoupProject' },
+    ] as ProjectSoupQuery['user']['soup']['items'];
     expect(projectSoupRows(items)).toEqual([
       {
         project: {
@@ -320,6 +326,9 @@ describe('project Soup source', () => {
           updatedAt: '2026-09-27',
           createdAt: '2026-09-26',
           access: 'edit',
+          appearance: null,
+          taskCount: 8,
+          completedTaskCount: 3,
         },
         properties: [],
       },
@@ -412,9 +421,91 @@ describe('project Soup source', () => {
       requests.mock.calls.every(([op]) =>
         op.query.definitions.some(
           (node: { kind: string; name?: { value: string } }) =>
-            node.kind === 'OperationDefinition' && node.name?.value === 'Soup'
+            node.kind === 'OperationDefinition' &&
+            node.name?.value === 'ProjectSoup'
         )
       )
     ).toBe(true);
+  });
+  it('updates initiatives optimistically without unrelated cache-only fields', async () => {
+    let notify: Parameters<CacheHost['onOpsAffected']>[0] = () => {};
+    let operationKey = 0;
+    let patched = false;
+    const appearance = { icon: { kind: 'emoji', value: '🚀' }, color: null };
+    const initial = {
+      user: {
+        id: 'viewer',
+        soup: {
+          items: [{ ...initiative('project'), appearance: null }],
+          nextCursor: null,
+        },
+      },
+    };
+    const host: CacheHost = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      watchQuery: async ({ opKey, query, since }) => {
+        operationKey = opKey;
+        // A loaded server response cannot satisfy another feature's cache-only
+        // fields. The real engine reports a miss for this selection as well.
+        if (query.includes('@cacheOnly'))
+          return { kind: 'miss', revision: parseCacheRevision('1') };
+        if (!patched || since === undefined) {
+          return {
+            kind: 'hit',
+            revision: parseCacheRevision('1'),
+            data: initial,
+          };
+        }
+        return {
+          kind: 'patch',
+          revision: parseCacheRevision('2'),
+          patches: [
+            {
+              path: ['user', 'soup', 'items', 0, 'appearance'],
+              value: appearance,
+            },
+          ],
+        };
+      },
+      onOpsAffected: (callback) => {
+        notify = callback;
+        return () => {};
+      },
+    };
+    const network = vi.fn(async (operation: Operation) => ({
+      operation,
+      data: initial,
+      stale: false,
+      hasNext: false,
+    }));
+    const exchange: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        mergeMap((operation) => fromPromise(network(operation)))
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [normalizedCacheExchange(host), exchange],
+    });
+    const rows = createRoot((cleanup) => {
+      dispose = cleanup;
+      const source = createProjectSoupSource(
+        () => client,
+        () => ({}),
+        () => true
+      );
+      return createMemo(source.rows);
+    });
+    await vi.waitFor(() => expect(rows()?.[0]?.project.appearance).toBeNull());
+    await vi.waitFor(() => expect(network).toHaveBeenCalledTimes(1));
+    patched = true;
+    notify([operationKey]);
+    await vi.waitFor(() =>
+      expect(rows()?.[0]?.project.appearance).toEqual(appearance)
+    );
+    expect(rows()?.[0]?.project.updatedAt).toBe('2026-09-27');
+    expect(rows()?.map((row) => row.project.id)).toEqual(['project']);
+    expect(network).toHaveBeenCalledTimes(1);
   });
 });

@@ -152,6 +152,7 @@ where
     ) -> Result<(), EmailErr> {
         self.change_thread_mailbox_state(user_id, thread_id, action)
             .await
+            .map(|_| ())
     }
     async fn send_email_message(
         &self,
@@ -655,10 +656,11 @@ async fn reload_thread<O: EmailThreadMutationOutput>(
         .await
         .map_err(internal_email_error)?
         .ok_or_else(|| {
-            // The primary-backed lookup completed, but its All Mail projection
-            // can omit a trashed thread even after the write committed. Repeating
-            // that write cannot recover the reply and blocks every later queued
-            // mutation, including unrelated notification reads.
+            // The primary-backed lookup completed, but the thread can be gone
+            // (deleted, or no longer in the caller's inboxes) even after the
+            // write committed. Repeating that write cannot recover the reply and
+            // blocks every later queued mutation, including unrelated
+            // notification reads.
             async_graphql::Error::new("updated email thread is unavailable")
                 .extend_with(|_, extensions| extensions.set("code", "NOT_FOUND"))
         })
@@ -835,8 +837,8 @@ where
             tracing::warn!(failed_thread_ids = ?result.failed_thread_ids, "some email threads kept their archive state");
         }
         // Failed threads reload too, so their unchanged state replaces the
-        // client's prediction. A committed thread the All Mail projection
-        // omits (e.g. trashed) is simply absent, not failed.
+        // client's prediction. A committed thread the reload no longer finds
+        // (e.g. deleted) is simply absent, not failed.
         let threads = futures::future::try_join_all(
             result
                 .updated_thread_ids

@@ -248,7 +248,7 @@ export function GithubPullRequestChecksContent(props: {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Open ${check.name} on GitHub`}
-                      class="text-link hover:text-link-hover visited:text-link-visited transition-colors"
+                      class="text-ink-muted hover:text-ink transition-colors"
                     >
                       <ArrowSquareOut class="size-3" />
                     </a>

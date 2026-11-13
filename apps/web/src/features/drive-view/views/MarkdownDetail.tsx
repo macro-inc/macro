@@ -1,3 +1,4 @@
+import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
 import {
   MarkdownDocument,
@@ -22,8 +23,9 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
+import type { DocumentEntity } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import { DocumentDebouncedNotificationReadMarker } from '@notifications';
+import { DocumentNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
 import { Button } from '@ui';
 import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
@@ -104,10 +106,20 @@ function MarkdownDetailContent(props: {
     });
   });
 
+  const documentEntity = (): DocumentEntity | undefined => {
+    const metadata = props.data.metadata;
+    if (
+      (props.kind !== 'document' && props.kind !== 'snippet') ||
+      metadata.documentId !== props.documentId
+    )
+      return;
+    return markdownEntityFromMetadata(metadata, persistedName());
+  };
   return (
     <MarkdownDocument
       documentId={props.documentId}
       kind={props.kind}
+      entity={documentEntity()}
       state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}
@@ -128,7 +140,7 @@ function MarkdownDetailContent(props: {
             <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
               <FindAndReplace hotkeyScope={panel.splitHotkeyScope} />
             </div>
-            <DocumentDebouncedNotificationReadMarker
+            <DocumentNotificationReadMarker
               notificationSource={notificationSource}
               documentId={props.documentId}
             />

@@ -46,7 +46,10 @@ use models_soup::{
     project::SoupProject,
 };
 use recursion::CollapsibleExt;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
+use sqlx::{
+    PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction, postgres::PgRow,
+    prelude::FromRow,
+};
 use system_properties::{StatusOption, SystemPropertyKey};
 use tracing::Instrument;
 use uuid::Uuid;
@@ -95,8 +98,8 @@ fn sort_key_expression(enabled: bool) -> &'static str {
     }
 }
 
-/// First document-ID array after the existing query parameters and optional property sort.
-fn first_document_id_slot(sort: DynamicSort, grouped: bool) -> usize {
+/// The caller's source-id array, after the existing query parameters and optional property sort.
+fn source_ids_slot(sort: DynamicSort, grouped: bool) -> usize {
     let fixed_parameters = if grouped { 10 } else { 8 };
     let property_parameters = if matches!(sort, DynamicSort::Property { .. }) {
         2
@@ -104,6 +107,11 @@ fn first_document_id_slot(sort: DynamicSort, grouped: bool) -> usize {
         0
     };
     fixed_parameters + property_parameters + 1
+}
+
+/// First document-ID array, after the caller's source ids.
+fn first_document_id_slot(sort: DynamicSort, grouped: bool) -> usize {
+    source_ids_slot(sort, grouped) + 1
 }
 
 // The non-null and missing-key branches both follow SQL's NULLS LAST order.
@@ -185,6 +193,29 @@ static PREFIX: &str = r#"
         SELECT $1
     ),
 "#;
+
+/// The `user_source_ids` rows, bound into the document, chat, and project
+/// access gates by [`bound_access_semi_join`].
+async fn fetch_user_source_ids(
+    connection: &mut PgConnection,
+    user_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let source_ids = sqlx::query_scalar!(
+        r#"
+        SELECT cp.channel_id::text FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        UNION ALL
+        SELECT t.team_id::text FROM team_user t
+            WHERE t.user_id = $1
+        UNION ALL
+        SELECT $1
+        "#,
+        user_id
+    )
+    .fetch_all(connection)
+    .await?;
+    Ok(source_ids.into_iter().flatten().collect())
+}
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
@@ -403,6 +434,7 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."branchedFromVersionId" as "branched_from_version_id",
             d."documentFamilyId" as "document_family_id",
             d."fileType" as "file_type",
+            d.appearance as "appearance",
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
@@ -490,6 +522,7 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
@@ -525,6 +558,7 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
@@ -568,6 +602,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."branchedFromVersionId" as "branched_from_version_id",
             d."documentFamilyId" as "document_family_id",
             d."fileType" as "file_type",
+            d.appearance as "appearance",
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
@@ -659,6 +694,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
@@ -698,6 +734,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
@@ -745,6 +782,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             event.created_at as "created_at",
             event.updated_at as "updated_at",
             NULL::text as "project_id",
@@ -814,6 +852,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             NULL::timestamptz as "created_at",
             NULL::timestamptz as "updated_at",
             NULL::text as "project_id",
@@ -1542,6 +1581,7 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
             filter_ast::ExprFrame::And(a, b) => a || b,
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(id)) => id.is_nil(),
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
             filter_ast::ExprFrame::Literal(_) => false,
         })
@@ -1613,7 +1653,23 @@ pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
     )
 }
 
-fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
+/// [`access_semi_join`] over the caller's source ids, bound as a constant
+/// array at parameter `source_ids`. Postgres costs the `user_source_ids` join at the average
+/// source's grant count, so it planned callers holding hundreds of thousands
+/// of grants with one item probe per grant; it estimates the array from
+/// `entity_access.source_id` statistics and hashes the grants instead.
+fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+    format!(
+        r#"{id_sql} IN (
+                    SELECT ea.entity_id::text
+                    FROM entity_access ea
+                    WHERE ea.source_id = ANY(${source_ids}::text[])
+                        AND ea.entity_type = '{entity_type}'
+                )"#
+    )
+}
+
+fn document_top_where_clause(sort_method: SimpleSortMethod, source_ids: usize) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
@@ -1624,25 +1680,25 @@ fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
         r#"{user_history_join}                WHERE d."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("d.id", "document")
+        bound_access_semi_join("d.id", "document", source_ids)
     )
 }
 
-fn chat_top_where_clause() -> String {
+fn chat_top_where_clause(source_ids: usize) -> String {
     format!(
         r#"                WHERE c."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("c.id", "chat")
+        bound_access_semi_join("c.id", "chat", source_ids)
     )
 }
 
-fn project_top_where_clause() -> String {
+fn project_top_where_clause(source_ids: usize) -> String {
     format!(
         r#"                WHERE p."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("p.id", "project")
+        bound_access_semi_join("p.id", "project", source_ids)
     )
 }
 
@@ -1653,6 +1709,7 @@ fn build_query<'a>(
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
     let sort_method = sort.timestamp_method();
+    let source_ids = source_ids_slot(sort, false);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
@@ -1778,7 +1835,7 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(sort_method, source_ids));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1793,7 +1850,7 @@ fn build_query<'a>(
         if optimized_notification_predicate.is_some() && chat_notification.is_some() {
             builder.push(build_notification_join("c", "chat"));
         }
-        builder.push(chat_top_where_clause());
+        builder.push(chat_top_where_clause(source_ids));
         builder.push(build_chat_filter(chat_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1808,7 +1865,7 @@ fn build_query<'a>(
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             builder.push(build_notification_join("p", "project"));
         }
-        builder.push(project_top_where_clause());
+        builder.push(project_top_where_clause(source_ids));
         builder.push(build_project_filter(project_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1938,6 +1995,7 @@ fn build_query<'a>(
                 NULL::bigint as "branched_from_version_id",
                 NULL::bigint as "document_family_id",
                 NULL::text as "file_type",
+                NULL::jsonb as "appearance",
                 NULL::timestamptz as "created_at",
                 NULL::timestamptz as "updated_at",
                 NULL::text as "project_id",
@@ -1972,6 +2030,7 @@ fn build_query<'a>(
 
 #[derive(Debug, FromRow)]
 struct DocumentRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: String,
     user_id: String,
     document_version_id: String,
@@ -2025,6 +2084,7 @@ struct ProjectRow {
 
 #[derive(Debug, FromRow)]
 struct InitiativeRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: String,
     user_id: String,
     name: String,
@@ -2112,6 +2172,7 @@ impl SoupRow {
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
+                appearance,
                 id,
                 user_id,
                 document_version_id,
@@ -2132,6 +2193,7 @@ impl SoupRow {
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {
+                appearance: appearance.map(|value| value.0),
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
                     .parse()
@@ -2212,6 +2274,7 @@ impl SoupRow {
                 extra: (),
             }),
             SoupRow::Initiative(row) => SoupItem::Initiative(SoupInitiative {
+                appearance: row.appearance.map(|value| value.0),
                 id: row.id.parse().map_err(type_err)?,
                 name: row.name,
                 owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
@@ -2252,6 +2315,25 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     pub exclude_frecency: bool,
 }
 
+/// Opens the transaction a dynamic query runs in. A parallel worker costs
+/// this query tens of milliseconds to start, so at the default
+/// `parallel_setup_cost` callers with a few thousand grants ran twice as slow
+/// in parallel; the raised cost keeps parallel plans for the largest callers.
+async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    let mut transaction = db
+        .begin()
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    sqlx::query!("SET LOCAL parallel_setup_cost = 10000")
+        .execute(&mut *transaction)
+        .await?;
+    Ok(transaction)
+}
+
 #[tracing::instrument(skip(db), err)]
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
@@ -2273,6 +2355,8 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
+    let mut transaction = begin_dynamic_query(db).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
@@ -2298,17 +2382,10 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     {
         query = query.bind(property_definition_id).bind(cursor_key);
     }
+    query = query.bind(&source_ids);
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
-    let mut connection = db
-        .acquire()
-        .instrument(tracing::info_span!(
-            "soup.pool.acquire",
-            pool_size = db.size(),
-            pool_idle = db.num_idle()
-        ))
-        .await?;
     let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let items = query
         // Unnamed statement: the SQL text varies per filter shape and per
@@ -2323,11 +2400,12 @@ async fn expanded_dynamic_cursor_soup_hydrated(
             item.sort_key = row.try_get("sort_key")?;
             Ok(item)
         })
-        .fetch_all(&mut *connection)
+        .fetch_all(&mut *transaction)
         .instrument(query_span.clone())
         .await?;
     query_span.record("rows", items.len());
     drop(query_span);
+    transaction.commit().await?;
 
     Ok(items)
 }
@@ -2492,6 +2570,7 @@ fn build_grouped_query<'a>(
     document_ids: &mut DocumentIdArrays,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let sort_method = sort.timestamp_method();
+    let source_ids = source_ids_slot(sort, true);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
@@ -2557,7 +2636,7 @@ fn build_grouped_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(sort_method, source_ids));
         builder.push(build_document_filter(
             filter_ast.document_filter.as_deref(),
             Some(document_ids),
@@ -2571,7 +2650,7 @@ fn build_grouped_query<'a>(
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_chat_top_clause(sort_method));
-        builder.push(chat_top_where_clause());
+        builder.push(chat_top_where_clause(source_ids));
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2582,7 +2661,7 @@ fn build_grouped_query<'a>(
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_project_top_clause(sort_method));
-        builder.push(project_top_where_clause());
+        builder.push(project_top_where_clause(source_ids));
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2779,6 +2858,8 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
+    let mut transaction = begin_dynamic_query(db).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
@@ -2821,30 +2902,23 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     {
         query = query.bind(property_definition_id).bind(cursor_key);
     }
+    query = query.bind(&source_ids);
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
 
-    let mut connection = db
-        .acquire()
-        .instrument(tracing::info_span!(
-            "soup.pool.acquire",
-            pool_size = db.size(),
-            pool_idle = db.num_idle()
-        ))
-        .await?;
     let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let rows: Vec<GroupedSoupRow> = query
         // Unnamed statement — same rationale as expanded_dynamic_cursor_soup:
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .fetch_all(&mut *connection)
+        .fetch_all(&mut *transaction)
         .instrument(query_span.clone())
         .await?;
     query_span.record("rows", rows.len());
     drop(query_span);
-    drop(connection);
+    transaction.commit().await?;
 
     let items = tracing::info_span!("soup.rows.convert", rows = rows.len()).in_scope(|| {
         rows.into_iter()

@@ -1,0 +1,224 @@
+{
+  "description": "Loki queries over run_local's run, step, build and service events (service_name=local-telemetry), read by both local-dashboard.nix and scripts/ci-report.ts --spec local. $NAME expands to filters.NAME and $RANGE to the window.",
+  "filters": {
+    "RUN": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\"",
+    "READY": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\" | outcome=\"success\"",
+    "STOPPED": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\" | outcome!=\"success\"",
+    "STEP": "{service_name=\"local-telemetry\"} | event=\"step\" | kind=\"up\"",
+    "BUILD": "{service_name=\"local-telemetry\"} | event=\"build\" | outcome=\"success\"",
+    "SERVICE": "{service_name=\"local-telemetry\"} | event=\"service\" | seconds_to_healthy!=\"\"",
+    "ACTION": "{service_name=\"local-telemetry\"} | event=\"run\" | kind!=\"up\""
+  },
+  "tables": [
+    {
+      "id": "summary",
+      "title": "run_local: time to ready",
+      "description": "Bring-ups (attached, detached and run_dev) from the first step to a backend answering through the proxy with Vite started. Machines counts distinct hosts.",
+      "by": [],
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum(count_over_time($RUN [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by ()"
+        },
+        {
+          "name": "Ready",
+          "unit": "percentunit",
+          "expr": "(sum(count_over_time($READY [$RANGE])) or 0 * sum(count_over_time($RUN [$RANGE]))) / sum(count_over_time($RUN [$RANGE]))"
+        },
+        {
+          "name": "Machines",
+          "unit": "short",
+          "expr": "count(sum by (host) (count_over_time($RUN [$RANGE])))"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "title": "Time to ready by start",
+      "description": "Fresh starts wipe the instance's data; resumes keep it. Detached runs are the ones agents and pipes start.",
+      "by": [
+        "start",
+        "detached"
+      ],
+      "sort": "p90",
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (start, detached) (count_over_time($READY [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start, detached)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start, detached)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start, detached)"
+        }
+      ]
+    },
+    {
+      "id": "steps",
+      "title": "Bring-up steps by p90",
+      "description": "Every bring-up step, including the background teardown and frontend lanes, which overlap the foreground: steps don't sum to the run.",
+      "by": [
+        "step"
+      ],
+      "sort": "p90",
+      "limit": 25,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (step) (count_over_time($STEP [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $STEP | unwrap seconds | __error__=\"\" [$RANGE]) by (step)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $STEP | unwrap seconds | __error__=\"\" [$RANGE]) by (step)"
+        },
+        {
+          "name": "Hours",
+          "unit": "h",
+          "expr": "sum by (step) (sum_over_time($STEP | unwrap seconds | __error__=\"\" [$RANGE])) / 3600"
+        }
+      ]
+    },
+    {
+      "id": "failures",
+      "title": "Failed and interrupted bring-ups by step",
+      "description": "The step a failed run stopped at, or for an interrupted run (killed, or stopped mid-bring-up) the step it was in.",
+      "by": [
+        "outcome",
+        "failed_step"
+      ],
+      "sort": "Runs",
+      "limit": 20,
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (outcome, failed_step) (count_over_time($STOPPED [$RANGE]))"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "title": "Slowest services to turn healthy",
+      "description": "From a container starting to its first passing health probe. Services without a health check have no row.",
+      "by": [
+        "service"
+      ],
+      "sort": "p90",
+      "limit": 20,
+      "columns": [
+        {
+          "name": "Starts",
+          "unit": "short",
+          "expr": "sum by (service) (count_over_time($SERVICE [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $SERVICE | unwrap seconds_to_healthy | __error__=\"\" [$RANGE]) by (service)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $SERVICE | unwrap seconds_to_healthy | __error__=\"\" [$RANGE]) by (service)"
+        },
+        {
+          "name": "Max",
+          "unit": "s",
+          "expr": "max_over_time($SERVICE | unwrap seconds_to_healthy | __error__=\"\" [$RANGE]) by (service)"
+        }
+      ]
+    },
+    {
+      "id": "builds",
+      "title": "Service builds",
+      "description": "The cargo build of the service binaries, in bring-ups and rebuilds. Units are what cargo compiled; the sccache hit rate counts the whole shared server during the build.",
+      "by": [
+        "kind"
+      ],
+      "sort": "p90",
+      "columns": [
+        {
+          "name": "Builds",
+          "unit": "short",
+          "expr": "sum by (kind) (count_over_time($BUILD [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $BUILD | unwrap seconds | __error__=\"\" [$RANGE]) by (kind)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $BUILD | unwrap seconds | __error__=\"\" [$RANGE]) by (kind)"
+        },
+        {
+          "name": "Units p50",
+          "unit": "short",
+          "expr": "quantile_over_time(0.5, $BUILD | unwrap units_compiled | __error__=\"\" [$RANGE]) by (kind)"
+        },
+        {
+          "name": "sccache hits",
+          "unit": "percentunit",
+          "expr": "sum by (kind) (sum_over_time($BUILD | unwrap sccache_hits | __error__=\"\" [$RANGE])) / (sum by (kind) (sum_over_time($BUILD | unwrap sccache_hits | __error__=\"\" [$RANGE])) + sum by (kind) (sum_over_time($BUILD | unwrap sccache_misses | __error__=\"\" [$RANGE])))"
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "title": "Rebuilds, restarts and stops",
+      "description": "Commands on a running stack: `just run_local rebuild`, `restart-frontend`, `stop`, and the r and f hotkeys.",
+      "by": [
+        "kind",
+        "outcome"
+      ],
+      "sort": "Runs",
+      "columns": [
+        {
+          "name": "Runs",
+          "unit": "short",
+          "expr": "sum by (kind, outcome) (count_over_time($ACTION [$RANGE]))"
+        },
+        {
+          "name": "p50",
+          "unit": "s",
+          "expr": "quantile_over_time(0.5, $ACTION | unwrap seconds | __error__=\"\" [$RANGE]) by (kind, outcome)"
+        },
+        {
+          "name": "p90",
+          "unit": "s",
+          "expr": "quantile_over_time(0.9, $ACTION | unwrap seconds | __error__=\"\" [$RANGE]) by (kind, outcome)"
+        }
+      ]
+    }
+  ]
+}

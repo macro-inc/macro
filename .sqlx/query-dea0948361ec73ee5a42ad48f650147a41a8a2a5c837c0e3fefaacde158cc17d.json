@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM password_folders WHERE team_id=$1 AND id=ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dea0948361ec73ee5a42ad48f650147a41a8a2a5c837c0e3fefaacde158cc17d"
+}

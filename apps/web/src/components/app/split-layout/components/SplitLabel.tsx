@@ -24,14 +24,17 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
+  children,
   createMemo,
   createSignal,
   For,
   type JSX,
+  onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -39,6 +42,7 @@ import { Portal } from 'solid-js/web';
 import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
+  type SplitPanelContextType,
 } from '../context';
 import { useSplitDisplayName, useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
@@ -143,9 +147,7 @@ export function StaticSplitLabel(props: {
           </span>
           <div
             class="shrink-0 flex items-center h-full"
-            ref={(ref) => {
-              panel.setTitleFileMenuRef(ref);
-            }}
+            ref={titleFileMenuMount(panel)}
           />
         </div>
       </HeaderIsland>
@@ -246,6 +248,13 @@ export function BlockItemSplitLabel(props: {
   const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
+  const suppliedIcon = children(() => props.icon);
+  const appearance = () => {
+    const metadata = blockMetadataSignal();
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
+      : undefined;
+  };
 
   const targetType = () => {
     if (blockName === 'unknown') {
@@ -270,16 +279,17 @@ export function BlockItemSplitLabel(props: {
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <Show
-            when={props.icon}
+            when={suppliedIcon.toArray().length > 0}
             fallback={
               <EntityIcon
                 class="shrink-0"
                 targetType={targetType()}
+                appearance={appearance()}
                 size="xs"
               />
             }
           >
-            {props.icon}
+            {suppliedIcon()}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show
@@ -316,9 +326,7 @@ export function BlockItemSplitLabel(props: {
           {props.trailingBadges}
           <div
             class="shrink-0 flex items-center h-full"
-            ref={(ref) => {
-              panel.setTitleFileMenuRef(ref);
-            }}
+            ref={titleFileMenuMount(panel)}
           />
         </div>
       </HeaderIsland>
@@ -336,6 +344,7 @@ function SplitLabelContextMenu(props: ParentProps) {
   const hasActions = createMemo(() => sections().length > 0);
 
   const item = (action: SplitFileMenuAction) => {
+    if (action.muteMenu) return <NotificationMuteMenu {...action.muteMenu} />;
     const children = () => action.children?.filter(Boolean) ?? [];
 
     return (
@@ -403,6 +412,24 @@ function SplitLabelContextMenu(props: ParentProps) {
       </ContextMenu>
     </Show>
   );
+}
+
+/**
+ * A ref that makes its element the split title's file menu mount until the
+ * element's owner is disposed. The split outlives the views in it, so a mount
+ * left behind would keep a view that has gone alive.
+ */
+export function titleFileMenuMount(
+  panel: Pick<SplitPanelContextType, 'setTitleFileMenuRef'>
+) {
+  return (element: HTMLDivElement) => {
+    panel.setTitleFileMenuRef(element);
+    onCleanup(() =>
+      panel.setTitleFileMenuRef((current) =>
+        current === element ? undefined : current
+      )
+    );
+  };
 }
 
 export function SplitTitleFileMenu(props: ParentProps) {

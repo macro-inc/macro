@@ -220,7 +220,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
   });
 
   it('reuses a known renderer for calls from the explicit Macro MCP server', () => {
@@ -265,7 +265,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
@@ -289,7 +289,7 @@ describe('ToolCallPart routing', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('subtitle').textContent).toBe('');
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });
@@ -842,80 +842,38 @@ describe('ToolCallPart inline results', () => {
     }
   );
 
-  it.each(['macro', 'other'] as const)(
-    'renders %s DisplayResults from call arguments before any response',
-    (kind) => {
-      const input = { view: { kind: 'text', text: 'Launch checklist' } };
-      const part = toolUse(
-        kind === 'macro'
-          ? { kind, input, output: null, error: null }
-          : {
-              kind,
-              input,
-              result: null,
-              output: null,
-              error: null,
-              acpKind: 'other',
-            },
-        { name: 'DisplayResults', status: 'running' }
-      );
-      if (kind === 'other')
-        part.name = { kind: 'mcp', server: 'macro', tool: 'DisplayResults' };
-      const rendered = render(() => (
-        <ToolCallPart part={part} context={context(true)} />
-      ));
-      expect(rendered.getByTestId('dashboard-view').textContent).toBe(
-        JSON.stringify(input.view)
-      );
-      expect(rendered.queryByTestId('tool-card')).toBeNull();
-      expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    }
-  );
-
-  it('updates inline results as the call arguments change', () => {
-    const [part, setPart] = createSignal(
-      toolUse(
-        {
-          kind: 'macro',
-          input: { view: { text: 'First' } },
-          output: null,
-          error: null,
-        },
-        { name: 'DisplayResults', status: 'running' }
-      )
-    );
-    const rendered = render(() => (
-      <ToolCallPart part={part()} context={context(true)} />
-    ));
-    const dashboard = rendered.getByTestId('dashboard-view');
-    setPart(
-      toolUse(
-        {
-          kind: 'macro',
-          input: { view: { text: 'Updated' } },
-          output: null,
-          error: null,
-        },
-        { name: 'DisplayResults', status: 'running' }
-      )
-    );
-    expect(rendered.getByTestId('dashboard-view')).toBe(dashboard);
-    expect(dashboard.textContent).toBe('{"text":"Updated"}');
-  });
-
-  it('passes settled missing input to dashboard validation without a tool disclosure', () => {
+  it('renders the view a view tool returned, without a tool disclosure', () => {
+    const view = {
+      title: 'Launch checklist',
+      widgets: [{ type: 'md' as const, markdown: 'Ship it' }],
+    };
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
-          { kind: 'macro', input: null, output: null, error: null },
+          { kind: 'view', view, error: null },
           { name: 'DisplayResults' }
         )}
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('dashboard-view').dataset.pending).toBe(
-      'false'
+    expect(rendered.getByTestId('dashboard-view').textContent).toBe(
+      JSON.stringify(view)
     );
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+  });
+
+  it('waits for a running view tool to return its view', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          { kind: 'view', view: null, error: null },
+          { name: 'DisplayResults', status: 'running' }
+        )}
+        context={context(true)}
+      />
+    ));
+    expect(rendered.getByTestId('dashboard-view').dataset.pending).toBe('true');
     expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 });
@@ -1206,30 +1164,6 @@ describe('ToolCallPart result summaries', () => {
       },
       output: { success: false, message: 'Denied' },
       reason: 'Denied',
-    },
-    {
-      name: 'WebFetch',
-      input: { input: 'https://status.macro.com' },
-      output: {
-        tool_use_id: 'call-1',
-        content: {
-          type: 'web_fetch_tool_result_error',
-          error_code: 'url_not_accessible',
-        },
-      },
-      reason: 'url_not_accessible',
-    },
-    {
-      name: 'WebSearch',
-      input: { input: 'launch checklist' },
-      output: {
-        tool_use_id: 'call-1',
-        content: {
-          type: 'web_search_tool_result_error',
-          error_code: 'unavailable',
-        },
-      },
-      reason: 'unavailable',
     },
   ])(
     'shows a validated $name response failure even if the call completed',
@@ -1531,15 +1465,6 @@ describe('code execution results', () => {
           outputOmitted: false,
         },
         {
-          id: 'call-2',
-          name: 'DisplayResults',
-          input: { view: { widgets: [] } },
-          output: { message: 'done' },
-          error: null,
-          status: 'completed',
-          outputOmitted: false,
-        },
-        {
           id: 'call-3',
           name: 'CreateDocument',
           input: {},
@@ -1552,7 +1477,7 @@ describe('code execution results', () => {
     };
   });
 
-  it('hides source and folds observed SDK ops into the peek window', () => {
+  it('hides the program and lists its observed steps as rows', () => {
     codeQuery.record = {
       ...codeQuery.record!,
       activity: [
@@ -1571,34 +1496,25 @@ describe('code execution results', () => {
     expect(rendered.container.textContent).not.toContain(
       'return { count: 1 };'
     );
-    const group = rendered.getByRole('button', { name: /Called 3 tools/ });
-    expect(group.getAttribute('aria-expanded')).toBe('false');
-    expect(
-      rendered
-        .queryAllByTestId('tool-card')
-        .filter((row) =>
-          /Classify content|Read documents/.test(row.textContent ?? '')
-        )
-    ).toHaveLength(0);
-
-    group.click();
-    expect(group.getAttribute('aria-expanded')).toBe('true');
-    const activity = rendered
+    expect(rendered.queryByRole('button', { name: /tools/ })).toBeNull();
+    const steps = rendered
       .getAllByTestId('tool-card')
       .filter((row) =>
         /Classify content|Read documents/.test(row.textContent ?? '')
       );
-    expect(activity).toHaveLength(3);
-    expect(activity[0].textContent).toContain('Classify content');
-    expect(activity[0].dataset.status).toBe('completed');
-    expect(activity[1].textContent).toContain('Outcome unknown');
-    expect(activity[2].dataset.status).toBe('failed');
-    expect(rendered.container.textContent).not.toContain('API calls');
-    expect(rendered.container.textContent).toContain('first 128 requests');
+    expect(steps).toHaveLength(3);
+    expect(steps[0].dataset.status).toBe('completed');
+    expect(steps[1].textContent).toContain('Outcome unknown');
+    expect(steps[2].dataset.status).toBe('failed');
+    expect(rendered.container.textContent).toContain(
+      'Only the first 128 steps are listed.'
+    );
+    expect(rendered.container.textContent).not.toMatch(
+      /requests|Workspace activity|API calls/
+    );
   });
 
-  it('opens the peek window for live SDK operations', () => {
-    vi.useFakeTimers();
+  it('lists live steps without a group of its own', () => {
     codeQuery.record = {
       ...codeQuery.record!,
       status: 'running',
@@ -1614,33 +1530,23 @@ describe('code execution results', () => {
     const rendered = render(() => (
       <ToolCallPart part={part} context={context(true)} />
     ));
-    const group = rendered.getByRole('button');
-    expect(group.textContent).toContain('Calling 2 tools');
+    expect(rendered.queryByRole('button')).toBeNull();
     expect(rendered.container.textContent).not.toContain('Workspace activity');
-    vi.advanceTimersByTime(150);
-    expect(group.getAttribute('aria-expanded')).toBe('true');
     const rows = rendered.getAllByTestId('tool-card');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('Browse workspace');
-    expect(rows[0].dataset.status).toBe('completed');
     expect(rows[1].textContent).toContain('Search email');
     expect(rows[1].dataset.status).toBe('running');
-    vi.useRealTimers();
   });
 
-  it('loads trusted records and keeps custom components after a script failure', () => {
+  it('loads trusted records and keeps custom components after a failed run', () => {
     const part = codePart('macro_internal');
     const rendered = render(() => (
       <ToolCallPart part={part} context={context(false)} />
     ));
     expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
-    expect(rendered.getAllByTestId('tool-card')[0].dataset.status).toBe(
-      'failed'
-    );
-    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
-      'Failed'
-    );
-    expect(rendered.getByTestId('dashboard-view')).toBeDefined();
+    // The failure the agent recovered from stays on the step, not the program.
+    expect(rendered.container.textContent).not.toContain('Failed');
     expect(rendered.container.textContent).toContain('Outcome unknown');
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
     expect(
@@ -1680,6 +1586,18 @@ describe('code execution results', () => {
     );
   });
 
+  it('loads the record by the receipt ID when the agent omitted one', () => {
+    const part = codePart('macro_internal');
+    if (part.detail.kind === 'other') {
+      part.detail.input = { source: 'return { count: 1 };' };
+    }
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+  });
+
   it('loads server-accepted UUIDs with reserved variant bits', () => {
     const id = '35e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f90';
     const part = codePart('macro_internal');
@@ -1693,9 +1611,6 @@ describe('code execution results', () => {
     ));
     expect(codeQuery.read).toHaveBeenCalledWith('session', id);
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
-    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
-      'Failed'
-    );
   });
 
   it('does not let an external MCP server select the code-mode record view', () => {
@@ -1749,5 +1664,36 @@ describe('ACP review presentations', () => {
       <ToolCallPart part={part('external')} context={context(false)} />
     ));
     expect(view.queryByTestId('persisted-review')).toBeNull();
+  });
+});
+
+describe('code-mode lookups', () => {
+  const lookup = (name: ToolUsePart['name']): ToolUsePart => ({
+    kind: 'tool_use',
+    id: 'lookup-1',
+    status: 'completed',
+    name,
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { query: 'documents' },
+      output: null,
+      result: { tools: [] },
+      error: null,
+    },
+  });
+  it('renders nothing for the agent finding its way around its own tools', () => {
+    for (const name of [
+      { kind: 'mcp', server: 'macro_internal', tool: 'DescribeCodeTools' },
+      { kind: 'mcp', server: 'macro_internal', tool: 'ReadCodeDocs' },
+      { kind: 'mcp', server: 'macro', tool: 'SearchTools' },
+      { kind: 'native', name: 'LoadTools' },
+    ] as const) {
+      const view = render(() => (
+        <ToolCallPart part={lookup(name)} context={context(false)} />
+      ));
+      expect(view.container.textContent).toBe('');
+      view.unmount();
+    }
   });
 });

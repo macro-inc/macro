@@ -59,18 +59,18 @@ export function createComposerModels(agent: Accessor<RosterAgent | undefined>) {
     pending: () => target() !== undefined && query.isPending,
     message: () => {
       if (!agent()?.runtime.connected)
-        return 'Connect the runtime to load models.';
-      if (!target()) return 'This runtime does not provide model discovery.';
+        return 'Connect the machine to load models.';
+      if (!target()) return 'This machine does not provide model discovery.';
       if (query.isError)
         return (
           providerCredentialRejectedMessage(query.error) ??
-          'Could not load models from this runtime.'
+          'Could not load models from this machine.'
         );
       if (query.isPending) return 'Loading models…';
       if (data()?.status === 'unsupported') {
-        return 'This runtime does not provide model discovery.';
+        return 'This machine does not provide model discovery.';
       }
-      return 'This runtime returned no models.';
+      return 'This machine returned no models.';
     },
   };
 }

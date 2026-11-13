@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::models::{
     Activity, ActivityType, ChannelAttachment, ChannelParticipant, GetOrCreateChannelResponse,
     GetOrCreateDmRequest, GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest,
+    ReferenceShareOutcome, ReferenceShareResult, ReferencedShareItem, ReferencedShareItemType,
     RemoveParticipantsRequest, Sender,
 };
 use crate::domain::ports::{
@@ -562,9 +563,33 @@ impl ChannelService for JoinLinkService {
 struct RecordingMutationService {
     pictures: Arc<Mutex<Vec<(String, Option<Uuid>)>>>,
     joins: Arc<Mutex<Vec<(Sender, Uuid)>>>,
+    shares: Arc<Mutex<Vec<(String, Uuid, Vec<ReferencedShareItem>)>>>,
+    share_outcome: Option<ReferenceShareOutcome>,
 }
 
 impl ChannelService for RecordingMutationService {
+    async fn share_referenced_items_with_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        let outcome = self.share_outcome.unwrap_or(ReferenceShareOutcome::Shared);
+        let results = items
+            .iter()
+            .map(|item| ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome,
+            })
+            .collect();
+        self.shares
+            .lock()
+            .unwrap()
+            .push((actor.as_ref().to_string(), channel_id, items));
+        Ok(results)
+    }
+
     async fn set_channel_picture(
         &self,
         access: ChannelPictureAccess,
@@ -723,6 +748,7 @@ impl JwtValidator for FakeJwtValidator {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: TEST_USER_ID.to_string(),
                 fusion_user_id: "test-fusion-user".to_string(),
                 organization_id,
@@ -1677,4 +1703,100 @@ async fn picture_endpoint_rejects_a_viewer_who_is_not_a_participant() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert!(pictures.lock().unwrap().is_empty());
+}
+
+fn share_request(channel_id: Uuid, body: serde_json::Value) -> Request<Body> {
+    Request::post(format!("/{channel_id}/shares"))
+        .header(
+            header::AUTHORIZATION,
+            format!("Bearer {VALID_BEARER_TOKEN}"),
+        )
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn share_endpoint_grants_a_calendar_event_to_the_verified_channel() {
+    let service = RecordingMutationService::default();
+    let shares = service.shares.clone();
+    let app = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::allow(),
+        authorization_state(),
+    ));
+    let channel_id = Uuid::new_v4();
+    let event_id = Uuid::new_v4();
+
+    let response = app
+        .oneshot(share_request(
+            channel_id,
+            serde_json::json!({"entityType": "calendar_event", "entityId": event_id}),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        *shares.lock().unwrap(),
+        vec![(
+            TEST_USER_ID.to_string(),
+            channel_id,
+            vec![ReferencedShareItem::new(
+                event_id.to_string(),
+                ReferencedShareItemType::CalendarEvent,
+            )],
+        )]
+    );
+}
+
+#[tokio::test]
+async fn share_endpoint_refuses_an_item_the_caller_cannot_share() {
+    let service = RecordingMutationService {
+        share_outcome: Some(ReferenceShareOutcome::NotPermitted),
+        ..RecordingMutationService::default()
+    };
+    let app = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::allow(),
+        authorization_state(),
+    ));
+
+    let response = app
+        .oneshot(share_request(
+            Uuid::new_v4(),
+            serde_json::json!({"entityType": "calendar_event", "entityId": Uuid::new_v4()}),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({"message": "you can only share a calendar event you hold on your own calendar, and private or confidential events are not shared"})
+    );
+}
+
+#[tokio::test]
+async fn share_endpoint_requires_channel_participation() {
+    let service = RecordingMutationService::default();
+    let shares = service.shares.clone();
+    let app = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::channel_view_only(),
+        authorization_state(),
+    ));
+
+    let response = app
+        .oneshot(share_request(
+            Uuid::new_v4(),
+            serde_json::json!({"entityType": "document", "entityId": Uuid::new_v4()}),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(shares.lock().unwrap().is_empty());
 }

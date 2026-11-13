@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses } from './types.gen';
+import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses, SearchPeopleData, SearchPeopleErrors, SearchPeopleResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,14 +56,14 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * GET /contacts handler.
      */
     public getContacts<ThrowOnError extends boolean = false>(options?: Options<GetContactsData, ThrowOnError>): RequestResult<GetContactsResponses, GetContactsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetContactsResponses, GetContactsErrors, ThrowOnError>({ url: '/contacts', ...options });
     }
-    
+
     /**
      * POST /contacts handler.
      */
@@ -76,5 +76,12 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * GET /contacts/search handler: ranked search of the viewer's contacts and team.
+     */
+    public searchPeople<ThrowOnError extends boolean = false>(options: Options<SearchPeopleData, ThrowOnError>): RequestResult<SearchPeopleResponses, SearchPeopleErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<SearchPeopleResponses, SearchPeopleErrors, ThrowOnError>({ url: '/contacts/search', ...options });
     }
 }

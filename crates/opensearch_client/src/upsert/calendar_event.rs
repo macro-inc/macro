@@ -1,7 +1,11 @@
 use models_opensearch::SearchIndex;
 
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::EpochMillis,
+    error::{OpensearchClientError, OpensearchOperation},
+};
 
 /// The arguments for upserting a calendar event into the opensearch index.
 ///
@@ -71,7 +75,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
 /// Upsert a single calendar event doc. Full-overwrite `index` semantics so
 /// omitted optional fields (e.g. `organizer_email`) get cleared on
 /// Some→None transitions.
-#[tracing::instrument(skip(client, args), fields(event_id=%args.event_id), err)]
+#[tracing::instrument(skip(client, args), fields(event_id=%args.event_id))]
 pub(crate) async fn upsert_calendar_event(
     client: &opensearch::OpenSearch,
     args: &UpsertCalendarEventArgs,
@@ -80,7 +84,7 @@ pub(crate) async fn upsert_calendar_event(
     let index = resolve_destination(index_override);
     let body = serde_json::to_value(args).map_err(|err| OpensearchClientError::Unknown {
         details: err.to_string(),
-        method: Some("upsert_calendar_event".to_string()),
+        operation: OpensearchOperation::UpsertCalendarEvent,
     })?;
 
     let response = client
@@ -88,9 +92,8 @@ pub(crate) async fn upsert_calendar_event(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::Unknown {
-            details: err.to_string(),
-            method: Some("upsert_calendar_event".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(OpensearchOperation::UpsertCalendarEvent, &err)
         })?;
 
     let status_code = response.status_code();
@@ -99,14 +102,12 @@ pub(crate) async fn upsert_calendar_event(
         return Ok(());
     }
 
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_calendar_event".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpsertCalendarEvent,
+            &err,
+        )
+    })?;
 
     tracing::error!(
         status_code=?status_code,
@@ -117,7 +118,7 @@ pub(crate) async fn upsert_calendar_event(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("upsert_calendar_event".to_string()),
+        operation: OpensearchOperation::UpsertCalendarEvent,
     })
 }
 
@@ -135,7 +136,7 @@ pub(crate) async fn update_calendar_event_properties(
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
-            method: Some("update_calendar_event_properties".to_string()),
+            operation: OpensearchOperation::UpdateCalendarEventProperties,
         })?;
     let body = json!({ "doc": { "properties": properties_value } });
 
@@ -144,9 +145,11 @@ pub(crate) async fn update_calendar_event_properties(
         .body(body)
         .send()
         .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_calendar_event_properties".to_string()),
+        .map_err(|err| {
+            OpensearchClientError::request_failed(
+                OpensearchOperation::UpdateCalendarEventProperties,
+                &err,
+            )
         })?;
 
     let status_code = response.status_code();
@@ -154,14 +157,12 @@ pub(crate) async fn update_calendar_event_properties(
         tracing::trace!(event_id=%event_id, "calendar event properties updated");
         return Ok(());
     }
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_calendar_event_properties".to_string()),
-            })?;
+    let body = response.text().await.map_err(|err| {
+        OpensearchClientError::deserialization_failed(
+            OpensearchOperation::UpdateCalendarEventProperties,
+            &err,
+        )
+    })?;
 
     // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
     // next full upsert will include its properties. A *missing index* 404
@@ -188,6 +189,6 @@ pub(crate) async fn update_calendar_event_properties(
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_calendar_event_properties".to_string()),
+        operation: OpensearchOperation::UpdateCalendarEventProperties,
     })
 }

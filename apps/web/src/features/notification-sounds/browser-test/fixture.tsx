@@ -9,6 +9,7 @@ import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { NotificationSoundSection } from '../components/NotificationSoundSection';
+import { QuietHoursSection } from '../components/QuietHoursSection';
 import { playNotificationSound } from '../primitives/sound-player';
 import { createNotificationSoundSettings } from '../primitives/sound-settings';
 import { useNotificationSounds } from '../use-notification-sounds';
@@ -59,6 +60,7 @@ function Fixture() {
         <NotificationSoundSection
           settings={sounds.settings()}
           onEnabledChange={sounds.setEnabled}
+          onCallSoundsEnabledChange={sounds.setCallSoundsEnabled}
           onVolumeChange={sounds.setVolume}
           onCategoryChange={sounds.setCategory}
           onPreview={(sound) =>
@@ -67,6 +69,10 @@ function Fixture() {
               'notification-sounds'
             )
           }
+        />
+        <QuietHoursSection
+          quietHours={sounds.settings().quietHours}
+          onChange={sounds.setQuietHours}
         />
       </SettingsPage>
     </main>

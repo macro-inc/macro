@@ -1,21 +1,31 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { NotificationSource } from '@notifications/notification-source';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const source = vi.hoisted(() => ({
   notifications: vi.fn<NotificationSource['notifications']>(() => []),
+  mutedEntities: () => [],
   subscribe: vi.fn(() => () => {}),
   withLocalState: vi.fn<NonNullable<NotificationSource['withLocalState']>>(),
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => source,
 }));
-vi.mock('@entity/utils/notification', () => ({
-  notificationIsRead: (n: { state: string }) => n.state !== 'unseen',
+const rail = vi.hoisted(() => ({
+  railId: 'rail',
+  selectedChannel: () => undefined,
+  list: { focus: { key: () => undefined } },
+  channelActivity: { unreadChannelIds: () => new Set<string>() },
+}));
+vi.mock('../ChannelsRailContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ChannelsRailContext')>()),
+  useChannelsRail: () => rail,
 }));
 
 import { useChannelRailActivity } from './useChannelRailActivity';
+import { useChannelRailFavoriteItemState } from './useChannelRailState';
 
 const row = (
   id: string,
@@ -72,6 +82,58 @@ describe('bounded channel unread indicators', () => {
     expect([...activity.unreadChannelIds()]).toEqual(['root']);
     expect(activity.unreadCount('channels')).toBe(1);
   });
+
+  it.each(['seen', 'done'] as const)(
+    'keeps favorite unread state aligned with channel reads, rollback, and new notifications after %s',
+    (state) => {
+      const [localState, setLocalState] = createSignal<typeof state>();
+      source.withLocalState.mockImplementation(
+        (notification) => localState() ?? notification.state
+      );
+      const [channels, setChannels] = createSignal([
+        row('favorite', [
+          { id: 'n1', state: 'unseen', createdAt: '2026-01-01' },
+        ]),
+        row('other', []),
+      ]);
+      const [favorite, setFavorite] = createSignal<Favorite>({
+        entityId: 'favorite',
+        entityType: 'channel',
+        createdAt: '2026-01-01',
+        sortOrder: 0,
+      });
+      const { item, activity } = createRoot((cleanup) => {
+        dispose = cleanup;
+        const activity = useChannelRailActivity(
+          () => channels().filter((channel) => channel.id === 'other'),
+          calls,
+          channels
+        );
+        rail.channelActivity = activity;
+        return { item: useChannelRailFavoriteItemState(favorite), activity };
+      });
+
+      expect(item().unread).toBe(true);
+      expect(activity.unreadCount('channels')).toBe(0);
+      expect(activity.targetChannelId('channels')).toBeUndefined();
+      setLocalState(state);
+      expect(item().unread).toBe(false);
+      setLocalState(undefined);
+      expect(item().unread).toBe(true);
+      setChannels([row('favorite', []), row('other', [])]);
+      expect(item().unread).toBe(false);
+      setChannels([
+        row('favorite', [
+          { id: 'n2', state: 'unseen', createdAt: '2026-01-02' },
+        ]),
+        row('other', []),
+      ]);
+      expect(item().unread).toBe(true);
+      setFavorite((current) => ({ ...current, entityId: 'other' }));
+      expect(item().unread).toBe(false);
+      expect(source.notifications).not.toHaveBeenCalled();
+    }
+  );
 
   it.each(['seen', 'done'] as const)(
     'clears dots, counts, and activity targets immediately on local %s, and restores them on rollback',
@@ -138,6 +200,22 @@ describe('bounded channel unread indicators', () => {
     expect(source.notifications).not.toHaveBeenCalled();
   });
 
+  it('prefers the loaded channel read state over an older favorite lookup', () => {
+    const activity = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useChannelRailActivity(
+        () => [row('one', [])],
+        calls,
+        () => [
+          row('one', [{ id: 'n1', state: 'unseen', createdAt: '2026-01-01' }]),
+        ]
+      );
+    });
+
+    expect(activity.unreadChannelIds().size).toBe(0);
+    expect(activity.unreadCount('channels')).toBe(0);
+  });
+
   it('uses one witness per channel without reading the global notification feed', () => {
     const [channels, setChannels] = createSignal([
       row('one', [{ id: 'n1', state: 'unseen', createdAt: '2026-01-01' }]),
@@ -166,5 +244,75 @@ describe('bounded channel unread indicators', () => {
     setChannels([row('one', []), row('two', [])]);
     expect(activity.unreadCount('channels')).toBe(0);
     expect(source.notifications).not.toHaveBeenCalled();
+  });
+});
+
+describe('channel mention counts', () => {
+  const mention = (id: string, state: 'unseen' | 'seen' = 'unseen') => ({
+    id,
+    state,
+  });
+  const withMentions = (
+    channel: ChannelEntity,
+    unreadMentions: ChannelEntity['unreadMentions']
+  ): ChannelEntity => ({ ...channel, unreadMentions });
+
+  it('counts unseen mentions per channel, including favorites and thread mentions with no unread dot', () => {
+    const [channels, setChannels] = createSignal([
+      withMentions(row('one', []), [mention('m1'), mention('m2')]),
+      withMentions(row('two', []), [mention('m3', 'seen')]),
+      row('legacy', undefined),
+    ]);
+    const activity = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useChannelRailActivity(channels, calls, () => [
+        withMentions(row('favorite', []), [mention('m4')]),
+      ]);
+    });
+
+    // A thread mention is not a top-level unread, so the dot stays off.
+    expect(activity.unreadChannelIds().size).toBe(0);
+    expect(activity.mentionCount('one')).toBe(2);
+    expect(activity.mentionCount('two')).toBe(0);
+    expect(activity.mentionCount('legacy')).toBe(0);
+    expect(activity.mentionCount('favorite')).toBe(1);
+    // Mentions never feed section counts, which count unread channels.
+    expect(activity.unreadCount('channels')).toBe(0);
+
+    setChannels([withMentions(row('one', []), [mention('m2')])]);
+    expect(activity.mentionCount('one')).toBe(1);
+    setChannels([withMentions(row('one', []), [])]);
+    expect(activity.mentionCount('one')).toBe(0);
+  });
+
+  it('clears on local read intent before the server commits, and restores on rollback', () => {
+    const [readIds, setReadIds] = createSignal(new Set<string>());
+    source.withLocalState.mockImplementation((notification) =>
+      readIds().has(notification.id) ? 'seen' : notification.state
+    );
+    const [favorite] = createSignal<Favorite>({
+      entityId: 'one',
+      entityType: 'channel',
+      createdAt: '2026-01-01',
+      sortOrder: 0,
+    });
+    const { activity, item } = createRoot((cleanup) => {
+      dispose = cleanup;
+      const activity = useChannelRailActivity(
+        () => [],
+        calls,
+        () => [withMentions(row('one', []), [mention('m1'), mention('m2')])]
+      );
+      rail.channelActivity = activity;
+      return { activity, item: useChannelRailFavoriteItemState(favorite) };
+    });
+
+    expect(item().mentions).toBe(2);
+    setReadIds(new Set(['m1']));
+    expect(activity.mentionCount('one')).toBe(1);
+    setReadIds(new Set(['m1', 'm2']));
+    expect(item().mentions).toBe(0);
+    setReadIds(new Set<string>());
+    expect(item().mentions).toBe(2);
   });
 });

@@ -2,11 +2,11 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
+use email_service::composition::workers::CrmMetadataResolver;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
-use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
@@ -309,14 +309,24 @@ async fn main() -> anyhow::Result<()> {
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
-    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
+        .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
-        worker_tracker.spawn(email_service::mailbox_sync_worker::run(
-            email::domain::mailbox::MailboxSyncService::new(
+        let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
+            mailbox_repository.clone(),
+            email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            mailbox_repository.clone(),
+        );
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_health(
+            email::domain::mailbox::progress::MailboxProgressService::new(
                 mailbox_repository.clone(),
-                email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
-                mailbox_repository.clone(),
+                mailbox_sync.import_tally(),
             ),
+            redis_client.clone(),
+            worker_cancellation_token.clone(),
+        ));
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run(
+            mailbox_sync,
             worker_cancellation_token.clone(),
         ));
     }
@@ -376,38 +386,12 @@ async fn main() -> anyhow::Result<()> {
     // The CRM crate's company-metadata resolver is consulted by
     // `crm_service.populate_contact` on `crm_domain_directory` misses and by
     // the enrichment worker for pending entries other binaries leave behind.
-    // `USE_APOLLO_CRM_ENRICHMENT` selects Apollo.io vs. the unfurl-backed
-    // resolver; we also fall back to unfurl when the Apollo key can't be
-    // loaded. The resolver is cheap to clone.
-    let build_unfurl = || -> anyhow::Result<CrmMetadataResolver> {
-        // Wrap the SSRF-safe reqwest fetcher in an `UnfurlServiceImpl`,
-        // then the `UnfurlCompanyMetadataResolver`.
-        let unfurl_service = Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
-            unfurl::outbound::ReqwestUnfurlFetcher::new()
-                .context("failed to build ReqwestUnfurlFetcher")?,
-        ));
-        Ok(CrmMetadataResolver::Unfurl(
-            crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver::new(unfurl_service),
-        ))
-    };
-
-    let metadata_resolver = if config.use_apollo_crm_enrichment {
-        // No usable key (missing/unreadable secret, or unset locally): fall
-        // back to unfurl rather than running Apollo with an empty key, which
-        // would no-op and pollute the directory with negative-cache rows.
-        if config.apollo_api_key.as_ref().is_empty() {
-            tracing::warn!("apollo api key unavailable; falling back to unfurl CRM enrichment");
-            build_unfurl()?
-        } else {
-            CrmMetadataResolver::Apollo(
-                crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver::new(
-                    config.apollo_api_key.as_ref().to_string(),
-                ),
-            )
-        }
-    } else {
-        build_unfurl()?
-    };
+    // Resolve public homepage metadata with the SSRF-safe unfurl fetcher.
+    let unfurl_service = Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
+        unfurl::outbound::ReqwestUnfurlFetcher::new()
+            .context("failed to build ReqwestUnfurlFetcher")?,
+    ));
+    let metadata_resolver = CrmMetadataResolver::new(unfurl_service);
 
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
@@ -765,16 +749,16 @@ async fn main() -> anyhow::Result<()> {
     // send scheduled emails
     worker_tracker.spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
-            email_service::pubsub::scheduled::context::ScheduledContext {
-                sqs_worker: scheduled_worker,
-                db: db_scheduled,
-                email_api: email_api_scheduled,
-                attachment_bytes: draft_content,
-                s3_client: s3_client_scheduled,
-                attachment_bucket: attachment_bucket_scheduled,
-                macro_event_broker: macro_event_broker_scheduled,
+            email_service::pubsub::scheduled::worker::context(
+                scheduled_worker,
+                db_scheduled,
+                email_api_scheduled,
+                draft_content,
+                s3_client_scheduled,
+                attachment_bucket_scheduled,
+                macro_event_broker_scheduled,
                 read_receipts,
-            },
+            ),
             cancellation_token,
         )
         .await;

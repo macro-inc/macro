@@ -1,28 +1,41 @@
 use super::*;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
+const DECLINE_FIELD: &str = "singleValueExtendedProperties.automaticDecline";
+const INSTANCE_DECLINE_FIELD: &str = "instances.singleValueExtendedProperties.automaticDecline";
+/// An exception without the start of the occurrence it replaces. An
+/// `originalStart` Macro cannot parse is `instances.originalStart` instead.
+pub(super) const UNPAIRED_EXCEPTION_FIELD: &str = "instances.originalStart.missing";
+
+/// A normalized event, and the occurrences of its series left out of it.
+pub(super) struct Projection {
+    pub(super) upsert: CalendarEventUpsert,
+    pub(super) skipped: Vec<SkippedOccurrence>,
+}
+
 #[cfg(test)]
 mod test;
 
-pub(super) fn instant(value: &Value) -> Result<DateTime<Utc>, CalendarProviderError> {
-    let text = string(value, "dateTime")?;
+pub(super) fn instant(value: &Value) -> Result<DateTime<Utc>, Rejected> {
+    let text = field(value, "dateTime")?;
     if let Ok(instant) = DateTime::parse_from_rfc3339(text) {
         return Ok(instant.with_timezone(&Utc));
     }
-    let local =
-        NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f").map_err(|_| invalid())?;
+    let local = NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f")
+        .map_err(|_| Rejected::at("dateTime"))?;
     // Requests receive UTC by default. Never guess an unknown Windows zone or
     // choose one side of an ambiguous local-time response silently.
-    let zone = zones::zone(value["timeZone"].as_str().unwrap_or("UTC")).ok_or_else(invalid)?;
+    let zone = zones::zone(value["timeZone"].as_str().unwrap_or("UTC"))
+        .ok_or_else(|| Rejected::at("timeZone"))?;
     zone.from_local_datetime(&local)
         .single()
         .map(|v| v.with_timezone(&Utc))
-        .ok_or_else(invalid)
+        .ok_or_else(|| Rejected::at("dateTime"))
 }
 
-pub(super) fn event_time(value: &Value) -> Result<EventTime, CalendarProviderError> {
-    let start = instant(&value["start"])?;
-    let end = instant(&value["end"])?;
+pub(super) fn event_time(value: &Value) -> Result<EventTime, Rejected> {
+    let start = instant(&value["start"]).map_err(|e| e.under("start"))?;
+    let end = instant(&value["end"]).map_err(|e| e.under("end"))?;
     let zone_name = value["originalStartTimeZone"]
         .as_str()
         .or(value["start"]["timeZone"].as_str())
@@ -45,17 +58,17 @@ pub(super) fn event_time(value: &Value) -> Result<EventTime, CalendarProviderErr
         }
     };
     if !time.is_valid() {
-        return Err(invalid());
+        return Err(Rejected::at("end"));
     }
     Ok(time)
 }
 
-pub(super) fn original(value: &Value) -> Result<Option<EventStart>, CalendarProviderError> {
+pub(super) fn original(value: &Value) -> Result<Option<EventStart>, Rejected> {
     let Some(text) = value["originalStart"].as_str() else {
         return Ok(None);
     };
     let instant = DateTime::parse_from_rfc3339(text)
-        .map_err(|_| invalid())?
+        .map_err(|_| Rejected::at("originalStart"))?
         .with_timezone(&Utc);
     if value["isAllDay"].as_bool() == Some(true) {
         let zone = zones::zone(value["originalStartTimeZone"].as_str().unwrap_or("UTC"))
@@ -174,14 +187,14 @@ pub(super) fn projection(
     target: &ProviderCalendarTarget,
     master: Value,
     instances: Vec<Value>,
-) -> Result<CalendarEventUpsert, CalendarProviderError> {
+) -> Result<Projection, Rejected> {
     let event_id = Uuid::now_v7();
     let time = event_time(&master)?;
     let updated = master["lastModifiedDateTime"]
         .as_str()
         .and_then(|v| DateTime::parse_from_rfc3339(v).ok())
         .map(|v| v.with_timezone(&Utc))
-        .ok_or_else(invalid)?;
+        .ok_or_else(|| Rejected::at("lastModifiedDateTime"))?;
     let created = master["createdDateTime"]
         .as_str()
         .and_then(|v| DateTime::parse_from_rfc3339(v).ok())
@@ -196,7 +209,7 @@ pub(super) fn projection(
     let event = CalendarEvent {
         id: event_id,
         owner_id: target.owner_id.clone(),
-        ical_uid: string(&master, "iCalUId")?.into(),
+        ical_uid: field(&master, "iCalUId")?.into(),
         calendar_id: Some(target.calendar_id),
         sources: vec![],
         title: master["subject"].as_str().unwrap_or_default().into(),
@@ -254,15 +267,28 @@ pub(super) fn projection(
     };
     let mut occurrences = std::collections::BTreeMap::new();
     let mut overrides = vec![];
+    let mut skipped = vec![];
     for instance in instances {
         if instance["isCancelled"].as_bool() == Some(true) {
             continue;
         }
-        let time = event_time(&instance)?;
-        let original = original(&instance)?;
+        let time = event_time(&instance).map_err(|e| e.under("instances"))?;
+        let original = original(&instance).map_err(|e| e.under("instances"))?;
         let recurrence_id = original.as_ref().map(EventStart::occurrence_key);
         if instance["type"].as_str() == Some("exception") {
-            let original_time = original.ok_or_else(invalid)?;
+            // Neither its slot nor its own details can be told apart from
+            // the series, so it is left out, as Google sync never shows an
+            // exception without its original start, and the rest of the
+            // series still imports.
+            let Some(original_time) = original else {
+                skipped.push(SkippedOccurrence {
+                    provider_id: field(&instance, "id")
+                        .map_err(|e| e.under("instances"))?
+                        .into(),
+                    field: UNPAIRED_EXCEPTION_FIELD.into(),
+                });
+                continue;
+            };
             let instance_preferences = preferences(&instance);
             // Graph may omit inherited extended properties. Preserve the series'
             // extra reminders unless this instance carries its own settings or
@@ -279,7 +305,7 @@ pub(super) fn projection(
                     .cloned()
                     .map(serde_json::from_value)
                     .transpose()
-                    .map_err(|_| invalid())?,
+                    .map_err(|_| Rejected::at(INSTANCE_DECLINE_FIELD))?,
                 recurrence_id: original_time.occurrence_key(),
                 original_time,
                 time: time.clone(),
@@ -315,7 +341,7 @@ pub(super) fn projection(
             );
         }
     }
-    Ok(CalendarEventUpsert {
+    let upsert = CalendarEventUpsert {
         event,
         source: CalendarEventSource::Outlook(ProviderEventSource {
             automatic_decline: if master["showAs"].as_str() == Some("oof") {
@@ -324,7 +350,7 @@ pub(super) fn projection(
                     .cloned()
                     .map(serde_json::from_value)
                     .transpose()
-                    .map_err(|_| invalid())?
+                    .map_err(|_| Rejected::at(DECLINE_FIELD))?
             } else {
                 None
             },
@@ -333,14 +359,15 @@ pub(super) fn projection(
             account_id: target.account_id,
             calendar_id: target.calendar_id,
             observed_access_role: target.observed_access_role.clone(),
-            provider_event_id: string(&master, "id")?.into(),
+            provider_event_id: field(&master, "id")?.into(),
             provider_recurring_event_id: None,
             provider_etag: master["@odata.etag"].as_str().map(str::to_owned),
             raw_payload: master,
         }),
         overrides,
         occurrences: occurrences.into_values().collect(),
-    })
+    };
+    Ok(Projection { upsert, skipped })
 }
 
 pub(super) fn preferences(event: &Value) -> Value {

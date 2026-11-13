@@ -315,10 +315,10 @@ async fn send_chat_message_inner(
         .filter_map(|r| r.parts)
         .collect();
 
-    // Fetch user memory (triggers background generation if stale/missing)
+    // Compose stored user activity, explicit preferences, and current team profiles
     let user_memory = ctx
         .memory_service
-        .get_or_generate_memory((*user_id).clone())
+        .get_memory((*user_id).clone())
         .await
         .inspect_err(|e| tracing::error!(error = ?e, "failed to fetch user memory"))
         .ok()
@@ -592,7 +592,7 @@ fn stream_and_save_message(
         let rig_messages = agent::to_rig_messages(&request);
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Chat, user_id.clone())
             .with_entity(macro_uuid::string_to_uuid(&chat_id).ok());
-        // Carry the feature on the context so tool-spawned subagents attribute to it.
+        // Carry the feature on the context so AI calls made by tools are attributed to it.
         let mut tool_context = tool_context;
         tool_context.usage_context = usage_ctx.clone();
         tool_context.document_tool_context.recorder = tool_context.recorder.clone();

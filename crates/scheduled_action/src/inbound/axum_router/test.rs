@@ -48,7 +48,7 @@ async fn manual_execution_returns_sanitized_admission_errors_after_authorization
         set_admission_error(&svc, error);
         let app = router_with(svc, FakeEntityAccessService::owner_only());
         let (status, created) =
-            request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+            request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
         assert_eq!(status, StatusCode::CREATED);
         let url = format!(
             "/scheduled-actions/{}/execute",
@@ -162,6 +162,7 @@ impl MacroAuthorizationService for FakeAuth {
                     let macro_user_id = MacroUserIdStr::try_from(user_id).expect("acting user id");
                     MacroUserAuthentication {
                         agent_id: None,
+                        agent_via: None,
                         origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),
@@ -346,7 +347,7 @@ impl EntityAccessService for FakeEntityAccessService {
     }
 }
 
-fn router(events: bool) -> Router {
+pub(crate) fn router(events: bool) -> Router {
     router_with(service(events), FakeEntityAccessService::owner_only())
 }
 
@@ -388,30 +389,29 @@ pub(crate) async fn request(
     (status, value)
 }
 
-fn legacy() -> Value {
-    json!({"name":"legacy", "kind":"Agent", "schedule":"0 0 9 * * *", "timezone":"UTC", "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
+fn cron_action() -> Value {
+    json!({"name":"cron", "kind":"Agent", "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}, "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
 }
 
 #[tokio::test]
-async fn legacy_and_canonical_cron_create_update_return_compatibility_fields() {
+async fn cron_create_update_return_compatibility_fields() {
     let app = router(false);
-    for input in [
-        legacy(),
-        serde_json::to_value(configuration(false)).unwrap(),
-    ] {
-        let (status, created) =
-            request(&app, "POST", "/scheduled-actions", "owner", input.clone()).await;
-        assert_eq!(status, StatusCode::CREATED);
-        assert_eq!(created["owner"], USER);
-        assert_eq!(created["trigger"]["type"], "cron");
-        assert_eq!(created["schedule"], created["trigger"]["schedule"]);
-        assert_eq!(created["timezone"], created["trigger"]["timezone"]);
-        let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
-        let (status, updated) = request(&app, "PUT", &url, "owner", input).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(updated["configuration_revision"], 2);
-        assert_eq!(updated["created_at"], created["created_at"]);
-    }
+    let (status, created) =
+        request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["owner"], USER);
+    assert_eq!(created["trigger"]["type"], "cron");
+    assert_eq!(created["schedule"], created["trigger"]["schedule"]);
+    assert_eq!(created["timezone"], created["trigger"]["timezone"]);
+    let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+    let (status, updated) = request(&app, "PUT", &url, "owner", cron_action()).await;
+    assert_eq!(status, StatusCode::OK);
+    // The same configuration again replaces nothing.
+    assert_eq!(
+        updated["configuration_revision"],
+        created["configuration_revision"]
+    );
+    assert_eq!(updated["created_at"], created["created_at"]);
 }
 
 #[tokio::test]
@@ -448,7 +448,7 @@ async fn event_responses_and_opt_in_lists_do_not_invent_cron_fields() {
 #[tokio::test]
 async fn mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_update() {
     let app = router(true);
-    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
     let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
     let mut invalid = vec![];
     for field in [
@@ -461,22 +461,18 @@ async fn mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_upda
         "created_at",
         "updated_at",
     ] {
-        let mut input = legacy();
+        let mut input = cron_action();
         input[field] = Value::Null;
         invalid.push(input);
     }
-    for extra in [
-        Value::Null,
-        json!({"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}),
-        json!({"type":"events", "filters":[{"events":["document.created"]}]}),
-    ] {
-        let mut input = legacy();
-        input["trigger"] = extra;
-        invalid.push(input);
+    let mut missing_trigger = cron_action();
+    missing_trigger["trigger"] = Value::Null;
+    invalid.push(missing_trigger);
+    for field in ["schedule", "timezone"] {
+        let mut top_level = cron_action();
+        top_level[field] = top_level["trigger"][field].clone();
+        invalid.push(top_level);
     }
-    let mut canonical = serde_json::to_value(configuration(true)).unwrap();
-    canonical["schedule"] = Value::Null;
-    invalid.push(canonical);
     let mut bad_filter = serde_json::to_value(configuration(true)).unwrap();
     bad_filter["trigger"]["filters"] = json!([]);
     invalid.push(bad_filter);
@@ -492,6 +488,21 @@ async fn mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_upda
             StatusCode::BAD_REQUEST
         );
     }
+}
+
+#[tokio::test]
+async fn rejected_create_bodies_return_the_validation_message() {
+    let app = router(false);
+    let mut input = serde_json::to_value(configuration(false)).unwrap();
+    input["trigger"]["schedule"] = json!("*/10 * * * *");
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", input).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(
+        body.as_str()
+            .unwrap()
+            .contains("cron schedule `*/10 * * * *` has 5 fields; use 6 or 7"),
+        "{body}"
+    );
 }
 
 #[tokio::test]
@@ -524,7 +535,7 @@ async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found
 }
 
 #[tokio::test]
-async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
+async fn foreign_owner_can_neither_read_nor_manage_and_list_is_empty() {
     let app = router(true);
     let (_, action) = request(
         &app,
@@ -535,16 +546,14 @@ async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
     )
     .await;
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
-    assert_eq!(
-        request(&app, "GET", &url, "other", Value::Null).await.0,
-        StatusCode::OK
-    );
     for (method, path, body) in [
-        ("PUT", url.clone(), legacy()),
+        ("GET", url.clone(), Value::Null),
+        ("PUT", url.clone(), cron_action()),
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
         ("POST", format!("{url}/execute"), Value::Null),
         ("GET", format!("{url}/history"), Value::Null),
+        ("GET", format!("{url}/code-upgrades"), Value::Null),
     ] {
         assert_eq!(
             request(&app, method, &path, "other", body).await.0,
@@ -568,7 +577,7 @@ async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
 #[tokio::test]
 async fn activation_endpoint_is_idempotent_and_accepts_only_enabled() {
     let app = router(false);
-    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
     let url = format!(
         "/scheduled-actions/{}/enabled",
         created["id"].as_str().unwrap()
@@ -578,7 +587,7 @@ async fn activation_endpoint_is_idempotent_and_accepts_only_enabled() {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(paused["enabled"], false);
         assert_eq!(paused["configuration_revision"], 2);
-        assert_eq!(paused["name"], "legacy");
+        assert_eq!(paused["name"], "cron");
         assert_eq!(paused["schedule"], "0 0 9 * * *");
     }
     for invalid in [
@@ -612,8 +621,8 @@ async fn event_management_off_and_expired_cron_are_bad_requests() {
         .0,
         StatusCode::BAD_REQUEST
     );
-    let mut input = legacy();
-    input["schedule"] = json!("0 0 0 1 1 * 2000");
+    let mut input = cron_action();
+    input["trigger"]["schedule"] = json!("0 0 0 1 1 * 2000");
     assert_eq!(
         request(&app, "POST", "/scheduled-actions", "owner", input)
             .await
@@ -660,6 +669,12 @@ async fn maps_typed_errors_and_sanitizes_internal_failures() {
             StatusCode::CONFLICT,
         ),
         (
+            anyhow::Error::from(ActionPolicyError::InvalidAppearance(
+                "Choose a single emoji".into(),
+            )),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             anyhow::Error::from(AlreadyRunningError {
                 action_id: macro_uuid::generate_uuid_v7(),
             }),
@@ -691,7 +706,7 @@ async fn target_errors_have_deliberate_sanitized_status_codes() {
             StatusCode::BAD_REQUEST,
         ),
         (
-            TargetValidationError::AgentsDisabled.into(),
+            TargetValidationError::SessionsUnavailable.into(),
             StatusCode::BAD_REQUEST,
         ),
         (
@@ -742,7 +757,7 @@ async fn target_errors_have_deliberate_sanitized_status_codes() {
 async fn target_configuration_is_validated_through_http_and_gate_defaults_off() {
     use crate::domain::target_validation::test::agent_task;
     let app = router(false);
-    let mut input = legacy();
+    let mut input = cron_action();
     for task in [json!({}), agent_task()] {
         input["task"] = task;
         assert_eq!(
@@ -753,7 +768,7 @@ async fn target_configuration_is_validated_through_http_and_gate_defaults_off() 
         );
     }
     assert_eq!(
-        request(&app, "POST", "/scheduled-actions", "owner", legacy())
+        request(&app, "POST", "/scheduled-actions", "owner", cron_action())
             .await
             .0,
         StatusCode::CREATED
@@ -763,7 +778,10 @@ async fn target_configuration_is_validated_through_http_and_gate_defaults_off() 
 #[tokio::test]
 async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_manageable() {
     use crate::domain::{
-        service::test::{FakeExecutor, FakeGrants, FakeRepo, TestService},
+        service::{
+            ScheduledActionServiceImpl,
+            test::{FakeExecutor, FakeGrants, FakeRepo},
+        },
         target_validation::{
             TargetValidation,
             test::{Sessions, agent_task},
@@ -773,15 +791,15 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
         Arc::new(FakeGrants::all(repo)),
     )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    .with_target_validation(TargetValidation::new(sessions.clone()));
     let app = router_with(Arc::new(svc), FakeEntityAccessService::owner_only());
-    let mut input = legacy();
+    let mut input = cron_action();
     input["task"] = agent_task();
     assert_eq!(
         request(&app, "POST", "/scheduled-actions", "other", input.clone())
@@ -793,7 +811,7 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
         request(&app, "POST", "/scheduled-actions", "owner", input.clone()).await;
     assert_eq!(status, StatusCode::CREATED);
     let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
-    let (status, message) = request(&app, "PUT", &url, "owner", legacy()).await;
+    let (status, message) = request(&app, "PUT", &url, "owner", cron_action()).await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(message.as_str().unwrap().contains("reload or upgrade"));
 
@@ -813,7 +831,7 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
             .0,
         StatusCode::OK
     );
-    let mut model = legacy();
+    let mut model = cron_action();
     model["task"]["agent"] = Value::Null;
     // Model selections also require the session service; they cannot bypass it
     // by falling back to the legacy chat runner.
@@ -833,19 +851,16 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
 }
 
 #[test]
-fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
+fn openapi_documents_request_and_event_opt_in_contracts() {
     let spec = serde_json::to_value(crate::swagger::ApiDoc::openapi()).unwrap();
     let schemas = &spec["components"]["schemas"];
     for name in [
         "ActionConfiguration",
         "ActionConfigurationUpdate",
-        "LegacyActionConfiguration",
         "ActionTrigger",
         "EventFilters",
         "EventName",
         "ScheduledActionResponse",
-        "CreateScheduledAction",
-        "UpdateScheduledAction",
         "SetScheduledActionEnabled",
     ] {
         assert!(!schemas[name].is_null(), "missing {name}");
@@ -872,10 +887,6 @@ fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
         schemas["ActionConfiguration"]["additionalProperties"],
         false
     );
-    assert_eq!(
-        schemas["LegacyActionConfiguration"]["additionalProperties"],
-        false
-    );
     let params = spec["paths"]["/scheduled-actions"]["get"]["parameters"]
         .as_array()
         .unwrap();
@@ -899,20 +910,20 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
             (VIEWER, AccessLevel::View),
         ]),
     );
-    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
     let id = created["id"].as_str().unwrap();
     let url = format!("/scheduled-actions/{id}");
     assert_eq!(
-        request(&app, "PUT", &url, "other", legacy()).await.0,
+        request(&app, "PUT", &url, "other", cron_action()).await.0,
         StatusCode::NOT_FOUND
     );
     assert_eq!(
         request(&app, "GET", &url, "viewer", Value::Null).await.0,
-        StatusCode::OK
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
         request(&app, "GET", &url, "stranger", Value::Null).await.0,
-        StatusCode::OK
+        StatusCode::UNAUTHORIZED
     );
     assert_eq!(
         request(
@@ -927,7 +938,7 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        request(&app, "PUT", &url, "viewer", legacy()).await.0,
+        request(&app, "PUT", &url, "viewer", cron_action()).await.0,
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
@@ -948,7 +959,7 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
 async fn executing_a_nonuser_owned_row_returns_not_found() {
     let svc = service(true);
     let app = router_with(svc.clone(), FakeEntityAccessService::owner_only());
-    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
     let id = macro_uuid::Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
     set_stored_owner(svc.as_ref(), id, Owner::Bot(bot_id::BotId::TEST_A));
     let (status, _) = request(
@@ -998,7 +1009,7 @@ async fn team_bot_create_returns_400_with_the_owner_message() {
                 .header(BOT_TOKEN_HEADER, BOT_TOKEN)
                 .header(BOT_SCOPE_HEADER, "team")
                 .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(legacy().to_string()))
+                .body(Body::from(cron_action().to_string()))
                 .unwrap(),
         )
         .await
@@ -1034,4 +1045,130 @@ async fn list_as_grantee_excludes_another_owners_routine() {
     )
     .await;
     assert_eq!(list, json!([]));
+}
+
+#[tokio::test]
+async fn code_steps_need_a_checker_and_the_owner_reads_their_upgrades() {
+    let app = router(true);
+    let mut routine = serde_json::to_value(configuration(true)).unwrap();
+    routine["task"] = json!({ "steps": [{
+        "type": "code",
+        "title": "Label invoices",
+        "source": "export async function main({ macro }: StepContext) { return 1; }",
+    }] });
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", routine).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(
+        body.as_str()
+            .unwrap()
+            .contains("no code executor is configured")
+    );
+
+    let (_, created) = request(
+        &app,
+        "POST",
+        "/scheduled-actions",
+        "owner",
+        serde_json::to_value(configuration(true)).unwrap(),
+    )
+    .await;
+    let url = format!(
+        "/scheduled-actions/{}/code-upgrades",
+        created["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        request(&app, "GET", &url, "owner", Value::Null).await,
+        (StatusCode::OK, json!([]))
+    );
+}
+
+#[tokio::test]
+async fn the_catalog_is_served_in_the_zone_asked_for() {
+    let app = router(false);
+    let (status, catalog) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/catalog?timezone=Asia/Tokyo",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let brief = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key"] == "brief")
+        .unwrap();
+    assert_eq!(brief["trigger"]["timezone"], "Asia/Tokyo");
+    // No code executor here, so every routine starts as Ask AI.
+    assert!(
+        catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["code"].is_null())
+    );
+
+    let (status, _) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/catalog?timezone=Mars/Olympus",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+async fn internal_get(app: &Router, uri: &str, acting_user: Option<&str>) -> StatusCode {
+    let mut request = Request::builder().uri(uri).header(
+        macro_authorization::INTERNAL_API_KEY_HEADER,
+        "test-internal-key",
+    );
+    if let Some(user) = acting_user {
+        request = request.header(macro_authorization::INTERNAL_MACRO_USER_ID_HEADER, user);
+    }
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
+}
+
+#[tokio::test]
+async fn reading_a_routine_answers_like_its_history() {
+    let app = router_with(
+        service(true),
+        FakeEntityAccessService::with([(USER, AccessLevel::Owner), (VIEWER, AccessLevel::View)]),
+    );
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
+    let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+    let history = format!("{url}/history");
+
+    let (status, routine) = request(&app, "GET", &url, "owner", Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(routine["id"], created["id"]);
+    assert_eq!(internal_get(&app, &url, Some(USER)).await, StatusCode::OK);
+
+    // A grant without ownership reads neither, and no configuration leaks.
+    for path in [&url, &history] {
+        let (status, body) = request(&app, "GET", path, "viewer", Value::Null).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(body.get("task").is_none());
+    }
+
+    for path in [&url, &history] {
+        let (status, body) = request(&app, "GET", path, "stranger", Value::Null).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert!(body.get("task").is_none());
+        assert_eq!(
+            internal_get(&app, path, Some("macro|stranger@macro.com")).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            internal_get(&app, path, None).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
 }

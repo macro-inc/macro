@@ -8,6 +8,8 @@ import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateBut
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { useParams } from '@app/lib/split-router';
 import {
@@ -19,10 +21,10 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import NoteIcon from '@icon/system/regular/note-pencil.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createMemo, For, Show } from 'solid-js';
@@ -43,8 +45,8 @@ const TAB_ICONS: Record<TasksTab, typeof NoteIcon> = {
   'my-tasks': CheckSquareIcon,
   'team-tasks': ListChecksIcon,
   'created-by-me': NoteIcon,
-  'my-projects': StackIcon,
-  projects: StackIcon,
+  'my-projects': ProjectIcon,
+  projects: ProjectIcon,
   'created-projects': NoteIcon,
 };
 
@@ -89,6 +91,7 @@ function FavoriteRow(props: {
           <FavoriteIcon favorite={props.favorite} class="size-4" />
         </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
+        <FavoriteUnreadIndicator favorite={props.favorite} />
       </ViewSidebar.Item>
     </FavoriteContextMenu>
   );
@@ -210,6 +213,7 @@ export function TasksSidebar() {
       />
 
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="tasks" />
         <TasksNavigation
           items={BUILT_IN_TASK_TABS}
           label={t('viewMenus.taskViews')}

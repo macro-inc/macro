@@ -1,4 +1,5 @@
 import type { BlockAlias, BlockName } from '@core/block';
+import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
 import { match } from 'ts-pattern';
 import {
   type CallEntity,
@@ -18,12 +19,14 @@ import {
 export type BuildEntityDataArgs = {
   id: string;
   name: string;
+  appearance?: EntityAppearance | null;
   blockName: BlockName | BlockAlias;
   ownerId?: string;
   projectId?: string;
   fileType?: string;
   isCompleted?: boolean;
   channelType?: ChannelEntity['channelType'];
+  teamId?: string;
   isParticipant?: boolean;
   cron?: string;
   enabled?: boolean;
@@ -58,7 +61,7 @@ export function buildEntityData(
   const { id, name, blockName, ownerId = '' } = args;
   if (!id || !name || !blockName) return undefined;
 
-  const base = { id, name, ownerId };
+  const base = { id, name, ownerId, appearance: args.appearance };
 
   return (
     match<BlockName | BlockAlias, EntityData | undefined>(blockName)
@@ -144,6 +147,7 @@ export function buildEntityData(
           ...base,
           type: 'channel',
           channelType: args.channelType,
+          ...(args.teamId === undefined ? {} : { teamId: args.teamId }),
           ...(args.isParticipant === undefined
             ? {}
             : { isParticipant: args.isParticipant }),

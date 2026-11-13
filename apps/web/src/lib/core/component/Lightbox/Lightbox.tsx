@@ -1,12 +1,13 @@
+import {
+  createImageActions,
+  ImageActionButtons,
+} from '@core/component/ImageActions';
 import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
-import ClipboardIcon from '@icon/system/regular/clipboard.svg';
-import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
-  type Component,
   createEffect,
   createSignal,
   type JSX,
@@ -15,25 +16,16 @@ import {
 } from 'solid-js';
 import { Zoompinch, type ZoompinchHandle } from '../Zoompinch';
 import { createGestures } from './createGestures';
-import { createImageActions } from './createImageActions';
 import { createMomentum } from './createMomentum';
 import { createZoomModel } from './createZoomModel';
 import { LightboxChrome } from './LightboxChrome';
 import { LightboxToolbar } from './LightboxToolbar';
 
-const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
-  <Spinner
-    {...p}
-    class={cn(
-      'size-4 touch:size-6 shrink-0 pointer-events-none animate-spin',
-      p.class
-    )}
-  />
-);
-
 type LightboxProps = {
   // Current image to display
   src: Accessor<string | undefined>;
+  // Match the source image's CORS mode when the host does not supply CORP.
+  crossOrigin?: JSX.ImgHTMLAttributes<HTMLImageElement>['crossorigin'];
   // Used for the download filename
   imageId: Accessor<string>;
   // Optional pre-fetched blob override (e.g. DSS images). Falls back to fetching `src`.
@@ -92,34 +84,7 @@ export function Lightbox(props: LightboxProps) {
         class="flex items-center justify-center bg-surface rounded-md overflow-hidden"
       >
         <LightboxToolbar isVisible={true}>
-          <Button
-            aria-label="Copy image"
-            tooltip="Copy image"
-            variant="ghost"
-            size="icon-md"
-            onClick={images.copyToClipboard}
-            disabled={images.isBusy() || images.isPrefetching()}
-          >
-            {images.isCopying() ? (
-              <SpinnerIcon />
-            ) : (
-              <ClipboardIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-            )}
-          </Button>
-          <Button
-            aria-label="Download image"
-            tooltip="Download image"
-            variant="ghost"
-            size="icon-md"
-            onClick={images.downloadImage}
-            disabled={images.isBusy() || images.isPrefetching()}
-          >
-            {images.isDownloading() ? (
-              <SpinnerIcon />
-            ) : (
-              <DownloadIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-            )}
-          </Button>
+          <ImageActionButtons actions={images} />
           <Dialog.CloseButton
             aria-label="Close"
             tooltip="Close"
@@ -182,6 +147,7 @@ export function Lightbox(props: LightboxProps) {
               }
             >
               <img
+                crossorigin={props.crossOrigin}
                 class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}

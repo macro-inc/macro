@@ -26,6 +26,10 @@ pub(super) struct NpmAdapter {
     /// catalogue. The value must be absolute: a bare name is looked up on the
     /// adapter's `PATH`, where its own `node_modules/.bin` comes first.
     pub(super) cli_path_env: &'static str,
+    /// Whether the adapter starts the CLI with Node's `child_process.spawn`,
+    /// which refuses Windows `.cmd` files without a shell. The variable then
+    /// names the program an npm `.cmd` shim runs instead of the shim.
+    pub(super) cli_spawned_by_node: bool,
 }
 
 impl NpmAdapter {
@@ -47,6 +51,11 @@ impl NpmAdapter {
                 missing: vec!["HOME"],
             };
         };
+        let cli_path = if self.cli_spawned_by_node {
+            crate::executable::npm_shim_target_or_self(cli_path)
+        } else {
+            cli_path.to_owned()
+        };
         let install = AdapterInstall {
             package: self.package,
             prefix: root.join(self.package),
@@ -56,7 +65,7 @@ impl NpmAdapter {
             kind: preset.kind(),
             name: preset.name(),
             launch: LaunchSpec::new(&install.bin.to_string_lossy(), [])
-                .with_env(self.cli_path_env, cli_path),
+                .with_env(self.cli_path_env, &cli_path),
             note: Some("via npm ACP adapter"),
             install: Some(install),
         })
@@ -120,10 +129,16 @@ impl AdapterInstall {
             .map_err(|error| format!("could not run npm to install {}: {error}", self.package))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::warn!(
+                package = self.package,
+                status = %output.status,
+                stderr = %stderr.trim(),
+                "adapter install failed"
+            );
             return Err(format!(
                 "npm install {} failed: {}",
                 self.package,
-                stderr.trim().lines().last().unwrap_or("no output")
+                failure_summary(&stderr, output.status)
             ));
         }
         if !self.bin.exists() {
@@ -134,5 +149,57 @@ impl AdapterInstall {
             ));
         }
         Ok(())
+    }
+}
+
+/// Lines of npm's error output a user needs to act on, at most this many.
+const SUMMARY_LINES: usize = 3;
+
+/// npm's closing line, naming its debug log. It is always last, so showing
+/// only the last line hid the actual error.
+const NPM_LOG_LINE: &str = "A complete log of this run can be found in:";
+
+/// npm's `key value` metadata lines; they come before the message and say
+/// less than it does.
+const METADATA_KEYS: [&str; 5] = ["code ", "syscall ", "errno ", "path ", "dest "];
+
+/// The reason npm gave for failing, on one line: its first few error lines
+/// without the `npm error` prefix (metadata last), then the path of its full log.
+pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) -> String {
+    let mut log = None;
+    let mut awaiting_log_path = false;
+    let mut reasons = Vec::new();
+    let mut metadata = Vec::new();
+    for line in stderr.lines() {
+        let line = line
+            .trim()
+            .trim_start_matches("npm error")
+            .trim_start_matches("npm ERR!")
+            .trim();
+        if let Some(path) = line.strip_prefix(NPM_LOG_LINE) {
+            // npm 8 puts the path on the next line.
+            match path.trim() {
+                "" => awaiting_log_path = true,
+                path => log = Some(path),
+            }
+        } else if awaiting_log_path && !line.is_empty() {
+            log = Some(line);
+            awaiting_log_path = false;
+        } else if METADATA_KEYS.iter().any(|key| line.starts_with(key)) {
+            metadata.push(line);
+        } else if !line.is_empty() {
+            reasons.push(line);
+        }
+    }
+    reasons.extend(metadata);
+    reasons.truncate(SUMMARY_LINES);
+    let summary = if reasons.is_empty() {
+        format!("npm exited with {status} and no error output")
+    } else {
+        reasons.join("; ")
+    };
+    match log {
+        Some(log) => format!("{summary} (npm log: {log})"),
+        None => summary,
     }
 }

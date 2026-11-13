@@ -59,11 +59,19 @@ and usage metering.
 
 ## Gotchas
 
+- A `Session` lives for one turn. Before its first request it reloads the
+  catalog tools the history called or loaded, reading `SearchTools`/`LoadTools`
+  results through `ai_toolset::tool_search::tools_loaded_by`; change those
+  response types there, not in `ai_tools`.
 - `rig-core`/`rig-agent` are pinned exact versions (not workspace deps);
   bump both together and check `test-utils` feature compatibility.
 - `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
   (native Anthropic/OpenAI); call it after `with_model`. Tools and
   `complete*` still use the deployment's keys.
+- `MeteredHttpClient` logs every provider response that means Macro's
+  account is suspended or out of credit (`genai_telemetry::provider_account`),
+  which pages on-call. A client rekeyed for an agent's own key is built
+  `with_agent_api_key()` so its billing failures never do.
 
 ## Related
 

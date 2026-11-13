@@ -92,22 +92,23 @@ impl LocalEnv {
         } else {
             instance.port(Port::Frontend)
         };
+        let public_origin = frontend::https_origin(instance)?;
         let frontend_origin = if static_frontend {
             proxy::url(instance)
         } else {
-            frontend::https_origin(instance)?
+            public_origin.clone()
         };
         // Presigned file URLs are opened by a browser that may be on another
         // machine (a laptop on the tailnet), so they use this machine's name,
         // which the proxy certificate covers in both flavors, not localhost.
-        let infra = InfraEnv::local(&frontend::https_origin(instance)?);
+        let infra = InfraEnv::local(&public_origin);
         Ok(LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
             frontend_port,
             mcp_client_public_url: format!("{frontend_origin}/cognition"),
-            static_file_public_url: format!("{frontend_origin}/static-file"),
+            static_file_public_url: format!("{public_origin}/static-file"),
             frontend_origin,
             external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
                 format!(
@@ -122,7 +123,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
-            agent_harness: AgentHarnessEnv::local(instance.project_name(), tunnels.egress),
+            agent_harness: AgentHarnessEnv::local(instance, tunnels.egress),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -133,6 +134,11 @@ impl LocalEnv {
     pub fn to_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
         env.insert("ENVIRONMENT".into(), self.environment.into());
+        env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
+        env.insert(
+            "PASSWORDS_JWT_ISSUER".into(),
+            "macro-local-passwords".into(),
+        );
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
@@ -197,6 +203,10 @@ impl LocalEnv {
         );
         env.insert(
             "OVERRIDE_APP_SERVICE_URL".into(),
+            self.frontend_origin.clone(),
+        );
+        env.insert(
+            "OVERRIDE_API_GATEWAY_URL".into(),
             self.frontend_origin.clone(),
         );
         self.infra.write(&mut env);
@@ -278,6 +288,10 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
             "http://connection-gateway:8080".into(),
+        );
+        env.insert(
+            "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL".into(),
+            "ws://connection-gateway:8080".into(),
         );
         // Same trap for document storage: the Environment::Local default is
         // http://localhost:8086, the *host* port mapping, which resolves to
@@ -511,14 +525,13 @@ struct AgentHarnessEnv {
 }
 
 impl AgentHarnessEnv {
-    fn local(project_name: &str, egress_public_url: Option<&str>) -> Self {
+    fn local(instance: &Instance, egress_public_url: Option<&str>) -> Self {
         AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, a first-party bot with no row.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
             snapshot: "macro-agent-harness",
             image: super::sandbox_image::DEFAULT_LOCAL_TAG,
-            // Compose names a network `<project>_<network>`.
-            network: format!("{project_name}_services"),
+            network: instance.network_services(),
             // With a tunnel, every client - the Cursor cloud, but also local
             // sandboxes - dials the public hostname; one URL both renderings
             // agree on beats a second config knob, and the extra hop only
@@ -692,6 +705,8 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // DSS requires a project key at boot; real flag evaluation needs Doppler.
+        env.insert("POSTHOG_API_KEY".into(), "local-posthog-project-key".into());
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
@@ -743,9 +758,11 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
             "local-cloudfront-signer-private-key".into(),
         );
-        // authentication_service's third-party OAuth/Stripe config. The FusionAuth
-        // kickstart only creates the Google/GitHub IdPs when real creds are
-        // present (see kickstart.rs), so these stubs just satisfy the loader.
+        // authentication_service's third-party OAuth/Stripe config. The Google
+        // pair is the client the stack's Gmail emulator is given (see
+        // google_emulator.rs); the FusionAuth kickstart only creates the
+        // GitHub IdP when real creds are present (see kickstart.rs), so its
+        // stubs just satisfy the loader.
         env.insert("GOOGLE_CLIENT_ID".into(), "local-google-client".into());
         env.insert(
             "GOOGLE_CLIENT_SECRET_KEY".into(),
@@ -765,6 +782,30 @@ impl BootStubEnv {
         );
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
+        env.insert(
+            "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID".into(),
+            "price_local_computer_standard_monthly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID".into(),
+            "price_local_computer_large_monthly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID".into(),
+            "price_local_computer_xl_monthly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID".into(),
+            "price_local_computer_standard_yearly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID".into(),
+            "price_local_computer_large_yearly".into(),
+        );
+        env.insert(
+            "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID".into(),
+            "price_local_computer_xl_yearly".into(),
+        );
         env.insert(
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
@@ -799,7 +840,6 @@ impl BootStubEnv {
         // email_service's GCP pubsub queue (gmail watch notifications) and
         // its own CloudFront signer for attachment presigned URLs.
         env.insert("GMAIL_GCP_QUEUE".into(), "gmail-gcp-queue-local".into());
-        env.insert("APOLLO_API_KEY".into(), "local".into());
         env.insert(
             "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
             "http://localhost:8100".into(),
@@ -842,6 +882,12 @@ impl BootStubEnv {
         env.insert(
             "SLACK_MCP_CLIENT_SECRET".into(),
             "local-slack-mcp-secret".into(),
+        );
+        // agent_harness_service serves this at `/.well-known/openai-apps-challenge`;
+        // only OpenAI's verifier reads it.
+        env.insert(
+            "OPENAI_DOMAIN_VERIFICATION_TOKEN".into(),
+            "local-openai-domain-verification-token".into(),
         );
         // document_storage_service's GitHub sync + LiveKit + LLM + Cal config.
         // All boot-required; the integrations they back are inert locally.

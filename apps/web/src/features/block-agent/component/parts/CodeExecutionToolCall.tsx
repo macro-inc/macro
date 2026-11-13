@@ -4,13 +4,17 @@ import type {
   RecordedToolCall,
 } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
+import { programEnded } from '../../state/code-execution';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
-import { LiveToolGroup } from '../../views/LiveToolGroup';
-import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
-/** Observed inner calls keep their registered Macro result components. */
+/**
+ * A program's steps, as rows of the tool group it belongs to: each observed
+ * operation, historical calls with their registered Macro result components,
+ * or one failed row when it ended without any. The program itself is never
+ * shown.
+ */
 export function CodeExecutionToolCall(props: {
   common: ToolCallCommon;
   context: ToolCallContext;
@@ -21,69 +25,40 @@ export function CodeExecutionToolCall(props: {
 }) {
   const calls = () => props.record?.calls ?? [];
   const activity = () => props.record?.activity ?? [];
-  const errorVisible = () =>
-    Boolean(
-      props.error &&
-        (props.record?.status !== 'running' ||
-          !isToolActive(props.common.status))
-    );
-  const activeIndex = () =>
-    isToolActive(props.common.status)
-      ? activity().findIndex((item) => item.status === 'running')
-      : -1;
-  const active = () => activeIndex() !== -1;
+  const ended = () =>
+    programEnded({
+      error: props.error,
+      recordRunning: props.record?.status === 'running',
+      active: isToolActive(props.common.status),
+    });
 
   return (
-    <div class="min-w-0" data-code-execution={props.record?.executionId}>
-      <Show when={activity().length === 0 || errorVisible()}>
+    <div
+      class="flex min-w-0 flex-col"
+      data-code-execution={props.record?.executionId}
+    >
+      <Show when={activity().length === 0 && calls().length === 0 && ended()}>
         <ToolCard
           title="Workspace activity"
           status={props.common.status}
           muted={props.common.muted}
-          trailing={
-            props.common.trailing ??
-            (calls().length > 0
-              ? `${calls().length} tool calls`
-              : isToolActive(props.common.status)
-                ? 'Working in your workspace…'
-                : undefined)
-          }
-          hasContent={errorVisible()}
-        >
-          <Show when={errorVisible()}>
-            <p class="mt-2 text-ink-muted">{props.error}</p>
-          </Show>
-        </ToolCard>
+          trailing={props.common.trailing}
+        />
       </Show>
-      <Show when={activity().length > 0}>
-        <LiveToolGroup
-          count={activity().length}
-          active={active()}
-          activeIndex={active() ? activeIndex() : undefined}
-        >
-          <For each={activity()}>
-            {(item) => (
-              <div class="min-h-8 shrink-0">
-                <ActivityRow
-                  item={item}
-                  turnActive={isToolActive(props.common.status)}
-                />
-              </div>
-            )}
-          </For>
-        </LiveToolGroup>
-      </Show>
+      <For each={activity()}>
+        {(item) => (
+          <div class="min-h-8 shrink-0">
+            <ActivityRow
+              item={item}
+              turnActive={isToolActive(props.common.status)}
+            />
+          </div>
+        )}
+      </For>
       <Show when={props.record?.activityTruncated}>
         <p class="text-xs text-ink-extra-muted">
-          Activity list limited to the first 128 requests.
+          Only the first 128 steps are listed.
         </p>
-      </Show>
-      <Show
-        when={
-          !props.record && !props.error && props.common.status !== 'completed'
-        }
-      >
-        <p class="text-xs text-ink-extra-muted">Working in your workspace…</p>
       </Show>
       <Show when={props.loading}>
         <p class="text-xs text-ink-extra-muted" role="status">
@@ -154,30 +129,16 @@ function RecordedCall(props: {
         : undefined,
   });
   return (
-    <Show
-      when={
-        props.call.name === 'DisplayResults' &&
-        props.call.status === 'completed'
-      }
-      fallback={
-        <MacroToolCall
-          detail={{
-            kind: 'macro',
-            input: props.call.input,
-            output: props.call.output,
-            error: props.call.error ?? null,
-          }}
-          common={common()}
-          context={props.context}
-          grouped={false}
-        />
-      }
-    >
-      <DisplayResultsToolCall
-        input={props.call.input}
-        error={props.call.error}
-        common={common()}
-      />
-    </Show>
+    <MacroToolCall
+      detail={{
+        kind: 'macro',
+        input: props.call.input,
+        output: props.call.output,
+        error: props.call.error ?? null,
+      }}
+      common={common()}
+      context={props.context}
+      grouped={false}
+    />
   );
 }

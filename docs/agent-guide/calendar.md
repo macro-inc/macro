@@ -1,103 +1,8 @@
 # Calendar
 
-## Meeting notes
-
-Meeting notes require `enable-calendar-meeting-notes`. It is on automatically in
-dev; production uses PostHog, enabled for `@macro.com` users. `VITE_ENABLE_CALENDAR_MEETING_NOTES=true` or `false` overrides it locally.
-With the flag off, event notes and document Share meeting-link controls do not
-mount or request note data, on desktop or phone. The flag does not revoke saved
-meeting/team grants or change API permissions.
-
-Open a live meeting's details and choose **Create** beside **Meeting notes**.
-This creates a Markdown document named after the meeting, links it with meeting
-viewer access, and opens it immediately. Team access starts off. A meeting can
-have multiple notes; **Create** and **Link** remain on the section title row
-so you can keep creating notes or linking existing documents.
-Both actions are available while notes load. Reopening a recently viewed event
-uses cached notes immediately while stale data refreshes in the background.
-The picker can open while existing links load, but submission waits for that
-check so selecting an already-linked note cannot change its sharing.
-
-Choose **Link** to search the titles of Markdown documents you own, select one, review
-the sharing explanation, and optionally include your existing team before
-**Link note**. Team access starts off for each note. Recurring meetings link only
-the displayed occurrence. Notes on a
-one-time meeting follow it when its date or time changes.
-Existing document editors and other sharing keep their access.
-Notes use the event details' existing row layout and controls. Team choices come
-from current Macro team memberships; they do not introduce departments or subteams.
-
-Linked meetings also appear in the note’s side-panel **References** section.
-Only readers with meeting-detail access see those references; owners retain safe
-unavailable-meeting entries.
-Click a meeting reference to reopen that exact occurrence. If the calendar
-backend has not yet deployed embedded reference previews, the dialog reports
-that meeting details are temporarily unavailable and offers **Retry**. Missing
-fields must not be described as removed meeting access.
-
-Open the linked title to read the original document. On desktop it opens in a
-new split; on mobile it replaces the calendar pane and closes event details.
-Opening a note leaves focus available to the document as it mounts; dismissing
-desktop details normally returns focus to the calendar event.
-Meeting access and occurrence scope are explained in the linking dialog;
-each note shows any additional team audience. **Options → Share** opens the same
-document Share dialog as the note toolbar. Its **Meeting links** section lets the
-owner change each link’s optional team access. **Options → Unlink from meeting**
-removes this meeting’s grants without deleting the document. Keep the labeled
-Options button visible beside long titles; truncate the title without widening
-the event details. Labeled note controls do not need extra hover tooltips.
-The linking dialog uses a wider desktop layout and a phone sheet. Only the
-document results scroll. The picker starts with owned Markdown matches from
-Quick Access's local cache, then adds the calendar notes endpoint's title
-results (up to 30 per query), not full-text search. Matching results stay visible
-while typing and searches are cached across opens. The meeting context,
-sharing controls, and action buttons stay visible, including in a short viewport.
-A former team’s grant can be removed in Share while the meeting is still visible;
-unlinking remains available even if the meeting is no longer accessible.
-Failed saves retain the selection and audience for retry; dismissing starts fresh.
-If creation succeeds but linking fails, **Retry linking** reuses the saved document;
-**Open saved note** lets you continue editing before the link is confirmed. Closing
-details never deletes that document; it remains in Drive. Changing the selected
-meeting or account prevents a late creation result from navigating away from the
-new selection.
-
-Owners can also open the markdown document's **Share** panel and find **Meeting
-links** (inside **Link** on mobile). Every saved link remains removable here even
-if the meeting was cancelled, fell outside the sync window, or stopped being
-shared with the owner. **Unlink** asks before removing its meeting/team grants.
-Unavailable meetings use a safe label rather than revealing private details.
-Checking **Also share with Macro** also updates **Team access** to **View via
-meeting** when there is no direct team grant. The dropdown's **Use meeting
-access** option removes only additional direct sharing; uncheck the meeting's
-checkbox to remove its team grant. Unlink stays in place while a team save runs.
-
-Full-detail team events expose the same note controls; provider actions such as
-editing the event or RSVPing stay unavailable. Busy-only team entries and
-imported snapshots have no meeting-note controls.
-Inherited access follows current meeting details and requires a synced live
-occurrence. If the provider hides its guest list, some guests need a direct
-document share. Independent team sharing lasts until the link is removed or the
-viewer leaves that team; it does not make the calendar event visible to that team.
-
-Verify on desktop and phone: create and open notes, add a second note, retry a failed
-link without duplicating the new document, link an existing note with team unchecked,
-add/remove a team in Share, and unlink while keeping the document. Link a long
-title and verify its Options menu opens without horizontal scrolling. The
-backend-free browser suite mounts the real event popover and mobile drawer with
-sample data and preview service adapters. It previews the real meeting-access
-controls inside a sample Share shell; verify the full Share dialog in the app
-as well. It is
-`apps/web/src/features/calendar-notes/browser-test/playwright.config.ts`.
-API permission cases are covered in `crates/calendar_events/src/outbound/pg/test/notes.rs`.
-The fixture accepts `?notes=off` to check the event details without notes.
-Use `?team=details` or `?team=busy` to check team visibility boundaries.
-
-Browser fixture screenshots: [desktop](media/calendar-notes/desktop.png) ·
-[phone](media/calendar-notes/phone.png) ·
-[desktop picker](media/calendar-notes/link-desktop.png) ·
-[phone picker](media/calendar-notes/link-phone.png).
-
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
+
+The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; touch devices show no tutorials.
 
 Microsoft calendars use the same editor and calendar views after calendar consent.
 Conference choices follow the selected calendar's capabilities: Microsoft Teams
@@ -141,6 +46,13 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
+Opening the calendar draws the visible period alone. The two neighboring periods
+mount on later tasks once the visible period has its events, or after a moment
+when that load is slow. They start beside whatever period is on screen by then,
+and paging waits for them. On the iOS and Android apps the periods seen last and
+the calendar list are kept on the device for a week, so a cold start draws them
+before the cache answers; the fresh read then replaces them.
+
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
 grids stay mounted and undimmed while occurrences load. An uncached range never
@@ -151,8 +63,12 @@ filled bars for all-day/multi-day-style entries with single subtle text lines fo
 single-day timed-style entries, without placeholder dots or time chips. Patterns stay
 stable for each date and clear the date headers. Skeletons preserve the grid, scroll
 position, and navigation.
-Quick loads skip the skeletons. Real events lay out underneath during the brief
-minimum display, then fade in as the skeletons fade out. Changing period during a
+Quick loads skip the skeletons: the delay counts animation frames, so time the
+thread spends mounting a grid never uses it up, and events that are in memory or
+answered locally appear without skeletons on slow phones too.
+Real events lay out underneath during the brief
+minimum display, then fade in as the skeletons fade out. Phones have no minimum
+display: events fade in as soon as they arrive. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
 pill. On a cold reload, the first event paint waits for calendar metadata so events
@@ -222,8 +138,15 @@ call setup. Existing channel calls and the upcoming-events list remain available
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
-from its separate button at the far right of the bottom toolbar. Messages persist
-with that call session and are visible in its recording page after it ends.
+with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
+the bottom-left and becomes icon-only in narrow panes. Active phone calls fill
+the viewport, with persistent Back and Copy Meeting Url header islands. Media/chat
+controls sit below the video, hide after four idle seconds, and return on tap;
+chat and settings keep them visible. Back returns to the app without hanging up.
+Tap or click a participant to focus them; tap again to restore the grid.
+Talking participants have an accent-colored border.
+Desktop chat fills the call content height; phones use a bottom sheet. Messages
+persist with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
 their messages show their name with **(Guest)**. The signed-in composer’s `@` menu includes Macro and available agents;
 mentioning one invokes it in the call thread. Reply on any live message, including
@@ -306,6 +229,24 @@ color field (Shift makes larger steps). **Reset to default** clears the override
 Visibility and colors share the calendar sidebar's browser-local preferences,
 survive reload, and do not change the Google calendar or booking conflict checks.
 
+Each calendar row also has a **Busy** switch (`<name> counts as busy`), right of
+its color dot: the saved, per-user `calendar_availability_preferences` choice
+(`GET`/`PUT /calendar/availability-calendars`). It is a switch, not a checkbox,
+and its visible `Busy` label sets it apart from the visibility checkbox on the
+same row; hiding a calendar never changes it. Every calendar counts until the
+user turns Busy off, and one choice governs every reader of busy time: booking
+slots, reschedule slots and the agent's booking tools (`MacroCalendars::busy`),
+team availability, and the agent and SDK `contributesToAvailability` labels.
+An event still blocks time when another copy sits on a Busy calendar, when its
+calendar is unknown, or when the user is in the meeting and has not declined it
+(`labels::attends_meeting`): invited as a guest, or organizing it with other
+guests on a copy they can change. A solo entry listing the user's inbox as its
+organizer, as Macro writes on a primary calendar, and the mailbox organizer row
+Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
+saves at once and restores itself with a toast when the save fails. Phones reach
+the same rows from the mobile Settings sheet's **Calendar** page; the calendar
+view's own phone settings sheet lists accounts, not calendars.
+
 The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
 `Now` during a meeting, or minutes until one under an hour away. Turning it off
@@ -326,7 +267,7 @@ show progress; the event summary and selected time stay visible. Choose another
 time preserves attendee input. Event booking pages do not show an All meetings
 link back to the profile chooser.
 The private confirmation shows the meeting, date, timezone, location, and guest.
-In the native iOS and Android apps, standalone booking and receipt pages keep a
+In the native desktop, iOS and Android apps, standalone booking and receipt pages keep a
 sticky **Back to Macro** button below the device's top safe-area inset. It returns to
 the app through the router without reloading, including while the page is loading
 or unavailable. Browser pages and embedded booking dialogs omit this button.
@@ -342,7 +283,8 @@ that private link. Rescheduling defaults to the browser's time zone; `Your time
 zone` controls both the selected calendar date and the displayed times. Changing
 the zone clears the date and times and discards outstanding availability results.
 Calendar provider failures show an error; they never report a
-confirmed booking. Current integrations check hosts' connected calendars and
+confirmed booking. Current integrations check hosts' connected calendars that
+count as Busy in Settings → Calendar (every calendar unless turned off) and
 write invitations/Google Meet through the existing calendar service.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
@@ -390,29 +332,24 @@ With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 `Busy blocks` (the default), `Event details`, and `Nothing`, with a one-line
 description of the current choice under the label. A new choice shows at once
 and saves in the background; a failed save restores the previous choice and
-shows a toast. Neither settings section returns to a loading state after a
-change, including when the server's `team_sharing_changed` push arrives.
+shows a toast. Neither it nor the Busy switches return to a loading state
+after a change, including when the server's `team_sharing_changed` push arrives.
 These are Macro read permissions. They do not change Google Calendar ACLs,
 invite teammates to meetings, or let teammates edit, RSVP, or manage reminders.
 The sharing choice covers every currently authorized calendar synced to Macro.
 Private/confidential events only expose generic time blocks.
 
-**Calendars that count as busy** reuses the sidebar's `Calendars` list: each
-connected account is a folded row with a checkbox, color swatch, and disclosure
-button that expands to its calendars. An account checkbox includes or excludes
-all of its calendars at once. These choices decide which calendars represent the
-user's personal schedule. Primary calendars count by default; other calendars
-require explicit inclusion. Meetings the user attends also contribute, except
-declined meetings. Following a coworker's calendar does not automatically make
-that coworker's events occupy the user's time. The section is hidden when the
-user has no calendars to list.
+Which calendars count toward the user's availability is the **Busy** switch on
+each Connected calendars row (above); the team settings have no list of their
+own. Meetings the user is in also contribute, by the same rule.
 
 Teammates' shared events do not render on the grid; `Team out of office` is the
 only teammate overlay. Replacing a login session clears team data and open
 teammate details before the new identity loads. Legacy out-of-office rows are
 read-only status displays and do not claim that every absence blocks availability.
 
-The `GetTeamAvailability` AI tool checks the requester together with the selected
+The `GetTeamAvailability` AI tool (and, in code mode, `macro.calendar.teamAvailability`
+over `POST /calendar-events/team/availability`) checks the requester together with the selected
 teammates. It reports confirmed free windows only when every participant has
 complete availability coverage. Hidden, disconnected, stale, or incomplete
 calendars are reported as unknown, never free. Busy blocks contain no event
@@ -439,9 +376,17 @@ Search button. The expanded field exposes Filters and, after typing, the
 icon-only Exact-match toggle. The filter button stays before Close. The filter
 menu opens below the button, aligned to its right edge: Search in is
 single-select, while Status, Organizer, and Attendee allow multiple values.
-Organizer and Attendee virtualize their contact lists; selected contacts stay
-in place, while custom email addresses appear first. Adding a valid email clears
-the contact search. Filter selections apply immediately, and only these filters
+Organizer and Attendee virtualize a bounded contact window, using shared
+name/email matching. Matching selected values stay pinned independently of the
+page; their labels resolve through explicit email lookup, including cached
+point reads offline. Unknown or external selections keep their email labels.
+Next contacts replaces the suggestion page without clearing selections. Empty
+server pages may still have a continuation; partial/offline caches are labeled
+rather than claiming no contacts exist. Adding a valid email clears the contact
+search. Typing keeps focus in the input as async rows arrive, and ArrowDown moves
+into the checkbox rows. Desktop/phone coverage uses the production filters and
+query/lookup state over stand-in services in
+`src/lib/core/internal/browser-test/playwright.config.ts`. Filter selections apply immediately, and only these filters
 mark the filter button, not Exact mode. Search opens a calendar-search hint
 until at least three characters are entered; searches show skeleton rows while
 loading. Empty results show an illustrated empty state. Result titles show a calendar-color
@@ -556,6 +501,8 @@ call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.
+Day-view chips, which show an event's location under its time on desktop and phone,
+leave out a location that is only the call link and keep a location typed beside it.
 Editing or rescheduling an owned event retains and updates its selected Macro call.
 Selecting `Macro call` on an owned editable event without one adds a call on save;
 choosing another option removes its generated Macro link from the invitation.
@@ -566,6 +513,11 @@ the tool's `addMacroCall`, and the call is created when the tool executes, befor
 event is written, so the single invitation already carries the link. The MCP server
 and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
 are mutually exclusive, and out-of-office entries accept neither.
+An existing event switches to a Macro call without being recreated:
+`UpdateCalendarEvent`'s `addMacroCall` and the SDK's `event.update({ macroCall: true })`
+send `macroCall` on the update route, which writes the join link and removes the
+Google Meet in one update. An event already holding a Macro call keeps it, and an
+Outlook event's Teams meeting cannot be removed this way.
 
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
@@ -585,7 +537,7 @@ shrink to fit the pane; long details scroll while the RSVP row stays visible.
 As in Google Calendar, the popover opens beside the event, aligned with its top,
 and switches only between the right and left side; when it doesn't fit below,
 it slides up to stay in the window instead of opening above the event. Sections
-that load after it opens (join requests, meeting notes) therefore never move it
+that load after it opens (join requests) therefore never move it
 from below the event to above it. Check placement with an event low in a tall
 window, a short window, and a pending join request; the backend-free regression
 is `apps/web/src/features/calendar-view/browser-test/playwright.config.ts`.
@@ -597,7 +549,11 @@ window. The picker, the people chosen and the send button stay visible at every
 event position and window height. The same regression covers both editors in a
 tall and a short window (`?guests=add` or `?guests=forward`, with
 `?contacts=late` delivering the picker's contacts on
-`window.calendarPreview.deliverContacts()`) and their phone sheets.
+`window.calendarPreview.deliverContacts()`) and their phone sheets. With `?addresses=long` it
+checks that a named guest's address and an address-only guest's address, neither with a space,
+wrap inside the popover and the phone drawer. CI runs it (`just test-calendar-details-browser`
+in `apps/web`) when calendar details or the calendar queries change; its `preview-adapters.tsx`
+stands in for those queries, so give it every export and callback argument the components use.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -642,6 +598,16 @@ selected, since the presets never end. Either is saved as written while untouche
 start to another weekday keeps a custom rule on the day the editor shows. Event details (desktop
 popover and phone drawer) and Forward by email's summary name the day too (`Weekly on Saturday ·
 3 occurrences`), read from the occurrence's original slot in the event's own time zone.
+Each guest in event details (desktop popover and phone drawer) shows their name with their
+address on a muted line under it, as the user card shows a person, followed by `Organizer` or
+`Optional` and any comment; the viewer's own row (`(you)`) does too, which tells their inboxes
+apart. A guest Macro has no name for (no Macro profile or email contact) shows the address
+once, as the name. The address wraps instead of truncating in a narrow popover or on a phone
+(the event details browser regression's `?addresses=long`).
+The `Organizer` row under the calendar row, shown when someone other than the calendar
+organizes the event, adds the organizer's address the same way. Teammates' read-only event
+details (`Shared in Macro · Read only`) list guests by provider name, or by address when there
+is none.
 As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
 carries `Copy guest emails` and `Email guests` icon buttons, both hidden when you are the
 only guest (always so on a snapshot). Copying puts every guest's address on the clipboard,
@@ -651,6 +617,16 @@ title as its subject (as `Forward by email` fills it in) — in a split
 beside the calendar on desktop, as the full-screen composer on touch devices, in its own
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
+Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
+paged personal suggestions. Type to find contacts outside the first window; Next
+options or PageDown replaces the page. Selected guests, their supplied/chosen
+names and custom addresses survive searches and paging. Known event guests are
+scoped extras, not personal-directory membership. Add-only editors exclude current
+and newly added guests case-insensitively without changing their stored address
+representation. Typing a complete custom address and pressing Enter selects its
+Add row, never a stale result or another person's display-name alias. Existing read-only, hidden
+list, optional-attendee and recurring-event permissions are unchanged.
+
 With the `enable-calendar-guest-invites` flag on, a third icon button, `Add guests`, shows
 whenever the event's `viewerCan.inviteGuests` allows it, including for a guest whose
 organizer lets guests invite. It opens an editor anchored to the button (on phones, a bottom
@@ -840,7 +816,7 @@ in that list without a marker, as documents shared that way sit beside your own;
 names the shared event, so it opens for whoever can already see it. Posting it elsewhere does
 not share it on (only someone holding the event on their own calendar can), so people without
 access see `No Access`, like any other mention they cannot open; clicking it (a tap on a phone,
-which opens a sheet) shows `You don't have access to this event`.
+which opens an opaque sheet) shows `You don't have access to this event`.
 A calendar event mentioned in a channel message opens the calendar focused on the viewer's
 own copy of the meeting. When a person holds the event on their own calendar and posts the
 mention, it is shared read-only with the channel's current members: a member without a copy of
@@ -953,6 +929,7 @@ description, then larger task-style URL-path, duration, and scheduling-type pill
 with matching surfaces. Scheduling type reflects the saved link mode: Individual,
 Collective, or Round robin, with a corresponding icon. Pills wrap on narrow panes
 and align with the title on touch devices. Row content has no hover tooltips.
+The Booking links list, empty or not, starts with the Scheduling `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog.
 Paused links appear dimmed but remain editable. The URL pill offers Copy link and
 Open in new tab. Desktop More and right-click menus share Copy link, Preview,
 Edit, Duplicate, and Delete. Touch rows hide More; hold a row to open the shared
@@ -1446,9 +1423,10 @@ is an accessible disclosure that starts closed and stays open across unchanged
 permission refreshes and window refocus on desktop and mobile; attachments remain below it.
 ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
-parameterized `text/calendar` MIME type. Opening the attachment of a message that shows a
+parameterized `text/calendar` MIME type. The pill's download button saves the
+file without opening it and without adding it to Drive. Opening the attachment of a message that shows a
 card opens a dialog (a drawer on phones) with the same card, so its RSVP or `Add to calendar`
-works there, and `Download .ics`, which saves the file without adding it to Drive. When an
+works there, and `Download .ics`, which saves the file the same way. When an
 invitation's card falls back to the saved invitation (the event matches nothing on your
 calendars), its status line reads `Saved invitation.` in the dialog; the card in the email
 adds that the original email or invitation attachment has more options. A shared event shown
@@ -1468,7 +1446,10 @@ been checked. A series invitation shows its current or next live occurrence.
 Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
-description links use the host's normal link-opening behavior.
+description links use the host's normal link-opening behavior. Long unbroken text
+(Google's Meet separator, long links, forwarded mail) wraps inside the card in a narrow
+pane, and the guest names stay level with their icon beside `+N more`, which
+keeps a 44px tap target on touch.
 
 A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
 organizer, `Forward invitation` attach) is a shared

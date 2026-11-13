@@ -772,3 +772,83 @@ async fn a_server_error_listing_models_is_not_a_rejected_credential() {
         "got {error}"
     );
 }
+
+/// A client whose read-retry schedule does not sleep.
+fn client_with_instant_read_retries(base_url: String, retries: usize) -> CursorClient {
+    client_against(base_url).with_read_retry_backoff(vec![std::time::Duration::ZERO; retries])
+}
+
+const RUN_LIST_BODY: &str =
+    r#"{"items":[{"id":"run-00000000-0000-0000-0000-000000000001","status":"RUNNING"}]}"#;
+
+const AT_CAPACITY_BODY: &str = r#"{"code":"unavailable","message":"Server at capacity"}"#;
+
+/// The failure that ended a turn in production: Cursor answered the run
+/// listing a new turn makes right after creating its agent with a capacity
+/// 503. A GET changes nothing, so it is simply asked again.
+#[tokio::test]
+async fn a_run_listing_at_capacity_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("503 Service Unavailable".to_owned(), AT_CAPACITY_BODY),
+        ("200 OK".to_owned(), RUN_LIST_BODY),
+    ]);
+    let runs = client_with_instant_read_retries(base_url, 3)
+        .list_runs(
+            &CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned()),
+            None,
+        )
+        .await
+        .expect("the second answer is the run list");
+    assert_eq!(runs.len(), 1);
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then the list");
+}
+
+/// Reads through the shared JSON path ride out the same transients.
+#[tokio::test]
+async fn a_rate_limited_read_is_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("429 Too Many Requests".to_owned(), RATE_LIMITED_BODY),
+        ("200 OK".to_owned(), r#"{"items":[]}"#),
+    ]);
+    let models = client_with_instant_read_retries(base_url, 3)
+        .list_models()
+        .await
+        .expect("the second answer is the model list");
+    assert!(models.is_empty());
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then the list");
+}
+
+/// A read refused for a reason of its own costs exactly one GET.
+#[tokio::test]
+async fn a_refused_read_is_never_asked_again() {
+    let (base_url, requests) = stand_in_server_sequence(vec![(
+        "404 Not Found".to_owned(),
+        r#"{"error":{"code":"not_found","message":"no such agent"}}"#,
+    )]);
+    client_with_instant_read_retries(base_url, 3)
+        .list_runs(
+            &CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned()),
+            None,
+        )
+        .await
+        .expect_err("the stand-in refuses");
+    assert_eq!(requests.try_iter().count(), 1, "asked exactly once");
+}
+
+/// An outage that outlasts the budget fails as it did before the retry.
+#[tokio::test]
+async fn a_read_outage_that_outlasts_the_budget_still_fails() {
+    let (base_url, requests) = stand_in_server_sequence(vec![
+        ("503 Service Unavailable".to_owned(), AT_CAPACITY_BODY),
+        ("503 Service Unavailable".to_owned(), AT_CAPACITY_BODY),
+    ]);
+    let error = client_with_instant_read_retries(base_url, 1)
+        .list_runs(
+            &CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned()),
+            None,
+        )
+        .await
+        .expect_err("the stand-in never relents");
+    assert!(error.to_string().contains("503"), "{error}");
+    assert_eq!(requests.try_iter().count(), 2, "one retry, then give up");
+}

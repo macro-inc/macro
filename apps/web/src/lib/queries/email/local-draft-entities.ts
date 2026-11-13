@@ -1,20 +1,24 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import type { EmailEntity } from '@entity';
 
+/** Whether a local working copy still shows as its own draft row. */
+export function isListedLocalDraft(draft: LocalDraft): boolean {
+  return draft.status !== 'synced' && draft.status !== 'deleting';
+}
+
+/** The conversation row a local working copy appears under. */
+export function localDraftRowId(draft: LocalDraft): string {
+  return draft.serverThreadId ?? draft.threadId ?? draft.key;
+}
+
 /** One conversation row, even when several local reply drafts share it. */
 export function localDraftEntities(
   drafts: readonly LocalDraft[]
 ): EmailEntity[] {
   const rows = new Map<string, EmailEntity>();
   for (const draft of drafts) {
-    if (
-      draft.status === 'synced' ||
-      (draft.status === 'deleting' &&
-        draft.queuedAttemptId &&
-        draft.queuedAttemptId === draft.latestAttemptId)
-    )
-      continue;
-    const id = draft.serverThreadId ?? draft.threadId ?? draft.key;
+    if (!isListedLocalDraft(draft)) continue;
+    const id = localDraftRowId(draft);
     if (rows.has(id)) continue;
     rows.set(id, {
       type: 'email',

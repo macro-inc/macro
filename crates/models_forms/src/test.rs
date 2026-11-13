@@ -44,6 +44,7 @@ const TEAM_QUESTION: FormQuestionId = FormQuestionId::from_uuid(Uuid::from_u128(
 fn a_form_detail_reads_as_the_web_client_expects() {
     let detail = FormDetail {
         form: Form {
+            appearance: None,
             id: FORM,
             name: "Q4 offsite RSVP".into(),
             description: "Tell us if you can make it.".into(),
@@ -57,9 +58,13 @@ fn a_form_detail_reads_as_the_web_client_expects() {
             status: FormStatus::Open,
             closes_at: Some(Utc.with_ymd_and_hms(2026, 10, 3, 17, 0, 0).unwrap()),
             confirmation_message: "".into(),
+            branding: FormBranding::default(),
             created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 9, 2, 9, 0, 0).unwrap(),
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         access: FormAccess::Edit,
         table_gone: false,
@@ -82,6 +87,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                     required: true,
                     widget: Some(Widget::Choice),
                 }],
+                show_when: None,
             },
             FormSectionDetail::Gate {
                 id: ELIGIBILITY,
@@ -116,11 +122,15 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                 "respondentColumnId": null,
                 "audience": "members",
                 "tallyVisible": false,
+                "responsesVisible": false,
+                "anonymous": false,
                 "status": "open",
                 "closesAt": "2026-10-03T17:00:00Z",
                 "confirmationMessage": "",
+                "branding": { "logoFileId": null, "coverFileId": null, "accentColor": null },
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-02T09:00:00Z",
+                "projectId": null,
                 "isHiddenInDrive": false,
             },
             "access": "edit",
@@ -217,6 +227,7 @@ fn a_layout_put_reads_sections_by_kind_and_a_missing_widget_as_default() {
                         required: false,
                         widget: None,
                     }],
+                    show_when: None,
                 },
                 FormSection::Gate {
                     id: ELIGIBILITY,
@@ -241,7 +252,8 @@ fn a_create_request_names_its_source_by_kind() {
     assert_eq!(
         new.source,
         FormSource::New {
-            is_hidden_in_drive: false
+            is_hidden_in_drive: false,
+            anonymous: false,
         }
     );
 
@@ -252,7 +264,8 @@ fn a_create_request_names_its_source_by_kind() {
     assert_eq!(
         hidden.source,
         FormSource::New {
-            is_hidden_in_drive: true
+            is_hidden_in_drive: true,
+            anonymous: false,
         }
     );
 
@@ -347,10 +360,12 @@ fn a_tally_names_options_and_checkbox_states() {
                 TallyBucket {
                     value: TallyValue::Option { option: CONTRACTOR },
                     count: 2,
+                    voters: Some(vec!["macro|a@example.com".to_string()]),
                 },
                 TallyBucket {
                     value: TallyValue::Checkbox { checked: true },
                     count: 1,
+                    voters: None,
                 },
             ],
         }],
@@ -362,7 +377,7 @@ fn a_tally_names_options_and_checkbox_states() {
                 "question": "00000000-0000-0000-0000-000000000091",
                 "responses": 3,
                 "buckets": [
-                    {"value": {"kind": "option", "option": "00000000-0000-0000-0000-0000000000c0"}, "count": 2},
+                    {"value": {"kind": "option", "option": "00000000-0000-0000-0000-0000000000c0"}, "count": 2, "voters": ["macro|a@example.com"]},
                     {"value": {"kind": "checkbox", "checked": true}, "count": 1},
                 ],
             }],
@@ -396,6 +411,7 @@ fn an_error_names_its_code_question_and_layout_problem() {
 fn a_form_takes_responses_while_open_and_before_it_closes() {
     let now = Utc.with_ymd_and_hms(2026, 10, 1, 12, 0, 0).unwrap();
     let form = |status, closes_at| Form {
+        appearance: None,
         id: FORM,
         name: "RSVP".into(),
         description: "".into(),
@@ -409,9 +425,13 @@ fn a_form_takes_responses_while_open_and_before_it_closes() {
         status,
         closes_at,
         confirmation_message: "".into(),
+        branding: FormBranding::default(),
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     assert!(form(FormStatus::Open, None).accepts_responses_at(now));
     assert!(
@@ -426,6 +446,7 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
     let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
     let listed = ListedForm {
         form: Form {
+            appearance: None,
             id: FORM,
             name: "RSVP".into(),
             description: "".into(),
@@ -439,9 +460,13 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
             status: FormStatus::Closed,
             closes_at: None,
             confirmation_message: "Thanks".into(),
+            branding: FormBranding::default(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            anonymous: false,
         },
         access: FormAccess::View,
     };
@@ -459,11 +484,15 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
                 "respondentColumnId": null,
                 "audience": "public",
                 "tallyVisible": true,
+                "responsesVisible": false,
+                "anonymous": false,
                 "status": "closed",
                 "closesAt": null,
                 "confirmationMessage": "Thanks",
+                "branding": { "logoFileId": null, "coverFileId": null, "accentColor": null },
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-01T09:00:00Z",
+                "projectId": null,
                 "isHiddenInDrive": false,
             },
             "access": "view",
@@ -515,6 +544,7 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
 
     let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
     let form = Form {
+        appearance: None,
         id: FORM,
         name: "RSVP".into(),
         description: "".into(),
@@ -528,9 +558,13 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "".into(),
+        branding: FormBranding::default(),
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
     };
     let response = FormResponse {
         id: FormResponseId::from_uuid(Uuid::from_u128(0xe1)),
@@ -561,4 +595,101 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
             );
         }
     }
+}
+
+#[test]
+fn a_form_sends_its_branding_with_its_facts() {
+    let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
+    let form = Form {
+        id: FORM,
+        name: "Site intake".into(),
+        description: "".into(),
+        appearance: None,
+        owner_id: "macro|owner@macro.com".into(),
+        database_id: DATABASE,
+        table_id: TABLE,
+        submitted_column_id: None,
+        respondent_column_id: None,
+        audience: Audience::Public,
+        tally_visible: false,
+        status: FormStatus::Open,
+        closes_at: None,
+        confirmation_message: "".into(),
+        branding: FormBranding {
+            logo_file_id: Some(Uuid::from_u128(0x10)),
+            cover_file_id: None,
+            accent_color: Some(AccentColor::try_from("#1F6FEB".to_string()).unwrap()),
+        },
+        created_at: now,
+        updated_at: now,
+        project_id: None,
+        is_hidden_in_drive: false,
+        responses_visible: false,
+        anonymous: false,
+    };
+    assert_eq!(
+        serde_json::to_value(&form).unwrap()["branding"],
+        json!({
+            "logoFileId": "00000000-0000-0000-0000-000000000010",
+            "coverFileId": null,
+            "accentColor": "#1f6feb",
+        })
+    );
+    let schema = serde_json::to_value(<FormBranding as utoipa::PartialSchema>::schema()).unwrap();
+    let required = schema["required"].as_array().unwrap();
+    for field in ["logoFileId", "coverFileId", "accentColor"] {
+        assert!(
+            required.contains(&json!(field)),
+            "missing required field {field}"
+        );
+    }
+}
+
+#[test]
+fn an_accent_color_is_six_hex_digits_after_a_hash() {
+    for accepted in ["#000000", "#ffffff", "#1F6FEB"] {
+        assert!(
+            AccentColor::try_from(accepted.to_string()).is_ok(),
+            "{accepted}"
+        );
+    }
+    for refused in [
+        "",
+        "#fff",
+        "1f6feb",
+        "#1f6feb00",
+        "#1g6feb",
+        "red",
+        " #1f6feb",
+    ] {
+        assert!(
+            AccentColor::try_from(refused.to_string()).is_err(),
+            "{refused}"
+        );
+    }
+}
+
+#[test]
+fn a_branding_change_sets_clears_or_keeps_each_part() {
+    let update: UpdateForm = serde_json::from_value(json!({
+        "logoFileId": "00000000-0000-0000-0000-000000000010",
+        "coverFileId": null,
+        "accentColor": "#ABCDEF",
+    }))
+    .unwrap();
+    assert_eq!(update.logo_file_id, Some(Some(Uuid::from_u128(0x10))));
+    assert_eq!(update.cover_file_id, Some(None));
+    assert_eq!(
+        update.accent_color,
+        Some(Some(AccentColor::try_from("#abcdef".to_string()).unwrap()))
+    );
+    assert!(update.changes_branding());
+    assert!(!update.needs_owner());
+
+    let untouched: UpdateForm = serde_json::from_value(json!({ "description": "Hi" })).unwrap();
+    assert_eq!(untouched.logo_file_id, None);
+    assert_eq!(untouched.accent_color, None);
+    assert!(!untouched.changes_branding());
+
+    assert!(serde_json::from_value::<UpdateForm>(json!({ "accentColor": "blue" })).is_err());
 }

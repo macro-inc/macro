@@ -14,7 +14,7 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
     type Err: Send + std::fmt::Debug;
 
     /// Every label of the scope in manual order. `channel_ids` on each label
-    /// is restricted to eligible team channels `viewer` participates in. Shared
+    /// is restricted to eligible channels `viewer` participates in. Shared
     /// labels include only their own team's channels. Manual counts include all
     /// eligible assignments; smart counts include only the viewer's active matches.
     /// Smart memberships are evaluated from current attributes, including matches
@@ -53,6 +53,19 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
     fn rename_label(
         &self,
         scope: &ChannelLabelsScope,
+        label_id: Uuid,
+        name: &str,
+        viewer: &MacroUserIdStr<'_>,
+        rule: Option<&ChannelLabelRule>,
+    ) -> impl Future<Output = Result<LabelWriteOutcome, Self::Err>> + Send;
+
+    /// Atomically rename and transfer a label to another authorized namespace.
+    /// Validate every source assignment, or every current personal smart match,
+    /// against the target before moving any assignment or changing the label.
+    fn transfer_label(
+        &self,
+        source: &ChannelLabelsScope,
+        target: &ChannelLabelsScope,
         label_id: Uuid,
         name: &str,
         viewer: &MacroUserIdStr<'_>,
@@ -116,6 +129,16 @@ pub trait ChannelLabelsService: Send + Sync + 'static {
     fn rename_label(
         &self,
         receipt: &ChannelLabelsReceipt,
+        label_id: Uuid,
+        name: String,
+        rule: Option<ChannelLabelRule>,
+    ) -> impl Future<Output = Result<ChannelLabel, ChannelLabelsError>> + Send;
+
+    /// Update a label and optionally transfer it to another authorized namespace.
+    fn update_label(
+        &self,
+        source: &ChannelLabelsReceipt,
+        target: Option<&ChannelLabelsReceipt>,
         label_id: Uuid,
         name: String,
         rule: Option<ChannelLabelRule>,

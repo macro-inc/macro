@@ -1,5 +1,10 @@
-/** Reserve the card before fetching its form; old cards have no layout hint. */
-export function pollCardHeight(previewData: unknown): string | undefined {
+/**
+ * The height of a poll card's body (its "Poll" row, 44px choices with 8px
+ * gaps, and the votes footer), reserved before its form loads. Choices are one
+ * line, so only the option count matters; the question wraps in the card's
+ * header, which renders its text while loading. Old cards have no layout hint.
+ */
+export function pollBodyHeight(previewData: unknown): string | undefined {
   if (
     !previewData ||
     typeof previewData !== 'object' ||
@@ -16,7 +21,5 @@ export function pollCardHeight(previewData: unknown): string | undefined {
     count > 20
   )
     return;
-  // Fixed header/footer space plus 44px choices and 8px gaps at the default
-  // font size. Large polls scroll inside their card instead of moving chat.
-  return `${Math.min(11.75 + count * 3.25, 40)}rem`;
+  return `${6.625 + count * 3.25}rem`;
 }

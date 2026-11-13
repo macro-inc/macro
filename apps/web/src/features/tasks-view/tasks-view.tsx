@@ -6,6 +6,7 @@ import {
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { projectDetailRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -126,7 +127,18 @@ function TasksViewRoot() {
         >
           <TaskSavedViewWarning />
           <div class="min-h-0 flex-1">
-            <TasksContent ref={setListElement} />
+            <TasksContent
+              ref={setListElement}
+              listStart={
+                // Task rows lead with priority and status icons; the inset
+                // puts the play icon over the status icon and the label
+                // over the task titles, while the row's hover still spans
+                // the list like the task rows'.
+                <div class="[--tutorial-row-inset:2.25rem]">
+                  <TutorialRow tutorial="tasks" />
+                </div>
+              }
+            />
           </div>
         </Show>
       </ViewShell.Content>

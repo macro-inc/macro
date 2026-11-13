@@ -14,6 +14,7 @@ import {
   Panel,
 } from '@ui';
 import {
+  createMemo,
   createSignal,
   createUniqueId,
   type JSX,
@@ -32,16 +33,23 @@ import type {
 } from '../../database/core/database-view';
 import { canEditCell, titleColumn } from '../../database/core/table';
 import type { RecordCreation } from '../../database/primitives/record-actions';
+import { CompanySelect } from '../components/company-select';
 import { RecordSearch } from '../components/record-search';
-import type { Pipeline } from '../core/pipeline';
+import type { PipelineRecordType, TrackedPipeline } from '../core/pipeline';
 import {
   contactCompany,
+  type DomainCompany,
   newRecordChoice,
   type RecordChoice,
   type RecordOption,
   recordChoiceProblem,
   recordDetail,
 } from '../core/pipeline-record';
+import {
+  missingStageFields,
+  requiredStageFields,
+  type StageRequirement,
+} from '../core/stage-requirements';
 import { companyCreationError } from './create-company';
 import { contactCreationError } from './create-contact';
 import {
@@ -55,6 +63,7 @@ type CellRenderers = Pick<
   GridCellProps,
   | 'renderTextEditor'
   | 'renderTextValue'
+  | 'renderLinkValue'
   | 'renderMentionPicker'
   | 'renderMentionValue'
 >;
@@ -62,8 +71,11 @@ type CellRenderers = Pick<
 /** A form for a whole pipeline row: its company or contact, then every field the pipeline has. */
 export function AddPipelineRecordDialog(
   props: CellRenderers & {
-    pipeline: Pick<Pipeline, 'name' | 'recordType'>;
+    pipeline: Pick<TrackedPipeline, 'name' | 'recordType'>;
     columns: DatabaseViewColumn[];
+    requirements?: StageRequirement[];
+    requirementsLoading?: boolean;
+    requirementsError?: boolean;
     /** Values the row starts with, such as the stage of the board lane it was added in. */
     initialValues: Record<string, DatabaseCellValue>;
     onCreate: (creation: RecordCreation) => Promise<boolean>;
@@ -79,8 +91,8 @@ export function AddPipelineRecordDialog(
     contacts
       ? contacts.contacts().map((contact) => ({
           id: contact.id,
-          name: contact.name || contact.email,
-          detail: contact.email,
+          name: contact.name || contact.email || '',
+          detail: contact.email ?? '',
         }))
       : companies.companies().map((entry) => ({
           id: entry.id,
@@ -88,15 +100,53 @@ export function AddPipelineRecordDialog(
           detail: entry.domains[0]?.domain ?? '',
         }));
   const domainCompanies = () =>
-    companies
-      .companies()
-      .flatMap((entry) =>
-        entry.domains.map((domain) => ({ id: entry.id, domain: domain.domain }))
-      );
+    companies.companies().flatMap<DomainCompany>((entry) =>
+      entry.domains.length
+        ? entry.domains.map((domain) => ({
+            id: entry.id,
+            domain: domain.domain,
+          }))
+        : [{ id: entry.id, domain: undefined }]
+    );
+  const companyOptions = createMemo(() =>
+    companies.companies().map((company) => ({
+      id: company.id,
+      name: company.name,
+      domain: company.domains[0]?.domain,
+    }))
+  );
   // One intent per dialog, so submitting again never adds a second row.
   const intentId = `pipeline-record:${createUniqueId()}`;
   const [choice, setChoice] = createSignal<RecordChoice>();
-  const [values, setValues] = createSignal(props.initialValues);
+  const [draftValues, setDraftValues] = createSignal(props.initialValues);
+  const [selectedOptions, setSelectedOptions] = createSignal<
+    Record<string, string>
+  >(
+    Object.fromEntries(
+      props.columns.flatMap((column) => {
+        if (column.dataType !== 'SELECT_STRING' || column.isMultiSelect)
+          return [];
+        const option = column.options.find(
+          (option) => option.label === props.initialValues[column.id]
+        );
+        return option ? [[column.id, option.id]] : [];
+      })
+    )
+  );
+  // Keep selections tied to option identities while schema polling renames labels.
+  // Deleted columns leave the submitted row; surviving drafts retain their edits.
+  const values = createMemo<Record<string, DatabaseCellValue>>(() =>
+    Object.fromEntries(
+      props.columns.flatMap((column) => {
+        const value = draftValues()[column.id];
+        if (value === undefined) return [];
+        const selected = selectedOptions()[column.id];
+        const option =
+          selected && column.options.find((option) => option.id === selected);
+        return [[column.id, option ? option.label : value]];
+      })
+    )
+  );
   const [newOption, setNewOption] = createSignal<string>();
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -108,6 +158,8 @@ export function AddPipelineRecordDialog(
       (column) =>
         column.id !== title()?.id && !column.relation && canEditCell(column)
     );
+  const required = () =>
+    requiredStageFields(props.columns, props.requirements ?? [], values());
   const noun = company ? 'deal' : 'contact';
   const submitLabel = company ? 'Add deal' : 'Add contact';
   const existing = () => {
@@ -122,12 +174,28 @@ export function AddPipelineRecordDialog(
     const current = choice();
     return current?.kind === 'new-contact' ? current : undefined;
   };
+  const suggestedCompany = () => {
+    const match = contactCompany(newContact()?.email ?? '', domainCompanies());
+    return companyOptions().find((company) => company.id === match?.id);
+  };
   const changeChoice = (next: RecordChoice | undefined) => {
     setChoice(next);
     setError(undefined);
   };
   const write = (columnId: string, value: DatabaseCellValue) => {
-    setValues((current) => ({ ...current, [columnId]: value }));
+    setDraftValues((current) => ({ ...current, [columnId]: value }));
+    setSelectedOptions((current) => {
+      const next = { ...current };
+      const column = props.columns.find((column) => column.id === columnId);
+      const option =
+        column?.dataType === 'SELECT_STRING' && !column.isMultiSelect
+          ? column.options.find((option) => option.label === value)
+          : undefined;
+      if (option) next[columnId] = option.id;
+      else delete next[columnId];
+      return next;
+    });
+    setError(undefined);
     return Promise.resolve(true);
   };
 
@@ -138,7 +206,7 @@ export function AddPipelineRecordDialog(
       const domain = current.domain.trim().toLowerCase();
       const { id } = await createCompany.mutateAsync({
         name: current.name.trim(),
-        domain,
+        domain: domain || undefined,
       });
       setChoice({
         kind: 'existing',
@@ -147,7 +215,11 @@ export function AddPipelineRecordDialog(
       return id;
     }
     const email = current.email.trim().toLowerCase();
-    const joins = contactCompany(email, domainCompanies());
+    const joins = current.companyId
+      ? companies
+          .companies()
+          .find((company) => company.id === current.companyId)
+      : undefined;
     if (!joins) throw new Error('A new contact needs a company.');
     const { id } = await createContact.mutateAsync({
       companyId: joins.id,
@@ -183,7 +255,39 @@ export function AddPipelineRecordDialog(
       editing.blur();
     const current = choice();
     const titleField = title();
-    if (pending() || !current || !titleField) return;
+    if (
+      pending() ||
+      props.requirementsLoading ||
+      props.requirementsError ||
+      !current ||
+      !titleField
+    )
+      return;
+    const deleted = props.columns.find(
+      (column) =>
+        column.dataType === 'SELECT_STRING' &&
+        !column.isMultiSelect &&
+        selectedOptions()[column.id] &&
+        !column.options.some(
+          (option) => option.id === selectedOptions()[column.id]
+        )
+    );
+    if (deleted) {
+      setError(
+        `The selected ${deleted.name} option was deleted. Choose another value.`
+      );
+      return;
+    }
+    const missing = missingStageFields(
+      required().filter((column) => column.id !== titleField.id),
+      values()
+    );
+    if (missing.length) {
+      setError(
+        `Fill in ${missing.map((column) => column.name).join(', ')} for the selected stage.`
+      );
+      return;
+    }
     const problem = recordChoiceProblem(current, domainCompanies());
     if (problem) {
       setError(problem);
@@ -256,7 +360,7 @@ export function AddPipelineRecordDialog(
             />
             <input
               aria-label="Domain"
-              placeholder="Domain, like acme.com"
+              placeholder="Domain (optional), like acme.com"
               autocomplete="off"
               spellcheck={false}
               data-1p-ignore
@@ -275,36 +379,69 @@ export function AddPipelineRecordDialog(
       </Match>
       <Match when={newContact()}>
         {(draft) => (
-          <NewRecordFields
-            name={draft().name}
-            namePlaceholder="Contact name"
-            disabled={pending()}
-            onName={(name) => changeChoice({ ...draft(), name })}
-            onCancel={() => changeChoice(undefined)}
-            cancelLabel="Choose an existing contact"
-          >
-            <EnvelopeIcon
-              aria-hidden="true"
-              class="size-4 shrink-0 text-ink-muted"
-            />
-            <input
-              aria-label="Email"
-              placeholder="Email, like jane@acme.com"
-              type="email"
-              autocomplete="off"
-              spellcheck={false}
-              data-1p-ignore
-              class="ph-no-capture w-full min-w-0 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
-              value={draft().email}
+          <>
+            <NewRecordFields
+              name={draft().name}
+              namePlaceholder="Contact name"
               disabled={pending()}
-              onInput={(event) =>
-                changeChoice({
-                  ...draft(),
-                  email: event.currentTarget.value,
-                })
+              onName={(name) => changeChoice({ ...draft(), name })}
+              onCancel={() => changeChoice(undefined)}
+              cancelLabel="Choose an existing contact"
+            >
+              <EnvelopeIcon
+                aria-hidden="true"
+                class="size-4 shrink-0 text-ink-muted"
+              />
+              <input
+                aria-label="Email"
+                placeholder="Email, like jane@example.com"
+                type="email"
+                autocomplete="off"
+                spellcheck={false}
+                data-1p-ignore
+                class="ph-no-capture w-full min-w-0 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
+                value={draft().email}
+                disabled={pending()}
+                onInput={(event) =>
+                  changeChoice({
+                    ...draft(),
+                    email: event.currentTarget.value,
+                  })
+                }
+              />
+            </NewRecordFields>
+            <CompanySelect
+              companies={companyOptions()}
+              value={companyOptions().find(
+                (company) => company.id === draft().companyId
+              )}
+              onChange={(company) =>
+                changeChoice({ ...draft(), companyId: company.id })
               }
+              loading={companies.query.isLoading}
+              disabled={pending()}
+              mount={dialog()}
             />
-          </NewRecordFields>
+            <Show when={!draft().companyId && suggestedCompany()} keyed>
+              {(suggestion) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="max-w-full self-start"
+                  tooltip={suggestion.name}
+                  disabled={pending()}
+                  onClick={() =>
+                    changeChoice({ ...draft(), companyId: suggestion.id })
+                  }
+                >
+                  <span class="truncate">
+                    Use suggested company: {suggestion.name}
+                  </span>
+                </Button>
+              )}
+            </Show>
+          </>
         )}
       </Match>
     </Switch>
@@ -318,6 +455,7 @@ export function AddPipelineRecordDialog(
       canEdit={!pending()}
       renderTextEditor={props.renderTextEditor}
       renderTextValue={props.renderTextValue}
+      renderLinkValue={props.renderLinkValue}
       renderMentionPicker={props.renderMentionPicker}
       renderMentionValue={props.renderMentionValue}
       popupMount={dialog()}
@@ -388,12 +526,26 @@ export function AddPipelineRecordDialog(
                 <div ref={fieldList} class="flex flex-col gap-5">
                   <Key each={fields()} by="id">
                     {(column) => (
-                      <StackedField column={column()}>
+                      <StackedField
+                        column={column()}
+                        required={required().some(
+                          (field) => field.id === column().id
+                        )}
+                      >
                         <div class={FIELD_BOX}>{cell(column)}</div>
                       </StackedField>
                     )}
                   </Key>
                 </div>
+                <Show
+                  when={props.requirementsLoading || props.requirementsError}
+                >
+                  <p role="status" class="text-sm text-ink-muted">
+                    {props.requirementsError
+                      ? 'Could not load stage requirements. Reopen this form to retry.'
+                      : 'Loading stage requirements…'}
+                  </p>
+                </Show>
                 <Show when={error()}>
                   {(message) => (
                     <p role="alert" class="text-sm text-failure">
@@ -415,7 +567,12 @@ export function AddPipelineRecordDialog(
                 <EntityComposer.Submit
                   type="submit"
                   hasContent={!!choice()}
-                  disabled={!choice() || pending()}
+                  disabled={
+                    !choice() ||
+                    pending() ||
+                    props.requirementsLoading ||
+                    props.requirementsError
+                  }
                 >
                   {pending() ? 'Adding…' : submitLabel}
                 </EntityComposer.Submit>
@@ -434,6 +591,7 @@ const FIELD_BOX =
 /** A field with its label stacked above the input. */
 function StackedField(props: {
   column: DatabaseViewColumn | undefined;
+  required?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -447,6 +605,9 @@ function StackedField(props: {
               entityType={column().specificEntityType}
             />
             <span class="truncate">{column().name}</span>
+            <Show when={props.required}>
+              <span class="text-accent">Required</span>
+            </Show>
           </div>
         )}
       </Show>
@@ -456,7 +617,7 @@ function StackedField(props: {
 }
 
 function PickedRecord(props: {
-  recordType: Pipeline['recordType'];
+  recordType: PipelineRecordType;
   record: RecordOption;
   disabled: boolean;
   onChange: () => void;

@@ -1,6 +1,7 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
+import { useCallContextOptional } from '@channel/Call/CallContext';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
@@ -12,15 +13,17 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
-import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
 import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import AtIcon from '@icon/system/regular/at.svg';
-import XIcon from '@icon/system/regular/x.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PhoneDisconnectIcon from '@icon/system/regular/phone-disconnect.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
+import { CallWaveform } from '../../../channel/Call/components/CallWaveform';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
+import { ChannelMentionCount } from './ChannelCountPill';
 import {
   type ChannelRailRow,
   rowKeyForChannel,
@@ -100,6 +103,7 @@ export function ChannelRailItemContextMenu(
 
 export function ChannelCallIndicator(props: {
   status: ChannelCallStatus | undefined;
+  channelId?: string;
   class?: string;
 }) {
   return (
@@ -117,7 +121,7 @@ export function ChannelCallIndicator(props: {
               <PhoneIncomingIcon class="incoming-call-shake size-full" />
             </Match>
             <Match when={true}>
-              <PhoneCallIcon class="size-full" />
+              <CallWaveform class="size-full" channelId={props.channelId} />
             </Match>
           </Switch>
         </span>
@@ -160,7 +164,7 @@ export function IncomingCallActions(props: {
               dismissIncomingCallEverywhere(callId(), userId());
             }}
           >
-            <XIcon class="size-3" />
+            <PhoneDisconnectIcon class="size-3" />
             <Show when={isWide()}>Decline</Show>
           </Button>
           <Button
@@ -181,7 +185,7 @@ export function IncomingCallActions(props: {
               });
             }}
           >
-            <PhoneIncomingIcon class="incoming-call-shake size-3" />
+            <PhoneIcon class="size-3" />
             <Show when={isWide()}>Join</Show>
           </Button>
         </span>
@@ -194,11 +198,24 @@ export function ChannelAvatar(props: {
   channel: ChannelEntity;
   size?: 'sm' | 'md';
 }) {
+  const call = useCallContextOptional();
+  const joined = () =>
+    call?.isInCall() && call.activeChannelId() === props.channel.id;
   const sizeClass = () =>
     props.size === 'md' ? 'size-9 [&_svg]:size-4.5' : 'size-5 [&_svg]:size-4';
 
   return (
     <Switch>
+      <Match when={joined()}>
+        <span
+          class={cn(
+            'flex shrink-0 items-center justify-center text-success',
+            sizeClass()
+          )}
+        >
+          <CallWaveform live class="size-full" channelId={props.channel.id} />
+        </span>
+      </Match>
       <Match when={isDirectMessage(props.channel)}>
         <span
           class={cn(
@@ -236,6 +253,8 @@ export type ConversationCardProps = ChannelRailItemProps & {
   showLatestMessage?: boolean;
   senderId?: string;
   mentionedCurrentUser: boolean;
+  /** Unread messages that mention the viewer, from `mentionCount`. */
+  mentions?: number;
 };
 
 function UserDisplayName(props: { id: MacroId }) {
@@ -269,6 +288,8 @@ export function ConversationCard(props: ConversationCardProps) {
   const latestRootMessage = () => props.channel.latestRootMessage;
   const hasMessageMetadata = () =>
     Boolean(latestRootMessage()?.threadId || props.mentionedCurrentUser);
+  // The mention count takes the unread dot's place, as on channel rows.
+  const showUnreadDot = () => props.unread && !((props.mentions ?? 0) > 0);
 
   return (
     <div
@@ -302,7 +323,7 @@ export function ConversationCard(props: ConversationCardProps) {
         <ChannelAvatar channel={props.channel} size="md" />
         <div class="min-w-0 flex-1 overflow-hidden">
           <span class="flex min-w-0 items-center gap-2">
-            <Show when={props.unread}>
+            <Show when={showUnreadDot()}>
               <span
                 aria-label="Unread"
                 class="size-2 shrink-0 rounded-full bg-accent touch:absolute touch:left-2 touch:top-7.5 touch:-translate-y-1/2"
@@ -313,6 +334,7 @@ export function ConversationCard(props: ConversationCardProps) {
             </span>
             <ChannelMutedIndicator muted={props.muted} class="size-3.5" />
             <ChannelCallIndicator
+              channelId={props.channel.id}
               status={props.incomingCallId ? undefined : props.callStatus}
               class="size-3.5"
             />
@@ -331,6 +353,7 @@ export function ConversationCard(props: ConversationCardProps) {
                 </Tooltip>
               )}
             </Show>
+            <ChannelMentionCount count={props.mentions ?? 0} />
           </span>
           <Show when={props.showLatestMessage !== false}>
             <Show when={hasMessageMetadata()}>

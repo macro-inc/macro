@@ -9,10 +9,11 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
-    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView, LogAppended,
-    ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim,
-    SessionManager, SessionPreviewCandidate, SessionSource, SessionStatus, SessionVisibility,
-    StoredAgentSessionLog, StoredQueuedAction, ThreadSession, TurnPrompter,
+    ArchiveCause, ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView,
+    LogAppended, ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionArchive,
+    SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate, SessionSource,
+    SessionStatus, SessionVisibility, StoredAgentSessionLog, StoredQueuedAction, ThreadSession,
+    TurnPrompter,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -73,6 +74,8 @@ pub struct InMemoryAgentSessionRepo {
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    /// Sessions whose turn was open when they last disconnected.
+    interrupted_turns: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     user_coding_preferences: Arc<Mutex<HashMap<String, CodingPreferences>>>,
@@ -87,11 +90,15 @@ pub struct InMemoryAgentSessionRepo {
     queues: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredQueuedAction>>>>,
     /// Session -> who prompted its turn, mirroring the `turn_*` columns.
     turn_prompters: Arc<Mutex<HashMap<AgentSessionId, TurnPrompter>>>,
+    /// People who prompted each session directly, in the order they did.
+    followers: Arc<Mutex<HashMap<AgentSessionId, Vec<MacroUserIdStr<'static>>>>>,
     /// Sessions an agent conversation sends its messages to, mirroring the
     /// current rows of `agent_conversation_sessions`.
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     /// Sessions whose name was generated, mirroring `name_is_generated`.
     generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
+    /// Session -> whether it is billed, mirroring `agent_session.billing`.
+    billings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionBilling>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -108,6 +115,30 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
+    }
+
+    /// Backdate `session`'s last user-visible activity, as if nobody had
+    /// touched it since `at`.
+    pub fn set_modified_at(&self, session: AgentSessionId, at: chrono::DateTime<chrono::Utc>) {
+        if let Some(stored) = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get_mut(&session)
+        {
+            stored.modified_at = at;
+        }
+    }
+
+    /// Who prompted `session` directly, in the order they first did.
+    #[must_use]
+    pub fn followers(&self, session: AgentSessionId) -> Vec<MacroUserIdStr<'static>> {
+        self.followers
+            .lock()
+            .expect("followers poisoned")
+            .get(&session)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Make `session` the one an agent conversation's channel sends its
@@ -190,12 +221,13 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            origin: params.origin.clone(),
             repo_branch: params.repo_branch,
             pull_request_url: None,
             task_id: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: params.owner_id,
             thread_id: params.thread_id,
             // The in-memory repo has no comms rows to derive a channel from.
@@ -215,10 +247,12 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             created_at: now,
             modified_at: now,
             source: params.purpose.source(),
-            visibility: params
-                .purpose
-                .visibility(params.bot_id, params.thread_id, false),
+            visibility: params.purpose.visibility(params.thread_id, false),
         };
+        self.billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(session.id, params.billing);
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
                 .lock()
@@ -281,6 +315,44 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        Ok(match self.turn_states.lock().unwrap().get(&id) {
+            Some(agent_fold::domain::model::TurnState::Disconnected) => {
+                self.interrupted_turns.lock().unwrap().contains(&id)
+            }
+            Some(turn) => crate::domain::turn_state::moves_session_list(*turn),
+            None => false,
+        })
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        // A session inserted directly, not through `create`, is billed as
+        // the column defaults.
+        Ok(self
+            .billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(&id)
+            .copied()
+            .unwrap_or_default())
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -395,6 +467,16 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.get(id).await?;
+        let mut followers = self.followers.lock().expect("followers poisoned");
+        let session = followers.entry(id).or_default();
+        if !session.contains(user) {
+            session.push(user.clone());
+        }
+        Ok(())
+    }
+
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         Ok(self
             .turn_prompters
@@ -472,7 +554,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
         let mut sessions = self
             .sessions
             .lock()
@@ -480,8 +562,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        if session.is_archived != is_archived {
-            session.is_archived = is_archived;
+        if session.is_archived() != archived {
+            session.archived = archived.then(|| SessionArchive {
+                by: ArchiveCause::User,
+                at: chrono::Utc::now(),
+            });
             session.modified_at = chrono::Utc::now();
         }
         Ok(())
@@ -503,7 +588,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        if session.name != DEFAULT_AGENT_SESSION_NAME || session.is_archived {
+        if session.name != DEFAULT_AGENT_SESSION_NAME || session.is_archived() {
             return Ok(false);
         }
         session.name = name.to_owned();
@@ -528,7 +613,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory generated name store is not poisoned")
             .contains(&id);
-        Ok((generated && !session.is_archived).then(|| session.name.clone()))
+        Ok((generated && !session.is_archived()).then(|| session.name.clone()))
     }
 
     async fn replace_generated_name(
@@ -549,7 +634,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory generated name store is not poisoned")
             .contains(&id);
-        if !generated || session.name != current || session.is_archived {
+        if !generated || session.name != current || session.is_archived() {
             return Ok(false);
         }
         session.name = name.to_owned();
@@ -1023,7 +1108,13 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .insert(session, boundary.initialization_log_id);
         }
         if let Some(turn_state) = turn_state {
-            self.turn_states.lock().unwrap().insert(session, turn_state);
+            let previous = self.turn_states.lock().unwrap().insert(session, turn_state);
+            let mut interrupted = self.interrupted_turns.lock().unwrap();
+            if turn_state != agent_fold::domain::model::TurnState::Disconnected {
+                interrupted.remove(&session);
+            } else if previous.is_some_and(crate::domain::turn_state::moves_session_list) {
+                interrupted.insert(session);
+            }
         }
         Ok(stored)
     }
@@ -1081,12 +1172,13 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        origin: Default::default(),
         repo_branch: None,
         pull_request_url: None,
         task_id: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        is_archived: false,
+        archived: None,
         owner_id: model_owner::Owner::User(
             macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
                 .expect("valid macro user id"),

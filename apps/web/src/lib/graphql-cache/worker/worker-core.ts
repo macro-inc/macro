@@ -4,6 +4,7 @@
  */
 
 import { match } from 'ts-pattern';
+import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
   CachePush,
@@ -20,7 +21,11 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import { parseCacheRevision, parseStorageGeneration } from '../protocol';
+import {
+  isTypedSearch,
+  parseCacheRevision,
+  parseStorageGeneration,
+} from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -100,7 +105,10 @@ export interface CacheWorkerCoreOptions {
 const BACKGROUND_HYDRATION_PRIORITY = -1;
 const NORMAL_READ_PRIORITY = 0;
 const USER_VISIBLE_READ_PRIORITY = 1;
-const CACHE_WRITE_PRIORITY = 2;
+// Someone is typing and waiting on it, and unlike a list read it has no
+// network fallback, so it runs before the rereads of lists already on screen.
+const TYPED_SEARCH_PRIORITY = 2;
+const CACHE_WRITE_PRIORITY = 3;
 
 /** Reads may reorder while they overlap, but never across lifecycle barriers. */
 function isOrderingBarrier(request: CacheRequest): boolean {
@@ -112,12 +120,18 @@ function isOrderingBarrier(request: CacheRequest): boolean {
   );
 }
 
+/** A new engine or cleared storage: not even a typed search runs ahead. */
+function stopsTypedSearch(request: CacheRequest): boolean {
+  return request.kind === 'init' || request.kind === 'clear';
+}
+
 function isAuthoritativeWrite(request: CacheRequest): boolean {
   // A calendar commit records coverage for data written just before it, so it
   // must never overtake that write or hydration.
   return (
     request.kind === 'write' ||
     request.kind === 'hydrate' ||
+    request.kind === 'people-update' ||
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'delete-records' ||
     request.kind === 'calendar-commit'
@@ -139,6 +153,7 @@ function revisionAdvancementCategory(
     .with(
       'write',
       'hydrate',
+      'people-update',
       'calendar-commit',
       () => 'authoritative-write' as const
     )
@@ -152,7 +167,9 @@ function revisionAdvancementCategory(
 }
 
 function requestPriority(request: CacheRequest): number {
-  if (request.kind === 'hydrate') return BACKGROUND_HYDRATION_PRIORITY;
+  if (request.kind === 'hydrate' || request.kind === 'people-update')
+    return BACKGROUND_HYDRATION_PRIORITY;
+  if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -444,6 +461,28 @@ export class CacheWorkerCore {
       }
     }
 
+    // A typed search registers nothing and writes nothing, so the generation
+    // checks and operation teardowns that fence other reads do not order it.
+    // After an engine restart those fences sit between it and the head of the
+    // replayed backlog. It can then run before a write queued ahead of it:
+    // its rows are only older, and that write's cache change refreshes them.
+    let searchEnd = this.queue.findIndex((queued) =>
+      stopsTypedSearch(queued.request)
+    );
+    if (searchEnd === -1) searchEnd = this.queue.length;
+    for (let i = segmentEnd; i < searchEnd; i += 1) {
+      const candidate = this.queue[i];
+      const selected = this.queue[index];
+      if (
+        candidate &&
+        selected &&
+        isTypedSearch(candidate.request) &&
+        candidate.priority > selected.priority
+      ) {
+        index = i;
+      }
+    }
+
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
     this.running = true;
@@ -526,6 +565,22 @@ export class CacheWorkerCore {
           revision: parseCacheRevision(result.revision),
         };
       })
+      .with(
+        { kind: 'people-context' },
+        { kind: 'people-update' },
+        { kind: 'people-search' },
+        { kind: 'people-references' },
+        { kind: 'people-sql' },
+        { kind: 'contact-snapshot' },
+        { kind: 'contact-reconcile' },
+        (request) =>
+          executePeopleRequest(
+            this.requireEngine(),
+            request,
+            (message) => this.push(message),
+            (result) => this.fanOut(result, true)
+          )
+      )
       .with({ kind: 'search' }, async (request) => {
         const result: SearchCachePage = await this.requireEngine().search(
           request.request
@@ -582,7 +637,8 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
-          request.identity
+          request.identity,
+          request.hydrationScope
         );
         result.revision = parseCacheRevision(result.revision);
         // Only cache-only consumers opt into hydration. Do not invalidate

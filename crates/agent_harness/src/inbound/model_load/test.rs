@@ -58,6 +58,7 @@ async fn successful_response_serializes_available_catalog() {
                 description: None,
                 group: None,
             }],
+            cached_at: None,
         })),
     )
         .into_response();
@@ -74,7 +75,8 @@ async fn successful_response_serializes_available_catalog() {
                 "name": "Fast",
                 "description": null,
                 "group": null
-            }]
+            }],
+            "cachedAt": null
         })
     );
 }

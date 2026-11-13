@@ -1,6 +1,10 @@
+import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { isAgentAccount, tryMacroId } from '@core/user';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { AgentTag } from './AgentTag';
 import { UserIcon } from './UserIcon';
 import {
   type UserCardAction,
@@ -91,8 +95,13 @@ function UserCardBody(props: {
           class="pointer-events-none"
         />
         <div class="min-w-0 flex-1">
-          <div class="truncate text-base font-semibold text-ink">
-            {props.user.displayName}
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div class="truncate text-base font-semibold text-ink">
+              {props.user.displayName}
+            </div>
+            <Show when={isAgentAccount(tryMacroId(props.user.id ?? ''))}>
+              <AgentTag />
+            </Show>
           </div>
           <Show
             when={
@@ -105,6 +114,17 @@ function UserCardBody(props: {
           </Show>
         </div>
       </div>
+
+      <Show when={props.user.id}>
+        {(id) => (
+          <Show when={isBotPrincipalId(id())}>
+            <AgentRuntime
+              botId={id().replace(/^bot\|/, '')}
+              class="px-6 pb-4"
+            />
+          </Show>
+        )}
+      </Show>
 
       <Show when={actions().length > 0}>
         <MobileDrawer.ScrollBody>

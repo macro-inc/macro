@@ -25,7 +25,11 @@ through `databases`' typed ops.
 
 ## Scope
 
-- Owns: binding the `database_sql` engine to live Macro data for agents, the HTTP query adapter, and the two SQL agent tools.
+- Owns: binding the `database_sql` engine to live Macro data for agents, the HTTP
+  query and saved-question routes (`POST /databases/query`, `POST /databases/queries`),
+  and the two SQL agent tools. Saving compiles the question here, so its route
+  lives here rather than in `crates/databases`, which keeps `GET
+  /databases/queries/{id}`.
 - Not here: the SQL grammar/engine itself → `crates/database_sql`; table/row
   persistence and the ops API → `crates/databases`.
 

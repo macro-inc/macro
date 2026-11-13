@@ -5,6 +5,7 @@ import type {
   FoldedMessage,
   SessionMetadata,
   SessionNotification,
+  ToolName,
 } from '@service-agent-fold/generated/types';
 import { beforeAll, expect, it } from 'vitest';
 import { timelineNotifications } from './session-notifications';
@@ -157,6 +158,7 @@ it('suppresses review events only when their trusted card is in the thread', () 
   ];
   const card: FoldedMessage = {
     agentSessionId: 'session',
+    key: '0:agent',
     turn: 0,
     author: { kind: 'agent' },
     requestId: null,
@@ -186,16 +188,60 @@ it('suppresses review events only when their trusted card is in the thread', () 
   expect(
     timelineNotifications([card], events).map((event) => event.id)
   ).toEqual(['connected']);
+  const externalName: ToolName = {
+    kind: 'mcp',
+    server: 'external',
+    tool: 'PresentReview',
+  };
   const externalCard: FoldedMessage = {
     ...card,
     parts: card.parts.map((part) =>
       part.kind === 'tool_use'
         ? {
             ...part,
-            name: { kind: 'mcp', server: 'external', tool: 'PresentReview' },
+            name: externalName,
           }
         : part
     ),
   };
   expect(timelineNotifications([externalCard], events)).toEqual(events);
+});
+
+it('announces a subscribed review revision as a metadata change, not a message', () => {
+  const stream = new wasm.FoldStream('019a0000-0000-7000-8000-000000000001');
+  try {
+    stream.push([{ kind: 'snapshot', rows: [] }]);
+    const events = stream.push([
+      {
+        kind: 'confirmed',
+        row: {
+          id: '019a0000-0000-7000-8000-000000000002',
+          createdAt: '2026-11-04T00:00:00Z',
+          direction: 'to_server',
+          content: {
+            type: 'acp',
+            jsonrpc: '2.0',
+            method: '_macro/review_updated',
+            params: {
+              reviewId: '019a0000-0000-7000-8000-000000000005',
+              revision: 3,
+            },
+          },
+        },
+      },
+    ]);
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: 'metadata',
+        metadata: expect.objectContaining({
+          reviewRevisions: [
+            { reviewId: '019a0000-0000-7000-8000-000000000005', revision: 3 },
+          ],
+        }),
+      }),
+    ]);
+    expect(stream.messages()).toEqual([]);
+  } finally {
+    stream.free();
+  }
 });

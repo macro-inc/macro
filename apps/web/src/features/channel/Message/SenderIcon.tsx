@@ -16,6 +16,7 @@ import { useMessage } from './context';
 type SenderIconProps = {
   class?: string;
   hidden?: boolean;
+  interactive?: boolean;
 };
 
 export function SenderIcon(props: SenderIconProps) {
@@ -26,21 +27,29 @@ export function SenderIcon(props: SenderIconProps) {
 
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
-  // does.
+  // does. A post a user made through a client is that client's, so it shows
+  // the client's initial rather than the mark of the bot that carried it.
   const botSender = (): MessageSender | undefined => {
     const current = sender();
-    if (current.type !== 'bot' || firstPartyBotMark(current.id)) {
-      return undefined;
+    if (current.type !== 'bot') return undefined;
+    if (current.triggered_via) {
+      return { ...current, name: current.triggered_via, avatar_url: null };
     }
+    if (firstPartyBotMark(current.id)) return undefined;
     return current;
   };
 
-  // Someone outside Macro, such as a WhatsApp participant, has no principal.
+  // Imported authors without a sender and opaque call participants have no profile.
   const externalAuthor = () => {
     const name = message().imported_author?.name?.trim();
-    return !message().sender_id && name
-      ? { name, avatar_url: null }
-      : undefined;
+    if (!message().sender_id && name) return { name, avatar_url: null };
+    if (
+      sender().type !== 'bot' &&
+      message().sender_id.startsWith('participant:')
+    ) {
+      return { name: name || 'Participant', avatar_url: null };
+    }
+    return undefined;
   };
 
   // An agent's avatar hovers like a person's, with the card that leads to its
@@ -63,7 +72,14 @@ export function SenderIcon(props: SenderIconProps) {
           ? { name: message().guest_name, avatar_url: null }
           : (externalAuthor() ?? botSender())
       }
-      fallback={<UserIcon id={message().sender_id} size="fill" />}
+      fallback={
+        <UserIcon
+          id={message().sender_id}
+          size="fill"
+          suppressClick={props.interactive === false}
+          showTooltip={props.interactive !== false}
+        />
+      }
     >
       {(bot) => (
         <BotIcon name={bot().name} avatarUrl={bot().avatar_url} size="fill" />
@@ -79,7 +95,10 @@ export function SenderIcon(props: SenderIconProps) {
       aria-hidden={props.hidden ? 'true' : undefined}
     >
       {!props.hidden && (
-        <Show when={agentCard()} fallback={avatar()}>
+        <Show
+          when={props.interactive !== false && agentCard()}
+          fallback={avatar()}
+        >
           {(user) => (
             <UserCardTrigger
               placement="left"

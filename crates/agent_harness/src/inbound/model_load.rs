@@ -88,6 +88,9 @@ pub struct LoadAgentModelsResponse {
     pub current_model: Option<String>,
     /// Ordered model catalog.
     pub models: Vec<AgentModelDto>,
+    /// When a paired runtime that is off or unreachable last reported this
+    /// catalog; null when it was probed live.
+    pub cached_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Model-selection availability returned over HTTP.
@@ -119,6 +122,7 @@ impl From<AgentModels> for LoadAgentModelsResponse {
                     supports_images: model.supports_images,
                 })
                 .collect(),
+            cached_at: value.cached_at,
         }
     }
 }
@@ -214,7 +218,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod runtime or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)", content((CredentialRejectedResponse = "application/json"), (String = "text/plain"))),
+        (status = 409, description = "Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)", content((CredentialRejectedResponse = "application/json"), (String = "text/plain"))),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )

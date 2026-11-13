@@ -3,6 +3,7 @@ use super::*;
 #[cfg(feature = "admission")]
 mod admission;
 mod call;
+mod configured_agent;
 mod task_assignment;
 
 use agent_session::domain::error::AgentSessionError;
@@ -70,6 +71,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: false,
+        stopped_reason: None,
     }
 }
 
@@ -107,12 +109,13 @@ fn message(mentions: Vec<SimpleMention>) -> MessagePostedMetadata {
 
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        origin: Default::default(),
         repo_branch: None,
         pull_request_url: None,
         task_id: None,
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        is_archived: false,
+        archived: None,
         owner_id: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         ),
@@ -140,6 +143,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
 /// A session rooted at the test message's thread.
 fn thread_session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        origin: Default::default(),
         thread_id: Some(Uuid::from_u128(3)),
         originating_message_id: Some(Uuid::from_u128(3)),
         ..session(id, bot_id)

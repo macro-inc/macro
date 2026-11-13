@@ -1,7 +1,11 @@
+import { usePending } from '@app/observability/flow';
 /** App-facing composition for the agent session and its controllers. */
 
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
-import { AgentSession } from '@core/agent-session/AgentSession';
+import {
+  AgentSession,
+  type IssueResult,
+} from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
@@ -15,9 +19,11 @@ import type {
   TurnState,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import {
   type Accessor,
   createEffect,
+  createSignal,
   type ParentProps,
   Suspense,
 } from 'solid-js';
@@ -50,13 +56,19 @@ export function AgentSessionProvider(
     acquired,
   } = resolveSessionId(() => props.blockId);
 
+  usePending('agent.provision', pending);
+
   createEffect(() => {
     const id = sessionId();
     if (id && id !== props.blockId) props.onSessionId?.(id);
   });
 
   const userId = useUserId();
-  const live = createAgentSession(sessionId, { userId, onAcquire: acquired });
+  const live = createAgentSession(sessionId, {
+    userId,
+    provisioning: pending,
+    onAcquire: acquired,
+  });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
   // session does not exist until `POST /agent-sessions` answers, and the
@@ -74,6 +86,7 @@ export function AgentSessionProvider(
     return [
       {
         agentSessionId: sessionId() ?? props.blockId,
+        key: '0:user',
         turn: 0,
         author: { kind: 'user', userId: userId() ?? null },
         requestId: null,
@@ -139,6 +152,24 @@ export function AgentSessionProvider(
   };
   const quoteSelection: QuoteInsert = (text) => quoteInsert?.(text);
 
+  // A prompt to a stopped agent is answered in the transcript, not a toast:
+  // the reason is the conversation's state until a prompt runs again.
+  const [runtimeRefusal, setRuntimeRefusal] = createSignal<string>();
+  const recordRefusal = async (issued: Promise<IssueResult>) => {
+    const result = await issued;
+    setRuntimeRefusal(
+      result.isErr()
+        ? result.error.find(isNoRuntimeAccessError)?.message
+        : undefined
+    );
+    return result;
+  };
+  const issue: typeof live.issue = (action) => {
+    const issued = live.issue(action);
+    if (!issued || action.type !== 'prompt') return issued;
+    return recordRefusal(issued);
+  };
+
   return (
     <>
       {/* Nested so a pending poll cannot take the block orchestrator's
@@ -179,9 +210,9 @@ export function AgentSessionProvider(
           loadRetryable: () => live.loadFailed() && !live.accessDenied(),
           retryLoad: live.retry,
           turn,
-          issue: live.issue,
+          issue,
+          runtimeRefusal,
           selectModel: live.selectModel,
-          sendNext: steering.sendNext,
           steer: steering.steer,
           steerFailed: steering.failed,
           interactions,

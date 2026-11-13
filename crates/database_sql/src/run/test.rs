@@ -1,3 +1,5 @@
+mod description;
+
 use models_databases::{ColumnId, DatabaseId, RowId};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -106,7 +108,7 @@ impl OpsSink for FakeSink {
                     table: *table,
                     table_version: TableVersion(8),
                     change: match change {
-                        RowsChange::Insert { rows } => RowsResult::Inserted {
+                        RowsChange::Insert { rows, .. } => RowsResult::Inserted {
                             rows: self.inserted[..rows.len()].to_vec(),
                         },
                         RowsChange::Update {
@@ -600,7 +602,8 @@ fn an_insert_is_one_op_holding_every_row() {
                             column: ColumnId::from_uuid(NAME),
                             value: CellValue::Text("Hooli".into()),
                         }],
-                    ]
+                    ],
+                    ids: None,
                 },
             }],
         )]
@@ -901,8 +904,24 @@ const DOUBLED: Uuid = Uuid::from_u128(0x0d);
 const FOLLOW_UP: Uuid = Uuid::from_u128(0x0e);
 
 #[test]
-fn derived_columns_are_computed_filtered_and_sorted_in_the_fold() {
-    let source = source(deals());
+fn derived_columns_read_their_stored_cells_like_any_other() {
+    // The writer stores formula cells; the fold reads them as it reads any
+    // cell, and never computes them.
+    let mut rows = deals();
+    for row in &mut rows {
+        let stored = match row.id {
+            ACME => vec![(DOUBLED, Cell::Number(24000.0))],
+            GLOBEX => vec![(DOUBLED, Cell::Number(6000.0))],
+            HOOLI => vec![(
+                FOLLOW_UP,
+                Cell::Date(Utc.with_ymd_and_hms(2026, 9, 22, 0, 0, 0).unwrap()),
+            )],
+            INITECH => vec![(DOUBLED, Cell::Number(14000.0))],
+            _ => vec![],
+        };
+        row.cells.extend(stored);
+    }
+    let source = source(rows);
     let sink = FakeSink::new();
 
     let outcome = pollster::block_on(run(
@@ -1052,7 +1071,7 @@ fn a_date_range_is_written_as_an_interval_or_one_day() {
     .unwrap();
     let applied = sink.applied.lock().unwrap();
     let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &applied[0].1[0]
     else {

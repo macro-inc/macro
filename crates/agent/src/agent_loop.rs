@@ -8,13 +8,15 @@ use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
-use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_adapter::{DynToolSetAdapter, provider_definition};
 use crate::tool_result_limit::ToolResultLimit;
+use ai_toolset::tool_search::{ToolMatch, tools_loaded_by};
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::tool::server::{ToolServer, ToolServerHandle};
-use rig_core::message::{AssistantContent, Message};
+use rig_core::message::{AssistantContent, Message, ToolResultContent, UserContent};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
@@ -393,8 +395,24 @@ impl AgentLoop {
             catalog: catalog.clone(),
             loads: ToolLoads::default(),
         };
+        // Resolve each definition once, so `already_available` matches the
+        // description the provider shows the model.
+        let definitions: Vec<_> = toolset
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| provider_definition(schema.name, schema.description, &schema.schema))
+            .collect();
+        let advertised = definitions
+            .iter()
+            .map(|definition| ToolMatch {
+                name: definition.name.clone(),
+                description: definition.description.clone(),
+            })
+            .collect();
         let request_context = RequestContext::new(usage_ctx.user.clone())
             .with_tool_search(catalog, loader)
+            .with_advertised_tools(Arc::new(advertised))
             .with_genai_telemetry(self.genai_telemetry);
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
@@ -406,7 +424,8 @@ impl AgentLoop {
         let routing: ToolRouter =
             Arc::new(move |name: &str| routing_toolset.routing_description(name));
 
-        let adapters = DynToolSetAdapter::from_toolset(
+        let adapters = DynToolSetAdapter::from_definitions(
+            definitions,
             toolset.clone(),
             context.clone(),
             request_context_rw.clone(),
@@ -731,11 +750,15 @@ impl Session {
         };
 
         // A session lives for one turn, so whatever the conversation loaded
-        // before is gone. Reload what it called, in the order it first did,
-        // rather than have the model reload each tool every turn.
-        let called = called_catalog_tools(history, &self.request_context.searchable_tools);
-        if !called.is_empty() {
-            (self.bridge_inputs.register_loaded)(called).await;
+        // before is gone. Reload what it loaded or called, in the order it
+        // first did, rather than have the model reload each tool every turn
+        // or call a tool it loaded that is no longer there.
+        let in_use = HistoryTools::of(history, &self.request_context.searchable_tools);
+        for (call_id, tools) in &in_use.loads {
+            self.bridge_inputs.tool_loads.record_call(call_id, tools);
+        }
+        if !in_use.tools.is_empty() {
+            (self.bridge_inputs.register_loaded)(in_use.tools).await;
         }
 
         let stream = self
@@ -762,25 +785,79 @@ impl Session {
     }
 }
 
-/// The catalog tools `history` called, in the order of their first call.
-fn called_catalog_tools(history: &[Message], catalog: &[SearchableTool]) -> Vec<SearchableTool> {
-    let mut called: Vec<SearchableTool> = Vec::new();
-    for message in history {
-        let Message::Assistant { content, .. } = message else {
-            continue;
-        };
-        for content in content.iter() {
-            let AssistantContent::ToolCall(call) = content else {
-                continue;
-            };
-            let name = &call.function.name;
-            if called.iter().any(|tool| &tool.name == name) {
-                continue;
-            }
-            if let Some(tool) = catalog.iter().find(|tool| &tool.name == name) {
-                called.push(tool.clone());
+/// The catalog tools `history` loaded or called, in the order it first did.
+#[derive(Default)]
+struct HistoryTools {
+    /// Every such tool, once.
+    tools: Vec<SearchableTool>,
+    /// The tools each `SearchTools` or `LoadTools` call loaded, by the call's
+    /// provider id.
+    loads: Vec<(String, Vec<SearchableTool>)>,
+}
+
+impl HistoryTools {
+    fn of(history: &[Message], catalog: &[SearchableTool]) -> Self {
+        let mut found = Self::default();
+        let mut call_names: HashMap<&str, &str> = HashMap::new();
+        for message in history {
+            match message {
+                Message::Assistant { content, .. } => {
+                    for content in content.iter() {
+                        let AssistantContent::ToolCall(call) = content else {
+                            continue;
+                        };
+                        call_names.insert(&call.id, &call.function.name);
+                        if let Some(tool) =
+                            catalog.iter().find(|tool| tool.name == call.function.name)
+                        {
+                            found.add(tool);
+                        }
+                    }
+                }
+                Message::User { content } => {
+                    for content in content.iter() {
+                        let UserContent::ToolResult(result) = content else {
+                            continue;
+                        };
+                        let Some(tool_name) = call_names.get(result.id.as_str()) else {
+                            continue;
+                        };
+                        let text: String = result
+                            .content
+                            .iter()
+                            .filter_map(|content| match content {
+                                ToolResultContent::Text(text) => Some(text.text.as_str()),
+                                _ => None,
+                            })
+                            .collect();
+                        // Every tool the call loaded, as the live turn
+                        // recorded it, even one an earlier call loaded too.
+                        let loaded: Vec<SearchableTool> = tools_loaded_by(tool_name, &text)
+                            .iter()
+                            .filter_map(|name| catalog.iter().find(|tool| &tool.name == name))
+                            .cloned()
+                            .collect();
+                        for tool in &loaded {
+                            found.add(tool);
+                        }
+                        if !loaded.is_empty() {
+                            // Requests are laid out under the provider's call
+                            // id (see `replay_provider_ids`).
+                            let call_id = result.call_id.as_ref().unwrap_or(&result.id);
+                            found.loads.push((call_id.clone(), loaded));
+                        }
+                    }
+                }
+                Message::System { .. } => {}
             }
         }
+        found
     }
-    called
+
+    /// Adds `tool` unless it is already in.
+    fn add(&mut self, tool: &SearchableTool) {
+        if !self.tools.iter().any(|known| known.name == tool.name) {
+            self.tools.push(tool.clone());
+        }
+    }
 }

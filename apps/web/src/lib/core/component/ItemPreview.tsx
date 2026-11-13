@@ -1,3 +1,4 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -128,7 +129,18 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     return (
       <Show
         when={targetType() === 'task'}
-        fallback={<EntityIcon targetType={targetType()} {...localProps} />}
+        fallback={
+          <EntityIcon
+            targetType={targetType()}
+            appearance={
+              isAccessiblePreviewItem(item()) &&
+              supportsEntityAppearance(item())
+                ? item().appearance
+                : undefined
+            }
+            {...localProps}
+          />
+        }
       >
         <TaskStatusIcon
           {...localProps}
@@ -383,7 +395,7 @@ export function InlineItemPreview(props: ItemEntity) {
                 <span class="relative top-[0.125em] inline-flex size-[1em] shrink-0">
                   <ItemEntityIcon size="fill" />
                 </span>
-                <span class="min-w-0 truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+                <span class="min-w-0 truncate text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
                   {truncateString(name(), 80)}
                 </span>
               </span>

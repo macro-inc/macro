@@ -94,9 +94,9 @@ const dashboard = new datadog.Dashboard('macrodb-alerts', {
       thresholdGraph({
         title: 'macro-db-prod long-running transaction',
         query:
-          'max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host}',
-        critical: '1800',
-        warning: '600',
+          "moving_rollup(max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host}, 300, 'min')",
+        critical: '1500',
+        warning: '300',
       }),
     ]),
     graphGroup('Storage', [
@@ -276,15 +276,20 @@ prodMonitor('macrodb-blocked-connections', {
   runbook: 'docs/runbooks/macrodb.md#locks',
 });
 
+// The lowest age over 5 minutes, so one sample cannot trigger it: an idle
+// LISTEN backend draining NOTIFYs reports its connect time as xact_start for
+// a few seconds (docs/runbooks/macrodb.md#locks). An open transaction stays
+// over 300s for 5 minutes once it is 10 minutes old, so warning and critical
+// fire at about 10 and 30 minutes.
 prodMonitor('macrodb-long-transactions', {
   title: 'macro-db-prod long-running transaction',
   service: 'macro-db-prod',
   query:
-    'avg(last_10m):max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host} > 1800',
-  monitorThresholds: { critical: '1800', warning: '600' },
+    'min(last_5m):max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host} > 1500',
+  monitorThresholds: { critical: '1500', warning: '300' },
   pages: false,
   description:
-    'The oldest open transaction on {{host.name}} is {{value}} seconds old. Long transactions hold locks and stop vacuum.',
+    'The oldest open transaction on {{host.name}} has been over {{value}} seconds old for 5 minutes, so it has been open at least 5 minutes longer than that. Long transactions hold locks and stop vacuum; find the session and its SQL in Database Monitoring.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#locks',
 });

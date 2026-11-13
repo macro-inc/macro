@@ -17,8 +17,9 @@
 # Deploying everything unconditionally makes the coalescing lossless: the
 # surviving run always deploys a superset of the runs it displaced. The
 # called workflows already avoid redundant work internally (Nix-cached
-# builds, Pulumi no-ops on unchanged stacks), so the cost is small next to
-# an undeployed commit.
+# builds, Pulumi no-ops on unchanged stacks, the sync worker comparing its
+# inputs with the live version), so the cost is small next to an undeployed
+# commit. Those checks compare with what is deployed, never the last push.
 #
 name: Deploy on Push
 on:
@@ -58,6 +59,7 @@ jobs:
   deploy-web-app:
     needs:
     - deploy-cloud-storage
+    - deploy-sync-service
     - build-web-app
     name: Deploy Web App
     uses: ./.github/workflows/deploy_web_app.yml

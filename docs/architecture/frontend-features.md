@@ -62,7 +62,8 @@ apps/web/src/features/<feature>/
   queries/        Wire decoding and feature-owned query/mutation orchestration
   primitives/     Reactive state and actions, without JSX
   components/     Presentational JSX driven by props
-  views/          Use-case composition of context, primitives, and components
+  views/          Use-case composition of context, primitives, and components;
+                  an app view has a desktop <name>.tsx and a mobile/<name>.tsx
   context/        Feature contracts and provider/consumer mechanism
   tests/          Shared test clients, context builders, and wire helpers
   <feature>.tsx   App-facing production composition and provider mounting
@@ -269,6 +270,59 @@ The two `activity-timeline-row.tsx` files show the intended split. The
 entity display, property definitions, and callback-based handlers, then passes
 them to the presentational row. External hosts choose the view when they want
 that wiring, and the component when they already have resolved values.
+
+### Platform views
+
+The web app is also the iOS and Android apps. An app view that people open on
+both desktop and touch has two compositions, in separate files, so a change
+made for desktop cannot reach mobile unnoticed:
+
+```text
+<entry>.tsx                    providers, shared state, the one device switch
+views/<name>.tsx               <Name>: desktop layout, chrome, actions
+views/<name>-parts.tsx         parts only the desktop view renders
+views/mobile/<name>.tsx        Mobile<Name>: touch layout, chrome, actions
+views/mobile/<name>-parts.tsx  parts only the mobile view renders
+views/shared/<name>-parts.tsx  parts both views render
+```
+
+- **The entry holds the only device switch**, written inline:
+  `<Show when={isTouchDevice()} fallback={<X />}><MobileX /></Show>`.
+  It keys on touch, not phone width, because the app shell (dock, floating
+  header, no sidebar) does: phones and tablets both get the mobile view. An
+  entry is the feature's route view, its root component, or a block adapter.
+- **State sits above the switch**: providers, queries, `TraceFlow` and
+  `usePending`, `useViewRestoration`, `useEntryState`, shared hotkeys, and the
+  content `Suspense`. A view holds layout and view-local UI state only, so a
+  flip of the switch loses nothing a user would miss.
+- **A view decides what exists; a shared part adapts.** A part may adapt size,
+  spacing, hover, and event handling to touch. It never decides by device which
+  controls exist. The test: delete the device check, and if both platforms
+  still show the same controls in the same order, it was adaptation.
+- **A shared part is one control or one region, never a set of actions.** A
+  hook that offers actions returns them by name, and each view lists the ones
+  it shows. A part that bundles several actions carries every later addition
+  to both platforms.
+- **Desktop is the default, so it has no prefix or directory.** A file in
+  `views/` outside `mobile/` and `shared/` is a desktop view, or predates the
+  split and may still serve both platforms. `tsx-no-device-composition` keeps
+  a split desktop view from branching on the device. Only the entry imports
+  from `views/mobile/`, and a mobile view imports nothing from `views/`
+  outside `mobile/` and `shared/`.
+- **A mobile view composes its header with `MobileHeader`**
+  (`components/app/mobile-header`). While it is mounted it owns the pane's
+  header: nothing else in the pane can add to it. A mobile view may branch on
+  `isMobile()` / `mobile:` for phone versus tablet.
+
+Some items have two hosts: on touch an email thread, channel, agent session,
+document, or CRM record opens as its block, while desktop shows it inline in
+its list view and uses the block for a second split or a preview. The block
+adapter is the entry and gets the desktop and mobile pair; the inline host is
+desktop-only.
+
+`features/task-composer` (`compose-task.tsx` and `views/`) and
+`features/block-email` (`EmailBlockAdapter.tsx` and `views/`) are the
+references.
 
 ### `context/`: the feature's capability contract
 
@@ -587,8 +641,23 @@ From the repository root, the existing scanner invocation can be scoped to a fea
 bunx --yes @ast-grep/cli@0.44.1 scan apps/web/src/features/activity
 ```
 
-These rules currently have warning severity and their `files` lists cover
-activity and the three email features. They do not automatically enforce every
+Platform views have their own error-level rules, which need no registration
+for the first three:
+
+| Rule | Applies to | Main check |
+| --- | --- | --- |
+| `tsx-views-no-mobile-imports` | `views/*.tsx`, `views/shared/**` | No import from `views/mobile/` |
+| `tsx-mobile-view-closed` | `views/mobile/**` | No `isTouchDevice`, `touch:` / `not-touch:`, import from the desktop side of `views/`, or open header outlet |
+| `tsx-mobile-header-only-in-mobile-views` | everything but `views/mobile/**` | No `MobileHeader` import |
+| `tsx-no-device-composition` | `features/**` | No `Show` / `Match` on a device check, device check yielding JSX, or `touch:hidden`-style class |
+
+`tsx-no-device-composition` ignores two lists of files: the entries, which hold
+each view's one switch, and "Not yet split", a baseline of files that predate
+the rule. When you split a view, delete its files from the baseline and add its
+entry. Never add a file to the baseline.
+
+The four feature-layer rules have warning severity and cover only the feature
+paths registered in their `files` lists. They do not automatically enforce every
 feature directory, resolve the whole transitive import graph, or prove that a
 component is presentational.
 Passing the scan is supporting evidence, not a complete architecture review.
@@ -654,6 +723,9 @@ general exceptions without a concrete need and an updated explanation.
   adapter tests verify wire behavior? Are any remaining integration stubs explained?
 - Are external consumers, route wrappers, presentation providers, and both lint
   language variants covered by the migration?
+- Is the device switch only in the view's entry, with shared state above it?
+- Does each shared part render one control or region, and does each view list
+  its own actions?
 
 
 ## Email application of the stronger boundaries

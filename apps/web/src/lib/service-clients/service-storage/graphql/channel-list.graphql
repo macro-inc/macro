@@ -24,6 +24,17 @@ fragment ChannelListItemFields on GraphqlSoupEntity {
 			state
 			createdAt
 		}
+		# Counts unread mentions, threads included; the row shows 9+ past nine.
+		unreadMentions: notifications(
+			filter: {
+				states: [UNSEEN]
+				eventTypes: ["channel_mention"]
+			}
+			limit: 10
+		) {
+			id
+			state
+		}
 	}
 }
 

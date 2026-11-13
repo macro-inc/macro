@@ -27,6 +27,7 @@ impl JwtValidator for Validator {
         match jwt {
             "execution" | "api" | "user" => Ok(ValidatedIdentity {
                 agent_id: (jwt == "execution").then_some(bot_id::MACRO_NEW_BOT_ID),
+                agent_via: None,
                 user_id: "macro|owner@example.com".into(),
                 fusion_user_id: "fusion-owner".into(),
                 organization_id: Some(42),

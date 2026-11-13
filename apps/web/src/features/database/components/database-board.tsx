@@ -46,6 +46,7 @@ import {
 import { cardTitleColumn, laneId, laneLabel } from '../core/views';
 import { BoardLaneHeader } from './board-lane-header';
 import type { DatabaseTableProps } from './database-table';
+import { isOnLink } from './grid-cell';
 import { NewBoardGroup } from './new-board-group';
 import { PropertyIcon } from './property-icon';
 import { SelectPill } from './select-pill';
@@ -72,6 +73,7 @@ type DatabaseBoardProps = {
   layout: BoardLayout;
   renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   groupColumn: DatabaseViewColumn;
   canEdit: boolean;
@@ -498,7 +500,7 @@ function BoardLane(
                 variant="ghost"
                 size="lg"
                 aria-label="New record"
-                class="justify-start rounded-md text-sm text-ink-placeholder"
+                class="justify-start"
                 onClick={props.onStartDraft}
               >
                 <PlusIcon class="size-3.5" />
@@ -519,6 +521,7 @@ function BoardLane(
                 cardFields={props.layout.cardFields}
                 renderCell={props.renderCell}
                 renderTextValue={props.renderTextValue}
+                renderLinkValue={props.renderLinkValue}
                 renderMentionValue={props.renderMentionValue}
                 groupColumn={props.groupColumn}
                 groups={props.groups}
@@ -624,6 +627,7 @@ function BoardCard(props: {
   cardFields: string[];
   renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   groupColumn: DatabaseViewColumn;
   groups: BoardGroup[];
@@ -646,6 +650,8 @@ function BoardCard(props: {
       return props.renderMentionValue(String(value), column.specificEntityType);
     if (isWritableText(column) && props.renderTextValue)
       return props.renderTextValue(String(value));
+    if (column.dataType === 'LINK' && props.renderLinkValue)
+      return props.renderLinkValue(String(value));
     return title();
   };
   const metadata = () =>
@@ -664,35 +670,19 @@ function BoardCard(props: {
       pending={props.pending}
     >
       <div
-        class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] gap-x-2 p-3"
+        class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 p-3"
         data-card-grid
       >
         <KanbanBoard.CardHeader class="col-span-full grid-cols-subgrid p-0 last:pb-0">
-          <Show
-            when={props.canEdit}
-            fallback={<span aria-hidden="true" class="size-6" />}
-          >
-            <KanbanHandle label={`Drag ${title()}`}>
-              <Button
-                variant="ghost"
-                aria-label={`Drag ${title()}`}
-                tooltip={{ content: `Drag ${title()}`, disabled: true }}
-                size="icon-xs"
-                class="size-6 touch-none text-ink-muted"
-                title="Drag to another group, or use the Move menu"
-                tabindex={-1}
-              >
-                <GripIcon class="size-4" />
-              </Button>
-            </KanbanHandle>
-          </Show>
           <Show
             when={props.renderCell && props.titleColumn}
             fallback={
               <button
                 type="button"
                 class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink hover:underline"
-                onClick={() => props.onOpen(props.row.rowId)}
+                onClick={(event) => {
+                  if (!isOnLink(event)) props.onOpen(props.row.rowId);
+                }}
                 aria-label={`Open ${title()}`}
               >
                 <span role="heading" aria-level={3}>
@@ -703,82 +693,103 @@ function BoardCard(props: {
           >
             {(column) => (
               <div
-                class="min-w-0 text-sm font-medium leading-6 text-ink [&_[data-cell-text-editor]]:min-h-6 [&_[data-cell-text-editor]]:break-words [&_[data-cell-text-editor]]:border-0 [&_[data-cell-text-editor]]:bg-transparent [&_[data-cell-text-editor]]:p-0 [&_[data-cell-text-editor]]:text-sm [&_[data-cell-text-editor]]:font-medium [&_[data-cell-text-editor]]:leading-6 [&_[data-cell-text-editor]]:ring-0 [&_[data-cell-text-editor][aria-invalid=true]]:ring-1 [&_[data-cell-text-editor][aria-invalid=true]]:ring-failure"
+                class="min-w-0 text-sm font-medium leading-6 text-ink [&_[data-database-mention-label]]:whitespace-normal [&_[data-database-mention-label]]:break-words [&_[data-cell-text-editor]]:min-h-6 [&_[data-cell-text-editor]]:break-words [&_[data-cell-text-editor]]:border-0 [&_[data-cell-text-editor]]:bg-transparent [&_[data-cell-text-editor]]:p-0 [&_[data-cell-text-editor]]:text-sm [&_[data-cell-text-editor]]:font-medium [&_[data-cell-text-editor]]:leading-6 [&_[data-cell-text-editor]]:ring-0 [&_[data-cell-text-editor][aria-invalid=true]]:ring-1 [&_[data-cell-text-editor][aria-invalid=true]]:ring-failure"
                 data-kanban-no-drag
               >
-                {props.renderCell?.(() => props.row, column)}
+                {props.renderCell?.(() => props.row, column, { wrap: true })}
               </div>
             )}
           </Show>
-          <KanbanBoard.CardActions>
-            <Show when={props.renderCell}>
-              <Button
-                variant="ghost"
-                aria-label={`Open ${title()}`}
-                tooltip={{ content: `Open ${title()}`, disabled: true }}
-                size="icon-xs"
-                title="Open record details"
-                onClick={() => props.onOpen(props.row.rowId)}
-              >
-                <OpenIcon class="size-3.5" />
-              </Button>
-            </Show>
-            <Show when={props.canEdit}>
-              <Dropdown>
-                <Dropdown.Trigger
-                  variant="ghost"
+          <div class="flex shrink-0 items-start">
+            <KanbanBoard.CardActions>
+              <Show when={props.renderCell}>
+                <Button
                   size="icon-xs"
-                  aria-label={`Move ${title()}`}
-                  title="Move to another group"
+                  variant="ghost"
+                  aria-label={`Open ${title()}`}
+                  tooltip={{ content: `Open ${title()}`, disabled: true }}
+                  class="touch:size-11"
+                  title="Open record details"
+                  onClick={() => props.onOpen(props.row.rowId)}
                 >
-                  <DotsIcon class="size-4" />
-                </Dropdown.Trigger>
-                <Dropdown.Content class="min-w-44">
-                  <Dropdown.Group>
-                    <Dropdown.GroupLabel>Move to</Dropdown.GroupLabel>
-                    <For each={props.groups}>
-                      {(group) => (
-                        <Dropdown.Item
-                          disabled={group.key === props.laneId}
-                          onSelect={() => props.onMove(props.row.rowId, group)}
-                        >
-                          <span class="flex-1">
-                            <LanePill
-                              group={group}
-                              column={props.groupColumn}
-                              renderMentionValue={props.renderMentionValue}
-                            />
-                          </span>
-                          <Show when={group.key === props.laneId}>
-                            <CheckIcon class="size-3.5" />
-                          </Show>
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.Group>
-                </Dropdown.Content>
-              </Dropdown>
+                  <OpenIcon class="size-3.5" />
+                </Button>
+              </Show>
+              <Show when={props.canEdit}>
+                <Dropdown>
+                  <Dropdown.Trigger
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Move ${title()}`}
+                    class="touch:size-11"
+                    title="Move to another group"
+                  >
+                    <DotsIcon class="size-4" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Content class="min-w-44">
+                    <Dropdown.Group>
+                      <Dropdown.GroupLabel>Move to</Dropdown.GroupLabel>
+                      <For each={props.groups}>
+                        {(group) => (
+                          <Dropdown.Item
+                            disabled={group.key === props.laneId}
+                            onSelect={() =>
+                              props.onMove(props.row.rowId, group)
+                            }
+                          >
+                            <span class="flex-1">
+                              <LanePill
+                                group={group}
+                                column={props.groupColumn}
+                                renderMentionValue={props.renderMentionValue}
+                              />
+                            </span>
+                            <Show when={group.key === props.laneId}>
+                              <CheckIcon class="size-3.5" />
+                            </Show>
+                          </Dropdown.Item>
+                        )}
+                      </For>
+                    </Dropdown.Group>
+                  </Dropdown.Content>
+                </Dropdown>
+              </Show>
+            </KanbanBoard.CardActions>
+            <Show when={props.canEdit}>
+              <KanbanHandle label={`Drag ${title()}`}>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Drag ${title()}`}
+                  tooltip={{ content: `Drag ${title()}`, disabled: true }}
+                  class="size-6 touch:size-11 touch-none text-ink-muted"
+                  title="Drag to another group, or use the Move menu"
+                  tabindex={-1}
+                >
+                  <GripIcon class="size-4" />
+                </Button>
+              </KanbanHandle>
             </Show>
-          </KanbanBoard.CardActions>
+          </div>
         </KanbanBoard.CardHeader>
         <Show when={metadata().length}>
-          <KanbanBoard.CardFields class="col-start-2 col-span-2 p-0 pt-2">
+          <KanbanBoard.CardFields class="col-span-full grid grid-cols-1 gap-3 p-0 pt-3 [&_[data-cell-empty]]:text-ink-muted [&_[data-cell-empty]]:opacity-100">
             <Key each={metadata()} by="id">
               {(column) => (
                 <div
-                  class="flex min-h-6 min-w-0 max-w-40 items-center gap-2 rounded pl-1.5 hover:bg-hover has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-failure"
+                  class="flex min-w-0 flex-col gap-0.5 rounded has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-failure"
                   data-card-field
                   title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id))}`}
                   data-kanban-no-drag={props.renderCell ? '' : undefined}
                 >
-                  <PropertyIcon
-                    type={column().dataType}
-                    entityType={column().specificEntityType}
-                    relation={!!column().relation}
-                    class="size-3.5 shrink-0 text-ink-placeholder"
-                  />
+                  <span
+                    class="truncate text-xs text-ink-extra-muted"
+                    title={column().name}
+                  >
+                    {column().name}
+                  </span>
                   <div
-                    class="min-w-0 flex-1 [&_[data-cell-text-editor]]:h-6 [&_[data-cell-text-editor]]:min-h-6 [&_[data-cell-text-editor]]:max-h-6 [&_[data-cell-text-editor]]:overflow-auto [&_[data-cell-text-editor]]:whitespace-pre [&_[data-cell-text-editor]]:[scrollbar-width:none] [&_[data-cell-text-editor]]:border-0 [&_[data-cell-text-editor]]:bg-transparent [&_[data-cell-text-editor]]:px-0 [&_[data-cell-text-editor]]:py-0.5 [&_[data-cell-text-editor]]:text-xs [&_[data-cell-text-editor]]:[font-weight:inherit] [&_[data-cell-text-editor]]:leading-5 [&_[data-cell-text-editor]]:ring-0"
+                    class="min-w-0 [&_[data-database-mention-label]]:whitespace-normal [&_[data-database-mention-label]]:break-words [&_[data-cell-text-editor]]:min-h-6 [&_[data-cell-text-editor]]:border-0 [&_[data-cell-text-editor]]:bg-transparent [&_[data-cell-text-editor]]:px-0 [&_[data-cell-text-editor]]:py-0.5 [&_[data-cell-text-editor]]:text-xs [&_[data-cell-text-editor]]:[font-weight:inherit] [&_[data-cell-text-editor]]:leading-5 [&_[data-cell-text-editor]]:ring-0"
                     classList={{
                       'font-medium': column().dataType === 'STRING',
                       // Reserve usable editor space even when the value is empty.
@@ -795,7 +806,7 @@ function BoardCard(props: {
                         <Show
                           when={isOptionColumn(column())}
                           fallback={
-                            <span class="block truncate text-xs text-ink-muted">
+                            <span class="block break-words whitespace-normal text-xs text-ink-muted">
                               {formatCellValue(
                                 column(),
                                 rowValue(props.row, column().id)
@@ -824,6 +835,8 @@ function BoardCard(props: {
                       {(render) =>
                         render()(() => props.row, column, {
                           preserveSize: true,
+                          wrap: true,
+                          emptyLabel: '—',
                         })
                       }
                     </Show>

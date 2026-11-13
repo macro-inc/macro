@@ -77,6 +77,8 @@ type DatabaseTimelineViewProps = {
   rowPending: (rowId: string) => boolean;
   onOpen: (rowId: string) => void;
   onCreate: (creation: RecordCreation) => Promise<boolean>;
+  /** Lets the host gather required fields before creating a record. */
+  onCompose?: (values: Record<string, DatabaseCellValue>) => void;
   /** Writes one cell of a saved record; resolves whether it was saved. */
   onWrite: (
     rowId: string,
@@ -113,15 +115,14 @@ export function DatabaseTimelineView(props: DatabaseTimelineViewProps) {
   };
   return (
     <>
-      <Show when={menu()}>
+      {/* With a chart, the menu sits among its controls. */}
+      <Show when={!spanned() && menu()}>
         {(shown) => (
-          <div class="flex shrink-0 items-center justify-end px-5 pt-2">
-            <TimelineMenu
-              layout={shown().layout}
-              columns={props.columns}
-              onChange={(layout) => shown().changeView({ layout })}
-            />
-          </div>
+          <TimelineMenuRow
+            layout={shown().layout}
+            columns={props.columns}
+            onViewChange={shown().changeView}
+          />
         )}
       </Show>
       <Show
@@ -156,6 +157,23 @@ export function DatabaseTimelineView(props: DatabaseTimelineViewProps) {
         )}
       </Show>
     </>
+  );
+}
+
+/** The view menu on a band of its own, for a view showing no chart. */
+function TimelineMenuRow(props: {
+  layout: TimelineLayout;
+  columns: DatabaseViewColumn[];
+  onViewChange: (change: ViewChange) => void;
+}) {
+  return (
+    <div class="flex shrink-0 items-center justify-end px-5 pt-2">
+      <TimelineMenu
+        layout={props.layout}
+        columns={props.columns}
+        onChange={(layout) => props.onViewChange({ layout })}
+      />
+    </div>
   );
 }
 
@@ -230,16 +248,17 @@ function TimelineChart(
   }
   const writeRange = (rowId: string, value: DatabaseCellValue) =>
     props.onWrite(rowId, props.rangeColumn.id, value);
+  const createRecord = (values: Record<string, DatabaseCellValue>) => {
+    if (props.onCompose) {
+      props.onCompose(values);
+      return;
+    }
+    fireAndForget(props.onCreate({ values, open: true }), 'database');
+  };
   const create = () =>
     canSchedule()
       ? (range: GanttCreation) =>
-          fireAndForget(
-            props.onCreate({
-              values: { [props.rangeColumn.id]: toCellTimeRange(range) },
-              open: true,
-            }),
-            'database'
-          )
+          createRecord({ [props.rangeColumn.id]: toCellTimeRange(range) })
       : undefined;
   /** A new record at a chart position, in the group whose row it was asked from. */
   function createAt(position: number, timed: boolean, group: string) {
@@ -247,20 +266,14 @@ function TimelineChart(
     const lane = group ? groupOf(group)?.lane : undefined;
     const groupValue =
       column?.writable && lane ? laneValue(column, lane) : undefined;
-    fireAndForget(
-      props.onCreate({
-        values: {
-          [props.rangeColumn.id]: toCellTimeRange(
-            ganttPlacedRange(position, timed)
-          ),
-          ...(column && groupValue !== undefined
-            ? { [column.id]: groupValue }
-            : {}),
-        },
-        open: true,
-      }),
-      'database'
-    );
+    createRecord({
+      [props.rangeColumn.id]: toCellTimeRange(
+        ganttPlacedRange(position, timed)
+      ),
+      ...(column && groupValue !== undefined
+        ? { [column.id]: groupValue }
+        : {}),
+    });
   }
   /** Focus a record's bar or chip again, as after its menu or an editor closes. */
   function focusRecord(rowId: string) {
@@ -354,6 +367,16 @@ function TimelineChart(
     <div ref={container} class="flex min-h-0 min-w-0 flex-1 flex-col">
       <Switch>
         <Match when={!props.rows.length && !create()}>
+          {/* Without a chart, nothing else holds the menu. */}
+          <Show when={props.onViewChange}>
+            {(changeView) => (
+              <TimelineMenuRow
+                layout={props.layout}
+                columns={props.columns}
+                onViewChange={changeView()}
+              />
+            )}
+          </Show>
           <div class="grid flex-1 place-items-center text-sm text-ink-muted">
             {props.filtered ? 'No records match this view.' : 'No records'}
           </div>
@@ -375,6 +398,15 @@ function TimelineChart(
             <Gantt.Controls>
               <Gantt.TodayButton />
               <Gantt.Settings />
+              <Show when={props.onViewChange}>
+                {(changeView) => (
+                  <TimelineMenu
+                    layout={props.layout}
+                    columns={props.columns}
+                    onChange={(layout) => changeView()({ layout })}
+                  />
+                )}
+              </Show>
             </Gantt.Controls>
             <Gantt.GroupDrag
               scope={`${props.rangeColumn.id}:${groupColumn()?.id ?? ''}`}

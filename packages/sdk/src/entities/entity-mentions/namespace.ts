@@ -3,7 +3,11 @@ import type { MacroClient } from '../../utils/client';
 import type { EntityReference } from '../reference';
 import { EntityMention } from './mention';
 
-/** Stored entity mention relationships. */
+/**
+ * Stored entity mention relationships.
+ *
+ * @routing Use when recording or removing a typed mention relationship between two Macro items; not writing mention tags into text.
+ */
 export class EntityMentionNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -12,7 +16,11 @@ export class EntityMentionNamespace {
     return EntityMention.byId(this.client, id);
   }
 
-  /** Create a mention from a source resource to a target resource. */
+  /**
+   * Create a mention from a source resource to a target resource.
+   *
+   * @write
+   */
   async create(
     source: EntityReference,
     target: EntityReference,

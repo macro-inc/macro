@@ -7,6 +7,7 @@ mod test;
 
 pub mod channel_share;
 pub mod direct_share;
+pub mod project_grants;
 pub mod source_grants;
 pub mod team_share;
 
@@ -314,6 +315,16 @@ pub async fn get_nested_project_entities(
 
             SELECT et.id::text as "entity_id!", 'email_thread' as "entity_type!" FROM email_threads et
             WHERE et.project_id IN (SELECT id FROM child_projects)
+
+            UNION ALL
+
+            SELECT de.database_id::text as "entity_id!", 'database' as "entity_type!" FROM database_entities de
+            WHERE de.project_id IN (SELECT id FROM child_projects)
+
+            UNION ALL
+
+            SELECT f.id::text as "entity_id!", 'form' as "entity_type!" FROM forms f
+            WHERE f.project_id IN (SELECT id FROM child_projects)
             "#,
             &project_id.to_string()
         )
@@ -403,6 +414,8 @@ pub async fn update_entity_access_channel_share_permissions(
             // are private to one user.
             | EntityType::Reminder
             | EntityType::ScheduledAction
+            // Runtimes are shared with people and teams, never channels.
+            | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
             => {
@@ -482,6 +495,8 @@ pub async fn update_entity_access_channel_share_permissions(
             // are private to one user.
             | EntityType::Reminder
             | EntityType::ScheduledAction
+            // Runtimes are shared with people and teams, never channels.
+            | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
             => {

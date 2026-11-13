@@ -1,4 +1,5 @@
 import { contentHash } from '@core/util/hash';
+import { hashFile } from '@core/util/hashFile';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 /**
@@ -37,11 +38,26 @@ export function createNativeStagedUploadFile(
   source: NativeStagedUploadSource,
   media: NativeStagedUploadData
 ): File | null {
+  const file = new File([], media.name ?? '', {
+    type: media.mimeType ?? undefined,
+  });
+  return tagNativeStagedUpload(file, source, media) ? file : null;
+}
+
+/**
+ * Marks `file` as staged natively, so uploads send the staged copy from Rust
+ * instead of reading `file` into JS. Desktop tags the real pasted `File`, which
+ * keeps its bytes for local previews.
+ */
+export function tagNativeStagedUpload(
+  file: File,
+  source: NativeStagedUploadSource,
+  media: NativeStagedUploadData
+): boolean {
   if (!media.token || !media.name || !media.mimeType || media.size == null) {
-    return null;
+    return false;
   }
 
-  const file = new File([], media.name, { type: media.mimeType });
   nativeStagedUploads.set(file, {
     source,
     token: media.token,
@@ -53,7 +69,7 @@ export function createNativeStagedUploadFile(
       ? convertFileSrc(media.previewPath)
       : undefined,
   });
-  return file;
+  return true;
 }
 
 export function getNativeStagedUpload(
@@ -105,22 +121,27 @@ export async function getNativeStagedUploadChecksum(
   return file.sha256;
 }
 
-/** Either JS bytes or a native staged file, with the fields uploads need. */
+/**
+ * Either a browser file, which is the upload body itself rather than a copy
+ * of its bytes, or a native staged file, with the fields uploads need.
+ */
 export type UploadSource =
-  | { kind: 'bytes'; buffer: ArrayBuffer; sha: string; size: number }
+  | { kind: 'file'; file: File; sha: string; size: number }
   | { kind: 'staged'; staged: NativeStagedUpload; sha: string; size: number };
 
-export async function resolveUploadSource(file: File): Promise<UploadSource> {
+export async function resolveUploadSource(
+  file: File,
+  onHashProgress?: (fraction: number) => void
+): Promise<UploadSource> {
   const staged = getNativeStagedUpload(file);
   if (staged) {
     const sha = await getNativeStagedUploadChecksum(staged);
     return { kind: 'staged', staged, sha, size: staged.size };
   }
-  const buffer = await file.arrayBuffer();
   return {
-    kind: 'bytes',
-    buffer,
-    sha: await contentHash(buffer),
+    kind: 'file',
+    file,
+    sha: await hashFile(file, onHashProgress),
     size: file.size,
   };
 }

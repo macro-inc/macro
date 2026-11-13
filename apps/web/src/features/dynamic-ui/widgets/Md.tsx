@@ -1,6 +1,6 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import type { WidgetOf } from '../schema';
+import type { WidgetOf } from '../view';
 
 export type MdProps = Omit<WidgetOf<'md'>, 'type'>;
 

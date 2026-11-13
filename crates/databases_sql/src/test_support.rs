@@ -130,6 +130,13 @@ pub(crate) fn sql(
 pub(crate) struct FakeDatabases(pub(crate) Shared);
 
 impl DatabasesService for FakeDatabases {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        Err(DatabaseError::Unauthorized)
+    }
     async fn apply_ops_with_changes(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -247,11 +254,13 @@ impl DatabasesService for FakeDatabases {
 
     async fn create_database(&self, input: CreateDatabase) -> Result<Database, DatabaseError> {
         let database = Database {
+            appearance: None,
             id: DatabaseId::new(),
             name: input.name.clone(),
             owner_id: input.owner_id.to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         };
         self.0.lock().unwrap().created.push(input);
         Ok(database)
@@ -261,9 +270,16 @@ impl DatabasesService for FakeDatabases {
     }
     async fn get_database(
         &self,
-        _: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<DatabaseDetail, DatabaseError> {
-        unimplemented!("SQL reads every database at once")
+        self.0
+            .lock()
+            .unwrap()
+            .databases
+            .iter()
+            .find(|database| database.database.id.to_string() == receipt.entity().entity_id)
+            .cloned()
+            .ok_or(DatabaseError::NotFound)
     }
     async fn rename_database(
         &self,

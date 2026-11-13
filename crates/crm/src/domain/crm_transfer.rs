@@ -25,6 +25,7 @@ use super::{
         CsvTable, RecordRow, company_pipeline_rows, encode_csv, parse_csv, record_rows,
         unique_companies,
     },
+    model::CrmError,
     pipeline_workflows::{
         EntryAddition, EntryQuery, FieldInput, FieldKind, FieldValue, MAX_SCANNED_ROWS,
         NewPipeline, PipelineEdit, PipelineField, PipelineOverview, PipelineWorkflowService,
@@ -34,7 +35,7 @@ use super::{
 };
 
 pub use models::{
-    CompanyImportOutcome, Created, CsvFile, CsvFiles, CsvInput, PipelineDestination,
+    CompanyImportOutcome, Created, CsvFile, CsvFiles, CsvInput, PipelineCsv, PipelineDestination,
     PipelineExport, PipelineImportOutcome, SkippedRecord, TransferError, TransferRecords,
 };
 pub use records::CrmTransferRecords;
@@ -70,6 +71,13 @@ pub trait CrmTransferService: Send + Sync + 'static {
         pipeline: Uuid,
         csv: CsvInput,
     ) -> impl Future<Output = Result<PipelineImportOutcome, TransferError>> + Send;
+
+    /// Every entry of a pipeline as CSV text, named after the pipeline.
+    fn pipeline_csv(
+        &self,
+        viewer: &Viewer,
+        pipeline: Uuid,
+    ) -> impl Future<Output = Result<PipelineCsv, TransferError>> + Send;
 
     /// Save every entry of a pipeline as a CSV file in the viewer's files.
     fn export_pipeline(
@@ -111,6 +119,17 @@ async fn bounded<F: Future>(futures: Vec<F>) -> Vec<F::Output> {
 /// The domain of an email address.
 fn email_domain(email: &str) -> Option<&str> {
     email.split_once('@').map(|(_, domain)| domain)
+}
+
+/// What an import resolves its rows to; a generic pipeline tracks nothing.
+fn tracked_record_type(overview: &PipelineOverview) -> Result<PipelineRecordType, TransferError> {
+    let pipeline = &overview.pipeline.pipeline;
+    pipeline.record_type.ok_or_else(|| {
+        TransferError::Invalid(format!(
+            "\"{}\" tracks no companies or contacts, so it takes no CSV import. Add its entries with AddToPipeline.",
+            pipeline.name
+        ))
+    })
 }
 
 /// The headers that name a record, so are never matched to a field.
@@ -332,17 +351,24 @@ where
         rows: &[&RecordRow],
         domains: &SharedDomains,
     ) -> Result<Vec<(String, Found)>, TransferError> {
-        let lookups = bounded(
+        let results = bounded(
             rows.iter()
-                .map(|row| async move {
-                    let id = self.records.contact(viewer, &row.key).await?;
-                    Ok::<_, TransferError>((*row, id))
-                })
+                .map(|row| async move { (*row, self.records.contact(viewer, &row.key).await) })
                 .collect(),
         )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<(&RecordRow, Option<Uuid>)>, _>>()?;
+        .await;
+        let mut lookups = Vec::new();
+        let mut found = Vec::new();
+        for (row, result) in results {
+            match result {
+                Ok(id) => lookups.push((row, id)),
+                Err(TransferError::Crm(CrmError::InvalidRequest(reason))) => {
+                    // A refused lookup must never fall through to record creation.
+                    found.push((row.key.clone(), Err(reason)));
+                }
+                Err(error) => return Err(error),
+            }
+        }
 
         let mut new_domains: Vec<String> = lookups
             .iter()
@@ -371,7 +397,7 @@ where
         }
 
         let refused = &refused;
-        let found = bounded(
+        let resolved = bounded(
             lookups
                 .iter()
                 .map(|&(row, existing)| async move {
@@ -404,7 +430,10 @@ where
                 .collect(),
         )
         .await;
-        found.into_iter().collect()
+        for result in resolved {
+            found.push(result?);
+        }
+        Ok(found)
     }
 
     /// Add `rows` to `overview`'s pipeline: the shared half of both imports.
@@ -418,7 +447,7 @@ where
         domains: &SharedDomains,
     ) -> Result<PipelineImportOutcome, TransferError> {
         let pipeline = &overview.pipeline.pipeline;
-        let record_type = pipeline.record_type;
+        let record_type = tracked_record_type(overview)?;
         let reserved = record_headers(record_type);
         let mut fields: Vec<(String, &PipelineField)> = Vec::new();
         let mut ignored_columns = Vec::new();
@@ -453,7 +482,8 @@ where
                 .await?
                 .into_iter()
                 .filter(|found| found.pipeline.pipeline.id == pipeline.id)
-                .flat_map(|found| found.entries.into_iter().map(|entry| entry.record.id))
+                .flat_map(|found| found.entries)
+                .filter_map(|entry| entry.record.map(|record| record.id))
                 .collect()
         };
 
@@ -479,7 +509,7 @@ where
                 })
                 .collect();
             additions.push(EntryAddition {
-                record: RecordTarget::Id(id),
+                record: Some(RecordTarget::Id(id)),
                 set,
             });
             keys.push(row.key.clone());
@@ -604,9 +634,9 @@ where
             }) {
                 PipelineDestination::Existing(id) => {
                     let overview = self.pipeline(viewer, id).await?;
-                    if overview.pipeline.pipeline.record_type != PipelineRecordType::Company {
+                    if overview.pipeline.pipeline.record_type != Some(PipelineRecordType::Company) {
                         return Err(TransferError::Invalid(format!(
-                            "\"{}\" tracks contacts; choose a company pipeline for Stage, Owner and Revenue.",
+                            "\"{}\" does not track companies; choose a company pipeline for Stage, Owner and Revenue.",
                             overview.pipeline.pipeline.name
                         )));
                     }
@@ -621,7 +651,7 @@ where
                                     .or(file_name)
                                     .filter(|name| !name.trim().is_empty())
                                     .unwrap_or_else(|| DEFAULT_PIPELINE_NAME.to_owned()),
-                                record_type: PipelineRecordType::Company,
+                                record_type: Some(PipelineRecordType::Company),
                                 sharing,
                                 stages: Vec::new(),
                                 fields: Vec::new(),
@@ -663,8 +693,9 @@ where
         csv: CsvInput,
     ) -> Result<PipelineImportOutcome, TransferError> {
         let overview = self.pipeline(viewer, pipeline).await?;
+        let record_type = tracked_record_type(&overview)?;
         let (table, _) = self.read(viewer, csv).await?;
-        let parsed = record_rows(&table, overview.pipeline.pipeline.record_type)?;
+        let parsed = record_rows(&table, record_type)?;
         if parsed.rows.is_empty() {
             return Err(TransferError::Invalid(
                 "No rows name a company by domain or a contact by email.".into(),
@@ -684,11 +715,11 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(pipeline = %pipeline), err)]
-    async fn export_pipeline(
+    async fn pipeline_csv(
         &self,
         viewer: &Viewer,
         pipeline: Uuid,
-    ) -> Result<PipelineExport, TransferError> {
+    ) -> Result<PipelineCsv, TransferError> {
         let found = self
             .workflows
             .find(
@@ -706,41 +737,59 @@ where
             .iter()
             .filter(|field| !field.is_record())
             .collect();
-        let headers: Vec<String> = record_headers(overview.pipeline.pipeline.record_type)
-            .iter()
-            .map(|header| (*header).to_owned())
+        let record_type = overview.pipeline.pipeline.record_type;
+        let headers: Vec<String> = record_type
+            .map(record_headers)
+            .into_iter()
+            .flatten()
+            .map(str::to_owned)
             .chain(fields.iter().map(|field| field.name.clone()))
             .collect();
         let rows: Vec<Vec<String>> = found
             .entries
             .iter()
             .map(|entry| {
-                [
-                    entry.record.name.clone().unwrap_or_default(),
-                    entry.record.detail.clone().unwrap_or_default(),
-                ]
-                .into_iter()
-                .chain(fields.iter().map(|field| {
-                    entry
-                        .fields
-                        .iter()
-                        .find(|(name, _)| name == &field.name)
-                        .map(|(_, value)| exported_value(value))
-                        .unwrap_or_default()
-                }))
-                .collect()
+                entry
+                    .record
+                    .iter()
+                    .flat_map(|record| {
+                        [
+                            record.name.clone().unwrap_or_default(),
+                            record.detail.clone().unwrap_or_default(),
+                        ]
+                    })
+                    .chain(fields.iter().map(|field| {
+                        entry
+                            .fields
+                            .iter()
+                            .find(|(name, _)| name == &field.name)
+                            .map(|(_, value)| exported_value(value))
+                            .unwrap_or_default()
+                    }))
+                    .collect()
             })
             .collect();
-        let file_name = overview.pipeline.pipeline.name.clone();
-        let document_id = self
-            .files
-            .save(viewer, &file_name, encode_csv(&headers, &rows))
-            .await?;
-        Ok(PipelineExport {
-            document_id,
-            file_name,
+        Ok(PipelineCsv {
+            name: overview.pipeline.pipeline.name.clone(),
+            text: encode_csv(&headers, &rows),
             rows: rows.len(),
             complete: found.complete,
+        })
+    }
+
+    #[tracing::instrument(skip_all, fields(pipeline = %pipeline), err)]
+    async fn export_pipeline(
+        &self,
+        viewer: &Viewer,
+        pipeline: Uuid,
+    ) -> Result<PipelineExport, TransferError> {
+        let csv = self.pipeline_csv(viewer, pipeline).await?;
+        let document_id = self.files.save(viewer, &csv.name, csv.text).await?;
+        Ok(PipelineExport {
+            document_id,
+            file_name: csv.name,
+            rows: csv.rows,
+            complete: csv.complete,
         })
     }
 }

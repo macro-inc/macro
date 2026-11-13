@@ -17,6 +17,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => state.flag,
 }));
 vi.mock('@core/constant/featureFlags', () => ({ enableForms: {} }));
+vi.mock('../entity-appearance/entity-appearance', () => ({
+  EntityAppearanceTrigger: () => null,
+}));
 vi.mock('@core/block', () => ({
   useBlockId: () => 'form-1',
   useIsNestedBlock: () => false,
@@ -101,7 +104,10 @@ beforeEach(() => {
         status: 'open',
         closesAt: null,
         tallyVisible: false,
+        responsesVisible: false,
+        anonymous: false,
         confirmationMessage: 'Thank you',
+        branding: { logoFileId: null, coverFileId: null, accentColor: null },
         submittedColumnId: null,
         respondentColumnId: null,
       },

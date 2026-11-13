@@ -727,3 +727,212 @@ async fn smart_preview_is_bounded_literal_and_respects_membership(pool: PgPool) 
     assert_eq!(empty.total_count, 0);
     assert!(empty.channels.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transfer_preserves_identity_and_moves_conflicting_destination_assignments(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let team_id = insert_team(&pool, USER_A).await;
+    let team = ChannelLabelsScope::Team(team_id);
+    let personal = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_A.to_owned()).unwrap());
+    let shared = insert_team_channel(&pool, "Shared", team_id, USER_A, &[USER_A, USER_B]).await;
+    let hidden = insert_team_channel(&pool, "Hidden", team_id, USER_B, &[USER_B]).await;
+    let repo = PgChannelLabelsRepo::new(pool.clone());
+    let original = written(
+        repo.create_label(&personal, "Mine", &[shared], &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    let conflict = written(
+        repo.create_label(&team, "Existing", &[shared], &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    let moved = written(
+        repo.transfer_label(&personal, &team, original.id, "Moved", &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(moved.id, original.id);
+    assert_eq!(moved.team_id, Some(team_id));
+    assert_eq!(moved.channel_ids, vec![shared]);
+    assert!(
+        repo.get_label(&personal, original.id, &user(USER_A))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        repo.get_label(&team, conflict.id, &user(USER_A))
+            .await
+            .unwrap()
+            .unwrap()
+            .channel_ids
+            .is_empty()
+    );
+    repo.set_channel_label(&team, hidden, Some(original.id), &user(USER_B))
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.transfer_label(&team, &personal, original.id, "Back", &user(USER_A), None)
+            .await
+            .unwrap(),
+        LabelWriteOutcome::InvalidChannel(SetChannelLabelOutcome::ChannelNotFound)
+    );
+    assert_eq!(
+        repo.get_label(&team, original.id, &user(USER_B))
+            .await
+            .unwrap()
+            .unwrap()
+            .channel_count,
+        2
+    );
+    repo.set_channel_label(&team, hidden, None, &user(USER_B))
+        .await
+        .unwrap();
+    let returned = written(
+        repo.transfer_label(&team, &personal, original.id, "Back", &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(returned.id, original.id);
+    assert_eq!(returned.team_id, None);
+    assert_eq!(returned.channel_ids, vec![shared]);
+    assert!(
+        repo.get_label(&team, original.id, &user(USER_B))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transfer_rejects_hidden_and_ineligible_members_and_name_collisions(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let team_id = insert_team(&pool, USER_A).await;
+    let team = ChannelLabelsScope::Team(team_id);
+    let personal = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_A.to_owned()).unwrap());
+    let shared = insert_team_channel(&pool, "Shared", team_id, USER_A, &[USER_A]).await;
+    let other_team = insert_team(&pool, USER_B).await;
+    let ineligible = insert_team_channel(&pool, "Other", other_team, USER_A, &[USER_A]).await;
+    let repo = PgChannelLabelsRepo::new(pool.clone());
+    let original = written(
+        repo.create_label(&personal, "Original", &[shared], &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    written(
+        repo.create_label(&team, "Taken", &[], &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        repo.transfer_label(&personal, &team, original.id, "Taken", &user(USER_A), None)
+            .await
+            .unwrap(),
+        LabelWriteOutcome::NameTaken
+    );
+    assert_eq!(
+        repo.get_label(&personal, original.id, &user(USER_A))
+            .await
+            .unwrap()
+            .unwrap()
+            .channel_ids,
+        vec![shared]
+    );
+    repo.set_channel_label(&personal, ineligible, Some(original.id), &user(USER_A))
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.transfer_label(&personal, &team, original.id, "New", &user(USER_A), None)
+            .await
+            .unwrap(),
+        LabelWriteOutcome::InvalidChannel(SetChannelLabelOutcome::ChannelNotLabelable)
+    );
+    assert_eq!(
+        repo.get_label(&personal, original.id, &user(USER_A))
+            .await
+            .unwrap()
+            .unwrap()
+            .channel_count,
+        2
+    );
+    let hidden = insert_team_channel(&pool, "Hidden", team_id, USER_B, &[USER_B]).await;
+    let team_label = written(
+        repo.create_label(&team, "Hidden label", &[hidden], &user(USER_B), None)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        repo.transfer_label(
+            &team,
+            &personal,
+            team_label.id,
+            "Hidden moved",
+            &user(USER_A),
+            None
+        )
+        .await
+        .unwrap(),
+        LabelWriteOutcome::InvalidChannel(SetChannelLabelOutcome::ChannelNotFound)
+    );
+    assert_eq!(
+        repo.get_label(&team, team_label.id, &user(USER_B))
+            .await
+            .unwrap()
+            .unwrap()
+            .channel_ids,
+        vec![hidden]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sharing_smart_tag_rejects_personal_matches_outside_team(pool: PgPool) {
+    use crate::domain::models::ChannelLabelRule;
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let team_id = insert_team(&pool, USER_A).await;
+    let team = ChannelLabelsScope::Team(team_id);
+    let personal = ChannelLabelsScope::User(MacroUserIdStr::try_from(USER_A.to_owned()).unwrap());
+    let channel = insert_team_channel(&pool, "Support", team_id, USER_A, &[USER_A]).await;
+    let other_team = insert_team(&pool, USER_B).await;
+    let ineligible =
+        insert_team_channel(&pool, "Support elsewhere", other_team, USER_A, &[USER_A]).await;
+    let repo = PgChannelLabelsRepo::new(pool.clone());
+    let rule = ChannelLabelRule::Name {
+        contains: "support".into(),
+    };
+    let label = written(
+        repo.create_label(&personal, "Smart", &[], &user(USER_A), Some(&rule))
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        repo.transfer_label(
+            &personal,
+            &team,
+            label.id,
+            "Shared smart",
+            &user(USER_A),
+            None
+        )
+        .await
+        .unwrap(),
+        LabelWriteOutcome::InvalidChannel(SetChannelLabelOutcome::ChannelNotLabelable)
+    );
+    assert_eq!(
+        repo.get_label(&personal, label.id, &user(USER_A))
+            .await
+            .unwrap()
+            .unwrap()
+            .channel_ids,
+        vec![channel, ineligible]
+    );
+    assert!(
+        repo.get_label(&team, label.id, &user(USER_A))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

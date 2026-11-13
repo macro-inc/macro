@@ -31,7 +31,11 @@ import {
   SchemaErrorNotice,
 } from '../components/database-table-notices';
 import { filterConditionCount } from '../components/database-view-filters';
-import { GridCell, type GridCellProps } from '../components/grid-cell';
+import {
+  GridCell,
+  GridCellPreview,
+  type GridCellProps,
+} from '../components/grid-cell';
 import { RecordPanel } from '../components/record-panel';
 import type { DatabaseRowsSource } from '../context/table-source';
 import { toCellTimeRange } from '../core/cell-date-range';
@@ -44,6 +48,7 @@ import type {
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type {
@@ -123,14 +128,17 @@ export type DatabaseRecordsViewProps = {
   onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
+  renderLinkValue?: GridCellProps['renderLinkValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
+  onOpenRecord?: (rowId: string) => boolean;
   /** Opens document/file references in any column, including record panel fields. */
   onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   columnCasts?: DatabaseColumnCastsSource;
   onCellFocus?: (cell: DatabaseCellFocus | undefined) => void;
   remoteUsers?: DatabaseCellPresence[];
@@ -221,6 +229,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     constrained: filtered,
     editCell,
   });
+  // Records the view itself opens, such as one just created, stay in its panel.
+  function openRecord(rowId: string) {
+    const savedId = draftRows.savedRowId(rowId);
+    if (savedId && props.onOpenRecord?.(savedId)) return;
+    records.open(rowId);
+  }
   const gridRows = createHeldGridRows({
     rows: () =>
       props.canEdit && visibleColumns().some(canEditCell)
@@ -342,11 +356,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
-            emptyLabel=""
+            emptyLabel={options?.emptyLabel ?? ''}
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}
             renderTextValue={props.renderTextValue}
+            renderLinkValue={props.renderLinkValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
             onOpenMention={
@@ -466,17 +481,22 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             <HiddenRecordNotice
               title={
                 records.hiddenSavedRecord()?.created
-                  ? records.hiddenSavedRecord()?.noEditableColumns
+                  ? records.hiddenSavedRecord()?.noEditableColumns ||
+                    records.hiddenSavedRecord()?.unloaded
                     ? 'Record created'
                     : 'Record created outside this view'
-                  : 'Record saved outside this view'
+                  : records.hiddenSavedRecord()?.unloaded
+                    ? 'Record saved'
+                    : 'Record saved outside this view'
               }
               message={
                 records.hiddenSavedRecord()?.noEditableColumns
                   ? 'This view has no editable columns. Open the record to see its details.'
-                  : `“${rowTitle(row(), columns())}” doesn’t match your filters.`
+                  : records.hiddenSavedRecord()?.unloaded
+                    ? 'Open the record to view or edit it.'
+                    : `“${rowTitle(row(), columns())}” doesn’t match your filters.`
               }
-              onOpen={() => records.open(row().rowId)}
+              onOpen={() => openRecord(row().rowId)}
               onDismiss={records.dismissHiddenRecord}
             />
           )}
@@ -537,11 +557,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               renderCell={renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               rowPending={controller.rowPending}
               createPending={controller.createPending}
               createComplete={controller.createComplete}
-              onOpen={records.open}
+              onOpen={openRecord}
               onCreate={records.createRow}
               onCompose={props.onComposeRecord}
               controlsRef={(controls) => {
@@ -561,9 +582,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 !props.stored || props.canEdit ? props.onViewChange : undefined
               }
               rowPending={controller.rowPending}
-              onOpen={records.open}
+              onOpen={openRecord}
               onCreate={records.createRow}
               onWrite={writeRowCell}
+              onCompose={props.onComposeRecord}
               onDuplicate={records.duplicateRow}
               onRequestDelete={records.requestDelete}
               renderMentionValue={props.renderMentionValue}
@@ -571,6 +593,11 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           </Match>
           <Match when={layoutKind() === 'table'}>
             <DatabaseTableView
+              hasMoreRows={props.source.pagination?.hasMore()}
+              onLoadMore={() => {
+                if (props.source.pagination?.hasMore())
+                  void props.source.pagination.loadMore();
+              }}
               onClearCells={
                 props.canEdit
                   ? async (rowIds, columnIds) => {
@@ -631,10 +658,17 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 focusColumn
               )}
               renderCell={renderCell}
+              renderCellPreview={(row, column) => (
+                <GridCellPreview
+                  column={column()}
+                  value={rowValue(row(), column().id)}
+                  canEdit={props.canEdit}
+                />
+              )}
               controlsRef={tableReady}
               titleColumnId={titleColumn(columns())?.id}
               getRowTitle={(row) => rowTitle(row, columns())}
-              onOpen={records.open}
+              onOpen={openRecord}
               onDuplicate={records.duplicateRow}
               onRequestDelete={records.requestDelete}
               relationTables={props.relationTables}
@@ -693,7 +727,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               canEdit={props.canEdit}
               pending={controller.pending()}
               outsideViewReason={
-                records.selectedPosition() < 0 && filtered()
+                records.selectedPosition() < 0 &&
+                filtered() &&
+                !props.source.pagination?.hasMore()
                   ? `This record doesn’t match your filters. You can ${props.canEdit ? 'keep editing' : 'view'} it here.`
                   : undefined
               }

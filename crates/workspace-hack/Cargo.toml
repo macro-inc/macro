@@ -20,7 +20,8 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
-async-graphql = { version = "7", features = ["dataloader"] }
+arrayvec = { version = "0.7" }
+async-graphql = { version = "7", features = ["chrono", "dataloader"] }
 async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
@@ -35,6 +36,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
+bitflags = { version = "2", default-features = false, features = ["std"] }
 block-buffer = { version = "0.12", default-features = false, features = ["zeroize"] }
 bstr = { version = "1" }
 bytemuck = { version = "1", default-features = false, features = ["extern_crate_alloc"] }
@@ -126,10 +128,11 @@ regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
-rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
+rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
+rustix = { version = "1", default-features = false, features = ["process", "pty", "std", "termios"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
@@ -145,6 +148,7 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new", "serde"] }
+specta = { version = "2.0.0-rc.25", features = ["chrono", "derive", "uuid"] }
 spin = { version = "0.9", default-features = false, features = ["once", "spin_mutex"] }
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
@@ -154,7 +158,7 @@ sync_wrapper = { version = "1", default-features = false, features = ["futures"]
 thiserror = { version = "2" }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-std", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
@@ -172,6 +176,7 @@ uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
+zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
@@ -179,7 +184,8 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
-async-graphql = { version = "7", features = ["dataloader"] }
+arrayvec = { version = "0.7" }
+async-graphql = { version = "7", features = ["chrono", "dataloader"] }
 async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
@@ -194,6 +200,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
+bitflags = { version = "2", default-features = false, features = ["std"] }
 block-buffer = { version = "0.12", default-features = false, features = ["zeroize"] }
 bstr = { version = "1" }
 bytemuck = { version = "1", default-features = false, features = ["extern_crate_alloc"] }
@@ -290,10 +297,11 @@ regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
-rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
+rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
+rustix = { version = "1", default-features = false, features = ["process", "pty", "std", "termios"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
@@ -310,6 +318,8 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new", "serde"] }
+specta = { version = "2.0.0-rc.25", features = ["chrono", "derive", "uuid"] }
+specta-macros = { version = "2.0.0-rc.25", features = ["serde"] }
 spin = { version = "0.9", default-features = false, features = ["once", "spin_mutex"] }
 sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki", "any", "chrono", "json", "migrate", "offline", "uuid"] }
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
@@ -322,7 +332,7 @@ sync_wrapper = { version = "1", default-features = false, features = ["futures"]
 thiserror = { version = "2" }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-std", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
@@ -340,9 +350,9 @@ uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
+zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
@@ -356,7 +366,7 @@ once_cell = { version = "1", default-features = false, features = ["critical-sec
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 spin = { version = "0.9" }
@@ -366,7 +376,6 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
@@ -380,7 +389,7 @@ once_cell = { version = "1", default-features = false, features = ["critical-sec
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 spin = { version = "0.9" }
@@ -390,7 +399,6 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.aarch64-apple-darwin.dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
@@ -404,7 +412,7 @@ objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 security-framework-sys = { version = "2" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
@@ -413,7 +421,6 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
@@ -427,7 +434,7 @@ objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 security-framework-sys = { version = "2" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }

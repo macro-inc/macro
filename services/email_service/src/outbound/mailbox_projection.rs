@@ -4,7 +4,7 @@ use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngre
 use email::domain::{
     events::EmailMacroEvent,
     invitation_extraction::InvitationExtractionRepository,
-    mailbox::{MailboxError, MailboxKey, projection::*},
+    mailbox::{DatabaseFailure, EffectFailure, MailboxError, MailboxKey, projection::*},
     models::calendar_invitation::CalendarInvitation,
 };
 use macro_event_broker::MacroEventBroker;
@@ -40,9 +40,19 @@ pub struct MailboxEffects<A, I, B, N, C> {
     pub notifications_enabled: bool,
 }
 
+/// A downstream effect (event broker, queue, another service) failed.
 fn failed<E: std::fmt::Debug>(error: E) -> MailboxError {
     tracing::warn!(?error, "mailbox projection effect deferred");
-    MailboxError::Persistence
+    MailboxError::Effect(EffectFailure::Downstream)
+}
+
+/// A database step of an effect keeps its SQLSTATE, so it reports as
+/// `persistence` rather than as an effect failure.
+fn database_failed(error: &dyn std::fmt::Debug, cause: Option<&sqlx::Error>) -> MailboxError {
+    tracing::warn!(?error, "mailbox projection effect deferred");
+    cause.map_or(MailboxError::Persistence, |cause| {
+        MailboxError::Database(DatabaseFailure::from(cause))
+    })
 }
 
 impl<A, I, B, N, C> MailboxProjectionEffects for MailboxEffects<A, I, B, N, C>
@@ -191,7 +201,7 @@ where
         self.invitations
             .save(message_id, invitations)
             .await
-            .map_err(failed)
+            .map_err(|report| database_failed(&report, report.downcast_current_context()))
     }
     async fn attachments(
         &self,
@@ -223,21 +233,25 @@ where
         )
         .execute(&self.db)
         .await
-        .map_err(failed)?;
+        .map_err(|error| database_failed(&error, Some(&error)))?;
         let documents = email_db_client::attachments::provider::upload::new_email_document_atts(
             &self.db,
             mailbox.link_id,
             provider_id,
         )
         .await
-        .map_err(failed)?;
+        .map_err(|error| {
+            database_failed(&error, error.chain().find_map(|cause| cause.downcast_ref()))
+        })?;
         let media = email_db_client::attachments::provider::upload::new_email_media_atts(
             &self.db,
             mailbox.link_id,
             provider_id,
         )
         .await
-        .map_err(failed)?;
+        .map_err(|error| {
+            database_failed(&error, error.chain().find_map(|cause| cause.downcast_ref()))
+        })?;
         for (attachment, destination) in documents
             .into_iter()
             .map(|a| (a, AttachmentUploadDestination::Dss))
@@ -268,7 +282,7 @@ where
                     backfill: is_import,
                     upload_destination: destination,
                 };
-                crate::util::upload_attachment::store_attachment(
+                let stored = crate::util::upload_attachment::store_attachment(
                     crate::util::upload_attachment::AttachmentStorageContext {
                         db: &self.db,
                         dss_client: &self.dss,
@@ -279,8 +293,24 @@ where
                     &args,
                     data,
                 )
-                .await
-                .map_err(failed)?;
+                .await;
+                // The deleted row took its claim with it; nothing is pending.
+                if let Err(
+                    crate::util::upload_attachment::UploadAttachmentError::AttachmentDeleted,
+                ) = stored
+                {
+                    return Ok(());
+                }
+                stored.map_err(|error| match error {
+                    // Its message is already a string, so no SQLSTATE survives.
+                    crate::util::upload_attachment::UploadAttachmentError::DatabaseError(_) => {
+                        database_failed(&error, None)
+                    }
+                    error => {
+                        tracing::warn!(?error, "mailbox projection effect deferred");
+                        MailboxError::Effect(EffectFailure::AttachmentUpload { attachment_id })
+                    }
+                })?;
                 Ok::<_, MailboxError>(())
             }
             .await;
@@ -291,18 +321,25 @@ where
                 )
                 .execute(&self.db)
                 .await
-                .map_err(failed)?;
+                .map_err(|error| database_failed(&error, Some(&error)))?;
                 return result;
             }
         }
-        let pending = sqlx::query_scalar!(r#"
-            SELECT EXISTS(SELECT 1 FROM email_attachments a WHERE a.message_id = $1
-                AND a.upload_claimed_at IS NOT NULL
-                AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)
-                AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)) AS "pending!"
-        "#,current.message.db_id).fetch_one(&self.db).await.map_err(failed)?;
-        if pending {
-            return Err(MailboxError::Persistence);
+        let pending = email_db_client::attachments::provider::upload::oldest_pending_upload_claim(
+            &self.db,
+            current.message.db_id,
+        )
+        .await
+        .map_err(|error| {
+            database_failed(&error, error.chain().find_map(|cause| cause.downcast_ref()))
+        })?;
+        if let Some(claim) = pending {
+            return Err(MailboxError::Effect(
+                EffectFailure::AttachmentUploadPending {
+                    attachment_id: claim.attachment_id,
+                    claim_age_seconds: claim.claim_age_seconds,
+                },
+            ));
         }
         Ok(())
     }

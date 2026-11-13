@@ -28,7 +28,9 @@ fn next_weekdays_follow_calendar_weeks_instead_of_model_computed_dates() {
         .reference_time
         .with_timezone(&chrono_tz::America::New_York);
     assert_eq!(
-        date(&expression, &request, reference).unwrap().to_string(),
+        date(&expression, &request.text, reference.date_naive())
+            .unwrap()
+            .to_string(),
         "2026-11-06"
     );
     let mut fields = InputSuggestions::Task(TaskSuggestions {
@@ -102,8 +104,8 @@ fn invalid_dates_clocks_and_unbacked_spans_are_rejected() {
                 month: 2,
                 day: 30
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .is_err()
     );
@@ -306,7 +308,6 @@ fn upcoming_today_with_a_past_clock_moves_one_week_but_this_week_does_not() {
             },
             &request,
             reference,
-            false,
         )
         .unwrap();
         assert_eq!(
@@ -318,6 +319,78 @@ fn upcoming_today_with_a_past_clock_moves_one_week_but_this_week_does_not() {
             expected
         );
     }
+}
+
+#[test]
+fn a_clock_without_a_date_is_its_next_occurrence() {
+    // The reference is 14:00 in New York: 3pm is still ahead today, 9am has passed.
+    for (text, span, hour, meridiem, expected) in [
+        (
+            "Team sync at 3pm",
+            "3pm",
+            3,
+            Meridiem::Pm,
+            "2026-10-23T15:00",
+        ),
+        (
+            "Team sync at 9am",
+            "9am",
+            9,
+            Meridiem::Am,
+            "2026-10-24T09:00",
+        ),
+    ] {
+        let request = input(text);
+        let mut fields = InputSuggestions::Calendar(CalendarSuggestions::default());
+        apply(
+            &mut fields,
+            TemporalExpressions::Calendar(CalendarTemporalExpressions {
+                start: Some(StartExpression::Local {
+                    date: None,
+                    clock: Some(ClockExpression {
+                        span: span.into(),
+                        hour,
+                        minute: 0,
+                        meridiem: Some(meridiem),
+                        daypart: None,
+                    }),
+                }),
+                end: None,
+                recurrence: None,
+            }),
+            &request,
+        )
+        .unwrap();
+        let InputSuggestions::Calendar(fields) = fields else {
+            panic!("wrong intent");
+        };
+        assert_eq!(fields.start.as_deref(), Some(expected));
+    }
+
+    let mut request = input("Send the deck by 3pm");
+    request.intent = InputIntent::Task;
+    let mut fields = InputSuggestions::Task(TaskSuggestions::default());
+    apply(
+        &mut fields,
+        TemporalExpressions::Task(TaskTemporalExpressions {
+            due: Some(StartExpression::Local {
+                date: None,
+                clock: Some(ClockExpression {
+                    span: "3pm".into(),
+                    hour: 3,
+                    minute: 0,
+                    meridiem: Some(Meridiem::Pm),
+                    daypart: None,
+                }),
+            }),
+        }),
+        &request,
+    )
+    .unwrap();
+    let InputSuggestions::Task(fields) = fields else {
+        panic!("wrong intent");
+    };
+    assert_eq!(fields.due_date.as_deref(), Some("2026-10-23T15:00"));
 }
 
 #[test]
@@ -383,8 +456,8 @@ fn absolute_dates_reject_numeric_facts_that_are_not_in_their_source() {
                 month: 12,
                 day: 31
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .is_err()
     );
@@ -396,8 +469,8 @@ fn absolute_dates_reject_numeric_facts_that_are_not_in_their_source() {
                 month: 5,
                 day: 15
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .is_err()
     );
@@ -409,8 +482,8 @@ fn absolute_dates_reject_numeric_facts_that_are_not_in_their_source() {
                 month: 12,
                 day: 31
             },
-            &request,
-            reference
+            &request.text,
+            reference.date_naive()
         )
         .unwrap()
         .to_string(),

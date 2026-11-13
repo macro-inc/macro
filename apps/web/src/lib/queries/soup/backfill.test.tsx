@@ -30,6 +30,12 @@ const graphqlMocks = vi.hoisted(() => ({
   hydrateGraphqlSoup: vi.fn(),
 }));
 
+vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+const contextPublisher = vi.hoisted(() => vi.fn());
+vi.mock('../contacts/use-context-publisher', () => ({
+  useContactContextPublisher: contextPublisher,
+}));
+
 const mailAccounts = vi.hoisted(() => vi.fn());
 vi.mock('../email/mail-accounts', () => ({
   useMailAccountsQuery: mailAccounts,
@@ -108,7 +114,7 @@ function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
     ...overrides,
   };
   localStorage.setItem(
-    'graphql-soup-backfill:v17:user-1:core-entities',
+    'graphql-soup-backfill:v19:user-1:core-entities',
     JSON.stringify(checkpoint)
   );
 }
@@ -328,6 +334,7 @@ describe('runSoupBackfills', () => {
     expect(
       DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
     ).toEqual([
+      'channels',
       'core-entities',
       'initiatives',
       'email-signal-filter-metadata',
@@ -825,7 +832,7 @@ describe('runSoupBackfills', () => {
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v17:user-1:core-entities',
+        'graphql-soup-backfill:v19:user-1:channels',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -881,14 +888,14 @@ describe('runSoupBackfills', () => {
         storage === 'preserved'
           ? { nextCursor: 'stale-cursor', pagesFetched: 12 }
           : { nextCursor: null, pagesFetched: 0 };
-      expect(
-        loadSoupBackfillCheckpoint('user-1', 'core-entities')
-      ).toMatchObject(expected);
+      expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject(
+        expected
+      );
       finishPages[0]({ nextCursor: 'obsolete-cursor' });
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(
-        loadSoupBackfillCheckpoint('user-1', 'core-entities')
-      ).toMatchObject(expected);
+      expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject(
+        expected
+      );
       rendered.unmount();
     }
   );
@@ -897,9 +904,9 @@ describe('runSoupBackfills', () => {
     'resumes completed lane watermarks only for %s storage',
     async (storage) => {
       const watermark = '2026-09-01T00:00:00.000Z';
-      for (const checkpointId of ['core-entities', 'email-thread-pages']) {
+      for (const checkpointId of ['channels', 'email-thread-pages']) {
         localStorage.setItem(
-          `graphql-soup-backfill:v17:user-1:${checkpointId}`,
+          `graphql-soup-backfill:v19:user-1:${checkpointId}`,
           JSON.stringify({
             userId: 'user-1',
             storageGeneration: 'storage-1',
@@ -991,9 +998,7 @@ describe('runSoupBackfills', () => {
     const second = render(() => <BackfillRunner userId="user-1" />);
     try {
       await vi.waitFor(() =>
-        expect(
-          loadSoupBackfillCheckpoint('user-1', 'core-entities')
-        ).toMatchObject({
+        expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject({
           nextCursor: 'committed-page-cursor',
           pagesFetched: 1,
         })
@@ -1043,7 +1048,7 @@ describe('runSoupBackfills', () => {
       expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
     );
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'core-entities').scanStartedAt
+      loadSoupBackfillCheckpoint('user-1', 'channels').scanStartedAt
     ).not.toBeNull();
 
     setUserId('user-2');
@@ -1054,7 +1059,7 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[0]?.aborted).toBe(true);
     expect(fetchSignals[1]?.aborted).toBe(false);
     expect(
-      loadSoupBackfillCheckpoint('user-2', 'core-entities').scanStartedAt
+      loadSoupBackfillCheckpoint('user-2', 'channels').scanStartedAt
     ).not.toBeNull();
 
     rendered.unmount();

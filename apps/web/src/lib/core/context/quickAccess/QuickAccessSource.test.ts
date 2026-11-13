@@ -17,6 +17,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HydrationSearchChanges } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
+import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
@@ -71,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   crmContacts: [] as CrmContactEntity[],
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
+  schedules: [] as ScheduledAction[],
   crmEnabled: (): boolean => true,
   projectsEnabled: (): boolean => true,
   graphqlEnabled: (): boolean => true,
@@ -115,8 +117,27 @@ vi.mock('@core/context/channels', () => ({
   }),
   useDmActivityByUserId: () => () => new Map(),
 }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
+}));
+vi.mock('./person-list', () => ({
+  createPersonList: () => ({
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    error: () => undefined,
+    loadMore: async () => {},
+  }),
+}));
+vi.mock('@core/context/emailLinks', () => ({
+  useEmailLinksContext: () => ({
+    links: () => [],
+    isConnectedSecondaryInbox: () => false,
+  }),
+}));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({
@@ -204,6 +225,9 @@ vi.mock('@queries/storage/databases', () => ({
 vi.mock('@queries/storage/forms', () => ({
   useFormsQuery: () => ({ data: [], isSuccess: true }),
 }));
+vi.mock('@app/features/routines/queries/schedules', () => ({
+  useSchedulesQuery: () => ({ data: mocks.schedules, isSuccess: true }),
+}));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
 }));
@@ -260,6 +284,7 @@ beforeEach(() => {
   mocks.crmContacts = [];
   mocks.initiatives = [];
   mocks.databases = [];
+  mocks.schedules = [];
   mocks.crmEnabled = () => true;
   mocks.projectsEnabled = () => true;
   mocks.graphqlEnabled = () => true;
@@ -1216,6 +1241,17 @@ describe('Quick Access source integration', () => {
     expect(list.items()[0].data).toMatchObject(restCompany);
   });
 
+  it('excludes archived REST suggestions and includes restored companies', () => {
+    mocks.cacheEnabled = false;
+    mocks.companies = [{ ...restCompany, hidden: true }];
+    const archived = setup((source) => source.useList('crm_company'));
+    expect(archived.items()).toEqual([]);
+    dispose?.();
+    mocks.companies = [{ ...restCompany, hidden: false }];
+    const restored = setup((source) => source.useList('crm_company'));
+    expect(restored.items().map((item) => item.id)).toEqual(['company-1']);
+  });
+
   it('preserves REST company mentions with GraphQL disabled', () => {
     mocks.cacheEnabled = false;
     mocks.companies = [restCompany];
@@ -1500,6 +1536,30 @@ describe('Quick Access source integration', () => {
     expect(mocks.search.mock.calls[0][0].buckets).toEqual(['channel', 'dm']);
   });
 
+  it('leaves a disabled list idle through cache changes and searches once enabled', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    const list = setup((source) =>
+      source.useList({ buckets: ['note'], searchTerm: () => '', enabled })
+    );
+    const subscriptions = mocks.onCacheChanged.mock.calls.length;
+    vi.useFakeTimers();
+    for (let i = 0; i < 20; i++)
+      mocks.changed?.({ searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).not.toHaveBeenCalled();
+
+    mocks.search.mockResolvedValue(page(0, 1));
+    setEnabled(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.search).toHaveBeenCalledOnce();
+    expect(list.items()).toHaveLength(1);
+    expect(mocks.onCacheChanged).toHaveBeenCalledTimes(subscriptions + 1);
+
+    mocks.changed?.({ searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledTimes(2);
+  });
+
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
     const list = setup((source) => source.useList({ buckets: ['note'] }));
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
@@ -1660,6 +1720,7 @@ describe('database command discovery', () => {
           owner_id: 'me',
           created_at: '2026-09-01T00:00:00Z',
           trashed_at: null,
+          project_id: null,
         },
         grant: 'owner',
         tables: [],
@@ -1677,6 +1738,32 @@ describe('database command discovery', () => {
       data: { type: 'database', name: 'Book Organizer' },
     });
     expect(mocks.history).toEqual([]);
+  });
+});
+
+describe('routine command discovery', () => {
+  it('finds a routine by name without any Soup history or cache hits', async () => {
+    mocks.schedules = [
+      {
+        id: 'weekly-digest',
+        name: 'Weekly digest',
+        owner: 'me',
+        enabled: true,
+        created_at: '2026-09-01T00:00:00Z',
+        updated_at: '2026-09-02T00:00:00Z',
+      } as ScheduledAction,
+    ];
+    const list = setup((source) =>
+      source.useList({
+        buckets: ['routine'],
+        searchTerm: () => 'digest',
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    expect(list.items()[0]).toMatchObject({
+      bucket: 'routine',
+      data: { type: 'routine', name: 'Weekly digest' },
+    });
   });
 });
 

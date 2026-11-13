@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type {
   BookingTarget,
   CellValue,
+  EntityAppearance,
   EntityKind,
   FilterGroup,
   FilterNode,
@@ -21,6 +22,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import type { DatabaseColumn } from '../databases/column';
 import { Database } from '../databases/database';
 import { DatabaseRow } from '../databases/row';
@@ -132,8 +135,16 @@ export type FormSubmissionOutcome =
     }
   | { outcome: 'stopped'; section: FormSection; message: string };
 
-/** The caller's receipt and current answers, read without access to other responses. */
-export type MyFormResponse = {
+/**
+ * The caller's receipt and current answers, read without access to other
+ * responses. On an anonymous form the caller only learns that they
+ * responded: nothing links them to their response.
+ */
+export type MyFormResponse = SavedFormResponse | { kind: 'anonymous' };
+
+/** The caller's saved response to a form that isn't anonymous. */
+export type SavedFormResponse = {
+  kind: 'saved';
   booking?: FormBookingStep;
   response: FormResponse;
   status: ResponseStatus;
@@ -212,13 +223,35 @@ export class Form extends MacroEntity<FormDetail> {
     return forms.map((form) => new Form(client, form.id));
   }
 
-  /** The form's presentation and column facts; this never contains response rows. */
+  /**
+   * The form's presentation and column facts; this never contains response rows.
+   *
+   * @readonly
+   */
   schema(): Promise<FormDetail> {
     return this.detail.get();
   }
 
   /** The form's display name. */
   readonly name = this.mappedField('form', (form) => form.name);
+  /** Shared icon and color overrides. */
+  readonly appearance = this.mappedField('form', (form) => form.appearance);
+
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setFormAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
+
   /** Introductory text shown to respondents. */
   readonly description = this.mappedField('form', (form) => form.description);
   /** The owning user. */
@@ -248,14 +281,34 @@ export class Form extends MacroEntity<FormDetail> {
   /** The caller's access level. */
   readonly access = this.field('access');
 
-  /** Sections in display order. */
+  /**
+   * Share this form with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * form; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'form', this.id);
+  }
+
+  /**
+   * Sections in display order.
+   *
+   * @readonly
+   */
   async sections(): Promise<FormSection[]> {
     return (await this.detail.get()).sections.map((section) =>
       FormSection.byId(this, section.id),
     );
   }
 
-  /** All questions in display order, skipping gates. */
+  /**
+   * All questions in display order, skipping gates.
+   *
+   * @readonly
+   */
   async questions(): Promise<FormQuestion[]> {
     return (await this.detail.get()).sections.flatMap((section) =>
       section.kind === 'questions'
@@ -266,7 +319,12 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Update presentation or owner-controlled settings; null explicitly clears the closing time. */
+  /**
+   * Update presentation or owner-controlled settings; null explicitly clears the closing time.
+   *
+   * @write
+   * @idempotent
+   */
   async update(updates: UpdateForm): Promise<this> {
     await this.mutate((client) =>
       client.storage.updateForm({ path: { id: this.id }, body: updates }),
@@ -286,6 +344,9 @@ export class Form extends MacroEntity<FormDetail> {
    * omitted handles mint sections or questions. Column facts use the database API.
    * A publicationError means the draft was saved but respondents still see the last
    * valid version. Repair the reported problem or reload to retry publication.
+   *
+   * @destructive
+   * @idempotent
    */
   async replaceLayout(
     sections: FormSectionPlacement[],
@@ -469,7 +530,11 @@ export class Form extends MacroEntity<FormDetail> {
       .exhaustive();
   }
 
-  /** Submit answers. Signed-in respondents get at most one response; use editResponse afterwards. */
+  /**
+   * Submit answers. Signed-in respondents get at most one response; use editResponse afterwards.
+   *
+   * @write
+   */
   async submit(answers: FormAnswer[]): Promise<FormSubmissionOutcome> {
     const body = { answers: this.wireAnswers(answers) };
     return this.outcome(
@@ -483,7 +548,12 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Replace the caller's answers while the form is open; gates are evaluated again. */
+  /**
+   * Replace the caller's answers while the form is open; gates are evaluated again.
+   *
+   * @destructive
+   * @idempotent
+   */
   async editResponse(answers: FormAnswer[]): Promise<FormSubmissionOutcome> {
     const body = { answers: this.wireAnswers(answers) };
     return this.outcome(
@@ -497,11 +567,16 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Read the caller's receipt and answers without reading anyone else's responses. */
+  /**
+   * Read the caller's receipt and answers without reading anyone else's responses.
+   *
+   * @readonly
+   */
   async myResponse(): Promise<MyFormResponse> {
     const mine = unwrap(
       await this.client.storage.getMyFormResponse({ path: { id: this.id } }),
     );
+    if (mine.kind === 'anonymous') return { kind: 'anonymous' };
     const table = await this.table();
     const answers = await Promise.all(
       mine.answers.map(async (answer): Promise<FormAnswer> => {
@@ -564,6 +639,7 @@ export class Form extends MacroEntity<FormDetail> {
       : undefined;
     const booking = this.unlockedBooking(mine.booking);
     return {
+      kind: 'saved',
       ...(booking ? { booking } : {}),
       response: FormResponse.byId(this, mine.response.id, {
         status: mine.response.status,
@@ -582,7 +658,11 @@ export class Form extends MacroEntity<FormDetail> {
     };
   }
 
-  /** Ledger counts and total table rows; requires edit access. */
+  /**
+   * Ledger counts and total table rows; requires edit access.
+   *
+   * @readonly
+   */
   async responseSummary(): Promise<FormResponseSummary> {
     const summary = unwrap(
       await this.client.storage.getFormResponseSummary({
@@ -598,7 +678,11 @@ export class Form extends MacroEntity<FormDetail> {
     };
   }
 
-  /** Choice and checkbox counts, available to viewers when tally visibility is enabled. */
+  /**
+   * Choice and checkbox counts, available to viewers when tally visibility is enabled.
+   *
+   * @readonly
+   */
   async tally(): Promise<FormQuestionTally[]> {
     const tally = unwrap(
       await this.client.storage.getFormTally({ path: { id: this.id } }),
@@ -631,14 +715,23 @@ export class Form extends MacroEntity<FormDetail> {
     });
   }
 
-  /** Read the form's sharing grants. Requires ownership. */
+  /**
+   * Read the form's sharing grants. Requires ownership.
+   *
+   * @readonly
+   */
   async sharePermissions(): Promise<SharePermissionV2> {
     return unwrap(
       await this.client.storage.getFormPermissions({ path: { id: this.id } }),
     );
   }
 
-  /** Update grants. Public responding is controlled by audience, not link sharing. */
+  /**
+   * Update grants. Public responding is controlled by audience, not link sharing.
+   *
+   * @write
+   * @idempotent
+   */
   updateSharePermissions(
     request: UpdateSharePermissionRequestV2,
   ): Promise<SharePermissionV2> {
@@ -650,12 +743,25 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Open the form's builder in Macro. */
+  /**
+   * Open the form's builder in Macro.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}`;
   }
 
-  /** The respondent page, which public forms also expose without signing in. */
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
+  /**
+   * The respondent page, which public forms also expose without signing in.
+   *
+   * @readonly
+   */
   respondUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}/respond`;
   }
