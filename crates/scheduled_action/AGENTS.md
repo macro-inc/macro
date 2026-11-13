@@ -93,15 +93,27 @@ each run.
   person's own open routines session in `suggestion_generation_session` may
   (the `GenerationSessions` port, found from the request's code-mode
   invocation like a draft's check; anything else is 403 `NotSuggesting`).
-  Suggestions are never rewritten; a retired catalog pick may be suggested
-  again, a dismissed one never. A drafted routine comes with its `card` (title,
-  importance, categories) and is written with its `routine` suggestion in one
-  transaction (`suggestions_db_utils`), refused when that would pass the suggestion
-  limits; dismissing, retiring or saving it from the routine suggestion closes
-  that `routine` suggestion in the same transaction. A catalog pick takes no
-  `card`. Every kept and retired suggestion is logged in
-  `suggestion_change`. `suggestions/decode.rs` is the trust boundary: a
-  catalog key with knob values that fit their knob, or a drafted routine that
+  Suggestions are never rewritten. Each has a stored `state` (`open`,
+  `dismissed`, `retired`, `saved`), and only `RoutineSuggestionState::on`
+  (`suggestions/state.rs`) moves it: retiring moves only an open one;
+  dismissing an open or retired one is for good; saving wins from any state;
+  nothing moves back to open. `pg_suggestion_repo::transition` applies it
+  under the row's lock (`FOR UPDATE`, never the person's advisory lock), with
+  its card's move (`proposed`, `dismissed`, `retired`, `done` with the saved
+  routine as `produced`), in one transaction; `create_action` saves the
+  owner's suggestion through `pg_suggestion_repo::save` (a template's id or
+  someone else's changes nothing). A retired catalog pick may be suggested
+  again; an open, dismissed or saved one never. Keeping takes the person's
+  advisory lock (`suggestions_db_utils::lock_user`) and counts the session's
+  kept suggestions and checks the catalog key under it (`Kept::SessionFull`,
+  `Kept::Taken`); the partial unique index
+  `routine_suggestion_open_catalog_key_idx` keeps one open pick per key
+  against a writer without the lock. A drafted routine comes with its `card`
+  (title, importance, categories) and is written with its `routine`
+  suggestion in one transaction (`suggestions_db_utils`), refused when that
+  would pass the suggestion limits. A catalog pick takes no `card`. Every
+  kept and retired suggestion is logged in `suggestion_change`.
+  `suggestions/decode.rs` is the trust boundary: a catalog key with knob values that fit their knob, or a drafted routine that
   passes saving's checks, kept switched off and never acting as the user; a
   one-line reason; no email address, phone number or street address in the
   reason or the drafted routine's words (`shown_text::personal_detail`, by
@@ -109,9 +121,10 @@ each run.
   never generates: per surface, drafted routines, then catalog picks (each
   best first, a second with the same catalog title or name left out), then
   catalog routines marked `suggest` as Macro's templates (stable ids,
-  `template_id`) to `PER_SURFACE`, skipping dismissed (permanent,
-  `.../{id}/dismiss` for either kind), retired and saved ones
-  (`scheduled_action.suggestion_id`); its `status` is the person's latest
+  `template_id`) to `PER_SURFACE`, showing only open AI suggestions and
+  skipping dismissed templates (permanent, `.../{id}/dismiss` for either
+  kind) and templates saved from (`scheduled_action.suggestion_id`); its
+  `status` is the person's latest
   generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Spans:
   `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`; log events

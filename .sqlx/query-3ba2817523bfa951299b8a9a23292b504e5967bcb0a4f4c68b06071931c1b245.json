@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, surfaces, catalog_key, knob_values, routine, reason, keep_probability,\n                      dismissed_at, retired_at, created_at\n               FROM routine_suggestion\n               WHERE user_id = $1\n               ORDER BY created_at, id",
+  "query": "SELECT id, surfaces, catalog_key, knob_values, routine, reason, keep_probability,\n                      state, dismissed_at, retired_at, created_at\n               FROM routine_suggestion\n               WHERE user_id = $1\n               ORDER BY created_at, id",
   "describe": {
     "columns": [
       {
@@ -40,16 +40,21 @@
       },
       {
         "ordinal": 7,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "dismissed_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "retired_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -67,10 +72,11 @@
       true,
       false,
       false,
+      false,
       true,
       true,
       false
     ]
   },
-  "hash": "5f8c0e1c3432c5fe65798a1f44ae184d2be67692154f582a3732ea62ab715df5"
+  "hash": "3ba2817523bfa951299b8a9a23292b504e5967bcb0a4f4c68b06071931c1b245"
 }

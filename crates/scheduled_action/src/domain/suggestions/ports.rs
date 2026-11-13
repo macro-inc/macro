@@ -16,6 +16,7 @@ use super::model::{
     CheckedSuggestion, GenerationStatus, RetireSuggestion, RoutineGenerationReport,
     RoutineSuggestions, StoredSuggestion, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
+use super::state::Transition;
 
 /// What AI suggested for each person, and what became of it.
 pub trait SuggestionRepo: Send + Sync + 'static {
@@ -27,8 +28,14 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u32>> + Send;
 
     /// Keep `suggestion`, handed back by `session` of `generation` for the
-    /// person, with its routine suggestion when it has one, and log both; its id,
-    /// or which suggestions limit the suggestion would pass, keeping nothing.
+    /// person, with its card when it has one, and log both; its id, or why
+    /// not, keeping nothing. Under the person's suggestion lock, so two
+    /// concurrent sessions can't pass a limit or keep one catalog routine
+    /// twice: the session's [`MAX_KEPT_PER_SESSION`], a catalog pick the
+    /// person has open, dismissed or saved (or dismissed as a template), and
+    /// the feed's limits for a card.
+    ///
+    /// [`MAX_KEPT_PER_SESSION`]: super::MAX_KEPT_PER_SESSION
     fn add(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -38,8 +45,11 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Kept>> + Send;
 
-    /// Retire the person's open suggestion `id` and its routine suggestion for
-    /// `reason`, logged as `session` of `generation`'s; whether it was open.
+    /// Retire the person's suggestion `id` and its card for `reason`, logged
+    /// as `session` of `generation`'s, as [`RoutineSuggestionState::on`]
+    /// allows; whether it moved (only an open one does).
+    ///
+    /// [`RoutineSuggestionState::on`]: super::state::RoutineSuggestionState::on
     fn retire(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -63,13 +73,16 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
 
-    /// Dismiss the person's suggestion `id` and its routine suggestion for good;
-    /// whether it was theirs.
+    /// Dismiss the person's suggestion `id` and its card for good, as
+    /// [`RoutineSuggestionState::on`] allows; what that did, or none when it
+    /// isn't theirs.
+    ///
+    /// [`RoutineSuggestionState::on`]: super::state::RoutineSuggestionState::on
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-    ) -> impl Future<Output = Result<bool>> + Send;
+    ) -> impl Future<Output = Result<Option<Transition>>> + Send;
 
     /// Dismiss catalog routine `key` as a template for the person, for good.
     fn dismiss_template(
@@ -206,6 +219,10 @@ pub trait GenerationStatuses: Send + Sync + 'static {
 pub enum Kept {
     /// Stored, with this id.
     Stored(Uuid),
+    /// The session kept the most it may.
+    SessionFull,
+    /// The person has this catalog routine open, dismissed or saved already.
+    Taken,
     /// Its routine suggestion would pass the person's open suggestions limit.
     SuggestionsFull,
     /// Its routine suggestion would pass the generation's new suggestions limit.

@@ -191,58 +191,38 @@ pub async fn add_routine_card(
     Ok(Room::Fits)
 }
 
-/// Move the open routine suggestion of suggestion `suggestion` to `state`
-/// (`dismissed` or `retired`), logging `change` when given; whether there
-/// was one.
-pub async fn close_routine_card(
+/// Move the card of routine suggestion `routine_suggestion` from state `from`
+/// to state `to` (`suggestion.state` names), as the routine suggestion's own
+/// transition moves it; the card's id, or none when it has no card in `from`
+/// (a catalog pick has none). Only that transition moves a routine card.
+pub async fn move_routine_card(
     conn: &mut PgConnection,
-    suggestion: Uuid,
-    state: &str,
-    change: Option<&SuggestionChange<'_>>,
+    routine_suggestion: Uuid,
+    from: &str,
+    to: &str,
     at: DateTime<Utc>,
-) -> Result<bool, sqlx::Error> {
-    let closed = sqlx::query!(
-        r#"UPDATE suggestion SET state = $2, state_reason = NULL, updated_at = $3, state_changed_at = $3
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"UPDATE suggestion SET state = $3, state_reason = NULL, updated_at = $4, state_changed_at = $4
            WHERE id = (SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1)
-             AND state IN ('proposed', 'accepted')
-           RETURNING id, user_id"#,
-        suggestion,
-        state,
+             AND state = $2
+           RETURNING id"#,
+        routine_suggestion,
+        from,
+        to,
         at,
     )
-    .fetch_optional(&mut *conn)
-    .await?;
-    if let (Some(closed), Some(change)) = (&closed, change) {
-        log_change(conn, &closed.user_id, closed.id, change).await?;
-    }
-    Ok(closed.is_some())
+    .fetch_optional(conn)
+    .await
 }
 
-/// `owner` saved routine `routine` from suggestion `suggestion`: their
-/// open routine suggestion for it is done, and produced the routine. Someone
-/// else's suggestion changes nothing.
-pub async fn complete_routine_card(
+/// Record routine `routine`, saved from a routine suggestion, as what its
+/// card `card` produced.
+pub async fn add_produced_routine(
     conn: &mut PgConnection,
-    owner: &str,
-    suggestion: Uuid,
+    card: Uuid,
     routine: Uuid,
-    at: DateTime<Utc>,
-) -> Result<bool, sqlx::Error> {
-    let done = sqlx::query_scalar!(
-        r#"UPDATE suggestion SET state = 'done', state_reason = NULL, updated_at = $2, state_changed_at = $2
-           WHERE id = (SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1)
-             AND user_id = $3
-             AND state IN ('proposed', 'accepted')
-           RETURNING id"#,
-        suggestion,
-        at,
-        owner,
-    )
-    .fetch_optional(&mut *conn)
-    .await?;
-    let Some(card) = done else {
-        return Ok(false);
-    };
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)
            VALUES ($1, 'produced',
@@ -253,5 +233,5 @@ pub async fn complete_routine_card(
     )
     .execute(conn)
     .await?;
-    Ok(true)
+    Ok(())
 }

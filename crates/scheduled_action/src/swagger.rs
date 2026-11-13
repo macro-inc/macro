@@ -87,7 +87,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::suggestions::model::SuggestOutcome,
             crate::domain::suggestions::model::SuggestionReview,
             crate::domain::suggestions::model::ReviewedSuggestion,
-            crate::domain::suggestions::model::ReviewedState,
+            crate::domain::suggestions::state::RoutineSuggestionState,
             crate::domain::suggestions::model::RetireSuggestion,
             crate::inbound::draft_router::DraftRoutineRequest,
             crate::domain::drafts::DraftRequest,
