@@ -111,6 +111,7 @@ export interface CalendarGridProps {
   /** Rendered occurrence ids that should visually stand out from nearby events. */
   emphasizedEventIds?: ReadonlySet<string>;
   eventTimeChangePending?: boolean;
+  isEventUpdating?: (event: CalendarEvent) => boolean;
   onDatesSet?: (info: DatesSetArg) => void;
   onEventTimeChange?: (
     change: CalendarEventTimeChange,
@@ -161,6 +162,8 @@ export function CalendarGrid(props: CalendarGridProps) {
   const mappedEvents = createMemo<EventInput[]>(() =>
     mergeWorkingLocationEvents(props.events).map(({ event, occurrenceIds }) => {
       const mapped = mapCalendarEventToFullCalendar(event);
+      const editable =
+        Boolean(props.onEventTimeChange) && !props.isEventUpdating?.(event);
       const emphasized = occurrenceIds.some((id) =>
         props.emphasizedEventIds?.has(id)
       );
@@ -173,10 +176,8 @@ export function CalendarGrid(props: CalendarGridProps) {
       return {
         ...mapped,
         classNames: classNames.length > 0 ? classNames : undefined,
-        startEditable: props.onEventTimeChange ? mapped.startEditable : false,
-        durationEditable: props.onEventTimeChange
-          ? mapped.durationEditable
-          : false,
+        startEditable: editable && mapped.startEditable,
+        durationEditable: editable && mapped.durationEditable,
         extendedProps:
           occurrenceIds.length > 1
             ? { ...mapped.extendedProps, mergedOccurrenceIds: occurrenceIds }
@@ -187,7 +188,10 @@ export function CalendarGrid(props: CalendarGridProps) {
   const [eventInteractionActive, setEventInteractionActive] =
     createSignal(false);
   const renderedEvents = createMemo<EventInput[]>(
-    (current) => (eventInteractionActive() ? current : mappedEvents()),
+    (current) =>
+      eventInteractionActive() || props.eventTimeChangePending
+        ? current
+        : mappedEvents(),
     mappedEvents()
   );
   let interactionEventsById: Map<string, CalendarEvent> | undefined;
@@ -257,16 +261,18 @@ export function CalendarGrid(props: CalendarGridProps) {
       slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
       eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
       events={renderedEvents()}
-      eventAllow={() =>
-        props.onEventTimeChange !== undefined &&
-        props.eventTimeChangePending !== true
-      }
+      eventAllow={(_drop, event) => {
+        if (!props.onEventTimeChange || props.eventTimeChangePending)
+          return false;
+        const original = event && eventByRenderId(calendarEventRenderId(event));
+        return Boolean(original && !props.isEventUpdating?.(original));
+      }}
       eventResizableFromStart
       eventDragStart={handleEventInteractionStart}
       eventDragStop={handleEventInteractionStop}
       eventDrop={(change) =>
         props.onEventTimeChange?.(
-          change,
+          { ...change, kind: 'move' },
           eventByRenderId(calendarEventRenderId(change.event))
         )
       }
@@ -274,7 +280,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       eventResizeStop={handleEventInteractionStop}
       eventResize={(change) =>
         props.onEventTimeChange?.(
-          change,
+          { ...change, kind: 'resize' },
           eventByRenderId(calendarEventRenderId(change.event))
         )
       }
@@ -403,6 +409,7 @@ export function CalendarGrid(props: CalendarGridProps) {
           return (
             <EventContent
               event={event}
+              isUpdating={props.isEventUpdating?.(event)}
               renderProps={renderProps}
               isSelected={
                 selectedId !== undefined &&

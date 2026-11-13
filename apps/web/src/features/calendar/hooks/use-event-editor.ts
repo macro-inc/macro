@@ -2,6 +2,7 @@ import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
+  calendarEventIsUpdating,
   isGuestEditRefused,
   useCreateCalendarEventMutation,
   useInviteCalendarEventGuestsMutation,
@@ -51,6 +52,11 @@ import {
   guestListHidden,
   viewerReplacesGuests,
 } from '../utils/event-guest-editing';
+import { isRecurringCalendarEvent } from '../utils/event-interaction';
+import {
+  calendarEventTimeUpdate,
+  calendarEventUpdateTarget,
+} from '../utils/event-time-update';
 import {
   attachCalendarMacroCall,
   calendarMacroCallUrl,
@@ -146,7 +152,6 @@ interface UseEventEditorProps {
 
 /** Shared create/edit query and mutation orchestration for any editor shell. */
 export function useEventEditor(props: UseEventEditorProps) {
-  const isEdit = () => props.event() !== undefined;
   const initialValues = createMemo(() => {
     const event = props.event();
     return event ? calendarEventToEditorInitialValues(event) : undefined;
@@ -254,6 +259,12 @@ export function useEventEditor(props: UseEventEditorProps) {
 
   const createMeeting = useCreateMeetingMutation();
   const [pending, setPending] = createSignal(false);
+  const isPending = () => {
+    const event = props.event();
+    return (
+      pending() || Boolean(event && calendarEventIsUpdating(event.eventId))
+    );
+  };
   const [saveError, setSaveError] = createSignal<string>();
   // If attaching the link to an existing event fails, retry the same meeting.
   const [createdMeeting, setCreatedMeeting] = createSignal<{
@@ -307,7 +318,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     values: EventEditorSubmitValues,
     scope?: CalendarUpdateScope
   ) => {
-    if (pending()) return;
+    if (isPending()) return;
     setPending(true);
     setSaveError(undefined);
 
@@ -413,7 +424,9 @@ export function useEventEditor(props: UseEventEditorProps) {
           : [];
       const detailChanges = {
         ...(values.title !== event.title ? { title: values.title } : {}),
-        ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
+        ...(hasTimeChanged(event, values.time)
+          ? calendarEventTimeUpdate(event, values.time, effectiveScope).patch
+          : {}),
         ...(content.location !== (event.location ?? '')
           ? { location: content.location }
           : {}),
@@ -427,13 +440,7 @@ export function useEventEditor(props: UseEventEditorProps) {
         ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
       };
       const updateArgs = {
-        eventId: event.eventId,
-        calendarId: event.calendarId,
-        scope: effectiveScope,
-        recurrenceId: targetsOneOccurrence
-          ? (event.recurrenceId ?? event.occurrenceKey)
-          : undefined,
-        occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
+        ...calendarEventUpdateTarget(event, effectiveScope),
         patch: {
           // A guest who may not modify the event sends only their own fields.
           ...(detailsLocked() ? {} : detailChanges),
@@ -497,20 +504,18 @@ export function useEventEditor(props: UseEventEditorProps) {
         setDetailEditsRefused(true);
         toast.failure(GUEST_EDITS_RESTRICTED);
       } else {
-        toast.failure(
-          event ? 'Failed to update event' : 'Failed to create event',
-          { subtext }
-        );
+        if (event) toast.failure('Update failed');
+        else toast.failure('Failed to create event', { subtext });
       }
     } finally {
       setPending(false);
     }
   };
 
-  const showRecurringEditNotice = () =>
-    isEdit() &&
-    ((props.event()?.recurrenceLines.length ?? 0) > 0 ||
-      props.event()?.recurrenceId !== undefined);
+  const showRecurringEditNotice = () => {
+    const event = props.event();
+    return event !== undefined && isRecurringCalendarEvent(event);
+  };
   const disabledFields = createMemo<EventEditorDisabledFields | undefined>(
     () => {
       const event = props.event();
@@ -544,7 +549,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     calendarOptions,
     guestOptions,
     showRecurringEditNotice,
-    pending,
+    pending: isPending,
     saveError,
     save,
   };

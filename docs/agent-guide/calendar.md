@@ -531,6 +531,46 @@ On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
 does not start a new event; the next press creates one. Clicking another event
 switches the open details.
+
+Editable recurring events can also be dragged and resized in the grid. The
+`Save repeating event` dialog keeps the dropped position visible until Save or
+Cancel. Scope confirmations for time changes and RSVP share a wider, padded
+layout with wrapping descriptions, no header divider or close icon, and footer
+actions. On phones they use the standard bottom sheet. After Save, cached
+occurrences update immediately. The affected event and its series show a spinner
+and cannot be dragged, resized, edited, deleted, or answered until the provider
+save and post-save refresh requests finish. Earlier reads drain before a fresh read
+starts, so navigation cannot release a save still in flight. Other events stay
+usable. A failed save rolls back the optimistic change and unlocks the event.
+Refresh completion releases the lock, but stale or incomplete provider data
+keeps the optimistic position until a confirming read. A failed refresh offers
+Retry. RSVP buttons and an already-open response-scope dialog stay disabled
+during the save, including in email invitations. Account changes retire
+unsent edits.
+Generic save failures show only `Update failed`, without raw provider error
+details. `This event` changes only the
+selected occurrence and leaves
+the cached series master time untouched; Cancel and Escape restore the original
+position before saving.
+`All events`, when available, applies
+the start and duration changes relative to the series master, not the selected
+occurrence's date. Daily and weekly rules keep their weekdays and week boundaries
+in step with date moves. Existing time exceptions, ambiguous daylight-saving
+times, and repeat patterns that cannot be shifted safely offer only `This event`,
+with an explanation. A duration-only change can still apply to more complex
+series. The provider controls whether other individually edited exceptions are
+retained or regenerated. Confirmed regenerated occurrences replace their old
+local exceptions instead of appearing alongside them; stale or partial reads do
+not discard the pending projection.
+
+The update API does not support `This and following events` or a guest-notification
+choice. Neither control is offered. Read-only events, snapshots, restricted guests,
+and timed points remain fixed. Verify both Week and Day with a weekly event you
+created: drag and resize with each offered scope, cancel with both Cancel and
+Escape, and inspect the next occurrence. Do not move another person's event.
+The move trace is `calendar.event_time_change`, with event/calendar IDs, operation
+kind, selected scope, and `calendar.time_change.outcome`.
+
 Desktop event details stay inside the visible calendar grid, including Home
 previews and narrow splits. They overlap wide Day-view events when needed and
 shrink to fit the pane; long details scroll while the RSVP row stays visible.

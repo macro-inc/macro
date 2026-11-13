@@ -997,6 +997,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
+- Route Calendar grid time edits through `createEventTimeChange` and `event-time-update`; hand the scope preview to the query-owned optimistic projection, keep the affected event/series locked with a spinner through its write and post-save refresh requests, and leave other events usable. Preserve same-event serialization and account-session fences; reconcile confirmed regenerated occurrences without retaining old exception projections. See the [calendar walkthrough](../../docs/agent-guide/calendar.md).
+- Compose Calendar scope confirmations with `ActionDialogShell`; give descriptions room to wrap, use footer cancellation instead of header close chrome, and let `Dialog` supply the mobile sheet.
 - Share row-open reads through `features/notifications/mark-row-seen.ts` for
   documents/tasks, legacy chats, email, calendar, agents, CRM, PRs, calls, and
   projects; use it for previews, keyboard following, action advance, and split

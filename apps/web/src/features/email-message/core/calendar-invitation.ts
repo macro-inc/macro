@@ -41,6 +41,7 @@ export type InvitationResolution =
 export type CalendarInvitationActions = {
   resolution?: InvitationResolution;
   pending?: boolean;
+  responseDisabled?: boolean;
   error?: string;
   notice?: string;
   retryCalendar?: () => void;

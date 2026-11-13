@@ -2,6 +2,7 @@ import {
   type CalendarRangeCacheArgs,
   validateRecordSelectionKeys,
 } from '@graphql-cache/index';
+import type { MutationSettlement } from '@graphql-cache/protocol';
 import type {
   CalendarEventFieldsFragment,
   CalendarMutationPayloadFieldsFragment,
@@ -335,6 +336,70 @@ describe('executeGraphqlInviteGuests', () => {
 });
 
 describe('executeGraphqlUpdate', () => {
+  it('waits for a queued update to commit before reporting success', async () => {
+    let notify!: (settlement: MutationSettlement) => void;
+    const unsubscribe = vi.fn();
+    const host = {
+      ...fakeHost(graphqlEvent(), []),
+      onMutationSettled: (listener: typeof notify) => {
+        notify = listener;
+        return unsubscribe;
+      },
+    };
+    const enqueued = Promise.withResolvers<void>();
+    const { calls, client } = fakeClient('queued', undefined, enqueued.resolve);
+    let completed = false;
+    const save = (async () => {
+      const outcome = await executeGraphqlUpdate(
+        host,
+        { eventId: 'event-1', patch: { title: 'Saved' } },
+        client,
+        true
+      );
+      completed = true;
+      return outcome;
+    })();
+    await enqueued.promise;
+    expect(completed).toBe(false);
+    notify({
+      mutationUuid: calls[0].optimistic.uuid,
+      transactionId: 'tx-1',
+      status: 'committed',
+    });
+    expect((await save).kind).toBe('committed');
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('reports a terminal queued update failure so the projection can roll back', async () => {
+    let notify!: (settlement: MutationSettlement) => void;
+    const unsubscribe = vi.fn();
+    const host = {
+      ...fakeHost(graphqlEvent(), []),
+      onMutationSettled: (listener: typeof notify) => {
+        notify = listener;
+        return unsubscribe;
+      },
+    };
+    const enqueued = Promise.withResolvers<void>();
+    const { calls, client } = fakeClient('queued', undefined, enqueued.resolve);
+    const save = executeGraphqlUpdate(
+      host,
+      { eventId: 'event-1', patch: { title: 'Refused' } },
+      client,
+      true
+    );
+    const rejected = expect(save).rejects.toMatchObject({ code: 'read_only' });
+    await enqueued.promise;
+    notify({
+      mutationUuid: calls[0].optimistic.uuid,
+      transactionId: 'tx-1',
+      status: 'permanently-failed',
+      error: 'Refused',
+      errorCode: 'read_only',
+    });
+    await rejected;
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
   it('moves a standalone event and its occurrence', async () => {
     const event = graphqlEvent({ recurrenceLines: [] });
     const host = fakeHost(event, [instance(6)]);

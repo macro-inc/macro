@@ -66,6 +66,7 @@ vi.mock('../calendar/hooks/use-calendar-ui-flag', () => ({
 vi.mock('../calendar/hooks/create-calendar-rsvp-controller', () => ({
   createCalendarRsvpController: () => ({
     pending: () => false,
+    blocked: () => false,
     error: () => undefined,
     scopeOpen: () => false,
     scope: () => 'this_event',

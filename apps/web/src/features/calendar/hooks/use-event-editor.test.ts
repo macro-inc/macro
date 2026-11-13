@@ -1,3 +1,5 @@
+import type { EventApi } from '@fullcalendar/core';
+import type { UpdateCalendarEventArgs } from '@queries/calendar/mutations';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from '../components/composer/create-calendar-event-form-controller';
@@ -5,6 +7,7 @@ import {
   calendarEventToEditorInitialValues,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
+import { createEventTimeChange } from '../primitives/create-event-time-change';
 import { type CalendarEvent, DEFAULT_GUEST_POLICY } from '../types';
 import { useEventEditor } from './use-event-editor';
 
@@ -19,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   fetchMeeting: vi.fn(),
   quickCalls: true,
   quickCallsLoading: false,
+  eventUpdating: false,
 }));
 
 vi.mock('@core/util/webOrigin', () => ({
@@ -34,6 +38,7 @@ vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@queries/calendar/mutations', () => ({
+  calendarEventIsUpdating: () => mocks.eventUpdating,
   useCreateCalendarEventMutation: () => ({
     mutateAsync: mocks.createEvent,
     isPending: false,
@@ -102,6 +107,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.quickCalls = true;
   mocks.quickCallsLoading = false;
+  mocks.eventUpdating = false;
   mocks.createEvent.mockResolvedValue({
     id: 'event-1',
     calendarId: 'calendar-1',
@@ -113,6 +119,28 @@ beforeEach(() => {
   });
   mocks.fetchMeeting.mockResolvedValue({ id: 'meeting-1' });
   mocks.updateMeeting.mockResolvedValue({ id: 'meeting-1' });
+});
+
+it('blocks form saves while the event is saving or reconciling elsewhere', async () => {
+  mocks.eventUpdating = true;
+  await createRoot(async (dispose) => {
+    try {
+      const editor = useEventEditor({
+        event: () => savedEvent,
+        onSaved: vi.fn(),
+        macroCallsEnabled: () => false,
+      });
+      expect(editor.pending()).toBe(true);
+      await editor.save(values);
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+      mocks.eventUpdating = false;
+      expect(editor.pending()).toBe(false);
+      await editor.save({ ...values, title: 'Updated' });
+      expect(mocks.updateEvent).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
 });
 
 describe('editing event times', () => {
@@ -131,6 +159,14 @@ describe('editing event times', () => {
         },
         ...overrides,
       };
+      event.seriesTime = event.allDay
+        ? { kind: 'allDay', startDate: event.start, endDate: event.end }
+        : {
+            kind: 'timed',
+            startsAt: event.start,
+            endsAt: event.end,
+            timeZone: event.timeZone ?? 'UTC',
+          };
       const onSaved = vi.fn();
       const editor = useEventEditor({
         event: () => event,
@@ -1192,9 +1228,7 @@ describe('guests of an event the viewer was invited to', () => {
         ...unchanged,
         guestEmails: ['host@example.com', 'dana@example.com'],
       });
-      expect(mocks.failure).toHaveBeenCalledWith('Failed to update event', {
-        subtext: 'Only the organizer can invite guests.',
-      });
+      expect(mocks.failure).toHaveBeenCalledWith('Update failed');
     } finally {
       dispose();
     }
@@ -1537,6 +1571,65 @@ describe('guest permissions', () => {
     });
     try {
       expect(editor.guestPolicyEditable()).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+});
+
+describe('optimistic grid saves', () => {
+  it('blocks another move of the same event until its save settles', async () => {
+    const first = Promise.withResolvers<void>();
+    let updatingEventId: string | undefined;
+    const blockedRevert = vi.fn();
+    const reverted = vi.fn();
+    const failed = vi.fn();
+    const save = vi.fn((args: UpdateCalendarEventArgs) => {
+      updatingEventId = args.eventId;
+      args.onOptimistic?.();
+      return first.promise;
+    });
+    const { change, dispose } = createRoot((dispose) => ({
+      change: createEventTimeChange({
+        active: () => true,
+        isUpdating: (event) => event.eventId === updatingEventId,
+        save,
+        onError: failed,
+      }),
+      dispose,
+    }));
+    const event = {
+      ...savedEvent,
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
+      recurrenceId: savedEvent.occurrenceKey,
+      seriesTime: values.time,
+    };
+    const moved = {
+      start: new Date('2026-09-22T15:00:00Z'),
+      end: new Date('2026-09-22T16:00:00Z'),
+      allDay: false,
+    } as EventApi;
+    try {
+      await change.handle({ event: moved, revert: reverted }, event);
+      const savingFirst = change.confirm();
+      expect(change.pending()).toBe(false);
+      await change.handle({ event: moved, revert: blockedRevert }, event);
+      expect(change.choosing()).toBe(false);
+      expect(blockedRevert).toHaveBeenCalledOnce();
+      expect(save).toHaveBeenCalledOnce();
+      first.reject(new Error('Refused'));
+      await savingFirst;
+      expect(failed).toHaveBeenCalledOnce();
+      expect(reverted).not.toHaveBeenCalled();
+      updatingEventId = undefined;
+      await change.handle({ event: moved, revert: reverted }, event);
+      expect(change.choosing()).toBe(true);
+      // A save elsewhere can begin while the scope dialog is open.
+      updatingEventId = event.eventId;
+      await change.confirm();
+      expect(change.choosing()).toBe(false);
+      expect(reverted).toHaveBeenCalledOnce();
+      expect(save).toHaveBeenCalledOnce();
     } finally {
       dispose();
     }

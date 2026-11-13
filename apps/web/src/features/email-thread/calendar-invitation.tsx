@@ -160,6 +160,9 @@ function ConnectedInvitation(
           get pending() {
             return rsvp.pending();
           },
+          get responseDisabled() {
+            return rsvp.blocked();
+          },
           get error() {
             return rsvp.error();
           },
@@ -205,6 +208,7 @@ function ConnectedInvitation(
       <EventRsvpScopeDialog
         open={rsvp.scopeOpen()}
         scope={rsvp.scope()}
+        pending={rsvp.blocked()}
         onScopeChange={rsvp.setScope}
         onClose={rsvp.closeScope}
         onConfirm={rsvp.confirmScope}

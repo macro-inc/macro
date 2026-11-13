@@ -11,6 +11,7 @@ import { EventRsvpSection } from './EventRsvpSection';
 
 const mutate = vi.hoisted(() => vi.fn());
 vi.mock('@queries/calendar/mutations', () => ({
+  calendarEventIsUpdating: () => false,
   useRsvpCalendarEventMutation: () => ({ mutate }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
