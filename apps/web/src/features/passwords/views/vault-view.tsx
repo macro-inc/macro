@@ -900,7 +900,7 @@ export function VaultView(props: {
       </ViewShell.Root>
       <Show when={importing()}>
         <ImportDialog
-          items={vault.loadedItems}
+          items={vault.availableItems}
           folders={vault.loadedFolders}
           refresh={async () => {
             await Promise.all([vault.items.refetch(), vault.folders.refetch()]);

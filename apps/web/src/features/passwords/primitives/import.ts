@@ -6,6 +6,7 @@ import type {
 } from '@core/password-import/types';
 import { sleep } from '@core/util/sleep';
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { match } from 'ts-pattern';
@@ -136,6 +137,8 @@ export async function sendImport(
   options: {
     span: Span;
     onProgress: (done: number) => void;
+    /** Each batch's items just before it is sent, for resuming. */
+    onSending?: (items: ParsedImportItem[]) => void;
     /** Each batch's per-item answers (outcomes and ids, never values), for resuming. */
     onAnswered?: (answers: ImportBatchResult['items']) => void;
     wait?: (ms: number) => Promise<void>;
@@ -163,6 +166,7 @@ export async function sendImport(
         folders: foldersFor(items, run.folders),
         items,
       };
+      options.onSending?.(items);
       let result = await options.span.run(() =>
         source.importBatch(run.importId, body)
       );
@@ -232,7 +236,8 @@ export async function sendImport(
  * dialog is open: never in a query cache, the store, or browser storage.
  */
 export function createPasswordImport(props: {
-  items: () => PasswordItem[];
+  /** The vault list; undefined while it is unavailable. */
+  items: () => PasswordItem[] | undefined;
   folders: () => PasswordFolder[];
   refresh: () => Promise<void>;
 }) {
@@ -273,7 +278,18 @@ export function createPasswordImport(props: {
   const folderCheck = () => {
     const current = state.current;
     if (current.step !== 'preview') return undefined;
-    return checkFolders(target(), current.preview.folders, props.folders());
+    // Only the folders the items being sent use.
+    const needed = new Set(
+      foldersFor(toSend(), current.preview.folders).map((folder) => folder.key)
+    );
+    const check = checkFolders(
+      target(),
+      current.preview.folders.filter((folder) => needed.has(folder.key)),
+      props.folders()
+    );
+    // A continued import's folders may already exist, so counting them again
+    // would refuse it; the vault enforces its folder cap on each batch.
+    return current.preview.resumed ? { ...check, tooMany: false } : check;
   };
   const toSend = () => {
     if (!parsed) return [];
@@ -288,9 +304,11 @@ export function createPasswordImport(props: {
    * in the body.
    */
   async function knownItems(items: ParsedImportItem[]) {
-    const loaded = props.items();
-    if (loaded.length < VAULT_LIST_CAP)
-      return { items: loaded, partial: false };
+    const available = props.items();
+    if (available && available.length < VAULT_LIST_CAP)
+      return { items: available, partial: false };
+    // A capped or unavailable list: match every name in the vault itself.
+    const loaded = available ?? [];
     const names = candidateNames(items);
     const found = new Map(loaded.map((item) => [item.id, item]));
     let partial = false;
@@ -314,7 +332,18 @@ export function createPasswordImport(props: {
     return { items: [...found.values()], partial };
   }
 
+  /**
+   * Reads `file` into a preview. Never rejects: a failure anywhere (the
+   * parser module failing to load, for one) returns to the file picker.
+   */
   async function choose(file: File) {
+    const run = generation + 1;
+    const read = await ResultAsync.fromPromise(readFile(file), () => 'failed');
+    if (read.isErr() && run === generation)
+      setStep({ step: 'choose', failure: { code: 'unreadable' } });
+  }
+
+  async function readFile(file: File) {
     const run = ++generation;
     setStep({ step: 'parsing' });
     const reply = await Telemetry.span(
@@ -465,15 +494,30 @@ export function createPasswordImport(props: {
             if (run === generation)
               setStep({ step: 'importing', done, total: items.length });
           },
+          onSending: (batch) => {
+            // An item with a verification code may be created while its code
+            // is not: until an answer says otherwise, a rerun must resend it.
+            let changed = false;
+            for (const item of batch) {
+              if (item.totp !== null && !unfinished.has(item.sourceKey)) {
+                unfinished.set(item.sourceKey, null);
+                changed = true;
+              }
+            }
+            if (changed) remember();
+          },
           onAnswered: (answers) => {
             // Written only when an item starts or stops needing a rerun.
             let changed = false;
             for (const answer of answers) {
               if (answer.outcome === 'failed' && answer.itemId) {
-                changed ||= unfinished.get(answer.sourceKey) !== answer.itemId;
-                unfinished.set(answer.sourceKey, answer.itemId);
+                if (unfinished.get(answer.sourceKey) !== answer.itemId) {
+                  unfinished.set(answer.sourceKey, answer.itemId);
+                  changed = true;
+                }
               } else if (answer.outcome !== 'failed') {
-                changed ||= unfinished.delete(answer.sourceKey);
+                // Evaluated first: every finished key is removed.
+                if (unfinished.delete(answer.sourceKey)) changed = true;
               }
             }
             if (changed) remember();

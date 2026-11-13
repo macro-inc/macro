@@ -19,7 +19,8 @@ import { createPasswordImport } from '../primitives/import';
  * starts fresh and closing drops the parsed export.
  */
 export function ImportDialog(props: {
-  items: () => PasswordItem[];
+  /** The vault list; undefined while it is unavailable. */
+  items: () => PasswordItem[] | undefined;
   folders: () => PasswordFolder[];
   refresh: () => Promise<void>;
   onOpenFolder: (folderId: string | null) => void;

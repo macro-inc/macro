@@ -22,7 +22,7 @@ const RESUME_SCHEMA = z.object({
   ]),
   private: z.boolean(),
   unfinished: z
-    .record(z.string().min(1).max(200), z.uuid())
+    .record(z.string().min(1).max(200), z.uuid().nullable())
     .refine((entries) => Object.keys(entries).length <= 20_000),
 });
 

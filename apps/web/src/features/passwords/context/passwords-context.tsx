@@ -137,11 +137,12 @@ export type ImportResume = {
   destination: ImportDestination;
   private: boolean;
   /**
-   * Source keys whose item this import created but could not finish (it
-   * failed with an item id, e.g. its verification code), with that id. A
-   * rerun resends them rather than skipping them as duplicates.
+   * Source keys whose item this import may have created without finishing:
+   * failed with an item id (its verification code, say), with that id, or
+   * a verification-code item sent without an answer yet (null). A rerun
+   * resends them rather than skipping them as duplicates.
    */
-  unfinished: Record<string, string>;
+  unfinished: Record<string, string | null>;
 };
 export type ImportResumeStore = {
   get(key: string): ImportResume | undefined;

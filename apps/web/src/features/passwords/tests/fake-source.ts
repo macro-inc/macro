@@ -30,6 +30,11 @@ export type FakeImportScript = {
   failRequests?: number;
   /** Names of each duplicate-match request, in order. */
   matchRequests?: string[][];
+  /**
+   * Requests whose items are created but whose answer is lost: the vault did
+   * the work, the client sees a retryable failure.
+   */
+  loseResponses?: number;
   /** How the failed requests fail; retryable unless set. */
   failWith?: ImportRequestFailure;
   requests?: ImportBatchBody[];
@@ -302,6 +307,10 @@ export function createFakePasswordSource(
           };
         return { sourceKey: entry.sourceKey, outcome: 'created', itemId: id };
       });
+      if (script.loseResponses && script.loseResponses > 0) {
+        script.loseResponses--;
+        return err('retryable');
+      }
       return ok({
         targetFolderId,
         folders: [...folderIds].map(([key, folderId]) => ({ key, folderId })),

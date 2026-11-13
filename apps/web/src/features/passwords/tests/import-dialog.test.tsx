@@ -13,7 +13,11 @@ import {
   type PasswordSource,
   PasswordsProvider,
 } from '../context/passwords-context';
-import type { PasswordFolder, PasswordItem } from '../core/types';
+import type {
+  PasswordFolder as Folder,
+  PasswordFolder,
+  PasswordItem,
+} from '../core/types';
 import { ImportDialog } from '../views/import-dialog';
 import { createFakePasswordSource } from './fake-source';
 import { createMemoryImportResume, FIXTURE_SCOPE } from './fixture-scope';
@@ -485,4 +489,197 @@ it('starts over when the folder a continued import used is gone', async () => {
       .disabled
   ).toBe(false);
   expect(screen.getByText(/^New folder “Imported from Bitwarden/)).toBeTruthy();
+});
+
+const totpItem = (sourceKey: string, name: string) => ({
+  sourceKey,
+  name,
+  kind: 'login' as const,
+  url: null,
+  folderKey: null,
+  favorite: false,
+  values: { username: 'fake', password: 'fake', notes: '', fields: [] },
+  totp: 'JBSWY3DPEHPK3PXP',
+});
+
+it('keeps only the items still unfinished in what it stores for a rerun', async () => {
+  const resume = createMemoryImportResume();
+  const source = createFakePasswordSource([], {
+    // A's code fails in every round; B's works.
+    totpFailures: new Map([['a', 3]]),
+  });
+  const twoCodes: ParsedImport = {
+    ...EXPORT,
+    items: [totpItem('a', 'Code A'), totpItem('b', 'Code B')],
+    skipped: [],
+    dropped: [],
+  };
+  mount(
+    source,
+    { outcome: 'parsed', export: twoCodes, fileHash: 'c'.repeat(64) },
+    resume,
+    { items: [] }
+  );
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Import 2 items' })
+  );
+  await screen.findByText('1 failed', undefined, { timeout: 5000 });
+
+  expect(resume.stored().map((entry) => Object.keys(entry.unfinished))).toEqual(
+    [['a']]
+  );
+});
+
+it('resends a code item whose answer was lost, though the vault has it', async () => {
+  const resume = createMemoryImportResume();
+  // The item is created, every answer to it is lost, then the vault answers.
+  const source = createFakePasswordSource([], {
+    loseResponses: 3,
+    totpFailures: new Map([['a', 3]]),
+  });
+  const oneCode: ParsedImport = {
+    ...EXPORT,
+    items: [totpItem('a', 'Code A')],
+    skipped: [],
+    dropped: [],
+  };
+  const reply = {
+    outcome: 'parsed',
+    export: oneCode,
+    fileHash: 'd'.repeat(64),
+  } as const;
+  mount(source, reply, resume, { items: [] });
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Import 1 item' }));
+  await screen.findByText('1 failed', undefined, { timeout: 5000 });
+  expect((await source.list())[0]?.hasTotp).toBe(false);
+  cleanup();
+
+  // The vault lists the item now: a duplicate, but one this import never finished.
+  mount(source, reply, resume, { items: await source.list() });
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText(/^Continuing an earlier import of this file/);
+  fireEvent.click(screen.getByRole('button', { name: 'Import 1 item' }));
+  await screen.findByText('1 already present');
+  expect((await source.list())[0]?.hasTotp).toBe(true);
+});
+
+it('returns to the file picker when the file cannot be read at all', async () => {
+  render(() => (
+    <PasswordsProvider
+      value={{
+        scope: FIXTURE_SCOPE,
+        source: createFakePasswordSource(),
+        recipients: () => [],
+        recipientsLoading: () => false,
+        recipientsError: () => false,
+        writeClipboard: async () => {},
+        // As when the parser module fails to load.
+        parseExport: () => Promise.reject(new Error('chunk load failed')),
+        importResume: createMemoryImportResume(),
+      }}
+    >
+      <ImportDialog
+        items={() => []}
+        folders={() => []}
+        refresh={async () => {}}
+        onOpenFolder={() => {}}
+        onClose={() => {}}
+      />
+    </PasswordsProvider>
+  ));
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText('The file could not be read. Try again.');
+  expect(screen.getByRole('button', { name: 'Choose file' })).toBeTruthy();
+});
+
+it('matches names in the vault while its list is unavailable', async () => {
+  const matchRequests: string[][] = [];
+  const source = createFakePasswordSource(
+    [
+      {
+        item: EXISTING,
+        values: { username: '', password: '', notes: '', fields: [] },
+      },
+    ],
+    { matchRequests }
+  );
+  render(() => (
+    <PasswordsProvider
+      value={{
+        scope: FIXTURE_SCOPE,
+        source,
+        recipients: () => [],
+        recipientsLoading: () => false,
+        recipientsError: () => false,
+        writeClipboard: async () => {},
+        parseExport: async () => PARSED,
+        importResume: createMemoryImportResume(),
+      }}
+    >
+      <ImportDialog
+        items={() => undefined}
+        folders={() => []}
+        refresh={async () => {}}
+        onOpenFolder={() => {}}
+        onClose={() => {}}
+      />
+    </PasswordsProvider>
+  ));
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  await screen.findByText('1 item looks like one you already have.');
+  expect(matchRequests).toHaveLength(1);
+});
+
+const vaultFolders = (count: number): Folder[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `vault-folder-${index}`,
+    name: `Vault folder ${index}`,
+    parentId: null,
+  }));
+
+it('counts only the folders the items being sent need', async () => {
+  // Fixture Mail (in source folder Work) is already in the vault and skipped.
+  const mail: PasswordItem = {
+    ...EXISTING,
+    name: 'Fixture Mail',
+    url: 'https://mail.example.test',
+  };
+  mount(createFakePasswordSource(), PARSED, undefined, {
+    items: [mail],
+    // With Work and the new folder that would be 501; without Work, 500.
+    folders: vaultFolders(499),
+  });
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+
+  const start = await screen.findByRole('button', { name: 'Import 2 items' });
+  expect((start as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('leaves the folder cap to the vault when continuing an import', async () => {
+  const source = createFakePasswordSource([], { busy: new Map([['bw-3', 3]]) });
+  const resume = createMemoryImportResume();
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  mount(source, PARSED, resume, { items: [] });
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Import 3 items' })
+  );
+  await screen.findByText('1 failed', undefined, { timeout: 5000 });
+  cleanup();
+
+  // The first run's folders count toward 500 already; they are not added twice.
+  mount(source, PARSED, resume, { items: [], folders: vaultFolders(499) });
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText(/^Continuing an earlier import of this file/);
+  const start = screen.getByRole('button', { name: 'Import 3 items' });
+  expect((start as HTMLButtonElement).disabled).toBe(false);
 });
