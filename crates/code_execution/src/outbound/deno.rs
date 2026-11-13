@@ -301,6 +301,7 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
+    max_calls_per_operation: u32,
     /// For an unattended program, the catalog a dry run tells reads from
     /// writes with, both for SDK operations and the requests they send.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -359,6 +360,7 @@ async fn bridge(
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         max_result_bytes: limits.max_result_bytes,
+        max_calls_per_operation: limits.max_calls_per_operation,
         operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
     })
     .map_err(internal)?;

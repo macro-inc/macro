@@ -907,3 +907,72 @@ async fn the_cpu_limit_stops_a_busy_program() {
     );
     service.shutdown().await;
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_looping_program_is_stopped_and_fails_naming_the_operation() {
+    let (_root, service) = setup(Limits {
+        max_calls_per_operation: 3,
+        ..Limits::default()
+    })
+    .await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        for _ in 0..3 {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            assert!(
+                request.starts_with("GET ") && request.contains("/threads/thread-1"),
+                "{request}"
+            );
+            respond(&mut stream, r#"{"thread":{}}"#).await;
+        }
+        // The calls past the budget never reach the API.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    // Catching each failure must not hide the loop: the run still fails.
+    let source = r#"
+export async function main({ macro }: { macro: any }) {
+  let refused = 0;
+  for (let i = 0; i < 10; i++) {
+    try {
+      await macro._client.email.getThread({ path: { thread_id: "thread-1" } });
+    } catch {
+      refused++;
+    }
+  }
+  return { refused };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("email", host.clone())],
+        serde_json::json!({}),
+        false,
+    );
+    let (progress, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(
+        error
+            .message
+            .starts_with("Stopped: this program called email.getThread more than 3 times"),
+        "{}",
+        error.message
+    );
+    assert_eq!(
+        progress
+            .iter()
+            .filter(|event| event["status"] == "refused")
+            .count(),
+        7
+    );
+    server.await.unwrap();
+    service.shutdown().await;
+}

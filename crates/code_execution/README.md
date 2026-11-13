@@ -86,6 +86,7 @@ fingerprint stays valid until it changes.
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |
+| Calls of one SDK operation (`Limits::max_calls_per_operation`; later calls are refused and the run fails, naming it) | 200 |
 | V8 old-space target per child | 128 MiB |
 | CPU time per child (`Limits::max_cpu`, off by default) | kernel stops it (SIGXCPU) |
 | Scheduling (`Limits::background`, off by default) | niceness 10 |

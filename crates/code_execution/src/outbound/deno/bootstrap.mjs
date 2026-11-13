@@ -74,7 +74,7 @@ AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
-  const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, maxCallsPerOperation, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
@@ -83,8 +83,25 @@ try {
     ...operation,
     pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
   }));
-  if (dryRun) gateRequests(({service, operation}) =>
-    catalog.get(`${service}.${operation}`)?.write === false ? undefined : {skip: {data: {}}});
+  // A program stuck in a loop (reading the same thread over and over, walking
+  // every page of a search for a match that never comes) would call one API
+  // until the deadline and end with only "timed out". Refuse an operation past
+  // its budget instead, with an error that says what looped, so the agent can
+  // rewrite the program rather than run it again. The run fails even when the
+  // program catches the refusal, since its result would be incomplete.
+  const calls = new Map();
+  let looping;
+  gateRequests(({service, operation}) => {
+    const key = `${service}.${operation}`;
+    const count = (calls.get(key) ?? 0) + 1;
+    calls.set(key, count);
+    if (count > maxCallsPerOperation) {
+      looping ??= `Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. Don't run it again as is: stop iterating once you have what you need (break out of for await loops), read an item once and reuse it, use batched reads such as macro.tasks.summaries, or narrow the search. Split genuinely large jobs across executions.`;
+      return {refuse: looping};
+    }
+    if (dryRun && catalog.get(key)?.write !== false) return {skip: {data: {}}};
+    return undefined;
+  });
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
@@ -142,6 +159,10 @@ try {
     const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
     if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
     value = await main({...context, macro, session, execution});
+  }
+  if (looping) {
+    emit({type: "error", message: looping});
+    exit(0);
   }
   if (unattended) {
     // A step's output feeds later steps whole; one too large fails instead
