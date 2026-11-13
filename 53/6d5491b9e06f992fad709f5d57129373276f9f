@@ -1,0 +1,24 @@
+apps/web/src/features/dynamic-ui/widgets/wakes/format.test.ts
+  s_d4c2d696332a80::t_41a1892ed9589a 8,117,166,172,177-185
+apps/web/src/lib/queries/agent-wakes/wakes.ts
+  s_d4c2d696332a80::t_41a1892ed9589a 3,41,50,71
+apps/web/src/features/dynamic-ui/widgets/wakes/format.ts
+  s_d4c2d696332a80::t_41a1892ed9589a 41-43,45,47-54,56,60-64,67-69
+  s_d4c2d696332a80::t_902cbc39444a16 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "536d5491b9e06f992fad709f5d57129373276f9f",
+  "prompts": {},
+  "sessions": {
+    "s_d4c2d696332a80": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8237ce79-a9ac-4b1a-bced-6b9de71c7898",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
