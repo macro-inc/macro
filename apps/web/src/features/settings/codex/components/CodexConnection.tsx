@@ -3,6 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { MachineSection } from '../../components/connected-runtimes-section';
 import { SettingsSelect } from '../../components/settings-select';
 import { HarnessIcon } from '../../integration-ui';
 import type { CodexConnectionDisplay, CodexLoginDisplay } from '../core/types';
@@ -50,7 +51,7 @@ export function CodexConnection(props: {
     props.onDisconnect();
   };
   return (
-    <section class="flex gap-4 px-6 py-5" aria-label="Codex connection">
+    <MachineSection aria-label="Codex connection">
       <HarnessIcon>
         <OpenAiIcon />
       </HarnessIcon>
@@ -273,6 +274,6 @@ export function CodexConnection(props: {
           </Show>
         </Show>
       </div>
-    </section>
+    </MachineSection>
   );
 }

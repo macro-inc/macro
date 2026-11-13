@@ -9,7 +9,11 @@
 //! unrepresentable (`host_port: None` == portless worker).
 
 use super::Mode;
+use super::google_emulator;
 use super::instance::Port;
+
+/// OpenBao release with namespaces, KV v2, JWT auth, and TOTP support.
+pub const OPENBAO_IMAGE: &str = "openbao/openbao:2.7.2";
 
 /// A Rust service whose binary the orchestrator builds on the host and mounts
 /// into the runtime image at `/app/out/<cargo_bin>`. Several fields document
@@ -168,6 +172,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         compose_name: "gmail_forwarder",
         cargo_bin: "seed_cli",
         package: "seed_cli",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[],
+        opt_in: false,
+    },
+    RustService {
+        // Not a service of ours: the Gmail emulator binary, shipped into
+        // /app/out for the gmail_emulator sidecar (a bespoke gen_compose
+        // block, hence no modes) that stands in for Google on a stack with
+        // no real Google client.
+        compose_name: google_emulator::SERVICE,
+        cargo_bin: "gmail_emulator",
+        package: "gmail_emulator",
         host_port: None,
         path_prefix: None,
         is_websocket: false,

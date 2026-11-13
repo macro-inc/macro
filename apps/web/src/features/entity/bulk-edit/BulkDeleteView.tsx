@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ActionDialogShell, Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type Ref, Show } from 'solid-js';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 import { createBulkDeleteDssItemsMutation } from '../queries/dss';
 import type { EntityData } from '../types/entity';
@@ -20,6 +20,8 @@ export const BulkDeleteView = (props: {
   onPartialDelete?: PartialDeleteHandler;
   /** What else the deletion removes, under its description. */
   note?: string;
+  /** The confirm button, which the dialog focuses on open so Enter deletes. */
+  deleteButtonRef?: Ref<HTMLButtonElement>;
 }) => {
   const mutation = createBulkDeleteDssItemsMutation();
   const [remainingEntities, setRemainingEntities] =
@@ -27,7 +29,19 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
+  // The button stays enabled while deleting, so ignore presses while an
+  // attempt is in flight instead of deleting the same items twice.
+  let deleting = false;
   const handleDelete = async () => {
+    if (deleting) return;
+    deleting = true;
+    try {
+      await deleteEntities();
+    } finally {
+      deleting = false;
+    }
+  };
+  const deleteEntities = async () => {
     // Keep the completion attached to the caller that submitted this attempt,
     // even if another modal replaces this one while the request is in flight.
     const onPartialDelete = props.onPartialDelete;
@@ -89,7 +103,13 @@ export const BulkDeleteView = (props: {
           Cancel
         </Button>
         <Button
+          ref={props.deleteButtonRef}
           variant="secondary"
+          // Delete takes focus when the dialog opens, so an Enter held down to
+          // open it would repeat onto Delete. Confirm only on a fresh press.
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key === 'Enter' && event.repeat) event.preventDefault();
+          }}
           onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
         >
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}

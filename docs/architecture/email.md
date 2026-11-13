@@ -1,5 +1,9 @@
 # Email feature architecture
 
+This page covers the frontend and the service contracts it uses. The
+[email backend architecture](email-backend.md) describes service composition,
+worker ownership and persistence boundaries.
+
 Email applies the stronger composition and capability
 boundaries in [Frontend feature architecture](frontend-features.md).
 Its reusable packages live under `apps/web/src/features/`. The application still
@@ -66,10 +70,14 @@ may import a block package, `@core/block`, or block-related signal modules.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
 - `block-email/EmailBlockAdapter.tsx` translates block focus, keyboard scope,
-  location parameters, and block methods into `EmailThreadHost` callbacks.
+  location parameters, and block methods into `EmailThreadHost` callbacks, then
+  picks `views/email-thread.tsx` or, on touch, where every thread opens as
+  this block, `views/mobile/email-thread.tsx`.
   `block-email/EmailThreadHostView.tsx` composes the shared thread body without
   reading block state, so the Email view can mount it directly and compose its
-  own top bar. The thread does not read a block ID or register a block method
+  own top bar. The body adds nothing to a host's header: each host passes its
+  top bar and header actions, and the mobile view passes only a title and Info.
+  The thread does not read a block ID or register a block method
   itself. The adapter captures block signal accessors during setup; event
   callbacks use those captured functions instead of resolving a provider after
   setup.
@@ -612,7 +620,9 @@ format to migrate. Unsupported journal records retain their contents and
 recognizable draft reservations for recovery.
 
 `email-send-dispatcher.ts` submits immediately online through the fetch-only
-GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
+GraphQL client in `service-storage/email-send.ts`. It keeps polling whatever
+`navigator.onLine` says, which native webviews can report as offline while the
+API is reachable; offline attempts back off. Per-attempt database leases
 coordinate tabs, with bounded concurrency across unrelated messages. A lost
 response triggers a status read before resubmitting the identical attempt.
 A thread shows an approved send as sent before the provider confirms it, while

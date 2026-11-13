@@ -13,10 +13,12 @@ import {
 function mountCalendar(view: CalendarPeriodView = 'timeGridDay') {
   const element = document.createElement('div');
   let calendar: Calendar;
+  let pagerContext: ReturnType<typeof useCalendarPager>;
   const scrollToTime = vi.fn();
 
   function Controls() {
     const pager = useCalendarPager();
+    pagerContext = pager;
     const [dateInfo, setDateInfo] = createSignal<DatesSetArg>();
     onMount(() => {
       calendar = new Calendar(element, {
@@ -72,7 +74,7 @@ function mountCalendar(view: CalendarPeriodView = 'timeGridDay') {
       <Controls />
     </CalendarPagerContextProvider>
   ));
-  return { calendar: () => calendar, scrollToTime };
+  return { calendar: () => calendar, pager: () => pagerContext, scrollToTime };
 }
 
 beforeEach(() => {
@@ -92,6 +94,17 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe('calendar page start dates', () => {
+  it('starts a late neighbor beside the period the active page moved to', async () => {
+    const { pager } = mountCalendar('timeGridDay');
+    fireEvent.click(screen.getByRole('button', { name: 'Another date' }));
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(pager().initialDateFor('previous').getDate()).toBe(4);
+    expect(pager().initialDateFor('next').getDate()).toBe(6);
+  });
 });
 
 describe('calendar Today navigation', () => {

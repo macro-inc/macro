@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { publishSessionActivity } from '@core/agent-session/session-activity';
 import type {
   FoldedMessage,
   MessagePart,
@@ -65,11 +66,9 @@ vi.mock('./parts/ToolCallPart', () => ({
       partIndex: number;
       inFlight: boolean;
       followedBy: (name: string) => boolean;
-      current?: boolean;
     };
   }) => (
     <div
-      data-current={String(props.context.current)}
       data-index={props.context.partIndex}
       data-followed-by-save={String(
         props.context.followedBy('SaveDatabaseQuery')
@@ -117,14 +116,24 @@ vi.mock('../ui', () => ({
     </div>
   ),
 }));
+const programSteps = vi.hoisted((): Record<string, number> => ({}));
+vi.mock('../views/code-execution-record', () => ({
+  useCodeExecutionRecord: (part: () => { id: string }) => ({
+    steps: () => programSteps[part().id] ?? 0,
+  }),
+}));
 vi.mock('../views/LiveToolGroup', () => ({
   LiveToolGroup: (props: {
     count: number;
     active: boolean;
     activeIndex?: number;
+    autoOpen?: boolean;
+    summary?: string;
     children: JSX.Element;
   }) => (
     <div
+      data-summary={props.summary}
+      data-auto-open={String(props.autoOpen ?? true)}
       data-active={String(props.active)}
       data-count={props.count}
       data-active-index={props.activeIndex}
@@ -542,47 +551,126 @@ describe('Message tool grouping', () => {
   });
 });
 
-describe('Message current step', () => {
-  it('marks the newest call of an open turn, even with thinking after it', () => {
+describe('Message tool runs', () => {
+  const program = (id: string): MessagePart =>
+    tool(id, {
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+    });
+  const lookup = (id: string, name: string): MessagePart =>
+    tool(id, { name: { kind: 'mcp', server: 'macro_internal', tool: name } });
+
+  it('counts one group per segment: shown calls and program steps, never lookups or programs', () => {
+    programSteps.first = 5;
+    programSteps.second = 2;
     const view = render(() => (
       <Message
         message={message(
           [
-            tool('first'),
-            text('Next.'),
-            tool('second'),
-            { kind: 'thought', text: 'Hmm' },
+            lookup('search', 'SearchTools'),
+            lookup('load', 'LoadTools'),
+            program('first'),
+            tool('read'),
+            program('second'),
+          ],
+          null
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(view.getByTestId('group').dataset.count).toBe('8');
+    expect(view.getAllByTestId('tool').map((row) => row.textContent)).toEqual([
+      'first',
+      'read',
+      'second',
+    ]);
+  });
+
+  it('keeps a run with programs from opening on its own', () => {
+    programSteps.only = 3;
+    const view = render(() => (
+      <Message message={message([program('only')], null)} inFlight />
+    ));
+    expect(view.getByTestId('group').dataset.autoOpen).toBe('false');
+  });
+
+  it('follows the running call among the rows shown, past hidden lookups', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            lookup('search', 'SearchTools'),
+            tool('a'),
+            tool('b', { status: 'running' }),
           ],
           null
         )}
         inFlight
       />
     ));
-    expect(
-      view.getAllByTestId('tool').map((row) => row.dataset.current)
-    ).toEqual(['false', 'true']);
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('1');
   });
 
-  it('marks no call once the turn has ended', () => {
+  it('lets a run of ordinary calls open as before', () => {
     const view = render(() => (
-      <Message
-        message={message([text('Done.'), tool('only')])}
-        inFlight={false}
-      />
+      <Message message={message([tool('a'), tool('b')], null)} inFlight />
     ));
-    expect(view.getByTestId('tool').dataset.current).toBe('false');
+    expect(view.getByTestId('group').dataset.autoOpen).toBe('true');
   });
 });
 
 describe('Message working tail', () => {
-  it('names the work after the last part of an open turn', () => {
+  it('shows one working row between calls while there is no live line', () => {
     const view = render(() => (
       <Message
         message={message([text('Looking.'), tool('a')], null)}
         inFlight
       />
     ));
-    expect(view.getByTestId('working').textContent).toBe('Running tools');
+    expect(view.getByTestId('working').textContent).toBe('Working');
+  });
+
+  it('lets the live line be the only working indicator between calls', () => {
+    publishSessionActivity('session', 'Searching your workspace…');
+    try {
+      const view = render(() => (
+        <Message
+          message={message([text('Looking.'), tool('a')], null)}
+          inFlight
+        />
+      ));
+      expect(view.getByTestId('group').dataset.summary).toBe(
+        'Searching your workspace…'
+      );
+      expect(view.queryByTestId('working')).toBeNull();
+    } finally {
+      publishSessionActivity('session', null);
+    }
+  });
+
+  it('keeps the working row after a call that no group carries the line for', () => {
+    publishSessionActivity('session', 'Searching your workspace…');
+    try {
+      const view = render(() => (
+        <Message
+          message={message(
+            [
+              tool('a'),
+              text('Showing what I found.'),
+              tool('display', {
+                name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+                detail: { kind: 'view', view: null, error: null },
+              }),
+            ],
+            null
+          )}
+          inFlight
+        />
+      ));
+      expect(view.getByTestId('working').textContent).toBe('Working');
+    } finally {
+      publishSessionActivity('session', null);
+    }
   });
 
   it('does not duplicate the active tool or group with a working shimmer', () => {

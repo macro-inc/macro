@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 serde_json = { workspace = true }
 # Local/dev orchestration. These deps reuse the workspace-pinned versions so
 # the orchestrator builds against the same crate graph as the services it
@@ -51,7 +52,7 @@ macro_env_var = { path = "../../../../crates/macro_env_var" }
 xtask_paths = { path = "../xtask_paths" }
 # Port windows, subnets and the machine-wide allocation registry.
 xtask_ports = { path = "../xtask_ports" }
-# Opt-in run_local telemetry (`local/telemetry.rs`); container health times.
+# Local build telemetry, on by default (`local/telemetry.rs`); container health times.
 chrono = { workspace = true }
 xtask_local_telemetry = { path = "../xtask_local_telemetry" }
 
