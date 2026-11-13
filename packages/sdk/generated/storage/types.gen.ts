@@ -4647,6 +4647,20 @@ export type CommentOnTextResponse = {
 };
 
 /**
+ * CRM-owned roles for columns in the reusable table.
+ */
+export type CommercialFields = {
+    /**
+     * Monetary fields, each with an independent per-row currency.
+     */
+    money?: Array<MoneyColumn>;
+    /**
+     * Outcome column, absent only for a pipeline from a pre-migration writer.
+     */
+    outcome?: string | null;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -10642,6 +10656,11 @@ export type FieldRename = {
  */
 export type FieldTotal = {
     /**
+     * The currency code of a monetary field's amounts; such a field has one
+     * total per currency, never converted or combined. Absent for other numbers.
+     */
+    currency?: string | null;
+    /**
      * The field.
      */
     field: string;
@@ -14538,6 +14557,20 @@ export type MessageTopicEvent = {
 };
 
 /**
+ * Stable association between a numeric amount and its per-row denomination.
+ */
+export type MoneyColumn = {
+    /**
+     * The numeric column; renaming it preserves this association.
+     */
+    amount: string;
+    /**
+     * The select column containing the currency code.
+     */
+    currency: string;
+};
+
+/**
  * A signed-in respondent's own response.
  */
 export type MyResponse = {
@@ -16005,6 +16038,10 @@ export type PinnedItem = {
  */
 export type Pipeline = {
     /**
+     * Stable identities for Outcome and amount/currency fields.
+     */
+    commercialFields: CommercialFields;
+    /**
      * Creation time.
      */
     createdAt: string;
@@ -16128,6 +16165,10 @@ export type PipelineExportResponse = {
  * One field of a pipeline, named as people see it.
  */
 export type PipelineFieldSummary = {
+    /**
+     * For a monetary amount, the field holding each entry's currency code.
+     */
+    currencyField?: string | null;
     /**
      * Whether it holds several values.
      */

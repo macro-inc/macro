@@ -9284,6 +9284,37 @@ export const createCrmPipelineWithFieldsBody = zod
 
 export const createCrmPipelineWithFieldsResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -9339,6 +9370,12 @@ export const createCrmPipelineWithFieldsResponse = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -9390,6 +9427,37 @@ version: what `ListPipelines` gives the agent, in one call.
  */
 export const listCrmPipelineDetailsResponseItem = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -9445,6 +9513,12 @@ export const listCrmPipelineDetailsResponseItem = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -9615,6 +9689,39 @@ export const searchCrmPipelineEntriesResponseItem = zod
       .describe('Its matching entries.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -9788,6 +9895,39 @@ export const listCrmRecordPipelineEntriesResponseItem = zod
       .describe('Its matching entries.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -10071,6 +10211,37 @@ export const editCrmPipelineBody = zod
 
 export const editCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -10126,6 +10297,12 @@ export const editCrmPipelineResponse = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -10926,6 +11103,39 @@ export const findCrmPipelineEntriesResponse = zod
       .describe('How many entries matched in all.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -10983,6 +11193,12 @@ export const findCrmPipelineEntriesResponse = zod
             .array(
               zod
                 .object({
+                  currencyField: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "For a monetary amount, the field holding each entry's currency code."
+                    ),
                   multiple: zod
                     .boolean()
                     .describe('Whether it holds several values.'),
@@ -11032,6 +11248,12 @@ export const findCrmPipelineEntriesResponse = zod
       .array(
         zod
           .object({
+            currency: zod
+              .string()
+              .nullish()
+              .describe(
+                "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+              ),
             field: zod.string().describe('The field.'),
             sum: zod.number().describe('The sum.'),
           })
