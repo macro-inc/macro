@@ -105,6 +105,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     linked: 'attachSuggestionDraft',
     approved: 'acceptSuggestion',
     rejected: 'dismissSuggestion',
+    restored: 'restoreSuggestion',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {

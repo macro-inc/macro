@@ -763,6 +763,28 @@ export type ExecutionResult = {
 };
 
 /**
+ * How many of a person's shown suggestions have each status.
+ */
+export type FeedCounts = {
+    /**
+     * Done in the last 24 hours.
+     */
+    done: number;
+    /**
+     * Their last run failed.
+     */
+    failed: number;
+    /**
+     * Open, nothing under way.
+     */
+    open: number;
+    /**
+     * Their run is under way.
+     */
+    running: number;
+};
+
+/**
  * What starting a generation did.
  */
 export type GenerationStarted = {
@@ -1332,11 +1354,6 @@ export type RunInfo = {
 export type RunMode = 'composer' | 'background';
 
 /**
- * How a run is going, as its session says.
- */
-export type RunProgress = 'running' | 'needs_approval' | 'needs_input' | 'finished' | 'failed' | 'unknown';
-
-/**
  * What started a run, for its page.
  */
 export type RunStart = {
@@ -1366,6 +1383,11 @@ export type RunStart = {
     by: string;
     kind: 'manual';
 };
+
+/**
+ * A run's state without its data: how it is stored and served.
+ */
+export type RunStateName = 'starting' | 'running' | 'waiting' | 'stopping' | 'cancelling' | 'finished' | 'failed' | 'cancelled';
 
 /**
  * Whether a routine's runs are listed in Home and the Agents list. Routines
@@ -1671,6 +1693,7 @@ export type Suggestion = SuggestionKind & {
      * What acting on it produced.
      */
     produced: Array<Target>;
+    result?: null | Target;
     run?: null | SuggestionRun;
     /**
      * Where it is for the person.
@@ -1684,6 +1707,10 @@ export type Suggestion = SuggestionKind & {
      * Why it was resolved; only on resolved suggestions.
      */
     stateReason?: string | null;
+    /**
+     * What the card shows: whether it is open, being run, failed or done.
+     */
+    status: SuggestionStatus;
     /**
      * Why, in a line or two.
      */
@@ -1713,16 +1740,33 @@ export type SuggestionChanged = {
 };
 
 /**
+ * A reply suggestion's draft.
+ */
+export type SuggestionDraft = Target & {
+    /**
+     * The start of its plain text, as it was when attached.
+     */
+    preview?: string | null;
+};
+
+/**
  * A person's feed: their open suggestions, best first, and the ones they
- * finished in the last day, newest first.
+ * finished in the last day, newest first. Both lists are in the order to
+ * show them.
  */
 export type SuggestionFeed = {
     /**
-     * Suggestions done in the last 24 hours, with what they produced.
+     * How many suggestions the whole feed holds of each status, whatever the
+     * `limit`.
      */
-    done: Array<Suggestion>;
+    counts: FeedCounts;
     /**
-     * The open suggestions.
+     * Suggestions done in the last 24 hours, with what they produced; left
+     * out when the feed was read with a `limit`.
+     */
+    done?: Array<Suggestion> | null;
+    /**
+     * The open suggestions, at most `limit` of them.
      */
     suggestions: Array<Suggestion>;
 };
@@ -1757,8 +1801,17 @@ export type SuggestionKind = {
      * What to do about the items.
      */
     action: EntityAction;
-    draft?: null | Target;
+    draft?: null | SuggestionDraft;
+    /**
+     * A reply suggestion's: that message's sender, by name.
+     */
+    from?: string | null;
     kind: 'entity';
+    /**
+     * A reply suggestion's: when the message the person hasn't answered
+     * came, as read from its item when the suggestion was last written.
+     */
+    waitingSince?: string | null;
 } | {
     kind: 'routine';
     /**
@@ -1784,24 +1837,32 @@ export type SuggestionReview = {
  */
 export type SuggestionRun = {
     /**
-     * How it is going, read from the session.
-     */
-    progress: RunProgress;
-    /**
-     * The agent session: open it to see the result or answer what it
-     * waits for.
+     * The agent session: open it to see the result.
      */
     sessionId: string;
     /**
      * When it started.
      */
     startedAt: string;
+    /**
+     * Where it is, as stored: reading it never asks the session.
+     */
+    state: RunStateName;
+    /**
+     * When it entered `state`.
+     */
+    stateChangedAt: string;
 };
 
 /**
  * Where a suggestion is for the person.
  */
 export type SuggestionState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
+
+/**
+ * What a suggestion's card shows, from its state and its latest run.
+ */
+export type SuggestionStatus = 'open' | 'running' | 'failed' | 'done' | 'closed';
 
 /**
  * What became of a session's write.
@@ -2741,6 +2802,11 @@ export type ListSuggestionsData = {
          * the reader's night.
          */
         timezone?: string;
+        /**
+         * Most open suggestions to return, best first; all when unset. With a
+         * limit the feed leaves out `done`; `counts` always counts every one.
+         */
+        limit?: number;
     };
     url: '/suggestions';
 };
@@ -2762,7 +2828,7 @@ export type ListSuggestionsError = ListSuggestionsErrors[keyof ListSuggestionsEr
 
 export type ListSuggestionsResponses = {
     /**
-     * The caller's open suggestions they can open every item of, best first
+     * The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of
      */
     200: SuggestionFeed;
 };
@@ -3042,6 +3108,46 @@ export type AttachSuggestionDraftResponses = {
 };
 
 export type AttachSuggestionDraftResponse = AttachSuggestionDraftResponses[keyof AttachSuggestionDraftResponses];
+
+export type RestoreSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/restore';
+};
+
+export type RestoreSuggestionErrors = {
+    401: string;
+    /**
+     * A generation session may not restore
+     */
+    403: string;
+    /**
+     * No suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    /**
+     * Not dismissed in the last five minutes, or a routine suggestion
+     */
+    409: string;
+    500: string;
+};
+
+export type RestoreSuggestionError = RestoreSuggestionErrors[keyof RestoreSuggestionErrors];
+
+export type RestoreSuggestionResponses = {
+    /**
+     * Open again, as proposed; a run the dismissal stopped stays stopped
+     */
+    204: void;
+};
+
+export type RestoreSuggestionResponse = RestoreSuggestionResponses[keyof RestoreSuggestionResponses];
 
 export type RetireSuggestionData = {
     body: RetireSuggestionRequest;

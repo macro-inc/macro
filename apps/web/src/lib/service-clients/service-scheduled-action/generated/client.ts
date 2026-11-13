@@ -2646,6 +2646,80 @@ export const attachSuggestionDraft = async (
 };
 
 /**
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, within
+five minutes of it.
+ */
+export type restoreSuggestionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type restoreSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type restoreSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type restoreSuggestionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type restoreSuggestionResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type restoreSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type restoreSuggestionResponseSuccess = restoreSuggestionResponse204 & {
+  headers: Headers;
+};
+export type restoreSuggestionResponseError = (
+  | restoreSuggestionResponse401
+  | restoreSuggestionResponse403
+  | restoreSuggestionResponse404
+  | restoreSuggestionResponse409
+  | restoreSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type restoreSuggestionResponse =
+  | restoreSuggestionResponseSuccess
+  | restoreSuggestionResponseError;
+
+export const getRestoreSuggestionUrl = (id: string) => {
+  return `/suggestions/${id}/restore`;
+};
+
+export const restoreSuggestion = async (
+  id: string,
+  options?: RequestInit
+): Promise<restoreSuggestionResponse> => {
+  const res = await fetch(getRestoreSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: restoreSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as restoreSuggestionResponse;
+};
+
+/**
  * @summary Retire an open suggestion from a suggestions generation session.
  */
 export type retireSuggestionResponse200 = {

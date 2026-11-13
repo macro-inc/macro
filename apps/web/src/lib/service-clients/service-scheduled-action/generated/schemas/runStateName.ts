@@ -7,16 +7,18 @@
  */
 
 /**
- * How a run is going, as its session says.
+ * A run's state without its data: how it is stored and served.
  */
-export type RunProgress = (typeof RunProgress)[keyof typeof RunProgress];
+export type RunStateName = (typeof RunStateName)[keyof typeof RunStateName];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const RunProgress = {
+export const RunStateName = {
+  starting: 'starting',
   running: 'running',
-  needs_approval: 'needs_approval',
-  needs_input: 'needs_input',
+  waiting: 'waiting',
+  stopping: 'stopping',
+  cancelling: 'cancelling',
   finished: 'finished',
   failed: 'failed',
-  unknown: 'unknown',
+  cancelled: 'cancelled',
 } as const;
