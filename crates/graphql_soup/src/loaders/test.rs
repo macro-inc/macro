@@ -489,6 +489,16 @@ fn email_threads_are_not_encoded_into_the_soup_request() {
 }
 
 #[test]
+fn scheduled_actions_are_not_encoded_into_the_soup_request() {
+    let routine_id = Uuid::from_u128(24);
+    let entities = vec![EntityType::ScheduledAction.with_entity_string(routine_id.to_string())];
+
+    let error = entity_filter_ast(&entities).expect_err("routines are not Soup entities");
+
+    assert!(error.to_string().contains("not represented in Soup"));
+}
+
+#[test]
 fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
     let first_document = Uuid::from_u128(21);
     let second_document = Uuid::from_u128(22);

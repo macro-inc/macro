@@ -48,6 +48,7 @@ schema types (entity type, owner type, property filters).
 - `cargo test -p graphql_common`.
 
 - `ExternalChat` (`EXTERNAL_CHAT`) is a canonical GraphQL entity type; Soup registration remains deferred.
+- Build `GraphqlSoupEntityType` only with `try_new`, which is `None` outside Soup; never fall back to another Soup type. `OUTSIDE_SOUP` exists only for the deprecated notification `entityType` and is rejected as input.
 
 ## Related
 

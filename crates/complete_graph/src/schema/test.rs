@@ -1794,6 +1794,33 @@ async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
 }
 
 #[tokio::test]
+async fn soup_entity_rejects_outside_soup_without_reading_soup() {
+    let harness = harness();
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(Uuid::from_u128(10))]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: OUTSIDE_SOUP, entityId: "{}"}}) {{ id }} }} }}"#,
+            Uuid::from_u128(10)
+        ))
+        .await;
+
+    assert_eq!(
+        response.errors[0].message,
+        "OUTSIDE_SOUP is not a Soup entity type"
+    );
+    assert_eq!(
+        harness
+            .primary_soup_service
+            .raw_calls
+            .load(Ordering::SeqCst),
+        0
+    );
+}
+
+#[tokio::test]
 async fn soup_entity_is_null_when_the_viewer_cannot_see_it() {
     let harness = harness();
     harness.primary_soup_service.set_raw_response(Vec::new());

@@ -2193,6 +2193,12 @@ export type GraphqlSoupEntityType =
   | 'HARNESS'
   /** Initiative entity, presented as a project in the frontend. */
   | 'INITIATIVE'
+  /**
+   * An entity outside Soup, such as a routine. Only the deprecated
+   * notification `entityType` returns it; read `targetEntityType` instead.
+   * Rejected as input.
+   */
+  | 'OUTSIDE_SOUP'
   /** Project entity. */
   | 'PROJECT';
 
