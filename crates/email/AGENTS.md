@@ -203,6 +203,22 @@ tools — hexagonal, heavily feature-gated.
   Synced Macro drafts in junk/trash must not advance All Mail timestamps.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
+- A CRM record's Team view (team-scoped All Mail with one OR-tree of addresses)
+  reads through `TeamRead` (`dynamic/query/team_scope.rs`): threads stream in
+  page order from the record's address superset or from each contributing
+  inbox's newest threads, and each gets the message match and the privacy rule
+  until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
+  whole stream before the LIMIT. `ALLOWED` restates `crm_email_thread_allowed`
+  set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
+  mailbox conditions (`allowed_restates_the_privacy_function` and
+  `contributing_inboxes_restate_the_privacy_function` compare them); change
+  them together. A copy stays only when no better copy passes the same checks,
+  so the representative never depends on the cursor; `test/crm_team_read.rs`
+  compares every stream with the general builder page by page. The superset
+  keeps only the read inboxes' own contacts, because a message lists only its
+  own inbox's contacts (`parse_and_upsert_message_contacts`); a writer that
+  broke that would drop threads from the Team view, and their conversations'
+  other copies with them (`docs/CRM_EMAIL_PRIVACY.md`).
 - The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
   the inbox: each inbox takes a page of opened threads and a page of
   never-opened threads (`idx_email_threads_inbox_reminder_sort` for

@@ -1,6 +1,7 @@
 mod all_mail;
 mod attachment_filter;
 mod crm_scope_dynamic_query;
+mod crm_team_read;
 mod draft;
 mod dynamic_query;
 mod folders;
