@@ -236,7 +236,7 @@ fn a_letter_starts_the_command_line_and_enter_runs_it() {
 
 #[test]
 fn reserved_letters_do_not_start_the_command_line() {
-    for letter in ['j', 'k', 'h', 'l', 'q', 'w'] {
+    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a'] {
         let (mode, _) = step(idle(), Key::Char(letter), &Page::Monitor);
         assert_eq!(mode, idle(), "{letter}");
     }
@@ -361,4 +361,13 @@ fn key_events_decode() {
 
     let shift_a = KeyEvent::new(KeyCode::Char('A'), KeyModifiers::SHIFT);
     assert_eq!(Key::from_event(shift_a), Some(Key::Char('A')));
+}
+
+#[test]
+fn a_toggles_ended_agents() {
+    let focused = Mode::Base(Base::Pane(Pane::Agents));
+    assert_eq!(
+        step(focused.clone(), Key::Char('a'), &Page::Monitor),
+        (focused, Action::ToggleAll)
+    );
 }

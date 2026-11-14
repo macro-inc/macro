@@ -193,8 +193,10 @@ impl TranscriptState {
                 }
                 TranscriptEventKind::Cost(cost) => {
                     // A reported cost is a running total; the last one wins.
-                    if let Some(usd) = cost.usd() {
-                        self.reported = Some(usd);
+                    // Only a program's own total counts: an estimate it sends
+                    // is no better than the one priced from its usage here.
+                    if let Cost::Known(usd) = cost {
+                        self.reported = Some(*usd);
                     }
                 }
             }

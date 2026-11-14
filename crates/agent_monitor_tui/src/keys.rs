@@ -307,6 +307,8 @@ pub enum Action {
     Unknown(String),
     /// Filter rows by this find query; empty clears it.
     Find(String),
+    /// Show ended agents too, or only current ones again.
+    ToggleAll,
 }
 
 /// The next state and action for `key` in `mode` on `page`.
@@ -351,6 +353,7 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Enter => (stay, Action::Activate(pane)),
         Key::Char('q') => (stay, Action::Quit),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
+        Key::Char('a') => (stay, Action::ToggleAll),
         Key::Char('/') => (
             Mode::Find {
                 input: Input::default(),

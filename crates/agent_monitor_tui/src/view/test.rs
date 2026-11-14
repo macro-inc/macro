@@ -1,4 +1,4 @@
-use chrono::{TimeZone, Utc};
+use chrono::{TimeDelta, TimeZone, Utc};
 
 use agent_monitor::domain::model::{
     Agent, AgentId, AgentKind, Severity, Snapshot, Status, TapeEvent, TapeKind, Timestamp,
@@ -34,6 +34,12 @@ fn event(seq: u64, id: &str, kind: TapeKind, severity: Severity) -> TapeEvent {
         text: String::from("Bash cargo test"),
         severity,
     }
+}
+
+fn agent_at(id: &str, status: Status, active: Timestamp) -> Agent {
+    let mut agent = agent(id, status, 0);
+    agent.last_activity = Some(active);
+    agent
 }
 
 fn view() -> ViewState {
@@ -157,15 +163,15 @@ fn filter_words_match_kind_status_and_name() {
     };
     let words = |words: &[&str]| Filter {
         words: words.iter().map(|word| (*word).to_owned()).collect(),
-        find: String::new(),
+        ..Filter::default()
     };
 
     assert_eq!(ids(words(&["builder", "working"])), vec!["demo:rpc"]);
     assert_eq!(ids(words(&["manager"])), vec!["demo:lead"]);
     assert_eq!(
         ids(Filter {
-            words: Vec::new(),
             find: String::from("u"),
+            ..Filter::default()
         }),
         vec!["demo:ui"]
     );
@@ -239,4 +245,46 @@ fn transcript_items_for_another_agent_are_ignored() {
     let transcript = view.transcript.as_ref().expect("a transcript is open");
     assert_eq!(transcript.agent, open);
     assert_eq!(transcript.items.len(), 1);
+}
+
+#[test]
+fn ended_agents_are_listed_only_briefly_unless_all() {
+    let mut view = view();
+    let mut old = agent("demo:old", Status::Done, 0);
+    old.ended = Some(at(0));
+    let mut just_done = agent("demo:just-done", Status::Done, 0);
+    just_done.ended = Some(at(0) + TimeDelta::minutes(25));
+    // The newest activity sets the view's clock half an hour after `old` ended.
+    let working = agent_at(
+        "demo:working",
+        Status::Working,
+        at(0) + TimeDelta::minutes(30),
+    );
+    view.apply(snapshot(1, vec![old, just_done, working]));
+
+    let ids = |all: bool| -> Vec<String> {
+        view.sorted_agents(&Filter {
+            all,
+            ..Filter::default()
+        })
+        .iter()
+        .map(|agent| agent.id.to_string())
+        .collect()
+    };
+    assert_eq!(ids(false), vec!["demo:working", "demo:just-done"]);
+    assert_eq!(
+        ids(true),
+        vec!["demo:working", "demo:just-done", "demo:old"]
+    );
+}
+
+#[test]
+fn failures_skip_agents_last_seen_before_the_window() {
+    let mut view = view();
+    let mut old = agent("demo:old-crash", Status::Failed, 0);
+    old.tool_errors = 4;
+    let recent = agent_at("demo:recent", Status::Working, at(0) + TimeDelta::hours(30));
+    view.apply(snapshot(1, vec![old, recent]));
+
+    assert!(view.failures(&Filter::default()).is_empty());
 }

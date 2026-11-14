@@ -445,7 +445,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-const HELP: [(&str, &str); 16] = [
+const HELP: [(&str, &str); 17] = [
     (
         "0 … 7",
         "monitor, then the numbered pane full screen (5 = tree)",
@@ -461,6 +461,7 @@ const HELP: [(&str, &str); 16] = [
     ),
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
+    ("a", "list ended agents too, or only current ones"),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),
@@ -470,7 +471,10 @@ const HELP: [(&str, &str); 16] = [
         "FAIL TREE SRC BODY WALL",
         "failures, tree, sources, body, wall",
     ),
-    ("AGT builder working", "words after a mnemonic filter rows"),
+    (
+        "AGT builder working",
+        "words after a mnemonic filter rows; all lists ended",
+    ),
 ];
 
 /// The help box: the keys column plus the longest description and borders.

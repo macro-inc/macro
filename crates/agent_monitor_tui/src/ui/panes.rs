@@ -207,7 +207,16 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
         .unwrap_or(0);
     let columns = AgentColumns::for_width(area.width.saturating_sub(2));
 
-    let mut extra = vec![count_span(format!("{live} LIVE / {} ROWS", rows.len()))];
+    let mut extra = vec![count_span(format!(
+        "{live} LIVE · {} ROWS / {} ALL",
+        rows.len(),
+        app.view.agents.len()
+    ))];
+    extra.push(if app.filter.all {
+        Span::styled(" ALL · a HIDES ENDED ", theme::bold(theme::YELLOW))
+    } else {
+        Span::styled(" a SHOWS ENDED ", theme::ink(theme::FAINT))
+    });
     if !app.filter.is_empty() {
         extra.push(Span::styled(" FILTERED ", theme::bold(theme::YELLOW)));
     }
