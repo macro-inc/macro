@@ -1,0 +1,117 @@
+crates/agent_monitor/Cargo.toml
+  s_1b36fa5422acb7::t_7f39c471457c39 22,25,28-31
+  s_7a07194ea723e2::t_f3df7f590a1d39 26
+  s_7a07194ea723e2::t_a3ee43209bf6f4 14,19-20,23-24,27
+Cargo.lock
+  s_7a07194ea723e2::t_64596c8068f59b 905,911-912,11421-11440,11979-11998,14521-14548,14859-14868
+Cargo.toml
+  s_cfe0e68707efd8::t_b788870e2e93ac 380
+crates/agent_monitor/examples/sources_dump.rs
+  s_cfe0e68707efd8::t_6b07c56c23c047 1-211
+crates/agent_monitor/fixtures/claude/proj-alpha/s-1.jsonl
+  s_cfe0e68707efd8::t_054ef8311a758b 1-10
+crates/agent_monitor/fixtures/claude/proj-alpha/s-1/subagents/agent-abc.jsonl
+  s_cfe0e68707efd8::t_1d0edb0ebc9654 1-2
+crates/agent_monitor/fixtures/claude/proj-alpha/s-1/subagents/agent-abc.meta.json
+  s_cfe0e68707efd8::t_cea72eb72a4379 1
+crates/agent_monitor/fixtures/codex/2030/01/01/rollout-2030-01-01T10-00-00-0aaaaaaa-1111-7222-8333-444444444444.jsonl
+  s_cfe0e68707efd8::t_66d5ec957f1b0e 1-9
+crates/agent_monitor/fixtures/codex_legacy/rollout-2029-01-01T00-00-00-0bbbbbbb-1111-7222-8333-444444444444.jsonl
+  s_cfe0e68707efd8::t_868aace0af0bf4 1-4
+crates/agent_monitor/fixtures/hc_events.jsonl
+  s_cfe0e68707efd8::t_0e8940fd7e7569 1-12
+crates/agent_monitor/src/domain.rs
+  s_cfe0e68707efd8::t_8904b4cd49ebc0 7
+crates/agent_monitor/src/domain/join.rs
+  s_cfe0e68707efd8::t_f8c938c1d6e22e 9,22,36-39,81-91,105-108,111,127-128,181-185,188-191,199-207,219-221,236-238,337-342,345-357,359-370,376-386,392-393,395-405,471-486,494-498,505,511-519,525,531-533,538-540,547,549-761,892,921
+crates/agent_monitor/src/domain/join/test.rs
+  s_cfe0e68707efd8::t_486f0687dc15ed 220-810
+crates/agent_monitor/src/domain/pricing.rs
+  s_cfe0e68707efd8::t_9504ebebbf773e 1-189
+crates/agent_monitor/src/domain/pricing/test.rs
+  s_cfe0e68707efd8::t_eb5d7f557a04b6 1-102
+crates/agent_monitor/src/lib.rs
+  s_cfe0e68707efd8::t_3dda91a9d61acd 11
+crates/agent_monitor/src/outbound.rs
+  s_cfe0e68707efd8::t_1a43b22ac77896 1-4,6-8,10-20
+crates/agent_monitor/src/outbound/claude_registry.rs
+  s_cfe0e68707efd8::t_bc4ab54338b773 1-138
+crates/agent_monitor/src/outbound/claude_registry/test.rs
+  s_cfe0e68707efd8::t_6a0840dd792fb2 1-72
+crates/agent_monitor/src/outbound/claude_transcripts.rs
+  s_cfe0e68707efd8::t_e3bf5bdbc2ce13 1-388
+crates/agent_monitor/src/outbound/claude_transcripts/test.rs
+  s_cfe0e68707efd8::t_f46d94f1eadf54 1-279
+crates/agent_monitor/src/outbound/codex_rollouts.rs
+  s_cfe0e68707efd8::t_e31a73f35ed819 1-262
+crates/agent_monitor/src/outbound/codex_rollouts/test.rs
+  s_cfe0e68707efd8::t_e5e5a461e00824 1-140
+crates/agent_monitor/src/outbound/hc.rs
+  s_cfe0e68707efd8::t_c5cc2a85187738 1-171
+crates/agent_monitor/src/outbound/hc/parse.rs
+  s_cfe0e68707efd8::t_d19ca8f73e1513 1-333
+crates/agent_monitor/src/outbound/hc/test.rs
+  s_cfe0e68707efd8::t_4070c8fa5d98f3 1-218
+crates/agent_monitor/src/outbound/local.rs
+  s_cfe0e68707efd8::t_ea3de542f641d0 1-76
+crates/agent_monitor/src/outbound/macrod_sessions.rs
+  s_cfe0e68707efd8::t_a4e97353603b16 1-142
+crates/agent_monitor/src/outbound/macrod_sessions/test.rs
+  s_cfe0e68707efd8::t_ab5f60c8d7a5ff 1-43
+crates/agent_monitor/src/outbound/managers.rs
+  s_cfe0e68707efd8::t_7288e363ab79c2 1-138
+crates/agent_monitor/src/outbound/managers/test.rs
+  s_cfe0e68707efd8::t_5e4e093ba56bb4 1-45
+crates/agent_monitor/src/outbound/records.rs
+  s_cfe0e68707efd8::t_e5a3b1121ac1b3 1-305
+crates/agent_monitor/src/outbound/run_records.rs
+  s_cfe0e68707efd8::t_0c04c4fe26c038 1-167
+crates/agent_monitor/src/outbound/run_records/test.rs
+  s_cfe0e68707efd8::t_c18c7646221e4d 1-58
+crates/agent_monitor/src/outbound/tail.rs
+  s_cfe0e68707efd8::t_aa1e3c6e0f7fa6 1-153
+crates/agent_monitor/src/outbound/tail/test.rs
+  s_cfe0e68707efd8::t_60b2384ef9742c 1-105
+crates/agent_monitor/src/outbound/test_support.rs
+  s_cfe0e68707efd8::t_5176b965db1996 1-95
+crates/agent_monitor/src/outbound/transcripts.rs
+  s_cfe0e68707efd8::t_f1655cc527bc31 1-671
+crates/agent_monitor/src/outbound/transcripts/test.rs
+  s_cfe0e68707efd8::t_105dce507de32e 1-60
+crates/agent_monitor/src/outbound/watch.rs
+  s_cfe0e68707efd8::t_99955cfc61516b 1-86
+crates/agent_monitor/src/outbound/watch/test.rs
+  s_cfe0e68707efd8::t_6d0a480082683b 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bbd8be3383c7b141d75f22321978f8f39ca1dc7d",
+  "prompts": {},
+  "sessions": {
+    "s_1b36fa5422acb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cb59596-7b07-4ad3-a590-3ccda4aca3de",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
