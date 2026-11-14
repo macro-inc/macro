@@ -26,7 +26,14 @@ function ReplyFocusHarness() {
   const [replying, setReplying] = createSignal(false);
   return (
     <>
-      <Root message={message} actions={{ onReply: () => setReplying(true) }}>
+      <Root
+        message={message}
+        actions={{
+          onReply: () => {
+            setReplying(true);
+          },
+        }}
+      >
         <div data-message-content>hello</div>
         <ActionMenu />
       </Root>
