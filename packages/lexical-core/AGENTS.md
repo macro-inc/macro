@@ -28,6 +28,13 @@ composer imports the URL matcher from this package; do not duplicate it.
 
 ## Gotchas
 
+GitHub comment and PR bodies go through `normalizeGithubMarkdown`
+(`utils/github-markdown.ts`) before import: it rewrites GitHub's raw HTML into
+Markdown and keeps `<details>` for `transformers/details.ts`. `DetailsNode` is
+registered only in `StaticRenderNodeTypes` (read-only renderers); the details
+transformer is in every set but does nothing in an editor without the node, so
+editors and services keep `<details>` as text.
+
 Human user mention Markdown requires only a nonempty string `userId`; the importer
 derives a missing email from `macro|` IDs so web name lookup and clipboard round
 trips can resolve the user. Other identities still need an email or display name.

@@ -133,6 +133,7 @@ async fn a_row_id_another_database_already_has_is_refused_as_taken(pool: PgPool)
             name: "Elsewhere".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

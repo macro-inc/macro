@@ -5,6 +5,7 @@ mod draft;
 mod dynamic_query;
 mod folders;
 mod importance_pagination;
+mod inbox_viewed_sort;
 mod labels;
 mod link;
 mod mail_tab_projection;
@@ -26,6 +27,7 @@ mod subject_filter;
 mod thread;
 mod thread_archive;
 mod thread_labels;
+mod thread_lookup;
 mod thread_redirect;
 mod thread_unread;
 

@@ -78,6 +78,7 @@ export function setupPhaseIndex(computer: ComputerStatus): number {
 
 export function setupStepLabel(step: SetupStep): string | undefined {
   return match(step)
+    .with('billing', () => t('computers.stageBilling'))
     .with('creating', () => t('computers.stepCreating'))
     .with('booting', () => t('computers.stepBooting'))
     .with('connecting', () => t('computers.stepConnecting'))

@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
+import { PropertiesProvider } from '../context/PropertiesContext';
+import { PropertyRootContext } from '../core/context';
 import type { EntityProperty } from '../types';
 import { EntityPropertyEditor } from './entity-property-editor';
 
@@ -97,17 +99,41 @@ describe('removed assignee lookup', () => {
     const [searchValue, setSearchValue] = createSignal('');
     const [selectedIndex, setSelectedIndex] = createSignal(0);
     render(() => (
-      <EntityPropertyEditor
-        property={property}
-        searchValue={searchValue}
-        selectedIndex={selectedIndex}
-        setSelectedIndex={setSelectedIndex}
-        onSubmit={vi.fn()}
-        onSave={vi.fn()}
-        setKeybindings={() => {}}
-        setPlaceholder={() => {}}
-        selectedEntityCount={1}
-      />
+      <PropertiesProvider
+        entityType="TASK"
+        canEdit
+        properties={() => [property]}
+        onRefresh={() => {}}
+        onPropertyAdded={() => {}}
+        onPropertyDeleted={() => {}}
+        saveHandler={{
+          saveProperty: async () => {},
+          saveDate: async () => {},
+        }}
+      >
+        <PropertyRootContext.Provider
+          value={{
+            property: () => property,
+            pickedEntityName: () => undefined,
+            canEdit: () => true,
+            editorOpen: () => true,
+            openEditor: () => {},
+            closeEditor: () => {},
+          }}
+        >
+          <EntityPropertyEditor
+            property={property}
+            searchValue={searchValue}
+            selectedIndex={selectedIndex}
+            setSelectedIndex={setSelectedIndex}
+            onSubmit={vi.fn()}
+            onSave={vi.fn()}
+            setKeybindings={() => {}}
+            setPlaceholder={() => {}}
+            selectedEntityCount={1}
+          />
+        </PropertyRootContext.Provider>
+      </PropertiesProvider>
     ));
 
     fireEvent.click(screen.getByText('Former Name'));

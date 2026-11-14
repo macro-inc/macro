@@ -78,7 +78,7 @@ function _ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '42px' : '36px',
         'justify-content': 'center',
@@ -161,7 +161,7 @@ export function GithubStarButton() {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '14px' : '15px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '9px',
         height: mobile() ? '40px' : '38px',
         'justify-content': 'center',
@@ -203,7 +203,7 @@ export function GithubStarButton() {
                 display: 'inline-flex',
                 'font-family': 'Inter, body',
                 'font-size': mobile() ? '15px' : '16px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '5px',
                 'letter-spacing': '0.02em',
               }}
@@ -289,7 +289,7 @@ function Avatar(props: {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * 0.38)}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         overflow: 'hidden',
         'place-items': 'center',
@@ -930,7 +930,7 @@ export function HeroDocWindow() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '16px' : '18px',
-                'font-weight': '600',
+                'font-weight': '500',
                 'letter-spacing': '-0.01em',
                 margin: '0',
               }}
@@ -961,7 +961,7 @@ export function HeroDocWindow() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '14px' : '15px',
-                'font-weight': '600',
+                'font-weight': '500',
                 margin: '0',
               }}
             >
@@ -1051,7 +1051,7 @@ export function HeroDocWindow() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '14px' : '15px',
-                'font-weight': '600',
+                'font-weight': '500',
                 margin: '0',
               }}
             >
@@ -1105,7 +1105,7 @@ function CollabCaret(props: { name: string; color: string }) {
           color: 'var(--b0)',
           'font-family': appFont,
           'font-size': '10px',
-          'font-weight': '700',
+          'font-weight': '500',
           left: '0',
           'line-height': 1,
           padding: '2px 5px',
@@ -1147,7 +1147,7 @@ function CollabSelection(props: {
           color: 'var(--b0)',
           'font-family': appFont,
           'font-size': '10px',
-          'font-weight': props.labelWeight ?? '700',
+          'font-weight': props.labelWeight ?? '500',
           left: props.labelLeft ?? '-2px',
           'line-height': 1,
           padding: '2px 5px',
@@ -1383,7 +1383,7 @@ export function HomeMobileDocsShot() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': 'calc(21px * 0.94)',
-                'font-weight': '550',
+                'font-weight': '500',
                 'letter-spacing': '-0.025em',
                 'line-height': 1.08,
                 margin: '0',
@@ -1447,7 +1447,7 @@ export function HomeMobileDocsShot() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '14px',
-                  'font-weight': '520',
+                  'font-weight': '500',
                   'letter-spacing': '-0.012em',
                   margin: '0',
                 }}
@@ -1738,7 +1738,7 @@ export function HeroDocCollabWindow() {
                       style={{
                         color: 'var(--c1)',
                         'font-family': appFont,
-                        'font-weight': '600',
+                        'font-weight': '500',
                         'letter-spacing': '-0.01em',
                         margin: '0',
                       }}
@@ -1751,7 +1751,7 @@ export function HeroDocCollabWindow() {
                     >
                       Every document is a CRDT with its own{' '}
                       <strong
-                        style={{ color: 'var(--c1)', 'font-weight': '700' }}
+                        style={{ color: 'var(--c1)', 'font-weight': '500' }}
                       >
                         Durable Object
                       </strong>{' '}
@@ -1785,7 +1785,7 @@ export function HeroDocCollabWindow() {
                       style={{
                         color: 'var(--c1)',
                         'font-family': appFont,
-                        'font-weight': '600',
+                        'font-weight': '500',
                         margin: '0',
                       }}
                     >
@@ -1886,7 +1886,7 @@ function PinnedProp(props: {
           <span
             style={{
               color: props.accent ? 'var(--a0)' : 'var(--c1)',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             {props.value}
@@ -1982,7 +1982,7 @@ function AtLinkPill() {
       }}
     >
       <Avatar initials="JW" size={compact() ? 17 : 21} color="var(--b3)" />
-      <span style={{ color: 'var(--a0)', 'font-weight': '600' }}>
+      <span style={{ color: 'var(--a0)', 'font-weight': '500' }}>
         Julia Westphal
       </span>
     </span>
@@ -2149,7 +2149,7 @@ export function SlashMenuPanel(props: { highlightIndex?: number } = {}) {
           color: 'var(--c4)',
           'font-family': appFont,
           'font-size': '11px',
-          'font-weight': '600',
+          'font-weight': '500',
           padding: '9px 12px 5px',
         }}
       >
@@ -2515,7 +2515,7 @@ export function SlashMenuGraphic(
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Untitled
@@ -2658,7 +2658,7 @@ export function CollabGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Collaborative editor (jacob rewrite)
@@ -2700,7 +2700,7 @@ export function CollabGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '-2px',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2740,7 +2740,7 @@ export function CollabGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '0',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2840,7 +2840,7 @@ export function AgentEditGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Launch plan (agent rewrite)
@@ -2883,7 +2883,7 @@ export function AgentEditGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '-2px',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2923,7 +2923,7 @@ export function AgentEditGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '0',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2979,7 +2979,7 @@ function AgentTag(props: {
         display: 'inline-flex',
         'font-family': appFont,
         'font-size': '10px',
-        'font-weight': '600',
+        'font-weight': '500',
         gap: '3px',
         left: props.left ?? '0',
         'line-height': 1,
@@ -3754,7 +3754,7 @@ export function CommentsGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Julia Westphal
@@ -3946,7 +3946,7 @@ export function PropertiesPanel() {
             display: 'flex',
             'font-family': appFont,
             'font-size': '11.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '6px',
             padding: '2px 14px 8px',
           }}
@@ -3993,7 +3993,7 @@ export function PropertiesPanel() {
             display: 'flex',
             'font-family': appFont,
             'font-size': '11.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '6px',
             padding: '2px 14px 8px',
           }}
@@ -4062,7 +4062,7 @@ export function PropertiesPanel() {
             display: 'flex',
             'font-family': appFont,
             'font-size': '11.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '6px',
             padding: '2px 14px 8px',
           }}
@@ -4133,7 +4133,7 @@ export function MarkdownGraphic(props: { columns?: number } = {}) {
                 'font-family':
                   "ui-monospace, 'SFMono-Regular', Menlo, monospace",
                 'font-size': '13px',
-                'font-weight': '700',
+                'font-weight': '500',
                 'min-width': '34px',
                 padding: '5px 7px',
                 'place-items': 'center',
@@ -4252,7 +4252,7 @@ function _ImportGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '12.5px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               Macro Agent
@@ -4366,7 +4366,7 @@ function _ImportGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '12.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Engineering
@@ -4563,7 +4563,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -4590,7 +4590,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.04em',
     'line-height': 1.1,

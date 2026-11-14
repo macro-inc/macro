@@ -4,6 +4,8 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { SetupProgressStepStartedAt } from './setupProgressStepStartedAt';
 import type { SetupStep } from './setupStep';
 
 /**
@@ -17,6 +19,8 @@ export interface SetupProgress {
   position: number;
   /** Current setup stage. */
   step: SetupStep;
+  /** When `step` began; null when it is not recorded. */
+  stepStartedAt?: SetupProgressStepStartedAt;
   /**
    * Number of setup stages.
    * @minimum 0

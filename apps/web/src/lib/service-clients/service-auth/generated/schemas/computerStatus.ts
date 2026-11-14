@@ -10,6 +10,7 @@ import type { ComputerStatusBilling } from './computerStatusBilling';
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
 import type { ComputerStatusDefaultAgentId } from './computerStatusDefaultAgentId';
+import type { ComputerStatusFailureReason } from './computerStatusFailureReason';
 import type { ComputerStatusHarnessId } from './computerStatusHarnessId';
 import type { ComputerStatusKind } from './computerStatusKind';
 import type { ComputerStatusPastDueSince } from './computerStatusPastDueSince';
@@ -46,6 +47,9 @@ first connects. It can name an agent the team since deleted. */
   defaultAgentId?: ComputerStatusDefaultAgentId;
   /** Root disk limit saved at purchase. */
   diskGib: number;
+  /** Why the computer failed, as a short sentence safe to show; present
+when it failed and the cause is known. The full error is only in the logs. */
+  failureReason?: ComputerStatusFailureReason;
   /** Harness claimed by this guest. */
   harnessId?: ComputerStatusHarnessId;
   /** Stable resource identity. */
