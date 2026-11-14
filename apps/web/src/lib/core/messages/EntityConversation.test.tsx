@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   refetchLink: vi.fn(),
   urlTarget: undefined as string | undefined,
   scroll: vi.fn(() => () => {}),
+  loadMentionAgents: undefined as Accessor<boolean> | undefined,
 }));
 
 vi.mock('@core/component/ParamsProvider', () => ({
@@ -41,7 +42,10 @@ vi.mock('@channel/Thread/utils/message-actions', () => ({
     `/channel/${channelId}/${messageId}`,
 }));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
-  useMessageBotMentionUsers: () => [],
+  useMessageBotMentionUsers: (_parent: unknown, load: Accessor<boolean>) => {
+    mocks.loadMentionAgents = load;
+    return () => [];
+  },
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -290,6 +294,13 @@ describe('EntityConversation placement', () => {
   it('names the document as the composer parent so it resolves the same mentions as a reply', () => {
     discussion([[]], undefined, { canWrite: true });
     expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
+  });
+
+  it('loads the agents for mentions once someone starts writing', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.loadMentionAgents?.()).toBe(false);
+    fireEvent.focusIn(view.getByRole('textbox'));
+    expect(mocks.loadMentionAgents?.()).toBe(true);
   });
 
   it('shows nothing from the shared latest page while a link is still resolving', () => {
