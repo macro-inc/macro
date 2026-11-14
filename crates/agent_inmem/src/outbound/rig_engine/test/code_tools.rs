@@ -135,6 +135,8 @@ async fn unseen_turns_get_only_code_mode() {
         advertised[1].1,
         agent_code_mode::inbound::toolset::unseen_execute_code_description()
     );
+    assert!(!advertised[1].1.contains("Optional reviews"));
+    assert!(!advertised[1].1.contains("execution.reviews"));
     assert!(AiToolSet::<()>::searchable_catalog(&set).is_empty());
     assert!(AiToolSet::<()>::searchable_toolset_names(&set).is_empty());
 
