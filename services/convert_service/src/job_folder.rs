@@ -5,9 +5,14 @@ use std::{
 
 use anyhow::Context;
 
-/// The folder all job folders live in. Conversions write nothing outside it.
+/// The folder all job folders live in. Conversions write nothing outside it,
+/// and it shares the temp directory's filesystem, which `/health` watches.
 pub static JOBS_ROOT: LazyLock<PathBuf> =
     LazyLock::new(|| std::env::temp_dir().join("convert_service_jobs"));
+
+/// Free space below which the task reports itself unhealthy, so ECS replaces
+/// it with a fresh disk instead of failing every conversion.
+pub const MIN_FREE_BYTES: u64 = 1024 * 1024 * 1024;
 
 /// A conversion's working folder. Dropping it removes the folder and
 /// everything in it, so every success, error and panic path cleans up.
@@ -59,4 +64,10 @@ pub fn remove_folder(path: &Path) -> anyhow::Result<()> {
 pub fn reset_jobs_root(root: &Path) -> anyhow::Result<()> {
     remove_folder(root)?;
     std::fs::create_dir_all(root).context("unable to create jobs root")
+}
+
+/// Free bytes on the filesystem holding `path`.
+pub fn free_bytes(path: &Path) -> anyhow::Result<u64> {
+    let stats = nix::sys::statvfs::statvfs(path).context("unable to stat filesystem")?;
+    Ok(stats.blocks_available() * stats.fragment_size())
 }

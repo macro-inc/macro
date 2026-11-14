@@ -15,8 +15,8 @@ synchronously via HTTP or asynchronously via SQS.
   through conversion (bun script, hits the deployed gateway endpoint).
 - `src/main.rs`: `smoke_test_lok` — forks a child process at startup to verify
   LibreOfficeKit's shared libraries load before accepting traffic.
-- `src/job_folder.rs`: per-job working folders (`JobFolder`) and the jobs
-  root.
+- `src/job_folder.rs`: per-job working folders (`JobFolder`), the jobs root
+  and the free-space check behind `/health`.
 
 ## Scope
 
@@ -47,7 +47,10 @@ synchronously via HTTP or asynchronously via SQS.
   points into it so LibreOffice's scratch files go with it; LibreOffice's
   user profile in `$HOME` stays a fixed size. Startup empties `JOBS_ROOT`.
   Anything written elsewhere stays on the task's 20 GiB ephemeral disk until
-  ECS replaces the task. A full disk looks like `No space left on device` or
+  ECS replaces the task.
+- `/health` returns 503 below `MIN_FREE_BYTES` free on the temp filesystem,
+  so the gateway target group marks a task with a full disk unhealthy and ECS
+  replaces it. A full disk looks like `No space left on device` or
   LibreOffice failing (`loadComponentFromURL returned an empty reference`,
   `Failed to save document`); check `ecs.fargate.ephemeral_storage.utilized`
   before debugging LibreOffice.

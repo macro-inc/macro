@@ -39,7 +39,7 @@ macro_queues = { path = "../../crates/macro_queues" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
 s3_key = { path = "../../crates/s3_key" }
-nix = { version = "0.29.0", features = ["process", "signal"] }
+nix = { version = "0.29.0", features = ["fs", "process", "signal"] }
 rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }
 s3_client = { path = "../../crates/s3_client" }
 serde = { workspace = true }
