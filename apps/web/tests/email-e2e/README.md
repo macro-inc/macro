@@ -69,6 +69,11 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
   and, last, `stack.sql`.
 - Failures of what the app depends on: `stack.failNextServiceRequest`,
   `stack.refuseQueueSends`, emulator faults, and Playwright's `page.route`.
+- Mark what the test covers: `did('AL-171')` where it performs an action of
+  the coverage manifest, `saw('STC-067')` where it asserts a state, and
+  `confirmed('F-108')` where it asserts the function's result at the
+  provider (`ledger/README.md`). New UI gets its manifest rows in the same
+  change.
 - Never sleep: wait with `expect.poll` and locators.
 - Say in a comment above the test what goes wrong when it fails.
 - A test for a bug that is not fixed yet asserts the right behaviour and is
@@ -84,6 +89,17 @@ CI: the `Email end-to-end (browser)` workflow (`xtask_workflows`'
 backend code and, within `PR CI`, on pull requests that touch email or
 calendar code on either side.
 
+## What the suite covers
+
+Every run records what each test did (the manifest rows it marked, the
+functions it did and checked, the requests the app made) under
+`ledger-results/`. `just apps/web/email-e2e-ledger` turns the last run into
+a report: first the functions of email (draft, send, mark done, star...)
+covered on Gmail and on Outlook, then the actions, states and network
+operations under them, by provider and layout, what no test covers, and
+where the manifest differs from the code. CI appends it to the job summary and uploads it as the
+`email-e2e-browser-coverage` artifact. See `ledger/README.md`.
+
 ## What is here
 
 One spec file per area; helpers a file shares with others are in `harness/`.
@@ -96,6 +112,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
 | `link*`, `notify` | connecting inboxes and calendars, the Mail badge | `harness/linking.ts` |
 | `calendar-invitation` | the invitation card in a thread | |
+| `ledger/` | the coverage manifest, the recorder and the report | |
 | `journey-*` | whole user journeys for a Gmail and an Outlook inbox: a mail day, a new message, scheduled send, triage, a received attachment, phone width, Settings › Email | `harness/journeys.ts` |
 
 - `harness/linking.ts` stands in for the authentication service's link

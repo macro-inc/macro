@@ -123,9 +123,9 @@ export const test = base.extend<
 
   evidence: [
     async ({ page, provider, hasTouch }, use, testInfo) => {
-      const evidence = await record(page, testInfo, provider, hasTouch);
+      const evidence = record(page, testInfo, provider, hasTouch);
       await use(evidence);
-      await evidence.finish();
+      evidence.finish();
     },
     { auto: true },
   ],

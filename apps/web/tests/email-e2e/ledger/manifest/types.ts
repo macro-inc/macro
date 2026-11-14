@@ -1,5 +1,6 @@
 // The shape of the coverage manifest: every email surface in the web app,
-// what a user can do on it and what it can show. `../README.md` says how a
+// what a user can do on it and what it can show, as the variants of the
+// functions in `../functions.tsv`. `../README.md` says how a
 // row is counted.
 
 export type Provider = 'gmail' | 'outlook';
@@ -18,6 +19,11 @@ export type Waiver = {
 };
 
 type Applies = {
+  /**
+   * The functions (`../functions.tsv`) it belongs to: an action is a way to do
+   * them, a state is how their result shows.
+   */
+  fn?: readonly string[];
   /** The providers it exists for; both when left out. */
   providers?: readonly Provider[];
   /** The layouts it exists in; the surface's when left out. */

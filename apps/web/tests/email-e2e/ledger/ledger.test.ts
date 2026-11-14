@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { graphqlOperations, socketMessages } from '../harness/front';
-import { restMatcher } from './ledger';
-import { segments } from './lines';
-import { markRan } from './record';
+import { functionRows, restMatcher } from './ledger';
+import { parseFunctions } from './manifest/functions';
 
 /** A websocket frame as a browser sends it: masked. */
 function frame(payload: Buffer, opcode: number, final = true): Buffer {
@@ -86,42 +85,101 @@ describe('restMatcher', () => {
   });
 });
 
-describe('segments', () => {
-  it('decodes columns, sources and lines across generated lines', () => {
-    // Line 0: column 0 -> source 0 line 0; column 4 -> source 0 line 2.
-    // Line 1: a segment without a source, then column 2 -> source 1 line 1.
-    expect(segments('AAAA,IAEA;A,ECDA')).toEqual([
-      { line: 0, column: 0, source: 0, sourceLine: 0 },
-      { line: 0, column: 4, source: 0, sourceLine: 2 },
-      { line: 1, column: 2, source: 1, sourceLine: 1 },
-    ]);
+const TABLE = [
+  'id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at',
+  'F-001\torganise\tStar a thread\tyes\tyes\tyes\tprovider',
+  'F-002\tlist\tSort the list\tyes\tyes\tyes\tui',
+  'F-003\tsync\tRefresh tokens\tyes\tno\tno\tprovider',
+  '',
+].join('\n');
+
+describe('parseFunctions', () => {
+  it('reads the table', () => {
+    expect(parseFunctions(TABLE)[2]).toEqual({
+      id: 'F-003',
+      area: 'sync',
+      name: 'Refresh tokens',
+      providers: ['gmail'],
+      ui: false,
+      checkedAt: 'provider',
+    });
+  });
+
+  it('refuses a row it cannot read', () => {
+    expect(() => parseFunctions(TABLE.replace('yes\tui', 'maybe\tui'))).toThrow(
+      'F-002'
+    );
+    expect(() => parseFunctions('id\tname\n')).toThrow('head');
   });
 });
 
-describe('markRan', () => {
-  it('lets an inner range decide and keeps what ran before', () => {
-    const ran = new Uint8Array(10);
-    markRan(ran, [
-      {
-        functionName: 'outer',
-        isBlockCoverage: true,
-        ranges: [
-          { startOffset: 0, endOffset: 10, count: 1 },
-          { startOffset: 4, endOffset: 8, count: 0 },
-        ],
-      },
-    ]);
-    expect([...ran]).toEqual([1, 1, 1, 1, 0, 0, 0, 0, 1, 1]);
-    markRan(ran, [
-      {
-        functionName: 'outer',
-        isBlockCoverage: true,
-        ranges: [
-          { startOffset: 0, endOffset: 10, count: 0 },
-          { startOffset: 4, endOffset: 6, count: 2 },
-        ],
-      },
-    ]);
-    expect([...ran]).toEqual([1, 1, 1, 1, 1, 1, 0, 0, 1, 1]);
+describe('functionRows', () => {
+  const functions = parseFunctions(TABLE);
+  const rows = [
+    { id: 'A-1', kind: 'action', fn: ['F-001'], status: 'open' },
+    { id: 'S-1', kind: 'state', fn: ['F-001'], status: 'open' },
+    {
+      id: 'A-2',
+      kind: 'action',
+      fn: ['F-002'],
+      status: 'deferred',
+      reason: 'a clock',
+    },
+  ] as const;
+  const test = (
+    provider: 'gmail' | 'outlook',
+    title: string,
+    id: string,
+    pieces: { performed?: boolean; seen?: boolean; confirmed?: boolean }
+  ) => ({
+    provider,
+    file: 'a.spec.ts',
+    title,
+    functions: [
+      { id, performed: false, seen: false, confirmed: false, ...pieces },
+    ],
+  });
+
+  it('needs the whole of a function in one test, on every provider', () => {
+    const [star] = functionRows(
+      functions,
+      [
+        test('gmail', 'whole', 'F-001', {
+          performed: true,
+          seen: true,
+          confirmed: true,
+        }),
+        // Done in one test and checked in another: not covered.
+        test('outlook', 'does', 'F-001', { performed: true, seen: true }),
+        test('outlook', 'checks', 'F-001', { confirmed: true }),
+      ],
+      rows
+    );
+    expect(star.on.gmail.covered).toBe(true);
+    expect(star.on.outlook.covered).toBe(false);
+    expect(star.status).toBe('partial');
+    expect(star.missing).toEqual(['outlook: no one test does all of it']);
+    expect(star.variants).toEqual(['A-1']);
+    expect(star.states).toEqual(['S-1']);
+  });
+
+  it('asks for no provider check where the result is only on screen', () => {
+    const sort = functionRows(
+      functions,
+      [
+        test('gmail', 'g', 'F-002', { performed: true, seen: true }),
+        test('outlook', 'o', 'F-002', { performed: true, seen: true }),
+      ],
+      rows
+    )[1];
+    expect(sort.status).toBe('covered');
+  });
+
+  it('defers a function whose every way needs more, and leaves the backend its own', () => {
+    const [star, sort, refresh] = functionRows(functions, [], rows);
+    expect(star.status).toBe('open');
+    expect(sort.status).toBe('deferred');
+    expect(sort.reason).toBe('a clock');
+    expect(refresh.status).toBe('backend');
   });
 });

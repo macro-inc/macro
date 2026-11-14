@@ -2,17 +2,10 @@
 // manifest against what the source defines.
 
 import { existsSync } from 'node:fs';
-import {
-  EMAIL_SOURCE,
-  graphqlOperations,
-  hotkeys,
-  restCalls,
-  sourceFiles,
-  toasts,
-} from './derive';
+import { graphqlOperations, hotkeys, restCalls, toasts } from './derive';
 import type { RunResult, Test } from './evidence';
-import { type FileLines, lineCoverage, loadRan } from './lines';
 import { GROUPS } from './manifest';
+import { type EmailFunction, FUNCTIONS } from './manifest/functions';
 import { GRAPHQL, OPERATIONS, REST } from './manifest/network';
 import {
   type Action,
@@ -24,7 +17,7 @@ import {
   type Surface,
   type Viewport,
 } from './manifest/types';
-import { REPOSITORY, runPaths, WEB } from './paths';
+import { REPOSITORY, WEB } from './paths';
 
 export type Status =
   | 'covered' // on every provider and every layout it applies to
@@ -44,6 +37,8 @@ export type Row = {
   providers: readonly Provider[];
   viewports: readonly Viewport[];
   status: Status;
+  /** The functions it belongs to. */
+  fn: readonly string[];
   /** Why it is deferred or waived. */
   reason?: string;
   /** The `provider/viewport` pairs a counted test ran it on. */
@@ -54,6 +49,143 @@ export type Row = {
   /** Only a test kept for a known bug touches it. */
   knownBugOnly: boolean;
 };
+
+/** What the counted tests on one provider showed of a function. */
+export type FunctionOn = {
+  /** One test did it through the UI and checked the result everywhere it is checked. */
+  covered: boolean;
+  /** Over all tests, not necessarily in one. */
+  performed: boolean;
+  seen: boolean;
+  confirmed: boolean;
+  tests: string[];
+};
+
+export type FunctionRow = EmailFunction & {
+  /** `backend`: no UI, so not the browser suite's to cover. */
+  status: Status | 'backend';
+  reason?: string;
+  /** The action rows that do it. */
+  variants: string[];
+  /** The state rows that show its result. */
+  states: string[];
+  on: Record<Provider, FunctionOn>;
+  /** What is still missing, per provider. */
+  missing: string[];
+};
+
+export type FunctionTotals = {
+  /** Functions with a UI. */
+  total: number;
+  /** On every provider it applies to. */
+  covered: number;
+  gmail: number;
+  outlook: number;
+  partial: number;
+  open: number;
+  deferred: number;
+  waived: number;
+  /** Without a UI: the backend's coverage counts them. */
+  backend: number;
+};
+
+export function functionTotals(rows: readonly FunctionRow[]): FunctionTotals {
+  const count = (status: FunctionRow['status']) =>
+    rows.filter((row) => row.status === status).length;
+  return {
+    total: rows.length - count('backend'),
+    covered: count('covered'),
+    gmail: rows.filter((row) => row.on.gmail.covered).length,
+    outlook: rows.filter((row) => row.on.outlook.covered).length,
+    partial: count('partial'),
+    open: count('open'),
+    deferred: count('deferred'),
+    waived: count('waived'),
+    backend: count('backend'),
+  };
+}
+
+/** Each function against what the counted tests showed of it. */
+export function functionRows(
+  functions: readonly EmailFunction[],
+  evidence: readonly Pick<
+    RunResult['evidence'][number],
+    'provider' | 'file' | 'title' | 'functions'
+  >[],
+  rows: readonly Pick<Row, 'id' | 'kind' | 'fn' | 'status' | 'reason'>[]
+): FunctionRow[] {
+  return functions.map((fn): FunctionRow => {
+    const mine = rows.filter((row) => row.fn.includes(fn.id));
+    const actions = mine.filter((row) => row.kind === 'action');
+    const on = (provider: Provider): FunctionOn => {
+      const found = evidence.flatMap((test) =>
+        test.provider === provider
+          ? test.functions
+              .filter((each) => each.id === fn.id)
+              .map((each) => ({
+                ...each,
+                test: `${test.file} › ${test.title}`,
+              }))
+          : []
+      );
+      const whole = (each: (typeof found)[number]) =>
+        each.performed &&
+        each.seen &&
+        (fn.checkedAt === 'ui' || each.confirmed);
+      return {
+        covered: found.some(whole),
+        performed: found.some((each) => each.performed),
+        seen: found.some((each) => each.seen),
+        confirmed: found.some((each) => each.confirmed),
+        tests: [...new Set(found.map((each) => each.test))].sort(),
+      };
+    };
+    const state = { gmail: on('gmail'), outlook: on('outlook') };
+    const touched = fn.providers.some(
+      (provider) => state[provider].tests.length > 0
+    );
+    const missing = fn.providers.flatMap((provider) => {
+      const of = state[provider];
+      if (of.covered) return [];
+      if (of.tests.length === 0) return touched ? [`${provider}: no test`] : [];
+      const lacks = [
+        of.performed ? '' : 'not done through the UI',
+        of.seen ? '' : 'result not checked in the UI',
+        fn.checkedAt === 'ui' || of.confirmed
+          ? ''
+          : `result not checked at the ${fn.checkedAt}`,
+      ].filter(Boolean);
+      return [
+        `${provider}: ${lacks.join(', ') || 'no one test does all of it'}`,
+      ];
+    });
+    const every = (status: Status[]) =>
+      actions.length > 0 && actions.every((row) => status.includes(row.status));
+    const status: FunctionRow['status'] = !fn.ui
+      ? 'backend'
+      : fn.providers.every((provider) => state[provider].covered)
+        ? 'covered'
+        : touched
+          ? 'partial'
+          : every(['waived'])
+            ? 'waived'
+            : every(['waived', 'deferred'])
+              ? 'deferred'
+              : 'open';
+    return {
+      ...fn,
+      status,
+      reason:
+        status === 'waived' || status === 'deferred'
+          ? [...new Set(actions.map((row) => row.reason))].join('; ')
+          : undefined,
+      variants: actions.map((row) => row.id),
+      states: mine.filter((row) => row.kind === 'state').map((row) => row.id),
+      on: state,
+      missing,
+    };
+  });
+}
 
 export type OperationRow = Operation & {
   status: Status | 'stubbed' | 'failed';
@@ -108,20 +240,12 @@ export type Drift = {
 };
 
 export type Ledger = {
+  functions: FunctionRow[];
   rows: Row[];
   operations: OperationRow[];
   /** Requests the app made that the manifest does not list. */
   unlisted: { request: string; answeredBy: string; count: number }[];
   drift: Drift[];
-  lines: {
-    measured: boolean;
-    /** By source file, from the repository. */
-    files: Map<string, FileLines>;
-    /** Email source files the bundle holds no line of. */
-    notBundled: string[];
-    /** The files that are email's own, as opposed to cited by a row. */
-    email: (file: string) => boolean;
-  };
   tests: {
     total: number;
     passed: number;
@@ -175,6 +299,7 @@ function rowsOf(
       surfaceName: surface?.name ?? '?',
       text,
       trigger: row.trigger,
+      fn: row.fn ?? [],
       providers,
       viewports,
       status,
@@ -291,6 +416,37 @@ function manifestDrift(): Drift[] {
     (group) => group.actions
   );
   const states = (GROUPS as readonly Group[]).flatMap((group) => group.states);
+
+  const known = new Map(FUNCTIONS.map((fn) => [fn.id, fn]));
+  const all = [...actions, ...states];
+  const unknown = all.flatMap((row) =>
+    (row.fn ?? [])
+      .filter((fn) => !known.has(fn))
+      .map((fn) => `${row.id}: ${fn}`)
+  );
+  if (unknown.length) {
+    drift.push({
+      check: 'Rows of a function that is not in functions.tsv',
+      items: unknown,
+    });
+  }
+  const loose = all.filter((row) => !row.fn?.length).map((row) => row.id);
+  if (loose.length) {
+    drift.push({ check: 'Rows that belong to no function', items: loose });
+  }
+  const done = new Set(actions.flatMap((row) => row.fn ?? []));
+  const undoable = FUNCTIONS.filter((fn) => fn.ui && !done.has(fn.id));
+  if (undoable.length) {
+    drift.push({
+      check: 'Functions with a UI and no action row',
+      items: undoable.map((fn) => `${fn.id} ${fn.name}`),
+    });
+  }
+  const twiceFn = FUNCTIONS.map((fn) => fn.id).filter(
+    (id, index, ids) => ids.indexOf(id) !== index
+  );
+  if (twiceFn.length)
+    drift.push({ check: 'Function ids used twice', items: twiceFn });
   drift.push(
     ...difference(
       'Hotkeys and commands',
@@ -332,11 +488,7 @@ function manifestDrift(): Drift[] {
   return drift;
 }
 
-export function buildLedger(
-  gating: RunResult,
-  knownBugs: RunResult,
-  dist: string | undefined
-): Ledger {
+export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
   // Rows.
   const cells = new Map<string, Set<string>>();
   const tests = new Map<string, Set<string>>();
@@ -443,47 +595,15 @@ export function buildLedger(
     };
   });
 
-  // Lines.
-  const emailFiles = EMAIL_SOURCE.flatMap(sourceFiles).map(
-    (file) => `apps/web/${file}`
-  );
-  const email = (file: string) =>
-    EMAIL_SOURCE.some((dir) => file.startsWith(`apps/web/${dir}/`));
-  const cited = new Set(
-    (GROUPS as readonly Group[])
-      .flatMap((group) => [...group.actions, ...group.states])
-      .flatMap((row) => row.source)
-      .map((file) => (file.startsWith('src/') ? `apps/web/${file}` : file))
-  );
-  const ran = loadRan(runPaths('gating').scripts);
-  const measured = dist !== undefined && existsSync(dist) && ran.size > 0;
-  const files = measured
-    ? lineCoverage(
-        dist,
-        REPOSITORY,
-        ran,
-        (file) => email(file) || cited.has(file)
-      )
-    : new Map<string, FileLines>();
-  // Generated code and tests are not what the suite is measured on.
-  for (const file of files.keys()) {
-    if (email(file) && !emailFiles.includes(file)) files.delete(file);
-  }
-
   const counted = gating.tests.filter((test) => !test.knownBug);
   return {
+    functions: functionRows(FUNCTIONS, gating.evidence, rows),
     rows,
     operations,
     unlisted: [...unlisted.entries()]
       .map(([request, entry]) => ({ request, ...entry }))
       .sort((a, b) => a.request.localeCompare(b.request)),
     drift,
-    lines: {
-      measured,
-      files,
-      notBundled: measured ? emailFiles.filter((file) => !files.has(file)) : [],
-      email,
-    },
     tests: {
       total: counted.length,
       passed: counted.filter((test) => test.status === 'expected').length,

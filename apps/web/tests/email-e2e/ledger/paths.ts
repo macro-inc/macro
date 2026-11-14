@@ -29,8 +29,6 @@ export function runPaths(run: Run) {
     playwright: `${dir}/playwright.json`,
     /** One file per test result: what the test did. */
     evidence: `${dir}/evidence`,
-    /** One file per worker: the script bytes that ran. */
-    scripts: `${dir}/scripts`,
   };
 }
 

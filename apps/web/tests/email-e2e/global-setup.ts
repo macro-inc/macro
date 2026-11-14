@@ -16,7 +16,6 @@ export default async function globalSetup(): Promise<
   // What an earlier run recorded is not this run's evidence.
   const recorded = runPaths(currentRun());
   rmSync(recorded.evidence, { recursive: true, force: true });
-  rmSync(recorded.scripts, { recursive: true, force: true });
 
   if (process.env.EMAIL_E2E_STACKS_URL) return undefined;
 
