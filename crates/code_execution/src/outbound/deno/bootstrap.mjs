@@ -88,6 +88,14 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  let sentAroundSdk = false;
+  // Once a program sends something no operation frame lists, the activity
+  // no longer lists everything it sent.
+  const sentUnseen = () => {
+    if (sentAroundSdk) return;
+    sentAroundSdk = true;
+    emit({type: "progress", value: {truncated: true}});
+  };
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
     if (request.headers.has("authorization") && origins.has(new URL(request.url).origin)) {
@@ -104,6 +112,8 @@ try {
         const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
         if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
       }
+      // A change sent around the SDK has no operation frame.
+      if (request.method !== "GET" && request.method !== "HEAD" && !request.headers.has("x-macro-sdk-verb")) sentUnseen();
     }
     return originalFetch(request);
   };
@@ -113,7 +123,7 @@ try {
     // A gated operation reports once, as skipped or refused, with no start.
     if (value.status === "started" || value.status === "skipped" || value.status === "refused") {
       if (++observedRequests > 128) {
-        if (observedRequests === 129) emit({type: "progress", value: {truncated: true}});
+        sentUnseen();
         return;
       }
       if (value.status === "started") activeRequests.add(value.id);
@@ -130,6 +140,32 @@ try {
     // network (raw sockets) or start a realm with its own fetch (workers).
     for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
     globalThis.Worker = undefined;
+  } else {
+    // The ordinary ways to send what neither the SDK nor fetch sees: a raw
+    // connection, a WebSocket, or a Node network module, loaded by
+    // getBuiltinModule or by import (deno.rs maps each to a module that
+    // calls this). Code written to hide a send still can.
+    for (const name of ["connect", "connectTls", "startTls"]) {
+      const original = Deno[name].bind(Deno);
+      Object.defineProperty(Deno, name, {value: (...args) => {
+        sentUnseen();
+        return original(...args);
+      }});
+    }
+    // process.mjs exports this wrapper for `import { getBuiltinModule }`.
+    const getBuiltinModule = process.getBuiltinModule.bind(process);
+    process.getBuiltinModule = (...args) => {
+      sentUnseen();
+      return getBuiltinModule(...args);
+    };
+    const BaseWebSocket = globalThis.WebSocket;
+    globalThis.WebSocket = class WebSocket extends BaseWebSocket {
+      constructor(...args) {
+        sentUnseen();
+        super(...args);
+      }
+    };
+    Object.defineProperty(globalThis, Symbol.for("macro.sentAroundSdk"), {value: sentUnseen});
   }
   const { main } = await import(program);
   let value;

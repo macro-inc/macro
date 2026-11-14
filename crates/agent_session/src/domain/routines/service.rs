@@ -1,5 +1,7 @@
+use std::collections::BTreeSet;
+
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::Author;
+use agent_fold::domain::model::{Author, MessagePart, ToolName};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use model_owner::Owner;
 
@@ -347,7 +349,8 @@ where
     }
 }
 
-/// Tool calls and turns in a session's effective history.
+/// Tool calls, the tools they called and turns in a session's effective
+/// history.
 fn activity(entries: Vec<crate::domain::model::StoredAgentSessionLog>) -> RoutineActivity {
     let mut fold = LifecycleFold::new();
     for row in entries {
@@ -355,23 +358,31 @@ fn activity(entries: Vec<crate::domain::model::StoredAgentSessionLog>) -> Routin
     }
     let messages = fold.inner().messages();
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    let calls: Vec<&ToolName> = messages
+        .iter()
+        .filter(|message| matches!(message.author, Author::Agent))
+        .flat_map(|message| message.parts.iter())
+        .filter_map(|part| match part {
+            MessagePart::ToolUse { name, .. } => Some(name),
+            _ => None,
+        })
+        .collect();
+    let tools: BTreeSet<String> = calls
+        .iter()
+        .map(|name| match name {
+            ToolName::Native { name } => name.clone(),
+            ToolName::Mcp { server, tool } => format!("mcp__{server}__{tool}"),
+        })
+        .collect();
     RoutineActivity {
-        tool_calls: count(
-            messages
-                .iter()
-                .filter(|message| matches!(message.author, Author::Agent))
-                .flat_map(|message| message.parts.iter())
-                .filter(|part| {
-                    matches!(part, agent_fold::domain::model::MessagePart::ToolUse { .. })
-                })
-                .count(),
-        ),
+        tool_calls: count(calls.len()),
         turns: count(
             messages
                 .iter()
                 .filter(|message| matches!(message.author, Author::User { .. }))
                 .count(),
         ),
+        tools: Some(tools.into_iter().collect()),
     }
 }
 

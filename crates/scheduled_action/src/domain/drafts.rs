@@ -22,8 +22,8 @@ use std::time::Duration;
 use agent_runtime_protocol::domain::action::AgentActionId;
 use agent_session::domain::model::{AgentSessionId, SessionSource, SessionVisibility};
 use agent_session::domain::routines::{
-    PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineSessionAction,
-    RoutineSessionError, RoutineSessions, ValidateRoutineSession,
+    PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineActivity,
+    RoutineSessionAction, RoutineSessionError, RoutineSessions, ValidateRoutineSession,
 };
 use anyhow::Result;
 use bot_id::BotId;
@@ -62,9 +62,27 @@ const POLL: Duration = Duration::from_millis(250);
 /// turn read every 2 s, only to notice a turn that ends without a passing
 /// check.
 const ROW_READS_PER_TURN_READ: u32 = 8;
-/// How long the drafter waits, once the session has stopped, for the
-/// activity its last creations wrote, which is recorded asynchronously.
+/// How long the drafter waits, once a session that may have written has
+/// stopped, for the activity its last creations wrote, which is recorded
+/// asynchronously.
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
+/// The tools a draft's session calls that write nothing themselves. Its
+/// programs (`ExecuteCode`) may, which [`SessionCreations::may_have_written`]
+/// tells.
+const READ_TOOLS: [&str; 8] = [
+    "ExecuteCode",
+    "ReadCodeDocs",
+    "DescribeCodeTools",
+    "ReadToolResult",
+    "SearchTools",
+    "NameSearch",
+    "ContentSearch",
+    "ListEntities",
+];
+/// The prefix the code-mode tools carry when a sandboxed harness reaches
+/// them through its `macro_internal` MCP server; the in-process agent calls
+/// them by their own names.
+const CODE_MODE_SERVER: &str = "mcp__macro_internal__";
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
 
@@ -296,6 +314,23 @@ enum Ending {
     Cancelled,
 }
 
+/// Why a stopped draft waits for its session's activity, or that it doesn't.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+enum Settle {
+    /// Every tool it called reads, and every program it ran finished having
+    /// only read: nothing is on its way.
+    Skipped,
+    /// It called a tool that can write.
+    Tool,
+    /// A program it ran may have written.
+    Program,
+    /// The session or its programs couldn't say.
+    Unknown,
+    /// Its turn couldn't be stopped, so it may still be writing.
+    Unstopped,
+}
+
 /// How one draft runs: in the request that waits for it, or in the
 /// background.
 struct Drafting<'a> {
@@ -338,6 +373,7 @@ fn draft_span(request: &DraftRequest) -> tracing::Span {
         routine.draft.tool_calls = tracing::field::Empty,
         routine.draft.turns = tracing::field::Empty,
         routine.draft.status_reads = tracing::field::Empty,
+        routine.draft.settle = tracing::field::Empty,
         routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
         routine.draft.agent_task = tracing::field::Empty,
@@ -500,7 +536,23 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             cleanup.forget().await;
             return Ok(None);
         }
-        tokio::time::sleep(ACTIVITY_SETTLE).await;
+        // Counts only; a session that can't say leaves them unset.
+        let activity = self.sessions.activity(action.clone()).await.ok();
+        if let Some(activity) = &activity {
+            span.record("routine.draft.tool_calls", activity.tool_calls);
+            span.record("routine.draft.turns", activity.turns);
+        }
+        // Activity is recorded asynchronously: a session that may have
+        // written waits for its last writes' activity.
+        let settle = if cleanup.stopped {
+            self.settle(session, activity.as_ref()).await
+        } else {
+            Settle::Unstopped
+        };
+        span.record("routine.draft.settle", <&str>::from(settle));
+        if settle != Settle::Skipped {
+            tokio::time::sleep(ACTIVITY_SETTLE).await;
+        }
         let recorded = self
             .creations
             .created_by(session.as_uuid())
@@ -516,11 +568,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             .inspect_err(|error| tracing::error!(error = ?error, "could not read a draft's check"))
             .unwrap_or_default();
         span.record("routine.draft.checks", handed_back.checks);
-        // Counts only; a session that can't say leaves them unset.
-        if let Ok(activity) = self.sessions.activity(action.clone()).await {
-            span.record("routine.draft.tool_calls", activity.tool_calls);
-            span.record("routine.draft.turns", activity.turns);
-        }
         cleanup.now().await;
         let ending = match ending {
             Ok(Ok(ending)) => ending,
@@ -629,6 +676,31 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             _ => {}
         }
         ending
+    }
+
+    /// Whether a stopped draft's session may have written anything, so its
+    /// activity may still be on its way, and why: it may have unless every
+    /// tool it called only reads and every program it ran finished having
+    /// only read. A session that can't say may have.
+    async fn settle(&self, session: AgentSessionId, activity: Option<&RoutineActivity>) -> Settle {
+        let Some(tools) = activity.and_then(|activity| activity.tools.as_ref()) else {
+            return Settle::Unknown;
+        };
+        let reads = |tool: &String| {
+            let tool = tool.strip_prefix(CODE_MODE_SERVER).unwrap_or(tool);
+            READ_TOOLS.contains(&tool)
+        };
+        if !tools.iter().all(reads) {
+            return Settle::Tool;
+        }
+        match self.creations.may_have_written(session.as_uuid()).await {
+            Ok(false) => Settle::Skipped,
+            Ok(true) => Settle::Program,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read whether a draft wrote");
+                Settle::Unknown
+            }
+        }
     }
 
     /// What the draft's row says now: whether the session handed back a

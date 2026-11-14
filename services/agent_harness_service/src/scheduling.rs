@@ -111,9 +111,16 @@ const SUGGESTION_RUN_RECONCILE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// What a session's programs created, from the activity recorded for its
-/// code-mode invocations.
-struct ActivityCreations(activity::outbound::pg_activity_repo::PgActivityRepo);
+/// code-mode invocations, and whether they may have written, from their
+/// execution records.
+struct ActivityCreations {
+    activity: activity::outbound::pg_activity_repo::PgActivityRepo,
+    executions: agent_code_mode::outbound::postgres::PgExecutionStore,
+}
 
+/// Execution records read per draft; a draft runs a handful of programs, and
+/// one that ran more is taken to have written.
+const DRAFT_EXECUTIONS: u16 = 32;
 /// Activity rows read per page; a session creates a handful of items.
 const SESSION_ACTIVITY_PAGE: u32 = 100;
 /// Pages of a session's activity read at most.
@@ -131,7 +138,7 @@ impl SessionCreations for ActivityCreations {
         let mut cursor = None;
         for _ in 0..SESSION_ACTIVITY_PAGES {
             let page = self
-                .0
+                .activity
                 .agent_activity(session, None, cursor, limit)
                 .await
                 .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
@@ -159,6 +166,28 @@ impl SessionCreations for ActivityCreations {
         );
         Ok(created)
     }
+
+    async fn may_have_written(&self, session: uuid::Uuid) -> Result<bool> {
+        let records = self
+            .executions
+            .session_records(
+                agent_session::domain::model::AgentSessionId::new_from_uuid(session),
+                DRAFT_EXECUTIONS + 1,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read a session's programs: {error}"))?;
+        Ok(programs_may_have_written(&records))
+    }
+}
+
+/// Whether a session's programs may have written, from up to
+/// `DRAFT_EXECUTIONS + 1` of their records, in any order: one of them may
+/// have, or there were more than a draft reads.
+fn programs_may_have_written(records: &[agent_code_mode::domain::ExecutionRecord]) -> bool {
+    records.len() > usize::from(DRAFT_EXECUTIONS)
+        || records
+            .iter()
+            .any(agent_code_mode::domain::ExecutionRecord::may_have_written)
 }
 
 /// The agent session behind a code-mode request, from the invocation its
@@ -711,9 +740,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
             },
         )
-        .with_session_creations(Arc::new(ActivityCreations(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
-        )))
+        .with_session_creations(Arc::new(ActivityCreations {
+            activity: activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+            executions: agent_code_mode::outbound::postgres::PgExecutionStore::new(db.clone()),
+        }))
         .with_conditions_enabled(conditions_enabled),
     );
     // Background drafts run here, on the replica they were started on, and
@@ -830,9 +860,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_runs(
             Arc::new(SuggestionRunSessions {
                 sessions: Arc::clone(&sessions),
-                creations: ActivityCreations(
-                    activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
-                ),
+                creations: ActivityCreations {
+                    activity: activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+                    executions: agent_code_mode::outbound::postgres::PgExecutionStore::new(
+                        db.clone(),
+                    ),
+                },
                 stored: agent_session::outbound::postgres::PgAgentSessionRepo::new(
                     db.clone(),
                     registrar.clone(),

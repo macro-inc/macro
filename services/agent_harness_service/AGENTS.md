@@ -218,7 +218,8 @@ Pulumi stacks; they do not host extra agent processes.
   as their agent session usage; `scheduling.rs` composes the drafter, its
   `scheduled_action_draft` store, the check's code-mode invocation lookup
   (`CorrelationSessions`), what a session created from its agent activity
-  (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  and whether its programs may have written, from their code-mode execution
+  records (`ActivityCreations`), and the sweep of drafts a stopped process left.
   Background drafts (`/scheduled-actions/draft-jobs`, `DraftJobs`) run on
   the scheduling `workers` tracker under `stop_workers`, so shutdown fails
   the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they

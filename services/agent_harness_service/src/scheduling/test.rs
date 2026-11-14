@@ -183,6 +183,45 @@ async fn health_is_served_at_gateway_prefix() {
     }
 }
 
+/// A finished program that ran one read, `label`.
+fn program(label: &str) -> agent_code_mode::domain::ExecutionRecord {
+    use agent_code_mode::domain::{
+        ExecutionActivity, ExecutionId, ExecutionRecord, ExecutionStatus, RecordedCallStatus,
+    };
+    ExecutionRecord {
+        execution_id: ExecutionId::mint(),
+        acting_as: None,
+        turn_id: None,
+        source: String::new(),
+        status: ExecutionStatus::Succeeded,
+        result: None,
+        error: None,
+        calls: Vec::new(),
+        activity: vec![ExecutionActivity {
+            id: 1,
+            label: label.to_owned(),
+            status: RecordedCallStatus::Completed,
+        }],
+        activity_truncated: false,
+    }
+}
+
+#[test]
+fn a_draft_reads_its_programs_up_to_a_bound() {
+    let reads = |count| vec![program("Check routine"); count];
+    assert!(!programs_may_have_written(&[]));
+    assert!(!programs_may_have_written(&reads(usize::from(
+        DRAFT_EXECUTIONS
+    ))));
+    // One more than it reads may hide a write.
+    assert!(programs_may_have_written(&reads(
+        usize::from(DRAFT_EXECUTIONS) + 1
+    )));
+    let mut wrote = reads(2);
+    wrote.push(program("Create Document"));
+    assert!(programs_may_have_written(&wrote));
+}
+
 /// The suggestions brief names the SDK symbols a session reads in its one
 /// documentation call; a renamed symbol would leave the session guessing.
 #[test]

@@ -203,6 +203,202 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_change_sent_around_the_sdk_marks_the_activity_incomplete_once() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let mut methods = Vec::new();
+        for _ in 0..3 {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            methods.push(request.split(' ').next().unwrap_or_default().to_owned());
+            respond(&mut stream, "{}").await;
+        }
+        methods
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+export async function main({token, hosts}) {
+  const headers = {authorization: `Bearer ${token}`};
+  await fetch(`${hosts.storage}/documents`, {headers});
+  for (let i = 0; i < 2; i++) await fetch(`${hosts.storage}/documents`, {method: "POST", headers, body: "{}"});
+  return {data: null, reviews: []};
+}
+"#;
+    let (events, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    let progress: Vec<_> = events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            EventKind::Progress { value } => Some(value.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(progress, [serde_json::json!({"truncated": true})]);
+    let methods = tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(methods, ["GET", "POST", "POST"]);
+    service.shutdown().await;
+}
+
+/// What a raw connection, a WebSocket or a Node network module sends passes
+/// neither the SDK nor fetch, so a session program that opens one, or only
+/// loads one, by import, `createRequire` or `getBuiltinModule`, marks its
+/// activity incomplete, once. One that only loads modules it can't send
+/// through doesn't.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_raw_connection_or_node_network_module_marks_the_activity_incomplete_once() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let environment = || RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let main = |body: &str| format!("export async function main() {{\n{body}\n}}\n");
+    let connects = main(&format!(
+        "for (let i = 0; i < 2; i++) (await Deno.connect({{hostname: \"127.0.0.1\", port: {}}})).close();\n\
+         return {{data: null, reviews: []}};",
+        address.port()
+    ));
+    let opens_a_websocket = main(&format!(
+        "const socket = new WebSocket(\"ws://{address}/\");\n\
+         socket.onerror = () => {{}};\n\
+         socket.close();\n\
+         return {{data: socket instanceof WebSocket, reviews: []}};"
+    ));
+    let imports = r#"
+import http from "node:http";
+import https from "node:https";
+import { connect } from "node:net";
+import tls from "node:tls";
+import http2 from "node:http2";
+import dgram from "node:dgram";
+export async function main() {
+  return {data: [http.request, https.request, connect, tls.connect, http2.connect, dgram.createSocket].map(f => typeof f), reviews: []};
+}
+"#
+    .to_owned();
+    let imports_an_internal = r#"
+import { ClientRequest } from "node:_http_client";
+export async function main() {
+  return {data: typeof ClientRequest, reviews: []};
+}
+"#
+    .to_owned();
+    let requires = r#"
+import { createRequire } from "node:module";
+export async function main() {
+  return {data: typeof createRequire(import.meta.url)("node:http").request, reviews: []};
+}
+"#
+    .to_owned();
+    let gets_a_builtin = main(
+        "return {data: typeof process.getBuiltinModule(\"node:https\").request, reviews: []};",
+    );
+    let imports_get_builtin = r#"
+import { getBuiltinModule } from "node:process";
+export async function main() {
+  return {data: typeof getBuiltinModule("node:http").request, reviews: []};
+}
+"#
+    .to_owned();
+    let only_reads = r#"
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import process from "node:process";
+export async function main() {
+  return {data: [readFile, path.join, createHash, process.getBuiltinModule, WebSocket].map(f => typeof f), reviews: []};
+}
+"#
+    .to_owned();
+    let functions = |count| Value::from(vec!["function"; count]);
+    for (source, data, marks) in [
+        (connects, Value::Null, true),
+        (opens_a_websocket, Value::Bool(true), true),
+        (imports, functions(6), true),
+        (imports_an_internal, "function".into(), true),
+        (requires, "function".into(), true),
+        (gets_a_builtin, "function".into(), true),
+        (imports_get_builtin, "function".into(), true),
+        (only_reads, functions(5), false),
+    ] {
+        let (events, outcome) = collect(
+            service
+                .execute(
+                    ExecuteRequest {
+                        source: source.clone(),
+                        timeout_ms: 5000,
+                    },
+                    environment(),
+                )
+                .unwrap(),
+        )
+        .await;
+        let Outcome::Succeeded { value } = outcome else {
+            panic!("{source}: {outcome:?}");
+        };
+        assert_eq!(value["data"], data, "{source}");
+        let progress: Vec<_> = events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                EventKind::Progress { value } => Some(value.clone()),
+                _ => None,
+            })
+            .collect();
+        let expected = if marks {
+            vec![serde_json::json!({"truncated": true})]
+        } else {
+            Vec::new()
+        };
+        assert_eq!(progress, expected, "{source}");
+    }
+    drop(listener);
+    service.shutdown().await;
+}
+
+/// A Node module the SDK or Handlebars loaded would run its mark before the
+/// bootstrap installs it, and stay loaded, so a program's own import of that
+/// module would never mark its activity.
+#[test]
+fn the_bundles_load_no_node_module() {
+    for (name, bundle) in [
+        ("sdk", code_mode_assets::SDK),
+        ("handlebars", code_mode_assets::HANDLEBARS),
+    ] {
+        assert!(!bundle.contains("node:"), "{name}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn a_program_presents_a_view_through_its_session() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

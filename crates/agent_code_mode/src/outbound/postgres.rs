@@ -13,6 +13,25 @@ impl PgExecutionStore {
     pub fn new(pool: PgPool) -> Self {
         Self(pool)
     }
+
+    /// Up to `limit` of `session`'s execution records, in no order.
+    pub async fn session_records(
+        &self,
+        session: AgentSessionId,
+        limit: u16,
+    ) -> Result<Vec<ExecutionRecord>, CodeModeError> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT record AS "record: Json<ExecutionRecord>" FROM agent_code_execution WHERE agent_session_id = $1 LIMIT $2"#,
+            session.as_uuid(),
+            i64::from(limit),
+        )
+        .fetch_all(&self.0)
+        .await
+        .map_err(storage)?
+        .into_iter()
+        .map(|record| record.0)
+        .collect())
+    }
 }
 
 fn storage(error: sqlx::Error) -> CodeModeError {

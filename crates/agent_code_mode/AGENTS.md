@@ -20,6 +20,12 @@ stacks. Process isolation belongs to
 - `SKILL.md`: the agent-facing JavaScript contract and examples.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+- `src/domain/activity.rs`: an execution's SDK activity, from the
+  bootstrap's operation frames. It is whole unless `activity_truncated` says
+  otherwise, and a routine draft skips waiting for its session's writes on
+  that (`ExecutionRecord::may_have_written`): any path that can lose a
+  request's frame (a bound, an unreadable frame, a request sent around the
+  SDK, a run stopped early) must set the flag.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.

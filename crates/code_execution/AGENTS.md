@@ -45,6 +45,13 @@ The bootstrap bans timers before importing `main.mjs`, and the import map points
 node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
 the SSE reconnect delay, so a reconnecting event stream fails the same way.
 
+A session program's import map points each Node module it could send through
+(`SENDING_MODULES`) at a shim that marks its activity incomplete, and
+`node:process` at `process.mjs`, which exports the bootstrap's wrapped
+`getBuiltinModule`. The SDK and Handlebars bundles must not import a Node module
+(`the_bundles_load_no_node_module`): a shim they loaded would run before the
+mark exists and stay cached, so a program's own import would never mark.
+
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
 An unattended result is never summarized: later routine steps read it whole, so

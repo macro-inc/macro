@@ -1927,11 +1927,13 @@ export type ExecutionId = string;
 export type ExecutionRecord = {
     actingAs?: null | ToolActor;
     /**
-     * Advisory SDK operation activity, without arguments or response contents.
+     * SDK operation activity, without arguments or response contents.
      */
     activity?: Array<ExecutionActivity>;
     /**
-     * Additional request activity was omitted at the bounded observation limit.
+     * The activity may leave requests out: it reached its bound, a frame
+     * couldn't be read, the program sent a change around the SDK, or it was
+     * stopped before its own end.
      */
     activityTruncated?: boolean;
     /**

@@ -34,7 +34,8 @@ pub struct UserExecutionReceipt {
     pub status: ExecutionStatus,
     /// Observed SDK operations, without arguments or responses.
     pub activity: Vec<ExecutionActivity>,
-    /// More SDK operations ran than the activity list records.
+    /// The activity list may leave SDK operations out (see
+    /// `ExecutionRecord::activity_truncated`).
     pub activity_truncated: bool,
     /// Only the value explicitly returned by the program.
     pub result: Option<Value>,
@@ -124,6 +125,7 @@ impl UserCodeMode for UserCodeModeService {
             super::activity::observe(&mut activity, &mut truncated, value);
         }
         super::activity::finish(&mut activity);
+        truncated |= !super::activity::ran_to_end(&outcome);
         let (status, result, error) = settle(outcome, Reviews::Rejected);
         let span = tracing::Span::current();
         span.record("status", tracing::field::debug(status));

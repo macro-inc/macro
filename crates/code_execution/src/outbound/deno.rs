@@ -21,9 +21,58 @@ use tokio_util::{
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
-/// Node timer and worker modules resolve to timers.mjs, which refuses to
-/// sleep; see bootstrap.mjs.
-const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#;
+const PROCESS: &str = include_str!("deno/process.mjs");
+/// The Node modules a program can send through without the SDK or the
+/// bootstrap's `fetch`: the network modules, the internal ones they are built
+/// from, and `module`, whose `createRequire` loads any of them. A session
+/// program that loads one has activity that may leave requests out, which
+/// the bootstrap marks. An unattended program has its own map,
+/// `UNATTENDED_IMPORTS`.
+const SENDING_MODULES: [&str; 13] = [
+    "net",
+    "tls",
+    "http",
+    "https",
+    "http2",
+    "dgram",
+    "_http_agent",
+    "_http_client",
+    "_http_common",
+    "_http_outgoing",
+    "_tls_common",
+    "_tls_wrap",
+    "module",
+];
+/// A session program's import map. Node timer and worker modules resolve to
+/// timers.mjs, which refuses to sleep; see bootstrap.mjs. Each of the
+/// [`SENDING_MODULES`] resolves to a module ([`network_module`]) that tells
+/// the bootstrap, then re-exports the real one, which its own scope maps;
+/// `node:process` resolves to process.mjs, whose `getBuiltinModule` is the
+/// bootstrap's wrapper.
+static IMPORTS: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let mut imports = serde_json::json!({
+        "@macro-inc/sdk": "./sdk.mjs",
+        "handlebars": "./handlebars.mjs",
+        "node:timers": "./timers.mjs",
+        "node:timers/promises": "./timers.mjs",
+        "node:worker_threads": "./timers.mjs",
+        "timers": "./timers.mjs",
+        "timers/promises": "./timers.mjs",
+        "worker_threads": "./timers.mjs",
+    });
+    let mut scopes = serde_json::Map::new();
+    for module in SENDING_MODULES {
+        let (specifier, path) = (format!("node:{module}"), format!("./node-{module}.mjs"));
+        imports[specifier.as_str()] = path.clone().into();
+        scopes.insert(path, serde_json::json!({ specifier.clone(): specifier }));
+    }
+    imports["node:process"] = "./process.mjs".into();
+    scopes.insert(
+        "./process.mjs".into(),
+        serde_json::json!({ "node:process": "node:process" }),
+    );
+    serde_json::json!({"imports": imports, "scopes": scopes}).to_string()
+});
 /// An unattended program's requests go through the bootstrap's `fetch`, where
 /// a dry run holds back writes, so the Node modules that open their own
 /// connections or threads resolve to a module that doesn't exist. Timers
@@ -119,12 +168,23 @@ impl DenoRunner {
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
             .await
             .map_err(internal)?;
+        tokio::fs::write(root.join("process.mjs"), PROCESS)
+            .await
+            .map_err(internal)?;
+        for module in SENDING_MODULES {
+            tokio::fs::write(
+                root.join(format!("node-{module}.mjs")),
+                network_module(module),
+            )
+            .await
+            .map_err(internal)?;
+        }
         tokio::fs::write(
             root.join("imports.json"),
             if job.environment.unattended.is_some() {
                 UNATTENDED_IMPORTS
             } else {
-                IMPORTS
+                IMPORTS.as_str()
             },
         )
         .await
@@ -221,6 +281,14 @@ impl DenoRunner {
         drop(directory);
         outcome
     }
+}
+
+/// The module a session program's `node:{module}` resolves to: it tells the
+/// bootstrap as it loads, then re-exports the real module.
+fn network_module(module: &str) -> String {
+    format!(
+        "globalThis[Symbol.for(\"macro.sentAroundSdk\")]?.();\nexport * from \"node:{module}\";\nexport {{ default }} from \"node:{module}\";\n"
+    )
 }
 
 /// The canonical path of `binary`, once it has proved to be the pinned Deno.

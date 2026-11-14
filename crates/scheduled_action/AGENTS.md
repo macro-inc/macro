@@ -54,8 +54,13 @@ each run.
   (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
   saved), naming what it created. The draft's `created` merges what its
   checks named with what its recorded activity shows (`SessionCreations`,
-  read `ACTIVITY_SETTLE` after the turn stops, since activity is written
-  asynchronously), each marked `used` when the routine references it, so the
+  read once the turn stops; since activity is written asynchronously, a
+  session that may have written waits `ACTIVITY_SETTLE` first: one that
+  couldn't be stopped, called a tool outside `READ_TOOLS`, ran a program that called anything
+  but reads, hadn't finished or whose activity may be incomplete, ran more
+  programs than the host reads (32), or can't say which tools it called or
+  what its programs did), each
+  marked `used` when the routine references it, so the
   review can show items made for nothing or the routine's work done early. A check from a draft's
   session, found from the request's code-mode invocation (`RequestSessions`),
   is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
@@ -74,8 +79,10 @@ each run.
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the session id, checks, items
-  created, the session's tool calls and turns, status reads, whether a
-  single agent task became steps (`routine.draft.agent_task`) and outcome
+  created, the session's tool calls and turns, why it waited for activity
+  or that it didn't (`settle`: `skipped`, `tool`, `program`, `unknown`,
+  `unstopped`), status reads, whether a single agent task became steps
+  (`routine.draft.agent_task`) and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send. `bench/`
