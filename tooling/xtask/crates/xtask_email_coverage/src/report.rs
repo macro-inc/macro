@@ -221,7 +221,14 @@ pub fn run(root: &Path, options: &Options) -> Result<bool, Report> {
         sources: &sources,
         schema: &schema,
     };
-    let model = build(&reader, &ledger, records, &results);
+    let mut model = build(&reader, &ledger, records, &results);
+    if results.runs.is_empty() {
+        // Without results a record of a scenario that failed after it was
+        // written, or of an earlier run, would count.
+        model.broken.push(format!(
+            "no {JUNIT_NAME} under --results: nothing says which scenarios passed"
+        ));
+    }
 
     std::fs::create_dir_all(&options.out)
         .context(format!("could not create {}", options.out.display()))?;
@@ -358,6 +365,12 @@ pub(crate) fn build(
                 waiver.entry
             ));
         }
+        if let Some(provider) = unknown_provider(waiver.provider.as_deref()) {
+            broken.push(format!(
+                "{}: a waiver names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                ledger::WAIVERS_PATH
+            ));
+        }
         for provider in applies(waiver.provider.as_deref()) {
             waived_entries.insert((waiver.entry.clone(), provider), &waiver.reason);
         }
@@ -463,6 +476,12 @@ pub(crate) fn build(
                 ledger::WAIVERS_PATH,
                 waiver.id,
                 ledger::FUNCTIONS_PATH
+            ));
+        }
+        if let Some(provider) = unknown_provider(waiver.provider.as_deref()) {
+            broken.push(format!(
+                "{}: a waiver names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                ledger::WAIVERS_PATH
             ));
         }
         for provider in applies(waiver.provider.as_deref()) {
@@ -621,6 +640,11 @@ fn applies(provider: Option<&str>) -> Vec<&'static str> {
         .into_iter()
         .filter(|own| provider.is_none_or(|provider| provider == *own))
         .collect()
+}
+
+/// A waiver for a provider that is neither of the two applies to nothing.
+fn unknown_provider(provider: Option<&str>) -> Option<&str> {
+    provider.filter(|provider| !PROVIDERS.contains(provider))
 }
 
 /// Whether the scenario performed the function on `provider`: one of the

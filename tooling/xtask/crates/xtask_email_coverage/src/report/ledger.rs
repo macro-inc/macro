@@ -24,6 +24,8 @@ pub(crate) const WAIVERS_PATH: &str = "crates/email_e2e/coverage/waivers.toml";
 const FUNCTIONS_HEADER: &str = "id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at";
 const CHECKS_HEADER: &str = "function\tscenario";
 const YES: &str = "yes";
+/// What the function list's provider columns say when it does not.
+const NO: &str = "no";
 /// The table of the map that is not a function: entry points that serve
 /// none.
 const PLUMBING: &str = "plumbing";
@@ -273,12 +275,19 @@ pub(crate) fn functions(text: &str) -> Result<Vec<Function>, Report> {
                     columns.len()
                 );
             };
+            let applies = |value: &str| match value {
+                YES => Ok(true),
+                NO => Ok(false),
+                other => Err(report!(
+                    "{FUNCTIONS_PATH}: {id} says `{other}` for a provider, not {YES} or {NO}"
+                )),
+            };
             Ok(Function {
                 id: id.to_owned(),
                 area: area.to_owned(),
                 wording: wording.to_owned(),
-                gmail: gmail == YES,
-                outlook: outlook == YES,
+                gmail: applies(gmail)?,
+                outlook: applies(outlook)?,
             })
         })
         .collect()

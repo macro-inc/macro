@@ -94,9 +94,7 @@ fn list(check: bool) -> Result<ExitCode, Report> {
 
     let checked_in = read_tsv(&path)?;
     let differences = diff(&checked_in, &rows);
-    let on_disk =
-        std::fs::read_to_string(&path).context(format!("could not read {ENTRYPOINTS_PATH}"))?;
-    if differences.is_empty() && on_disk == text {
+    if differences.is_empty() {
         println!(
             "{ENTRYPOINTS_PATH} lists the code's {} entry points",
             rows.len()
@@ -108,9 +106,6 @@ fn list(check: bool) -> Result<ExitCode, Report> {
     eprintln!("`-` rows are only in the file, `+` rows only in the code:\n");
     for difference in &differences {
         eprintln!("{difference}");
-    }
-    if differences.is_empty() {
-        eprintln!("(the rows agree; the file's order, comments or whitespace differ)");
     }
     eprintln!("\nRun `cargo x email-coverage list` and commit the result.");
     Ok(ExitCode::FAILURE)

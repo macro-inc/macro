@@ -56,6 +56,10 @@
   expression. Routes added in an `if` or by reassignment are an error by
   design; restructure the router or teach the walker.
 - `source` lines need proc-macro2's `span-locations` feature.
+- `list --check` compares everything but the line numbers in `source`: a
+  line moves whenever its file changes above it. `list` refreshes them.
+- The report fails without a `junit.xml`: nothing else says which records
+  are of scenarios that passed.
 - A GraphQL field is looked up in `static_assets/schema.graphql`; export the
   SDL first when a resolver is new.
 - The report exits non-zero when the ledger contradicts the code or itself

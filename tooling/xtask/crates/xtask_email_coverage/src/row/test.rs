@@ -25,11 +25,10 @@ fn check_reports_rows_only_in_the_file_and_only_in_the_code() {
 
     assert_eq!(
         diff(&checked_in, &generated),
+        // A route that only moved within its file is the same entry point.
         [
-            "- http\tGET /old\tboth\t\tapi/old.rs:4",
-            "- http\tPOST /init\tboth\t\tapi/email.rs:41",
-            "+ http\tPOST /init\tboth\t\tapi/email.rs:44",
-            "+ http\tPUT /new\tboth\t\tapi/new.rs:9",
+            "- http\tGET /old\tboth\t\tapi/old.rs",
+            "+ http\tPUT /new\tboth\t\tapi/new.rs",
         ]
     );
     assert_eq!(diff(&checked_in, &checked_in), Vec::<String>::new());

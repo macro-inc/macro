@@ -238,7 +238,21 @@ impl Scenario {
                         request.service == service
                             && request.method == method
                             && served(request.status)
-                            && fits(template, &request.path).is_some()
+                            && fits(template, &request.path).is_some_and(|fixed| {
+                                // As a router does, the listed route with
+                                // the most fixed segments takes the request.
+                                !sources
+                                    .elsewhere
+                                    .iter()
+                                    .filter(|source| source.service == service)
+                                    .flat_map(|source| &source.routes)
+                                    .filter_map(|other| other.split_once(' '))
+                                    .any(|(other_method, other)| {
+                                        other_method == method
+                                            && fits(other, &request.path)
+                                                .is_some_and(|more| more > fixed)
+                                    })
+                            })
                     })
                     .map(|request| Hit {
                         params: params(route, &request.path),

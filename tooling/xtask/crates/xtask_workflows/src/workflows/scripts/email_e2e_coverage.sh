@@ -9,6 +9,7 @@ xtask=(cargo run --manifest-path tooling/xtask/Cargo.toml -- email-coverage)
 # Report only: gaps are listed, not failed. `--enforce` on the next line
 # makes a function or an entry point that is neither covered nor waived
 # fail this job.
+mkdir -p "$EMAIL_E2E_RESULTS"
 status=0
 "${xtask[@]}" report --results "$EMAIL_E2E_RESULTS" --out "$EMAIL_E2E_COVERAGE" || status=$?
 if [ -f "$EMAIL_E2E_COVERAGE/coverage.md" ]; then

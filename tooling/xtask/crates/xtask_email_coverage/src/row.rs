@@ -83,6 +83,19 @@ pub struct Row {
 }
 
 impl Row {
+    /// The row without the line of its source: a line moves whenever the
+    /// file above it changes, which is no change to the entry point.
+    fn identity(&self) -> String {
+        let file = self
+            .source
+            .rsplit_once(':')
+            .map_or(self.source.as_str(), |(file, _)| file);
+        format!(
+            "{}\t{}\t{}\t{}\t{file}",
+            self.kind, self.key, self.providers, self.matcher
+        )
+    }
+
     fn line(&self) -> String {
         format!(
             "{}\t{}\t{}\t{}\t{}",
@@ -152,8 +165,8 @@ pub fn parse_tsv(text: &str, origin: &str) -> Result<Vec<Row>, Report> {
 /// each row only the file has, then a `+` line for each row only the code
 /// gives. Empty when they agree.
 pub fn diff(checked_in: &[Row], generated: &[Row]) -> Vec<String> {
-    let in_file: BTreeSet<String> = checked_in.iter().map(Row::line).collect();
-    let in_code: BTreeSet<String> = generated.iter().map(Row::line).collect();
+    let in_file: BTreeSet<String> = checked_in.iter().map(Row::identity).collect();
+    let in_code: BTreeSet<String> = generated.iter().map(Row::identity).collect();
 
     let removed = in_file.difference(&in_code).map(|line| format!("- {line}"));
     let added = in_code.difference(&in_file).map(|line| format!("+ {line}"));
