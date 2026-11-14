@@ -190,13 +190,14 @@ impl Walker<'_> {
                 && init.diverge.is_none()
             {
                 // An initializer that assigns (`let done = { router =
-                // router.route(..); true };`) changes a router the walker
-                // has already read.
+                // router.route(..); true };`) or lends a binding out to be
+                // changed (`let done = install(&mut router);`) changes a
+                // router the walker has already read.
                 let mut assigns = Assignments::default();
                 assigns.visit_expr(&init.expr);
                 if let Some(span) = assigns.first {
                     bail!(
-                        "{}: `{name}` assigns inside a `let` the walker cannot follow; \
+                        "{}: `{name}` assigns or borrows mutably inside a `let` the walker cannot follow; \
                          build the router in `let` bindings and one final expression",
                         Loc::new(file, span)
                     );
@@ -205,12 +206,13 @@ impl Walker<'_> {
                 continue;
             }
 
-            // An assignment may add routes inside a function it calls
-            // (`router = add_routes(router)`), which no method name shows.
-            let assigned = match statement {
-                Stmt::Expr(Expr::Assign(assign), _) => Some(assign.span()),
-                _ => None,
-            };
+            // An assignment anywhere in the statement, or a binding lent out
+            // to be changed, may add routes inside a function it calls
+            // (`if on { router = add_routes(router); }`), which no method
+            // name shows.
+            let mut assigns = Assignments::default();
+            assigns.visit_stmt(statement);
+            let assigned = assigns.first;
             let mut routing = RoutingCalls::default();
             routing.visit_stmt(statement);
             if let Some(span) = routing.first.or(assigned) {
@@ -479,7 +481,8 @@ impl<'ast> Visit<'ast> for Returns {
     fn visit_item(&mut self, _: &'ast syn::Item) {}
 }
 
-/// Finds the first assignment.
+/// Finds the first assignment or `&mut` borrow: either can change a router
+/// the walker has already read, the borrow inside whatever it is handed to.
 #[derive(Default)]
 struct Assignments {
     first: Option<proc_macro2::Span>,
@@ -489,6 +492,13 @@ impl<'ast> Visit<'ast> for Assignments {
     fn visit_expr_assign(&mut self, assign: &'ast syn::ExprAssign) {
         self.first.get_or_insert(assign.span());
         syn::visit::visit_expr_assign(self, assign);
+    }
+
+    fn visit_expr_reference(&mut self, reference: &'ast syn::ExprReference) {
+        if reference.mutability.is_some() {
+            self.first.get_or_insert(reference.span());
+        }
+        syn::visit::visit_expr_reference(self, reference);
     }
 }
 

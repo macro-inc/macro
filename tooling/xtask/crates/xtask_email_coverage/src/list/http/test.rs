@@ -210,7 +210,7 @@ pub fn app() -> Router {
     assert!(
         error
             .to_string()
-            .contains("services/svc/src/api.rs:6: `app` assigns inside a `let`"),
+            .contains("services/svc/src/api.rs:6: `app` assigns or borrows mutably inside a `let`"),
         "{error}"
     );
 }
@@ -238,6 +238,35 @@ pub fn app() -> Router {
         error
             .to_string()
             .contains("services/svc/src/api.rs:4: `app` returns before its final expression"),
+        "{error}"
+    );
+}
+
+#[test]
+fn fails_on_a_router_lent_out_or_assigned_under_a_condition() {
+    let error_of = |body: &str| {
+        let root = tempfile::tempdir().unwrap();
+        write(root.path(), "services/svc/Cargo.toml", "");
+        write(
+            root.path(),
+            "services/svc/src/api.rs",
+            &format!(
+                "\npub fn app() -> Router {{\n    let mut router = Router::new();\n{body}\n    router\n}}\n"
+            ),
+        );
+        list(&Repo::new(root.path()), &source())
+            .unwrap_err()
+            .to_string()
+    };
+
+    let error = error_of("    let _installed = install(&mut router);");
+    assert!(
+        error.contains("services/svc/src/api.rs:4: `app` assigns or borrows mutably"),
+        "{error}"
+    );
+    let error = error_of("    if enabled() {\n        router = extra(router);\n    }");
+    assert!(
+        error.contains("services/svc/src/api.rs:5: `app` adds routes in a statement"),
         "{error}"
     );
 }
