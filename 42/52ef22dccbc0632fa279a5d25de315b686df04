@@ -1,0 +1,25 @@
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_e722a0e50d8d61::t_8ebab48b709e88 179,332-333
+  s_e722a0e50d8d61::t_b196530541bada 191-199,201,204,211-227
+packages/sdk-ocaml/analyzer/test/dune
+  s_e722a0e50d8d61::t_abc9134ba4f1f5 1-16
+packages/sdk-ocaml/analyzer/test/test_analyzer.ml
+  s_e722a0e50d8d61::t_8ebab48b709e88 28-30
+  s_e722a0e50d8d61::t_abc9134ba4f1f5 1-27,31-266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4252ef22dccbc0632fa279a5d25de315b686df04",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
