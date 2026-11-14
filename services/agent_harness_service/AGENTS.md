@@ -198,9 +198,10 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
-  A scoped hidden session's chat messages and structured completions take
-  no tools (`tool_selection::tools_refused_to_current_session`): tools run
-  with the person's full access, past the scope its credential carries.
+  A scoped hidden session's or a channel-mention program's chat messages and
+  structured completions take no tools
+  (`tool_selection::tools_refused_to_current_session`): tools run with the
+  person's full access, past the scope or email refusal its credential carries.
 - `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
