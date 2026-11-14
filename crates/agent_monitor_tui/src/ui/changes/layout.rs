@@ -374,8 +374,10 @@ pub fn layout(
 }
 
 /// How many of a lane's newest commits are not pushed: those above
-/// `pushed`; every commit when nothing was pushed; none when the pushed
-/// commit is not among them (pushed past what is local).
+/// `pushed`; every commit when nothing was pushed, or when the pushed
+/// commit is not in the lane's history at all (amended or rebased locally
+/// and not force-pushed yet). When commits are elided the pushed commit
+/// may be among them, so none count.
 pub fn unpushed(lane: &Lane) -> usize {
     match &lane.pushed {
         None => lane.commits.len(),
@@ -383,7 +385,11 @@ pub fn unpushed(lane: &Lane) -> usize {
             .commits
             .iter()
             .position(|commit| commit.oid == *pushed)
-            .unwrap_or(0),
+            .unwrap_or(if lane.elided == 0 {
+                lane.commits.len()
+            } else {
+                0
+            }),
     }
 }
 

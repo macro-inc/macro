@@ -206,3 +206,18 @@ fn the_automatic_zoom_fits_most_forks() {
     let scales = [60, 300, 900, 3_600];
     assert_eq!(fit_scale(&refs, now(), 100, &scales), 1);
 }
+
+#[test]
+fn unpushed_counts_a_local_rewrite_as_all_unpushed() {
+    let mut lane = lane("feat/a", 60, &[10, 20, 30], 100);
+    lane.pushed = Some(oid(101));
+    assert_eq!(super::layout::unpushed(&lane), 1, "one commit above the push");
+
+    // Amended or rebased locally: the pushed commit is in no carried commit.
+    lane.pushed = Some(oid(999));
+    assert_eq!(super::layout::unpushed(&lane), 3);
+
+    // It may be among elided commits: say nothing.
+    lane.elided = 4;
+    assert_eq!(super::layout::unpushed(&lane), 0);
+}
