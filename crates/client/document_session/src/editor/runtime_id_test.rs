@@ -19,11 +19,30 @@ const FIXTURE: &str = r#"{"root":{"type":"root","children":[
     ]}
 ]}}"#;
 
+/// FIXTURE with a stored root id: the open keeps it and draws nothing for the root, so a row's
+/// deterministic draw sequence goes to its own nodes only (purpose-preserving fixture for the
+/// rows below that count draws; the root's own open id is covered by root_id_test).
+const FIXTURE_STORED_ROOT: &str = r#"{"root":{"type":"root","$":{"id":"rootId01"},"children":[
+    {"type":"paragraph","$":{"id":"existing"},"children":[
+        {"type":"text","text":"kept","$":{"id":"keptText"}}
+    ]}
+]}}"#;
+
 /// The real application factory, or its composition with deterministic entropy.
 fn editor_from(
     config: &EditorConfig,
     peer: u64,
     entropy: Option<NodeRandom>,
+) -> Result<Editor, Box<dyn std::error::Error>> {
+    editor_with(config, peer, entropy, FIXTURE)
+}
+
+/// editor_from over a chosen stored fixture.
+fn editor_with(
+    config: &EditorConfig,
+    peer: u64,
+    entropy: Option<NodeRandom>,
+    fixture: &str,
 ) -> Result<Editor, Box<dyn std::error::Error>> {
     let builder = match entropy {
         None => (config.builder)(EditorMode::ViewAttached, peer),
@@ -41,7 +60,7 @@ fn editor_from(
         ),
     };
     Ok(builder
-        .initial_state(serde_json::from_str(FIXTURE)?)
+        .initial_state(serde_json::from_str(fixture)?)
         .build()?)
 }
 
@@ -93,8 +112,12 @@ fn repeated(index: usize) -> String {
         .repeat(8)
 }
 
+/// Formerly `runtime_nodes_get_source_shaped_ids_existing_ids_stay_and_root_gets_none`. The
+/// application root now gets the id its open mints (ID_STORED_AT_OPEN, root-id open control
+/// outcome 6e501bb9); the surviving purpose is unchanged: runtime nodes get Source-shaped ids
+/// and existing ids stay.
 #[test]
-fn runtime_nodes_get_source_shaped_ids_existing_ids_stay_and_root_gets_none() -> TestResult {
+fn runtime_and_root_ids_are_source_shaped_and_existing_ids_stay() -> TestResult {
     let mut editor = editor_from(&config(), 77, None)?;
     let (paragraph, text) = append_paragraph(&mut editor, None)?;
     let paragraph_id = assert_source_shaped(id(&editor, paragraph)?);
@@ -102,7 +125,9 @@ fn runtime_nodes_get_source_shaped_ids_existing_ids_stay_and_root_gets_none() ->
     assert_ne!(paragraph_id, text_id);
     let first = editor.state().view().children_keys(NodeKey::ROOT)?[0];
     assert_eq!(id(&editor, first)?.as_deref(), Some("existing"));
-    assert_eq!(id(&editor, NodeKey::ROOT)?, None);
+    let root_id = assert_source_shaped(id(&editor, NodeKey::ROOT)?);
+    assert_ne!(root_id, paragraph_id);
+    assert_ne!(root_id, text_id);
     Ok(())
 }
 
@@ -137,10 +162,11 @@ fn peers_differ_and_a_same_config_rebuild_continues_the_stream() -> TestResult {
 #[test]
 fn a_colliding_draw_is_retried_with_a_fresh_one() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut editor = editor_from(
+    let mut editor = editor_with(
         &config(),
         77,
         Some(sequence(vec![0, 0, 1, 2], calls.clone())),
+        FIXTURE_STORED_ROOT,
     )?;
     let (paragraph, text) = append_paragraph(&mut editor, None)?;
     let (paragraph_id, text_id) = (id(&editor, paragraph)?, id(&editor, text)?);
@@ -163,7 +189,12 @@ fn a_colliding_draw_is_retried_with_a_fresh_one() -> TestResult {
 #[test]
 fn exhausted_draws_leave_new_nodes_without_ids_instead_of_a_duplicate() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut editor = editor_from(&config(), 77, Some(sequence(vec![0], calls.clone())))?;
+    let mut editor = editor_with(
+        &config(),
+        77,
+        Some(sequence(vec![0], calls.clone())),
+        FIXTURE_STORED_ROOT,
+    )?;
     let ((paragraph, text), commit) = editor.update(|tx| {
         let paragraph = tx.create(Paragraph::default())?;
         let text = tx.create_text("new")?;
@@ -196,7 +227,12 @@ fn exhausted_draws_leave_new_nodes_without_ids_instead_of_a_duplicate() -> TestR
 #[test]
 fn incoming_stored_ids_are_reserved_before_minting_in_the_same_commit() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut editor = editor_from(&config(), 77, Some(sequence(vec![0, 1, 2], calls.clone())))?;
+    let mut editor = editor_with(
+        &config(),
+        77,
+        Some(sequence(vec![0, 1, 2], calls.clone())),
+        FIXTURE_STORED_ROOT,
+    )?;
     let zeros = repeated(0);
     let ((minted, imported), _) = editor.update(|tx| {
         let minted = tx.create(Paragraph::default())?;
@@ -216,7 +252,12 @@ fn incoming_stored_ids_are_reserved_before_minting_in_the_same_commit() -> TestR
 #[test]
 fn duplicate_incoming_ids_keep_the_existing_first_seen_policy() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut editor = editor_from(&config(), 77, Some(sequence(vec![3, 4], calls.clone())))?;
+    let mut editor = editor_with(
+        &config(),
+        77,
+        Some(sequence(vec![3, 4], calls.clone())),
+        FIXTURE_STORED_ROOT,
+    )?;
     let ((first, second), _) = editor.update(|tx| {
         let first = tx.create(Paragraph::default())?;
         let second = tx.create(Paragraph::default())?;

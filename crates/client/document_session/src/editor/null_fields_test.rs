@@ -168,13 +168,27 @@ fn the_source_written_null_field_document_opens_and_loads_as_source_does() {
     // DEFAULT_METADATA {version:-1} (:21-29) and no environmentTags key
     // appears; be8649fb covers the rest of the tree.
     let model = surface.state().to_json().expect("model export");
+    // The root id this Edit open minted (ID_STORED_AT_OPEN, root-id open control outcome
+    // 6e501bb9): read from the model only for this one field, checked to be a Source-shaped
+    // nanoid(8), and checked below to be the id the open stored.
+    let root_id = model.root["$"]["id"]
+        .as_str()
+        .expect("minted root id")
+        .to_owned();
+    assert_eq!(root_id.len(), 8, "{root_id}");
+    assert!(
+        root_id
+            .bytes()
+            .all(|byte| macro_document_model::node_ids::NANOID_ALPHABET.contains(&byte)),
+        "{root_id}"
+    );
     let mut actual = Vec::new();
     rows(&serde_json::Value::Object(model.root.clone()), &mut actual);
     assert_eq!(
         actual,
         vec![
-            serde_json::json!({"$":{"documentMetadata":{"version":10}},"format":"","type":"root",
-                "version":1}),
+            serde_json::json!({"$":{"id":root_id,"documentMetadata":{"version":10}},"format":"",
+                "type":"root","version":1}),
             serde_json::json!({"$":{"id":"OdqPM9gw"},"direction":null,"format":"","indent":null,
                 "textFormat":null,"textStyle":null,"type":"paragraph","version":1}),
             serde_json::json!({"$":{"id":"mXsX_K_a"},"detail":null,"format":null,"style":null,
@@ -196,8 +210,9 @@ fn the_source_written_null_field_document_opens_and_loads_as_source_does() {
         expected[0],
         serde_json::json!({"format":"","type":"root","version":1})
     );
-    expected[0] = serde_json::json!({"$":{"documentMetadata":{"version":10}},"format":"",
-        "type":"root","version":1});
+    // The open also stores the minted root id (6e501bb9), the same id as the model's.
+    expected[0] = serde_json::json!({"$":{"id":root_id,"documentMetadata":{"version":10}},
+        "format":"","type":"root","version":1});
     assert_eq!(after, expected);
     // Control: a null-style text renders; the view receives its Initialize.
     assert!(
