@@ -1,0 +1,60 @@
+crates/agent_monitor/Cargo.toml
+  s_a7d426ced409b1::t_0a5eb3f64bfe72 17
+crates/agent_monitor/proto/agent_monitor.proto
+  s_a7d426ced409b1::t_7bae817fbd323a 53-56,66,85-86,172-173,197-201,261-262,288-344
+crates/agent_monitor/src/domain/join.rs
+  s_a7d426ced409b1::t_7bae817fbd323a 450,811-812
+  s_a7d426ced409b1::t_126b5823677365 482,495,766,773-774,776-810,818,822-829,840,857,893,901,910,915-916
+  s_a7d426ced409b1::t_83bb6a11a7ce38 15-16,19-22,42-48,82-83,126-127,149,216-218,245-249,303-315,365-370,382-385,442-449,451-460,480-481,483-494,496-519,531-532,756,760-765,767-772,775,813-817,819-821,830-839,841-856,858-892,894-900,902-909,911-914,917
+crates/agent_monitor/src/domain/store.rs
+  s_a7d426ced409b1::t_7f30efb3ad177b 29-31,34,104,113,160,178-183,207,213,256,262,306-309,319-324,334-335,356,463,509-523,537-542,547,669-728
+  s_a7d426ced409b1::t_e837f97386beef 24,310-318
+  s_a7d426ced409b1::t_08b50253aa2c4c 590-592
+  s_a7d426ced409b1::t_8f1e457e21f43e 729-730
+crates/agent_monitor/src/proto.rs
+  s_a7d426ced409b1::t_aaadf4bbbd1a81 11-14,30,49-51,91,111,277,373,398-402,423-427,575-577,597-599,611,640-644,661-662,685-686,749-879,881-893,895-896
+  s_a7d426ced409b1::t_6a6ceef4a9a352 880
+  s_a7d426ced409b1::t_295ac6c169f419 894
+crates/agent_monitor/examples/monitor.rs
+  s_a7d426ced409b1::t_cbd050fb28aee9 164,167-168,170-177
+crates/agent_monitor/src/domain/source.rs
+  s_a7d426ced409b1::t_e837f97386beef 5,9,13,82-100
+crates/agent_monitor/src/domain/join/test.rs
+  s_37ab47ec06e4df::t_f91d6c4c46252a 6-7,458,1082-1269
+crates/agent_monitor/src/domain/model.rs
+  s_65316fb49f4b19::t_9d7c51fe6d6150 94-95,100,110,125,393-394,497,526-535,656-658,672,688-689,708-711,773-975
+crates/agent_monitor/src/domain/observation.rs
+  s_37ab47ec06e4df::t_4ed6c49ceabddc 15-17,21-24,65-68,81-82,102-105,293-295,330-331,354-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7f7c3eb81a47dcb1888a1c4f1930a9ac50d00243",
+  "prompts": {},
+  "sessions": {
+    "s_37ab47ec06e4df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bc0f25ca-e765-4c04-90a8-d1bd01c5a954",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_65316fb49f4b19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2291efef-03f9-4d9a-a2d2-ab88c561180f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a7d426ced409b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "399fe238-f278-46d4-acb2-93e5dbcc93ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
