@@ -338,6 +338,19 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     );
 }
 
+/// Width above which the BODY pane grows with the terminal.
+const BODY_GROWS_ABOVE: u16 = 200;
+
+/// The BODY pane's width: 40 columns, and a quarter of the screen on
+/// terminals wider than [`BODY_GROWS_ABOVE`], so the figure can be big.
+fn body_width(width: u16) -> u16 {
+    if width > BODY_GROWS_ABOVE {
+        (width / 4).max(40)
+    } else {
+        40
+    }
+}
+
 fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     if area.width < NARROW {
         let [agents, tape, failures, spend] = Layout::vertical([
@@ -365,7 +378,7 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
     } else {
         let [agents, body, right] = Layout::horizontal([
             Constraint::Min(0),
-            Constraint::Length(40),
+            Constraint::Length(body_width(area.width)),
             Constraint::Length(38),
         ])
         .areas(upper);

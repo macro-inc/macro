@@ -379,25 +379,14 @@ impl ViewState {
         rows
     }
 
-    /// Spend by agent kind, largest first, with whether any part is an
-    /// estimate.
+    /// Today's spend by agent kind, largest first, from the collector's
+    /// totals: the same window as the day total, so the rows add up to it.
     pub fn spend_by_kind(&self) -> Vec<(AgentKind, Cost)> {
-        let mut by_kind: Vec<(AgentKind, Cost)> = Vec::new();
-        for agent in self.agents.values() {
-            if agent.cost.usd().is_none() {
-                continue;
-            }
-            match by_kind.iter_mut().find(|(kind, _)| *kind == agent.kind) {
-                Some((_, cost)) => *cost = cost.plus(agent.cost),
-                None => by_kind.push((agent.kind, agent.cost)),
-            }
-        }
-        by_kind.sort_by(|a, b| {
-            let a = a.1.usd().unwrap_or(0.0);
-            let b = b.1.usd().unwrap_or(0.0);
-            b.total_cmp(&a)
-        });
-        by_kind
+        self.totals
+            .spend_by_kind
+            .iter()
+            .map(|(kind, usd)| (*kind, Cost::Estimated(*usd)))
+            .collect()
     }
 
     /// The agent's last `count` tape lines, newest first.

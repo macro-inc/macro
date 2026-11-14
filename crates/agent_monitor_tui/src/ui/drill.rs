@@ -138,43 +138,72 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
         |started| format::duration(agent.ended.unwrap_or(clock.now) - started),
     );
     let errors = agent.tool_errors;
-    let cells: [(&str, String, Color); 9] = [
-        ("DURATION", duration, theme::AMBER),
-        ("COST", format::cost(agent.cost), theme::YELLOW),
+    let minutes = &agent.minutes;
+    let counts = |series: &[u16]| series.iter().map(|value| u64::from(*value)).collect();
+    // Cents, so the sparkline's integer levels still tell small spends apart.
+    let cents = minutes
+        .cost_usd
+        .iter()
+        .map(|usd| (f64::from(*usd) * 100.0).round().max(0.0) as u64)
+        .collect();
+    let tokens = minutes
+        .tokens
+        .iter()
+        .map(|value| u64::from(*value))
+        .collect();
+    // Cells with a per-minute series draw it; the rest show only their value.
+    let cells: [(&str, String, Color, Option<Vec<u64>>); 9] = [
+        ("DURATION", duration, theme::AMBER, None),
+        ("COST", format::cost(agent.cost), theme::YELLOW, Some(cents)),
         (
             "TURNS",
             format::thousands(u64::from(agent.turns)),
             theme::AMBER,
+            Some(counts(&minutes.turns)),
         ),
         (
             "TOOLS",
             format::thousands(u64::from(agent.tool_calls)),
             theme::CYAN,
+            Some(counts(&minutes.tools)),
         ),
         (
             "ERRORS",
             errors.to_string(),
             if errors > 0 { theme::RED } else { theme::GREEN },
+            Some(counts(&minutes.errors)),
         ),
-        ("TOK IN", format::compact(agent.tokens.input), theme::AMBER),
+        (
+            "TOKENS",
+            format::compact(agent.tokens.total()),
+            theme::AMBER,
+            Some(tokens),
+        ),
+        (
+            "TOK IN",
+            format::compact(agent.tokens.input),
+            theme::AMBER,
+            None,
+        ),
         (
             "TOK OUT",
             format::compact(agent.tokens.output),
             theme::AMBER,
+            None,
         ),
         (
-            "CACHE RD",
-            format::compact(agent.tokens.cache_read),
+            "CACHE RD/WR",
+            format!(
+                "{}/{}",
+                format::compact(agent.tokens.cache_read),
+                format::compact(agent.tokens.cache_write)
+            ),
             theme::DIM,
-        ),
-        (
-            "CACHE WR",
-            format::compact(agent.tokens.cache_write),
-            theme::DIM,
+            None,
         ),
     ];
     let areas = Layout::horizontal([Constraint::Ratio(1, 9); 9]).split(area);
-    for ((label, value, color), cell) in cells.into_iter().zip(areas.iter()) {
+    for ((label, value, color, series), cell) in cells.into_iter().zip(areas.iter()) {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(theme::ink(theme::FAINT))
@@ -183,18 +212,15 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
                 theme::bold(theme::STRIP),
             ))
             .style(theme::base());
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::from(Span::styled(value, theme::bold(color))),
-                Line::from(format::activity(
-                    &agent.activity,
-                    usize::from(cell.width.saturating_sub(2)),
-                    theme::FAINT,
-                )),
-            ])
-            .block(block),
-            *cell,
-        );
+        let mut lines = vec![Line::from(Span::styled(value, theme::bold(color)))];
+        if let Some(series) = series {
+            lines.push(Line::from(format::spark(
+                series,
+                usize::from(cell.width.saturating_sub(2)),
+                color,
+            )));
+        }
+        frame.render_widget(Paragraph::new(lines).block(block), *cell);
     }
 }
 

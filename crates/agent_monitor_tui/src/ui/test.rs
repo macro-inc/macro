@@ -102,6 +102,11 @@ fn monitor_200x56() {
 }
 
 #[test]
+fn monitor_wide_240x60_grows_the_body() {
+    insta::assert_snapshot!(render(&mut app(), 240, 60));
+}
+
+#[test]
 fn monitor_narrow_100x30() {
     insta::assert_snapshot!(render(&mut app(), 100, 30));
 }
