@@ -346,12 +346,12 @@ async fn contributing_inboxes_restate_the_privacy_function(
     Ok(())
 }
 
-/// `team_user_user_id_unique` (one team per user) is all that keeps another
-/// team's consent and personal lists away from a team's read through its
-/// members today. This test drops it, so the read's own team conditions
-/// must: u3, a Gamma member without Gamma consent, joins Delta and consents
-/// there, and u1, who contributes to Gamma, joins Delta and blocks
-/// dense.test there.
+/// With one team per user (`team_user_user_id_unique`), another team's
+/// consent and personal lists can't reach a team's read through its members,
+/// so no valid data tests the read's own team conditions on them. This test
+/// drops the constraint: u3, a Gamma member without Gamma consent, joins
+/// Delta and consents there, and u1, who contributes to Gamma, joins Delta
+/// and blocks dense.test there.
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
@@ -460,18 +460,29 @@ async fn allowed_restates_the_privacy_function(pool: sqlx::PgPool) -> anyhow::Re
         ]
     );
 
-    // Gamma's own mail, and Delta's, which Delta's blocklist and hidden
-    // company cut down.
-    for (team, least_allowed) in [(GAMMA, 500), (DELTA, 100)] {
-        let (allowed, differ, total) = verdicts(&pool, Uuid::parse_str(team)?).await?;
-        assert_eq!(
-            differ, 0,
-            "{team}: {differ} of {total} threads get another verdict"
-        );
-        assert!(
-            allowed > least_allowed && allowed < total,
-            "{team}: both verdicts occur: {allowed} of {total}"
-        );
-    }
+    let (allowed, differ, total) = verdicts(&pool, team).await?;
+    assert_eq!(differ, 0, "{differ} of {total} threads get another verdict");
+    assert!(
+        allowed > 500 && allowed < total,
+        "both verdicts occur: {allowed} of {total}"
+    );
+
+    // Delta reads only its own inbox, less what its blocklist and hidden
+    // company cut.
+    let (allowed, differ, total) = verdicts(&pool, Uuid::parse_str(DELTA)?).await?;
+    assert_eq!(
+        differ, 0,
+        "Delta: {differ} of {total} threads get another verdict"
+    );
+    let delta_threads = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM email_threads WHERE link_id = $1"#,
+        gamma_link(10),
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        allowed > 100 && allowed < delta_threads,
+        "Delta allows most of its inbox's threads: {allowed} of {delta_threads}"
+    );
     Ok(())
 }
