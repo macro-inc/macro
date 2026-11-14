@@ -1,0 +1,635 @@
+#!/usr/bin/env bash
+# Enrol this machine's git-ai client with Macro's gitai-service.
+#
+#   doppler run -p gitai-service -c prd -- tooling/gitai/gitai-enroll [--dry-run] [--yes] [--rotate]
+#
+# See README.md next to this file for what each step does and how to test it.
+# Keep this file bash 3.2 compatible: it runs on stock macOS.
+set -euo pipefail
+
+# 1.7.7 has no GitHub release; it is 1.7.6 plus a version bump, so we install
+# 1.7.6 and accept either one already installed (Nix packages build 1.7.7).
+PINNED_VERSION="${GITAI_CLIENT_VERSION:-1.7.6}"
+ACCEPTED_VERSIONS="${GITAI_CLIENT_VERSION:-1.7.6 1.7.7}"
+RELEASE_REPO="git-ai-project/git-ai"
+BASE_URL="${GITAI_BASE_URL:-https://gateway.macro.com/gitai}"
+BASE_URL="${BASE_URL%/}"
+# The client normalises this to github.com/macro-inc/macro, which matches both
+# the HTTPS and SSH remotes. A bare "github.com/..." is rejected by
+# `git-ai config set`, which reads it as a file path.
+ALLOWED_REPOSITORIES='["https://github.com/macro-inc/macro"]'
+SKILL_NAME="gitai-why"
+MARK_BEGIN="<!-- gitai-enroll:begin -->"
+MARK_END="<!-- gitai-enroll:end -->"
+# shellcheck disable=SC2016 # literal backticks: Markdown code span
+INSTRUCTION='After you open a pull request on macro-inc/macro, append exactly one line to its description, `git-ai: https://gateway.macro.com/gitai/v1/prs/macro-inc/macro/<n>` with <n> the PR number, and nothing else about git-ai; to find why code was written, use the gitai-why skill.'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_SOURCE="$SCRIPT_DIR/$SKILL_NAME/SKILL.md"
+GIT_AI_DIR="$HOME/.git-ai"
+CONFIG="$GIT_AI_DIR/config.json"
+# Where a managed machine keeps its credential; git-ai reads it from GIT_AI_API_KEY.
+KEY_ENV_FILE="$GIT_AI_DIR/api-key.env"
+OWN_BIN="$GIT_AI_DIR/bin/git-ai"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
+
+DRY_RUN=0
+ASSUME_YES=0
+ROTATE=0
+
+usage() {
+  cat <<'USAGE'
+Usage: doppler run -p gitai-service -c prd -- gitai-enroll [--dry-run] [--yes] [--rotate]
+
+Installs git-ai, points it at Macro's gitai-service, mints a device
+credential, starts the daemon at login, and installs the gitai-why agent skill.
+Safe to re-run: an existing credential is kept unless --rotate is given.
+
+  --dry-run   print what would change; change nothing, contact nothing
+  --yes       do not ask for confirmation
+  --rotate    mint a new credential and revoke this machine's old ones (alias --force)
+
+Environment:
+  GITAI_SHARED_KEY      shared minting key (from Doppler); needed only to mint or rotate
+  GITAI_BASE_URL        server base URL (default https://gateway.macro.com/gitai)
+  GITAI_CLIENT_VERSION  git-ai release to install (default 1.7.6, the pin)
+USAGE
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --yes | -y) ASSUME_YES=1 ;;
+    --rotate | --force) ROTATE=1 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      echo "gitai-enroll: unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+# Take the shared key out of the environment at once, so nothing this script
+# starts (git-ai, its daemon, the login-start installer) inherits it.
+SHARED_KEY="${GITAI_SHARED_KEY:-}"
+unset GITAI_SHARED_KEY
+
+say() { printf '==> %s\n' "$*"; }
+note() { printf '    %s\n' "$*"; }
+warn() { printf 'warning: %s\n' "$*" >&2; }
+die() {
+  printf 'gitai-enroll: %s\n' "$*" >&2
+  exit 1
+}
+
+# `doppler run` puts every secret of the project into the environment. Children
+# get a minimal environment instead, so the git-ai daemon (which outlives this
+# script) never carries them.
+CHILD_ENV=("HOME=$HOME" "PATH=$PATH")
+for name in USER LOGNAME SHELL TERM LANG LC_ALL TMPDIR XDG_CONFIG_HOME XDG_DATA_HOME \
+  XDG_STATE_HOME XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS CLAUDE_CONFIG_DIR CODEX_HOME \
+  GIT_CONFIG_GLOBAL SSL_CERT_FILE NIX_SSL_CERT_FILE; do
+  if [ -n "${!name:-}" ]; then
+    CHILD_ENV+=("$name=${!name}")
+  fi
+done
+
+child() { env -i "${CHILD_ENV[@]}" "$@"; }
+
+# Run a command that changes the machine, or print it under --dry-run. Never
+# pass a secret to it: dry runs print their arguments.
+change() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '    would run:'
+    printf ' %q' "$@"
+    printf '\n'
+  else
+    child "$@"
+  fi
+}
+
+for tool in curl jq git uname; do
+  command -v "$tool" >/dev/null 2>&1 || die "$tool is required"
+done
+
+case "$BASE_URL" in
+  https://*) ;;
+  http://localhost:* | http://localhost/* | http://127.0.0.1:* | http://127.0.0.1/*) ;;
+  *) die "GITAI_BASE_URL must be https (plain http only for localhost): $BASE_URL" ;;
+esac
+
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gitai-enroll.XXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+version_accepted() {
+  case " $ACCEPTED_VERSIONS " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
+client_version() {
+  child "$1" --version 2>/dev/null | awk '{print $NF}' | sed 's/^v//' || true
+}
+
+RELEASE_URL="https://github.com/$RELEASE_REPO/releases/download/v$PINNED_VERSION"
+
+# SHA256 of the pinned release's assets, so a replaced asset fails even if its
+# SHA256SUMS were replaced too. Other versions fall back to SHA256SUMS alone.
+pinned_sha256() {
+  [ "$PINNED_VERSION" = 1.7.6 ] || return 0
+  case "$1" in
+    git-ai-linux-x64) echo f6cda0cb43c1c9a3d68e7efe2d79577680ea6f382c31bf36a2162906f93f6c1c ;;
+    git-ai-linux-arm64) echo 1326abd5547636e6b6b297ad79afc955e57e82361efac320d4f860147b95a87a ;;
+    git-ai-macos-x64) echo bc1a504e9abb259519313954b0f57c5ca5b7192b8c1111282d6b5d95dfe19558 ;;
+    git-ai-macos-arm64) echo 1d44c44b54aac71708e9fce638047551587324d8d58ad15841bd517609748667 ;;
+    git-ai-login-start-linux.sh) echo 103008938742f03f67286058bf10ab5d0bee08d97fa93b7f519f8defbc797a0d ;;
+    git-ai-login-start-macos.sh) echo d7201100f01e121d2d8d64d4f7759d6ca21399d00c386357e2a7ac0d3fed422c ;;
+  esac
+}
+
+# Download a release asset into WORK_DIR and check it against the release's
+# SHA256SUMS.
+fetch_release_asset() {
+  local asset="$1" expected actual pinned
+
+  if [ ! -f "$WORK_DIR/SHA256SUMS" ]; then
+    curl --fail --location --silent --show-error -o "$WORK_DIR/SHA256SUMS" "$RELEASE_URL/SHA256SUMS" ||
+      die "git-ai v$PINNED_VERSION has no published GitHub release ($RELEASE_URL); set GITAI_CLIENT_VERSION to a published one"
+  fi
+
+  curl --fail --location --silent --show-error -o "$WORK_DIR/$asset" "$RELEASE_URL/$asset" ||
+    die "could not download $asset from $RELEASE_URL"
+
+  expected="$(awk -v name="$asset" '$2 == name {print $1}' "$WORK_DIR/SHA256SUMS")"
+  [ -n "$expected" ] || die "$asset is not listed in the release's SHA256SUMS"
+  actual="$(sha256_of "$WORK_DIR/$asset")"
+  [ "$expected" = "$actual" ] || die "checksum mismatch for $asset"
+  pinned="$(pinned_sha256 "$asset")"
+  [ -z "$pinned" ] || [ "$pinned" = "$actual" ] || die "$asset does not match the checksum pinned in this script"
+}
+
+case "$(uname -s)" in
+  Linux) OS=linux ;;
+  Darwin) OS=macos ;;
+  *) die "unsupported OS: $(uname -s)" ;;
+esac
+case "$(uname -m)" in
+  x86_64 | amd64) ARCH=x64 ;;
+  arm64 | aarch64) ARCH=arm64 ;;
+  *) die "unsupported architecture: $(uname -m)" ;;
+esac
+
+# --- Plan -------------------------------------------------------------------
+
+GITAI_BIN=""
+INSTALL_CLIENT=0
+PATH_BIN="$(command -v git-ai 2>/dev/null || true)"
+
+if [ -n "$PATH_BIN" ] && version_accepted "$(client_version "$PATH_BIN")"; then
+  GITAI_BIN="$PATH_BIN"
+elif [ -x "$OWN_BIN" ] && version_accepted "$(client_version "$OWN_BIN")"; then
+  GITAI_BIN="$OWN_BIN"
+else
+  GITAI_BIN="$OWN_BIN"
+  INSTALL_CLIENT=1
+fi
+
+# A config.json owned by a package manager (a Home Manager symlink into the Nix
+# store, say) is managed mode: its settings come from that manager, and the
+# credential, which must never enter the world-readable store, goes into
+# KEY_ENV_FILE for GIT_AI_API_KEY instead.
+MANAGED=0
+if [ -L "$CONFIG" ] || { [ -e "$CONFIG" ] && [ ! -w "$CONFIG" ]; }; then
+  MANAGED=1
+fi
+
+config_get() {
+  if [ -f "$CONFIG" ]; then
+    jq -r --arg key "$1" '.[$key] // empty' "$CONFIG"
+  fi
+}
+
+# git-ai finds git only in fixed locations (/usr/bin, Homebrew, ...). Elsewhere
+# (NixOS, say) tell it where git is.
+GIT_PATH_SETTING=""
+if [ -z "$(config_get git_path)" ] && [ ! -x /usr/bin/git ] && [ ! -x /usr/local/bin/git ] &&
+  [ ! -x /opt/homebrew/bin/git ]; then
+  GIT_PATH_SETTING="$(command -v git)"
+fi
+
+PREVIOUS_BASE="$(config_get api_base_url)"
+if [ "$MANAGED" -eq 1 ]; then
+  EXISTING_KEY="$(sed -n 's/^GIT_AI_API_KEY=//p' "$KEY_ENV_FILE" 2>/dev/null || true)"
+else
+  EXISTING_KEY="$(config_get api_key)"
+fi
+MINT=1
+if [ "$ROTATE" -eq 0 ] && [ "$PREVIOUS_BASE" = "$BASE_URL" ]; then
+  case "$EXISTING_KEY" in
+    gitai_*) MINT=0 ;;
+  esac
+fi
+
+EMAIL="$(git config --get user.email || true)"
+HOSTNAME_VALUE="$(uname -n)"
+[ -n "$EMAIL" ] || die "git config user.email is not set"
+
+say "gitai-enroll for $EMAIL on $HOSTNAME_VALUE"
+note "server:     $BASE_URL"
+if [ "$INSTALL_CLIENT" -eq 1 ]; then
+  note "git-ai:     install v$PINNED_VERSION from github.com/$RELEASE_REPO into $GIT_AI_DIR/bin"
+else
+  note "git-ai:     $(client_version "$GITAI_BIN") already installed at $GITAI_BIN; leaving it alone"
+fi
+if [ "$MANAGED" -eq 1 ]; then
+  note "config:     $CONFIG is managed by another tool; the credential goes to $KEY_ENV_FILE,"
+  note "            and you get the settings to put in that tool. Hooks and login start are left to it."
+fi
+if [ "$MINT" -eq 1 ]; then
+  note "credential: mint a new device credential$([ "$ROTATE" -eq 1 ] && echo ' and revoke this machine'"'"'s old ones')"
+else
+  note "credential: keep the existing one (pass --rotate to replace it)"
+fi
+if [ "$MANAGED" -eq 1 ]; then
+  note "agents:     $SKILL_NAME skill and PR line for Claude Code and Codex"
+else
+  note "agents:     git-ai hooks, daemon login start, $SKILL_NAME skill and PR line for Claude Code and Codex"
+fi
+
+# Managed mode cannot change config.json, and a credential must not exist
+# before every setting this script would make is in place: without the base URL
+# or the notes backend uploads go elsewhere, without the allowlist every repo's
+# transcripts leave the machine, and vendor telemetry stays on. Print the
+# missing keys and stop until the managing tool sets them.
+managed_missing_settings() {
+  # -s: an empty file is no settings, not "nothing missing".
+  jq -rs --arg base "$BASE_URL" --arg git "$GIT_PATH_SETTING" '
+    def on: . == true or . == "true";
+    # The client normalises repository URLs (scheme, user, ".git", ":" for SSH).
+    def repo_key: ascii_downcase | sub("^[a-z+]+://"; "") | sub("^[^@/]*@"; "")
+      | sub(":"; "/") | sub("\\.git/?$"; "") | sub("/+$"; "");
+    if length == 1 and (.[0] | type) == "object" then .[0] else error("not a JSON object") end
+    |
+    [ (if .api_base_url == $base then empty else "api_base_url" end),
+      (if .telemetry_oss == "off" then empty else "telemetry_oss" end),
+      (if (.disable_auto_updates | on) then empty else "disable_auto_updates" end),
+      (if (.disable_version_checks | on) then empty else "disable_version_checks" end),
+      (if .notes_backend.kind == "git_notes" then empty else "notes_backend" end),
+      (if (.allow_repositories | type) == "array" and any(.allow_repositories[]; type == "string" and repo_key == "github.com/macro-inc/macro")
+       then empty else "allow_repositories" end),
+      (if $git == "" then empty else "git_path" end)
+    ] | join(" ")' "$CONFIG" 2>/dev/null || echo "config.json (not a JSON object with these keys)"
+}
+
+if [ "$MANAGED" -eq 1 ]; then
+  MISSING_SETTINGS="$(managed_missing_settings)"
+  if [ -n "$MISSING_SETTINGS" ]; then
+    say "Settings for the tool that manages $CONFIG"
+    note "Missing or wrong: $MISSING_SETTINGS"
+    note "Put these keys in config.json (for Home Manager: home.file.\".git-ai/config.json\"); none is secret:"
+    jq -n --arg base "$BASE_URL" --argjson repos "$ALLOWED_REPOSITORIES" --arg git "$GIT_PATH_SETTING" \
+      '{api_base_url: $base, telemetry_oss: "off", disable_auto_updates: true, disable_version_checks: true,
+        notes_backend: {kind: "git_notes"}, allow_repositories: $repos}
+       + (if $git == "" then {} else {git_path: $git} end)' | sed 's/^/    /'
+    die "apply these settings (all must be in place before a credential exists), then re-run"
+  fi
+fi
+
+if [ "$MINT" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] && [ -z "$SHARED_KEY" ]; then
+  die "GITAI_SHARED_KEY is not set; run under: doppler run -p gitai-service -c prd -- gitai-enroll"
+fi
+
+if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
+  [ -t 0 ] || die "not a terminal; pass --yes to run without confirmation"
+  printf 'Proceed? [y/N] '
+  read -r answer
+  case "$answer" in
+    y | Y | yes) ;;
+    *) die "aborted" ;;
+  esac
+fi
+
+# --- (a) Install the pinned client --------------------------------------------
+
+if [ "$INSTALL_CLIENT" -eq 1 ]; then
+  say "Installing git-ai v$PINNED_VERSION"
+  asset="git-ai-$OS-$ARCH"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "would download $RELEASE_URL/$asset, verify it against SHA256SUMS and install it as $OWN_BIN"
+  else
+    fetch_release_asset "$asset"
+    mkdir -p "$GIT_AI_DIR/bin"
+    chmod +x "$WORK_DIR/$asset"
+    mv -f "$WORK_DIR/$asset" "$OWN_BIN"
+    if [ "$OS" = macos ]; then
+      xattr -d com.apple.quarantine "$OWN_BIN" 2>/dev/null || true
+    fi
+    mkdir -p "$HOME/.local/bin"
+    ln -sf "$OWN_BIN" "$HOME/.local/bin/git-ai"
+    version_accepted "$(client_version "$OWN_BIN")" || die "installed binary does not report version $PINNED_VERSION"
+    note "installed $OWN_BIN (linked from ~/.local/bin/git-ai)"
+  fi
+  if [ -n "$PATH_BIN" ] && [ "$PATH_BIN" != "$OWN_BIN" ] && [ "$PATH_BIN" != "$HOME/.local/bin/git-ai" ]; then
+    warn "another git-ai at $PATH_BIN ($(client_version "$PATH_BIN")) comes first on PATH; remove it or put ~/.git-ai/bin first"
+  fi
+fi
+
+# --- (b, c) Point the client at our server, then lock it down ----------------
+# The base URL goes first: with a credential and the default URL, the client
+# would upload to the vendor.
+
+if [ "$MANAGED" -eq 0 ]; then
+  say "Configuring git-ai"
+  change "$GITAI_BIN" config set api_base_url "$BASE_URL"
+  change "$GITAI_BIN" config set telemetry_oss off
+  change "$GITAI_BIN" config set disable_auto_updates true
+  change "$GITAI_BIN" config set disable_version_checks true
+  # With an api_key and no notes_backend, git-ai sends notes to the server and
+  # stops writing refs/notes/ai. Notes stay in git, so pin this before the key.
+  change "$GITAI_BIN" config set notes_backend.kind git_notes
+  change "$GITAI_BIN" config set allow_repositories "$ALLOWED_REPOSITORIES"
+  if [ -n "$GIT_PATH_SETTING" ]; then
+    change "$GITAI_BIN" config set git_path "$GIT_PATH_SETTING"
+  fi
+fi
+
+# --- (d) Device credential -----------------------------------------------------
+
+curl_quote() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+# Call the server with a key (the shared key or a device credential). The key
+# travels to curl in a config file on stdin, never on a command line. Prints the
+# body, then the HTTP status on the last line.
+api_request() {
+  local key="$1" method="$2" path="$3" body="${4:-}"
+  {
+    printf 'url = %s\n' "$(curl_quote "$BASE_URL$path")"
+    printf 'request = %s\n' "$(curl_quote "$method")"
+    printf 'header = %s\n' "$(curl_quote "X-API-Key: $key")"
+    if [ -n "$body" ]; then
+      printf 'header = "Content-Type: application/json"\n'
+      printf '%s' "$body" >"$WORK_DIR/request.json"
+      printf 'data-binary = %s\n' "$(curl_quote "@$WORK_DIR/request.json")"
+    fi
+  } | curl --silent --show-error --max-time 30 --config - --write-out '\n%{http_code}' || true
+}
+
+shared_key_request() { api_request "$SHARED_KEY" "$@"; }
+
+response_status() { printf '%s\n' "$1" | tail -n 1; }
+response_body() { printf '%s\n' "$1" | sed '$d'; }
+
+# Store the credential without putting it on a command line: in config.json,
+# or in managed mode in KEY_ENV_FILE (KEY=value, readable by shells and systemd).
+write_api_key() {
+  local target="$CONFIG"
+  [ "$MANAGED" -eq 0 ] || target="$KEY_ENV_FILE"
+  local tmp="$target.gitai-enroll.$$"
+  (
+    umask 077
+    mkdir -p "$GIT_AI_DIR"
+    if [ "$MANAGED" -eq 1 ]; then
+      printf 'GIT_AI_API_KEY=%s\n' "$1" >"$tmp"
+    else
+      printf '%s' "$1" | jq --rawfile key /dev/stdin '.api_key = $key' "$CONFIG" >"$tmp"
+    fi
+  )
+  mv -f "$tmp" "$target"
+  STORED_IN="$target"
+}
+
+if [ "$MINT" -eq 0 ]; then
+  say "Keeping the existing device credential"
+elif [ "$DRY_RUN" -eq 1 ]; then
+  say "Minting a device credential"
+  note "would POST $BASE_URL/v1/credentials {email: $EMAIL, hostname: $HOSTNAME_VALUE} and store it as api_key"
+else
+  say "Minting a device credential"
+  request_body="$(jq -nc --arg email "$EMAIL" --arg hostname "$HOSTNAME_VALUE" '{email: $email, hostname: $hostname}')"
+  response="$(shared_key_request POST /v1/credentials "$request_body")"
+  status="$(response_status "$response")"
+  body="$(response_body "$response")"
+  case "$status" in
+    200 | 201) ;;
+    401 | 403) die "the server rejected the shared key (HTTP $status)" ;;
+    000) die "could not reach $BASE_URL" ;;
+    *) die "minting failed (HTTP $status): $(printf '%s' "$body" | head -c 300)" ;;
+  esac
+
+  credential="$(printf '%s' "$body" | jq -r '.credential // empty')"
+  credential_id="$(printf '%s' "$body" | jq -r '.id // empty')"
+  case "$credential" in
+    gitai_*) ;;
+    *) die "the server's response has no gitai_ credential" ;;
+  esac
+  write_api_key "$credential"
+  unset credential
+  note "stored credential $credential_id in $STORED_IN"
+
+  if [ "$ROTATE" -eq 1 ]; then
+    response="$(shared_key_request GET /v1/credentials)"
+    [ "$(response_status "$response")" = 200 ] || die "listing credentials failed (HTTP $(response_status "$response"))"
+    # The server stores emails lowercased; compare the same way. tr, not
+    # ${EMAIL,,}: bash 3.2.
+    email_lower="$(printf '%s' "$EMAIL" | tr '[:upper:]' '[:lower:]')"
+    old_ids="$(response_body "$response" | jq -r --arg email "$email_lower" --arg hostname "$HOSTNAME_VALUE" --arg keep "$credential_id" \
+      '.credentials[] | select((.email // "" | ascii_downcase) == $email and .hostname == $hostname and .revoked_at == null and .id != $keep) | .id')"
+    [ -n "$old_ids" ] || warn "no older credential for $email_lower on $HOSTNAME_VALUE to revoke; check the list (README \"Credentials\") if you expected one"
+    for old_id in $old_ids; do
+      response="$(shared_key_request DELETE "/v1/credentials/$old_id")"
+      case "$(response_status "$response")" in
+        200 | 204) note "revoked old credential $old_id" ;;
+        *) warn "could not revoke credential $old_id (HTTP $(response_status "$response"))" ;;
+      esac
+    done
+  fi
+fi
+unset SHARED_KEY
+
+# --- (e) Agent hooks and daemon login start -----------------------------------
+
+install_hooks_and_login_start() {
+  say "Installing git-ai hooks"
+  # `git-ai install` hooks every agent it detects (Claude Code, Codex, ...),
+  # writes git's trace2 config and restarts the daemon. --env also puts our own
+  # install on the shell PATH, as the upstream installer does.
+  if [ "$GITAI_BIN" = "$OWN_BIN" ]; then
+    change "$GITAI_BIN" install --env || warn "git-ai install reported errors; see above"
+  else
+    change "$GITAI_BIN" install || warn "git-ai install reported errors; see above"
+  fi
+
+  say "Starting the daemon at login"
+  local login_asset="git-ai-login-start-$OS.sh"
+  local login_args=()
+  if [ "$GITAI_BIN" != "$OWN_BIN" ]; then
+    login_args=(--bin "$GITAI_BIN")
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    note "would download $RELEASE_URL/$login_asset, verify it and run it${login_args[0]:+ with --bin $GITAI_BIN}"
+  else
+    # A failure here is not fatal: without it the daemon still starts on the
+    # first git-ai command, it just misses git commands run before that.
+    if (fetch_release_asset "$login_asset"); then
+      child sh "$WORK_DIR/$login_asset" ${login_args[@]+"${login_args[@]}"} ||
+        warn "the login-start installer failed; the daemon will start on first use instead"
+    else
+      warn "could not fetch $login_asset; the daemon will start on first use instead"
+    fi
+  fi
+}
+
+if [ "$MANAGED" -eq 0 ]; then
+  install_hooks_and_login_start
+fi
+
+# --- (f) Agent skill and PR instruction --------------------------------------
+
+install_skill() {
+  local target="$1/skills/$SKILL_NAME/SKILL.md"
+  if [ -f "$target" ] && cmp -s "$SKILL_SOURCE" "$target"; then
+    note "skill up to date: $target"
+  elif [ "$DRY_RUN" -eq 1 ]; then
+    note "would write $target"
+  else
+    mkdir -p "$(dirname "$target")"
+    cp "$SKILL_SOURCE" "$target"
+    note "wrote $target"
+  fi
+}
+
+# Put the instruction between marker comments: replace an existing block,
+# otherwise append one. Writes in place, so a symlinked file stays a symlink.
+install_instruction() {
+  local target="$1" new="$WORK_DIR/instructions"
+  if [ -e "$target" ] && [ ! -w "$target" ]; then
+    warn "$target is read-only; add this line to it yourself: $INSTRUCTION"
+    return
+  fi
+
+  if [ -f "$target" ] && grep -qxF "$MARK_BEGIN" "$target" && ! grep -qxF "$MARK_END" "$target"; then
+    warn "$target has $MARK_BEGIN but no $MARK_END; fix it by hand, then re-run"
+    return
+  fi
+
+  if [ -f "$target" ] && grep -qxF "$MARK_BEGIN" "$target"; then
+    awk -v begin="$MARK_BEGIN" -v end="$MARK_END" -v line="$INSTRUCTION" '
+      $0 == begin { print; print line; skipping = 1; next }
+      $0 == end { skipping = 0 }
+      !skipping { print }
+    ' "$target" >"$new"
+  else
+    {
+      if [ -s "$target" ]; then
+        cat "$target"
+        printf '\n'
+      fi
+      printf '%s\n%s\n%s\n' "$MARK_BEGIN" "$INSTRUCTION" "$MARK_END"
+    } >"$new"
+  fi
+
+  if [ -f "$target" ] && cmp -s "$new" "$target"; then
+    note "instruction up to date: $target"
+  elif [ "$DRY_RUN" -eq 1 ]; then
+    note "would add the PR instruction to $target"
+  else
+    mkdir -p "$(dirname "$target")"
+    cat "$new" >"$target"
+    note "added the PR instruction to $target"
+  fi
+}
+
+say "Installing the $SKILL_NAME skill and PR instruction"
+[ -f "$SKILL_SOURCE" ] || die "missing $SKILL_SOURCE"
+agents_found=0
+if command -v claude >/dev/null 2>&1 || [ -d "$CLAUDE_DIR" ]; then
+  agents_found=1
+  install_skill "$CLAUDE_DIR"
+  install_instruction "$CLAUDE_DIR/CLAUDE.md"
+fi
+if command -v codex >/dev/null 2>&1 || [ -d "$CODEX_DIR" ]; then
+  agents_found=1
+  install_skill "$CODEX_DIR"
+  install_instruction "$CODEX_DIR/AGENTS.md"
+fi
+[ "$agents_found" -eq 1 ] || note "neither Claude Code nor Codex found; skipped"
+
+# --- (g) Status ------------------------------------------------------------------
+
+if [ "$MANAGED" -eq 1 ]; then
+  say "Exporting the credential"
+  note "Export $KEY_ENV_FILE (mode 600, outside the store) to every process that runs"
+  note "git-ai, agents included; git-ai reads it as GIT_AI_API_KEY:"
+  note "  shell rc:        set -a; . \"\$HOME/.git-ai/api-key.env\"; set +a"
+  note "  systemd --user:  EnvironmentFile=%h/.git-ai/api-key.env"
+  note "Then restart the daemon (git-ai bg shutdown; it restarts on next use) from a shell that has the key."
+fi
+
+# `git-ai whoami` reads only local state, so ask the server whether it accepts
+# this machine's credential.
+say "Checking the credential with the server"
+if [ "$DRY_RUN" -eq 1 ]; then
+  note "would GET $BASE_URL/v1/whoami with the device credential"
+else
+  if [ "$MANAGED" -eq 1 ]; then
+    device_key="$(sed -n 's/^GIT_AI_API_KEY=//p' "$KEY_ENV_FILE")"
+  else
+    device_key="$(config_get api_key)"
+  fi
+  response="$(api_request "$device_key" GET /v1/whoami)"
+  unset device_key
+  status="$(response_status "$response")"
+  case "$status" in
+    200)
+      note "accepted: $(response_body "$response" | jq -r '"credential \(.id) for \(.email) on \(.hostname)"')"
+      ;;
+    401 | 403) die "the server rejects this machine's credential (HTTP $status); it may be revoked: re-run with --rotate" ;;
+    404) warn "the server has no /v1/whoami yet; credential not checked" ;;
+    *) warn "could not check the credential (HTTP $status)" ;;
+  esac
+fi
+
+say "git-ai whoami"
+if [ "$DRY_RUN" -eq 1 ]; then
+  note "would run: $GITAI_BIN whoami"
+elif [ "$MANAGED" -eq 1 ]; then
+  # The key reaches git-ai through its environment, never argv.
+  (
+    set -a
+    # shellcheck source=/dev/null
+    . "$KEY_ENV_FILE"
+    set +a
+    # Drop every other exported variable (Doppler's secrets) instead of using
+    # env -i, which would need the key on its command line.
+    for name in $(compgen -e); do
+      # shellcheck disable=SC2163 # unexport the variable named by $name
+      case " ${CHILD_ENV[*]} " in
+        *" $name="*) ;;
+        *) [ "$name" = GIT_AI_API_KEY ] || export -n "$name" ;;
+      esac
+    done
+    "$GITAI_BIN" whoami
+  )
+else
+  child "$GITAI_BIN" whoami
+fi
