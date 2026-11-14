@@ -235,8 +235,14 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   without a viewer. The viewer reconnects by itself when its collector goes
   away, and a collector started by a later `macrod monitor` takes over.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
-  lock, no harness. It reads only `[monitor]` from `~/.macrod/macrod.toml`
-  and refuses to start while another collector answers.
+  lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
+  or the `--config` / `--profile` it is given (resolved as for
+  `macrod service`; the viewer passes its own to a collector it starts), and
+  refuses to start while another collector answers.
+- **Work runs** come from `[monitor] run_record_dirs` (`<id>.json` records
+  with an optional `<id>.cost`; a leading `~` is the home directory). A run
+  joins its terminal by the record's terminal name, or by an hc label named
+  in `run_id_labels` whose value is the run's id.
 - **`macrod monitor dump`** prints `{"connected": ...}`, then one
   `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
   stops after N updates. `--transcript <agent id>` prints that agent's

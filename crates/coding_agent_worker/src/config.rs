@@ -66,8 +66,12 @@ pub struct MonitorSettings {
     /// The viewer's frames per second while something animates; 0 stops
     /// animation.
     pub fps: u8,
-    /// Extra directories of work-run records (`<id>.json` with `<id>.cost`).
+    /// Extra directories of work-run records (`<id>.json` with `<id>.cost`);
+    /// a leading `~` is the home directory.
     pub run_record_dirs: Vec<PathBuf>,
+    /// hc terminal labels whose value is a work run's id, joining the run to
+    /// its terminal.
+    pub run_id_labels: Vec<String>,
 }
 
 impl Default for MonitorSettings {
@@ -77,6 +81,7 @@ impl Default for MonitorSettings {
             history_hours: 24,
             fps: 12,
             run_record_dirs: Vec::new(),
+            run_id_labels: Vec::new(),
         }
     }
 }

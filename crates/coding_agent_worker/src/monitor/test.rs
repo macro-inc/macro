@@ -13,7 +13,15 @@ async fn serve_refuses_a_socket_another_collector_answers() {
 
     assert!(matches!(claim(&socket), Ok(Claim::Served)));
     assert!(matches!(
-        serve(Some(socket.clone()), false).await,
+        serve(
+            Some(socket.clone()),
+            &MonitorConfig {
+                config: Some(directory.path().join("macrod.toml")),
+                profile: None,
+            },
+            false
+        )
+        .await,
         Err(error) if error.to_string().contains("another collector already serves")
     ));
     assert!(answers(&socket), "the live socket is left in place");
@@ -73,6 +81,7 @@ fn monitor_settings_default_when_the_table_or_file_is_missing() {
             history_hours: 24,
             fps: 12,
             run_record_dirs: Vec::new(),
+            run_id_labels: Vec::new(),
         }
     );
 
@@ -90,7 +99,7 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
     let path = directory.path().join("macrod.toml");
     std::fs::write(
         &path,
-        "[monitor]\nenabled = false\nrun_record_dirs = [\"/var/runs\"]\n",
+        "[monitor]\nenabled = false\nrun_record_dirs = [\"/var/runs\"]\nrun_id_labels = [\"run.id\"]\n",
     )
     .unwrap();
 
@@ -101,7 +110,43 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
             history_hours: 24,
             fps: 12,
             run_record_dirs: vec![PathBuf::from("/var/runs")],
+            run_id_labels: vec![String::from("run.id")],
         }
+    );
+}
+
+#[test]
+fn a_leading_tilde_in_a_directory_is_the_home_directory() {
+    let home = Path::new("/home/someone");
+    assert_eq!(
+        expand_home(Path::new("~/runs/work"), home),
+        PathBuf::from("/home/someone/runs/work")
+    );
+    assert_eq!(expand_home(Path::new("~"), home), PathBuf::from("/home/someone"));
+    assert_eq!(
+        expand_home(Path::new("/var/runs"), home),
+        PathBuf::from("/var/runs")
+    );
+    assert_eq!(
+        expand_home(Path::new("~other/runs"), home),
+        PathBuf::from("~other/runs")
+    );
+}
+
+#[test]
+fn the_standalone_commands_read_monitor_from_the_chosen_config() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("other.toml");
+    std::fs::write(&path, "[monitor]\nrun_id_labels = [\"run.id\"]\n").unwrap();
+    let chosen = MonitorConfig {
+        config: Some(path.clone()),
+        profile: None,
+    };
+
+    assert_eq!(chosen.settings().unwrap().run_id_labels, vec!["run.id"]);
+    assert_eq!(
+        chosen.arguments(),
+        vec![std::ffi::OsString::from("--config"), path.into_os_string()]
     );
 }
 

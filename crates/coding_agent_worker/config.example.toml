@@ -55,4 +55,5 @@ repo_url = "https://github.com/macro-inc/macro"
 # enabled = true              # Host the collector in this macrod (also in the TUI).
 # history_hours = 24          # Transcripts indexed at startup, finished runs kept.
 # fps = 12                    # Viewer animation; 0 turns it off.
-# run_record_dirs = []        # Extra work-run record directories (<id>.json, <id>.cost).
+# run_record_dirs = []        # Work-run record directories (<id>.json, <id>.cost); ~ is home.
+# run_id_labels = []          # hc labels holding a run's id, joining it to its terminal.

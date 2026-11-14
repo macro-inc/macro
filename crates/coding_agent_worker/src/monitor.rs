@@ -32,7 +32,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::config::{self, MonitorSettings};
-use crate::profiles::MacrodHome;
+use crate::profiles::{ConfigSelection, MacrodHome, ProfileName};
 
 mod daemon_source;
 #[cfg(test)]
@@ -76,6 +76,15 @@ pub struct MonitorArgs {
     /// The collector's socket; defaults to `~/.macrod/monitor/monitor.sock`.
     #[arg(long, global = true)]
     socket: Option<PathBuf>,
+    /// The config whose `[monitor]` table applies; defaults to
+    /// `~/.macrod/macrod.toml`, as for `macrod service`. Only that table is
+    /// read.
+    #[arg(long, global = true, conflicts_with = "profile")]
+    config: Option<PathBuf>,
+    /// Read `[monitor]` from the named profile,
+    /// `~/.macrod/profiles/<name>.toml`, instead.
+    #[arg(long, global = true)]
+    profile: Option<ProfileName>,
 }
 
 #[derive(clap::Subcommand)]
@@ -101,10 +110,14 @@ enum MonitorCommand {
 
 /// Runs a `macrod monitor` command.
 pub async fn run(args: MonitorArgs) -> ExitCode {
+    let config = MonitorConfig {
+        config: args.config,
+        profile: args.profile,
+    };
     let result = match args.command {
         Some(MonitorCommand::Serve { exit_when_idle }) => {
             let _telemetry = crate::telemetry::install();
-            serve(args.socket, exit_when_idle).await
+            serve(args.socket, &config, exit_when_idle).await
         }
         Some(MonitorCommand::Dump {
             count,
@@ -114,7 +127,7 @@ pub async fn run(args: MonitorArgs) -> ExitCode {
             count,
             transcript: Some(agent),
         }) => dump_transcript(args.socket, agent, count).await,
-        None => view(args.socket, args.demo).await,
+        None => view(args.socket, &config, args.demo).await,
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -136,13 +149,41 @@ fn socket_path(socket: Option<PathBuf>) -> rootcause::Result<PathBuf> {
     }
 }
 
-/// The `[monitor]` table of the default config; its defaults when there is
-/// no home, no config, or no table.
-fn settings() -> rootcause::Result<MonitorSettings> {
-    let Ok(home) = MacrodHome::locate() else {
-        return Ok(MonitorSettings::default());
-    };
-    Ok(MonitorSettings::read(&home.default_config())?)
+/// Which config's `[monitor]` table the standalone commands read:
+/// `--config` or `--profile`, resolved as `macrod service` resolves them.
+struct MonitorConfig {
+    config: Option<PathBuf>,
+    profile: Option<ProfileName>,
+}
+
+impl MonitorConfig {
+    /// The `[monitor]` table; its defaults when the file or table is missing.
+    fn settings(&self) -> rootcause::Result<MonitorSettings> {
+        let selection = ConfigSelection::resolve(self.config.clone(), self.profile.clone())?;
+        Ok(MonitorSettings::read(&selection.path)?)
+    }
+
+    /// The same choice as arguments, for a collector started from here.
+    fn arguments(&self) -> Vec<std::ffi::OsString> {
+        let mut arguments = Vec::new();
+        if let Some(config) = &self.config {
+            arguments.push("--config".into());
+            arguments.push(config.into());
+        }
+        if let Some(profile) = &self.profile {
+            arguments.push("--profile".into());
+            arguments.push(profile.to_string().into());
+        }
+        arguments
+    }
+}
+
+/// `path` with a leading `~` replaced by `home`; other paths unchanged.
+fn expand_home(path: &Path, home: &Path) -> PathBuf {
+    match path.strip_prefix("~") {
+        Ok(rest) => home.join(rest),
+        Err(_) => path.to_owned(),
+    }
 }
 
 /// Whether a collector answers on `socket`.
@@ -193,8 +234,14 @@ impl Collector {
             .ok_or_else(|| rootcause::report!("no home directory: set HOME"))?;
         let macrod_home = MacrodHome::locate()?;
         let history = Duration::from_secs(u64::from(settings.history_hours) * 3600);
+        let run_record_dirs = settings
+            .run_record_dirs
+            .iter()
+            .map(|directory| expand_home(directory, &home))
+            .collect();
         let mut local = LocalSources::in_home(home, macrod_home.directory().to_owned(), history);
-        local.run_record_dirs = settings.run_record_dirs.clone();
+        local.run_record_dirs = run_record_dirs;
+        local.hc_labels.run_id = settings.run_id_labels.clone();
 
         let tracker = TaskTracker::new();
         let cancel = CancellationToken::new();
@@ -356,9 +403,13 @@ where
 
 /// `macrod monitor serve`: the collector alone, until a signal (or, when
 /// auto-started, ten minutes without a viewer).
-async fn serve(socket: Option<PathBuf>, exit_when_idle: bool) -> rootcause::Result<()> {
+async fn serve(
+    socket: Option<PathBuf>,
+    config: &MonitorConfig,
+    exit_when_idle: bool,
+) -> rootcause::Result<()> {
     let socket = socket_path(socket)?;
-    let settings = settings()?;
+    let settings = config.settings()?;
     let bound = match claim(&socket)? {
         Claim::Bound(bound) => bound,
         Claim::Served => {
@@ -482,8 +533,8 @@ async fn dump_transcript(
 
 /// `macrod monitor`: the viewer, on the demo fleet or on the machine's
 /// collector, starting a detached one when nothing answers.
-async fn view(socket: Option<PathBuf>, demo: bool) -> rootcause::Result<()> {
-    let settings = settings()?;
+async fn view(socket: Option<PathBuf>, config: &MonitorConfig, demo: bool) -> rootcause::Result<()> {
+    let settings = config.settings()?;
     let feed = if demo {
         agent_monitor_tui::FeedChoice::Demo {
             seed: DemoConfig::default().seed,
@@ -491,7 +542,7 @@ async fn view(socket: Option<PathBuf>, demo: bool) -> rootcause::Result<()> {
     } else {
         let socket = socket_path(socket)?;
         if !answers(&socket) {
-            start_collector(&socket)?;
+            start_collector(&socket, config)?;
             wait_until_answering(&socket).await;
         }
         agent_monitor_tui::FeedChoice::Socket(socket)
@@ -507,7 +558,7 @@ async fn view(socket: Option<PathBuf>, demo: bool) -> rootcause::Result<()> {
 /// Starts `macrod monitor serve --exit-when-idle` detached from this
 /// terminal (its own process group, no stdin or stdout), logging to
 /// `collector.log` beside the socket.
-fn start_collector(socket: &Path) -> rootcause::Result<()> {
+fn start_collector(socket: &Path, config: &MonitorConfig) -> rootcause::Result<()> {
     use std::os::unix::process::CommandExt as _;
 
     let program = std::env::current_exe()
@@ -516,6 +567,7 @@ fn start_collector(socket: &Path) -> rootcause::Result<()> {
     std::process::Command::new(program)
         .args(["monitor", "serve", "--exit-when-idle", "--socket"])
         .arg(socket)
+        .args(config.arguments())
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(log)
