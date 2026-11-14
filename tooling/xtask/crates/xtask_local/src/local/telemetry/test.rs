@@ -324,10 +324,10 @@ const UNIT_DATA = [
     "features": [], "start": 0.1, "duration": 0.4, "unblocked_units": [],
     "unblocked_rmeta_units": [], "sections": null },
   { "i": 2, "name": "email_service", "version": "0.1.0", "mode": "todo",
-    "target": " email_service \"bin\"", "features": [], "start": 30.0,
+    "target": " bin \"email_service\"", "features": [], "start": 30.0,
     "duration": 12.5, "unblocked_units": [], "unblocked_rmeta_units": [], "sections": null },
   { "i": 3, "name": "ring", "version": "0.17.0", "mode": "run-custom-build",
-    "target": " build-script (run)", "features": [], "start": 2.0, "duration": 6.0,
+    "target": " build script (run)", "features": [], "start": 2.0, "duration": 6.0,
     "unblocked_units": [], "unblocked_rmeta_units": [], "sections": null }
 ];
 const CONCURRENCY_DATA = [];

@@ -768,8 +768,8 @@ impl BuildOutput {
 #[derive(Debug, PartialEq, serde::Deserialize)]
 pub(super) struct CargoUnit {
     pub name: String,
-    /// What was built: empty for a library, ` build-script`, ` build-script
-    /// (run)`, or the target's name and kind, such as ` email_service "bin"`.
+    /// What was built: empty for a library, ` build script`, ` build script
+    /// (run)`, or the kind and name, such as ` bin "email_service"`.
     pub target: String,
     /// Seconds from the build's start.
     pub start: f64,
@@ -779,21 +779,27 @@ pub(super) struct CargoUnit {
 impl CargoUnit {
     /// The target's kind without its name, which may be one of ours.
     pub(super) fn target_kind(&self) -> &str {
-        let target = self.target.trim();
+        // Cargo writes `bin "name"`, `build script`, `build script (run)`;
+        // older versions hyphenate `build-script`.
+        let target = self.target.trim().replace('-', " ");
         if target.is_empty() {
             return "lib";
         }
-        if target.starts_with("build-script") {
+        if target.starts_with("build script") {
             return if target.ends_with("(run)") {
                 "build-script-run"
             } else {
                 "build-script"
             };
         }
-        target
-            .rsplit('"')
-            .find(|part| !part.trim().is_empty())
-            .unwrap_or("other")
+        match target.split_whitespace().next() {
+            Some("bin") => "bin",
+            Some("test") => "test",
+            Some("bench") => "bench",
+            Some("example") => "example",
+            Some("lib") => "lib",
+            _ => "other",
+        }
     }
 
     fn span_name(&self) -> String {
