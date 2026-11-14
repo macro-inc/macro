@@ -648,6 +648,135 @@ fn push_candidate_body(
     }
 }
 
+/// The page's columns over the limited candidate relation `t`, up to the
+/// `FROM (` that opens it. [`push_page_tail`] closes it and joins the
+/// preview message `lmp`, its sender `c` and the owning inbox `el`.
+fn push_page_head(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    params: &QueryParams,
+    defer_uh: bool,
+) {
+    builder.push(
+        r#"
+        SELECT
+            t.id,
+            t.provider_id,
+            t.inbox_visible,
+            t.is_read,
+            t.is_signal,
+            t.effective_ts AS sort_ts,
+            t.created_at,
+            t.updated_at,
+            "#,
+    );
+
+    // viewed_at comes from the deferred outer join (added below) when the sort
+    // mode allowed deferral; otherwise it was computed per candidate as
+    // `t.viewed_at`.
+    if defer_uh {
+        builder.push("uh.updated_at AS viewed_at,");
+    } else {
+        builder.push("t.viewed_at,");
+    }
+
+    // Provider attention is evidence. The Importance filter separately uses
+    // Macro Signal, including the user's overrides.
+    builder.push(
+        r#"
+            t.project_id,
+            lmp.subject AS name,
+            lmp.snippet,
+            lmp.is_draft,
+            CASE
+                WHEN "#,
+    );
+
+    builder.push_bind(params.is_important);
+
+    builder.push(
+        r#" THEN TRUE
+                ELSE (
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM email_messages m_imp
+                        JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                        WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
+                    )
+                )
+            END AS is_important,
+            c.email_address AS sender_email,
+            COALESCE(lmp.from_name, c.name) AS sender_name,
+            c.sfs_photo_url as sender_photo_url,
+            el.macro_id AS owner_id,
+            el.id AS link_id
+        FROM ("#,
+    );
+}
+
+/// Closes the candidate relation opened by [`push_page_head`] as `t`, picks
+/// each thread's preview message, joins its sender and inbox, and orders the
+/// page.
+fn push_page_tail(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+    defer_uh: bool,
+) {
+    builder.push(") AS t");
+    if picks_preview_in_candidates(view, email_filter, params) {
+        builder.push(
+            r#"
+        -- Step 2: the preview message was picked with the candidate
+        CROSS JOIN LATERAL (
+            SELECT t.subject, t.snippet, t.from_contact_id, t.from_name, t.is_draft
+        ) AS lmp"#,
+        );
+    } else {
+        if super::folders::is_folder(view) {
+            // Preserve the folder sort date inside mixed thread/message predicates
+            // in the preview LATERAL, after the candidate relation has been limited.
+            builder.push(
+                " CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ",
+            );
+        }
+        builder.push(
+            r#"
+        -- Step 2: For each thread, find its latest message matching the filter
+        CROSS JOIN LATERAL ("#,
+        );
+        push_preview_message_select(builder, view, email_filter, params);
+        builder.push(
+            r#"
+        ) AS lmp"#,
+        );
+    }
+    builder.push(
+        r#"
+        -- Step 3: Join to get the sender's details
+        LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
+        -- Step 4: Join to get the thread owner's macro user ID
+        JOIN email_links el ON t.link_id = el.id
+        "#,
+    );
+
+    // Step 5 (deferred): attach the caller's per-thread viewed_at. Kept out of
+    // the candidate stage so it runs once per returned row rather than once per
+    // candidate thread. `email_user_history` is unique per (link_id, thread_id),
+    // so this LEFT JOIN can neither drop nor duplicate rows.
+    if defer_uh {
+        builder.push(
+            r#"        LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
+        "#,
+        );
+    }
+
+    builder.push(
+        r#"        ORDER BY t.effective_ts DESC, t.id DESC
+        "#,
+    );
+}
+
 /// Builds a dynamic email thread query with filters applied.
 /// All user-controlled values are parameterized via `push_bind`.
 fn build_query(
@@ -722,60 +851,9 @@ fn build_query(
         builder.push("\n        ");
     }
 
+    push_page_head(&mut builder, &params, defer_uh);
     builder.push(
         r#"
-        SELECT
-            t.id,
-            t.provider_id,
-            t.inbox_visible,
-            t.is_read,
-            t.is_signal,
-            t.effective_ts AS sort_ts,
-            t.created_at,
-            t.updated_at,
-            "#,
-    );
-
-    // viewed_at comes from the deferred outer join (added below) when the sort
-    // mode allowed deferral; otherwise it was computed per candidate as
-    // `t.viewed_at`.
-    if defer_uh {
-        builder.push("uh.updated_at AS viewed_at,");
-    } else {
-        builder.push("t.viewed_at,");
-    }
-
-    // Provider attention is evidence. The Importance filter separately uses
-    // Macro Signal, including the user's overrides.
-    builder.push(
-        r#"
-            t.project_id,
-            lmp.subject AS name,
-            lmp.snippet,
-            lmp.is_draft,
-            CASE
-                WHEN "#,
-    );
-
-    builder.push_bind(params.is_important);
-
-    builder.push(
-        r#" THEN TRUE
-                ELSE (
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM email_messages m_imp
-                        JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
-                        WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
-                    )
-                )
-            END AS is_important,
-            c.email_address AS sender_email,
-            COALESCE(lmp.from_name, c.name) AS sender_name,
-            c.sfs_photo_url as sender_photo_url,
-            el.macro_id AS owner_id,
-            el.id AS link_id
-        FROM (
             -- Step 1: Efficiently find and sort candidate threads
             SELECT *
             FROM (
@@ -897,60 +975,7 @@ fn build_query(
     }
 
     builder.push_bind(params.query_limit);
-
-    builder.push(") AS t");
-    if picks_preview_in_candidates(view, email_filter, &params) {
-        builder.push(
-            r#"
-        -- Step 2: the preview message was picked with the candidate
-        CROSS JOIN LATERAL (
-            SELECT t.subject, t.snippet, t.from_contact_id, t.from_name, t.is_draft
-        ) AS lmp"#,
-        );
-    } else {
-        if super::folders::is_folder(view) {
-            // Preserve the folder sort date inside mixed thread/message predicates
-            // in the preview LATERAL, after the candidate relation has been limited.
-            builder.push(
-                " CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ",
-            );
-        }
-        builder.push(
-            r#"
-        -- Step 2: For each thread, find its latest message matching the filter
-        CROSS JOIN LATERAL ("#,
-        );
-        push_preview_message_select(&mut builder, view, email_filter, &params);
-        builder.push(
-            r#"
-        ) AS lmp"#,
-        );
-    }
-    builder.push(
-        r#"
-        -- Step 3: Join to get the sender's details
-        LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
-        -- Step 4: Join to get the thread owner's macro user ID
-        JOIN email_links el ON t.link_id = el.id
-        "#,
-    );
-
-    // Step 5 (deferred): attach the caller's per-thread viewed_at. Kept out of
-    // the candidate stage so it runs once per returned row rather than once per
-    // candidate thread. `email_user_history` is unique per (link_id, thread_id),
-    // so this LEFT JOIN can neither drop nor duplicate rows.
-    if defer_uh {
-        builder.push(
-            r#"        LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
-        "#,
-        );
-    }
-
-    builder.push(
-        r#"        ORDER BY t.effective_ts DESC, t.id DESC
-        "#,
-    );
-
+    push_page_tail(&mut builder, view, email_filter, &params, defer_uh);
     builder
 }
 
