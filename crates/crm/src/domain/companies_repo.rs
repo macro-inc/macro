@@ -45,7 +45,15 @@ pub struct CrmCompanySoupCursor {
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
-pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
+pub trait CompaniesRepository:
+    super::email_privacy::EmailPrivacyRepository + super::auth::CrmMemberAccess
+{
+    /// Current membership and effective CRM access, without a permission cache.
+    fn current_member_access(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<(uuid::Uuid, bool)>, CrmError>> + Send;
+
     /// List authorized contacts across the viewer's teams. Apply visibility and
     /// predicates before choosing one record per lowercased full email (latest
     /// interaction, then highest ID). Deduplicate before seeking/limiting. An

@@ -123,7 +123,14 @@ tools/HTTP/GraphQL surfaces over them.
   including hidden rows; skip ambiguous identities and preserve manual company choices.
 - Serialize single and bulk source teardown company-before-source/contact, and
   re-read the target after waiting; orphan deletion must not cascade a new manual link.
-- CRM availability is team membership, independent of contribution consent.
+- CRM availability requires current membership and effective `team_user.crm_access`;
+  admins/owners always qualify. Recheck `CrmTeamReceipt::check_access` on every
+  team operation; aggregate Soup/search paths return no denied records. Entity
+  receipts and requester-side email grants use the same primary-backed predicate.
+  Contribution consent is independent and remains manageable after CRM denial.
+  `/crm/member-access` reads authority even for a denied viewer; storage's response
+  header lets an open client retire stale snapshots.
+- Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
   takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,

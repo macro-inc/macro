@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT team_id, user_id FROM team_user WHERE team_id = ANY($1)",
+  "query": "SELECT team_id, (crm_access OR team_role <> 'member') AS \"allowed!\"\n               FROM team_user WHERE user_id = $1",
   "describe": {
     "columns": [
       {
@@ -10,19 +10,19 @@
       },
       {
         "ordinal": 1,
-        "name": "user_id",
-        "type_info": "Text"
+        "name": "allowed!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "UuidArray"
+        "Text"
       ]
     },
     "nullable": [
       false,
-      false
+      null
     ]
   },
-  "hash": "6b5639e1aae160c04c640f6ca095c9791878c8ed789ea73883e09e4d548cfeb9"
+  "hash": "ba9fdcf699f39ac9e899458dc0f3ae94ab59fbec027d7d85133979318144a085"
 }

@@ -1232,7 +1232,7 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let members = sqlx::query!(
             r#"
-            SELECT user_id,
+            SELECT user_id, (crm_access OR team_role <> 'member') AS "crm_access!",
                 team_role as "team_role!: TeamRole",
                 plan as "plan!: SeatPlan"
             FROM team_user
@@ -1242,6 +1242,11 @@ impl TeamRepository for TeamRepositoryImpl {
         )
         .fetch_all(&self.pool)
         .await?;
+
+        let crm_member_access = members
+            .iter()
+            .map(|row| (row.user_id.clone(), row.crm_access))
+            .collect();
 
         let members = members
             .into_iter()
@@ -1261,6 +1266,7 @@ impl TeamRepository for TeamRepositoryImpl {
             team,
             members,
             scheduled_seat_plans: None,
+            crm_member_access,
         })
     }
 
@@ -1527,6 +1533,51 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(member)
+    }
+
+    #[tracing::instrument(name = "team.crm_member_access", skip_all, fields(team_id = %team_id, enabled), err)]
+    async fn set_member_crm_access(
+        &self,
+        team_id: uuid::Uuid,
+        actor: &MacroUserIdStr<'_>,
+        member: &MacroUserIdStr<'_>,
+        enabled: bool,
+    ) -> Result<(), TeamError> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        let members = sqlx::query!(
+            r#"SELECT user_id, team_role AS "role!: TeamRole"
+               FROM team_user WHERE team_id = $1 AND user_id = ANY($2)
+               ORDER BY user_id FOR UPDATE"#,
+            team_id,
+            &[actor.as_ref(), member.as_ref()] as &[&str],
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        crate::domain::crm_member_access::validate_change(
+            members
+                .iter()
+                .find(|row| row.user_id == actor.as_ref())
+                .map(|row| row.role),
+            members
+                .iter()
+                .find(|row| row.user_id == member.as_ref())
+                .map(|row| row.role),
+            team_id,
+            enabled,
+        )?;
+        sqlx::query!(
+            "UPDATE team_user SET crm_access = $3 WHERE team_id = $1 AND user_id = $2",
+            team_id,
+            member.as_ref(),
+            enabled,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

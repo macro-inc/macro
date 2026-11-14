@@ -269,6 +269,16 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, TeamError>> + Send;
 
+    /// Atomically recheck the administrator and target's current roles while
+    /// changing only the target's CRM access. Refuse denying admins or owners.
+    fn set_member_crm_access(
+        &self,
+        team_id: uuid::Uuid,
+        actor: &MacroUserIdStr<'_>,
+        member: &MacroUserIdStr<'_>,
+        enabled: bool,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
     /// Patches the role of the provided user id for the team
     fn patch_team_user_role(
         &self,

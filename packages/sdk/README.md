@@ -634,6 +634,16 @@ fails with a 409 conflict instead of being overwritten, and `view.refresh()`
 picks up the current revision. Order is personal; `reorder` sets yours for one
 kind.
 
+### CRM member access
+
+`macro.crm.access()` reads the caller's current team and effective CRM access,
+even when access is denied. `team.members()` includes `crmAccess` for each member.
+Admins and owners use `team.setMemberCrmAccess(user, enabled)` to deny or restore
+an ordinary member; admins and owners cannot be denied. This never changes the
+member's mailbox contribution consent. Record, search, email and tool requests
+recheck access on the server. A separately shared pipeline still exposes its own
+rows and cell values, while its CRM record references need separate access.
+
 ### CRM contact fields
 
 A contact holds several addresses, one of them primary: `contact.emails()` lists

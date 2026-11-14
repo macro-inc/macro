@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            'view'::\"AccessLevel\" AS \"access_level!: AccessLevel\",\n            team_id AS \"team_id!\",\n            'member'::team_role AS \"team_role!: TeamRole\"\n        FROM crm_companies\n        WHERE id = $1\n          AND team_id = $2\n          AND hidden = false\n        ",
+  "query": "\n        SELECT\n            'view'::\"AccessLevel\" AS \"access_level!: AccessLevel\",\n            team_id AS \"team_id!\",\n            'member'::team_role AS \"team_role!: TeamRole\"\n        FROM (\n            SELECT team_id, hidden FROM crm_companies WHERE id = $1 OFFSET 0\n        ) company\n        WHERE team_id = $2\n          AND hidden = false\n        ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       null
     ]
   },
-  "hash": "7d447304c6e7dd9e6cf653557861d5c48c44f087d3d027a1d565fd04182b0bf2"
+  "hash": "a65726d562b05159fae5e3e774e82643926e0eb3d54e63af0d7e935ffd412045"
 }

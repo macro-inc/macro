@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT user_id,\n                team_role as \"team_role!: TeamRole\",\n                plan as \"plan!: SeatPlan\"\n            FROM team_user\n            WHERE team_id = $1\n            ",
+  "query": "\n            SELECT user_id, (crm_access OR team_role <> 'member') AS \"crm_access!\",\n                team_role as \"team_role!: TeamRole\",\n                plan as \"plan!: SeatPlan\"\n            FROM team_user\n            WHERE team_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -10,6 +10,11 @@
       },
       {
         "ordinal": 1,
+        "name": "crm_access!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
         "name": "team_role!: TeamRole",
         "type_info": {
           "Custom": {
@@ -25,7 +30,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "plan!: SeatPlan",
         "type_info": {
           "Custom": {
@@ -47,9 +52,10 @@
     },
     "nullable": [
       false,
+      null,
       false,
       false
     ]
   },
-  "hash": "a7f782a9d4d647fc38cdef92ede9b3bf09a20f03c89eafcfc24d1d439b630a41"
+  "hash": "fc856d158ab107a09036aa9648609c86a467af9d9245bd4d61249102e173d31c"
 }

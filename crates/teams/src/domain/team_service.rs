@@ -2623,7 +2623,7 @@ where
         self.team_repository.get_team_invites(&team_id).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %entity_access_receipt.entity().entity_id), err)]
     async fn patch_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -2636,6 +2636,21 @@ where
             .into_owned();
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        if let Some(change) = &req.member_crm_access {
+            if req
+                .user_role_updates
+                .as_ref()
+                .is_some_and(|updates| !updates.is_empty())
+            {
+                return Err(TeamError::BadRequest(
+                    "change roles and CRM access in separate requests".into(),
+                ));
+            }
+            self.team_repository
+                .set_member_crm_access(team_id, &actor_user_id, &change.user_id, change.enabled)
+                .await?;
+        }
 
         if let Some(user_role_updates) = req.user_role_updates.as_ref() {
             if user_role_updates.iter().any(|u| u.role == TeamRole::Owner) {
@@ -2712,7 +2727,7 @@ where
         let _ = (entity_access_receipt, backfill);
         if !enabled {
             return Err(TeamError::BadRequest(
-                "CRM is available to every team member; manage individual email contribution in CRM settings".into(),
+                "Manage member CRM access separately from mailbox contribution consent".into(),
             ));
         }
         Ok(PatchTeamCrmSettingsResponse {

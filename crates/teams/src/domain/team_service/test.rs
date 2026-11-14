@@ -284,6 +284,16 @@ impl MockTeamRepository {
 }
 
 impl TeamRepository for MockTeamRepository {
+    async fn set_member_crm_access(
+        &self,
+        _: uuid::Uuid,
+        _: &MacroUserIdStr<'_>,
+        _: &MacroUserIdStr<'_>,
+        _: bool,
+    ) -> Result<(), TeamError> {
+        unimplemented!("member access tests use the database repository")
+    }
+
     fn is_seat_included(
         &self,
         _: &uuid::Uuid,
@@ -718,6 +728,7 @@ impl TeamRepository for MockTeamRepository {
         async move {
             let team = team.ok_or(TeamError::TeamDoesNotExist)?;
             Ok(TeamWithMembers {
+                crm_member_access: HashMap::new(),
                 team,
                 members,
                 scheduled_seat_plans: None,
@@ -4605,6 +4616,7 @@ async fn test_patch_team_rejects_owner_role_assignment() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: Some("new-team".to_string()),
         user_role_updates: Some(vec![PatchTeamUserRole {
@@ -4646,6 +4658,7 @@ async fn test_patch_team_rejects_owner_downgrade() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: Some(vec![PatchTeamUserRole {
@@ -4688,6 +4701,7 @@ async fn test_patch_team_applies_role_updates_and_name() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: Some("new-team slug".to_string()),
         user_role_updates: Some(vec![
@@ -4749,6 +4763,7 @@ async fn test_patch_team_empty_role_updates() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: None,
         user_role_updates: Some(Vec::new()),
@@ -4775,6 +4790,7 @@ async fn test_patch_team_metadata_publishes_updated_with_omitted_fields() {
         broker.clone(),
     );
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Renamed".to_string()),
         slug: None,
         user_role_updates: None,
@@ -4817,6 +4833,7 @@ async fn test_patch_team_role_only_publishes_previous_role_without_updated_event
     let broker = RecordingEventBroker::default();
     let service = build_service_with_repo_and_broker(repo, broker.clone());
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: Some(vec![PatchTeamUserRole {
@@ -4867,6 +4884,7 @@ async fn test_patch_team_partial_role_failure_keeps_ordered_success_events() {
     let broker = RecordingEventBroker::default();
     let service = build_service_with_repo_and_broker(repo, broker.clone());
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: Some(vec![
@@ -4907,6 +4925,7 @@ async fn test_patch_team_repository_failure_does_not_publish_updated() {
     let broker = RecordingEventBroker::default();
     let service = build_service_with_repo_and_broker(repo, broker.clone());
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Renamed".to_string()),
         slug: None,
         user_role_updates: None,

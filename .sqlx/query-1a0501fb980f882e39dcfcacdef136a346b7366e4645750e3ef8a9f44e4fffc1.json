@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT access_level::text FROM entity_access WHERE entity_id = $1 AND entity_type = 'crm_pipeline' AND source_id = ANY($2)",
+  "query": "SELECT ea.access_level::text FROM entity_access ea\n         WHERE ea.entity_id = $1 AND ea.entity_type = 'crm_pipeline' AND ea.source_id = ANY($2)",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       null
     ]
   },
-  "hash": "97e6ebd22b021145300b88d79714a3f0cd99ac43c4a30f8923cd4a1e61dc92e7"
+  "hash": "1a0501fb980f882e39dcfcacdef136a346b7366e4645750e3ef8a9f44e4fffc1"
 }

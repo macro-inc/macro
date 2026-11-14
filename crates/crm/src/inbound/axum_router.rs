@@ -53,6 +53,9 @@ pub mod blocked_domains;
 /// team saved views).
 pub mod team_settings;
 
+/// Fresh viewer authority for session cache retirement.
+pub mod member_access;
+
 /// Individual email consent and domain blocklists.
 pub mod email_privacy;
 
@@ -142,6 +145,10 @@ where
     S: Send + Sync + 'static,
 {
     Router::new()
+        .route(
+            "/member-access",
+            get(member_access::handler::<C, St, Eas, Auth>),
+        )
         .route(
             "/email-privacy",
             get(email_privacy::get_handler::<C, St, Eas, Auth>)
@@ -248,6 +255,12 @@ impl IntoResponse for CrmError {
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: message.into(),
+                }),
+            ),
+            CrmError::AccessDenied => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "CRM access is not enabled for this team member".into(),
                 }),
             ),
             CrmError::AdminRoleRequired => (

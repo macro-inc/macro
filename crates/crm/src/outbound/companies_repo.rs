@@ -2258,6 +2258,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
     }
 
+    #[tracing::instrument(name = "crm.current_member_access", skip_all, err)]
+    async fn current_member_access(&self, user_id: &str) -> Result<Option<(Uuid, bool)>, CrmError> {
+        sqlx::query!(
+            r#"SELECT team_id, (crm_access OR team_role <> 'member') AS "allowed!"
+               FROM team_user WHERE user_id = $1"#,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|row| row.map(|row| (row.team_id, row.allowed)))
+        .map_err(|error| CrmError::StorageLayerError(error.into()))
+    }
+
     #[tracing::instrument(skip_all, err)]
     async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         sqlx::query_scalar!(
@@ -2950,5 +2963,15 @@ impl TeamSettingsStore for CompaniesRepositoryImpl {
         patch: &CrmTeamSettingsPatch,
     ) -> Result<CrmTeamSettings, CrmError> {
         self.update_team_settings(team_id, patch).await
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for CompaniesRepositoryImpl {
+    async fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, crate::domain::model::CrmError> {
+        super::member_access::member_has_crm_access(&self.pool, team_id, user_id).await
     }
 }

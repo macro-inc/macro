@@ -21,6 +21,8 @@ mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;
 mod list_contacts_for_company;
 mod list_contacts_for_soup;
+#[cfg(all(feature = "axum", feature = "search", feature = "ai_tools"))]
+mod member_access;
 mod personal_emails;
 mod populate_contact;
 mod population_locks;

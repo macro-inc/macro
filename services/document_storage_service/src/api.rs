@@ -76,7 +76,10 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                             complete_graph::MAIL_CACHE_PROFILE_HEADER,
                         ),
                     ])
-                    .expose_headers([axum::http::header::RETRY_AFTER]),
+                    .expose_headers([
+                        axum::http::header::RETRY_AFTER,
+                        axum::http::HeaderName::from_static(middleware::crm_access::HEADER),
+                    ]),
                 )
                 .layer(CompressionLayer::new().gzip(true)),
         )
@@ -457,6 +460,10 @@ fn api_router(state: ApiContext) -> Router {
             "/passwords",
             passwords::inbound::router::router(state.passwords_state.clone()),
         )
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::crm_access::handler,
+        ))
         .with_state(state);
     let dss_router = Router::new()
         .nest("/{version}", internal_router.clone())

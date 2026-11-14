@@ -73,7 +73,7 @@ impl CompaniesRepositoryImpl {
         let rows = sqlx::query!(
             r#"
             WITH scope AS (
-                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
+                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                 UNION ALL
                 SELECT $2::uuid
             )
@@ -150,7 +150,7 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
+                    JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
                        AND (NOT ct.hidden OR tu.team_role <> 'member')
@@ -203,7 +203,7 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
                         WHERE ct.id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
                     ) AS "visible!"

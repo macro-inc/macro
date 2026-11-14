@@ -1,10 +1,41 @@
 # CRM email contribution
 
-CRM records and email contribution are separate permissions. Every team member
-can use company and contact records before contributing a mailbox. Existing CRM
+CRM access and email contribution are separate permissions. Existing and new
+members start with CRM access. Admins and owners can deny or restore a plain
+member through the team member-access API; admins and owners always retain access. A member
+can use company and contact records without contributing a mailbox. Existing CRM
 feature flags still control optional product surfaces such as pipelines.
 Existing record hiding remains a separate admin action; blocking email never
 hides or deletes a company or contact.
+
+## Member access
+
+`team_user.crm_access` defaults to true. Effective access is that flag or an
+admin/owner role. Only a current admin/owner may change it; the mutation locks
+both membership rows and rejects denying an admin/owner or self-restoration by
+a denied member. Changing this flag never changes mailbox consent or exclusions.
+A denied member can still manage their contribution consent.
+
+Fresh primary-backed checks protect records, lists, CRM email/activity scope,
+search, references, discussion access, and the CRM-derived grant to other
+mailboxes' threads. Normal mailbox ownership and independent sharing grants
+remain valid. A team-shared pipeline no longer grants access; an individual or
+channel grant still can. Such a pipeline exposes its own fields, row values,
+and opaque company/contact references. CRM names, domains, email addresses, and
+record details resolve only with separate record access. Text copied into a
+pipeline cell remains pipeline content and may itself identify a record.
+
+`GET /crm/member-access` and the storage response header
+`x-macro-crm-access` expose current authority to clients. The server rechecks
+membership on each request. Settings controls and retirement of already-cached
+client content are a separate client change; this server API alone does not
+remove previously downloaded content from an older client.
+
+Notifications follow the existing snapshot policy: a revoked member keeps
+already-delivered CRM comment text and may still receive a previously queued
+notification until delivery-time permission checks are added separately.
+Opening its record always requires current access. Already copied text in
+messages, documents, or agent transcripts is not retroactively redacted.
 
 ## Consent and exclusions
 
