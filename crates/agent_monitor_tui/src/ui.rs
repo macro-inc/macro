@@ -98,7 +98,6 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     let wide = area.width >= WIDE;
     let (link, link_style) = match &app.view.link {
         Link::Connecting => (String::from("○ CONNECTING"), theme::bold(theme::YELLOW)),
-        Link::Live if clock.blink() => (String::from("○ LIVE"), theme::bold(theme::GREEN)),
         Link::Live => (String::from("● LIVE"), theme::bold(theme::GREEN)),
         Link::Reconnecting(_) => (String::from("● RECONNECTING"), theme::bold(theme::RED)),
         Link::Incompatible(_) => (String::from("✕ UPDATE MACROD"), theme::bold(theme::RED)),
@@ -278,15 +277,12 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         .fg(theme::BG)
         .bg(theme::AMBER)
         .add_modifier(ratatui::style::Modifier::BOLD);
-    let slant = Style::new().fg(theme::AMBER).bg(theme::BG);
 
     let mut spans = Vec::new();
     for (key, long_name, short_name, active) in tabs {
         let name = if short { short_name } else { long_name };
         if active {
-            spans.push(Span::styled("◢", slant));
-            spans.push(Span::styled(format!("{key} {name}"), active_style));
-            spans.push(Span::styled("◤", slant));
+            spans.push(Span::styled(format!(" {key} {name} "), active_style));
         } else {
             spans.push(Span::raw(" "));
             spans.push(Span::styled(key, theme::bold(theme::YELLOW)));
@@ -298,15 +294,13 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         }
     }
     if let Page::Agent(id) = page {
-        spans.push(Span::styled("◢", Style::new().fg(theme::YELLOW)));
         spans.push(Span::styled(
-            format!("▸ {}", app.view.name_of(id)),
+            format!(" {} ", app.view.name_of(id)),
             Style::new()
                 .fg(theme::BG)
                 .bg(theme::YELLOW)
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
-        spans.push(Span::styled("◤", Style::new().fg(theme::YELLOW)));
     }
 
     let hints = if area.width >= WIDE {
@@ -478,7 +472,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-/// A command-line prompt: a slanted strip, then `rest`.
+/// A command-line prompt: a title chip, then `rest`.
 fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
     let mut spans = theme::strip_title(label);
     spans.extend(rest);

@@ -107,7 +107,7 @@ pub fn draw_card(
     let status_color = theme::status_color(agent.status);
     let model = agent.model.clone().unwrap_or_default();
     let doing = match &agent.doing {
-        Some(doing) => Span::styled(format!("▶ {doing}"), theme::ink(theme::CYAN)),
+        Some(doing) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
         None => Span::styled(
             agent.task.clone().unwrap_or_else(|| String::from("—")),
             theme::ink(theme::DIM),

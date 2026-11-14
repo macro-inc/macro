@@ -163,10 +163,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let cells = Layout::horizontal([Constraint::Ratio(1, 8); 8]).split(area);
     for (index, (quote, cell)) in quotes.into_iter().zip(cells.iter()).enumerate() {
         let block = theme::frame(theme::EDGE)
-            .title(Line::from(vec![
-                Span::styled("▸", theme::ink(theme::STRIP)),
-                Span::styled(format!("{} ", quote.label), theme::bold(theme::STRIP)),
-            ]))
+            .title(Line::from(vec![Span::styled(
+                format!(" {} ", quote.label),
+                theme::bold(theme::STRIP),
+            )]))
             .title(
                 Line::from(Span::styled(
                     format!(" Q{} ", index + 1),
