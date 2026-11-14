@@ -45,8 +45,7 @@ use uuid::Uuid;
 use super::super::SqlFragment;
 use super::super::filters::{
     AddressSuperset, ContactScope, build_address_superset, build_contact_scope,
-    build_thread_conjunct_filter,
-    get_sort_timestamp_field, top_level_owners,
+    build_thread_conjunct_filter, get_sort_timestamp_field, top_level_owners,
 };
 use super::{
     QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select_with,
