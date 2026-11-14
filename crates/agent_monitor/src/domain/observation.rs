@@ -19,8 +19,8 @@
 use std::path::PathBuf;
 
 use crate::domain::model::{
-    AgentKind, CiState, Cost, Mergeable, PrId, PrRef, PrState, RepoName, ReviewState,
-    SourceHealth, SourceKind, Timestamp, Tokens,
+    AgentKind, CiState, Cost, Mergeable, PrId, PrRef, PrState, RepoName, ReviewState, SourceHealth,
+    SourceKind, Timestamp, Tokens,
 };
 
 /// One message from a source to the store.

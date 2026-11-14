@@ -389,9 +389,8 @@ impl ClaudeParser {
                 } => {
                     let is_error = is_error.unwrap_or(false);
                     if self.pr_calls.remove(&tool_use_id) && !is_error {
-                        opened = opened.or_else(|| {
-                            std::str::from_utf8(line).ok().and_then(PrRef::last_in)
-                        });
+                        opened = opened
+                            .or_else(|| std::str::from_utf8(line).ok().and_then(PrRef::last_in));
                     }
                     out.push(
                         at,

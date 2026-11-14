@@ -72,10 +72,7 @@ pub enum GithubError {
 /// with fixtures instead of the network.
 pub trait GithubBackend: Clone + Send + Sync + 'static {
     /// Runs one GraphQL query and returns the response body.
-    fn graphql(
-        &self,
-        query: String,
-    ) -> impl Future<Output = Result<Vec<u8>, GithubError>> + Send;
+    fn graphql(&self, query: String) -> impl Future<Output = Result<Vec<u8>, GithubError>> + Send;
 
     /// The `origin` remote URL of the checkout holding `cwd`, if any.
     fn origin(&self, cwd: PathBuf) -> impl Future<Output = Option<String>> + Send;
@@ -98,17 +95,19 @@ impl GhCli {
     pub fn default_programs(home: &Path) -> Vec<PathBuf> {
         let mut programs = vec![PathBuf::from("gh"), home.join(".local/bin/gh")];
         if let Some(user) = home.file_name() {
-            programs.push(Path::new("/etc/profiles/per-user").join(user).join("bin/gh"));
+            programs.push(
+                Path::new("/etc/profiles/per-user")
+                    .join(user)
+                    .join("bin/gh"),
+            );
         }
-        programs.extend(
-            [
-                home.join(".nix-profile/bin/gh"),
-                PathBuf::from("/run/current-system/sw/bin/gh"),
-                PathBuf::from("/opt/homebrew/bin/gh"),
-                PathBuf::from("/usr/local/bin/gh"),
-                PathBuf::from("/usr/bin/gh"),
-            ],
-        );
+        programs.extend([
+            home.join(".nix-profile/bin/gh"),
+            PathBuf::from("/run/current-system/sw/bin/gh"),
+            PathBuf::from("/opt/homebrew/bin/gh"),
+            PathBuf::from("/usr/local/bin/gh"),
+            PathBuf::from("/usr/bin/gh"),
+        ]);
         programs
     }
 }
@@ -160,7 +159,10 @@ impl GithubBackend for GhCli {
             .env("GIT_TERMINAL_PROMPT", "0")
             .kill_on_drop(true)
             .output();
-        let output = tokio::time::timeout(CALL_TIMEOUT, output).await.ok()?.ok()?;
+        let output = tokio::time::timeout(CALL_TIMEOUT, output)
+            .await
+            .ok()?
+            .ok()?;
         if !output.status.success() {
             return None;
         }
@@ -173,8 +175,9 @@ impl GithubBackend for GhCli {
 /// (`https://github.com/o/r`) or SSH (scp-style `github.com:o/r.git`, or
 /// `ssh://` with `github.com/o/r.git`), with any user before the host.
 pub fn repo_of_remote(url: &str) -> Option<RepoName> {
-    let captures = lazy_regex::regex!(r"github\.com[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$")
-        .captures(url.trim())?;
+    let captures =
+        lazy_regex::regex!(r"github\.com[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+            .captures(url.trim())?;
     RepoName::parse(&format!(
         "{}/{}",
         captures.get(1)?.as_str(),

@@ -10,9 +10,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use chrono::TimeDelta;
 
 use agent_monitor::domain::model::{
-    Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, Severity, Snapshot,
-    SourceHealth, SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem,
-    Update, UpdateKind,
+    Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, Severity, Snapshot, SourceHealth,
+    SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem, Update, UpdateKind,
 };
 
 use crate::body::BodyPane;
@@ -473,11 +472,7 @@ impl ViewState {
 
     /// An agent's pull requests that the view holds, newest first.
     pub fn agent_prs(&self, agent: &Agent) -> Vec<&Pr> {
-        agent
-            .prs
-            .iter()
-            .filter_map(|id| self.prs.get(id))
-            .collect()
+        agent.prs.iter().filter_map(|id| self.prs.get(id)).collect()
     }
 
     /// Whether any agent is working, so status squares blink.

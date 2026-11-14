@@ -412,6 +412,10 @@ fn failing_prs_sort_first_then_open_ones_newest_first_then_finished() {
         words: vec![String::from("draft")],
         ..Filter::default()
     };
-    let drafts: Vec<u32> = view.sorted_prs(&filter).iter().map(|pr| pr.number).collect();
+    let drafts: Vec<u32> = view
+        .sorted_prs(&filter)
+        .iter()
+        .map(|pr| pr.number)
+        .collect();
     assert_eq!(drafts, vec![4]);
 }

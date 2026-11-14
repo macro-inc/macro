@@ -58,7 +58,10 @@ fn one_query_asks_every_repository_for_its_numbers_and_branches() {
                 items: vec![
                     (String::from("p0"), Lookup::Number(41)),
                     (String::from("p1"), Lookup::Number(42)),
-                    (String::from("b2"), Lookup::Branch(String::from("feat/codex"))),
+                    (
+                        String::from("b2"),
+                        Lookup::Branch(String::from("feat/codex"))
+                    ),
                 ],
             },
         ]
@@ -68,7 +71,11 @@ fn one_query_asks_every_repository_for_its_numbers_and_branches() {
             .text
             .contains("r1: repository(owner: \"example-org\", name: \"widgets\")")
     );
-    assert!(query.text.contains("b2: pullRequests(headRefName: \"feat/codex\""));
+    assert!(
+        query
+            .text
+            .contains("b2: pullRequests(headRefName: \"feat/codex\"")
+    );
     assert!(query.text.contains("context(name: \"CI gate\")"));
 }
 
@@ -145,7 +152,10 @@ fn an_answer_parses_state_ci_review_and_conflicts_and_skips_what_github_lacks() 
     );
 
     assert!(matches!(
-        parse_response(&fixture_query(), br#"{"errors":[{"message":"Bad credentials"}]}"#),
+        parse_response(
+            &fixture_query(),
+            br#"{"errors":[{"message":"Bad credentials"}]}"#
+        ),
         Err(GithubError::Failed(_))
     ));
 }
@@ -163,9 +173,16 @@ fn remote_urls_name_their_github_repository() {
         &String::from("https://github.com/example-org/widgets.git\n"),
         &format!("ssh://{}", ssh_remote("github.com/example-org/widgets.git")),
     ] {
-        assert_eq!(repo_of_remote(url), Some(repo("example-org/widgets")), "{url}");
+        assert_eq!(
+            repo_of_remote(url),
+            Some(repo("example-org/widgets")),
+            "{url}"
+        );
     }
-    assert_eq!(repo_of_remote("https://gitlab.com/example-org/widgets"), None);
+    assert_eq!(
+        repo_of_remote("https://gitlab.com/example-org/widgets"),
+        None
+    );
 }
 
 /// Answers every query with the fixture and records when it was asked.
@@ -177,10 +194,7 @@ struct FakeGithub {
 
 impl GithubBackend for FakeGithub {
     async fn graphql(&self, _query: String) -> Result<Vec<u8>, GithubError> {
-        self.calls
-            .lock()
-            .expect("calls")
-            .push(Instant::now());
+        self.calls.lock().expect("calls").push(Instant::now());
         if self.absent {
             return Err(GithubError::NotFound);
         }
@@ -278,10 +292,12 @@ async fn a_poll_reports_checkouts_and_statuses_then_repeats_each_minute_while_wa
 
     let (changes, health) = harness.until_health().await;
     assert_eq!(changes[0], Change::Reset(Vec::new()));
-    assert!(changes.contains(&Change::Upsert(Fact::Checkout(CheckoutFact {
-        cwd: PathBuf::from("/work/widgets"),
-        repo: repo("example-org/widgets"),
-    }))));
+    assert!(
+        changes.contains(&Change::Upsert(Fact::Checkout(CheckoutFact {
+            cwd: PathBuf::from("/work/widgets"),
+            repo: repo("example-org/widgets"),
+        })))
+    );
     let statuses = changes
         .iter()
         .filter(|change| matches!(change, Change::Upsert(Fact::PrStatus(_))))

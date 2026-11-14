@@ -303,10 +303,13 @@ impl Facts {
             Fact::PrStatus(fact) => {
                 let id = fact.pr.id();
                 if !self.retired.contains_key(&id) {
-                    self.prs.insert(id, Owned {
-                        source,
-                        fact: *fact,
-                    });
+                    self.prs.insert(
+                        id,
+                        Owned {
+                            source,
+                            fact: *fact,
+                        },
+                    );
                 }
             }
             Fact::Checkout(fact) => {
@@ -453,8 +456,7 @@ impl Facts {
             }
             keep
         });
-        self.retired
-            .extend(retire.into_iter().map(|id| (id, now)));
+        self.retired.extend(retire.into_iter().map(|id| (id, now)));
         let retired_horizon = now - history * RETIRED_WINDOWS;
         self.retired.retain(|_, at| *at >= retired_horizon);
 
@@ -881,7 +883,10 @@ fn join_prs(facts: &Facts, built: &mut Built) {
                 .agents
                 .get(agent)
                 .is_some_and(|agent| agent.kind == AgentKind::Manager)
-                && entry.author.as_ref().is_none_or(|(author, _)| author != agent)
+                && entry
+                    .author
+                    .as_ref()
+                    .is_none_or(|(author, _)| author != agent)
         });
 
         let pr = Pr {
@@ -920,7 +925,10 @@ fn join_prs(facts: &Facts, built: &mut Built) {
                 .cmp(&a.opened_at)
                 .then_with(|| b.number.cmp(&a.number))
         });
-        lists.push((agent.clone(), prs.into_iter().map(|pr| pr.id.clone()).collect()));
+        lists.push((
+            agent.clone(),
+            prs.into_iter().map(|pr| pr.id.clone()).collect(),
+        ));
     }
     for (agent, prs) in lists {
         if let Some(agent) = built.agents.get_mut(&agent) {

@@ -29,9 +29,9 @@ use crate::domain::model::{
     SourceHealth, SourceKind, SourceState, Timestamp, Tokens, TranscriptItem, TranscriptItemKind,
 };
 use crate::domain::observation::{
-    Change, CheckoutFact, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact,
-    Observation, PrStatusFact, TerminalActivity, TerminalFact, TerminalState, TranscriptDelta,
-    TranscriptEvent, TranscriptEventKind, TranscriptKey, TranscriptProgram,
+    Change, CheckoutFact, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact, Observation,
+    PrStatusFact, TerminalActivity, TerminalFact, TerminalState, TranscriptDelta, TranscriptEvent,
+    TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
 use crate::domain::source::{
     AgentSource, SourceError, TranscriptError, TranscriptFeed, TranscriptStream,
@@ -83,7 +83,11 @@ const DEMO_PRS: &[DemoPr] = &[
         review: ReviewState::ReviewRequired,
         mergeable: Mergeable::Mergeable,
         opened_minutes: 12,
-        ci: &[(0, CiState::Failed), (60, CiState::Running), (150, CiState::Passed)],
+        ci: &[
+            (0, CiState::Failed),
+            (60, CiState::Running),
+            (150, CiState::Passed),
+        ],
     },
     DemoPr {
         agent: Some("store-reducer"),
@@ -105,7 +109,11 @@ const DEMO_PRS: &[DemoPr] = &[
         review: ReviewState::None,
         mergeable: Mergeable::Unknown,
         opened_minutes: 6,
-        ci: &[(0, CiState::None), (90, CiState::Running), (200, CiState::Failed)],
+        ci: &[
+            (0, CiState::None),
+            (90, CiState::Running),
+            (200, CiState::Failed),
+        ],
     },
     DemoPr {
         agent: Some("invoice-export"),
@@ -163,10 +171,10 @@ impl DemoPr {
             ci: self.ci_at(step),
             review: self.review,
             mergeable: self.mergeable,
-            branch: Some(
-                self.agent
-                    .map_or_else(|| format!("chore/{}", self.number), |agent| format!("feat/{agent}")),
-            ),
+            branch: Some(self.agent.map_or_else(
+                || format!("chore/{}", self.number),
+                |agent| format!("feat/{agent}"),
+            )),
             created: Some(opened),
             updated: Some(closed.unwrap_or(now)),
             closed,
@@ -907,7 +915,10 @@ impl DemoFleet {
         for index in 0..self.agents.len() {
             let mut history = self.history(index);
             let agent = &self.agents[index];
-            for demo in DEMO_PRS.iter().filter(|demo| demo.agent == Some(agent.name.as_str())) {
+            for demo in DEMO_PRS
+                .iter()
+                .filter(|demo| demo.agent == Some(agent.name.as_str()))
+            {
                 let at = (self.start - TimeDelta::minutes(demo.opened_minutes))
                     .max(agent.created + TimeDelta::minutes(1));
                 if let Some(pr) = demo.pr() {

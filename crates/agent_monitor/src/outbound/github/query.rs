@@ -266,9 +266,7 @@ fn status(repo: &RepoName, node: Node) -> PrStatusFact {
             .status
             .and_then(|status| status.context)
             .and_then(|context| context.state);
-        let rollup = commit
-            .status_check_rollup
-            .and_then(|rollup| rollup.state);
+        let rollup = commit.status_check_rollup.and_then(|rollup| rollup.state);
         gate.or(rollup).as_deref().map_or(CiState::None, ci_state)
     });
     PrStatusFact {

@@ -374,7 +374,8 @@ pub fn pr_line(
     with_agent: bool,
     highlight: bool,
 ) -> Line<'static> {
-    let agent = ViewState::pr_agent(pr).map_or_else(|| String::from("—"), |id| app.view.name_of(id));
+    let agent =
+        ViewState::pr_agent(pr).map_or_else(|| String::from("—"), |id| app.view.name_of(id));
     // CI, number, repo, review, conflict, age and state, with spacing.
     let agent_width = if with_agent { 15 } else { 0 };
     let branch_width = branch_width(width);
@@ -397,7 +398,10 @@ pub fn pr_line(
             format::cell(&format!("#{}", pr.number), 7),
             theme::bold(theme::YELLOW),
         ),
-        Span::styled(format::cell(pr.repo.name(), 11), theme::ink(theme::CYAN_DIM)),
+        Span::styled(
+            format::cell(pr.repo.name(), 11),
+            theme::ink(theme::CYAN_DIM),
+        ),
         Span::styled(
             format::cell(&title, title_width),
             theme::ink(if pr.state.is_final() {
@@ -416,7 +420,10 @@ pub fn pr_line(
     }
     if with_agent {
         spans.push(Span::raw(" "));
-        spans.push(Span::styled(format::cell(&agent, 14), theme::bold(theme::AMBER)));
+        spans.push(Span::styled(
+            format::cell(&agent, 14),
+            theme::bold(theme::AMBER),
+        ));
     }
     spans.extend([
         Span::raw(" "),
@@ -460,7 +467,10 @@ fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: 
             theme::bold(theme::RED),
         ));
     }
-    if let Some(health) = app.view.sources.get(&agent_monitor::domain::model::SourceKind::Github)
+    if let Some(health) = app
+        .view
+        .sources
+        .get(&agent_monitor::domain::model::SourceKind::Github)
         && let Some(every) = health.poll_every
     {
         extra.push(Span::styled(
@@ -504,7 +514,16 @@ fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: 
             .enumerate()
             .skip(skip)
             .take(height)
-            .map(|(index, pr)| pr_line(app, clock, pr, width, with_agent, focused && index == cursor)),
+            .map(|(index, pr)| {
+                pr_line(
+                    app,
+                    clock,
+                    pr,
+                    width,
+                    with_agent,
+                    focused && index == cursor,
+                )
+            }),
     );
     if rows.is_empty() {
         lines.push(Line::from(Span::styled(

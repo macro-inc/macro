@@ -1087,7 +1087,13 @@ fn pr_ref(repo: &str, number: u32) -> PrRef {
     }
 }
 
-fn pr_status(pr: PrRef, state: PrState, ci: CiState, branch: &str, closed: Option<Timestamp>) -> Fact {
+fn pr_status(
+    pr: PrRef,
+    state: PrState,
+    ci: CiState,
+    branch: &str,
+    closed: Option<Timestamp>,
+) -> Fact {
     Fact::PrStatus(Box::new(PrStatusFact {
         url: pr.url(),
         pr,
@@ -1129,7 +1135,10 @@ fn a_pr_joins_its_author_its_manager_and_agents_on_its_branch() {
     observe(
         &mut facts,
         SourceKind::ClaudeRegistry,
-        Change::Reset(vec![registry(4242, "s-author", true), registry(99, "s-other", true)]),
+        Change::Reset(vec![
+            registry(4242, "s-author", true),
+            registry(99, "s-other", true),
+        ]),
         now,
     );
     // The transcript helper puts both sessions on `feat/x`.
@@ -1157,7 +1166,10 @@ fn a_pr_joins_its_author_its_manager_and_agents_on_its_branch() {
             state: None,
             reviews: 0,
             last_verdict: None,
-            prs: vec![pr_ref("example-org/widgets", 42), pr_ref("example-org/widgets", 7)],
+            prs: vec![
+                pr_ref("example-org/widgets", 42),
+                pr_ref("example-org/widgets", 7),
+            ],
         })]),
         now,
     );
@@ -1169,7 +1181,10 @@ fn a_pr_joins_its_author_its_manager_and_agents_on_its_branch() {
     assert_eq!(pr.state, PrState::Unknown);
     assert_eq!(pr.ci, CiState::Unknown);
     assert_eq!(pr.author_agent, Some(AgentId::terminal("t2")));
-    assert_eq!(pr.agents, vec![AgentId::terminal("t2"), AgentId::terminal("t1")]);
+    assert_eq!(
+        pr.agents,
+        vec![AgentId::terminal("t2"), AgentId::terminal("t1")]
+    );
     assert_eq!(pr.opened_at, Some(at(3, 0)));
 
     // GitHub answers; t3's checkout is the same repository.
@@ -1220,9 +1235,12 @@ fn a_pr_joins_its_author_its_manager_and_agents_on_its_branch() {
     let wanted = facts.wanted(&built);
     assert_eq!(
         wanted.refs,
-        [pr_ref("example-org/widgets", 7), pr_ref("example-org/widgets", 42)]
-            .into_iter()
-            .collect()
+        [
+            pr_ref("example-org/widgets", 7),
+            pr_ref("example-org/widgets", 42)
+        ]
+        .into_iter()
+        .collect()
     );
     assert!(wanted.branches.contains(&BranchCandidate {
         cwd: PathBuf::from("/work-b"),
@@ -1251,7 +1269,13 @@ fn a_merged_pr_older_than_the_window_is_retired_and_not_asked_for_again() {
     );
     let statuses = || {
         Change::Reset(vec![
-            pr_status(merged.clone(), PrState::Merged, CiState::Passed, "a", Some(at(5, 0))),
+            pr_status(
+                merged.clone(),
+                PrState::Merged,
+                CiState::Passed,
+                "a",
+                Some(at(5, 0)),
+            ),
             pr_status(open.clone(), PrState::Open, CiState::Running, "b", None),
         ])
     };
@@ -1265,6 +1289,9 @@ fn a_merged_pr_older_than_the_window_is_retired_and_not_asked_for_again() {
     observe(&mut facts, SourceKind::Github, statuses(), later);
     let built = build_agents(&facts, later);
     assert!(!built.prs.contains_key(&merged.id()));
-    assert!(built.prs.contains_key(&open.id()), "an open, named PR stays");
+    assert!(
+        built.prs.contains_key(&open.id()),
+        "an open, named PR stays"
+    );
     assert_eq!(facts.wanted(&built).refs, [open].into_iter().collect());
 }

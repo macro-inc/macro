@@ -21,7 +21,6 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::domain::clock::Clock;
-use crate::domain::source::PrInterest;
 use crate::domain::join::{
     FactEvent, Facts, MinuteCounts, build_agents, minute_counts, spend_since,
 };
@@ -33,6 +32,7 @@ use crate::domain::model::{
 use crate::domain::observation::{
     Change, FactKey, Observation, PrWanted, TranscriptEventKind, TranscriptKey,
 };
+use crate::domain::source::PrInterest;
 
 /// Store sizes and timings.
 #[derive(Clone, Debug)]
@@ -686,7 +686,13 @@ fn pr_lines(previous: Option<&Pr>, pr: &Pr, now: Timestamp, recent: Timestamp) -
     let Some(previous) = previous else {
         if pr.opened_at.is_some_and(|opened| opened >= recent) {
             let at = pr.opened_at.unwrap_or(now);
-            lines.push(line(at, &agent, TapeKind::PrOpened, format!("{name} opened"), Severity::Notice));
+            lines.push(line(
+                at,
+                &agent,
+                TapeKind::PrOpened,
+                format!("{name} opened"),
+                Severity::Notice,
+            ));
         }
         return lines;
     };
