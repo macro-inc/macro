@@ -7,6 +7,7 @@ import {
   EditorInputMsg,
   type IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import type { DecodedViewEffect } from '@macro-inc/collaboration/session/output';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import * as nativeModule from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { selectionMessage } from '../session-port';
@@ -556,8 +557,7 @@ test.each([false, true])(
       if (bindCauses) {
         // The executor took the record and put the value on the follow-up failure effect.
         expect(fixture.session.takeCodeTokenFailure()).toBeUndefined();
-        const effect: { codeTokenCause?: { value: unknown } } =
-          effects[failedAt];
+        const effect: DecodedViewEffect = effects[failedAt];
         expect(effect.codeTokenCause?.value).toBe(thrown);
       } else {
         const failure = fixture.session.takeCodeTokenFailure();
