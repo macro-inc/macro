@@ -16,6 +16,15 @@ use crate::domain::models::{
 };
 use crate::domain::records::CallProvider;
 
+/// The name a guest shows under: their display name, else their email.
+/// A guest who joined a Macro call always gave a name; an imported attendee
+/// may have only an email, or neither.
+pub(super) fn guest_name(display_name: Option<String>, email: Option<String>) -> String {
+    display_name
+        .or(email)
+        .unwrap_or_else(|| "Participant".into())
+}
+
 /// Imported attendees, shown as guests: they carry provider identity hints
 /// (name, email) but never a Macro account.
 pub(super) async fn imported_guests(
@@ -46,10 +55,7 @@ pub(super) async fn imported_guests(
             .or_default()
             .push(CallRecordGuest {
                 id: GuestId::from_uuid(row.id),
-                display_name: row
-                    .display_name
-                    .or(row.email)
-                    .unwrap_or_else(|| "Participant".into()),
+                display_name: guest_name(row.display_name, row.email),
                 joined_at: row.joined_at,
                 left_at: row.ended_at,
             });
