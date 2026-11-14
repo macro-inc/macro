@@ -1,0 +1,56 @@
+crates/agent_monitor/src/outbound/managers.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 74-79,104
+crates/agent_monitor/src/outbound/records.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 159-163,237-240
+crates/agent_monitor/src/outbound/transcripts.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 266-268,286-289,295-300,455-456,461,505-508,517
+crates/agent_monitor/src/outbound/claude_registry/test.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 15-19,38-42
+crates/agent_monitor/src/outbound/hc/test.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 154-157,200-203
+crates/agent_monitor/examples/sources_dump.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 52-55,151-154,161
+  s_cfe0e68707efd8::t_a58f7c14ef03eb 13,183-184,188-190
+crates/agent_monitor/src/outbound/local.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 59
+crates/agent_monitor/src/outbound/tail/test.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 82-86,88-91
+crates/agent_monitor/src/outbound/claude_transcripts.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 142-143
+crates/agent_monitor/src/outbound/codex_rollouts/test.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 138-141
+crates/agent_monitor/src/domain/pricing.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 121
+crates/agent_monitor/src/domain/join/test.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 283-286,388-391,527-531,584-587,806-810,822-824,827-831
+crates/agent_monitor/src/domain/join.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 485-487,734-744
+crates/agent_monitor/src/outbound/hc/parse.rs
+  s_7a07194ea723e2::t_6fc9e16db5cebd 229-233,235-242
+crates/agent_monitor/src/outbound/hc.rs
+  s_7a07194ea723e2::t_9170ece8b3581c 19,69-70,105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1705dc1fb9fad259e3c7f017c9440efcc1c4204b",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
