@@ -217,6 +217,7 @@ pub(crate) struct PreparedTransition {
     pub(crate) foreign_update: Option<ForeignUpdateIdentity>,
     pub(crate) default_prevented: bool,
     pub(crate) events: Vec<PluginEvent>,
+    pub(crate) receipts: Vec<crate::receipt::Receipt>,
     pub(crate) prev: EditorState,
     pub(crate) next: EditorState,
     pub(crate) changes: Changes,
@@ -241,6 +242,7 @@ impl PreparedTransition {
                 following: vec![],
                 follow_up_error: None,
                 events: self.events,
+                receipts: self.receipts,
                 id: self.publication_id,
                 prev: self.prev,
                 next: self.next,
@@ -323,6 +325,7 @@ impl Transaction<'_> {
             || self.pipeline_continuation.is_some()
             || !self.nested.is_empty()
             || !self.events.is_empty()
+            || !self.receipts.is_empty()
             || self.preceding.is_some()
             || self.options.tags != transition.tags
             || self.default_prevented != transition.default_prevented

@@ -112,16 +112,26 @@ impl EditorCore {
         now: HistoryTime,
         main_commit: &mut MainCommitOutcome,
     ) -> Result<Output, ApplyError> {
-        self.apply_inner(input, now, Some(main_commit))
+        self.apply_inner(input, now, Some(MainCommitObservation::new(main_commit)))
+    }
+    /// Observe the actual main transaction and optional capture-only typed facts.
+    /// The capture runs before follow-ups and grants no mutation authority.
+    pub fn apply_with_main_commit_observation(
+        &mut self,
+        input: Input,
+        now: HistoryTime,
+        observation: MainCommitObservation<'_>,
+    ) -> Result<Output, ApplyError> {
+        self.apply_inner(input, now, Some(observation))
     }
     fn apply_inner(
         &mut self,
         input: Input,
         now: HistoryTime,
-        mut main_commit: Option<&mut MainCommitOutcome>,
+        mut main_commit: Option<MainCommitObservation<'_>>,
     ) -> Result<Output, ApplyError> {
         if let Some(outcome) = &mut main_commit {
-            **outcome = MainCommitOutcome::NotPublished;
+            outcome.reset();
         }
         self.initial = None;
         let error = |error| ApplyError {
@@ -276,11 +286,8 @@ impl EditorCore {
                 });
             }
         };
-        if let Some(outcome) = main_commit {
-            *outcome = MainCommitOutcome::Published {
-                commit_id: commit.id,
-                handled,
-            };
+        if let Some(outcome) = &mut main_commit {
+            outcome.published(&commit, handled);
         }
         let commit = self.editor.run_after_commit(commit);
         if let Some(history) = &mut self.history {

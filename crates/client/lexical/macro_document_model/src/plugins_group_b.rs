@@ -14,7 +14,11 @@ mod code;
 mod creation_await_actions;
 #[cfg(test)]
 mod creation_await_actions_test;
+mod database_create_actions;
 mod database_query_actions;
+pub use database_create_actions::{
+    DatabaseCaptureFailure, DatabaseCommandResult, DatabaseCommitCapture, DatabaseMainCommitResult,
+};
 mod date_mention_actions;
 mod decorator_actions;
 mod decorator_content_actions;
@@ -136,6 +140,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = paste_actions::register(builder);
     let builder = tag_mention_actions::register(builder);
     let builder = database_query_actions::register(builder);
+    let builder = database_create_actions::register(builder);
     let builder = metadata::register(builder);
     let builder = decorator_actions::register(builder);
     let builder = decorator_content_actions::register(builder);
@@ -225,6 +230,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = decorator_content_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = database_create_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = creation_await_actions::decode(name, json, generation)? {
@@ -317,6 +325,9 @@ pub fn query(
     generation: u32,
     state: &EditorState,
 ) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(reply) = database_create_actions::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
     if let Some(reply) = format_facts::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }
@@ -364,3 +375,6 @@ pub mod checklist_presentation;
 pub mod checklist_updates;
 
 mod word_navigation;
+
+#[cfg(test)]
+mod database_create_red_test;

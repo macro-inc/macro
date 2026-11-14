@@ -29,6 +29,7 @@ pub struct PendingUpdate {
     extensions: crate::extension::Extensions,
     pub(crate) update_local: crate::update_local::UpdateLocal,
     events: Vec<PluginEvent>,
+    receipts: Vec<crate::receipt::Receipt>,
     default_prevented: bool,
     pending: EditorState,
     dirty_leaves: IndexSet<NodeKey>,
@@ -128,6 +129,7 @@ impl Transaction<'_> {
             extensions: self.extensions,
             update_local: self.update_local,
             events: self.events,
+            receipts: self.receipts,
             default_prevented: self.default_prevented,
             pending: self.pending,
             dirty_leaves: self.dirty_leaves,
@@ -197,6 +199,7 @@ impl Editor {
             extensions: update.extensions,
             update_local: update.update_local,
             events: update.events,
+            receipts: update.receipts,
             default_prevented: update.default_prevented,
             pending: update.pending,
             dirty_leaves: update.dirty_leaves,
@@ -331,6 +334,7 @@ impl Transaction<'_> {
         self.extensions = update.extensions;
         self.update_local = update.update_local;
         self.events = update.events;
+        self.receipts = update.receipts;
         self.default_prevented = update.default_prevented;
         self.pending = update.pending;
         self.dirty_leaves = update.dirty_leaves;

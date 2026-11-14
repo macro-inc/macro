@@ -40,7 +40,7 @@ impl Surface for EditorSurface {
         input: SessionInput,
         context: LocalInputContext,
         view: &mut Vec<ViewEffect>,
-        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+        main_commit: Option<lexical_model::MainCommitObservation<'_>>,
     ) -> Result<bool, SessionError> {
         let LocalInputContext { now, access, ready } = context;
         let SessionInput::Editor(input) = input else {
@@ -338,7 +338,7 @@ impl Surface for GenericSurface {
         input: SessionInput,
         context: LocalInputContext,
         view: &mut Vec<ViewEffect>,
-        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+        main_commit: Option<lexical_model::MainCommitObservation<'_>>,
     ) -> Result<bool, SessionError> {
         let LocalInputContext { now, access, ready } = context;
         if main_commit.is_some() {

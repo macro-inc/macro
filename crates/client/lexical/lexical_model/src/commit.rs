@@ -65,7 +65,6 @@ pub struct WorkCounters {
     pub bytes_allocated: u64,
 }
 /// An atomically published state transition.
-#[derive(Clone, Debug)]
 pub struct Commit {
     /// Actual originating transaction, never a host-invented publication identity.
     #[cfg(feature = "foreign-nodes")]
@@ -78,6 +77,7 @@ pub struct Commit {
     pub follow_up_error: Option<FollowUpError>,
     /// Typed host events in emission order.
     pub events: Vec<PluginEvent>,
+    pub(crate) receipts: Vec<crate::receipt::Receipt>,
     /// Monotonic commit identity.
     pub id: CommitId,
     /// Previous state.
@@ -106,6 +106,60 @@ pub struct Commit {
     /// Instrumented model work.
     #[cfg(feature = "bench-counters")]
     pub work: WorkCounters,
+}
+// Capture-only receipts are intentionally absent from public Clone and Debug.
+impl Clone for Commit {
+    fn clone(&self) -> Self {
+        Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_update: self.foreign_update.clone(),
+            default_prevented: self.default_prevented,
+            following: self.following.clone(),
+            follow_up_error: self.follow_up_error.clone(),
+            events: self.events.clone(),
+            id: self.id,
+            prev: self.prev.clone(),
+            next: self.next.clone(),
+            changes: self.changes.clone(),
+            tags: self.tags.clone(),
+            normalized: self.normalized.clone(),
+            selection_changed: self.selection_changed,
+            composition_key: self.composition_key,
+            composition_changed: self.composition_changed,
+            full_reconcile: self.full_reconcile,
+            stored_state_superseded: self.stored_state_superseded,
+            preceding: self.preceding.clone(),
+            receipts: vec![],
+            #[cfg(feature = "bench-counters")]
+            work: self.work.clone(),
+        }
+    }
+}
+impl std::fmt::Debug for Commit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut value = f.debug_struct("Commit");
+        #[cfg(feature = "foreign-nodes")]
+        value.field("foreign_update", &self.foreign_update);
+        value.field("default_prevented", &self.default_prevented);
+        value.field("following", &self.following);
+        value.field("follow_up_error", &self.follow_up_error);
+        value.field("events", &self.events);
+        value.field("id", &self.id);
+        value.field("prev", &self.prev);
+        value.field("next", &self.next);
+        value.field("changes", &self.changes);
+        value.field("tags", &self.tags);
+        value.field("normalized", &self.normalized);
+        value.field("selection_changed", &self.selection_changed);
+        value.field("composition_key", &self.composition_key);
+        value.field("composition_changed", &self.composition_changed);
+        value.field("full_reconcile", &self.full_reconcile);
+        value.field("stored_state_superseded", &self.stored_state_superseded);
+        value.field("preceding", &self.preceding);
+        #[cfg(feature = "bench-counters")]
+        value.field("work", &self.work);
+        value.finish()
+    }
 }
 impl Commit {
     /// Nothing dirty, no selection change and no emitted events.
@@ -377,6 +431,7 @@ impl Transaction<'_> {
             foreign_update: Some(self.foreign_update_identity()),
             default_prevented: self.default_prevented,
             events: std::mem::take(&mut self.events),
+            receipts: std::mem::take(&mut self.receipts),
             publication_id: next_id,
             prev,
             next,
@@ -517,6 +572,7 @@ impl Editor {
             following: vec![],
             follow_up_error: None,
             events: vec![],
+            receipts: vec![],
             #[cfg(feature = "bench-counters")]
             work: WorkCounters::default(),
         }

@@ -177,3 +177,25 @@ impl crate::EditorSurface {
 #[cfg(test)]
 mod await_ownership_test;
 mod checklist;
+
+/// Copy Database authority from only the admitted command's own main transaction.
+/// Model admission and output/error processing retain their existing policy.
+impl crate::DocumentSession<crate::EditorSurface> {
+    /// Observe id-only publication and its separately typed Database result.
+    pub fn handle_editor_with_database_commit(
+        &mut self,
+        now: crate::Now,
+        input: lexical_model::Input,
+        main_commit: &mut lexical_model::MainCommitOutcome,
+        database_result: &mut Option<
+            macro_document_model::plugins_group_b::DatabaseMainCommitResult,
+        >,
+    ) -> &crate::SessionOutput {
+        *database_result = None;
+        let mut capture = macro_document_model::plugins_group_b::DatabaseCommitCapture::new(&input);
+        let output =
+            self.handle_editor_with_main_commit_receipts(now, input, main_commit, &mut capture);
+        *database_result = capture.into_result();
+        output
+    }
+}

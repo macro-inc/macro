@@ -39,6 +39,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 - Compose application plugins, command decoders and bulk-query handlers in surface.rs with append-only group registration blocks; keep editor.rs registry-only presets free of surface mutations. Register Macro shortcuts through isolated post-insertion updates and the source Enter listener, preserving first-paragraph-child matching even for interior/expanded selections.
 - Keep Group B registration and command adapters in plugins_group_b.rs with child modules under plugins_group_b/; preserve its public module paths and keep mod.rs files declarations-only.
+- Keep keyed Database creation in plugins_group_b/database_create_actions.rs: construct through existing clock/random hosts, complete mention/card/trailing paragraph atomically, and validate private receipts against only the actual main commit; service IO and edit admission stay outside this model.
 - Route application word chords through group-b.move-to-start/end with actual keyboard facts; keep the High leading-inline-decorator policy separate from the Editor rich-text fallback, and preserve handled-without-preventing browser word movement.
 - Keep composer Await payloads closed objects; capture selection before construction, resolve the first attached matching placeholder before reading completion time, and preserve Source neighbor selection.
 - Treat pending empty-node Await parity as a failure outcome only; do not infer matching exception timing or allocator/callback rollback.

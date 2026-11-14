@@ -66,6 +66,10 @@ mod pipeline;
 pub use pipeline::*;
 mod commit;
 pub use commit::*;
+mod receipt;
+pub use receipt::{
+    MainCommitObservation, MainCommitReceiptCapture, MainCommitReceiptView, ReceiptKey,
+};
 
 mod caret;
 pub use caret::*;

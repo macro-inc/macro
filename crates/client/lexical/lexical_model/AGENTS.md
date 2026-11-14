@@ -22,6 +22,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/transaction.rs` owns writes; never mutate a committed snapshot. Keep import_node_shallow on the same virtual import dispatch as import_node, passing complete constructor JSON and leaving only framework-child recursion to the caller.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches; its non-converging transform regression pins the upstream invariant text. `pipeline/continuation.rs` shares this engine between ordinary unboxed flush and owned sliced work; budgets count node work rather than elapsed time. Move its optional state unchanged through suspend/resume/adoption, reject intervening writes, and retain failed continuations until cancellation.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
+- `src/receipt.rs` stages capture-only typed facts; keep them private, absent from public Clone/Debug and all effects, and visible only at the own-main capture boundary before follow-ups.
 - `src/foreign/publication.rs` notifies optional foreign adapters immediately after real publication and at existing speculative rollback boundaries; retain actual receipt identities and revoke rolled-back follow-ups before external delivery, without model, host or I/O work in the observer.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/plugin/command_listener.rs` adds ordinary synchronous host listeners to the

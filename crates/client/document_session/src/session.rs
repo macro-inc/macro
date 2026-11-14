@@ -189,7 +189,7 @@ pub trait Surface: sealed::Sealed {
         input: SessionInput,
         context: LocalInputContext,
         view: &mut Vec<ViewEffect>,
-        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+        main_commit: Option<lexical_model::MainCommitObservation<'_>>,
     ) -> Result<bool, SessionError>;
     #[doc(hidden)]
     fn presence(&self, _doc: &LoroDoc) -> Option<loro::LoroValue> {
@@ -357,7 +357,7 @@ impl<S: Surface> DocumentSession<S> {
         &mut self,
         now: Now,
         input: SessionInput,
-        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+        main_commit: Option<lexical_model::MainCommitObservation<'_>>,
     ) -> &SessionOutput {
         self.out.view.clear();
         #[cfg(feature = "conformance")]
@@ -908,7 +908,31 @@ impl DocumentSession<EditorSurface> {
         main_commit: &mut lexical_model::MainCommitOutcome,
     ) -> &SessionOutput {
         *main_commit = lexical_model::MainCommitOutcome::NotPublished;
-        self.handle_inner(now, SessionInput::Editor(input), Some(main_commit))
+        self.handle_inner(
+            now,
+            SessionInput::Editor(input),
+            Some(lexical_model::MainCommitObservation::new(main_commit)),
+        )
+    }
+    /// Observe capture-only typed facts from the admitted input's own main commit.
+    /// Receipt facts grant no edit, publication, retarget or service authority.
+    pub fn handle_editor_with_main_commit_receipts(
+        &mut self,
+        now: Now,
+        input: lexical_model::Input,
+        main_commit: &mut lexical_model::MainCommitOutcome,
+        capture: &mut dyn lexical_model::MainCommitReceiptCapture,
+    ) -> &SessionOutput {
+        *main_commit = lexical_model::MainCommitOutcome::NotPublished;
+        capture.begin();
+        self.handle_inner(
+            now,
+            SessionInput::Editor(input),
+            Some(lexical_model::MainCommitObservation::with_receipts(
+                main_commit,
+                capture,
+            )),
+        )
     }
     /// Install inert-by-default typed error metadata, retained across core resets.
     pub fn observe_reported_model_errors(

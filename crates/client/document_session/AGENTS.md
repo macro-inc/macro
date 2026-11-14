@@ -155,7 +155,7 @@ Forward the default-off `dev-probes` feature only to `lexical_loro/dev-probes`; 
 
 Read the preview/test stored comparison from the current surface core and configured sync policy; do not substitute ordinary JSON queries or a pending read scope.
 
-Forward an opt-in main-commit sink only through the designated local editor application; retain it through projection/recovery errors without observing prefix, remote, resync or follow-up applications. Admission remains in the existing session path.
+Forward an opt-in main-commit sink and capture-only typed facts only through the designated local editor application; capture from that actual commit before follow-ups and retain known publication through projection/recovery errors without observing prefix, remote or resync applications. Keep typed Database authority beside the id-only outcome; admission remains in the existing session path.
 
 Complete accepted InsertClipboardNodes through clipboard::insert_nodes_and_update_selection so the resulting caret inherits inserted format and style; keep direct dispatch handled and identity invalidation before insertion.
 

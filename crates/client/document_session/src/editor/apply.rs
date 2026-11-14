@@ -19,7 +19,7 @@ impl EditorSurface {
         now: Now,
         access: Access,
         view: &mut Vec<ViewEffect>,
-        main_commit: &mut MainCommitOutcome,
+        main_commit: lexical_model::MainCommitObservation<'_>,
     ) -> Result<bool, SessionError> {
         self.apply_inner(doc, input, now, access, view, Some(main_commit))
     }
@@ -30,7 +30,7 @@ impl EditorSurface {
         now: Now,
         access: Access,
         view: &mut Vec<ViewEffect>,
-        main_commit: Option<&mut MainCommitOutcome>,
+        main_commit: Option<lexical_model::MainCommitObservation<'_>>,
     ) -> Result<bool, SessionError> {
         let time = history_time(now)?;
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
@@ -126,7 +126,9 @@ impl EditorSurface {
             capture.clear();
         }
         let result = match main_commit {
-            Some(outcome) => self.core.apply_with_main_commit(input, time, outcome),
+            Some(outcome) => self
+                .core
+                .apply_with_main_commit_observation(input, time, outcome),
             None => self.core.apply(input, time),
         };
         // Run KeyDown and routed command listeners through the model first. Its
