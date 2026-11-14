@@ -130,6 +130,10 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       await expect(
         panel.getByRole('heading', { name: 'Activity' })
       ).toBeVisible();
+      await expect(panel.getByText('Created', { exact: true })).toBeVisible();
+      await expect(
+        panel.getByText('Last updated', { exact: true })
+      ).toBeVisible();
       saw('STL-109');
 
       await properties.getByRole('button', { name: 'Add property' }).click();

@@ -1890,6 +1890,23 @@ export const list = {
       source: ['src/features/email-view/components/EmailList.tsx'],
     },
     {
+      id: 'STL-984',
+      surface: 'SL-01',
+      fn: ['F-016'],
+      state: 'result: mail the mailbox held before it was connected is listed',
+      trigger: 'connect an inbox that already holds mail, then load the list',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
+      id: 'STL-985',
+      surface: 'SL-01',
+      fn: ['F-027'],
+      state:
+        'result: mail the provider set aside (Promotions, Other) is listed under Noise, other mail under Signal',
+      trigger: 'load the Inbox tabs after the service synced the mail',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
       id: 'STL-903',
       surface: 'SL-06',
       fn: ['F-021'],
@@ -2110,6 +2127,65 @@ export const list = {
         'src/features/email-view/components/EmailRowActions.tsx',
         'src/features/email-view/components/EmailList.tsx',
         'src/features/next-soup/actions/make-favorite-action.ts',
+      ],
+    },
+    {
+      id: 'STL-979',
+      surface: 'SL-23',
+      fn: ['F-036'],
+      state:
+        'result: the threads of the next page are in the list after the ones already there, and no "Load More" row is left once the last page is in',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/email-view/components/EmailList.tsx',
+        'src/features/email-view/queries/use-email-query.ts',
+      ],
+    },
+    {
+      id: 'STL-986',
+      surface: 'SL-09',
+      fn: ['F-091'],
+      state:
+        'result: the clock of the Reminders row names the time the reminder was moved to',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/reminders/components/reminder-schedule-indicator.tsx',
+        'src/features/reminders/views/email-row-schedule.tsx',
+      ],
+      flag: 'enable-reminders',
+    },
+    {
+      id: 'STL-974',
+      surface: 'SL-51',
+      fn: ['F-183'],
+      state:
+        'result: the tutorial video dialog "Learn how to use Macro Mail" is open with its play button',
+      trigger: 'after the tutorial row is clicked',
+      source: [
+        'src/features/video-tutorials/components/TutorialVideoDialog.tsx',
+      ],
+    },
+    {
+      id: 'STL-975',
+      surface: 'SL-51',
+      fn: ['F-183'],
+      state: 'result: a dismissed tutorial row stays away after a reload',
+      trigger: 'after Dismiss on the tutorial row',
+      source: [
+        'src/features/video-tutorials/primitives/create-tutorial-state.ts',
+        'src/features/video-tutorials/components/TutorialEntries.tsx',
+      ],
+    },
+    {
+      id: 'STL-976',
+      surface: 'SL-52',
+      fn: ['F-184'],
+      state:
+        'result: the sheet "Keyboard shortcuts" lists the shortcuts of this view',
+      trigger: 'after ? is pressed in Email',
+      source: [
+        'src/components/app/KeyboardShortcutsDialog.tsx',
+        'src/components/app/GlobalHotkeys.tsx',
       ],
     },
   ],

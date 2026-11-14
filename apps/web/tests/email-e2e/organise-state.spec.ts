@@ -167,13 +167,15 @@ for (const provider of PROVIDERS) {
       // '#' as a keyboard types it: Shift with the 3 key.
       await page.keyboard.press('Shift+Digit3');
       await expect(row(page, agenda.id)).toHaveCount(0);
+      // The notice stays for as long as the pointer is on it: the provider
+      // can take longer over the move than the notice otherwise lasts.
+      const moved = notice(page, 'Moved to Trash');
+      await moved.hover();
       await expect
         .poll(async () => (await held(mailbox, 'Agenda'))?.labels)
         .toContain(trashFolder(provider));
 
-      await notice(page, 'Moved to Trash')
-        .getByRole('button', { name: 'Undo' })
-        .click();
+      await moved.getByRole('button', { name: 'Undo' }).click();
       did('AL-414');
       await expect(notice(page, 'Restored from Trash')).toBeVisible();
       saw('STL-408');
@@ -206,8 +208,14 @@ for (const provider of PROVIDERS) {
             kind: string;
             resource: string;
             enabled: boolean;
+            needs_attention: boolean;
           }[]
-        ).map(({ kind, resource, enabled }) => ({ kind, resource, enabled }));
+        ).map(({ kind, resource, enabled, needs_attention }) => ({
+          kind,
+          resource,
+          enabled,
+          needs_attention,
+        }));
       };
 
       await mailbox.open();
@@ -222,8 +230,14 @@ for (const provider of PROVIDERS) {
         )
       ).toBeVisible();
       saw('STX-019');
+      // Waiting for the mailbox, not for a retry.
       expect(await waiting()).toEqual([
-        { kind: 'sender_block', resource: 'grace@example.com', enabled: true },
+        {
+          kind: 'sender_block',
+          resource: 'grace@example.com',
+          enabled: true,
+          needs_attention: false,
+        },
       ]);
       confirmed('F-180');
     });

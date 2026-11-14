@@ -681,6 +681,7 @@ export const thread = {
       trigger: 'card "Join" button',
       source: [CARD],
       flag: 'enable-calendar-ui',
+      needs: 'the calendar service',
     },
     {
       id: 'AL-180',
@@ -690,6 +691,7 @@ export const thread = {
       trigger: 'card "Open in calendar" icon button',
       source: [CARD, INVITATION],
       flag: 'enable-calendar-ui',
+      needs: 'the calendar service',
     },
     {
       id: 'AL-181',
@@ -721,6 +723,7 @@ export const thread = {
         'src/features/calendar-view/components/AddToCalendarButton.tsx',
       ],
       flag: 'enable-calendar-ui; enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     {
       id: 'AL-184',
@@ -1231,6 +1234,7 @@ export const thread = {
         'src/features/email-thread/calendar-invitation.tsx#Added to your calendar',
       ],
       flag: 'enable-calendar-ui; enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     {
       id: 'STL-100',
@@ -1291,6 +1295,7 @@ export const thread = {
         'src/features/calendar-view/components/AddToCalendarButton.tsx',
       ],
       flag: 'enable-calendar-ui; enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     {
       id: 'STL-519',
@@ -1309,6 +1314,7 @@ export const thread = {
       trigger:
         'owned thread with a pending mailbox operation (a pending mark-as-read only when the user asked for it)',
       source: [OPERATIONS],
+      providers: ['outlook'],
     },
     {
       id: 'STL-081',
@@ -1326,6 +1332,7 @@ export const thread = {
         'operation names: Mark as read/unread, Star/Unstar messages, Archive, Restore to Inbox, Move to Trash, Move to Junk / Restore from Junk, Add/Remove category “<name>”',
       trigger: 'per kind of unresolved operation',
       source: [OPERATIONS],
+      providers: ['outlook'],
     },
     // SL-44
     {
@@ -1455,6 +1462,7 @@ export const thread = {
       source: [
         'src/features/email-message/components/calendar-invite-card.tsx',
       ],
+      needs: 'the calendar service',
     },
     {
       id: 'STL-952',
@@ -1505,6 +1513,28 @@ export const thread = {
         'result: the browser saves the file under its name, with the bytes that were sent',
       trigger: 'after the action succeeds',
       source: [ATTACHMENTS],
+    },
+    {
+      id: 'STL-977',
+      surface: 'SL-29',
+      fn: ['F-054'],
+      state: 'result: the thread is open in a split of its own beside the list',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/email-view/email-view-context.tsx',
+        'src/features/email-view/components/EmailList.tsx',
+      ],
+    },
+    {
+      id: 'STL-978',
+      surface: 'SL-28',
+      fn: ['F-178'],
+      state: 'result: the subject is on the clipboard',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/email-thread/email-thread.tsx',
+        'src/features/email-thread/components/copy-subject-button.tsx',
+      ],
     },
   ],
 } as const satisfies Group;

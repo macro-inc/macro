@@ -70,6 +70,9 @@ for (const provider of PROVIDERS) {
       const queued = notice(page, 'Sender block queued');
       await expect(queued).toContainText('hal@example.com');
       saw('STL-050', 'F-080');
+      // The notice stays for as long as the pointer is on it: the service
+      // can take longer over the block than the notice otherwise lasts.
+      await queued.hover();
       await expect.poll(() => blocked(mailbox)).toEqual(['hal@example.com']);
       confirmed('F-080');
 

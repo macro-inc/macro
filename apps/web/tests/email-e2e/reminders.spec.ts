@@ -78,11 +78,11 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       saw('STL-102');
 
       await remindWhen(page).fill('tomorrow 9am');
-      did('AL-621');
       await expect(
         page.getByRole('option', { name: /^tomorrow 9am/ })
       ).toBeVisible();
       await remindWhen(page).press('Enter');
+      did('AL-621');
       await expect(remindWhen(page)).toBeHidden();
       // The thread waits out of the Inbox until the reminder returns it.
       await expect.poll(() => rowIds(page)).not.toContain(thread.id);
@@ -177,6 +177,7 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       await page.getByRole('option', { name: /^Next week/ }).click();
       await expect(remindWhen(page)).toBeHidden();
       await expect(clock).toHaveAccessibleName(/ at 9:00 AM$/);
+      saw('STL-986');
       await expect
         .poll(() => remindAt(mailbox, thread.id))
         .not.toBe(first.getTime());
@@ -233,10 +234,12 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       });
       await mailbox.synced('Re: Lunch?');
       // The storage service looks at pending reminders on the scheduler's
-      // tick, which the test plays.
-      await tickReminders(mailbox);
+      // tick, which the test plays until the service has seen the reply.
       await expect
-        .poll(async () => (await followup(mailbox, thread.id))?.state)
+        .poll(async () => {
+          await tickReminders(mailbox);
+          return (await followup(mailbox, thread.id))?.state;
+        })
         .toBe('cancelled');
       expect(await pendingFollowups(mailbox)).toEqual([]);
       confirmed('F-094');
