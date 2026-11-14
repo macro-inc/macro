@@ -1,0 +1,25 @@
+crates/agent_monitor_tui/Cargo.toml
+  s_d14d9597da0a04::t_16b3b30a737a55 21
+crates/agent_monitor_tui/src/keys.rs
+  s_d14d9597da0a04::t_11315b0ddb8a63 395
+crates/agent_monitor_tui/src/runner.rs
+  s_d14d9597da0a04::t_16b3b30a737a55 19,194-200,228-229
+Cargo.lock
+  s_d14d9597da0a04::t_6e5796f059edb1 945
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3eecc5fdf2a54d56a2cf011acff8d9c7fe317da2",
+  "prompts": {},
+  "sessions": {
+    "s_d14d9597da0a04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bde7157c-1ac0-434d-b2b6-e2d6405a5d46",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
