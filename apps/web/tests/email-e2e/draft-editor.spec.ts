@@ -9,6 +9,7 @@ import {
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { htmlBody, onlySentRaw } from './harness/send';
+import { threadMessages } from './harness/thread';
 import { confirmed, did, saw } from './ledger/record';
 
 /** A 1x1 PNG. */
@@ -86,6 +87,15 @@ test.describe('content the composer did not write itself', () => {
       .toContain('Back by four.');
     expect(saves.at(-1)?.html).toContain('Meet at the north gate.');
     expect(saves.at(-1)?.html).toContain('Bring boots.');
+    // And the service holds it: a save that was only sent proves nothing.
+    await expect(async () => {
+      const [draft] = await draftThreads(mailbox);
+      const [message] = await threadMessages(mailbox, draft.id);
+      const stored = String(message.body_html_sanitized);
+      expect(stored).toContain('Meet at the north gate.');
+      expect(stored).toContain('Bring boots.');
+      expect(stored).toContain('Back by four.');
+    }).toPass({ timeout: 30_000 });
   });
 
   // Class composer-inline-media: when this fails, an image dropped on the

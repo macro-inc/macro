@@ -80,15 +80,24 @@ async function deliverPictures(
     throw new Error(`Gmail did not announce it: ${pushed.status}`);
 
   const thread = await mailbox.synced(subject);
-  const [message] = await threadMessages(mailbox, thread.id);
-  const attachments = message.attachments as
-    | { content_id: string | null; sfs_id: string | null }[]
-    | undefined;
-  const inline = attachments?.find((attachment) =>
-    attachment.content_id?.includes('logo@example.com')
-  );
-  if (!inline?.sfs_id) throw new Error('the inline picture has no file id');
-  return { threadId: thread.id, inlineFileId: inline.sfs_id };
+  // The picture is stored after the thread is listed: wait for its file.
+  let inlineFileId: string | null | undefined;
+  await expect
+    .poll(
+      async () => {
+        const [message] = await threadMessages(mailbox, thread.id);
+        const attachments = message.attachments as
+          | { content_id: string | null; sfs_id: string | null }[]
+          | undefined;
+        inlineFileId = attachments?.find((attachment) =>
+          attachment.content_id?.includes('logo@example.com')
+        )?.sfs_id;
+        return Boolean(inlineFileId);
+      },
+      { message: 'the inline picture has no file id', timeout: 30_000 }
+    )
+    .toBe(true);
+  return { threadId: thread.id, inlineFileId: inlineFileId as string };
 }
 
 /**
@@ -154,6 +163,10 @@ test.describe("a message's pictures", () => {
       );
       await soft.poll(() => loadedWidth(page, 'inline')).toBeGreaterThan(0);
       saw('STL-906');
+      // Through the proxy: the page itself must not ask the sender's server.
+      await soft(
+        page.locator('[data-message-body-id] img[alt="remote"]')
+      ).toHaveAttribute('src', /\/image-proxy\/proxy\?/);
       await soft.poll(() => loadedWidth(page, 'remote')).toBeGreaterThan(0);
       soft(pictures.asked).toContain('/banner.png');
     } finally {

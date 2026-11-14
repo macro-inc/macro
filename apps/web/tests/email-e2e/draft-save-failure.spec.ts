@@ -4,6 +4,7 @@ import {
   loadAppSteadily,
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { threadMessages } from './harness/thread';
 import { confirmed, did } from './ledger/record';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
@@ -60,6 +61,15 @@ test.describe('a draft save the server fails', () => {
     await expect
       .poll(async () => (await draftThreads(mailbox)).map((draft) => draft.id))
       .toEqual([thread.id]);
+    // With the reply as written: an empty draft would list the thread too.
+    await expect
+      .poll(async () =>
+        (await threadMessages(mailbox, thread.id))
+          .filter((message) => message.is_draft)
+          .map((message) => String(message.body_html_sanitized))
+          .join('\n')
+      )
+      .toContain('Paid today.');
     expect(faults).toBe(2);
     await expect(page.getByText('Draft could not be synced')).toHaveCount(0);
   });
