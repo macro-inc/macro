@@ -444,6 +444,97 @@ fn import_runs_tab_hooks_and_tracks_absent_fields() -> Result<(), Error> {
 }
 
 #[test]
+fn null_text_mode_imports_as_absent_mode_on_both_import_paths() -> Result<(), Error> {
+    // Source TextNode.updateFromJSON (Lexical 0.45.0 dist sha256 449d061d) calls
+    // setMode(serializedNode.mode); for null that stores TEXT_MODE_TO_TYPE[null],
+    // undefined, so exportJSON omits mode, as for an omitted key. A Source client's
+    // Loro writer stores omitted fields as null, so this reaches native loads.
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("valid");
+    // The general import path (update_from_json, also used for remote fields).
+    editor.update(|tx| {
+        let text = tx.create_text("old")?;
+        let imported = serde_json::json!({"type":"text","version":1,"text":"hi","mode":null});
+        tx.update_from_json(text, imported.as_object().expect("object"))?;
+        assert!(!tx.export_json(text)?.contains_key("mode"));
+        assert!(!tx.is_simple_text(text));
+        Ok(())
+    })?;
+    // The parse path every state load takes.
+    let raw: SerializedEditorState = serde_json::from_str(
+        r#"{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"hi","mode":null}]}]}}"#,
+    )?;
+    let state = editor.parse_editor_state(&raw)?;
+    assert_eq!(
+        serde_json::Value::Object(
+            state.to_json()?.root["children"][0]["children"][0]
+                .as_object()
+                .cloned()
+                .expect("text")
+        ),
+        serde_json::json!({"text":"hi","type":"text","version":1})
+    );
+    Ok(())
+}
+
+#[test]
+fn null_mode_text_is_not_simple_for_normalization_until_mode_is_set() -> Result<(), Error> {
+    // Source $normalizeTextNode merges and removes only isSimpleText nodes
+    // (__mode === 0). Observed on Source (scratch probe): a null-mode text beside a
+    // normal one stays separate and an empty null-mode text stays, through a
+    // normalizing update; after setMode('normal') the mode exports and they merge.
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("valid");
+    let ((null_mode, empty_null_mode, normal), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let null_mode = tx.create_text("old")?;
+        let empty_null_mode = tx.create_text("old")?;
+        let normal = tx.create_text("b")?;
+        tx.append(
+            paragraph,
+            &[null_mode.key(), empty_null_mode.key(), normal.key()],
+        )?;
+        let a = serde_json::json!({"type":"text","version":1,"text":"a","mode":null,"format":0,"detail":0,"style":""});
+        tx.update_from_json(null_mode, a.as_object().expect("object"))?;
+        let empty = serde_json::json!({"type":"text","version":1,"text":"","mode":null,"format":0,"detail":0,"style":""});
+        tx.update_from_json(empty_null_mode, empty.as_object().expect("object"))?;
+        Ok((null_mode.key(), empty_null_mode.key(), normal.key()))
+    })?;
+    editor.update(|tx| {
+        for key in [null_mode, empty_null_mode, normal] {
+            tx.mark_dirty(key)?;
+        }
+        Ok(())
+    })?;
+    let paragraph = |editor: &Editor| -> Result<serde_json::Value, Error> {
+        Ok(editor.state().to_json()?.root["children"][0]["children"].clone())
+    };
+    assert_eq!(
+        paragraph(&editor)?,
+        serde_json::json!([
+            {"detail":0,"format":0,"style":"","text":"a","type":"text","version":1},
+            {"detail":0,"format":0,"style":"","text":"","type":"text","version":1},
+            {"detail":0,"format":0,"mode":"normal","style":"","text":"b","type":"text","version":1}
+        ])
+    );
+    editor.update(|tx| {
+        tx.text(null_mode)?.set_mode(TextMode::Normal)?;
+        tx.text(empty_null_mode)?.set_mode(TextMode::Normal)?;
+        Ok(())
+    })?;
+    assert_eq!(
+        paragraph(&editor)?,
+        serde_json::json!([
+            {"detail":0,"format":0,"mode":"normal","style":"","text":"ab","type":"text","version":1}
+        ])
+    );
+    Ok(())
+}
+
+#[test]
 fn split_text_keeps_imported_absent_format_style_detail_on_new_parts() -> Result<(), Error> {
     // Source TextNode.splitText (Lexical 0.45.0 dist sha256 449d061d, L7044) copies
     // __format/__style/__detail raw onto each new part (L7072-7074, L7108-7110), so

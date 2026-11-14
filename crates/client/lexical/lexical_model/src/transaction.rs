@@ -873,8 +873,11 @@ impl<'editor> Transaction<'editor> {
                         TextFormatType::flag,
                     );
                     let detail = TextDetail::from_bits_retain(number("detail"));
+                    // Source setMode(null) stores undefined: absent mode, omitted on export.
+                    let mode_is_null = json.get("mode").is_some_and(serde_json::Value::is_null);
                     let mode = json
                         .get("mode")
+                        .filter(|value| !value.is_null())
                         .map(|value| {
                             serde_json::from_value(value.clone()).or_else(|error| {
                                 if opaque {
@@ -917,6 +920,9 @@ impl<'editor> Transaction<'editor> {
                         AbsentKeys::from_json(json, &["text", "format", "detail", "mode", "style"]);
                     if format_type.is_some() && parsed_format.is_none() {
                         data.absent.insert(AbsentKeys::FORMAT);
+                    }
+                    if mode_is_null {
+                        data.absent.insert(AbsentKeys::MODE);
                     }
                 }
                 Some(NodeKind::Element) => {

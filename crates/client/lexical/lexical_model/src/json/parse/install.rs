@@ -92,10 +92,18 @@ impl ParsedNode<'_> {
                 || TextFormat::from_bits_retain(self.number("format")),
                 TextFormatType::flag,
             );
+            // Source TextNode.updateFromJSON: setMode(null) stores
+            // TEXT_MODE_TO_TYPE[null] (undefined), so exportJSON omits mode; that is
+            // native's absent mode (Lexical 0.45 dist 449d061d).
+            let mode_is_null = matches!(
+                self.fields.get("mode"),
+                Some(FieldValue::Other(Value::Null))
+            );
             let mode = match self.string("mode") {
                 Some("normal") => TextMode::Normal,
                 Some("token") => TextMode::Token,
                 Some("segmented") => TextMode::Segmented,
+                _ if mode_is_null => TextMode::default(),
                 _ => self
                     .fields
                     .get("mode")
@@ -106,6 +114,9 @@ impl ParsedNode<'_> {
             let mut absent = self.absent(&["text", "format", "detail", "mode", "style"]);
             if format_type.is_some() && parsed_format.is_none() {
                 absent.insert(AbsentKeys::FORMAT);
+            }
+            if mode_is_null {
+                absent.insert(AbsentKeys::MODE);
             }
             tx.writable(key)?.base = BaseData::Text(TextData {
                 text: TextBuffer::new(self.take_string("text")),
