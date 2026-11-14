@@ -31,7 +31,6 @@ mod unix {
     use std::path::PathBuf;
 
     use crate::app::App;
-    use crate::body::Vitals;
     use crate::feed::{self, Feed};
     use crate::runner;
     use crate::view::ViewState;
@@ -65,6 +64,18 @@ mod unix {
         Terminal(#[from] io::Error),
     }
 
+    /// The BODY pane: the mesh man.
+    #[cfg(feature = "mesh-man")]
+    fn body() -> Box<dyn crate::body::BodyPane> {
+        Box::new(crate::body::mesh::MeshBody::default())
+    }
+
+    /// The BODY pane: the vitals panel, built without the mesh man.
+    #[cfg(not(feature = "mesh-man"))]
+    fn body() -> Box<dyn crate::body::BodyPane> {
+        Box::new(crate::body::Vitals::default())
+    }
+
     /// Takes over the terminal and runs the viewer until the user quits.
     /// Must be called inside a tokio runtime.
     pub async fn run(options: Options) -> Result<(), ViewerError> {
@@ -78,7 +89,7 @@ mod unix {
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
     /// over a store it hosts; `label` is shown in the header.
     pub async fn run_feed(feed: Feed, label: Option<String>, fps: u8) -> Result<(), ViewerError> {
-        let mut app = App::new(ViewState::new(Box::new(Vitals::default())), label);
+        let mut app = App::new(ViewState::new(body()), label);
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
         let result = runner::run_loop(

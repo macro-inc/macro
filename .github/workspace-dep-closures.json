@@ -1372,6 +1372,7 @@
     "agent_monitor_tui": [
       "crates/agent_monitor",
       "crates/agent_monitor_tui",
+      "crates/mesh_man",
       "crates/workspace-hack"
     ],
     "agent_preview": [
