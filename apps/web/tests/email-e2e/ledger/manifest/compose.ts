@@ -1388,49 +1388,6 @@ export const compose = {
       ],
     },
     {
-      id: 'STC-300',
-      surface: 'SC-01',
-      fn: ['F-106'],
-      state: 'toast: <email> added to CC',
-      trigger: '@mention of a user in the body (also in a reply)',
-      source: [
-        'src/features/email-compose/compose-adapter.ts',
-        'src/features/email-compose/editor-adapter.ts',
-        'src/features/email-compose/primitives/mention-to-cc.ts',
-      ],
-      toasts: [
-        'src/features/email-compose/compose-adapter.ts#message',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: the key derive.ts prints
-        'src/features/email-compose/editor-adapter.ts#${email} added to CC',
-      ],
-      note: 'every composer notice is raised through compose-adapter.ts#message',
-    },
-    {
-      id: 'STC-303',
-      surface: 'SC-01',
-      fn: ['F-120'],
-      state:
-        'toast: Draft could not be saved on this device (stays until dismissed with Maybe later)',
-      trigger: 'writing the local draft copy fails',
-      source: [
-        'src/features/email-compose/primitives/draft-save-notice.ts',
-        'src/features/email-compose/compose-adapter.ts',
-      ],
-      toasts: [
-        'src/features/email-compose/compose-adapter.ts#common.maybeLater',
-      ],
-    },
-    {
-      id: 'STC-304',
-      surface: 'SC-01',
-      fn: ['F-120'],
-      state: 'toast: Failed to save draft / Failed to delete draft',
-      trigger:
-        'the draft save or delete request is rejected or the network fails',
-      source: ['src/lib/queries/email/draft-queue.ts'],
-      toasts: ['src/lib/queries/email/draft-queue.ts#message'],
-    },
-    {
       id: 'STC-316',
       surface: 'SC-01',
       fn: ['F-119'],
@@ -1592,29 +1549,6 @@ export const compose = {
       state: 'Show quoted text / Show forwarded message',
       trigger: 'quoted content collapsed',
       source: ['src/features/email-compose/views/reply-input.tsx'],
-    },
-    {
-      id: 'STC-301',
-      surface: 'SC-03',
-      fn: ['F-106'],
-      state:
-        'toast: Recipients can now view this file (File share permissions have been updated to public view-only)',
-      trigger: '@mention of a document in a reply',
-      source: ['src/features/email-compose/make-attachment-public.ts'],
-      toasts: [
-        'src/features/email-compose/make-attachment-public.ts#Recipients can now view this file',
-      ],
-    },
-    {
-      id: 'STC-302',
-      surface: 'SC-03',
-      fn: ['F-106'],
-      state: 'toast: Recipients may not be able to view this file',
-      trigger: 'making the mentioned document public fails',
-      source: ['src/features/email-compose/make-attachment-public.ts'],
-      toasts: [
-        'src/features/email-compose/make-attachment-public.ts#Recipients may not be able to view this file',
-      ],
     },
     {
       id: 'STC-096',

@@ -75,7 +75,7 @@ F-073	organise	Star a thread	yes	yes	yes	provider
 F-074	organise	Unstar a thread	yes	yes	yes	provider
 F-075	organise	Move a thread to Trash	yes	yes	yes	provider
 F-076	organise	Restore a thread from Trash	yes	yes	yes	provider
-F-077	organise	Delete a thread permanently	yes	yes	yes	provider
+F-077	organise	Delete a thread permanently	yes	yes	no	provider
 F-078	organise	Report a thread as not spam	yes	yes	yes	provider
 F-079	organise	Mute and unmute a thread's notifications	yes	yes	yes	service
 F-080	organise	Block a sender	yes	yes	yes	service
@@ -185,3 +185,5 @@ F-183	list	Learn Mail: tutorial video and view tour	yes	yes	yes	ui
 F-184	list	See the keyboard shortcuts for Mail	yes	yes	yes	ui
 F-185	attachments	Open and preview an attachment on a draft	yes	yes	yes	service
 F-186	compose	See the Macro watermark without a paid plan and open the upgrade prompt	yes	yes	yes	ui
+F-187	read	Copy a thread's ID	yes	yes	yes	ui
+F-188	read	See a thread's details in the side panel (activity, references, dates)	yes	yes	yes	ui

@@ -2,26 +2,28 @@
 
 import { BOTH_VIEWPORTS, type Group } from './types';
 
+const SCHEDULE_FLAG = 'ENABLE_EMAIL_SCHEDULED_SEND';
+
 export const send = {
   name: 'send',
   surfaces: [
     {
       id: 'SC-08',
-      name: 'Schedule send time picker (presets, natural-language query, custom calendar, time input, mobile footer Cancel schedule)',
+      name: 'Schedule send time picker (presets, natural-language query, custom calendar with time; on phones the current value, Clear time and Cancel schedule)',
       opened:
         'clock button "Schedule send time" in any composer toolbar (flag ENABLE_EMAIL_SCHEDULED_SEND)',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SC-09',
-      name: 'Schedule bar / schedule summary (Scheduled send: … / Scheduled for … / Send failed before delivery / Delivery unconfirmed)',
+      name: 'Schedule bar / schedule summary (Scheduled send: … / Scheduled for … / Sending / Delivery unconfirmed / Send failed before delivery)',
       opened:
-        'appears under composer card (desktop) or in header island (touch) once a time is chosen or confirmed',
+        'under the composer card and the reply card (desktop), in the header island (phone composer, touch reply), once a time is chosen or confirmed',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SC-16',
-      name: 'Draft sync status banner (waiting to sync / could not be synced / Retry / Reload / Keep editing)',
+      name: 'Draft sync status banner (waiting to sync / could not be synced / Retry / Retry discard / Reload / Keep editing)',
       opened:
         'top of composer above recipients when a draft write needs the user',
       viewports: BOTH_VIEWPORTS,
@@ -47,7 +49,7 @@ export const send = {
     },
     {
       id: 'SC-22',
-      name: 'Message operation recovery notice inside composer (Outlook pending / failed provider operations, draft reload)',
+      name: 'Message operation recovery notice inside composer (pending / failed provider operations, draft reload)',
       opened: 'composer with a provider operation source',
       viewports: BOTH_VIEWPORTS,
     },
@@ -63,61 +65,79 @@ export const send = {
       id: 'AC-045',
       surface: 'SC-08',
       action: 'choose a send time from a preset option',
-      trigger: 'clock button, pick option',
+      trigger: 'clock button (aria-label Choose send time), pick an option',
       source: [
         'src/features/email-compose/components/email-date-selector.tsx',
-        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/components/date-selector.tsx',
+        'src/features/email-compose/primitives/email-send-schedule.ts',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-046',
       surface: 'SC-08',
       action:
         'search a send time with a natural-language query (3d, 1w, feb 17, tomorrow)',
-      trigger: 'type in picker input',
-      source: ['src/features/email-compose/components/date-selector.tsx'],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      trigger: 'type in the picker input, pick a result',
+      source: [
+        'src/features/email-compose/components/date-selector.tsx',
+        'src/lib/core/util/dateSearch/useDateSearch.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-047',
       surface: 'SC-08',
       action: 'choose a custom date and time',
-      trigger: 'Custom date... then calendar day and Time input',
+      trigger: 'Custom date... (Pick from calendar), then a day and its time',
+      source: [
+        'src/features/email-compose/components/date-selector.tsx',
+        'src/lib/core/component/DatePicker/DatePickerUI.tsx',
+      ],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'AC-403',
+      surface: 'SC-08',
+      action: 'move through the picker options from the keyboard',
+      trigger: 'ctrl+j / ctrl+k in the open picker',
       source: ['src/features/email-compose/components/date-selector.tsx'],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      viewports: ['desktop'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-048',
       surface: 'SC-09',
       action: 'clear the chosen (unconfirmed) send time',
       trigger:
-        'schedule bar Cancel (aria Clear send time); touch picker Clear time',
+        "schedule bar Cancel (aria-label Clear send time); on phones also the picker's Clear time",
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
+        'src/features/email-compose/components/email-date-selector.tsx',
         'src/features/email-compose/components/date-selector.tsx',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-050',
       surface: 'SC-09',
       action: 'propose a new time on a confirmed schedule then Update schedule',
       trigger:
-        'pick new time, primary button (label Update schedule) or cmd+enter',
+        'pick a new time, then the primary button (aria-label Update schedule) or cmd+enter',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-051',
       surface: 'SC-09',
       action: 'discard a proposed schedule change',
-      trigger: 'bar Cancel change; touch picker Discard proposed time',
+      trigger:
+        "bar Cancel change (aria-label Cancel schedule change); on phones also the picker's Discard proposed time",
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
         'src/features/email-compose/components/email-date-selector.tsx',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-052',
@@ -125,35 +145,36 @@ export const send = {
       action:
         'cancel a confirmed scheduled send (message becomes editable draft)',
       trigger:
-        'bar Cancel (aria Cancel scheduled send); touch picker footer Cancel schedule',
+        "bar Cancel (aria-label Cancel scheduled send); on phones also the picker footer's Cancel schedule",
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
         'src/features/email-compose/components/email-date-selector.tsx',
         'src/features/email-compose/primitives/email-send-schedule.ts',
         'src/features/email-compose/compose-adapter.ts',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-053',
       surface: 'SC-09',
       action: 'restore draft after Send failed before delivery',
-      trigger: 'bar Restore draft',
+      trigger: 'bar Restore draft (aria-label Restore failed scheduled draft)',
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
+        'src/features/email-compose/primitives/email-send-schedule.ts',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-054',
       surface: 'SC-09',
       action: 'check status of an unconfirmed / sending scheduled delivery',
-      trigger: 'bar Check status',
+      trigger: 'bar Check status (aria-label Check delivery status)',
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
         'src/features/email-compose/primitives/email-send-schedule.ts',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-055',
@@ -161,15 +182,19 @@ export const send = {
       action: 'undo an initial schedule from the Email scheduled toast',
       trigger: 'toast Undo',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-056',
       surface: 'SC-18',
       action: 'open the scheduled message from the toast',
-      trigger: 'toast View message',
-      source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      trigger: 'toast View message (Email scheduled / Email rescheduled)',
+      source: [
+        'src/features/email-compose/primitives/email-send-schedule.ts',
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-059',
@@ -179,6 +204,7 @@ export const send = {
       source: [
         'src/features/email-compose/primitives/queued-send-notice.ts',
         'src/features/email-compose/undo-send.ts',
+        'src/features/email-compose/compose-adapter.ts',
       ],
     },
     {
@@ -191,11 +217,22 @@ export const send = {
     {
       id: 'AC-064',
       surface: 'SC-16',
-      action: 'retry a failed draft sync or discard',
-      trigger: 'banner Retry / Retry discard',
+      action: 'retry a failed draft sync, or a failed read of its status',
+      trigger: 'banner Retry',
       source: [
         'src/features/email-compose/components/draft-sync-status.tsx',
+        'src/features/email-compose/primitives/draft-sync-status.ts',
         'src/features/email-compose/compose-adapter.ts',
+      ],
+    },
+    {
+      id: 'AC-400',
+      surface: 'SC-16',
+      action: 'retry a discard the server did not confirm',
+      trigger: 'banner Retry discard',
+      source: [
+        'src/features/email-compose/components/draft-sync-status.tsx',
+        'src/features/email-compose/primitives/draft-sync-status.ts',
       ],
     },
     {
@@ -206,6 +243,7 @@ export const send = {
       source: [
         'src/features/email-compose/components/draft-sync-status.tsx',
         'src/features/email-compose/views/email-compose.tsx',
+        'src/features/email-compose/views/reply-input.tsx',
       ],
     },
     {
@@ -213,7 +251,10 @@ export const send = {
       surface: 'SC-16',
       action: 'keep editing after a failed discard',
       trigger: 'banner Keep editing',
-      source: ['src/features/email-compose/components/draft-sync-status.tsx'],
+      source: [
+        'src/features/email-compose/components/draft-sync-status.tsx',
+        'src/features/email-compose/primitives/draft-sync-status.ts',
+      ],
     },
     {
       id: 'AC-067',
@@ -221,40 +262,42 @@ export const send = {
       action: 'save rejected draft content as a new draft',
       trigger: 'toast action Save as new draft',
       source: ['src/features/email-compose/primitives/draft-identity.ts'],
+      note: 'only while the GraphQL draft queue is off (enable-graphql-soup off); with it on the sync banner recovers instead',
     },
     {
       id: 'AC-098',
       surface: 'SC-08',
       action: 'choose / change send time in a reply',
-      trigger: 'clock button',
+      trigger: 'clock button in the reply footer (touch: reply toolbar)',
       source: [
         'src/features/email-compose/views/reply-input.tsx',
         'src/features/email-compose/primitives/reply-composer.ts',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-099',
       surface: 'SC-09',
       action: 'cancel / restore / check status of a scheduled reply',
-      trigger: 'schedule strip actions in message card',
+      trigger:
+        'schedule bar under the reply card (touch: summary in the reply toolbar)',
       source: [
         'src/features/email-compose/views/reply-input.tsx',
         'src/features/email-compose/primitives/reply-composer.ts',
       ],
-      flag: 'ENABLE_EMAIL_SCHEDULED_SEND',
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'AC-102',
       surface: 'SC-19',
       action: 'retry loading a local reply draft',
-      trigger: 'Retry button',
+      trigger: 'Retry button in Unable to load local draft',
       source: ['src/features/email-compose/views/reply-input.tsx'],
     },
     {
       id: 'AC-104',
       surface: 'SC-17',
-      action: 'cancel a queued / failed send from the status panel',
+      action: 'cancel a queued, failed or scheduled send from the status panel',
       trigger: 'Cancel button',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
@@ -282,30 +325,57 @@ export const send = {
     {
       id: 'AC-108',
       surface: 'SC-17',
-      action: 'cancel and restore a server-side send from another device',
+      action:
+        'cancel and restore a failed or scheduled send made on another device',
       trigger: 'Cancel and restore button',
-      source: ['src/features/email-compose/queued-send-status.tsx'],
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/cancel-server-send.ts',
+      ],
     },
     {
       id: 'AC-109',
       surface: 'SC-17',
-      action: 'refresh a server-side send status',
+      action: "refresh an unconfirmed send's status (send from another device)",
       trigger: 'Check status button (server row)',
-      source: ['src/features/email-compose/queued-send-status.tsx'],
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/server-sends.ts',
+      ],
     },
     {
       id: 'AC-110',
       surface: 'SC-17',
       action: 'load more server-side sends',
       trigger: 'Load more sends button',
-      source: ['src/features/email-compose/queued-send-status.tsx'],
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/server-sends.ts',
+      ],
+    },
+    {
+      id: 'AC-402',
+      surface: 'SC-22',
+      action: 'reload the draft once the mailbox version is ready',
+      trigger: 'Reload draft button in the notice above the composer',
+      source: [
+        'src/features/email-message/views/message-operation-recovery.tsx',
+        'src/features/email-compose/views/email-compose.tsx',
+        'src/features/email-compose/views/reply-input.tsx',
+      ],
     },
     {
       id: 'AC-111',
       surface: 'SC-24',
-      action:
-        'confirm or cancel sign-out when local drafts / pending sends exist',
-      trigger: 'Sign out, dialog buttons',
+      action: 'confirm sign-out when local drafts / pending sends exist',
+      trigger: "Sign out, then the dialog's Sign out",
+      source: ['src/lib/core/auth/logout.ts'],
+    },
+    {
+      id: 'AC-401',
+      surface: 'SC-24',
+      action: 'cancel sign-out from the local drafts dialog (stays signed in)',
+      trigger: 'Sign out, then dismiss the dialog',
       source: ['src/lib/core/auth/logout.ts'],
     },
   ],
@@ -314,8 +384,11 @@ export const send = {
       id: 'STC-001',
       surface: 'SC-19',
       state: 'Loading draft…',
-      trigger: 'standalone draft still loading',
-      source: ['src/features/email-compose/views/email-compose.tsx'],
+      trigger: 'composer or reply whose local draft is still being read',
+      source: [
+        'src/features/email-compose/views/email-compose.tsx',
+        'src/features/email-compose/views/reply-input.tsx',
+      ],
     },
     {
       id: 'STC-002',
@@ -334,200 +407,365 @@ export const send = {
     {
       id: 'STC-018',
       surface: 'SC-18',
-      state: '<email> added to CC',
-      trigger:
-        '@mention of a user (reply: src/features/email-compose/primitives/reply-composer.ts:1546)',
-      source: ['src/features/email-compose/views/email-compose.tsx'],
+      state: 'toast: <email> added to CC',
+      trigger: '@mention of a user in the body',
+      source: [
+        'src/features/email-compose/editor-adapter.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      toasts: [
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the key derive.ts prints
+        'src/features/email-compose/editor-adapter.ts#${email} added to CC',
+      ],
     },
     {
       id: 'STC-019',
       surface: 'SC-18',
-      state: 'Recipients can now view this file',
+      state: 'toast: Recipients can now view this file',
       trigger: 'document mention / oversize link made public',
       source: ['src/features/email-compose/make-attachment-public.ts'],
+      toasts: [
+        'src/features/email-compose/make-attachment-public.ts#Recipients can now view this file',
+      ],
     },
     {
       id: 'STC-020',
       surface: 'SC-18',
-      state: 'Recipients may not be able to view this file',
+      state: 'toast: Recipients may not be able to view this file',
       trigger: 'making file public failed',
       source: ['src/features/email-compose/make-attachment-public.ts'],
+      toasts: [
+        'src/features/email-compose/make-attachment-public.ts#Recipients may not be able to view this file',
+      ],
     },
     {
       id: 'STC-024',
       surface: 'SC-18',
-      state: 'Email queued to send / Sending… (toast with Undo)',
-      trigger: 'send accepted into local journal',
+      state: 'toast: Sending… with Undo',
+      trigger:
+        'send accepted into the send journal while online; shown again until the undo deadline once the server accepts',
+      source: [
+        'src/features/email-compose/primitives/queued-send-notice.ts',
+        'src/features/email-compose/compose-adapter.ts',
+      ],
+      toasts: ['src/features/email-compose/compose-adapter.ts#message'],
+    },
+    {
+      id: 'STC-402',
+      surface: 'SC-18',
+      state: 'toast: Email queued to send, with Undo',
+      trigger: 'send while the device is offline',
       source: ['src/features/email-compose/primitives/queued-send-notice.ts'],
     },
     {
       id: 'STC-025',
       surface: 'SC-18',
-      state: 'Email sent',
-      trigger: 'server confirmed send',
+      state: 'toast: Email sent',
+      trigger: 'the send journal reports the attempt sent',
       source: ['src/features/email-compose/primitives/queued-send-notice.ts'],
     },
     {
       id: 'STC-026',
       surface: 'SC-18',
       state:
-        'Email failed to send — Open its conversation or Drafts and choose Cancel to recover the draft.',
+        'persistent toast: Email failed to send — Open its conversation or Drafts and choose Cancel to recover the draft. (dismiss: Maybe later)',
       trigger: 'send attempt failed',
-      source: ['src/features/email-compose/primitives/queued-send-notice.ts'],
+      source: [
+        'src/features/email-compose/primitives/queued-send-notice.ts',
+        'src/features/email-compose/compose-adapter.ts',
+      ],
+      toasts: [
+        'src/features/email-compose/compose-adapter.ts#common.maybeLater',
+      ],
     },
     {
       id: 'STC-027',
       surface: 'SC-18',
       state:
-        'Delivery unconfirmed — Check your sent mail. We will not resend automatically.',
+        'toast: Delivery unconfirmed — Check your sent mail. We will not resend automatically.',
       trigger: 'send outcome unknown',
       source: ['src/features/email-compose/primitives/queued-send-notice.ts'],
     },
     {
+      id: 'STC-400',
+      surface: 'SC-18',
+      state: 'loading toast: Cancelling send…',
+      trigger: 'Undo pressed, cancellation not yet confirmed',
+      source: ['src/features/email-compose/undo-send.ts'],
+      toasts: [
+        'src/features/email-compose/undo-send.ts#cancelEmailSendAndConfirm(intent)',
+      ],
+    },
+    {
       id: 'STC-028',
       surface: 'SC-18',
-      state: 'Send cancelled',
+      state: 'toast: Send cancelled (the draft is back in its composer)',
       trigger: 'Undo succeeded',
       source: ['src/features/email-compose/undo-send.ts'],
+      toasts: ['src/features/email-compose/undo-send.ts#Send cancelled'],
     },
     {
       id: 'STC-029',
       surface: 'SC-18',
-      state: 'Cancellation pending — Waiting for confirmation',
+      state: 'toast: Cancellation pending — Waiting for confirmation',
       trigger: 'Undo sent, server not yet confirmed',
       source: ['src/features/email-compose/undo-send.ts'],
+      toasts: ['src/features/email-compose/undo-send.ts#Cancellation pending'],
     },
     {
       id: 'STC-030',
       surface: 'SC-18',
-      state: 'Too late to undo — Delivery has already started',
+      state: 'toast: Too late to undo — Delivery has already started',
       trigger: 'Undo after delivery started',
       source: ['src/features/email-compose/undo-send.ts'],
+      toasts: ['src/features/email-compose/undo-send.ts#Too late to undo'],
     },
     {
       id: 'STC-031',
       surface: 'SC-18',
-      state: 'Too late to undo — The email was already sent',
-      trigger: 'Undo after send completed',
+      state: 'toast: Too late to undo — The email was already sent',
+      trigger: 'Undo of a send made without the send journal',
       source: ['src/features/email-compose/undo-send.ts'],
+      waiver: {
+        kind: 'no-user-path',
+        reason:
+          'Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.',
+      },
     },
     {
       id: 'STC-032',
       surface: 'SC-18',
-      state: 'Failed to undo send',
-      trigger: 'cancel request failed',
+      state: 'toast: Failed to undo send',
+      trigger: 'cancel request failed, or the send is no longer in the journal',
       source: ['src/features/email-compose/undo-send.ts'],
+      toasts: ['src/features/email-compose/undo-send.ts#Failed to undo send'],
+    },
+    {
+      id: 'STC-401',
+      surface: 'SC-18',
+      state:
+        'toast: Delivery unconfirmed; check your sent mail. We will not resend automatically.',
+      trigger: 'Undo of a send whose delivery is unconfirmed',
+      source: [
+        'src/features/email-compose/undo-send.ts',
+        'src/lib/queries/email/send-queue.ts',
+      ],
     },
     {
       id: 'STC-033',
       surface: 'SC-18',
-      state:
-        "Failed to send email — You're offline / Reconnect to send this email.",
-      trigger: 'send while offline',
+      state: 'toast: Failed to send email — Reconnect to send this email.',
+      trigger: 'send while offline with an attachment that has not uploaded',
       source: ['src/features/email-compose/primitives/send-readiness.ts'],
     },
     {
       id: 'STC-034',
       surface: 'SC-18',
       state:
-        'Failed to send email — Wait for images and videos to finish uploading, or remove them.',
+        'toast: Failed to send email — Wait for images and videos to finish uploading, or remove them.',
       trigger: 'send with inline media still uploading',
       source: ['src/features/email-compose/primitives/send-readiness.ts'],
     },
     {
       id: 'STC-035',
       surface: 'SC-18',
-      state:
-        'Failed to send email — Draft not saved / Draft still syncing, try again',
-      trigger: 'send before draft saved or synced',
-      source: ['src/features/email-compose/primitives/send-readiness.ts'],
+      state: 'toast: Failed to send email — Draft not saved',
+      trigger: 'the save made before sending failed on this device',
+      source: [
+        'src/features/email-compose/primitives/send-readiness.ts',
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
     },
     {
       id: 'STC-036',
       surface: 'SC-18',
-      state:
-        'Failed to send email — Attachment not uploaded / Files are still uploading',
-      trigger: 'send with unfinished attachment upload',
+      state: 'toast: Failed to send email — Attachment not uploaded',
+      trigger: 'send with an attachment whose upload did not finish',
       source: ['src/features/email-compose/primitives/send-readiness.ts'],
+    },
+    {
+      id: 'STC-403',
+      surface: 'SC-18',
+      state: 'toast: Failed to send email — Files are still uploading',
+      trigger: 'send while linked files are uploading',
+      source: [
+        'src/features/email-compose/primitives/send-readiness.ts',
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
     },
     {
       id: 'STC-037',
       surface: 'SC-18',
-      state: 'Failed to send email',
-      trigger:
-        'unexpected send error (reply: src/features/email-compose/primitives/reply-composer.ts:1360)',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+      state: 'toast: Failed to send email (no subtext)',
+      trigger: 'unexpected error while queuing the send',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
     },
     {
       id: 'STC-038',
       surface: 'SC-18',
-      state: 'Loading email sender addresses...',
+      state: 'toast: Loading email sender addresses...',
       trigger: 'reply send before aliases loaded',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-039',
       surface: 'SC-18',
-      state: 'Email failed to send. No recipients provided',
+      state: 'toast: Email failed to send. No recipients provided',
       trigger: 'reply send with no recipients',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-040',
       surface: 'SC-18',
-      state: 'Loading email accounts...',
+      state: 'toast: Loading email accounts...',
       trigger: 'reply send before accounts loaded',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-041',
       surface: 'SC-18',
-      state: 'Email failed to send: Could not load email accounts',
+      state: 'toast: Email failed to send: Could not load email accounts',
       trigger: 'accounts query failed',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-042',
       surface: 'SC-18',
-      state: 'Email failed to send: No email account connected',
+      state: 'toast: Email failed to send: No email account connected',
       trigger: 'no inbox connected',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-043',
       surface: 'SC-18',
-      state: 'Email sent, but unable to mark thread done',
-      trigger: 'archive failed after send and mark done',
+      state: 'toast: Email sent, but unable to mark thread done',
+      trigger: 'marking done failed after Send and mark done',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-044',
       surface: 'SC-18',
-      state: 'Failed to restore thread to inbox',
-      trigger: 'un-archive failed after undo',
-      source: ['src/features/email-compose/primitives/reply-composer.ts'],
+      state: 'toast: Failed to restore thread to inbox',
+      trigger:
+        'un-archive failed after undoing a send or a schedule that marked the thread done',
+      source: [
+        'src/features/email-compose/primitives/reply-composer.ts',
+        'src/features/email-compose/primitives/email-send-schedule.ts',
+      ],
     },
     {
       id: 'STC-050',
       surface: 'SC-08',
-      state: 'Schedule send time (tooltip); Choose send time',
-      trigger: 'picker trigger idle',
+      state:
+        'clock button: tooltip Schedule send time, aria-label Choose send time',
+      trigger: 'picker trigger with no time chosen',
       source: ['src/features/email-compose/components/email-date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-416',
+      surface: 'SC-08',
+      state:
+        'clock button accented, aria-label Send time set to <date>. Open to change it.',
+      trigger: 'a time is chosen, not yet scheduled',
+      source: ['src/features/email-compose/components/email-date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-417',
+      surface: 'SC-08',
+      state:
+        'clock button aria-label Scheduled for <date>. Open to propose a new time. (phones: … or cancel the schedule.)',
+      trigger: 'schedule confirmed',
+      source: ['src/features/email-compose/components/email-date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-418',
+      surface: 'SC-08',
+      state:
+        'clock button aria-label Proposed send time <date>. The email remains scheduled for <date> until you choose Update schedule.',
+      trigger: 'new time proposed on a confirmed schedule',
+      source: ['src/features/email-compose/components/email-date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-051',
       surface: 'SC-08',
-      state: 'Send time cannot be changed during delivery or recovery.',
-      trigger: 'picker disabled while delivery in progress',
+      state:
+        'clock button disabled, aria-label Send time cannot be changed during delivery or recovery.',
+      trigger: 'scheduled delivery is sending, failed or unconfirmed',
       source: ['src/features/email-compose/components/email-date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-052',
       surface: 'SC-08',
       state:
-        'Select date (placeholder); Use queries like 3d, 1w, feb 17, or tomorrow; Custom date...',
+        'open picker: input placeholder Select date, preset options, Custom date... (Pick from calendar), hint Use queries like 3d, 1w, feb 17, or tomorrow',
       trigger: 'picker open',
       source: ['src/features/email-compose/components/date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-415',
+      surface: 'SC-08',
+      state: 'No dates match "<query>"',
+      trigger: 'picker query that parses to no date',
+      source: ['src/features/email-compose/components/date-selector.tsx'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-422',
+      surface: 'SC-08',
+      state: 'Clear time button at the top of the picker',
+      trigger: 'phone picker opened with a chosen, unconfirmed time',
+      source: [
+        'src/features/email-compose/components/email-date-selector.tsx',
+        'src/features/email-compose/components/date-selector.tsx',
+      ],
+      viewports: ['phone'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-419',
+      surface: 'SC-08',
+      state:
+        'Scheduled: <date> row, footer Cancel the schedule before editing the message. with Cancel schedule',
+      trigger: 'phone picker opened on a scheduled email',
+      source: [
+        'src/features/email-compose/components/email-date-selector.tsx',
+        'src/features/email-compose/components/date-selector.tsx',
+      ],
+      viewports: ['phone'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-420',
+      surface: 'SC-08',
+      state:
+        'Proposed: <date> row with Discard proposed time, footer The original schedule stays active until Update schedule succeeds.',
+      trigger: 'phone picker opened with a proposed time',
+      source: [
+        'src/features/email-compose/components/email-date-selector.tsx',
+        'src/features/email-compose/components/date-selector.tsx',
+      ],
+      viewports: ['phone'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-421',
+      surface: 'SC-08',
+      state: 'Cancelling schedule… (footer button, disabled)',
+      trigger: 'phone picker open while the cancel is in flight',
+      source: ['src/features/email-compose/components/email-date-selector.tsx'],
+      viewports: ['phone'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-053',
@@ -537,6 +775,7 @@ export const send = {
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
       ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-054',
@@ -546,6 +785,7 @@ export const send = {
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
       ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-055',
@@ -556,222 +796,392 @@ export const send = {
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
       ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-056',
       surface: 'SC-09',
-      state: 'Sending / Delivery unconfirmed with Check status',
-      trigger: 'scheduled delivery in progress or unknown',
+      state:
+        'Sending — Delivery has started. Cancellation is no longer available. — Check status',
+      trigger: 'scheduled delivery in progress',
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
       ],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-423',
+      surface: 'SC-09',
+      state:
+        'Delivery unconfirmed — This email may already have been sent. Check Sent. We will not resend automatically. — Check status',
+      trigger: 'scheduled delivery outcome unknown',
+      source: [
+        'src/features/email-compose/components/email-schedule-summary.tsx',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-057',
       surface: 'SC-09',
-      state: 'Send failed before delivery with Restore draft',
+      state:
+        'Send failed before delivery — Cancel to restore this draft and review it before sending again. — Restore draft',
       trigger: 'scheduled send failed',
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
       ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-058',
       surface: 'SC-09',
-      state: 'Cancelling…',
+      state: 'Cancelling… (bar action, disabled)',
       trigger: 'schedule cancel in flight',
       source: [
         'src/features/email-compose/components/email-schedule-summary.tsx',
       ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-059',
       surface: 'SC-18',
       state:
-        'Email scheduled / Email rescheduled — Sends <time> (actions View message, Undo)',
-      trigger: 'schedule or update succeeded',
+        'toast: Email scheduled — Sends <EEE, MMM d at h:mm a> (actions View message, Undo)',
+      trigger: 'Schedule send succeeded',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-404',
+      surface: 'SC-18',
+      state:
+        'toast: Email rescheduled — Sends <time> (action View message, no Undo)',
+      trigger: 'Update schedule succeeded',
+      source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-060',
       surface: 'SC-18',
-      state: 'Choose a valid send time.',
-      trigger: 'schedule with invalid time',
+      state: 'toast: Choose a valid send time.',
+      trigger: 'schedule with a time that is not a date',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-061',
       surface: 'SC-18',
-      state: 'That send time has passed. Choose a future time.',
-      trigger: 'schedule with past time',
+      state: 'toast: That send time has passed. Choose a future time.',
+      trigger: 'Schedule send after the chosen time has gone by',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-062',
       surface: 'SC-18',
-      state: 'Failed to schedule email / Failed to update schedule',
-      trigger: 'PUT schedule failed',
+      state: 'toast: Failed to schedule email',
+      trigger: 'the schedule request failed',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-405',
+      surface: 'SC-18',
+      state: 'toast: Failed to update schedule',
+      trigger: 'the request to change a confirmed schedule failed',
+      source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-063',
       surface: 'SC-18',
       state:
-        'Draft is not ready to schedule. Resolve any save or connection errors and try again',
-      trigger: 'schedule before draft synced',
+        'toast: Failed to schedule email (or Failed to update schedule) — Draft is not ready to schedule. Resolve any save or connection errors and try again',
+      trigger: 'schedule while the draft has no saved id',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-064',
       surface: 'SC-18',
-      state: 'Email scheduled, but unable to mark thread done',
+      state: 'toast: Email scheduled, but unable to mark thread done',
       trigger: 'archive failed after scheduling',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-065',
       surface: 'SC-18',
-      state: 'Schedule cancelled.',
+      state: 'toast: Schedule cancelled.',
       trigger: 'Undo of initial schedule',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-066',
       surface: 'SC-18',
       state:
-        'Schedule cancelled, but the draft could not be reopened. Check Drafts.',
+        'toast: Schedule cancelled, but the draft could not be reopened. Check Drafts.',
       trigger: 'Undo succeeded but reopen failed',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-067',
       surface: 'SC-18',
-      state: 'This email was already sent and can no longer be unscheduled.',
+      state:
+        'toast: This email was already sent and can no longer be unscheduled.',
       trigger: 'Undo after due time',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-068',
       surface: 'SC-18',
-      state: 'Failed to undo scheduled send',
+      state: 'toast: Failed to undo scheduled send',
       trigger: 'unschedule failed',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-069',
       surface: 'SC-18',
-      state: 'Failed to cancel schedule',
+      state: 'toast: Failed to cancel schedule',
       trigger: 'cancel request failed',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-070',
       surface: 'SC-18',
-      state: 'Schedule cancelled. This email is editable again.',
+      state: 'toast: Schedule cancelled. This email is editable again.',
       trigger:
-        'cancel confirmed (also remote: src/features/email-compose/primitives/email-composer.ts:1288)',
-      source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+        'cancel confirmed, here or from another tab or device while the composer is open',
+      source: [
+        'src/features/email-compose/primitives/email-send-schedule.ts',
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-071',
       surface: 'SC-18',
       state:
-        'Could not check delivery status. Try again when you have service.',
+        'toast: Could not check delivery status. Try again when you have service.',
       trigger: 'Check status failed',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-072',
       surface: 'SC-18',
-      state: 'Email scheduled for <time>. Cancel the schedule to edit.',
+      state: 'toast: Email scheduled for <time>. Cancel the schedule to edit.',
       trigger:
-        'edit attempt on a scheduled email / scheduled elsewhere (alert :927)',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+        'the open draft was scheduled or rescheduled from another tab or device',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-406',
+      surface: 'SC-18',
+      state:
+        'toast: This email is scheduled for <time>. Choose a new time to update it, or cancel the schedule to edit.',
+      trigger: 'Send (cmd+enter) on a scheduled email with no new time chosen',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-073',
       surface: 'SC-18',
-      state: 'Cancel the schedule before deleting this draft.',
+      state: 'toast: Cancel the schedule before deleting this draft.',
       trigger: 'discard while scheduled',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-074',
       surface: 'SC-18',
       state:
-        'This email was scheduled in another tab. Your newer text was kept as a new draft.',
-      trigger: 'second tab scheduled the same draft',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+        'toast: This email was scheduled in another tab. Your newer text was kept as a new draft.',
+      trigger:
+        'the draft was scheduled elsewhere while this composer had unsaved edits',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-075',
       surface: 'SC-18',
-      state: 'Scheduled email sent',
-      trigger: 'scheduled email delivered while composer open',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+      state: 'toast: Scheduled email sent',
+      trigger: 'scheduled email delivered while its composer is open',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
     },
     {
       id: 'STC-076',
       surface: 'SC-18',
-      state: 'This scheduled email was sent. Your composer has been updated.',
-      trigger: 'scheduled email delivered, composer reset',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+      state:
+        'toast: This scheduled email was sent. Your composer has been updated.',
+      trigger:
+        'a draft save fails because the scheduled email already went out',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-410',
+      surface: 'SC-18',
+      state:
+        'toast: The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.',
+      trigger: 'scheduled email delivered while its composer had unsaved edits',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+      flag: SCHEDULE_FLAG,
+    },
+    {
+      id: 'STC-411',
+      surface: 'SC-18',
+      state:
+        'toast: This email was already sent. Your newer text was kept as a new draft and was not sent.',
+      trigger:
+        'the draft was sent from another tab or device while this composer had unsaved edits',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+    },
+    {
+      id: 'STC-409',
+      surface: 'SC-18',
+      state:
+        'toast: The draft changed elsewhere. Your newer text was kept as a new draft.',
+      trigger:
+        'the draft was deleted or replaced elsewhere while this composer had unsaved edits',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+    },
+    {
+      id: 'STC-412',
+      surface: 'SC-18',
+      state: 'toast: This draft is no longer available.',
+      trigger: 'the open draft was deleted elsewhere, with no unsaved edits',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+    },
+    {
+      id: 'STC-080',
+      surface: 'SC-18',
+      state:
+        'toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.',
+      trigger:
+        'newer text kept as a new draft (STC-074, STC-409 to STC-411) when the old draft had saved attachments',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
     },
     {
       id: 'STC-077',
       surface: 'SC-18',
-      state: 'Your newer reply was kept. The earlier message was not reopened.',
-      trigger: 'restore of cancelled send while newer reply exists',
+      state:
+        'toast: Your newer reply was kept. The earlier message was not reopened.',
+      trigger: 'Undo send while a newer reply is being written in the thread',
       source: ['src/features/email-compose/primitives/reply-composer.ts'],
     },
     {
       id: 'STC-078',
       surface: 'SC-18',
       state:
-        'Could not change inbox. Retry the same inbox to recover. (action Retry inbox change)',
-      trigger: 'draft transfer failed',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+        'toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)',
+      trigger: 'moving the draft to another sending inbox failed',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
     },
     {
       id: 'STC-079',
       surface: 'SC-18',
-      state: 'Retry the previous inbox change before choosing another inbox.',
+      state:
+        'toast: Retry the previous inbox change before choosing another inbox.',
       trigger: 'choosing a third inbox while a transfer is pending',
       source: ['src/features/email-compose/primitives/draft-transfer.ts'],
     },
     {
-      id: 'STC-080',
+      id: 'STC-407',
       surface: 'SC-18',
-      state: 'attachments not copied alert on inbox change',
-      trigger: 'transfer could not carry attachments',
-      source: ['src/features/email-compose/primitives/email-composer.ts'],
+      state:
+        'toast: These attachments exceed the destination inbox’s size limit.',
+      trigger: 'changing to an inbox whose attachment limit the draft exceeds',
+      source: ['src/features/email-compose/primitives/draft-transfer.ts'],
+    },
+    {
+      id: 'STC-408',
+      surface: 'SC-18',
+      state:
+        'toast: Reconnect and let the draft finish saving before changing inboxes.',
+      trigger: 'changing inbox before the server has confirmed the draft',
+      source: ['src/features/email-compose/primitives/draft-transfer.ts'],
     },
     {
       id: 'STC-081',
       surface: 'SC-16',
-      state: 'Saved on this device; waiting to sync',
-      trigger: 'offline or queued draft save',
+      state:
+        'Saved on this device; waiting to sync — Changes stay on this device until you are back online.',
+      trigger: 'draft edited while offline',
+      source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
+    },
+    {
+      id: 'STC-434',
+      surface: 'SC-16',
+      state:
+        'Saved on this device; waiting to sync — Changes stay on this device until draft synchronization resumes. (Retry while unavailable)',
+      trigger: 'local draft storage has been restarting for over 15 seconds',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
     },
     {
       id: 'STC-082',
       surface: 'SC-16',
-      state: 'Draft could not be synced (Retry)',
-      trigger: 'server save failed',
+      state:
+        'Draft could not be synced — The server could not save this draft. / The last save could not be confirmed. (Retry)',
+      trigger: 'server save failed for good or could not be confirmed',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
     },
     {
       id: 'STC-083',
       surface: 'SC-16',
       state:
-        'Changes could not be saved on this device — Keep this editor open until saving succeeds.',
+        'Changes could not be saved on this device — Keep this editor open until saving succeeds. (Retry)',
       trigger: 'IndexedDB write failed',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
     },
     {
       id: 'STC-084',
       surface: 'SC-16',
-      state: 'Discard could not be confirmed. (Retry discard / Keep editing)',
+      state:
+        'Draft could not be synced — Discard could not be confirmed. (Retry discard / Keep editing)',
       trigger: 'queued delete failed',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
     },
@@ -779,140 +1189,273 @@ export const send = {
       id: 'STC-085',
       surface: 'SC-16',
       state:
-        'Draft synchronization unavailable — Queued changes are preserved. Update or reload Macro to recover local storage. (Reload)',
-      trigger: 'local draft store unusable',
+        'Draft synchronization unavailable (Saved on this device; waiting to sync when a local copy exists) — Queued changes are preserved. Update or reload Macro to recover local storage. (Reload)',
+      trigger: 'local draft store needs a reload to recover',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
     },
     {
       id: 'STC-086',
       surface: 'SC-16',
-      state: 'Unable to read local draft status.',
+      state:
+        'Unable to read local draft status. — Retry to check the saved draft. (Retry)',
       trigger: 'status read failed',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
+    },
+    {
+      id: 'STC-435',
+      surface: 'SC-16',
+      state: "the banner's detail line replaced by the failed action's error",
+      trigger: 'Retry, Retry discard or Keep editing failed',
+      source: [
+        'src/features/email-compose/primitives/draft-sync-status.ts',
+        'src/features/email-compose/components/draft-sync-status.tsx',
+      ],
     },
     {
       id: 'STC-087',
       surface: 'SC-18',
       state:
-        'Draft could not be saved — Your edits are still in this editor. Save them as a new draft before closing. (Save as new draft)',
-      trigger: 'server rejected draft identity',
+        'persistent toast: Draft could not be saved — Your edits are still in this editor. Save them as a new draft before closing. (Save as new draft)',
+      trigger: 'server rejected the queued draft save',
       source: ['src/features/email-compose/primitives/draft-identity.ts'],
+      note: 'only while the GraphQL draft queue is off (enable-graphql-soup off); with it on the sync banner recovers instead',
     },
     {
       id: 'STC-088',
       surface: 'SC-18',
-      state: 'Draft could not be saved on this device',
-      trigger: 'local save failed',
+      state:
+        'persistent toast: Draft could not be saved on this device — <error>',
+      trigger: 'saving the draft to local storage failed',
       source: ['src/features/email-compose/primitives/draft-save-notice.ts'],
     },
     {
       id: 'STC-089',
       surface: 'SC-18',
       state:
-        'This draft changed while saving. Reopen it to use the latest version.',
-      trigger: 'concurrent edit conflict',
-      source: ['src/lib/queries/email/local-draft-store.ts'],
+        'Draft could not be saved on this device — … This draft changed while saving. Reopen it to use the latest version.',
+      trigger: 'the local copy was changed by another tab during the save',
+      source: [
+        'src/lib/queries/email/local-draft-store.ts',
+        'src/features/email-compose/primitives/draft-save-notice.ts',
+      ],
+    },
+    {
+      id: 'STC-413',
+      surface: 'SC-18',
+      state: 'toast: Draft could not be synced',
+      trigger: 'a draft save the composer was waiting on failed',
+      source: [
+        'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
     },
     {
       id: 'STC-090',
       surface: 'SC-18',
-      state: 'Failed to save draft / Failed to delete draft',
-      trigger: 'queue operation failed (delete :489)',
+      state: 'toast: Failed to save draft',
+      trigger: 'the queued draft save was refused or could not be queued',
       source: ['src/lib/queries/email/draft-queue.ts'],
+      toasts: ['src/lib/queries/email/draft-queue.ts#message'],
     },
     {
       id: 'STC-099',
       surface: 'SC-17',
-      state: 'Queued on this device',
-      trigger: 'send journaled, not yet submitted',
+      state: 'Queued on this device (row with subject and Cancel)',
+      trigger:
+        'send journaled, not yet submitted (offline, or dispatch failing)',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-100',
       surface: 'SC-17',
-      state: 'Sending / Checking server acceptance / Scheduled',
-      trigger: 'local send in progress',
+      state: 'Sending · <time> (no Cancel)',
+      trigger: 'a scheduled send from this device is being delivered',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-424',
+      surface: 'SC-17',
+      state: 'Checking server acceptance',
+      trigger:
+        'send submitted but not confirmed (offline, or the confirmation failing)',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-425',
+      surface: 'SC-17',
+      state: 'Scheduled · <time> with Cancel',
+      trigger: 'a send scheduled from this device is accepted by the server',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-101',
       surface: 'SC-17',
       state: 'Send cancelled (Restore draft)',
-      trigger: 'send cancelled locally',
+      trigger: 'send cancelled, draft not yet restored',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-102',
       surface: 'SC-17',
-      state: 'Cancellation pending',
+      state: 'Cancellation pending (Cancel disabled)',
       trigger: 'cancel awaiting server',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-103',
       surface: 'SC-17',
-      state: 'Delivery unconfirmed. Your email may already have been sent…',
-      trigger: 'unknown outcome (local)',
+      state:
+        'Delivery unconfirmed. Your email may already have been sent. Check your sent mail. We will not resend automatically. (Check status, no Cancel)',
+      trigger: 'unknown outcome of a send from this device',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-104',
       surface: 'SC-17',
       state: 'Send needs attention. Cancel to recover this draft.',
-      trigger: 'send failed (local)',
+      trigger: 'the send failed on this device before the server answered',
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-105',
       surface: 'SC-17',
       state: 'Send failed before delivery. Cancel to recover this draft.',
-      trigger: 'server row FAILED',
+      trigger:
+        'the server reports the attempt FAILED (this device: Cancel; another device: Cancel and restore)',
       source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-428',
+      surface: 'SC-17',
+      state:
+        'Reconnect your email account, then check status to resume. (Cancel, Check status)',
+      trigger: 'the send was refused because the mail account needs signing in',
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/email-send-dispatcher.ts',
+      ],
     },
     {
       id: 'STC-106',
       surface: 'SC-17',
       state:
-        'Delivery unconfirmed. Check sent mail; we will not resend automatically.',
-      trigger: 'server row unknown',
+        'Delivery unconfirmed. Check sent mail; we will not resend automatically. (Check status)',
+      trigger: 'unknown outcome of a send from another device',
       source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-429',
+      surface: 'SC-17',
+      state: 'Scheduled · <time> with Cancel and restore',
+      trigger: 'a send scheduled from another device',
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/server-sends.ts',
+      ],
     },
     {
       id: 'STC-107',
       surface: 'SC-17',
       state:
-        'Unable to cancel the send / Unable to check send status / Could not update delivery status',
-      trigger: 'panel action failed (:255, :164)',
+        "alert under a row: the failure's message (else Unable to cancel the send / Unable to check send status / Could not update delivery status)",
+      trigger:
+        "a row's Cancel, Restore draft, Check status or Cancel and restore failed",
       source: ['src/features/email-compose/queued-send-status.tsx'],
     },
     {
       id: 'STC-108',
       surface: 'SC-17',
-      state: '(No subject); View saved message; Load more sends',
-      trigger: 'row without subject / failed row / more server pages',
+      state: '(No subject) as the row title',
+      trigger: 'row of a send without a subject',
       source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-426',
+      surface: 'SC-17',
+      state:
+        'View saved message disclosure; open, it shows the recipients and the body text',
+      trigger: 'row of a send that failed on this device',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-427',
+      surface: 'SC-17',
+      state: 'Load more sends button',
+      trigger: 'the server has a further page of pending sends',
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/server-sends.ts',
+      ],
+    },
+    {
+      id: 'STC-430',
+      surface: 'SC-17',
+      state:
+        'A saved email needs recovery. Its contents are preserved on this device. Contact support before clearing storage.',
+      trigger: 'the send journal holds a record this build cannot read',
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/send-intent.ts',
+      ],
+    },
+    {
+      id: 'STC-431',
+      surface: 'SC-17',
+      state:
+        'Could not refresh server delivery status. Previously confirmed sends are preserved.',
+      trigger: 'reading pending sends failed while server rows are listed',
+      source: [
+        'src/features/email-compose/queued-send-status.tsx',
+        'src/lib/queries/email/server-sends.ts',
+      ],
     },
     {
       id: 'STC-109',
       surface: 'SC-24',
       state:
-        'Sign out and remove local drafts? (confirm Sign out) with unsynced-draft and pending-send warnings',
-      trigger: 'sign out with local drafts or pending sends',
+        'dialog Sign out and remove local drafts? — <n> draft(s) have changes saved only on this device. Signing out removes those changes and their pending attachments. (confirm Sign out)',
+      trigger: 'sign out with unsynced local drafts',
+      source: ['src/lib/core/auth/logout.ts'],
+    },
+    {
+      id: 'STC-432',
+      surface: 'SC-24',
+      state:
+        'dialog body: Pending sends remain saved for this account and resume when you sign in again. Sends already accepted by the server may still be delivered; signing out does not cancel them.',
+      trigger: 'sign out with a send in the journal that is not yet sent',
+      source: ['src/lib/core/auth/logout.ts'],
+    },
+    {
+      id: 'STC-433',
+      surface: 'SC-24',
+      state:
+        'dialog body: Draft storage could not be checked. Signing out removes unsubmitted drafts and their pending attachments. …',
+      trigger:
+        'sign out when local draft storage fails or takes over 3 seconds',
       source: ['src/lib/core/auth/logout.ts'],
     },
     {
       id: 'STC-111',
       surface: 'SC-22',
-      state: 'message operation recovery notice (text not captured) (inferred)',
-      trigger: 'Outlook pending operation needs recovery',
-      source: ['src/features/email-compose/views/email-compose.tsx'],
+      state:
+        'notice above the composer: the operation description with its resolution buttons, or The mailbox version is ready. Reload the draft to continue editing. with Reload draft',
+      trigger: 'the draft has a provider operation that needs the user',
+      source: [
+        'src/features/email-message/views/message-operation-recovery.tsx',
+        'src/features/email-compose/views/email-compose.tsx',
+        'src/features/email-compose/views/reply-input.tsx',
+      ],
+      note: 'the same notice as on a thread message (thread group), mounted in both composers',
     },
     {
       id: 'STC-113',
       surface: 'SC-18',
-      state: 'toast "Failed to save attachments"',
+      state: 'toast: Failed to save attachments',
       trigger: 'attachment upload to storage rejected',
-      source: [],
+      source: ['src/lib/queries/email/attachment.ts'],
+      toasts: [
+        'src/lib/queries/email/attachment.ts#Failed to save attachments',
+      ],
     },
   ],
 } as const satisfies Group;
