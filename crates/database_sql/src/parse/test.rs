@@ -981,6 +981,17 @@ fn alter_column_type_names_the_table_column_and_type() {
             to: OpColumnKind::Text,
         })
     );
+    assert_eq!(
+        parse("ALTER TABLE deals ALTER COLUMN share TYPE percentage").unwrap(),
+        Statement::AlterColumnType(AlterColumnType {
+            table: TableName {
+                database: None,
+                table: Identifier("deals".into()),
+            },
+            column: Identifier("share".into()),
+            to: OpColumnKind::Percentage,
+        })
+    );
 }
 
 #[test]
@@ -1056,7 +1067,7 @@ fn an_entity_type_names_its_kind_and_takes_brackets_for_several() {
 
 #[test]
 fn a_bad_alter_says_what_would_have_been_accepted() {
-    let types = "text, number, boolean, date, date_range, link, select, select_number, tag or \
+    let types = "text, number, percentage, boolean, date, date_range, link, select, select_number, tag or \
                  entity(<KIND>) such as entity(USER); add [] after select, select_number \
                  or entity(…) for several values";
     let cases: Vec<(&str, std::ops::Range<usize>, String)> = vec![

@@ -1,6 +1,7 @@
 import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 /** The forms service's wire shapes, projected into the feature's vocabulary and back. */
 
+import type { ColumnKind } from '@service-storage/generated/schemas/columnKind';
 import type { Form } from '@service-storage/generated/schemas/form';
 import type { FormDetail as WireFormDetail } from '@service-storage/generated/schemas/formDetail';
 import type { FormLayout as WireFormLayout } from '@service-storage/generated/schemas/formLayout';
@@ -13,6 +14,7 @@ import type { MyResponse, SubmitOutcome } from '../context/form-context';
 import type {
   FormBookingTarget,
   FormColumn,
+  FormColumnKind,
   FormDetail,
   FormLayout,
   FormMetadata,
@@ -107,6 +109,11 @@ function toBookingTarget(target: FormBookingTarget): FormBookingTarget {
   return { profileId: target.profileId, eventTypeId: target.eventTypeId };
 }
 
+/** Percentage is Number storage; forms send and display the stored fraction. */
+function toFormColumnKind(kind: ColumnKind): FormColumnKind {
+  return kind.type === 'percentage' ? { type: 'number' } : kind;
+}
+
 /** The columns the questions ask, as the detail joins them. */
 function questionColumns(detail: WireFormDetail): FormColumn[] {
   return detail.sections.flatMap((section) =>
@@ -114,7 +121,7 @@ function questionColumns(detail: WireFormDetail): FormColumn[] {
       ? section.questions.map((question) => ({
           id: question.column,
           name: question.title,
-          kind: question.kind,
+          kind: toFormColumnKind(question.kind),
           options: question.options.map((option) => ({
             id: option.id,
             label: option.label,

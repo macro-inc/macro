@@ -192,6 +192,7 @@ function typeLabel(type: ColumnType): string {
   return match(type)
     .with({ type: 'text' }, () => 'Text')
     .with({ type: 'number' }, () => 'Number')
+    .with({ type: 'percentage' }, () => 'Percentage')
     .with({ type: 'boolean' }, () => 'Checkbox')
     .with({ type: 'date' }, () => 'Date')
     .with({ type: 'date_range' }, () => 'Time range')

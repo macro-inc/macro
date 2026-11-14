@@ -264,6 +264,8 @@ pub struct PropertyType {
     pub specific_entity_type: Option<models_properties::EntityType>,
     /// Whether the column relates rows of another table.
     pub relation: bool,
+    /// Whether a number column is shown as a percent.
+    pub percentage: bool,
 }
 
 impl PropertyType {
@@ -273,6 +275,7 @@ impl PropertyType {
         is_multi_select: true,
         specific_entity_type: None,
         relation: true,
+        percentage: false,
     };
 
     /// The type of a column placement bound to `definition`.
@@ -284,6 +287,9 @@ impl PropertyType {
             is_multi_select: definition.is_multi_select || relation,
             specific_entity_type: definition.specific_entity_type.filter(|_| !relation),
             relation,
+            percentage: column.is_percentage()
+                && definition.data_type == DataType::Number
+                && !relation,
         }
     }
 
@@ -294,10 +300,15 @@ impl PropertyType {
             is_multi_select,
             specific_entity_type: None,
             relation: false,
+            percentage: false,
         };
         match kind {
             ColumnKind::Text => plain(DataType::String, false),
             ColumnKind::Number => plain(DataType::Number, false),
+            ColumnKind::Percentage => PropertyType {
+                percentage: true,
+                ..plain(DataType::Number, false)
+            },
             ColumnKind::Boolean => plain(DataType::Boolean, false),
             ColumnKind::Date => plain(DataType::Date, false),
             ColumnKind::DateRange => plain(DataType::DateRange, false),
@@ -323,6 +334,14 @@ impl PropertyType {
             self.relation || target == Some(None),
         )
     }
+
+    /// Whether two types store the same values, ignoring percent display.
+    pub fn same_storage(&self, other: &Self) -> bool {
+        self.data_type == other.data_type
+            && self.is_multi_select == other.is_multi_select
+            && self.specific_entity_type == other.specific_entity_type
+            && self.relation == other.relation
+    }
 }
 
 /// The [`ColumnKind`] an op names a column's current type by; `None` for a
@@ -343,6 +362,9 @@ pub fn column_kind(
     }
     let definition = &definition.definition;
     let multi = definition.is_multi_select;
+    if column.is_percentage() && definition.data_type == DataType::Number {
+        return Some(ColumnKind::Percentage);
+    }
     Some(match definition.data_type {
         DataType::String => ColumnKind::Text,
         DataType::Number => ColumnKind::Number,

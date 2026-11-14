@@ -102,6 +102,23 @@ describe('optimistic rows', () => {
   });
 });
 
+describe('percentage cells', () => {
+  it('shows the stored fraction as a percent', () => {
+    const share: DatabaseViewColumn = {
+      id: 'share',
+      name: 'Share',
+      dataType: 'NUMBER',
+      percentage: true,
+      isMultiSelect: false,
+      options: [],
+      writable: true,
+    };
+    expect(formatCellValue(share, 0.25)).toBe('25%');
+    expect(formatCellValue(share, 0.5)).toBe('50%');
+    expect(formatCellValue(share, null)).toBe('');
+  });
+});
+
 describe('date-range cells', () => {
   it('shows the days a range spans, compactly', () => {
     // Intl sets the dash between thin spaces.

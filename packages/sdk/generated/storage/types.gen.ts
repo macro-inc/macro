@@ -4290,6 +4290,10 @@ export type ColumnCast = {
      */
     is_multi_select: boolean;
     /**
+     * Whether the target shows a number as a percent.
+     */
+    percentage?: boolean;
+    /**
      * Why nothing converts, for a `never` cast.
      */
     reason: string | null;
@@ -4398,6 +4402,12 @@ export type ColumnConfig = {
      */
     formula: Formula;
     kind: 'derived';
+    /**
+     * Whether a number formula is shown as a percent.
+     */
+    percentage?: boolean;
+} | {
+    kind: 'percentage';
 };
 
 /**
@@ -4476,6 +4486,8 @@ export type ColumnKind = {
     type: 'text';
 } | {
     type: 'number';
+} | {
+    type: 'percentage';
 } | {
     type: 'boolean';
 } | {

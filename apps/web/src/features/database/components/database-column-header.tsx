@@ -391,6 +391,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                 <PropertyIcon
                   relation={!!props.column.relation}
                   formula={!!props.column.formula}
+                  percentage={!!props.column.percentage}
                   type={props.column.dataType}
                   entityType={props.column.specificEntityType}
                 />
@@ -471,7 +472,8 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                 group === 'edit' &&
                                 props.onChangeType &&
                                 canRename() &&
-                                !props.column.formula
+                                (!props.column.formula ||
+                                  props.column.dataType === 'NUMBER')
                               }
                             >
                               <ColumnTypeMenu
@@ -484,16 +486,17 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                   fireAndForget(changeType(change), 'database')
                                 }
                                 onFormula={
-                                  formulas &&
-                                  (() => {
-                                    const replace = formulaReplaces();
-                                    requested = () =>
-                                      setFormulaEditing({
-                                        kind: 'create',
-                                        replace,
-                                      });
-                                    setMenuOpen(false);
-                                  })
+                                  formulas && !props.column.formula
+                                    ? () => {
+                                        const replace = formulaReplaces();
+                                        requested = () =>
+                                          setFormulaEditing({
+                                            kind: 'create',
+                                            replace,
+                                          });
+                                        setMenuOpen(false);
+                                      }
+                                    : undefined
                                 }
                                 onConvertToNewColumn={
                                   props.onConvert &&
@@ -521,6 +524,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               <PropertyIcon
                 relation={!!props.column.relation}
                 formula={!!props.column.formula}
+                percentage={!!props.column.percentage}
                 type={props.column.dataType}
                 entityType={props.column.specificEntityType}
               />

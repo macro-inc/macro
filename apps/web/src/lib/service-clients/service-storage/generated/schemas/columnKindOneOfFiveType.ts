@@ -10,5 +10,5 @@ export type ColumnKindOneOfFiveType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ColumnKindOneOfFiveType = {
-  boolean: 'boolean',
+  percentage: 'percentage',
 } as const;

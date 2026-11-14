@@ -35032,6 +35032,10 @@
             "type": "boolean",
             "description": "Whether the target holds several values."
           },
+          "percentage": {
+            "type": "boolean",
+            "description": "Whether the target shows a number as a percent."
+          },
           "reason": {
             "type": ["string", "null"],
             "description": "Why nothing converts, for a `never` cast."
@@ -35252,6 +35256,21 @@
               "kind": {
                 "type": "string",
                 "enum": ["derived"]
+              },
+              "percentage": {
+                "type": "boolean",
+                "description": "Whether a number formula is shown as a percent."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number shown as a percent: 0.25 displays as 25%.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["percentage"]
               }
             }
           }
@@ -35359,6 +35378,17 @@
               "type": {
                 "type": "string",
                 "enum": ["number"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number shown as a percent: 0.25 displays as 25%.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["percentage"]
               }
             }
           },
