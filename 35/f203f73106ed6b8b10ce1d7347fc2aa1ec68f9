@@ -1,0 +1,50 @@
+crates/agent_monitor_tui/src/ui/drill.rs
+  s_279deb38b74f3b::t_fa3a15c9331bb2 209
+  s_279deb38b74f3b::t_1e70d01b6a0893 208,210
+  s_279deb38b74f3b::t_d4000f0fbb7e38 211
+crates/agent_monitor_tui/src/theme.rs
+  s_279deb38b74f3b::t_9f9a904223be08 249
+  s_279deb38b74f3b::t_1e70d01b6a0893 3,97,99,114
+crates/agent_monitor_tui/src/ui.rs
+  s_279deb38b74f3b::t_1e70d01b6a0893 285,298,475
+crates/agent_monitor_tui/src/ui/board.rs
+  s_279deb38b74f3b::t_c142076bb0e38c 167
+  s_279deb38b74f3b::t_1e70d01b6a0893 166,168
+  s_279deb38b74f3b::t_ea18b5a6cf65e6 169
+crates/agent_monitor_tui/src/ui/wall.rs
+  s_279deb38b74f3b::t_1e70d01b6a0893 110
+crates/agent_monitor_tui/AGENTS.md
+  s_279deb38b74f3b::t_f6eec43fdcdb7b 29-30
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__drill_in_200x56.snap
+  s_279deb38b74f3b::t_277813a1e45c8b 5-7,11,15,19,23,38,42,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_200x56.snap
+  s_279deb38b74f3b::t_e9fe49d4dbdbdb 5-7,11,27,40,51,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_narrow_100x30.snap
+  s_279deb38b74f3b::t_4a395da7c21ab6 5-6,8,24,30,34
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_one_column_80x24.snap
+  s_279deb38b74f3b::t_52af33600cd738 5-6,8,15,20,23,25,28
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_wide_240x60_grows_the_body.snap
+  s_279deb38b74f3b::t_33b9fffce3f00f 5-7,11,29,43,55,64
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__prs_page_200x56_and_enter_drills_into_the_author.snap
+  s_279deb38b74f3b::t_624d3366b4b6d2 5-7,11,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__tree_200x56.snap
+  s_279deb38b74f3b::t_d58ad77f143db6 5-7,11,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__wall_200x56.snap
+  s_279deb38b74f3b::t_250d7cb4ae549d 5-7,11-12,14,23,34,45,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "35f203f73106ed6b8b10ce1d7347fc2aa1ec68f9",
+  "prompts": {},
+  "sessions": {
+    "s_279deb38b74f3b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5557ae49-9906-4709-8659-e011f85074ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
