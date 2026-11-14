@@ -339,6 +339,8 @@ pub(crate) fn left_behind_batch(lines: &[Line]) -> Option<(Begin, Vec<Record>)> 
         name: Some(RUN_EVENT.to_owned()),
         at_ns: last_ns,
         duration_ns: Some(duration_ns),
+        span: None,
+        parent: None,
         fields,
     });
     Some((begin, records))

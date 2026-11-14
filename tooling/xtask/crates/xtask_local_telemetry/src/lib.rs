@@ -12,8 +12,13 @@
 //! sends it, closed off as an `interrupted` run.
 //!
 //! `services = true` in the settings also forwards the local stack's own
-//! telemetry, which [`forwarding`] decides and `xtask_local` runs; its runs then
-//! carry the readable machine name as `host_name`.
+//! telemetry, which [`forwarding`] decides and `xtask_local` runs. Its runs, and
+//! those of a machine with a `machine` setting, carry the readable machine name
+//! as `host_name`; every run carries `machine`, that name or the hashed host.
+//!
+//! A run's trace id is its `run_id`. An event with a span key ([`Event::span`])
+//! is the parent of the events naming that key ([`Event::under`]); the others
+//! hang under the run's root span.
 
 #![deny(missing_docs)]
 
@@ -49,6 +54,8 @@ pub struct Event {
     name: Option<String>,
     at: SystemTime,
     duration: Option<Duration>,
+    span: Option<String>,
+    parent: Option<String>,
     fields: BTreeMap<String, Value>,
 }
 
@@ -60,8 +67,24 @@ impl Event {
             name: None,
             at: SystemTime::now(),
             duration: None,
+            span: None,
+            parent: None,
             fields: BTreeMap::new(),
         }
+    }
+
+    /// Name the event's span with `key`, unique within the run, so other events
+    /// can hang under it with [`Event::under`]. Without one, the span gets an id
+    /// of its own that nothing can refer to.
+    pub fn span(mut self, key: &str) -> Self {
+        self.span = Some(key.to_owned());
+        self
+    }
+
+    /// Hang the event's span under the span keyed `key` instead of the run's root.
+    pub fn under(mut self, key: &str) -> Self {
+        self.parent = Some(key.to_owned());
+        self
     }
 
     /// A structured-metadata field. Keep values low in size; never paths or secrets.
@@ -116,6 +139,13 @@ pub(crate) struct Record {
     pub name: Option<String>,
     pub at_ns: u64,
     pub duration_ns: Option<u64>,
+    /// The key the span is known by, from [`Event::span`]. Buffers written
+    /// before it existed have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<String>,
+    /// The key of the span it hangs under, from [`Event::under`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
     pub fields: BTreeMap<String, Value>,
 }
 
@@ -137,6 +167,11 @@ pub(crate) const RUN_EVENT: &str = "run";
 /// The common field naming the machine, as forwarded telemetry's `host.name`
 /// arrives in Loki, so one filter finds both.
 pub(crate) const MACHINE_FIELD: &str = "host_name";
+/// The common field holding the hashed hostname, which `common` provides.
+pub(crate) const HOST_FIELD: &str = "host";
+/// The common field every run is grouped by machine with: `host_name` when the
+/// machine has a readable name, else the hashed `host`.
+pub(crate) const MACHINE_LABEL_FIELD: &str = "machine";
 
 /// Records one process's events: one run (a bring-up, a rebuild, a stop).
 pub struct Recorder {
@@ -203,8 +238,9 @@ impl Shared {
 impl Recorder {
     /// Start recording a run that began at `started_at`, unless opted out.
     /// `common` builds the fields every event carries (kind, mode, instance,
-    /// host, ...); it is only called when recording. With `services = true`,
-    /// the machine's readable name joins them as `host_name`.
+    /// host, ...); it is only called when recording. The machine's readable name
+    /// joins them as `host_name` when the settings name it or forward services,
+    /// and `machine` is that name or else the hashed `host`.
     ///
     /// `Ok(None)` means off: opted out, or no settings file and no way to get one
     /// now (no provisioning, or it failed within the hour). Nothing was created,
@@ -235,14 +271,25 @@ impl Recorder {
         std::fs::create_dir_all(&paths.buffer_dir).map_err(buffer_error(&paths.buffer_dir))?;
 
         // Forwarding tags the stack's telemetry with this name; the same name on
-        // the runs puts both under one machine.
-        let machine = config
-            .as_ref()
-            .filter(|config| config.services())
-            .and_then(|config| config.machine().cloned().or_else(MachineName::of_this_host));
+        // the runs puts both under one machine. A `machine` the developer chose
+        // names their runs even without forwarding; the hostname only with it.
+        let machine = config.as_ref().and_then(|config| {
+            config
+                .machine()
+                .cloned()
+                .or_else(|| config.services().then(MachineName::of_this_host).flatten())
+        });
         let mut common = common();
         if let Some(machine) = machine {
             common.insert(MACHINE_FIELD.to_owned(), Value::from(machine.as_str()));
+        }
+        // One field to group machines by: the readable name, else the hashed host.
+        if let Some(label) = common
+            .get(MACHINE_FIELD)
+            .or_else(|| common.get(HOST_FIELD))
+            .cloned()
+        {
+            common.insert(MACHINE_LABEL_FIELD.to_owned(), label);
         }
         let run_id = uuid::Uuid::now_v7().simple().to_string();
         let begin = Begin {
@@ -315,6 +362,8 @@ impl Recorder {
             duration_ns: event
                 .duration
                 .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)),
+            span: event.span,
+            parent: event.parent,
             fields: event.fields,
         }));
     }

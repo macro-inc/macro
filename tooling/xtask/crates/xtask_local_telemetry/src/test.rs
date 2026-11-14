@@ -405,6 +405,45 @@ fn forwarding_runs_carry_the_readable_machine_name() {
     }
 }
 
+/// A chosen `machine` names runs without forwarding; with neither, runs are
+/// grouped by the hashed host.
+#[test]
+fn every_run_names_its_machine() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut paths = opt_in(dir.path(), &endpoint.server.uri());
+    let run = |paths: &Paths, common: BTreeMap<String, Value>| {
+        let recorder = Recorder::start(paths, SystemTime::now(), || common)
+            .expect("start")
+            .expect("on");
+        recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    };
+    let hashed = BTreeMap::from([("host".to_owned(), json!("9643b8d9287c"))]);
+
+    run(&paths, hashed.clone());
+    let plain = endpoint.log_records();
+    assert!(!plain.is_empty());
+    for record in &plain {
+        assert_eq!(fields(record).get("machine"), Some(&json!("9643b8d9287c")));
+    }
+
+    let settings = std::fs::read_to_string(&paths.config).expect("read");
+    std::fs::write(
+        &paths.config,
+        format!("{settings}machine = \"build-box\"\n"),
+    )
+    .expect("write");
+    paths.buffer_dir = dir.path().join("buffer-named");
+    run(&paths, hashed);
+    let records = endpoint.log_records();
+    let named = &records[plain.len()..];
+    assert!(!named.is_empty());
+    for record in named {
+        assert_eq!(fields(record).get("host_name"), Some(&json!("build-box")));
+        assert_eq!(fields(record).get("machine"), Some(&json!("build-box")));
+    }
+}
+
 #[test]
 fn opting_out_wins_over_working_settings() {
     let endpoint = Endpoint::start(ResponseTemplate::new(204));

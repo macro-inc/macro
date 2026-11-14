@@ -6,7 +6,10 @@ use serde_json::json;
 use xtask_local_telemetry::{Event, Paths};
 
 use super::super::instance::Instance;
-use super::{BuildOutput, RunKind, RunTelemetry, SccacheStats, ServiceHealth, step_name};
+use super::{
+    BuildOutput, CargoUnit, RunKind, RunTelemetry, SccacheStats, ServiceHealth,
+    parse_cargo_timings, parse_cpuinfo_model, parse_meminfo_kib, step_name,
+};
 
 /// A `stop` exits as soon as it returns, so its run line must already be
 /// buffered then, or the next run reports the stop as interrupted.
@@ -170,6 +173,10 @@ fn build_output_counts_compiled_units_and_ours() {
         BuildOutput {
             units_compiled: 3,
             workspace_units_compiled: 2,
+            workspace_crates: ["macro_db_client", "email_service"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
         }
     );
 }
@@ -192,6 +199,9 @@ fn sccache_counts_sum_every_language() {
         })
     );
 }
+
+/// `2026-11-08T10:00:00Z`, when [`container`] started.
+const STARTED_AT_UNIX: u64 = 1_794_132_000;
 
 fn container(log: serde_json::Value) -> serde_json::Value {
     json!({
@@ -216,6 +226,7 @@ fn health_wait_runs_to_the_first_passing_probe() {
         Some(ServiceHealth {
             service: "postgres".to_owned(),
             health: "healthy".to_owned(),
+            started: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(STARTED_AT_UNIX)),
             seconds_to_healthy: Some(4.25),
             restarts: 1,
         })
@@ -247,4 +258,101 @@ fn a_container_without_a_healthcheck_reports_none() {
     .expect("parsed");
     assert_eq!(health.health, "none");
     assert_eq!(health.seconds_to_healthy, None);
+}
+
+/// A step started inside another on the same thread is its child span; a
+/// background lane's steps are top-level spans in their own lane.
+#[test]
+fn nested_steps_name_their_parent_and_lanes_keep_their_own() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = opted_in(dir.path());
+    let telemetry = RunTelemetry::begin_in(
+        &paths,
+        None,
+        RunKind::BuildServices,
+        SystemTime::now(),
+        false,
+    );
+    let stage = super::super::stage::Stage::from_env().with_telemetry(telemetry.clone());
+    let background = stage.background(super::FRONTEND_LANE);
+
+    let lane =
+        std::thread::spawn(move || background.run_step("Building frontend bundle", || Ok(())));
+    let result = stage.run_step("Building the Macro computer image", || {
+        stage
+            .quiet()
+            .run_step("Loading the image into Docker", || Ok(()))
+    });
+    lane.join().expect("lane").expect("lane step");
+    RunTelemetry::close(telemetry, &result);
+
+    let records = buffered_records(&paths);
+    let step = |name: &str| {
+        records
+            .iter()
+            .find(|line| line["event"] == json!("step") && line["fields"]["step"] == json!(name))
+            .unwrap_or_else(|| panic!("a step event for {name}"))
+            .clone()
+    };
+    let outer = step("Building the Macro computer image");
+    let inner = step("Loading the image into Docker");
+    let frontend = step("Building frontend bundle");
+
+    assert_eq!(inner["parent"], outer["span"]);
+    assert_eq!(
+        inner["fields"]["parent_step"],
+        json!("Building the Macro computer image")
+    );
+    assert!(outer.get("parent").is_none(), "{outer}");
+    assert_eq!(outer["fields"]["lane"], json!("main"));
+    assert_eq!(inner["fields"]["lane"], json!("main"));
+    assert_eq!(frontend["fields"]["lane"], json!("frontend"));
+    assert!(frontend.get("parent").is_none(), "{frontend}");
+    assert!(outer["fields"]["offset"].as_f64().is_some());
+    assert_ne!(outer["span"], frontend["span"]);
+}
+
+#[test]
+fn cargo_timings_keep_the_slowest_units() {
+    let html = r#"<script>
+const UNIT_DATA = [
+  { "i": 1, "name": "serde", "version": "1.0.0", "mode": "todo", "target": "",
+    "features": [], "start": 0.1, "duration": 0.4, "unblocked_units": [],
+    "unblocked_rmeta_units": [], "sections": null },
+  { "i": 2, "name": "email_service", "version": "0.1.0", "mode": "todo",
+    "target": " email_service \"bin\"", "features": [], "start": 30.0,
+    "duration": 12.5, "unblocked_units": [], "unblocked_rmeta_units": [], "sections": null },
+  { "i": 3, "name": "ring", "version": "0.17.0", "mode": "run-custom-build",
+    "target": " build-script (run)", "features": [], "start": 2.0, "duration": 6.0,
+    "unblocked_units": [], "unblocked_rmeta_units": [], "sections": null }
+];
+const CONCURRENCY_DATA = [];
+</script>"#;
+    let units = parse_cargo_timings(html);
+    assert_eq!(
+        units
+            .iter()
+            .map(|unit| (unit.name.as_str(), unit.target_kind()))
+            .collect::<Vec<_>>(),
+        vec![("email_service", "bin"), ("ring", "build-script-run")]
+    );
+    assert_eq!(
+        parse_cargo_timings("<html></html>"),
+        Vec::<CargoUnit>::new()
+    );
+}
+
+#[test]
+fn hardware_fields_parse_proc() {
+    assert_eq!(
+        parse_meminfo_kib("MemTotal:       65843160 kB\nMemFree:  1 kB\n"),
+        Some(65_843_160)
+    );
+    assert_eq!(
+        parse_cpuinfo_model(
+            "processor\t: 0\nvendor_id\t: AuthenticAMD\nmodel name\t: AMD EPYC 7B13\n"
+        ),
+        Some("AMD EPYC 7B13".to_owned())
+    );
+    assert_eq!(parse_cpuinfo_model("processor\t: 0\n"), None);
 }
