@@ -630,7 +630,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     /// Returns `None` (skipping the CRM sub-request) for no-team users,
-    /// Frecency cursors, or a malformed team-receipt uuid.
+    /// Frecency cursors, a malformed team-receipt uuid, or a company filter
+    /// pinned to the nil id.
     pub(crate) fn build_crm_company_request(
         &self,
         team_receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
@@ -694,6 +695,17 @@ impl SoupRequest<Option<EntityFilterAst>> {
         {
             // Fail closed: unsupported AST shape would widen the result
             // set. Skip the CRM sub-request rather than over-include.
+            return None;
+        }
+        // The CRM query matches `id = ANY(ids)` when ids are given, so ids that
+        // are all nil match no company. Read the extract rather than the tree:
+        // it flattens `And` into the id list, and the skip must answer exactly
+        // what the query would have. A request for hidden companies must still
+        // reach the CRM service's admin check.
+        if extract.hidden != Some(true)
+            && !extract.ids.is_empty()
+            && extract.ids.iter().all(Uuid::is_nil)
+        {
             return None;
         }
 

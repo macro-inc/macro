@@ -141,7 +141,7 @@ fn build_address_predicate_on_m(
                 kind,
                 "c.email_address ILIKE ",
                 pattern,
-                resolved.contact_links(),
+                resolved.text_match_links(),
             )
         }
         // Domain: exact match on the domain portion of the address. Backed
@@ -155,7 +155,7 @@ fn build_address_predicate_on_m(
                 kind,
                 "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
                 domain,
-                resolved.contact_links(),
+                resolved.text_match_links(),
             )
         }
     }
@@ -979,17 +979,43 @@ pub(super) fn build_matching_threads_ctes(
 
 /// The threads that may match a positive OR-tree of addresses: `SELECT
 /// m.thread_id` branches over the address indexes, without the mailbox facts
-/// probe, plus the hoisted contact CTEs they read. The owned address read
-/// (`dynamic/query/owned_scope.rs`) counts and sorts these threads, then gives
-/// each thread it reads the full message match, which implies the branch
-/// condition when a message's contacts are its own inbox's.
+/// probe, plus the hoisted contact CTEs they read. The team-scoped CRM query
+/// and the owned address read (`dynamic/query/owned_scope.rs`) count and sort
+/// these threads, then give each thread they read the full message match
+/// (`build_thread_message_exists_filter`, the preview pick), which implies the
+/// branch condition: a thread's messages and contacts share its link. The
+/// owned read also checks that ([`ContactScope`]).
 #[derive(Clone)]
 pub(super) struct AddressSuperset {
     pub(super) contact_ctes: Vec<(String, SqlFragment)>,
     pub(super) branches: Vec<SqlFragment>,
-    /// How a thread's match stays on the inboxes' own contacts, when the tree
-    /// has domains or partial addresses.
-    pub(super) contact_scope: Option<ContactScope>,
+}
+
+/// [`AddressSuperset`] for a tree whose only pure-address top-level conjunct
+/// is a flat OR-tree of positive address literals (a CRM record's addresses
+/// and domains), scoped to `links`, and `None` for any other tree. A complete
+/// address keeps only the contacts of `links`' inboxes, so a record whose
+/// addresses have no contact there gets no branches: nothing can match.
+pub(super) fn build_address_superset(
+    ast: &Expr<EmailLiteral>,
+    resolved: &ResolvedFilters,
+    links: &[Uuid],
+) -> Option<AddressSuperset> {
+    let conjuncts = extract_address_only_conjuncts(ast);
+    let [conjunct] = conjuncts.as_slice() else {
+        return None;
+    };
+    let literals = flatten_or_tree_of_address_literals(conjunct)?;
+    let (contact_ctes, branches) = address_groups::build(
+        literals,
+        &resolved.within_links(links),
+        BranchFacts::Skipped,
+        Some(links),
+    );
+    Some(AddressSuperset {
+        contact_ctes,
+        branches,
+    })
 }
 
 /// How the owned address read keeps a thread's match to the queried inboxes'
@@ -1007,47 +1033,36 @@ pub(super) struct ContactScope {
     pub(super) member: SqlFragment,
 }
 
-/// [`AddressSuperset`] for a tree whose only pure-address top-level conjunct
-/// is a flat OR-tree of positive address literals (a CRM record's addresses
-/// and domains), on the contacts of `links`, and `None` for any other tree. A
-/// complete address has only the contacts `resolved` found in `links`'
-/// inboxes, so a record whose addresses have no contact there gets no
-/// branches: nothing can match.
-pub(super) fn build_address_superset(
+/// [`ContactScope`] on the contacts of `links` for the tree
+/// [`build_address_superset`] reads, when it has a domain or partial address,
+/// and `None` otherwise: complete addresses resolved to the inboxes' contacts,
+/// so only text matches can reach another inbox's.
+pub(super) fn build_contact_scope(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
     links: &[Uuid],
-) -> Option<AddressSuperset> {
+) -> Option<ContactScope> {
     let conjuncts = extract_address_only_conjuncts(ast);
     let [conjunct] = conjuncts.as_slice() else {
         return None;
     };
     let literals = flatten_or_tree_of_address_literals(conjunct)?;
-    // Complete addresses resolved to the inboxes' contacts, so only text
-    // matches can reach another inbox's.
-    let contact_scope = literals
+    if literals
         .iter()
-        .any(|(_, email)| !matches!(email, Email::Complete(_)))
-        .then(|| {
-            let scoped = resolved.scoped_to(links);
-            let mut member = SqlFragment::raw(
-                "EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
-            );
-            member.extend(build_trash_check(&scoped));
-            member.push_raw(" AND ");
-            member.extend(address_groups::message_predicate(literals.clone(), &scoped));
-            member.push_raw(")");
-            ContactScope {
-                own_contacts: own_contacts(links),
-                member,
-            }
-        });
-    let (contact_ctes, branches) =
-        address_groups::build(literals, resolved, BranchFacts::Skipped, Some(links));
-    Some(AddressSuperset {
-        contact_ctes,
-        branches,
-        contact_scope,
+        .all(|(_, email)| matches!(email, Email::Complete(_)))
+    {
+        return None;
+    }
+    let scoped = resolved.text_matches_within(links);
+    let mut member =
+        SqlFragment::raw("EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ");
+    member.extend(build_trash_check(&scoped));
+    member.push_raw(" AND ");
+    member.extend(address_groups::message_predicate(literals, &scoped));
+    member.push_raw(")");
+    Some(ContactScope {
+        own_contacts: own_contacts(links),
+        member,
     })
 }
 

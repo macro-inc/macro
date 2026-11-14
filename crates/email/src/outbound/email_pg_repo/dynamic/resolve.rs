@@ -13,15 +13,22 @@ pub(super) struct ResolvedFilters {
     /// resolved scope (one link, or all team links). Empty Vec means the
     /// address has no matching contact anywhere in scope.
     contact_ids: HashMap<String, Vec<Uuid>>,
+    /// Each resolved contact's inbox (`email_contacts.link_id`).
+    contact_links: HashMap<Uuid, Uuid>,
     /// Every primary `email_links.id` owned by a member of the query's team.
     /// `Some` only for team-scoped queries. Doubles as the candidate-stage
     /// `t.link_id = ANY(…)` set and (for non-shared, non-project queries)
     /// the `matching_threads` link scope.
     team_link_ids: Option<Vec<Uuid>>,
+    /// The team links whose threads CRM may show when this resolution ran:
+    /// primary, not being deleted, with the owner's consent for this team
+    /// (`crm_email_thread_allowed`'s mailbox conditions). `Some` only for
+    /// team-scoped queries. The query rechecks them as it reads.
+    contributing_link_ids: Option<Vec<Uuid>>,
     /// The inboxes whose contacts a domain or partial address matches on a
     /// message, or `None` for every inbox. Complete addresses resolve to
     /// contacts of the queried inboxes already.
-    contact_links: Option<Vec<Uuid>>,
+    text_match_links: Option<Vec<Uuid>>,
 }
 
 impl ResolvedFilters {
@@ -47,16 +54,53 @@ impl ResolvedFilters {
     }
 
     /// The inboxes a domain or partial address's contacts must belong to.
-    pub(super) fn contact_links(&self) -> Option<&[Uuid]> {
-        self.contact_links.as_deref()
+    pub(super) fn text_match_links(&self) -> Option<&[Uuid]> {
+        self.text_match_links.as_deref()
     }
 
     /// This resolution with domain and partial addresses matching only
     /// contacts of `links`.
-    pub(super) fn scoped_to(&self, links: &[Uuid]) -> Self {
+    pub(super) fn text_matches_within(&self, links: &[Uuid]) -> Self {
         Self {
-            contact_links: Some(links.to_vec()),
+            text_match_links: Some(links.to_vec()),
             ..self.clone()
+        }
+    }
+
+    /// The team links that contributed to CRM when this resolution ran.
+    pub(super) fn contributing_link_ids(&self) -> Option<&[Uuid]> {
+        self.contributing_link_ids.as_deref()
+    }
+
+    /// This resolution with only the contacts of `links`' inboxes. A message
+    /// lists only its own inbox's contacts, so the others can't match there.
+    pub(super) fn within_links(&self, links: &[Uuid]) -> Self {
+        let in_links = |id: &Uuid| {
+            self.contact_links
+                .get(id)
+                .is_some_and(|link| links.contains(link))
+        };
+        Self {
+            include_trash: self.include_trash,
+            contact_ids: self
+                .contact_ids
+                .iter()
+                .map(|(email, ids)| {
+                    (
+                        email.clone(),
+                        ids.iter().copied().filter(in_links).collect(),
+                    )
+                })
+                .collect(),
+            contact_links: self
+                .contact_links
+                .iter()
+                .filter(|(id, _)| in_links(id))
+                .map(|(id, link)| (*id, *link))
+                .collect(),
+            team_link_ids: self.team_link_ids.clone(),
+            contributing_link_ids: self.contributing_link_ids.clone(),
+            text_match_links: self.text_match_links.clone(),
         }
     }
 
@@ -74,8 +118,10 @@ impl ResolvedFilters {
         Self {
             include_trash: false,
             contact_ids: HashMap::new(),
+            contact_links: HashMap::new(),
             team_link_ids: None,
-            contact_links: None,
+            contributing_link_ids: None,
+            text_match_links: None,
         }
     }
 
@@ -86,11 +132,23 @@ impl ResolvedFilters {
     }
 
     #[cfg(test)]
-    pub(super) fn with_contact(mut self, lowered_email: impl Into<String>, id: Uuid) -> Self {
+    pub(super) fn with_contributing_links(mut self, ids: Vec<Uuid>) -> Self {
+        self.contributing_link_ids = Some(ids);
+        self
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_contact(
+        mut self,
+        lowered_email: impl Into<String>,
+        id: Uuid,
+        link: Uuid,
+    ) -> Self {
         self.contact_ids
             .entry(lowered_email.into())
             .or_default()
             .push(id);
+        self.contact_links.insert(id, link);
         self
     }
 }
@@ -188,12 +246,21 @@ pub(super) async fn resolve_filters(
     // downstream lookup (and the main query's candidate WHERE / CTE link
     // scope) is a direct `link_id = ANY($ids)` instead of re-joining
     // email_links/team_user per query.
-    let team_link_ids: Option<Vec<Uuid>> = match team_id {
-        None => None,
-        Some(team_id) => Some(
-            sqlx::query_scalar!(
+    let (team_link_ids, contributing_link_ids) = match team_id {
+        None => (None, None),
+        Some(team_id) => {
+            // `contributing` restates crm_email_thread_allowed's mailbox
+            // conditions; the team-scoped CRM query reads only these inboxes.
+            let links = sqlx::query!(
                 r#"
-            SELECT el.id
+            SELECT el.id,
+                   (el.deleting_at IS NULL AND EXISTS (
+                       SELECT 1 FROM crm_email_consent consent
+                       WHERE consent.team_id = $1
+                         AND consent.user_id = el.macro_id
+                         AND consent.link_id = el.id
+                         AND consent.enabled
+                   )) AS "contributing!"
             FROM email_links el
             JOIN team_user tu ON tu.user_id = el.macro_id
             WHERE tu.team_id = $1 AND el.is_primary
@@ -201,17 +268,27 @@ pub(super) async fn resolve_filters(
                 team_id,
             )
             .fetch_all(pool)
-            .await?,
-        ),
+            .await?;
+            let contributing = links
+                .iter()
+                .filter(|link| link.contributing)
+                .map(|link| link.id)
+                .collect();
+            (
+                Some(links.into_iter().map(|link| link.id).collect()),
+                Some(contributing),
+            )
+        }
     };
     let scope_link_ids: &[Uuid] = team_link_ids.as_deref().unwrap_or(link_ids);
 
     let emails = collect_complete_emails(ast);
     let mut contact_ids: HashMap<String, Vec<Uuid>> = HashMap::new();
+    let mut contact_links: HashMap<Uuid, Uuid> = HashMap::new();
     if !emails.is_empty() {
         let rows = sqlx::query!(
             r#"
-                SELECT id, LOWER(email_address) AS "email_lower!"
+                SELECT id, link_id, LOWER(email_address) AS "email_lower!"
                 FROM email_contacts
                 WHERE link_id = ANY($1) AND LOWER(email_address) = ANY($2)
                 "#,
@@ -223,13 +300,16 @@ pub(super) async fn resolve_filters(
 
         for row in rows {
             contact_ids.entry(row.email_lower).or_default().push(row.id);
+            contact_links.insert(row.id, row.link_id);
         }
     }
 
     Ok(ResolvedFilters {
         include_trash: false,
         contact_ids,
+        contact_links,
         team_link_ids,
-        contact_links: None,
+        contributing_link_ids,
+        text_match_links: None,
     })
 }

@@ -1,4 +1,5 @@
 mod owned_scope;
+mod team_scope;
 
 use super::SqlFragment;
 use super::filters::*;
@@ -18,9 +19,12 @@ pub(crate) use owned_scope::inbox_window;
 pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
+use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use team_scope::TeamRead;
+pub(crate) use team_scope::TeamReadTuning;
 use uuid::Uuid;
 
 struct QueryParams {
@@ -446,6 +450,25 @@ fn push_subject_subscan_match(
     builder.push_bind(params.query_limit);
 }
 
+/// The key team-member copies of one conversation share: the RFC-822
+/// Message-ID (`global_id`) of the thread's first non-draft message, stable
+/// across mailboxes unlike provider thread ids. Drafts' Message-IDs are
+/// mailbox-local, and a thread with none keeps its own id, so it never
+/// dedupes. `alias` names the `email_threads` row.
+fn dedupe_key_sql(alias: &str) -> String {
+    format!(
+        r#"COALESCE(
+                        (SELECT m_root.global_id FROM email_messages m_root
+                         WHERE m_root.thread_id = {alias}.id
+                           AND m_root.global_id IS NOT NULL
+                           AND m_root.is_draft = FALSE
+                         ORDER BY m_root.internal_date_ts ASC NULLS LAST, m_root.id ASC
+                         LIMIT 1),
+                        {alias}.id::text
+                    )"#
+    )
+}
+
 /// One candidate scan: the projection, its source and inbox predicates, the
 /// filters, and the cursor. Callers add any ORDER BY and LIMIT.
 fn push_candidate_body(
@@ -533,26 +556,15 @@ fn push_candidate_body(
     }
 
     // Team-scoped queries return one thread copy per team member on the
-    // same conversation. Dedupe on the root message's RFC-822 Message-ID
-    // (email_messages.global_id) — stable across mailboxes, unlike
-    // provider thread ids. Drafts are excluded (their Message-IDs are
-    // mailbox-local), and threads with no usable global_id fall back to
-    // their own id and never dedupe. is_own_link feeds the DISTINCT ON
-    // preference in build_query so the caller's copy wins.
+    // same conversation; is_own_link feeds the DISTINCT ON preference in
+    // build_query so the caller's copy wins.
     if params.team_id.is_some() {
-        builder.push(
+        builder.push(format!(
             r#",
-                    COALESCE(
-                        (SELECT m_root.global_id FROM email_messages m_root
-                         WHERE m_root.thread_id = t.id
-                           AND m_root.global_id IS NOT NULL
-                           AND m_root.is_draft = FALSE
-                         ORDER BY m_root.internal_date_ts ASC NULLS LAST, m_root.id ASC
-                         LIMIT 1),
-                        t.id::text
-                    ) AS dedupe_key,
+                    {} AS dedupe_key,
                     t.link_id = ANY("#,
-        );
+            dedupe_key_sql("t")
+        ));
         builder.push_bind(params.link_ids.clone());
         builder.push(") AS is_own_link");
     }
@@ -1243,19 +1255,17 @@ pub(crate) async fn dynamic_email_thread_cursor(
         query,
         user_id,
         team_id,
-        Some(OwnedReadTuning::DEFAULT),
+        Some(TeamReadTuning::DEFAULT),
     )
     .await
-    .map(|(rows, _)| rows)
 }
 
-/// [`dynamic_email_thread_cursor`] with the owned address read's switch
-/// points given, or with `owned_read: None`, owned address filters read by
-/// the general builder, as the parity tests compare. Also returns the
-/// streams that read the page when the owned address read took it.
+/// [`dynamic_email_thread_cursor`] with the team read's switch points given,
+/// or with `team_read: None`, team scope read by the general builder, as the
+/// parity tests compare.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the entry point's arguments plus the owned read's tuning"
+    reason = "the entry point's arguments plus the team read's tuning"
 )]
 pub(crate) async fn dynamic_email_thread_cursor_with(
     pool: &PgPool,
@@ -1265,7 +1275,81 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
     user_id: &str,
     team_id: Option<Uuid>,
+    team_read: Option<TeamReadTuning>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: team_read,
+            owned: Some(OwnedReadTuning::DEFAULT),
+        },
+    )
+    .await
+    .map(|(rows, _)| rows)
+}
+
+/// [`dynamic_email_thread_cursor`] with the owned address read's switch
+/// points given, or with `owned_read: None`, owned address filters read by
+/// the general builder, as the parity tests compare. Also returns the
+/// streams that read the page when the owned address read took it.
+#[cfg(test)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the entry point's arguments plus the owned read's tuning"
+)]
+pub(crate) async fn dynamic_email_thread_cursor_owned_with(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
     owned_read: Option<OwnedReadTuning>,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: Some(TeamReadTuning::DEFAULT),
+            owned: owned_read,
+        },
+    )
+    .await
+}
+
+/// The page-order reads a request may take; `None` leaves its requests to the
+/// general builder.
+struct Reads {
+    team: Option<TeamReadTuning>,
+    owned: Option<OwnedReadTuning>,
+}
+
+/// A page, and the owned address read's streams when it read the page.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the entry point's arguments plus the reads' tunings"
+)]
+async fn read_page(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    reads: Reads,
 ) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
     // A repeated inbox would list its threads twice.
     let link_ids = distinct_links(link_ids);
@@ -1332,7 +1416,9 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
         project_scope,
     };
 
-    let params = match owned_read {
+    // The owned read's gate refuses team requests itself, so a test that
+    // drops that check sees team pages leave the team read.
+    let params = match reads.owned {
         Some(tuning) => match OwnedRead::new(view, email_filter, params, tuning) {
             Ok(read) => {
                 let (streams, rows) = read_owned_page(pool, read).await?;
@@ -1342,6 +1428,11 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
         },
         None => params,
     };
+    if team_id.is_some() {
+        return read_team_page(pool, view, email_filter, params, reads.team)
+            .await
+            .map(|rows| (rows, None));
+    }
 
     let mut qb = build_query(view, email_filter, params);
     // Unnamed statement: the SQL text varies per filter shape (and per
@@ -1366,22 +1457,44 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
         return Ok((rows, None));
     }
 
-    if team_id.is_none() {
-        return Ok((query.fetch_all(pool).await?, None));
-    }
+    Ok((query.fetch_all(pool).await?, None))
+}
 
-    // Team-scoped (CRM) queries check privacy on every candidate thread
-    // before the LIMIT, so a domain that covers most of a mailbox can run
-    // for tens of minutes. The client gives up after 12s and the server
-    // never cancels the query, so bound it in the database instead.
-    // Slightly above the web client's 12s Soup request timeout.
+/// How long a team-scoped (CRM) page may run in the database, across all its
+/// statements: under the web client's 12s Soup request timeout, after which
+/// nobody reads the page. The server never cancels a query its client
+/// dropped, so the database enforces the bound.
+const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
+
+/// Reads a team-scoped page with [`TeamRead`] when it covers the request, and
+/// with the general builder otherwise, within [`TEAM_READ_BUDGET`].
+async fn read_team_page(
+    pool: &PgPool,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: QueryParams,
+    tuning: Option<TeamReadTuning>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    let deadline = Instant::now() + TEAM_READ_BUDGET;
+    let team_read = match tuning {
+        Some(tuning) => TeamRead::new(view, email_filter, params, tuning),
+        None => Err(Box::new(params)),
+    };
     let mut transaction = pool.begin().await?;
-    sqlx::query!("SET LOCAL statement_timeout = '15s'")
-        .execute(&mut *transaction)
-        .await?;
-    let rows = query.fetch_all(&mut *transaction).await?;
+    let rows = match team_read {
+        Ok(read) => read.fetch(&mut transaction, deadline).await?,
+        Err(params) => {
+            limit_statement_time(&mut transaction, deadline).await?;
+            let mut qb = build_query(view, email_filter, *params);
+            qb.build()
+                .persistent(false)
+                .try_map(map_row)
+                .fetch_all(&mut *transaction)
+                .await?
+        }
+    };
     transaction.commit().await?;
-    Ok((rows, None))
+    Ok(rows)
 }
 
 /// `link_ids` without repeats, in order.
@@ -1414,6 +1527,26 @@ pub(crate) async fn begin_snapshot(
 ) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
     pool.begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .await
+}
+
+/// Bounds the transaction's next statement by what is left until `deadline`.
+async fn limit_statement_time(
+    connection: &mut PgConnection,
+    deadline: Instant,
+) -> Result<(), sqlx::Error> {
+    // A zero statement_timeout disables the bound, so a spent budget still
+    // allows one millisecond and fails the statement.
+    let remaining = deadline
+        .saturating_duration_since(Instant::now())
+        .as_millis()
+        .max(1);
+    sqlx::query_scalar!(
+        "SELECT set_config('statement_timeout', $1, true)",
+        format!("{remaining}ms")
+    )
+    .fetch_one(connection)
+    .await?;
+    Ok(())
 }
 
 /// Maps one page row, as [`push_page_head`] names its columns.

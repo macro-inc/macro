@@ -3,7 +3,7 @@
 //! general builder's rows, in its order, page after page, for every filter
 //! shape the Sales Email view, a CRM record under Me, an All Mail address
 //! search and Soup's hydration by id send. Requests the read doesn't cover
-//! go to the general builder.
+//! go to the general builder, or a team's to the team read.
 //!
 //! Fixtures: `email/fixtures/email_owned_address_read.sql` (generated, see
 //! its header) and `email_owned_address_foreign_contacts.sql`.
@@ -192,7 +192,7 @@ async fn pages(
     let mut cursor = None;
     loop {
         let query = Query::new(cursor.take(), request.sort, filter.clone());
-        let (page, streams) = dynamic::dynamic_email_thread_cursor_with(
+        let (page, streams) = dynamic::dynamic_email_thread_cursor_owned_with(
             pool,
             request.links,
             request.limit,
@@ -261,8 +261,8 @@ async fn assert_parity(
         .len())
 }
 
-/// Asserts the general builder reads every page of a request the owned read
-/// doesn't take, and returns the rows.
+/// Asserts the owned read leaves every page of a request to the builder that
+/// reads it without the owned read, and returns the rows.
 async fn general(
     pool: &Pool<Postgres>,
     request: &Request<'_>,
@@ -844,7 +844,7 @@ async fn project_requests_read_general(pool: Pool<Postgres>) -> anyhow::Result<(
 }
 
 /// A team request applies the CRM's privacy rule and lists each
-/// conversation once, so it goes to the general builder.
+/// conversation once, so the owned read leaves it to the team read.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(

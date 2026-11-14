@@ -198,14 +198,14 @@ pub(super) fn message_predicate(
                 predicates.push(message_domains(
                     &members.domains,
                     None,
-                    resolved.contact_links(),
+                    resolved.text_match_links(),
                 ));
             }
             if kinds.any_recipient() {
                 predicates.push(message_domains(
                     &members.domains,
                     Some(kinds),
-                    resolved.contact_links(),
+                    resolved.text_match_links(),
                 ));
             }
         }

@@ -44,7 +44,8 @@ use uuid::Uuid;
 
 use super::super::SqlFragment;
 use super::super::filters::{
-    AddressSuperset, ContactScope, build_address_superset, build_thread_conjunct_filter,
+    AddressSuperset, ContactScope, build_address_superset, build_contact_scope,
+    build_thread_conjunct_filter,
     get_sort_timestamp_field, top_level_owners,
 };
 use super::{
@@ -125,6 +126,9 @@ pub(super) struct OwnedRead<'a> {
     /// general builder's `matching_threads` is.
     inboxes: Vec<Uuid>,
     superset: AddressSuperset,
+    /// How a picked thread stays on the inboxes' own contacts, when the tree
+    /// has domains or partial addresses.
+    contact_scope: Option<ContactScope>,
     /// The filter's top-level thread-level terms on `t`, which the streams
     /// apply as they read.
     thread_terms: SqlFragment,
@@ -165,6 +169,7 @@ impl<'a> OwnedRead<'a> {
         else {
             return Err(Box::new(params));
         };
+        let contact_scope = build_contact_scope(email_filter, &params.resolved, &params.link_ids);
         Ok(Self {
             view,
             email_filter,
@@ -176,6 +181,7 @@ impl<'a> OwnedRead<'a> {
             tuning,
             inboxes,
             superset,
+            contact_scope,
         })
     }
 
@@ -351,7 +357,7 @@ impl<'a> OwnedRead<'a> {
             ) AS t
             CROSS JOIN LATERAL ("#,
         );
-        let contact_scope = self.superset.contact_scope.clone();
+        let contact_scope = self.contact_scope.clone();
         push_preview_message_select_with(
             &mut builder,
             self.view,
