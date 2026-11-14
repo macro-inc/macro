@@ -15,6 +15,7 @@ use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use gtm_invite::domain::ports::GtmInviteService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use roles_and_permissions::domain::model::{ProductTier, SubscriptionStatus as RoleStatus};
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::Serialize;
 use stripe::{CustomerId, EventId, SubscriptionStatus};
@@ -24,13 +25,14 @@ use stripe_inbox::domain::model::{
     SubscriptionChange, SubscriptionFacts,
 };
 use stripe_inbox::domain::ports::{EventConsumers, InboxRepo, StripeReader};
-use teams::domain::model::SeatPrices;
+use teams::domain::model::{SeatPrices, TeamError};
 use teams::domain::team_repo::TeamService;
 
 use crate::domain::computer_billing::ComputerBillingObserver;
 use crate::domain::stripe_consumers::{
-    Conversion, PersonalDecision, PersonalUpdate, TeamUpdate, UnknownPrice, conversion,
-    decide_personal_invoice, decide_personal_subscription, decide_team_invoice,
+    Conversion, PersonalAccess, PersonalDecision, PersonalUpdate, TeamBinding, TeamState,
+    TeamUpdate, UnknownPrice, analytics_conversion, decide_personal_invoice,
+    decide_personal_subscription, decide_team_binding, decide_team_invoice,
     decide_team_subscription,
 };
 use crate::outbound::stripe_identity::PgStripeIdentity;
@@ -319,10 +321,31 @@ where
                 .map_err(retry)?;
         }
 
-        self.roles
-            .update_user_roles_and_permissions_for_subscription(user, update.status, update.tier)
-            .await
-            .map_err(retry)?;
+        match update.access {
+            PersonalAccess::Grant(tier) => self
+                .roles
+                .update_user_roles_and_permissions_for_subscription(
+                    user,
+                    RoleStatus::Active,
+                    tier,
+                )
+                .await
+                .map_err(retry)?,
+            // Every tier's role goes, whatever the price: a revoke never
+            // depends on knowing the plan.
+            PersonalAccess::Revoke(status) => {
+                for tier in ProductTier::ALL {
+                    self.roles
+                        .update_user_roles_and_permissions_for_subscription(
+                            user,
+                            status.clone(),
+                            tier,
+                        )
+                        .await
+                        .map_err(retry)?;
+                }
+            }
+        }
         self.sync_periods(user, update.period, update.verified)
             .await?;
         if let Some(change) = update.plan_change {
@@ -393,16 +416,26 @@ where
         // A team that moved to another subscription ignores the old one's
         // lapse, so a late cancel or failed invoice cannot revoke seats the
         // new subscription pays for.
-        let bound = self
-            .teams
-            .team_subscription_id(&update.team_id)
-            .await
-            .map_err(retry)?;
-        let replaced = bound.as_ref() != Some(&update.subscription_id);
-        if replaced && bound.is_some() && !update.paying {
-            tracing::info!("team is on another subscription; ignoring this one's lapse");
-            return Ok(());
-        }
+        let team = match self.teams.team_subscription_id(&update.team_id).await {
+            Ok(bound) => TeamState::Bound(bound),
+            Err(TeamError::TeamDoesNotExist) => TeamState::Missing,
+            Err(error) => return Err(retry(error)),
+        };
+        let replaced = match decide_team_binding(&update, team) {
+            TeamBinding::TeamGone => {
+                tracing::warn!(
+                    team_id = %update.team_id,
+                    subscription_id = %update.subscription_id,
+                    "team no longer exists; ignoring its subscription event"
+                );
+                return Ok(());
+            }
+            TeamBinding::IgnoreLapse => {
+                tracing::info!("team is on another subscription; ignoring this one's lapse");
+                return Ok(());
+            }
+            TeamBinding::Apply { replaced } => replaced,
+        };
 
         // The usage policy checks the team's subscription binding as it was
         // before this event, so it runs before the binding is patched. Its
@@ -518,21 +551,13 @@ where
         change: &SubscriptionChange,
     ) -> Result<(), ApplyError> {
         let subscription = &change.subscription;
-        let personal = if subscription.team_id.is_none() {
-            Some(
-                decide_personal_subscription(
-                    &delivery.event_id,
-                    delivery.created_at,
-                    change,
-                    &delivery.customer_subscriptions,
-                    &self.prices,
-                )
-                .map_err(reject)?,
-            )
-        } else {
-            None
-        };
-        let Some(conversion) = conversion(change, personal.as_ref()) else {
+        let Some(conversion) = analytics_conversion(
+            &delivery.event_id,
+            delivery.created_at,
+            change,
+            &delivery.customer_subscriptions,
+            &self.prices,
+        ) else {
             return Ok(());
         };
         tracing::Span::current().record("conversion", format!("{conversion:?}"));

@@ -6,6 +6,12 @@ use super::*;
 
 const TEAM: &str = "0195d6b1-7a8f-7c3e-9a51-2a2b3c4d5e6f";
 
+/// Historical prices Macro still bills subscribers at.
+const MACRO_WEB_PRICE: &str = "price_1PnRu9JaD7zvQeOBbExpFxPX";
+const PROFESSIONAL_PRICE: &str = "price_1KnR08JaD7zvQeOB7S30pQ0C";
+/// A price neither sold nor on the legacy list.
+const UNLISTED_PRICE: &str = "price_1ZzUnlistedJaD7zvQeOBzzzz";
+
 fn prices() -> SeatPrices {
     SeatPrices {
         premium: "price_premium".parse().unwrap(),
@@ -94,8 +100,7 @@ fn a_new_trial_grants_premium_and_records_the_trial() {
     let PersonalDecision::Apply(update) = decision else {
         panic!("expected an update, got {decision:?}");
     };
-    assert_eq!(update.status, RoleStatus::Active);
-    assert_eq!(update.tier, ProductTier::Opus);
+    assert_eq!(update.access, PersonalAccess::Grant(ProductTier::Opus));
     assert!(update.started_trial);
     assert_eq!(update.verified.len(), 1);
     assert_eq!(update.verified[0].evidence, PeriodEvidence::Snapshot);
@@ -177,7 +182,7 @@ fn canceling_one_subscription_keeps_access_while_another_is_live() {
     .unwrap() else {
         panic!("expected a revoke");
     };
-    assert_eq!(update.status, RoleStatus::Canceled);
+    assert_eq!(update.access, PersonalAccess::Revoke(RoleStatus::Canceled));
     assert_eq!(update.plan_change, None);
 }
 
@@ -185,7 +190,7 @@ fn canceling_one_subscription_keeps_access_while_another_is_live() {
 fn an_unknown_price_grants_nothing_and_fails() {
     let unknown = change(
         EventType::CustomerSubscriptionCreated,
-        subscription("sub_Person", "active", 1_800_000_000, "price_legacy"),
+        subscription("sub_Person", "active", 1_800_000_000, UNLISTED_PRICE),
         Value::Null,
     );
 
@@ -350,7 +355,7 @@ fn a_failed_payment_revokes_unless_another_personal_subscription_is_live() {
     .unwrap() else {
         panic!("expected a revoke");
     };
-    assert_eq!(update.status, RoleStatus::PastDue);
+    assert_eq!(update.access, PersonalAccess::Revoke(RoleStatus::PastDue));
 }
 
 #[test]
@@ -374,7 +379,7 @@ fn a_paid_renewal_restores_access_with_renewal_evidence() {
         panic!("expected a restore");
     };
 
-    assert_eq!(update.status, RoleStatus::Active);
+    assert_eq!(update.access, PersonalAccess::Grant(ProductTier::Opus));
     assert_eq!(update.verified[0].evidence, PeriodEvidence::Renewal);
     assert_eq!(
         update.period,
@@ -533,5 +538,214 @@ fn a_payment_after_the_subscription_ended_grants_nothing_back() {
             &facts(team),
         ),
         None
+    );
+}
+
+fn paid_invoice_of(price: &str) -> InvoiceFacts {
+    let mut invoice = invoice(true, "subscription_cycle");
+    for line in &mut invoice.lines {
+        line.price = Some(price.parse().unwrap());
+    }
+    invoice
+}
+
+#[test]
+fn legacy_prices_keep_premium_through_grant_renewal_and_cancel() {
+    for price in [MACRO_WEB_PRICE, PROFESSIONAL_PRICE] {
+        let created = change(
+            EventType::CustomerSubscriptionCreated,
+            subscription("sub_Person", "active", 1_800_000_000, price),
+            Value::Null,
+        );
+        let PersonalDecision::Apply(grant) = decide_personal_subscription(
+            &event_id(),
+            event_at(),
+            &created,
+            std::slice::from_ref(&created.subscription),
+            &prices(),
+        )
+        .unwrap() else {
+            panic!("expected a grant for {price}");
+        };
+        assert_eq!(grant.access, PersonalAccess::Grant(ProductTier::Opus));
+        // No AI plan change is inferred from a price that is not sold.
+        assert_eq!(grant.plan_change, None);
+
+        let renewed = change(
+            EventType::CustomerSubscriptionUpdated,
+            subscription("sub_Person", "active", 1_800_000_000, price),
+            json!({"current_period_start": 1_797_000_000}),
+        );
+        let PersonalDecision::Apply(renewal) = decide_personal_subscription(
+            &event_id(),
+            event_at(),
+            &renewed,
+            std::slice::from_ref(&renewed.subscription),
+            &prices(),
+        )
+        .unwrap() else {
+            panic!("expected a renewal for {price}");
+        };
+        assert_eq!(renewal.access, PersonalAccess::Grant(ProductTier::Opus));
+
+        let person = facts(subscription("sub_Person", "past_due", 1_700_000_000, price));
+        let PersonalDecision::Apply(paid) = decide_personal_invoice(
+            &event_id(),
+            event_at(),
+            &paid_invoice_of(price),
+            &person,
+            std::slice::from_ref(&person),
+            &prices(),
+        )
+        .unwrap() else {
+            panic!("expected a paid renewal for {price}");
+        };
+        assert_eq!(paid.access, PersonalAccess::Grant(ProductTier::Opus));
+
+        let canceled = change(
+            EventType::CustomerSubscriptionDeleted,
+            subscription("sub_Person", "canceled", 1_700_000_000, price),
+            Value::Null,
+        );
+        let PersonalDecision::Apply(revoke) = decide_personal_subscription(
+            &event_id(),
+            event_at(),
+            &canceled,
+            std::slice::from_ref(&canceled.subscription),
+            &prices(),
+        )
+        .unwrap() else {
+            panic!("expected a revoke for {price}");
+        };
+        assert_eq!(revoke.access, PersonalAccess::Revoke(RoleStatus::Canceled));
+    }
+}
+
+#[test]
+fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
+    let canceled = change(
+        EventType::CustomerSubscriptionDeleted,
+        subscription("sub_Person", "canceled", 1_700_000_000, UNLISTED_PRICE),
+        Value::Null,
+    );
+    let PersonalDecision::Apply(cancel) = decide_personal_subscription(
+        &event_id(),
+        event_at(),
+        &canceled,
+        std::slice::from_ref(&canceled.subscription),
+        &prices(),
+    )
+    .unwrap() else {
+        panic!("expected a revoke");
+    };
+    assert_eq!(cancel.access, PersonalAccess::Revoke(RoleStatus::Canceled));
+
+    for status in ["past_due", "unpaid", "paused", "incomplete_expired"] {
+        let lapsed = change(
+            EventType::CustomerSubscriptionUpdated,
+            subscription("sub_Person", status, 1_700_000_000, UNLISTED_PRICE),
+            json!({"status": "active"}),
+        );
+        let decision = decide_personal_subscription(
+            &event_id(),
+            event_at(),
+            &lapsed,
+            std::slice::from_ref(&lapsed.subscription),
+            &prices(),
+        )
+        .unwrap();
+        assert!(
+            matches!(&decision, PersonalDecision::Apply(update) if matches!(update.access, PersonalAccess::Revoke(_))),
+            "{status}: {decision:?}"
+        );
+    }
+
+    let person = facts(subscription("sub_Person", "active", 1_700_000_000, UNLISTED_PRICE));
+    let PersonalDecision::Apply(failed) = decide_personal_invoice(
+        &event_id(),
+        event_at(),
+        &invoice(false, "subscription_cycle"),
+        &person,
+        std::slice::from_ref(&person),
+        &prices(),
+    )
+    .unwrap() else {
+        panic!("expected a revoke");
+    };
+    assert_eq!(failed.access, PersonalAccess::Revoke(RoleStatus::PastDue));
+}
+
+#[test]
+fn an_unknown_price_dead_letters_a_paid_renewal() {
+    let person = facts(subscription("sub_Person", "active", 1_700_000_000, UNLISTED_PRICE));
+    assert_eq!(
+        decide_personal_invoice(
+            &event_id(),
+            event_at(),
+            &paid_invoice_of(UNLISTED_PRICE),
+            &person,
+            std::slice::from_ref(&person),
+            &prices(),
+        ),
+        Err(UnknownPrice {
+            subscription_id: "sub_Person".to_owned()
+        })
+    );
+}
+
+#[test]
+fn analytics_skips_an_unknown_price_instead_of_failing() {
+    let created = change(
+        EventType::CustomerSubscriptionCreated,
+        subscription("sub_Person", "active", 1_800_000_000, UNLISTED_PRICE),
+        Value::Null,
+    );
+    assert_eq!(
+        analytics_conversion(
+            &event_id(),
+            event_at(),
+            &created,
+            std::slice::from_ref(&created.subscription),
+            &prices(),
+        ),
+        None
+    );
+
+    let legacy = change(
+        EventType::CustomerSubscriptionCreated,
+        subscription("sub_Person", "active", 1_800_000_000, MACRO_WEB_PRICE),
+        Value::Null,
+    );
+    assert_eq!(
+        analytics_conversion(
+            &event_id(),
+            event_at(),
+            &legacy,
+            std::slice::from_ref(&legacy.subscription),
+            &prices(),
+        ),
+        Some(Conversion::Purchase)
+    );
+}
+
+#[test]
+fn a_deleted_team_ignores_its_subscription_events() {
+    let mut object = subscription("sub_Team", "canceled", 1_800_000_000, MACRO_WEB_PRICE);
+    object["metadata"]["team_id"] = json!(TEAM);
+    let deleted = change(EventType::CustomerSubscriptionDeleted, object, Value::Null);
+    let update = decide_team_subscription(&event_id(), event_at(), &deleted).unwrap();
+
+    assert_eq!(decide_team_binding(&update, TeamState::Missing), TeamBinding::TeamGone);
+    assert_eq!(
+        decide_team_binding(&update, TeamState::Bound(Some("sub_Other".parse().unwrap()))),
+        TeamBinding::IgnoreLapse
+    );
+    assert_eq!(
+        decide_team_binding(&update, TeamState::Bound(Some("sub_Team".parse().unwrap()))),
+        TeamBinding::Apply { replaced: false }
+    );
+    assert_eq!(
+        decide_team_binding(&update, TeamState::Bound(None)),
+        TeamBinding::Apply { replaced: true }
     );
 }

@@ -18,8 +18,9 @@ use teams::domain::open_seat_release::SubscriptionStart;
 #[cfg(test)]
 mod test;
 
-/// A subscription no seat price matches: no entitlements are inferred from
-/// it, the event dead-letters and pages.
+/// A subscription granting access on a price that neither a sold seat price
+/// nor the legacy list matches: no tier is inferred from it, the event
+/// dead-letters and pages. Revokes never need a price, so they never fail.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("subscription {subscription_id} has no known seat price")]
 pub struct UnknownPrice {
@@ -27,7 +28,7 @@ pub struct UnknownPrice {
     pub subscription_id: String,
 }
 
-/// The plan a personal subscription's seat price belongs to.
+/// The plan whose entitlements a personal subscription's price grants.
 fn seat_plan(
     subscription: &SubscriptionFacts,
     prices: &SeatPrices,
@@ -35,7 +36,7 @@ fn seat_plan(
     subscription
         .items
         .iter()
-        .find_map(|item| prices.plan_for_price(item.price.as_str()))
+        .find_map(|item| prices.entitlement_plan(item.price.as_str()))
         .ok_or_else(|| UnknownPrice {
             subscription_id: subscription.id.to_string(),
         })
@@ -222,13 +223,21 @@ pub enum PersonalDecision {
     Apply(PersonalUpdate),
 }
 
+/// What a personal update does to the subscriber's roles.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PersonalAccess {
+    /// Grant the subscriber role and the tier the seat price grants.
+    Grant(ProductTier),
+    /// Remove the subscriber role and every tier's role: no price is read,
+    /// so an unknown price never blocks a revoke.
+    Revoke(RoleStatus),
+}
+
 /// The subscriber's new roles and billing state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PersonalUpdate {
     /// Grant or revoke.
-    pub status: RoleStatus,
-    /// The tier the seat price grants.
-    pub tier: ProductTier,
+    pub access: PersonalAccess,
     /// The subscription entered its trial with this event.
     pub started_trial: bool,
     /// The legacy payer anchor.
@@ -274,10 +283,14 @@ pub fn decide_personal_subscription(
         return Ok(PersonalDecision::KeepAccess);
     }
 
-    let plan = seat_plan(subscription, prices)?;
+    let access = match status {
+        RoleStatus::Active => {
+            PersonalAccess::Grant(seat_plan(subscription, prices)?.product_tier())
+        }
+        revoked => PersonalAccess::Revoke(revoked),
+    };
     Ok(PersonalDecision::Apply(PersonalUpdate {
-        status,
-        tier: plan.product_tier(),
+        access,
         started_trial: change.started_trial(),
         period: legacy_period(subscription),
         verified: subscription_periods(event_id, event_at, subscription, None),
@@ -309,14 +322,13 @@ pub fn decide_personal_invoice(
             return Ok(PersonalDecision::KeepAccess);
         }
     }
-    let plan = seat_plan(subscription, prices)?;
+    let access = if invoice.paid {
+        PersonalAccess::Grant(seat_plan(subscription, prices)?.product_tier())
+    } else {
+        PersonalAccess::Revoke(RoleStatus::PastDue)
+    };
     Ok(PersonalDecision::Apply(PersonalUpdate {
-        status: if invoice.paid {
-            RoleStatus::Active
-        } else {
-            RoleStatus::PastDue
-        },
-        tier: plan.product_tier(),
+        access,
         started_trial: false,
         period: legacy_period(subscription),
         verified: subscription_periods(event_id, event_at, subscription, Some(invoice)),
@@ -378,6 +390,43 @@ pub fn decide_team_subscription(
     })
 }
 
+/// What Macro holds for a team subscription event's team.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TeamState {
+    /// The team was deleted.
+    Missing,
+    /// The team exists, bound to this subscription, if any.
+    Bound(Option<stripe::SubscriptionId>),
+}
+
+/// How a team subscription event applies to its team.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TeamBinding {
+    /// The team was deleted: nothing to apply, and no retry.
+    TeamGone,
+    /// The team moved to another subscription; this one's lapse cannot
+    /// revoke seats the new one pays for.
+    IgnoreLapse,
+    /// Apply; `replaced` when the event's subscription becomes the team's.
+    Apply {
+        /// The team was bound to no or another subscription.
+        replaced: bool,
+    },
+}
+
+/// Decides how a team update applies given the team's current binding.
+pub fn decide_team_binding(update: &TeamUpdate, team: TeamState) -> TeamBinding {
+    let bound = match team {
+        TeamState::Missing => return TeamBinding::TeamGone,
+        TeamState::Bound(bound) => bound,
+    };
+    let replaced = bound.as_ref() != Some(&update.subscription_id);
+    if replaced && bound.is_some() && !update.paying {
+        return TeamBinding::IgnoreLapse;
+    }
+    TeamBinding::Apply { replaced }
+}
+
 /// Whether the subscription ended for good.
 fn is_terminal(status: SubscriptionStatus) -> bool {
     matches!(
@@ -417,6 +466,29 @@ pub enum Conversion {
     Purchase,
     /// A subscription was canceled.
     Cancel,
+}
+
+/// The conversion the analytics consumer reports for a subscription event.
+/// A personal subscription granting on an unknown price reports nothing:
+/// analytics never dead-letters, the personal plan consumer pages for it.
+pub fn analytics_conversion(
+    event_id: &EventId,
+    event_at: DateTime<Utc>,
+    change: &SubscriptionChange,
+    customer_subscriptions: &[SubscriptionFacts],
+    prices: &SeatPrices,
+) -> Option<Conversion> {
+    if change.subscription.team_id.is_some() {
+        return conversion(change, None);
+    }
+    match decide_personal_subscription(event_id, event_at, change, customer_subscriptions, prices)
+    {
+        Ok(personal) => conversion(change, Some(&personal)),
+        Err(error) => {
+            tracing::info!(error = %error, "skipping analytics tracking: unknown price");
+            None
+        }
+    }
 }
 
 /// Which conversion, if any, a subscription event reports. A personal
