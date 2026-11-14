@@ -1946,7 +1946,14 @@ async fn run_server() -> anyhow::Result<()> {
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                 readonly_db.clone(),
             )),
-            crm_service.clone(),
+            // The Sales views' activity edges probe every record of the scope;
+            // read them from the replica, like the rest of the list. Record
+            // and access reads stay on the primary.
+            crm::domain::service::CrmServiceImpl::new(
+                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
+                    .with_activity_edges_replica(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+                crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+            ),
             GithubPullRequestServiceImpl::new(
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
                 PgGithubPullRequestRepo::new(readonly_db.clone()),
