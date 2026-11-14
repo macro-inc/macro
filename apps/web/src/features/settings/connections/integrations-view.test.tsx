@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   granolaConnected: false,
   leftovers: [] as Leftover[],
   overlaysLoading: false,
+  githubLinkStatus: vi.fn(),
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -54,6 +55,10 @@ vi.mock('@queries/pipedream-connectors', () => ({
     },
   }),
   overlaidAppSlug: () => undefined,
+}));
+vi.mock('@queries/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/auth')>()),
+  readGithubLinkStatus: mocks.githubLinkStatus,
 }));
 vi.mock('./use-connections-model', () => ({
   useConnectionsModel: () => ({
@@ -127,9 +132,14 @@ vi.mock('@core/pipedream/catalog', () => ({
   }),
 }));
 vi.mock('./PipedreamAiProvider', () => ({
-  PipedreamAiProvider: () => {
+  PipedreamAiProvider: (props: { provider: string }) => {
     const view = useConnectionsView();
-    return <button onClick={view.closeProvider}>Back to integrations</button>;
+    return (
+      <>
+        <h1>{props.provider} agent tools</h1>
+        <button onClick={view.closeProvider}>Back to integrations</button>
+      </>
+    );
   },
 }));
 vi.mock('@queries/import', async (importOriginal) => ({
@@ -308,6 +318,45 @@ describe('Slack channel import handoff', () => {
       expect(mocks.connect).toHaveBeenCalledWith({ appSlug: 'linear' })
     );
     expect(mocks.discover).not.toHaveBeenCalled();
+  });
+});
+
+describe('GitHub connect requests', () => {
+  function requestGithub() {
+    requestConnectApp('github');
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+        onOpenLocalAgents={() => {}}
+      />
+    ));
+  }
+
+  it('shows GitHub agent tools instead of relinking a linked account', async () => {
+    mocks.githubLinkStatus.mockResolvedValueOnce('linked');
+    requestGithub();
+    await screen.findByText('github agent tools');
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+
+  it('links an unlinked account', async () => {
+    mocks.githubLinkStatus.mockResolvedValueOnce('unlinked');
+    mocks.connect.mockResolvedValueOnce('closed');
+    requestGithub();
+    await waitFor(() =>
+      expect(mocks.connect).toHaveBeenCalledWith({ appSlug: 'github' })
+    );
+    expect(screen.queryByText('github agent tools')).toBeNull();
+  });
+
+  it('links when the link status cannot be read', async () => {
+    mocks.githubLinkStatus.mockRejectedValueOnce(new Error('offline'));
+    mocks.connect.mockResolvedValueOnce('closed');
+    requestGithub();
+    await waitFor(() =>
+      expect(mocks.connect).toHaveBeenCalledWith({ appSlug: 'github' })
+    );
   });
 });
 
