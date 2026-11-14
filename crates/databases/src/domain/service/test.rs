@@ -239,6 +239,7 @@ async fn seeded() -> Seeded {
             name: "Offsite".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

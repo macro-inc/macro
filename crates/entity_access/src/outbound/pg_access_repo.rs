@@ -12,7 +12,7 @@ use crate::domain::telemetry::{record_source_ids, span_count};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
-        CrmEntityAccess, EntityType, UserTeamInfo,
+        CrmEntityAccess, EntityAudience, EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -911,6 +911,17 @@ impl AccessRepository for PgAccessRepository {
         queries::get_entity_users(&self.pool, entity_id, entity_type)
             .await
             .map_err(anyhow_access_error)
+    }
+
+    #[tracing::instrument(err, skip(self, entity_ids), fields(entity_count = entity_ids.len()))]
+    async fn get_entity_grant_audiences(
+        &self,
+        entity_ids: &[Uuid],
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityAudience>, AccessError> {
+        queries::entity_audiences::get_entity_audiences(&self.pool, entity_ids, entity_type)
+            .await
+            .map_err(AccessError::from)
     }
 
     #[tracing::instrument(err, skip(self))]

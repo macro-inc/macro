@@ -1,5 +1,9 @@
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
+import {
+  databaseDetailSearch,
+  withDatabaseLinkParams,
+} from '@app/features/block-database/database-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
 import {
   CALENDAR_ROUTE_ID,
@@ -309,7 +313,11 @@ const documentRemountKey = ({
 export const driveRootDocumentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'drive-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    databaseDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -318,14 +326,18 @@ export const driveRootDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
-  toReference: ({ documentId, documentType }) =>
-    uuidRouteReference(documentId, documentType),
+  toReference: ({ documentId, documentType }, query) =>
+    withDatabaseLinkParams(uuidRouteReference(documentId, documentType), query),
 });
 
 export const driveFolderDocumentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'drive-folder-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    databaseDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -334,14 +346,18 @@ export const driveFolderDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
-  toReference: ({ documentId, documentType }) =>
-    uuidRouteReference(documentId, documentType),
+  toReference: ({ documentId, documentType }, query) =>
+    withDatabaseLinkParams(uuidRouteReference(documentId, documentType), query),
 });
 
 export const driveTabDocumentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'drive-tab-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    databaseDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -350,8 +366,8 @@ export const driveTabDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
-  toReference: ({ documentId, documentType }) =>
-    uuidRouteReference(documentId, documentType),
+  toReference: ({ documentId, documentType }, query) =>
+    withDatabaseLinkParams(uuidRouteReference(documentId, documentType), query),
 });
 
 export const driveFolderRoute = defineRoute({
@@ -1051,13 +1067,13 @@ export const legacyContentRoute = defineRoute({
       id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
     };
   },
-  toReference: ({ type, id }) => {
+  toReference: ({ type, id }, query) => {
     const project = type === 'component' ? parseProjectRoute(id) : undefined;
     // A project mention opens the project, not one of its discussions.
     if (project?.discussionId) return;
     return project
       ? uuidRouteReference(project.id, 'initiative')
-      : uuidRouteReference(id, type);
+      : withDatabaseLinkParams(uuidRouteReference(id, type), query);
   },
 });
 

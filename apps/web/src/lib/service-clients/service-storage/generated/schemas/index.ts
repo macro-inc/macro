@@ -718,6 +718,7 @@ export * from './createCrmContactRequestEmail';
 export * from './createCrmTeamContactRequest';
 export * from './createCrmTeamContactRequestEmail';
 export * from './createDatabaseRequest';
+export * from './createDatabaseRequestFirstTable';
 export * from './createDatabaseWebhookRequest';
 export * from './createDocument200';
 export * from './createDocument200DataOneOf';

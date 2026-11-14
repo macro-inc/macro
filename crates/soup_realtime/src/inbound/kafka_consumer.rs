@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{future::Future, time::Duration};
+use std::{collections::HashSet, future::Future, time::Duration};
 
 use crate::domain::{
     models::{Patch, SoupRealtimePatch},
@@ -614,8 +614,14 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     }
 }
 
-/// Total publication attempts per patch before discarding its source event.
+/// Total publication attempts per batch before discarding its source event.
 const MAX_NOTIFY_ATTEMPTS: usize = 5;
+
+/// Patches whose recipients are resolved in one lookup and retried as a unit.
+///
+/// Bounds the lookups a large folder event makes, and the duplicates a retry
+/// republishes.
+const NOTIFY_BATCH_SIZE: usize = 500;
 
 /// Retries after one, two, four, and eight seconds.
 fn notify_retry_strategy() -> impl Iterator<Item = Duration> {
@@ -630,11 +636,19 @@ enum EventOutcome {
     Notified,
     /// A recognized event does not change a Soup-visible entity.
     Ignored,
-    /// A patch exhausted its retries; the remaining event was logged and discarded.
+    /// A batch exhausted its retries; the remaining event was logged and discarded.
     Dropped,
 }
 
-#[tracing::instrument(skip(service, sessions, event, commit))]
+#[tracing::instrument(
+    skip(service, sessions, event, commit),
+    fields(
+        entity_count = tracing::field::Empty,
+        recipient_lookup_count = tracing::field::Empty,
+        recipient_set_count = tracing::field::Empty,
+        publish_count = tracing::field::Empty,
+    )
+)]
 async fn process_event<S: SoupRealtimeService, L: PullRequestSessions>(
     service: &S,
     sessions: &L,
@@ -675,25 +689,42 @@ async fn process_event<S: SoupRealtimeService, L: PullRequestSessions>(
     };
 
     let patch_count = patches.len();
-    for (index, patch) in patches.into_iter().enumerate() {
+    let mut recipient_lookup_count = 0_usize;
+    let mut recipient_sets = HashSet::new();
+    let mut publish_count = 0_usize;
+    for (index, batch) in patches.chunks(NOTIFY_BATCH_SIZE).enumerate() {
         let result = Retry::start(notify_retry_strategy(), || {
-            service.notify_users(patch.clone())
+            recipient_lookup_count += 1;
+            service.notify_users(batch.to_vec())
         })
         .await
         .inspect_err(|error| {
             tracing::error!(
                 error = ?error,
-                patch = ?patch,
+                batch_index = index,
+                batch_patch_count = batch.len(),
                 attempts = MAX_NOTIFY_ATTEMPTS,
-                skipped_patch_count = patch_count - index - 1,
+                skipped_patch_count = patch_count.saturating_sub((index + 1) * NOTIFY_BATCH_SIZE),
                 "discarding realtime Soup source event after exhausting notification retries"
             );
         });
-        if result.is_err() {
-            outcome = EventOutcome::Dropped;
-            break;
+        match result {
+            Ok(delivery) => {
+                recipient_sets.extend(delivery.recipient_sets);
+                publish_count += delivery.publish_count;
+            }
+            Err(_) => {
+                outcome = EventOutcome::Dropped;
+                break;
+            }
         }
     }
+
+    let span = tracing::Span::current();
+    span.record("entity_count", patch_count);
+    span.record("recipient_lookup_count", recipient_lookup_count);
+    span.record("recipient_set_count", recipient_sets.len());
+    span.record("publish_count", publish_count);
 
     commit();
     outcome
@@ -719,8 +750,10 @@ impl SoupRealtimeServiceImpl {
     ///
     /// The consumer subscribes to every existing entity topic with events that
     /// can change a Soup item under the `soup-realtime` group. It commits malformed
-    /// and recognized-but-ignored events immediately. Affecting events are committed
-    /// after every patch succeeds or a patch exhausts its five publication attempts.
+    /// and recognized-but-ignored events immediately. An affecting event's patches
+    /// are published in batches of up to 500, each with one recipient lookup, and
+    /// the event is committed after every batch succeeds or a batch exhausts its
+    /// five publication attempts.
     /// Exhaustion logs an error and discards the remaining event before committing,
     /// intentionally preferring consumer progress over delivery during persistent
     /// failures. Shutdown during processing or retry backoff leaves the event
@@ -753,11 +786,20 @@ impl SoupRealtimeServiceImpl {
                 result = consumer.recv() => {
                     let Ok(message) = result else { continue; };
                     let kafka_message = message.inner();
+                    // Parent each event on its producer's trace, so a folder's
+                    // fan-out reads in the trace of the request that changed it
+                    // instead of under the consumer's lifetime span.
+                    let consumer_span = kafka_util::consumer_span(
+                        kafka_message,
+                        SoupRealtimeConsumerGroup::GROUP_NAME,
+                    );
                     let span = tracing::info_span!(
+                        parent: &consumer_span,
                         "realtime_soup_source_event",
                         topic = kafka_message.topic(),
                         partition = kafka_message.partition(),
                         offset = kafka_message.offset(),
+                        key = kafka_message.key().and_then(|key| std::str::from_utf8(key).ok()),
                     );
                     let decoded = {
                         let _guard = span.enter();
