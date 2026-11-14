@@ -29,13 +29,18 @@ export function EntityConversationComposer(props: {
 }) {
   const send = useSendMessageMutation();
   const userId = useUserId();
-  // The mention list's agents load when someone starts writing, not with
-  // every record or document that shows a composer.
+  // The mention list's agents load when someone heads for the composer
+  // (pointer over it, or focus from the keyboard or a tap), not with every
+  // record or document that shows one.
   const [writing, setWriting] = createSignal(false);
   const bots = useMessageBotMentionUsers(() => props.parent, writing);
   let input: InputHandle | undefined;
   return (
-    <div class="contents" onFocusIn={() => setWriting(true)}>
+    <div
+      class="contents"
+      onPointerEnter={() => setWriting(true)}
+      onFocusIn={() => setWriting(true)}
+    >
       <ChannelInput
         parent={props.parent}
         bots={bots}
