@@ -215,7 +215,8 @@ tools — hexagonal, heavily feature-gated.
   every stream with the general builder page by page. The superset keeps only
   the read inboxes' own contacts, because a message lists only its own inbox's
   contacts (`parse_and_upsert_message_contacts`); a writer that broke that
-  would drop threads from the Team view.
+  would drop threads from the Team view, and their conversations' other
+  copies with them (`docs/CRM_EMAIL_PRIVACY.md`).
 - The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
   the inbox: each inbox takes a page of opened threads and a page of
   never-opened threads (`idx_email_threads_inbox_reminder_sort` for
