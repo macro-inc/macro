@@ -1,0 +1,19 @@
+crates/agent_monitor/AGENTS.md
+  s_7a07194ea723e2::t_3548b796005acd 26-30,39-45,71-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d6eaed49cd2051a1282fa8b7275e210479b6d275",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
