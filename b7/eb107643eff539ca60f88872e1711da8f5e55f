@@ -1,0 +1,51 @@
+crates/agent_monitor/src/client.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 23-26,136-137,152-155,158,168,171-174
+crates/agent_monitor/examples/monitor.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 1-205
+crates/agent_monitor/src/domain/store.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 17,48-49,54-57,71,176-222,298-300,389-396,398-402,408-415,464-472,484-488,503,507,526-536,615,632,656
+crates/agent_monitor/src/inbound/grpc.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 3,5,13,35,38-43,57-81,84-93,96-104,109-112,115,117,121,259,300,312,314-317,323,328-341
+crates/agent_monitor/src/outbound/demo/test.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 58-79
+crates/agent_monitor/src/outbound/demo.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 24,28-29,39,108-113,124-128,130-134,136-137,169-197,1046-1058,1060,1062
+crates/agent_monitor/AGENTS.md
+  s_7a07194ea723e2::t_8b0eeabed1ca85 12-17,23,25-45,62-68
+crates/agent_monitor/src/domain/store/test.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 139-144
+crates/agent_monitor/src/domain/model.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 118-119,125
+crates/agent_monitor/src/domain/supervisor.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 33-35,37,40-50,53,56,70
+crates/agent_monitor/Cargo.toml
+  s_7a07194ea723e2::t_8b0eeabed1ca85 48-54
+crates/agent_monitor/tests/rpc.rs
+  s_7a07194ea723e2::t_8b0eeabed1ca85 1-358
+Cargo.lock
+  s_52b778d7b06e4b::t_ac860ee17c4b4f 908,926
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b7eb107643eff539ca60f88872e1711da8f5e55f",
+  "prompts": {},
+  "sessions": {
+    "s_52b778d7b06e4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb1c9354-6ebd-4559-ba14-05d8d00f4534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
