@@ -23,6 +23,11 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
+import type {
+  EmailPrivacy,
+  EmailPrivacyChange,
+  ExcludedThreads,
+} from '../core/email-privacy';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
@@ -35,6 +40,7 @@ import type {
   CrmEmailScope,
   CrmEmailSignal,
   CrmMutation,
+  CrmQuery,
   CrmStageInput,
   CrmStagesResult,
   DealStages,
@@ -57,13 +63,11 @@ import type {
 
 export type CrmContext = {
   createEmailPrivacy(): {
-    query: import('./crm-sources').CrmQuery<
-      import('../core/email-privacy').EmailPrivacy
-    >;
-    update: CrmMutation<
-      import('../core/email-privacy').EmailPrivacyChange,
-      import('../core/email-privacy').EmailPrivacy
-    >;
+    createExcludedThreads(
+      after: Accessor<string | undefined>
+    ): CrmQuery<ExcludedThreads>;
+    query: CrmQuery<EmailPrivacy>;
+    update: CrmMutation<EmailPrivacyChange, EmailPrivacy>;
   };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;

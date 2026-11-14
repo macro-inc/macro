@@ -46,6 +46,7 @@ inbound = ["axum", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
+  "dep:feature_flags",
   "dep:opentelemetry",
   "dep:tracing-opentelemetry",
   "dep:entity_access_db_utils",
@@ -56,7 +57,7 @@ outbound = [
   "dep:unfurl",
   "ports",
 ]
-ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
+ports = ["dep:async-trait", "dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
@@ -107,6 +108,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
+feature_flags = { path = "../feature_flags", optional = true }
 opentelemetry = { workspace = true, features = ["trace"], optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }

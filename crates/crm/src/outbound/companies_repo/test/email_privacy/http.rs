@@ -19,9 +19,20 @@ use macro_authorization::{
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tower::ServiceExt;
 
 const MEMBER: &str = "macro|member@example.com";
+#[derive(Debug)]
+struct ThreadExclusionRollout(Arc<AtomicBool>);
+
+#[async_trait::async_trait]
+impl crate::domain::email_privacy::ThreadExclusionGate for ThreadExclusionRollout {
+    async fn enabled_for(&self, _: macro_user_id::user_id::MacroUserIdStr<'_>) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
 #[derive(Clone)]
 struct FixtureCredential;
 impl JwtValidator for FixtureCredential {
@@ -107,11 +118,12 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
     let company = insert_company(&pool, team, true, &["acme.example.com"]).await?;
     insert_contact(&pool, company, "pat@acme.example.com").await?;
     let thread = insert_interaction(&pool, link, "pat@acme.example.com", Utc::now(), true).await?;
+    let rollout = Arc::new(AtomicBool::new(false));
     let state = CrmRouterState {
-        service: Arc::new(CrmServiceImpl::new(
-            repo.clone(),
-            NoOpCompanyMetadataResolver,
-        )),
+        service: Arc::new(
+            CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver)
+                .with_thread_exclusion_gate(Arc::new(ThreadExclusionRollout(rollout.clone()))),
+        ),
         stage_service: Arc::new(()),
         entity_access_service: Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),
@@ -133,6 +145,10 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
             "/crm/email-privacy",
             get(email_privacy::get_handler::<_, (), _, _>)
                 .put(email_privacy::update_handler::<_, (), _, _>),
+        )
+        .route(
+            "/crm/email-privacy/threads",
+            get(email_privacy::excluded_threads_handler::<_, (), _, _>),
         )
         .with_state(state);
     assert_eq!(
@@ -164,6 +180,97 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
             &app,
             "owner",
             Some(json!({"action":"set_consent","enabled":true,"link_id":link}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert!(allowed(&pool, team, thread).await?);
+
+    for excluded in [true, false] {
+        assert_eq!(
+            request(
+                &app,
+                "owner",
+                Some(
+                    json!({"action":"set_thread_exclusion","thread_id":thread,"excluded":excluded})
+                )
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN,
+        );
+    }
+    assert!(
+        repo.excluded_email_threads(team, OWNER, None)
+            .await?
+            .threads
+            .is_empty()
+    );
+    rollout.store(true, Ordering::SeqCst);
+    for excluded in [true, false] {
+        assert_eq!(
+            request(
+                &app,
+                "member",
+                Some(
+                    json!({"action":"set_thread_exclusion","thread_id":thread,"excluded":excluded})
+                )
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        request(
+            &app,
+            "owner",
+            Some(json!({"action":"set_thread_exclusion","thread_id":thread,"excluded":true}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert!(!allowed(&pool, team, thread).await?);
+    for (actor, expected_count) in [("owner", 1), ("member", 0)] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/crm/email-privacy/threads")
+                    .header("authorization", format!("Bearer {actor}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 64 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(body["threads"].as_array().unwrap().len(), expected_count);
+        if actor == "owner" {
+            assert_eq!(body["threads"][0]["thread_id"], thread.to_string());
+        }
+    }
+
+    assert_eq!(
+        request(
+            &app,
+            "member",
+            Some(json!({"action":"set_thread_exclusion","thread_id":thread,"excluded":false}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert!(!allowed(&pool, team, thread).await?);
+    assert_eq!(
+        request(
+            &app,
+            "owner",
+            Some(json!({"action":"set_thread_exclusion","thread_id":thread,"excluded":false}))
         )
         .await
         .0,

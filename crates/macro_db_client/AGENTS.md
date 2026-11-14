@@ -157,3 +157,8 @@ only after provider namespace erasure. Keep orphan-discovery candidates durable
 with their cursor advance, and separate retry scheduling from TOTP quarantine.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.
+
+`crm_email_thread_exclusions` stores one contributor's private thread exceptions;
+its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
+owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
+veto used by the shared eligibility function and mirrored in set-based ingestion.

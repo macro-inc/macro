@@ -812,6 +812,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
+- Keep the owner-only **Keep this thread out of CRM** action in both thread
+  menus, and removal/pagination in the existing CRM Email settings surface.
+  Use the shared privacy mutation so contact/company contribution email readers refresh;
+  gate thread actions and exception settings with `enableCrmThreadExclusions`,
+  which has no dev/local override while backend ingestion rolls out;
+  another contributor's copy remains eligible. Desktop/phone coverage lives in
+  `src/features/crm/browser-test/privacy`.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see

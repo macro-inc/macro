@@ -32,6 +32,7 @@ export function emailThreadMenu(actions: EmailThreadMenuActions): BlockTool[] {
     actions.share,
     actions.moveToFolder,
     actions.downloadEml,
+    actions.excludeFromCrm,
     actions.trash,
     actions.senderToSignal,
     actions.senderToNoise,

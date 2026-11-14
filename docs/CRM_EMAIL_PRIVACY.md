@@ -16,6 +16,23 @@ hides or deletes a company or contact.
   current membership model.
 - Personal domains exclude only the caller's contributions. Another consenting
   teammate's copy may remain visible. Personal lists are returned only to their owner.
+- Thread exceptions exclude only the mailbox owner's copy of one thread for this
+  team, including messages already shared and future messages in that same thread.
+  A different member's eligible copy of the same conversation remains visible,
+  including overlapping messages; this is not a team-wide redaction. Ordinary
+  mailbox access and separately granted access remain independent.
+- Sales Email currently reads the viewer's own mailbox, not teammates'
+  contributed copies. Their own copy remains visible there, matching personal
+  blocked-domain behavior; thread exceptions do not change that mailbox access.
+- Owners add an exception from their thread's **Keep this thread out of CRM** menu
+  action. **Email settings → Threads kept out of CRM** lists only their own
+  exceptions, fifty per page, and lets them remove one. Removing an exception
+  restores eligibility only if consent and every other exclusion still allow it.
+  The same controls are available in the phone menu and settings drawer.
+- Thread exceptions do not immediately recompute first/last interaction dates,
+  matching personal blocked domains. Existing company/contact records, archive
+  state, sources and prior interaction metadata remain. Normal population uses
+  only eligible stored messages when it next updates interaction ranges.
 - A domain also covers subdomains, with a dot boundary: `acme.com` covers
   `sales.acme.com`, but not `notacme.com`. Any blocked sender/recipient in any
   non-draft message excludes the whole thread, including mixed-company threads.
@@ -29,9 +46,14 @@ hides or deletes a company or contact.
 ## Enforcement and boundaries
 
 `EmailPrivacyService` in the CRM domain validates domains and authorizes typed team
-receipts. The Axum GET/PUT `/crm/email-privacy` adapters only extract identity,
-forward a command, and map the response. The SQL repository persists consent and
-the two lists; it commits backfill requests in an outbox with the mutation.
+receipts. The Axum GET/PUT `/crm/email-privacy` adapters extract identity,
+forward a command, and map the response. `set_thread_exclusion` takes `thread_id`
+and `excluded`; identity always comes from the authenticated team receipt, and
+both setting and clearing require ownership of that thread's mailbox. It is
+idempotent and can be set before consent. `GET /crm/email-privacy/threads?after=…`
+returns the owner's keyset-paginated exceptions and their current subjects.
+The SQL repository persists consent, domain lists and thread exceptions; it
+commits backfill requests in an outbox with the mutation.
 
 CRM-scoped REST and GraphQL email previews read the primary database so a
 committed withdrawal or exclusion cannot be undone by replica lag during refresh.
@@ -40,7 +62,14 @@ stale CRM eligibility.
 
 `crm_email_thread_allowed` is shared by CRM-scoped email listing and direct thread
 access. It verifies the mailbox, current membership, explicit consent, and
-whole-thread participant exclusions. `crm_email_domain_blocked` also honors
+whole-thread participant exclusions. The separate
+`crm_email_thread_excluded(team, user, link, thread)` predicate is a veto regardless
+of domain eligibility. `crm_email_thread_exclusions` holds team/member/mailbox/thread
+identities, with deletion cascades for membership, mailbox and thread. A future
+selective inclusion rule must retain this veto. Labels and folders are not
+implemented: future target-specific exclusion tables can keep their own foreign
+keys and add predicates alongside this one, without changing thread exceptions.
+`crm_email_domain_blocked` also honors
 legacy company `email_sync = false` exclusions. The ingestion interaction scan
 (`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) applies
 the same rules set-based, once per call instead of once per thread and participant;
@@ -71,6 +100,23 @@ carried through queue delivery, retries, and contact fan-out without logging
 mailbox identities or message payloads.
 
 ## Rollout
+
+Thread-exclusion controls and API writes are gated by the remote
+`enable-crm-thread-exclusions` flag, off by default in every environment. The
+web registry has no dev default or local override; the CRM domain independently
+requires a successful enabled snapshot for the authenticated caller before
+setting or clearing an exception. Missing flags, failed evaluations and service
+constructions without the gate all refuse these writes. Other privacy settings
+and existing exclusion enforcement remain active when the flag is off.
+
+DSS and email-service binaries can briefly run different versions. An older
+population binary ignores an existing exception row and may populate from the
+excluded thread until that worker restarts with the new query. CRM email listing
+and direct-access checks still enforce the replaced SQL veto. Keep the flag off
+until the ingestion binaries are confirmed to run the new code; creating or
+enabling the remote flag is a separate rollout action. Rolling back an
+application binary leaves the SQL veto active while the migration remains
+applied.
 
 The first privacy migration starts with no individual consents. In one transaction,
 it takes a write barrier on `team_crm_settings`, turns off the retired

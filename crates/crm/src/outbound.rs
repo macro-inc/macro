@@ -16,6 +16,9 @@ pub mod search_repo;
 /// Properties-service implementation of the team stage definition store
 #[cfg(feature = "outbound")]
 pub mod stage_definitions;
+/// Remote rollout gate for owner-managed thread-exclusion writes.
+#[cfg(feature = "outbound")]
+pub mod thread_exclusions;
 /// Unfurl-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod unfurl_resolver;

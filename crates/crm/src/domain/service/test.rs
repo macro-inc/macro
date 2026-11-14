@@ -29,6 +29,15 @@ struct StubRepo {
 }
 
 impl EmailPrivacyRepository for StubRepo {
+    async fn excluded_email_threads(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+        _: Option<uuid::Uuid>,
+    ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: uuid::Uuid,
@@ -1161,5 +1170,26 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
+    }
+}
+
+#[tokio::test]
+async fn thread_exclusion_writes_are_disabled_without_an_injected_rollout_gate() {
+    use crate::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyService};
+    let service = service();
+    let receipt = receipt_with_role(TeamRole::Owner);
+    for excluded in [true, false] {
+        assert!(matches!(
+            service
+                .change_email_privacy(
+                    &receipt,
+                    EmailPrivacyChange::SetThreadExclusion {
+                        thread_id: uuid::Uuid::now_v7(),
+                        excluded,
+                    }
+                )
+                .await,
+            Err(CrmError::ThreadExclusionsUnavailable),
+        ));
     }
 }

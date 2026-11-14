@@ -32,6 +32,14 @@ const CHANNEL: Uuid = Uuid::from_u128(0xc4a);
 struct FakeCrm;
 
 impl EmailPrivacyService for FakeCrm {
+    async fn excluded_email_threads(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<Uuid>,
+    ) -> Result<crm::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,

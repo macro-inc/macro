@@ -6,6 +6,6 @@
  */
 
 /**
- * Required when enabling; must match the displayed primary connection.
+ * Current subject, for the owner's privacy settings.
  */
-export type EmailPrivacyChangeOneOfLinkId = string | null;
+export type ExcludedEmailThreadSubject = string | null;

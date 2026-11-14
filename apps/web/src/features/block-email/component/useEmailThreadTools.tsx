@@ -2,6 +2,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { useThreadExclusionAction } from '@app/features/crm/thread-exclusion-adapter';
 import { downloadEmailMessageEml } from '@app/features/email-message/eml-download-adapter';
 import type { EmailThreadListNavigation } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
@@ -107,6 +108,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     if (!thread || !queryReadyGate(linksQuery)) return false;
     return linksQuery.data.links.some((link) => link.id === thread.link_id);
   };
+  const crmPrivacy = useThreadExclusionAction(() => props.id, isOwnThread);
 
   const isDone = () => emailCtx.isThreadDone();
 
@@ -357,6 +359,15 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         isOwnThread() &&
         emailCtx.canActOnSender() &&
         senderBucket() !== 'noise',
+    },
+    excludeFromCrm: {
+      group: 'file',
+      get label() {
+        return t('crm.privacyExcludeThread');
+      },
+      icon: ProhibitIcon,
+      action: crmPrivacy.exclude,
+      condition: crmPrivacy.available,
     },
     blockSender: {
       group: 'sender',
