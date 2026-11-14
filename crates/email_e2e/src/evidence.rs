@@ -38,17 +38,24 @@ const TAG_LENGTH: usize = 48;
 const TEXT: &str = "<str>";
 /// The keys whose string values name a kind of request, message or event,
 /// and are kept: everything else a body or a query holds may be content.
-const KIND_KEYS: [&str; 11] = [
+const KIND_KEYS: [&str; 18] = [
     "action",
     "backfillOperation",
     "changeType",
+    "deletion_reason",
+    "emailView",
+    "entity_type",
     "event",
     "event_type",
     "field",
     "kind",
     "lifecycleEvent",
+    "match_type",
+    "message_type",
     "operation",
+    "search_on",
     "sort_method",
+    "status",
     "type",
 ];
 /// The query values kept under any key.

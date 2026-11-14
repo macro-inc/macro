@@ -36,3 +36,93 @@
 #
 # Functions another service carries out are deferred to the full-stack tier
 # by `outside` in functions.toml, not here.
+
+# ------------------------------------------------- provider methods unused
+
+[[entry_point]]
+entry = "provider gmail:messages.batchDelete"
+reason = "served by the emulator, never called by the product: every Gmail request goes through gmail_client, which has no batch delete"
+
+[[entry_point]]
+entry = "provider gmail:messages.delete"
+reason = "served by the emulator, never called by the product: gmail_client only reads messages by id; the product trashes, it never deletes"
+
+[[entry_point]]
+entry = "provider gmail:messages.import"
+reason = "served by the emulator, never called by the product: sending is messages.send; nothing posts to messages/import"
+
+[[entry_point]]
+entry = "provider gmail:labels.update"
+reason = "served by the emulator, never called by the product: the Gmail label adapter lists, creates and deletes; nothing sends a PUT or PATCH"
+
+[[entry_point]]
+entry = "provider outlook:messages.copy"
+reason = "served by the emulator, never called by the product: archive and move use /move; no Graph request ends in /copy"
+
+[[entry_point]]
+entry = "provider outlook:messages.sendMail"
+reason = "served by the emulator, never called by the product: Outlook sends by creating a draft and posting /send on it"
+
+[[entry_point]]
+entry = "provider outlook:messages.reply"
+reason = "served by the emulator, never called by the product: the product calls createReply, a separate row"
+
+[[entry_point]]
+entry = "provider outlook:messages.forward"
+reason = "served by the emulator, never called by the product: no Graph request ends in /forward"
+
+[[entry_point]]
+entry = "provider outlook:batch"
+reason = "served by the emulator, never called by the product: every Graph call is a single request; nothing posts to $batch"
+
+# ---------------------------------------------------- sign-in, full stack
+
+[[deferred]]
+entry = "provider gmail:oauth.authorize"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider gmail:oauth.userinfo"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.authorize"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.adminconsent"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.discovery"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.keys"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.userinfo"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+# ------------------------------------------------------------- no caller
+
+[[dead_code]]
+entry = "queue gmail-ops:DeleteLabel"
+reason = "the handler has no sender: nothing in the repository builds this message"
+
+[[dead_code]]
+entry = "http GET /internal/messages/{id}"
+reason = "no client in the repository requests this internal route"
+
+[[dead_code]]
+entry = "http POST /internal/messages/batch"
+reason = "no client in the repository requests this internal route"
+
+[[dead_code]]
+entry = "http GET /internal/threads/{id}/messages"
+reason = "no client in the repository requests this internal route"
+
+[[dead_code]]
+entry = "http GET /internal/threads/{id}/owner"
+reason = "no client in the repository requests this internal route"
