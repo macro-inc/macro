@@ -5,8 +5,8 @@ import {
   SessionInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type {
-  SessionExecutor,
   ExecutorCompletion,
+  SessionExecutor,
   SyncEntrySchedule,
 } from '@macro-inc/collaboration/session/executor';
 import { emptyInput } from '@macro-inc/collaboration/session/input';

@@ -13,8 +13,8 @@ import type {
 } from '@macro-inc/collaboration/session/wasm';
 import { Telemetry } from '@macro-inc/observability';
 import {
-  inputDomDisposition,
   type InputDomDisposition,
+  inputDomDisposition,
 } from './input-dom-disposition';
 import { ListenerMetadataCache } from './listener-metadata';
 import type { NativeEnterDispatcher } from './native-enter';

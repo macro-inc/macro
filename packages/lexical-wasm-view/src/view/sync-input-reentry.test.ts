@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // UNAPPLIED/UNRUN: actual mounted production Port, view.apply, executor and WASM.
-import { afterAll, beforeAll, expect, test } from 'vitest';
+
 import { EditorInputMsg } from '@macro-inc/collaboration/session/abi.generated';
+import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
   initializeNativeKeyboardSurface,
   nativeAcknowledgementSurface,

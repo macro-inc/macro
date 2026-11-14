@@ -48,17 +48,22 @@ test.each([
 ])(
   'the real executor binds a View-only follow-up $label cause exactly once',
   async ({ cause }) => {
-    const fixture = await nativeAcknowledgementSurface(undefined, undefined, undefined, {
-      primeEcho: false,
-      codeTokens: {
-        profile: 'native-ack-cause-control',
-        provider: (operation) => {
-          if (operation === 'loaded')
-            return JSON.stringify({ kind: 'loaded', loaded: true });
-          throw cause;
+    const fixture = await nativeAcknowledgementSurface(
+      undefined,
+      undefined,
+      undefined,
+      {
+        primeEcho: false,
+        codeTokens: {
+          profile: 'native-ack-cause-control',
+          provider: (operation) => {
+            if (operation === 'loaded')
+              return JSON.stringify({ kind: 'loaded', loaded: true });
+            throw cause;
+          },
         },
-      },
-    });
+      }
+    );
     const lookup = vi.spyOn(fixture.session, 'takeCodeTokenFailure');
     const effects: DecodedViewEffect[] = [];
     const apply = fixture.view.apply.bind(fixture.view);

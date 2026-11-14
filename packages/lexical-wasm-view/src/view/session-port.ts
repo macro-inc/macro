@@ -1,4 +1,3 @@
-import { executeSyncInput } from './sync-input';
 import {
   Access,
   ClipboardDomMsg,
@@ -44,8 +43,6 @@ import type { NativeEnterBinding } from './native-enter-output';
 import { assertNativeSessionReceiverAdmission } from './native-session-guard';
 import type {
   EditorPort,
-  SyncInputOptions,
-  SyncApplicationOptions,
   InputSettlement,
   NativeBlockNavigationPort,
   NativeEnterPort,
@@ -53,10 +50,13 @@ import type {
   ProgrammaticApplicationAdmissionOptions,
   ProgrammaticApplicationInput,
   ProgrammaticApplicationOptions,
+  SyncApplicationOptions,
+  SyncInputOptions,
   TextFromView,
   ViewSink,
 } from './port';
 import type { EditorThemeClasses } from './registry';
+import { executeSyncInput } from './sync-input';
 import type { Point, TypeRow, ViewSelection } from './types';
 
 export function selectionMessage(selection: ViewSelection): ISelectionMsg {

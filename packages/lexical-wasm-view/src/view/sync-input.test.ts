@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // UNAPPLIED/UNRUN: production mount, native table-picker and Code producers.
-import { afterAll, beforeAll, expect, test, vi } from 'vitest';
-import { Telemetry } from '@macro-inc/observability';
+
 import { SessionInputError } from '@macro-inc/collaboration/session/executor';
+import { Telemetry } from '@macro-inc/observability';
+import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import {
   initializeNativeKeyboardSurface,
   nativeAcknowledgementSurface,

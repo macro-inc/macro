@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 // UNAPPLIED/UNRUN: explicit fixture boundary faults, not product parity failures.
-import { Telemetry } from '@macro-inc/observability';
+
 import { SessionExecutor } from '@macro-inc/collaboration/session/executor';
+import { Telemetry } from '@macro-inc/observability';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
-import * as native from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import {
   initializeNativeKeyboardSurface,
-  nativeAcknowledgementSurface,
   type NativeKeyboardCleanupFailure,
+  nativeAcknowledgementSurface,
 } from '../../../../apps/web/src/lib/core/component/LexicalMarkdown/editing/test/native-keyboard-surface';
+import * as native from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { SessionPort } from './session-port';
 
 let restore: (() => void) | undefined;
@@ -190,6 +191,7 @@ test.each([undefined, null, { opaque: 'initializer-primary' }])(
     let restoring = false;
     const releases: (() => void)[] = [];
     let testFailure: { readonly error: unknown } | undefined;
+    const failures: NativeKeyboardCleanupFailure[] = [];
     try {
       const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {
         throw new Error('injected reporter fault');
@@ -245,7 +247,6 @@ test.each([undefined, null, { opaque: 'initializer-primary' }])(
       throw error;
     } finally {
       restoring = false;
-      const failures: NativeKeyboardCleanupFailure[] = [];
       for (const release of releases.reverse()) {
         try {
           release();
@@ -265,8 +266,8 @@ test.each([undefined, null, { opaque: 'initializer-primary' }])(
       } catch (error) {
         failures.push({ error });
       }
-      if (!testFailure && failures.length) throw failures[0].error;
     }
+    if (!testFailure && failures.length) throw failures[0].error;
   }
 );
 
@@ -289,6 +290,7 @@ test.each([undefined, null, { opaque: 'seed-primary' }])(
     let setup: Promise<void> | undefined;
     const releases: (() => void)[] = [];
     let testFailure: { readonly error: unknown } | undefined;
+    const failures: NativeKeyboardCleanupFailure[] = [];
     try {
       const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
       releases.push(() => report.mockRestore());
@@ -373,7 +375,6 @@ test.each([undefined, null, { opaque: 'seed-primary' }])(
     } finally {
       armed = false;
       gate.resolve();
-      const failures: NativeKeyboardCleanupFailure[] = [];
       try {
         await setup;
       } catch (error) {
@@ -386,7 +387,7 @@ test.each([undefined, null, { opaque: 'seed-primary' }])(
           failures.push({ error });
         }
       }
-      if (!testFailure && failures.length) throw failures[0].error;
     }
+    if (!testFailure && failures.length) throw failures[0].error;
   }
 );

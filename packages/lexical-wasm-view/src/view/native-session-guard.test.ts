@@ -642,7 +642,7 @@ test('installation rollback fault remains unowned and exposes no entry lease', (
   const secondary = { rollback: 'fault' };
   let writes = 0;
   let armed = true;
-  const constructor = new Proxy(DescriptorFixture, {
+  const guardedConstructor = new Proxy(DescriptorFixture, {
     defineProperty(target, key, descriptor) {
       writes++;
       if (armed && writes === 2) throw primary;
@@ -653,14 +653,14 @@ test('installation rollback fault remains unowned and exposes no entry lease', (
   const hooks = { active: () => false };
   let caught: { readonly error: unknown } | undefined;
   try {
-    installNativeSessionReceiverGuard(constructor, hooks);
+    installNativeSessionReceiverGuard(guardedConstructor, hooks);
   } catch (error) {
     caught = { error };
   }
   expect(caught).toBeDefined();
   expect(caught?.error).toBe(primary);
   armed = false;
-  const guard = installNativeSessionReceiverGuard(constructor, hooks);
+  const guard = installNativeSessionReceiverGuard(guardedConstructor, hooks);
   const receiver = new DescriptorFixture();
   const completion = {};
   const ticket = guard.beginCleanupEntry(receiver, completion);

@@ -1,9 +1,3 @@
-import type { InputDomDisposition } from './input-dom-disposition';
-import type {
-  ExecutorOwnedTransfer,
-  SyncEntrySchedule,
-} from '@macro-inc/collaboration/session/executor';
-import type { EditorView } from './editor-view';
 import type {
   EditorInputMsg,
   IClipboardMsg,
@@ -14,11 +8,17 @@ import type {
   ISelectionMsg,
   IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import type {
+  ExecutorOwnedTransfer,
+  SyncEntrySchedule,
+} from '@macro-inc/collaboration/session/executor';
 import type { ViewCommandPriority } from './commands';
+import type { EditorView } from './editor-view';
 import type {
   InputCommitEvidence,
   InputCommitObservation,
 } from './input-commit-observation';
+import type { InputDomDisposition } from './input-dom-disposition';
 import type { NativeEnterScope } from './native-enter';
 import type { NativeCallbackFailure } from './native-enter-output';
 import type { EditorThemeClasses } from './registry';

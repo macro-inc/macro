@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest';
 import type { IViewEffectMsg } from '@macro-inc/collaboration/session/abi.generated';
+import { describe, expect, test } from 'vitest';
 import { inputDomDisposition } from './input-dom-disposition';
 
 function effect(flag: boolean, detail: number): IViewEffectMsg {

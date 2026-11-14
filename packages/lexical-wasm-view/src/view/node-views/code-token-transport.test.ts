@@ -24,8 +24,7 @@ if (
 )
   throw new Error('Unknown native session artifact profile');
 
-const productionArtifactJs =
-  process.env.NATIVE_SESSION_PRODUCTION_ARTIFACT_JS;
+const productionArtifactJs = process.env.NATIVE_SESSION_PRODUCTION_ARTIFACT_JS;
 
 beforeAll(() => {
   initializeNativeSurfaceTests();
@@ -397,21 +396,19 @@ test('a provider without a profile is rejected at construction', () => {
 
 test.runIf(
   nativeArtifactProfile === 'production' || productionArtifactJs !== undefined
-)(
-  'the production artifact ships no dev-probes registry export',
-  async () => {
-    const { readFileSync } = await import('node:fs');
-    const { resolve } = await import('node:path');
-    const glue = readFileSync(
-      productionArtifactJs ?? resolve(
+)('the production artifact ships no dev-probes registry export', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const glue = readFileSync(
+    productionArtifactJs ??
+      resolve(
         import.meta.dirname,
         '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js'
       ),
-      'utf8'
-    );
-    expect(glue).not.toContain('debugCodeTokenProviders');
-  }
-);
+    'utf8'
+  );
+  expect(glue).not.toContain('debugCodeTokenProviders');
+});
 
 test.each([
   ['an Error', new Error(SENTINEL)],

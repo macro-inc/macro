@@ -41,6 +41,7 @@ test('actual Source shortcut prefix survives a nested Format error in the same D
   const rootListener = (event: KeyboardEvent) => {
     returned.push(event.defaultPrevented);
   };
+  const failures: { readonly error: unknown }[] = [];
   try {
     editor.setRootElement(root); // Installs the actual Source root keydown listener first.
     dispose.push(
@@ -106,7 +107,6 @@ test('actual Source shortcut prefix survives a nested Format error in the same D
     primary = { error };
     throw error;
   } finally {
-    const failures: { readonly error: unknown }[] = [];
     const cleanup = (call: () => void) => {
       try {
         call();
@@ -119,6 +119,6 @@ test('actual Source shortcut prefix survives a nested Format error in the same D
     for (const release of dispose.reverse()) cleanup(release);
     cleanup(() => editor.setRootElement(null));
     cleanup(() => root.remove());
-    if (!primary && failures.length) throw failures[0].error;
   }
+  if (!primary && failures.length) throw failures[0].error;
 });

@@ -19,11 +19,11 @@ import {
   Transport,
 } from './abi.generated';
 import {
-  type ExecutorFailure,
-  type ExecutorDrain,
-  type ExecutorSettlement,
   type ExecutorCompletion,
+  type ExecutorDrain,
+  type ExecutorFailure,
   type ExecutorOptions,
+  type ExecutorSettlement,
   SessionExecutor,
 } from './executor';
 import { emptyInput } from './input';

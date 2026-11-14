@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // UNAPPLIED/UNRUN. Explicit post-cleanup faults on actual mounted production paths.
-import { Telemetry } from '@macro-inc/observability';
+
 import { SessionInputError } from '@macro-inc/collaboration/session/executor';
+import { Telemetry } from '@macro-inc/observability';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import {
   initializeNativeKeyboardSurface,
@@ -207,6 +208,7 @@ test.each([undefined, null, { opaque: 'entry-primary' }])(
     });
     let original: { readonly error: unknown } | undefined;
     let testFailure: { readonly error: unknown } | undefined;
+    const cleanupErrors: { readonly error: unknown }[] = [];
     try {
       const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {
         throw reporter;
@@ -290,7 +292,6 @@ test.each([undefined, null, { opaque: 'entry-primary' }])(
       throw error;
     } finally {
       armed = false;
-      const cleanupErrors: { readonly error: unknown }[] = [];
       for (const release of restoreFaults.reverse()) {
         try {
           release();
@@ -313,8 +314,8 @@ test.each([undefined, null, { opaque: 'entry-primary' }])(
       } catch (error) {
         cleanupErrors.push({ error });
       }
-      if (!testFailure && cleanupErrors.length) throw cleanupErrors[0].error;
     }
+    if (!testFailure && cleanupErrors.length) throw cleanupErrors[0].error;
   }
 );
 
