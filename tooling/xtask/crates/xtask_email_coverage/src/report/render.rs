@@ -1,8 +1,9 @@
 //! The report as text: one line, a job summary in Markdown, and a page.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use super::{Cell, EntryRow, FunctionRow, Model, Status, Tally};
+use super::{Cell, EntryRow, FunctionRow, Model, OwnedRow, Status, Tally};
 
 /// The page's frame: the styles, and where the body goes.
 const PAGE: &str = include_str!("page.html");
@@ -66,6 +67,7 @@ fn status_word(cell: Option<&Cell>) -> &'static str {
         Some(Status::Performed) => "performed",
         Some(Status::Waived) => "waived",
         Some(Status::Deferred) => "deferred",
+        Some(Status::Owned) => "owned",
         Some(Status::Open) => "open",
     }
 }
@@ -106,6 +108,32 @@ fn open_entries(model: &Model) -> Vec<&EntryRow> {
         .iter()
         .filter(|row| is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()))
         .collect()
+}
+
+/// The owners of the entry points counted elsewhere, each with its rows.
+fn owned_by_owner(model: &Model) -> BTreeMap<&str, Vec<&OwnedRow>> {
+    let mut owners: BTreeMap<&str, Vec<&OwnedRow>> = BTreeMap::new();
+    for row in &model.owned {
+        owners.entry(&row.owner).or_default().push(row);
+    }
+    owners
+}
+
+/// What is said of the entry points `owner`'s functions own.
+fn owned_note(owner: &str) -> String {
+    format!(
+        "Entry points the {owner} functions call, not email's: counted there, and in none of \
+         the totals above."
+    )
+}
+
+/// Whether a scenario reached an owned entry point on a provider.
+fn reached_word(reached: Option<bool>) -> &'static str {
+    match reached {
+        None => "n/a",
+        Some(true) => "reached",
+        Some(false) => "not reached",
+    }
 }
 
 /// The job summary.
@@ -199,6 +227,24 @@ pub(crate) fn markdown(model: &Model) -> String {
                 out,
                 "| `{}` | `{}` | {} |",
                 row.entry, row.source, row.reason
+            );
+        }
+        let _ = writeln!(out);
+    }
+
+    for (owner, rows) in owned_by_owner(model) {
+        let _ = writeln!(out, "### Counted with the {owner} functions\n");
+        let _ = writeln!(out, "{}\n", owned_note(owner));
+        let _ = writeln!(out, "| Entry point | Source | Gmail | Outlook |");
+        let _ = writeln!(out, "| --- | --- | --- | --- |");
+        for row in rows {
+            let _ = writeln!(
+                out,
+                "| `{}` | `{}` | {} | {} |",
+                row.entry,
+                row.source,
+                reached_word(row.gmail),
+                reached_word(row.outlook)
             );
         }
         let _ = writeln!(out);
@@ -411,6 +457,27 @@ pub(crate) fn html(model: &Model) -> String {
                 escape(&row.entry),
                 escape(&row.source),
                 escape(&row.reason)
+            );
+        }
+        let _ = write!(out, "</table></div>");
+    }
+
+    for (owner, rows) in owned_by_owner(model) {
+        let _ = write!(
+            out,
+            "<h2>Counted with the {} functions</h2><p>{}</p><div class=\"scroll\">\
+             <table class=\"rows\"><tr><th>entry point</th><th>Gmail</th><th>Outlook</th></tr>",
+            escape(owner),
+            escape(&owned_note(owner))
+        );
+        for row in rows {
+            let _ = write!(
+                out,
+                "<tr><td><code>{}</code><br><small>{}</small></td><td>{}</td><td>{}</td></tr>",
+                escape(&row.entry),
+                escape(&row.source),
+                reached_word(row.gmail),
+                reached_word(row.outlook)
             );
         }
         let _ = write!(out, "</table></div>");

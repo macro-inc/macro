@@ -565,3 +565,200 @@ F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
     );
     assert!(render::html(&model).contains("<small>known bug BUG-7</small>"));
 }
+
+/// An entry point another product's functions own is in none of email's
+/// counts, reached or not, and is listed with whether a scenario reached it.
+#[test]
+fn an_owned_entry_point_is_counted_with_its_owner() {
+    let rows = parse_tsv(
+        &format!(
+            "{ROWS}provider\tgmail:events.list\tgmail\t\tg.rs:1\n\
+             provider\toutlook:events.list\toutlook\t\tg.rs:2\n"
+        ),
+        "rows",
+    )
+    .unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: Vec::new(),
+        proofs: Vec::new(),
+        waivers: toml::from_str(
+            r#"
+[[owned]]
+entry = "provider gmail:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.list"
+provider = "outlook"
+owner = "calendar"
+"#,
+        )
+        .unwrap(),
+    };
+    let mut reaches_events = record("gmail_lists_events", "gmail", true);
+    reaches_events.provider.push(
+        serde_json::from_value(json!({
+            "provider": "gmail", "route": "events.list", "method": "GET", "status": 200
+        }))
+        .unwrap(),
+    );
+    let model = build(&reader, &ledger, vec![reaches_events], &Results::default());
+
+    assert_eq!(model.broken, Vec::<String>::new());
+    assert_eq!(model.stale, Vec::<String>::new());
+    let row = model
+        .entry_rows
+        .iter()
+        .find(|row| row.key == "gmail:events.list")
+        .unwrap();
+    let gmail = row.gmail.as_ref().unwrap();
+    assert_eq!((gmail.status, gmail.scenarios), (Status::Owned, 1));
+    assert_eq!(
+        gmail.reason.as_deref(),
+        Some("counted with the calendar functions")
+    );
+    // Only the two mail methods are counted: one reached, one open.
+    let provider = model
+        .entry_points
+        .iter()
+        .find(|kind| kind.kind == "provider")
+        .unwrap();
+    assert_eq!((provider.gmail.total, provider.gmail.covered), (1, 1));
+    assert_eq!((provider.outlook.total, provider.outlook.open), (1, 1));
+    let owned: Vec<_> = model
+        .owned
+        .iter()
+        .map(|row| {
+            (
+                row.entry.as_str(),
+                row.source.as_str(),
+                row.owner.as_str(),
+                row.gmail,
+                row.outlook,
+            )
+        })
+        .collect();
+    assert_eq!(
+        owned,
+        [
+            (
+                "provider gmail:events.list",
+                "g.rs:1",
+                "calendar",
+                Some(true),
+                None
+            ),
+            (
+                "provider outlook:events.list",
+                "g.rs:2",
+                "calendar",
+                None,
+                Some(false)
+            ),
+        ]
+    );
+    assert_eq!(
+        serde_json::to_value(&model).unwrap()["owned"][1],
+        json!({
+            "entry": "provider outlook:events.list", "source": "g.rs:2", "owner": "calendar",
+            "gmail": null, "outlook": false
+        })
+    );
+    let summary = render::markdown(&model);
+    assert!(
+        summary.contains(
+            "### Counted with the calendar functions\n\nEntry points the calendar functions \
+             call, not email's: counted there, and in none of the totals above.\n\n\
+             | Entry point | Source | Gmail | Outlook |\n| --- | --- | --- | --- |\n\
+             | `provider gmail:events.list` | `g.rs:1` | reached | n/a |\n\
+             | `provider outlook:events.list` | `g.rs:2` | n/a | not reached |"
+        ),
+        "{summary}"
+    );
+    assert!(!summary.contains("| `provider outlook:events.list` | n/a | open |"));
+    assert!(render::html(&model).contains("<h2>Counted with the calendar functions</h2>"));
+}
+
+/// What another product's functions own cannot also be email's: not in the
+/// list, waived, deferred, dead code or mapped to a function.
+#[test]
+fn an_owned_entry_point_that_email_also_accounts_for_is_broken() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: Vec::new(),
+        proofs: Vec::new(),
+        waivers: toml::from_str(
+            r#"
+[[entry_point]]
+entry = "http GET /email/drafts/{id}/operation"
+provider = "gmail"
+reason = "x"
+
+[[deferred]]
+entry = "http GET /email/drafts/{id}/operation"
+provider = "outlook"
+reason = "x"
+
+[[dead_code]]
+entry = "http GET /email/drafts/scheduled"
+reason = "x"
+
+[[owned]]
+entry = "provider gmail:events.gone"
+owner = "calendar"
+
+[[owned]]
+entry = "http GET /email/drafts/{id}/operation"
+owner = "calendar"
+
+[[owned]]
+entry = "http GET /email/drafts/scheduled"
+provider = "gmail"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:messages.modify"
+provider = "yahoo"
+owner = "calendar"
+"#,
+        )
+        .unwrap(),
+    };
+    let model = build(&reader, &ledger, Vec::new(), &Results::default());
+
+    for problem in [
+        "[[owned]] names `provider gmail:events.gone`, which is not in",
+        "`http GET /email/drafts/{id}/operation` is both owned by calendar and waived on gmail",
+        "`http GET /email/drafts/{id}/operation` is both owned by calendar and deferred on outlook",
+        "`http GET /email/drafts/scheduled` is both owned by calendar and waived on gmail",
+        "`http GET /email/drafts/scheduled` is owned by calendar in \
+         crates/email_e2e/coverage/waivers.toml and mapped in \
+         crates/email_e2e/coverage/functions.toml",
+        "`provider gmail:messages.modify` is owned by calendar in",
+        "[[owned]] names the provider `yahoo`",
+    ] {
+        assert!(
+            model.broken.iter().any(|found| found.contains(problem)),
+            "{problem}: {:?}",
+            model.broken
+        );
+    }
+}

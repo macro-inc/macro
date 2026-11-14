@@ -236,6 +236,12 @@ shared with the web app's suite) and backend entry points second.
   (`[[deferred]]`, counted apart from waived), and entry points nothing in
   the repository calls (`[[dead_code]]`: waived, and listed in the report
   under "Dead code candidates" with their source).
+  Entry points the functions of another product call are not waived:
+  `[[owned]]` with `owner = "calendar"` (the calendar provider methods)
+  keeps them out of every email total and lists them under "Counted with
+  the calendar functions" and in `coverage.json` (`owned`), with whether a
+  scenario reached each. An owned entry point cannot also be waived,
+  deferred, dead code or named in `functions.toml`.
 - `just email-e2e-coverage` after `just email-e2e` writes the report to
   `target/email-e2e-coverage/` (`index.html`, `coverage.md`,
   `coverage.json`). In CI the `Email end-to-end (coverage)` job puts it in

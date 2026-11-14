@@ -1,7 +1,7 @@
 //! The checked-in files the report joins the evidence with: the list of
 //! email functions, how the backend carries each out, which scenarios check
-//! one, which a break in product code proved, and what is waived, deferred
-//! or thought dead.
+//! one, which a break in product code proved, and what is waived, deferred,
+//! thought dead or owned by the functions of another product.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -19,9 +19,9 @@ pub(crate) const FUNCTIONS_PATH: &str = "apps/web/tests/email-e2e/ledger/functio
 pub(crate) const MAP_PATH: &str = "crates/email_e2e/coverage/functions.toml";
 /// The scenarios that check a function's result.
 pub(crate) const CHECKS_PATH: &str = "crates/email_e2e/coverage/checks.tsv";
-/// What is left uncovered on purpose.
 /// The breaks in product code that made a scenario fail.
 pub(crate) const PROOFS_PATH: &str = "crates/email_e2e/coverage/proofs.tsv";
+/// What is left uncovered on purpose, and what is counted elsewhere.
 pub(crate) const WAIVERS_PATH: &str = "crates/email_e2e/coverage/waivers.toml";
 
 const FUNCTIONS_HEADER: &str = "id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at";
@@ -218,6 +218,10 @@ pub(crate) struct Waivers {
     /// candidates for removal.
     #[serde(default)]
     pub(crate) dead_code: Vec<DeadCode>,
+    /// Entry points the functions of another product own: counted there, and
+    /// neither reached, waived, deferred nor open here.
+    #[serde(default)]
+    pub(crate) owned: Vec<Owned>,
 }
 
 /// An entry point no scenario is asked to reach, or not yet.
@@ -239,6 +243,18 @@ pub(crate) struct DeadCode {
     pub(crate) entry: String,
     /// How it was found to have no caller.
     pub(crate) reason: String,
+}
+
+/// An entry point the functions of another product own.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Owned {
+    /// `kind key`, as in the list.
+    pub(crate) entry: String,
+    /// `gmail` or `outlook`; both when absent.
+    pub(crate) provider: Option<String>,
+    /// Whose functions it is counted with: `calendar`.
+    pub(crate) owner: String,
 }
 
 /// A break in product code that made a scenario fail on a provider: the

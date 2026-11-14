@@ -1,7 +1,9 @@
 # What the email end-to-end suite leaves uncovered, and why. Four kinds:
 # waived for good, deferred to the full-stack tier, thought dead, and (in
-# functions.toml, `bug`) held open by a known product bug. Anything listed
-# here that a scenario does cover or reach is reported as stale.
+# functions.toml, `bug`) held open by a known product bug. Anything waived,
+# deferred or thought dead here that a scenario does cover or reach is
+# reported as stale. A fifth kind is not left uncovered: entry points owned
+# by the functions of another product, counted there.
 #
 # A function no scenario is asked to cover:
 #
@@ -33,6 +35,17 @@
 # [[dead_code]]
 # entry = "http GET /email/unused"
 # reason = "..."
+#
+# An entry point the functions of another product call, not email's: not
+# waived, deferred or open, and in none of email's totals. It is counted
+# with its owner's functions; the report lists it under "Counted with the
+# <owner> functions" and says whether a scenario reached it. It cannot also
+# be waived, deferred, dead code or named in functions.toml.
+#
+# [[owned]]
+# entry = "provider gmail:events.list"
+# provider = "gmail"           # optional
+# owner = "calendar"
 #
 # Functions another service carries out are deferred to the full-stack tier
 # by `outside` in functions.toml, not here.
@@ -118,3 +131,85 @@ reason = "no client in the repository requests this internal route"
 [[dead_code]]
 entry = "http GET /internal/threads/{id}/owner"
 reason = "no client in the repository requests this internal route"
+
+# ------------------------------------------- calendar provider methods
+#
+# The calendar product calls these, not email. `provider gmail:events.import`
+# is not here: adding a forwarded invitation to the calendar (F-156) is a
+# function of email and calls it.
+
+[[owned]]
+entry = "provider gmail:calendarList.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.delete"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.insert"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.instances"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.patch"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.watch"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendarView.delta"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendarView.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendars.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendars.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.create"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.delete"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.instances"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.respond"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.update"
+owner = "calendar"

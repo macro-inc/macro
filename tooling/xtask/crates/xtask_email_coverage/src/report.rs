@@ -81,6 +81,9 @@ pub(crate) enum Status {
     Waived,
     /// An entry point left to the full-stack tier.
     Deferred,
+    /// An entry point the functions of another product own: counted there,
+    /// and in none of email's totals.
+    Owned,
     /// Nothing covers it.
     Open,
 }
@@ -93,8 +96,8 @@ pub(crate) struct Cell {
     pub(crate) scenarios: usize,
     /// A few of them.
     pub(crate) examples: Vec<String>,
-    /// Why it is waived or deferred, what was broken to prove it, or the
-    /// known bug that keeps it open.
+    /// Why it is waived or deferred, what was broken to prove it, the known
+    /// bug that keeps it open, or whose functions it is counted with.
     pub(crate) reason: Option<String>,
 }
 
@@ -118,8 +121,9 @@ pub(crate) struct Tally {
 impl Tally {
     fn add(&mut self, cell: Option<&Cell>) {
         let Some(cell) = cell else { return };
-        self.total += 1;
         match cell.status {
+            // Counted with its owner's functions, not here.
+            Status::Owned => return,
             Status::Proved => self.proved += 1,
             Status::Claimed => self.claimed += 1,
             Status::Covered => self.covered += 1,
@@ -128,6 +132,7 @@ impl Tally {
             Status::Deferred => self.deferred += 1,
             Status::Open => self.open += 1,
         }
+        self.total += 1;
     }
 }
 
@@ -164,6 +169,19 @@ pub(crate) struct DeadCodeRow {
     pub(crate) entry: String,
     pub(crate) source: String,
     pub(crate) reason: String,
+}
+
+/// An entry point the functions of another product own.
+#[derive(Debug, Serialize)]
+pub(crate) struct OwnedRow {
+    pub(crate) entry: String,
+    pub(crate) source: String,
+    /// Whose functions it is counted with.
+    pub(crate) owner: String,
+    /// Whether a recorded scenario reached it on Gmail; absent when it is
+    /// not owned there.
+    pub(crate) gmail: Option<bool>,
+    pub(crate) outlook: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -216,6 +234,9 @@ pub(crate) struct Model {
     pub(crate) entry_rows: Vec<EntryRow>,
     /// Waived entry points with no caller in the repository.
     pub(crate) dead_code: Vec<DeadCodeRow>,
+    /// Entry points counted with the functions of another product, with
+    /// whether a scenario reached each: none is in `entry_points`.
+    pub(crate) owned: Vec<OwnedRow>,
     /// Background loops: listed, never counted.
     pub(crate) loops: Vec<String>,
     /// What scenarios made the backend do that is in no list.
@@ -460,7 +481,55 @@ pub(crate) fn build(
         }
     }
 
+    // An entry point the functions of another product own is counted there:
+    // email neither maps it to a function nor waives or defers it.
+    let mut owned_entries: BTreeMap<(String, &str), &str> = BTreeMap::new();
+    for own in &ledger.waivers.owned {
+        if !by_entry.contains_key(&own.entry) {
+            broken.push(format!(
+                "{}: [[owned]] names `{}`, which is not in {ENTRYPOINTS_PATH}",
+                ledger::WAIVERS_PATH,
+                own.entry
+            ));
+        }
+        if let Some(provider) = unknown_provider(own.provider.as_deref()) {
+            broken.push(format!(
+                "{}: [[owned]] names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                ledger::WAIVERS_PATH
+            ));
+        }
+        if functions_of.contains_key(&own.entry) || ledger.map.plumbing.contains_key(&own.entry) {
+            broken.push(format!(
+                "`{}` is owned by {} in {} and mapped in {}",
+                own.entry,
+                own.owner,
+                ledger::WAIVERS_PATH,
+                ledger::MAP_PATH
+            ));
+        }
+        for provider in applies(own.provider.as_deref()) {
+            let key = (own.entry.clone(), provider);
+            let other = if waived_entries.contains_key(&key) {
+                Some("waived")
+            } else if deferred_entries.contains_key(&key) {
+                Some("deferred")
+            } else {
+                None
+            };
+            if let Some(other) = other {
+                broken.push(format!(
+                    "{}: `{}` is both owned by {} and {other} on {provider}",
+                    ledger::WAIVERS_PATH,
+                    own.entry,
+                    own.owner
+                ));
+            }
+            owned_entries.insert(key, &own.owner);
+        }
+    }
+
     let mut entry_rows = Vec::new();
+    let mut owned = Vec::new();
     let mut entry_totals: BTreeMap<String, KindTotals> = BTreeMap::new();
     let mut loops = Vec::new();
     for row in reader.rows {
@@ -494,6 +563,11 @@ pub(crate) fn build(
                     })
                     .map(|(scenario, _)| scenario.name())
                     .collect();
+                // Reached or not, it is counted with its owner's functions.
+                if let Some(owner) = owned_entries.get(&(name.clone(), provider)) {
+                    let reason = format!("counted with the {owner} functions");
+                    return cell_of(Status::Owned, &by, Some(&reason));
+                }
                 let waiver = waived_entries.get(&(name.clone(), provider)).copied();
                 let deferral = deferred_entries.get(&(name.clone(), provider)).copied();
                 if !by.is_empty() && (waiver.is_some() || deferral.is_some()) {
@@ -529,6 +603,23 @@ pub(crate) fn build(
             });
         totals.gmail.add(gmail.as_ref());
         totals.outlook.add(outlook.as_ref());
+        let owner = PROVIDERS
+            .iter()
+            .find_map(|provider| owned_entries.get(&(name.clone(), *provider)));
+        if let Some(owner) = owner {
+            let reached = |cell: &Option<Cell>| {
+                cell.as_ref()
+                    .filter(|cell| cell.status == Status::Owned)
+                    .map(|cell| cell.scenarios > 0)
+            };
+            owned.push(OwnedRow {
+                entry: name.clone(),
+                source: row.source.clone(),
+                owner: (*owner).to_owned(),
+                gmail: reached(&gmail),
+                outlook: reached(&outlook),
+            });
+        }
         entry_rows.push(EntryRow {
             kind: row.kind.to_string(),
             key: row.key.clone(),
@@ -808,6 +899,7 @@ pub(crate) fn build(
         entry_points: entry_totals.into_values().collect(),
         entry_rows,
         dead_code,
+        owned,
         loops,
         unlisted: unlisted.into_iter().collect(),
         broken,

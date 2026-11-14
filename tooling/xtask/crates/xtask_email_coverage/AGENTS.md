@@ -26,7 +26,7 @@
   as `email::inbound::axum::send_router::send_router` to its file.
 - `src/list/wire.rs`: the `match` column, from serde attributes.
 - `src/report.rs`: the join and its rules (what counts as proved, claimed,
-  performed, waived, deferred or open).
+  performed, waived, deferred, owned elsewhere or open).
   `src/report/seen.rs`: which entry point a recorded request is.
   `src/report/ledger.rs`: `functions.toml`, `checks.tsv`, `proofs.tsv`,
   `waivers.toml` and the atoms (`<kind> <key> where <conditions>`). `src/report/render.rs`: the
@@ -79,6 +79,12 @@
   an entry point under `[[deferred]]` in `waivers.toml` wait for the
   full-stack tier and have their own count. `[[dead_code]]` waives an entry
   point with no caller and lists it under "Dead code candidates".
+- Owned is not waived either: an entry point under `[[owned]]` in
+  `waivers.toml` (the calendar provider methods) is in none of email's
+  totals, reached or not, and is listed under "Counted with the calendar
+  functions" and in `coverage.json` (`owned`, with whether a scenario
+  reached it). One that is also waived, deferred, dead code, mapped in
+  `functions.toml` or missing from the list is a ledger error.
 - `bug = "<id>"` in a function's mapping keeps it open: its scenarios,
   checks and proofs are not looked at.
 - A record counts only when its scenario passed. A scenario that linked no
