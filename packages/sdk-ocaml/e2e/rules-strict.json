@@ -1,0 +1,8 @@
+{
+  "default": "block",
+  "rules": [
+    { "match": "@read", "decision": "allow" },
+    { "match": "tasks@create", "decision": "allow" },
+    { "match": "@destroy", "decision": "block" }
+  ]
+}

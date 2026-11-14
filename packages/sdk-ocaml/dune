@@ -1,3 +1,3 @@
-; generator/ and proxy/ are TypeScript with their own node_modules, not dune
-; targets.
-(dirs :standard \ generator proxy node_modules)
+; generator/ and proxy/ are TypeScript with their own node_modules, and e2e/
+; holds programs the runner compiles, not dune targets.
+(dirs :standard \ generator proxy e2e node_modules)

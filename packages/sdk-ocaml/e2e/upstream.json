@@ -1,0 +1,17 @@
+{
+  "POST /documents/similarity_search": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"results\":[{\"taskId\":\"task-old\",\"taskName\":\"Update the docs\",\"vectorScore\":0.31}]}"
+  },
+  "POST /documents/create_task": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"documentId\":\"task-1\",\"documentMetadata\":{\"documentId\":\"task-1\",\"documentVersionId\":1,\"documentName\":\"Fix login redirect loop\",\"owner\":\"user-1\"},\"initialSnapshot\":\"\",\"token\":\"t\"}"
+  },
+  "DELETE /documents/doc-1": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"success\":true}"
+  }
+}
