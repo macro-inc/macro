@@ -34,6 +34,13 @@ pub(super) async fn property_edges(
     }
     let company_ids: Vec<String> = company_ids.iter().map(Uuid::to_string).collect();
     let contact_ids: Vec<String> = contact_ids.iter().map(Uuid::to_string).collect();
+    // Activity asks for every visible record of the caller's teams, so the
+    // cost follows the team's record count: bound it like the association
+    // read that produced the ids.
+    let mut transaction = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *transaction)
+        .await?;
     let rows = sqlx::query!(
         r#"
         SELECT ep.entity_type AS "entity_type!: EntityType", ep.entity_id AS "entity_id!"
@@ -75,8 +82,9 @@ pub(super) async fn property_edges(
         &company_ids,
         &contact_ids,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *transaction)
     .await?;
+    transaction.commit().await?;
     Ok(rows
         .into_iter()
         .map(|row| CrmPropertyEdge {
