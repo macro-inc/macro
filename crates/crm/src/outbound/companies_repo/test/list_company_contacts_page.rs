@@ -410,12 +410,13 @@ async fn page_contacts_equal_the_full_read(pool: PgPool) -> anyhow::Result<()> {
 
     let pat = insert_named(&pool, company_id, Some("pat@acme.test"), Some("Pat")).await?;
     // The primary is the newest address, yet it comes first; the rest go
-    // oldest first, ties by address.
+    // oldest first, ties by address. The oldest company address sorts after a
+    // newer one by name, so both lists show age order, not address order.
     add_address(&pool, pat, "pat@acme.test", 0).await?;
     add_address(&pool, pat, "pat@other.test", 2).await?;
     add_address(&pool, pat, "pat@foreign.test", 2).await?;
-    add_address(&pool, pat, "b.pat@acme.test", 1).await?;
-    add_address(&pool, pat, "a.pat@acme.test", 3).await?;
+    add_address(&pool, pat, "b.pat@acme.test", 3).await?;
+    add_address(&pool, pat, "a.pat@acme.test", 1).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool);
     let full = repo
@@ -454,15 +455,15 @@ async fn page_contacts_equal_the_full_read(pool: PgPool) -> anyhow::Result<()> {
         pat.emails,
         [
             "pat@acme.test",
-            "a.pat@acme.test",
+            "b.pat@acme.test",
             "pat@foreign.test",
             "pat@other.test",
-            "b.pat@acme.test",
+            "a.pat@acme.test",
         ]
     );
     assert_eq!(
         pat.company_domain_emails,
-        ["a.pat@acme.test", "b.pat@acme.test", "pat@acme.test"]
+        ["b.pat@acme.test", "a.pat@acme.test", "pat@acme.test"]
     );
     Ok(())
 }
