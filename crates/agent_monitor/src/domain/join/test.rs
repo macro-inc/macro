@@ -808,3 +808,55 @@ fn a_claude_transcript_without_a_registry_entry_joins_the_claude_terminal_in_its
     assert!(built.agents.contains_key(&AgentId::claude_session("s-older")));
     assert_eq!(built.agents.len(), 3);
 }
+
+#[test]
+fn a_registry_entry_behind_a_wrapper_joins_the_claude_terminal_in_its_directory() {
+    let now = at(5, 0);
+    let mut facts = Facts::default();
+    observe(
+        &mut facts,
+        SourceKind::Hc,
+        Change::Reset(vec![Fact::Terminal(Box::new(TerminalFact {
+            program: Some("claude-code".to_owned()),
+            activity: Some(TerminalActivity::Idle),
+            ..terminal("t-wrap", 50)
+        }))]),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::ClaudeRegistry,
+        Change::Reset(vec![
+            registry(51, "s-w", true),
+            ClaudeSessionFact {
+                cwd: Some(PathBuf::from("/elsewhere")),
+                ..match registry(52, "s-x", false) {
+                    Fact::ClaudeSession(session) => session,
+                    _ => unreachable!(),
+                }
+            }
+            .into_fact(),
+        ]),
+        now,
+    );
+
+    let built = build_agents(&facts, now);
+
+    let agent = &built.agents[&AgentId::terminal("t-wrap")];
+    assert_eq!(agent.session.as_deref(), Some("s-w"));
+    assert!(agent.sources.contains(SourceKind::ClaudeRegistry));
+    // hc says idle; a terminal's own status wins over the registry's.
+    assert_eq!(agent.status, Status::Idle);
+    assert!(built.agents.contains_key(&AgentId::claude_session("s-x")));
+    assert_eq!(built.agents.len(), 2);
+}
+
+trait IntoFact {
+    fn into_fact(self) -> Fact;
+}
+
+impl IntoFact for ClaudeSessionFact {
+    fn into_fact(self) -> Fact {
+        Fact::ClaudeSession(self)
+    }
+}

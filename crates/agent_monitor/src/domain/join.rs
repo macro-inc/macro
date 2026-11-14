@@ -94,6 +94,9 @@ struct TranscriptMinute {
 struct TranscriptState {
     path: PathBuf,
     cwd: Option<PathBuf>,
+    /// The first working directory: where the program started. Later ones
+    /// follow the agent's `cd`s.
+    start_cwd: Option<PathBuf>,
     branch: Option<String>,
     model: Option<String>,
     title: Option<String>,
@@ -116,6 +119,7 @@ impl TranscriptState {
         Self {
             path,
             cwd: None,
+            start_cwd: None,
             branch: None,
             model: None,
             title: None,
@@ -136,6 +140,9 @@ impl TranscriptState {
         self.path.clone_from(&delta.path);
         if delta.cwd.is_some() {
             self.cwd.clone_from(&delta.cwd);
+            if self.start_cwd.is_none() {
+                self.start_cwd.clone_from(&delta.cwd);
+            }
         }
         if delta.branch.is_some() {
             self.branch.clone_from(&delta.branch);
@@ -447,7 +454,39 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
         built.agents.insert(agent.id.clone(), agent);
     }
 
-    // Registry entries no terminal claimed: plain Claude Code in a shell.
+    // Registry entries no terminal claimed by pid, because a wrapper runs
+    // Claude Code: match a Claude Code terminal by directory and start.
+    let mut unclaimed = unclaimed_terminals(facts, &session_owner);
+    for (pid, owned) in &facts.claude_sessions {
+        if session_owner.contains_key(&owned.fact.session_id) {
+            continue;
+        }
+        let main = TranscriptKey {
+            program: TranscriptProgram::Claude,
+            session: owned.fact.session_id.clone(),
+            subagent: None,
+        };
+        let first = facts
+            .transcripts
+            .get(&main)
+            .and_then(|transcript| transcript.fact.first_at);
+        let claimed = claim_terminal(
+            &mut unclaimed,
+            TranscriptProgram::Claude,
+            owned.fact.cwd.as_ref(),
+            first,
+        );
+        let Some(id) = claimed else {
+            continue;
+        };
+        if let Some(agent) = built.agents.get_mut(&id) {
+            merge_registry(agent, owned);
+        }
+        built.owners.insert(FactKey::ClaudeSession(*pid), id.clone());
+        session_owner.insert(owned.fact.session_id.clone(), id);
+    }
+
+    // Registry entries still unclaimed: plain Claude Code in a shell.
     for (pid, owned) in &facts.claude_sessions {
         if session_owner.contains_key(&owned.fact.session_id) {
             continue;
@@ -468,7 +507,7 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
         built.agents.insert(id, agent);
     }
 
-    join_transcripts(facts, &mut built, &mut session_owner, now);
+    join_transcripts(facts, &mut built, &mut session_owner, &mut unclaimed, now);
     join_macrod_sessions(facts, &mut built, &session_owner);
     join_run_records(facts, &mut built);
     split_session_costs(facts, &mut built);
@@ -480,9 +519,10 @@ fn join_transcripts(
     facts: &Facts,
     built: &mut Built,
     session_owner: &mut BTreeMap<String, AgentId>,
+    unclaimed: &mut Vec<UnclaimedTerminal>,
     now: Timestamp,
 ) {
-    claim_terminals(facts, session_owner);
+    claim_terminals(facts, session_owner, unclaimed);
 
     // Main transcripts first, so subagents find their parent.
     let (mains, subagents): (Vec<_>, Vec<_>) = facts
@@ -554,14 +594,13 @@ struct UnclaimedTerminal {
     created: Option<Timestamp>,
 }
 
-/// Joins transcripts nothing else claimed to the terminals that wrote them,
-/// by program, working directory and start time: Codex has no registry, and
-/// Claude Code run behind a wrapper or without a session registry entry has
-/// no pid join. A terminal claims the newest such transcript, and at most
-/// one.
-fn claim_terminals(facts: &Facts, session_owner: &mut BTreeMap<String, AgentId>) {
+/// Terminals running a coding agent that no registry pid joined to a session.
+fn unclaimed_terminals(
+    facts: &Facts,
+    session_owner: &BTreeMap<String, AgentId>,
+) -> Vec<UnclaimedTerminal> {
     let claimed: BTreeSet<&AgentId> = session_owner.values().collect();
-    let mut terminals: Vec<UnclaimedTerminal> = facts
+    facts
         .terminals
         .values()
         .map(|owned| &owned.fact)
@@ -579,8 +618,18 @@ fn claim_terminals(facts: &Facts, session_owner: &mut BTreeMap<String, AgentId>)
                 created: terminal.created,
             })
         })
-        .collect();
+        .collect()
+}
 
+/// Joins transcripts nothing else claimed to the terminals that wrote them,
+/// by program, starting directory and start time: Codex has no registry, and
+/// Claude Code without a registry entry has no pid join. A terminal claims
+/// the newest such transcript, and at most one.
+fn claim_terminals(
+    facts: &Facts,
+    session_owner: &mut BTreeMap<String, AgentId>,
+    unclaimed: &mut Vec<UnclaimedTerminal>,
+) {
     let mut unowned: Vec<(&TranscriptKey, &TranscriptState)> = facts
         .transcripts
         .iter()
@@ -590,28 +639,37 @@ fn claim_terminals(facts: &Facts, session_owner: &mut BTreeMap<String, AgentId>)
     unowned.sort_by_key(|(_, transcript)| std::cmp::Reverse(transcript.last_at));
 
     for (key, transcript) in unowned {
-        if let Some(id) = claim_terminal(&mut terminals, key.program, transcript) {
+        let Some(first) = transcript.first_at else {
+            continue;
+        };
+        let claimed = claim_terminal(
+            unclaimed,
+            key.program,
+            transcript.start_cwd.as_ref(),
+            Some(first),
+        );
+        if let Some(id) = claimed {
             session_owner.insert(key.session.clone(), id);
         }
     }
 }
 
-/// The terminal that wrote a transcript: same program and working directory,
-/// started before the transcript's first record (with some slack), the
-/// latest such.
+/// The terminal that started a session: same program and working directory,
+/// started before the session's first record (with some slack) when that is
+/// known, the latest such.
 fn claim_terminal(
     terminals: &mut Vec<UnclaimedTerminal>,
     program: TranscriptProgram,
-    transcript: &TranscriptState,
+    cwd: Option<&PathBuf>,
+    first: Option<Timestamp>,
 ) -> Option<AgentId> {
-    let first = transcript.first_at?;
-    let cwd = transcript.cwd.as_ref()?;
+    let cwd = cwd?;
     let (index, _) = terminals
         .iter()
         .enumerate()
         .filter(|(_, terminal)| terminal.program == program && terminal.cwd.as_ref() == Some(cwd))
         .filter_map(|(index, terminal)| Some((index, terminal.created?)))
-        .filter(|(_, created)| *created <= first + TERMINAL_START_SLACK)
+        .filter(|(_, created)| first.is_none_or(|first| *created <= first + TERMINAL_START_SLACK))
         .max_by_key(|(_, created)| *created)?;
     Some(terminals.swap_remove(index).id)
 }
