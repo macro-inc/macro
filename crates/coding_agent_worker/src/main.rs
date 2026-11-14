@@ -169,7 +169,7 @@ enum Command {
         root: std::path::PathBuf,
     },
     /// The live agent monitor: every agent on this machine, from the
-    /// collector on `~/.macrod/monitor.sock` (started when none answers).
+    /// collector on `~/.macrod/monitor/monitor.sock` (started when none answers).
     #[cfg(unix)]
     Monitor(monitor::MonitorArgs),
     /// List the ACP agents installed on this machine as JSON.

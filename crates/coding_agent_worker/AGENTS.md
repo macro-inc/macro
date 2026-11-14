@@ -85,7 +85,7 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `macrod monitor` (viewer, auto-starting a detached collector),
   `monitor serve|dump`, `--demo`, the collector the panel and `macrod service`
   host while `[monitor] enabled` (`Host`; one per machine, claimed through
-  `~/.macrod/monitor.sock`), and the `daemon` source (`daemon_source.rs`, fed
+  `~/.macrod/monitor/monitor.sock`), and the `daemon` source (`daemon_source.rs`, fed
   by `Daemon::reporting_to`). The model, store, sources and server are
   `crates/agent_monitor`, the viewer `crates/agent_monitor_tui`; README.md
   "Monitor" has the behaviour.

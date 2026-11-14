@@ -42,6 +42,26 @@ async fn serve_replaces_a_stale_socket() {
     assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
 }
 
+#[tokio::test]
+async fn the_socket_directory_is_private_even_under_an_open_home() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path().join("home");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let socket = home.join(SOCKET_DIRECTORY).join(SOCKET_FILE);
+
+    let claimed = claim(&socket);
+    assert!(
+        matches!(claimed, Ok(Claim::Bound(_))),
+        "a 0755 home does not stop hosting: {:?}",
+        claimed.err()
+    );
+
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&home.join(SOCKET_DIRECTORY)), 0o700);
+    assert_eq!(mode(&socket), 0o600);
+}
+
 #[test]
 fn monitor_settings_default_when_the_table_or_file_is_missing() {
     let directory = tempfile::tempdir().unwrap();

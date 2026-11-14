@@ -1,7 +1,9 @@
 //! The agent monitor inside macrod (Unix only): the `macrod monitor`
 //! subcommands, and the collector the panel and `macrod service` host.
 //!
-//! One collector serves the machine on `<macrod home>/monitor.sock`. The
+//! One collector serves the machine on `<macrod home>/monitor/monitor.sock`,
+//! in a directory of its own that the monitor creates 0700 (macrod's home
+//! itself may be 0755). The
 //! first process to claim the socket hosts it: the panel or `macrod service`
 //! when `[monitor] enabled`, or a `macrod monitor serve` (started by hand, or
 //! detached by the viewer when nothing answers). Everyone else finds the live
@@ -39,7 +41,12 @@ mod test;
 pub use daemon_source::{DaemonLink, DaemonState, report_daemon};
 
 /// The collector's socket, in macrod's home.
+/// The collector's directory in macrod's home, private to the user.
+const SOCKET_DIRECTORY: &str = "monitor";
+/// The collector's socket in that directory.
 const SOCKET_FILE: &str = "monitor.sock";
+/// The auto-started collector's log in that directory.
+const COLLECTOR_LOG: &str = "collector.log";
 
 /// How long an auto-started collector keeps running with no viewer.
 const IDLE_EXIT: Duration = Duration::from_secs(10 * 60);
@@ -62,7 +69,7 @@ pub struct MonitorArgs {
     /// Show the scripted demo fleet from this process, with no collector.
     #[arg(long)]
     demo: bool,
-    /// The collector's socket; defaults to `~/.macrod/monitor.sock`.
+    /// The collector's socket; defaults to `~/.macrod/monitor/monitor.sock`.
     #[arg(long, global = true)]
     socket: Option<PathBuf>,
 }
@@ -114,11 +121,14 @@ pub async fn run(args: MonitorArgs) -> ExitCode {
     }
 }
 
-/// `<macrod home>/monitor.sock`, or the `--socket` override.
+/// `<macrod home>/monitor/monitor.sock`, or the `--socket` override.
 fn socket_path(socket: Option<PathBuf>) -> rootcause::Result<PathBuf> {
     match socket {
         Some(socket) => Ok(socket),
-        None => Ok(MacrodHome::locate()?.directory().join(SOCKET_FILE)),
+        None => Ok(MacrodHome::locate()?
+            .directory()
+            .join(SOCKET_DIRECTORY)
+            .join(SOCKET_FILE)),
     }
 }
 
@@ -446,7 +456,7 @@ async fn view(socket: Option<PathBuf>, demo: bool) -> rootcause::Result<()> {
 
 /// Starts `macrod monitor serve --exit-when-idle` detached from this
 /// terminal (its own process group, no stdin or stdout), logging to
-/// `<socket directory>/logs/monitor.log`.
+/// `collector.log` beside the socket.
 fn start_collector(socket: &Path) -> rootcause::Result<()> {
     use std::os::unix::process::CommandExt as _;
 
@@ -465,22 +475,22 @@ fn start_collector(socket: &Path) -> rootcause::Result<()> {
     Ok(())
 }
 
-/// The auto-started collector's log, `logs/monitor.log` beside the socket,
-/// private to the user and appended to.
+/// The auto-started collector's log, `collector.log` beside the socket,
+/// private to the user and appended to. Creates the socket's directory 0700
+/// when it is missing, as binding would.
 fn collector_log(socket: &Path) -> rootcause::Result<std::fs::File> {
     use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 
     let directory = socket
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or(Path::new("."))
-        .join("logs");
+        .unwrap_or(Path::new("."));
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
-        .create(&directory)
+        .create(directory)
         .map_err(|error| rootcause::report!("cannot create {}: {error}", directory.display()))?;
-    let path = directory.join("monitor.log");
+    let path = directory.join(COLLECTOR_LOG);
     std::fs::OpenOptions::new()
         .create(true)
         .append(true)

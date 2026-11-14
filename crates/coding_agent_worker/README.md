@@ -218,17 +218,19 @@ not repair old pending replies produced by those versions.
 `macrod monitor` (Linux and macOS) is a live board of every agent on the
 machine: hc terminals, Claude Code and Codex sessions, macrod's own sessions,
 managers and work runs. The viewer (`crates/agent_monitor_tui`) reads one
-collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor.sock`.
+collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`.
 
 - **One collector per machine.** The first process to claim the socket hosts
   it: the panel or `macrod service` while `[monitor] enabled` (the default),
   or `macrod monitor serve`. A socket that answers is left alone and the
   process skips hosting; a socket left by a dead collector is replaced only
-  after a connect fails, under `<socket>.lock`. The directory is 0700 and the
-  socket 0600.
+  after a connect fails, under `<socket>.lock`. The socket lives in its own
+  directory, `~/.macrod/monitor/`, which the monitor creates 0700 (and
+  refuses to use when it is open to other users); the socket is 0600.
+  macrod's home itself may be 0755.
 - **`macrod monitor`** opens the viewer. When nothing answers it starts
   `macrod monitor serve --exit-when-idle` detached (its own process group,
-  logging to `~/.macrod/logs/monitor.log`), which exits after ten minutes
+  logging to `~/.macrod/monitor/collector.log`), which exits after ten minutes
   without a viewer. The viewer reconnects by itself when its collector goes
   away, and a collector started by a later `macrod monitor` takes over.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config

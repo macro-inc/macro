@@ -48,7 +48,7 @@ repo_url = "https://github.com/macro-inc/macro"
 # auto = true
 
 # Optional: the agent monitor (`macrod monitor`, Linux and macOS). One
-# collector serves the machine on ~/.macrod/monitor.sock; the first macrod
+# collector serves the machine on ~/.macrod/monitor/monitor.sock; the first macrod
 # with `enabled = true` hosts it, and `macrod monitor` starts one when none is
 # running. Every key below is the default.
 # [monitor]
