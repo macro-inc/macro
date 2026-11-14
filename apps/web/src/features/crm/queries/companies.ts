@@ -8,6 +8,7 @@ import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
+import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import {
   type Query,
@@ -19,6 +20,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
+import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 import { listCanIncludeCrm } from './list-refresh';
@@ -258,9 +260,10 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
  * Renames a company via `PUT /crm/companies/{id}/name`. The name is a
  * team-scoped override (`crm_companies.custom_name`) that read paths resolve
  * over the global directory name — the shared directory is never touched.
- * Optimistically updates the company detail cache (with rollback on error) so
- * the title flips immediately, then invalidates it plus soup so the Customers
- * listings pick up the new name.
+ * Optimistically updates the company detail and the summaries of loaded
+ * contact details (with rollback on error) so the name flips immediately,
+ * then invalidates them plus soup so the Customers listings pick up the new
+ * name.
  */
 export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -269,7 +272,11 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
         throwOnErr(() => deps.storage.setCompanyName({ companyId, name })),
       onMutate: async ({ companyId, name }) => {
         const queryKey = crmKeys.company(companyId).queryKey;
-        await deps.client.cancelQueries({ queryKey });
+        const details = contactDetailsOfCompanyFilter(companyId);
+        await Promise.all([
+          deps.client.cancelQueries({ queryKey }),
+          deps.client.cancelQueries(details),
+        ]);
         const previous = deps.client.getQueryData<CrmCompanyResponse>(queryKey);
         if (previous) {
           deps.client.setQueryData<CrmCompanyResponse>(queryKey, {
@@ -277,12 +284,22 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
             name,
           });
         }
-        return { previous, optimisticName: name };
+        const previousDetails =
+          deps.client.getQueriesData<CrmContactDetailResponse>(details);
+        for (const [key, detail] of previousDetails) {
+          if (!detail?.company) continue;
+          deps.client.setQueryData<CrmContactDetailResponse>(key, {
+            ...detail,
+            company: { ...detail.company, name },
+          });
+        }
+        return { previous, previousDetails, optimisticName: name };
       },
       // Roll back only if the cache still holds this mutation's optimistic
       // name — a stale failure must not clobber a newer rename's update.
       onError: (_err, { companyId }, context) => {
-        if (context?.previous) {
+        if (!context) return;
+        if (context.previous) {
           deps.client.setQueryData<CrmCompanyResponse>(
             crmKeys.company(companyId).queryKey,
             (current) =>
@@ -291,20 +308,41 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
                 : current
           );
         }
+        for (const [key, detail] of context.previousDetails) {
+          const name = detail?.company?.name;
+          deps.client.setQueryData<CrmContactDetailResponse>(key, (current) =>
+            current?.company?.id === companyId &&
+            current.company.name === context.optimisticName
+              ? { ...current, company: { ...current.company, name } }
+              : current
+          );
+        }
       },
+      onSuccess: (_data, { companyId }) =>
+        refreshContactDetailsOfCompany(deps.client, companyId),
       onSettled: async (_data, _err, { companyId }) => {
         await invalidateCachedCrmContacts();
         return Promise.all([
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
-          refreshContactDetailsOfCompany(deps.client, companyId),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },
     }),
     () => deps.client
   );
+}
+
+/** Loaded contact details whose summary is of `companyId`. */
+function contactDetailsOfCompanyFilter(companyId: string) {
+  return {
+    queryKey: crmKeys.contact._def,
+    predicate: (query: Query) =>
+      contactCompanySummary(
+        query.state.data as CrmContactDetailResponse | undefined
+      )?.id === companyId,
+  };
 }
 
 /**

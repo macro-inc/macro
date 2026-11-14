@@ -144,3 +144,67 @@ it('reads a contact detail again when it was loading during a rename', async () 
   });
   unsubscribe();
 });
+
+const summary = (id: string, name: string) => ({
+  id,
+  name,
+  domain: 'example.com',
+  hidden: false,
+});
+
+it("renames the company in its contacts' details before the server answers", async () => {
+  let answer!: (value: unknown) => void;
+  storage.setCompanyName.mockReturnValue(
+    new Promise((resolve) => {
+      answer = resolve;
+    })
+  );
+  const own = crmKeys.contact('contact-1').queryKey;
+  const other = crmKeys.contact('contact-2').queryKey;
+  client.setQueryData(own, {
+    id: 'contact-1',
+    companyId: 'company-1',
+    company: summary('company-1', 'Old'),
+  });
+  client.setQueryData(other, {
+    id: 'contact-2',
+    companyId: 'company-2',
+    company: summary('company-2', 'Other'),
+  });
+  const mutations = mount();
+
+  const rename = mutations.rename.mutateAsync({
+    companyId: 'company-1',
+    name: 'New',
+  });
+  await vi.waitFor(() =>
+    expect(client.getQueryData(own)).toMatchObject({
+      company: { name: 'New' },
+    })
+  );
+  expect(client.getQueryData(other)).toMatchObject({
+    company: { name: 'Other' },
+  });
+  answer(ok({}));
+  await rename;
+});
+
+it('restores the name and reads no detail again when a rename fails', async () => {
+  storage.setCompanyName.mockResolvedValue(err([{ message: 'Refused' }]));
+  const own = crmKeys.contact('contact-1').queryKey;
+  client.setQueryData(own, {
+    id: 'contact-1',
+    companyId: 'company-1',
+    company: summary('company-1', 'Old'),
+  });
+  const mutations = mount();
+
+  await expect(
+    mutations.rename.mutateAsync({ companyId: 'company-1', name: 'New' })
+  ).rejects.toBeDefined();
+
+  expect(client.getQueryData(own)).toMatchObject({
+    company: { name: 'Old' },
+  });
+  expect(client.getQueryState(own)?.isInvalidated).toBe(false);
+});
