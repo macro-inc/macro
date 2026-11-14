@@ -165,4 +165,6 @@ export default {
   privacyCompanyDescription:
     'Manage your mailbox contribution and excluded domains. Email exclusions preserve company and contact records.',
   privacyUpdateFailed: 'Could not update CRM email settings',
+  privacyRefreshFailed:
+    'Your email settings were saved, but some views could not refresh. Reload to see the latest state.',
 };

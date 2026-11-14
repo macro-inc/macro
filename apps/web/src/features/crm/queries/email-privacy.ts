@@ -120,55 +120,64 @@ export function createEmailPrivacyMutation(
           if ('thread_id' in change) {
             span.setAttr('entity.id', change.thread_id);
           }
+          let data: EmailPrivacy;
           try {
-            const data = fromResponse(
+            data = fromResponse(
               await throwOnErr(() => deps.privacy.update(change))
             );
-            // The response belongs to the identity that started this request.
-            // Never replace another account's settings after an account switch.
-            deps.client.setQueryData(queryKey, data);
-            await span.span('crm.email_privacy.refresh', async (refresh) => {
-              try {
-                // Consent is server-derived; normalized lists also need a
-                // server read after this mutation changes their eligibility.
-                await refreshActiveGraphqlSoupQueries({
-                  where: threadChange
-                    ? isContributionEmailRead
-                    : (body) =>
-                        typeof body === 'object' &&
-                        body !== null &&
-                        ('ecd' in body || 'eca' in body || 'crma' in body),
-                  throwOnError: true,
-                });
-                if (threadChange) {
-                  // Refresh contribution email readers and this owner's pages.
-                  // The PUT response already supplies current settings.
-                  await deps.client.invalidateQueries({
-                    queryKey: soupKeys._def,
-                    predicate: (query) =>
-                      query.queryKey.some(isContributionEmailRead),
-                  });
-                  await deps.client.invalidateQueries({
-                    queryKey: excludedThreadsKey,
-                  });
-                } else {
-                  await deps.client.invalidateQueries({
-                    queryKey: soupKeys._def,
-                  });
-                  await deps.client.invalidateQueries({
-                    queryKey: crmKeys._def,
-                  });
-                }
-              } catch (error) {
-                refresh.error('CRM email privacy refresh failed');
-                throw error;
-              }
-            });
-            return data;
           } catch (error) {
             span.error('CRM email privacy update failed');
             throw error;
           }
+          // The response belongs to the identity that started this request.
+          // Never replace another account's settings after an account switch.
+          deps.client.setQueryData(queryKey, data);
+          await span.span('crm.email_privacy.refresh', async (refresh) => {
+            let graphqlFailed = false;
+            try {
+              // Consent is server-derived; normalized lists also need a
+              // server read after this mutation changes their eligibility.
+              await refreshActiveGraphqlSoupQueries({
+                where: threadChange
+                  ? isContributionEmailRead
+                  : (body) =>
+                      typeof body === 'object' &&
+                      body !== null &&
+                      ('ecd' in body || 'eca' in body || 'crma' in body),
+                throwOnError: true,
+              });
+            } catch {
+              graphqlFailed = true;
+            }
+            // A failed reader must not prevent other caches from refreshing.
+            // Thread changes refresh only contribution readers and owner pages;
+            // the PUT response already supplies current settings.
+            const invalidations = await Promise.allSettled([
+              deps.client.invalidateQueries(
+                {
+                  queryKey: soupKeys._def,
+                  predicate: threadChange
+                    ? (query) => query.queryKey.some(isContributionEmailRead)
+                    : undefined,
+                },
+                { throwOnError: true }
+              ),
+              deps.client.invalidateQueries(
+                {
+                  queryKey: threadChange ? excludedThreadsKey : crmKeys._def,
+                },
+                { throwOnError: true }
+              ),
+            ]);
+            if (
+              graphqlFailed ||
+              invalidations.some((result) => result.status === 'rejected')
+            ) {
+              refresh.error('CRM email privacy refresh failed');
+              deps.feedback.failure(t('crm.privacyRefreshFailed'));
+            }
+          });
+          return data;
         }),
       onError: (error: Error) =>
         deps.feedback.failure(error.message || t('crm.privacyUpdateFailed')),

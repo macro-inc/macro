@@ -58,7 +58,9 @@ commits backfill requests in an outbox with the mutation.
 CRM-scoped REST and GraphQL email previews read the primary database so a
 committed withdrawal or exclusion cannot be undone by replica lag during refresh.
 Ordinary inbox lists retain replica reads; primary failures never fall back to
-stale CRM eligibility.
+stale CRM eligibility. A successful privacy write stays saved if a client refresh
+fails: other readers and the owner's exception pages still refresh, and the UI
+reports the refresh failure separately with a reload prompt.
 
 `crm_email_thread_allowed` is shared by CRM-scoped email listing and direct thread
 access. It verifies the mailbox, current membership, explicit consent, and

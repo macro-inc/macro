@@ -814,7 +814,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   task/contact/mixed/thread/generic source pagination on desktop and touch.
 - Keep the owner-only **Keep this thread out of CRM** action in both thread
   menus, and removal/pagination in the existing CRM Email settings surface.
-  Use the shared privacy mutation so contact/company contribution email readers refresh;
+  Use the shared privacy mutation so contact/company contribution email readers
+  and owner exception pages refresh even when another reader fails; report
+  refresh failures separately from a successfully saved change;
   gate thread actions and exception settings with `enableCrmThreadExclusions`,
   which has no dev/local override while backend ingestion rolls out;
   another contributor's copy remains eligible. Desktop/phone coverage lives in

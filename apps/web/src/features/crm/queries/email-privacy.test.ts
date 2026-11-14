@@ -278,6 +278,59 @@ it('commits a thread exception through the shared privacy refresh and paginated 
   expect(h.privacy.get).toHaveBeenCalledOnce();
 });
 
+it('keeps a restoration saved and refreshes exception pages when a contribution reader fails', async () => {
+  const h = mount();
+  await signIn(h);
+  h.privacy.excludedThreads.mockResolvedValueOnce(
+    ok({
+      threads: [
+        {
+          thread_id: 'thread',
+          link_id: 'mailbox',
+          subject: 'Private conversation',
+        },
+      ],
+      next_cursor: null,
+    })
+  );
+  let list!: ReturnType<typeof h.source.createExcludedThreads>;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    list = h.source.createExcludedThreads(() => undefined);
+  });
+  await waitFor(() => expect(list.data?.threads).toHaveLength(1));
+  cleanups.push(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      cacheMaintained: () => true,
+      body: () => ({ ecd: ['example.com'] }),
+      refresh: async () => {
+        throw new Error('Contribution refresh failed');
+      },
+    })
+  );
+  const emailsKey = soupKeys.astItems({
+    params: { limit: 100, sort_method: 'updated_at' },
+    body: { ecd: ['example.com'] },
+  }).queryKey;
+  h.client.setQueryData(emailsKey, ['previously visible thread']);
+
+  await h.source.update.mutateAsync({
+    action: 'set_thread_exclusion',
+    thread_id: 'thread',
+    excluded: false,
+  });
+
+  await waitFor(() => {
+    expect(h.source.update.isSuccess).toBe(true);
+    expect(list.data?.threads).toHaveLength(0);
+  });
+  expect(h.privacy.update).toHaveBeenCalledOnce();
+  expect(h.privacy.excludedThreads).toHaveBeenCalledTimes(2);
+  expect(h.client.getQueryState(emailsKey)?.isInvalidated).toBe(true);
+  expect(h.feedback.failure).toHaveBeenCalledOnce();
+});
+
 it('cancels a private-subject read across login and never caches it for the previous session', async () => {
   const h = mount();
   await signIn(h);
