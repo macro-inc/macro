@@ -39,6 +39,7 @@ tracing-opentelemetry = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+clap = { workspace = true }
 tempfile = { workspace = true }
 
 [build-dependencies]
