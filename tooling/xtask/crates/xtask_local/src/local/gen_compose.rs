@@ -26,7 +26,7 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, microsoft_emulator, repo_root};
+use super::{Mode, google_emulator, microsoft_emulator, model_emulator, repo_root};
 
 #[cfg(test)]
 mod test;
@@ -83,6 +83,9 @@ pub struct Sidecars {
     /// The Outlook emulator, in place of Microsoft. On when the stack runs
     /// its own FusionAuth and the env names no real Microsoft client.
     pub outlook_emulator: bool,
+    /// The model emulator, in place of Gemini. On when the stack is
+    /// self-contained and the env names no real Gemini key.
+    pub model_emulator: bool,
 }
 
 impl Sidecars {
@@ -94,6 +97,7 @@ impl Sidecars {
                     .is_some_and(|key| !key.trim().is_empty()),
             gmail_emulator: google_emulator::stands_in(mode, env),
             outlook_emulator: microsoft_emulator::stands_in(mode, env),
+            model_emulator: model_emulator::stands_in(mode, env),
         }
     }
 }
@@ -204,6 +208,19 @@ pub fn generate(
                     ("services", &[microsoft_emulator::network_alias()]),
                     ("auth", &[microsoft_emulator::network_alias()]),
                 ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.model_emulator {
+        services.insert(
+            model_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(model_emulator::command())),
+                ports: dct::Ports::Short(vec![model_emulator::published_port(instance)]),
+                networks: net_aliases(&[("services", &[model_emulator::network_alias()])]),
                 ..Default::default()
             }),
         );

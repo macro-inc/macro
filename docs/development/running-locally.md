@@ -285,6 +285,28 @@ With a real Microsoft client in the environment the emulator does not start.
 Sign in with Microsoft is then unavailable locally, as before: the stack defines
 no `microsoft` identity provider for a real client.
 
+### The assistant without a model
+
+A stack whose environment names no real Gemini key
+(`GOOGLE_GENERATIVE_AI_API_KEY` absent from Doppler and `--env-file`) starts
+the model emulator (`crates/model_emulator`) as the `model_emulator` service,
+and `OVERRIDE_GOOGLE_GENERATIVE_AI_API_URL` points the agent harness's Gemini
+client at it (`xtask_local`'s `model_emulator.rs`). A new local user is on
+the free plan, whose model is Gemini Flash, so the assistant answers from the
+emulator and nothing talks to a model provider.
+
+- Every message is answered `OK.` until a script says otherwise. Add one with
+  `PUT /_emulator/scripts/{name}` (the model's turns: text, tool calls, or
+  both) and send the assistant a message containing `[[script:{name}]]`.
+- The control API is at the `model_emulator` port, `http://localhost:8482` on
+  the default instance and the window's port on a named one
+  (`docker compose port model_emulator 8080`). `GET /_emulator/requests`
+  lists what the assistant sent. See the crate's `AGENTS.md`.
+- Models of the other providers (a paid plan's choices) are not emulated: the
+  stack's placeholder keys make those calls fail.
+
+With a real Gemini key in the environment the emulator does not start.
+
 ### Recover an existing instance without resetting data
 
 `just run_local --detach --instance <name>` brings an existing instance back up over

@@ -145,6 +145,7 @@ members = [
   "crates/granola_sync",
   "crates/onboarding",
   "crates/outlook_emulator",
+  "crates/model_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",

@@ -146,6 +146,7 @@ fn emits_required_keys() {
         "LIVEKIT_API_SECRET",
         "OPENAI_API_KEY",
         "FIREWORK_API_KEY",
+        "CEREBRAS_API_KEY",
         "GOOGLE_GENERATIVE_AI_API_KEY",
         "COHERE_API_KEY",
         "CAL_WEBHOOK_SECRET_KEY",

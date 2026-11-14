@@ -944,9 +944,10 @@ impl BootStubEnv {
         // Doppler; real provider calls still fail on the dummy keys.
         // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
         env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        env.insert("CEREBRAS_API_KEY".into(), "local-cerebras-key".into());
         env.insert(
-            "GOOGLE_GENERATIVE_AI_API_KEY".into(),
-            "local-google-generative-ai-key".into(),
+            super::model_emulator::API_KEY_VAR.into(),
+            super::model_emulator::PLACEHOLDER_API_KEY.into(),
         );
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(

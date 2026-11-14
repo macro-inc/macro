@@ -208,6 +208,7 @@ dependencies = [
  "genai_telemetry",
  "jsonschema",
  "macro_env_var",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "non_empty",
@@ -13673,6 +13674,29 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "model_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "futures",
+ "lazy-regex",
+ "macro_entrypoint",
+ "macro_env",
+ "regex",
+ "reqwest 0.13.4",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
