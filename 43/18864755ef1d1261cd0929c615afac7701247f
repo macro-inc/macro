@@ -1,0 +1,44 @@
+Cargo.toml
+  s_7a07194ea723e2::t_ced150759cd30f 380
+crates/agent_monitor/Cargo.toml
+  s_7a07194ea723e2::t_a3ee43209bf6f4 12,15-16,19-20,22,33-34
+  s_7a07194ea723e2::t_a86942d2da8d95 35
+crates/agent_monitor/src/outbound/tail/test.rs
+  s_7a07194ea723e2::t_0568c685cbc882 1-105
+crates/agent_monitor/src/outbound/watch/test.rs
+  s_7a07194ea723e2::t_0568c685cbc882 1-22
+crates/agent_monitor/src/outbound.rs
+  s_7a07194ea723e2::t_d2db50288888b5 1-8
+crates/agent_monitor/src/outbound/watch.rs
+  s_7a07194ea723e2::t_29ed05effd4da9 1-83
+crates/agent_monitor/src/outbound/hc.rs
+  s_7a07194ea723e2::t_643fdd556729e6 1-139,142-173
+  s_7a07194ea723e2::t_f91e0f99f429d8 140-141
+crates/agent_monitor/fixtures/hc_events.jsonl
+  s_7a07194ea723e2::t_256046a852a539 1-12
+crates/agent_monitor/src/outbound/hc/parse.rs
+  s_7a07194ea723e2::t_2630127d470543 1-333
+crates/agent_monitor/src/outbound/tail.rs
+  s_7a07194ea723e2::t_b463948a10f1e9 28-29,76-79
+  s_7a07194ea723e2::t_29ed05effd4da9 1-27,30-75,80-135
+crates/agent_monitor/src/outbound/hc/test.rs
+  s_7a07194ea723e2::t_8946cdcfcb64c7 1-218
+crates/agent_monitor/src/lib.rs
+  s_7a07194ea723e2::t_d2db50288888b5 8,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4318864755ef1d1261cd0929c615afac7701247f",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
