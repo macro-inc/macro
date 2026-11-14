@@ -225,7 +225,10 @@ async fn blocked_domains_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
             100,
         )
         .await?;
-        assert_eq!(rows, shown, "{domain} is blocked for the whole team");
+        assert_eq!(
+            rows, shown,
+            "{domain} is blocked for the whole team except on drafts"
+        );
     }
     let personal = company(&["personal.test"]);
     let rows = assert_parity(&pool, TEAM_GAMMA_ID, &[link(1)], &user(1), &personal, 5).await?;

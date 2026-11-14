@@ -7,7 +7,8 @@
 --     u5, u6 and u7 are members whose primary inboxes miss one of the
 --     privacy rule's mailbox conditions each: u5's consent names its
 --     second, non-primary inbox, u6's inbox is being deleted, and u7's
---     consent is off.
+--     consent is off. u8 is a member with no inbox of its own whose consent
+--     names u3's inbox.
 --   • Each link holds threads over a few weeks, one to three messages each.
 --     Conversation k is shared: u1 holds k % 10 = 0 (joining k % 20 = 0
 --     after its first message, so those copies don't dedupe) and about half
@@ -23,11 +24,11 @@
 
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
 SELECT md5('user' || i)::uuid, 'u' || i || '@gamma.test', 'u' || i || '@gamma.test', 'stripe_u' || i
-FROM generate_series(0, 7) i;
+FROM generate_series(0, 8) i;
 
 INSERT INTO "User" (id, email, name, macro_user_id)
 SELECT 'macro|u' || i || '@gamma.test', 'u' || i || '@gamma.test', 'U' || i, md5('user' || i)::uuid
-FROM generate_series(0, 7) i;
+FROM generate_series(0, 8) i;
 
 INSERT INTO team (id, name, owner_id, seat_count)
 VALUES ('e0000003-0000-0000-0000-000000000003', 'Team Gamma', 'macro|u0@gamma.test', 4);
@@ -35,7 +36,7 @@ VALUES ('e0000003-0000-0000-0000-000000000003', 'Team Gamma', 'macro|u0@gamma.te
 INSERT INTO team_user (team_id, user_id, team_role)
 SELECT 'e0000003-0000-0000-0000-000000000003', 'macro|u' || i || '@gamma.test',
        CASE WHEN i = 0 THEN 'owner' ELSE 'member' END::team_role
-FROM generate_series(0, 7) i
+FROM generate_series(0, 8) i
 WHERE i <> 4;
 
 INSERT INTO team_crm_settings (team_id, crm_enabled)
@@ -63,7 +64,10 @@ INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled)
 SELECT 'e0000003-0000-0000-0000-000000000003'::uuid, macro_id, id, TRUE FROM gamma_link WHERE i < 3
 UNION ALL
 SELECT 'e0000003-0000-0000-0000-000000000003'::uuid, macro_id, id, i <> 9
-FROM gamma_link WHERE i IN (7, 8, 9);
+FROM gamma_link WHERE i IN (7, 8, 9)
+UNION ALL
+SELECT 'e0000003-0000-0000-0000-000000000003'::uuid, 'macro|u8@gamma.test', id, TRUE
+FROM gamma_link WHERE i = 3;
 
 INSERT INTO crm_blocked_domains (team_id, domain)
 VALUES ('e0000003-0000-0000-0000-000000000003', 'blocked.test');

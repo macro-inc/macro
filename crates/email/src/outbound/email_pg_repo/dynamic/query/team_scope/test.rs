@@ -11,6 +11,8 @@ const TEAM: Uuid = Uuid::from_u128(0xf1);
 const OWN: Uuid = Uuid::from_u128(1);
 const TEAMMATE: Uuid = Uuid::from_u128(2);
 const NOT_CONTRIBUTING: Uuid = Uuid::from_u128(3);
+/// The team of the `email_crm_team_read` fixture.
+const GAMMA: &str = "e0000003-0000-0000-0000-000000000003";
 
 fn all_mail() -> PreviewView {
     PreviewView::StandardLabel(PreviewViewStandardLabel::All)
@@ -249,17 +251,17 @@ fn record_without_contacts_in_the_inboxes_has_no_superset() {
     assert!(read.superset.branches.is_empty());
 }
 
-const GAMMA: &str = "e0000003-0000-0000-0000-000000000003";
-
 /// Link `i` of the `email_crm_team_read` fixture.
 fn gamma_link(i: u128) -> Uuid {
     Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | i)
 }
 
 /// The inboxes a team read takes are the ones `crm_email_thread_allowed`
-/// lets contribute. In the fixture the primary inboxes of u5, u6 and u7
-/// each miss one of its mailbox conditions (consent naming another inbox,
-/// an inbox being deleted, consent off), and u3's has no consent.
+/// lets contribute. In the fixture each of these misses one of its mailbox
+/// conditions: u5's primary inbox (link 6) has no consent of its own, since
+/// u5's consent names u5's non-primary link 7; u6's inbox (link 8) is being
+/// deleted; u7's (link 9) has consent off; and u3's (link 3) is named only by
+/// u8's consent.
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
