@@ -1,5 +1,8 @@
-//! The agent monitor's terminal viewer: view state, key machine, panes and
-//! pages, drawn with ratatui from the collector's `Subscribe` stream.
+//! The agent monitor's terminal viewer (`macrod monitor`): a dense,
+//! Bloomberg-style board of every agent on the machine, drawn with ratatui
+//! from the collector's `Subscribe` stream or from an in-process demo fleet.
 //!
-//! Not written yet; this crate holds its place in the workspace.
+//! - [`keys`]: the pure key machine, [`keys::step`].
 #![deny(missing_docs)]
+
+pub mod keys;

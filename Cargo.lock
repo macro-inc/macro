@@ -928,6 +928,19 @@ name = "agent_monitor_tui"
 version = "0.1.0"
 dependencies = [
  "agent_monitor",
+ "async-stream",
+ "async-trait",
+ "chrono",
+ "crossterm 0.28.1",
+ "futures",
+ "insta",
+ "ratatui",
+ "rootcause",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tui-input",
+ "tui-tree-widget",
  "workspace-hack",
 ]
 
@@ -21625,6 +21638,16 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "911e93158bf80bbc94bad533b2b16e3d711e1132d69a6a6980c3920a63422c19"
 dependencies = [
+ "unicode-width 0.2.0",
+]
+
+[[package]]
+name = "tui-tree-widget"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c14c4488e071617f5b5922222193cdf6725835e492c6229557af85d3c1a4e903"
+dependencies = [
+ "ratatui",
  "unicode-width 0.2.0",
 ]
 
