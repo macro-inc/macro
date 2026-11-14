@@ -72,6 +72,9 @@ pub struct Sources {
     /// Files holding background loops.
     #[serde(default, rename = "loop")]
     pub loops: Vec<LoopSource>,
+    /// Routes of other services that carry email functions out.
+    #[serde(default)]
+    pub elsewhere: Vec<ElsewhereSource>,
     /// Rows whose providers differ from the default rule.
     #[serde(default)]
     pub applies: Vec<ProvidersOverride>,
@@ -235,6 +238,18 @@ pub struct ProviderSource {
 pub struct LoopSource {
     /// A file whose `pub` and `pub(crate)` `run*` functions are loops.
     pub file: String,
+}
+
+/// `[[elsewhere]]`
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ElsewhereSource {
+    /// The service, as the harness names it: `document_storage_service`.
+    pub service: String,
+    /// The file the routes are defined in.
+    pub file: String,
+    /// The routes, each `METHOD /path/{param}`.
+    pub routes: Vec<String>,
 }
 
 /// `[[applies]]`

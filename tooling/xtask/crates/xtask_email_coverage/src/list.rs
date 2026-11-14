@@ -7,7 +7,7 @@ use rootcause::prelude::*;
 
 use crate::repo::{Loc, Repo};
 use crate::row::{self, Kind, Providers, Row};
-use crate::sources::{ProvidersOverride, SOURCES_PATH, Sources};
+use crate::sources::{ElsewhereSource, ProvidersOverride, SOURCES_PATH, Sources};
 
 mod background;
 mod graphql;
@@ -84,6 +84,10 @@ pub fn generate_from(repo_root: &Path, sources: &Sources) -> Result<Vec<Row>, Re
         add(Kind::Loop, background::list(&repo, background)?);
     }
 
+    for elsewhere in &sources.elsewhere {
+        add(Kind::Elsewhere, routes_elsewhere(repo_root, elsewhere)?);
+    }
+
     let mut rows: Vec<Row> = found
         .into_iter()
         .map(|(kind, entry)| Row {
@@ -119,6 +123,36 @@ fn named(prefix: &str, messages: Vec<wire::Message>) -> Vec<Entry> {
             key: format!("{prefix}:{}", message.ident),
             matcher: message.matcher,
             loc: message.loc,
+        })
+        .collect()
+}
+
+/// The routes of another service that `sources.toml` lists by hand. The
+/// file must hold the end of each route's path as a string literal, so
+/// that a route that is renamed or removed does not stay listed.
+fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<Entry>, Report> {
+    let text = std::fs::read_to_string(repo_root.join(&source.file))
+        .context(format!("could not read {}", source.file))?;
+    source
+        .routes
+        .iter()
+        .map(|route| {
+            let path = route.split_once(' ').map_or(route.as_str(), |(_, path)| path);
+            let line = path
+                .match_indices('/')
+                .map(|(start, _)| format!("\"{}\"", &path[start..]))
+                .find_map(|literal| text.lines().position(|line| line.contains(&literal)))
+                .ok_or_else(|| {
+                    report!("{}: no string literal ends the path of `{route}`", source.file)
+                })?;
+            Ok(Entry {
+                key: format!("{} {route}", source.service),
+                matcher: String::new(),
+                loc: Loc {
+                    file: source.file.clone(),
+                    line: line + 1,
+                },
+            })
         })
         .collect()
 }

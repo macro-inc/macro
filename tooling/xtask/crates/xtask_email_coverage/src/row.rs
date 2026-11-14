@@ -44,6 +44,9 @@ pub enum Kind {
     Provider,
     /// A background loop, listed but not counted.
     Loop,
+    /// A route of another service that carries an email function out,
+    /// listed by hand.
+    Elsewhere,
 }
 
 /// Which mail providers an entry point applies to.

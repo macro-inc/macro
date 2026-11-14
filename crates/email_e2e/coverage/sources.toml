@@ -171,3 +171,37 @@ kind = "lambda"
 key = "email_refresh_handler"
 providers = "gmail"
 reason = "It selects Gmail links only, to renew their watches and probe their grants."
+
+# kind `elsewhere`: routes of other services that carry a function of email
+# out, where a scenario's stack starts that service and records its
+# requests. Listed by hand: `file` must hold the end of each route's path as
+# a string literal. They need no function; one that has none is not counted
+# against anything.
+[[elsewhere]]
+service = "document_storage_service"
+file = "crates/soup/src/inbound/axum_router.rs"
+routes = ["POST /items/soup/ast"]
+
+[[elsewhere]]
+service = "document_storage_service"
+file = "services/document_storage_service/src/api.rs"
+routes = ["POST /search"]
+
+[[elsewhere]]
+service = "document_storage_service"
+file = "crates/reminders/src/inbound/axum_router.rs"
+routes = [
+    "GET /reminders/email/collection",
+    "GET /reminders/email/{thread_id}",
+    "PUT /reminders/email/{thread_id}",
+]
+
+[[elsewhere]]
+service = "document_storage_service"
+file = "crates/properties/src/inbound/axum_router.rs"
+routes = [
+    "POST /properties/tags",
+    "PUT /properties/entities/{entity_type}/{entity_id}/{property_id}",
+    "POST /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
+    "DELETE /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
+]

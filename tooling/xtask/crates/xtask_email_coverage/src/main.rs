@@ -2,12 +2,14 @@
 //!
 //! - `list` writes `crates/email_e2e/coverage/entrypoints.tsv` from the code.
 //! - `list --check` fails when the checked-in file differs from the code.
+//! - `report` joins what the scenarios recorded with the ledger.
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use rootcause::prelude::*;
-use xtask_email_coverage::{ENTRYPOINTS_PATH, diff, generate, read_tsv, render_tsv};
+use xtask_email_coverage::{ENTRYPOINTS_PATH, ReportOptions, diff, generate, read_tsv, render_tsv, report};
 
 #[derive(Parser)]
 #[command(
@@ -27,11 +29,45 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Report which functions of email and which entry points the scenarios
+    /// cover, from the records they left.
+    Report {
+        /// A directory holding `evidence.json` and `junit.xml` files, at any
+        /// depth. Repeat for several.
+        #[arg(long, required = true)]
+        results: Vec<PathBuf>,
+        /// Where to write coverage.json, coverage.md and index.html.
+        #[arg(long)]
+        out: PathBuf,
+        /// Fail when a function or an entry point is neither covered nor
+        /// waived, or a scenario failed.
+        #[arg(long)]
+        enforce: bool,
+    },
 }
 
 fn main() -> ExitCode {
     let outcome = match Cli::parse().command {
         Command::List { check } => list(check),
+        Command::Report {
+            results,
+            out,
+            enforce,
+        } => report(
+            &xtask_paths::repo_root(),
+            &ReportOptions {
+                results,
+                out,
+                enforce,
+            },
+        )
+        .map(|failed| {
+            if failed {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }),
     };
 
     // Printed with `Display`: `Debug`, which a returned error gets, quotes

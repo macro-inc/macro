@@ -11,10 +11,12 @@
 mod attrs;
 mod list;
 mod repo;
+mod report;
 mod row;
 mod sources;
 
 pub use list::{generate, generate_from};
+pub use report::{Options as ReportOptions, run as report};
 pub use row::{Kind, Providers, Row, diff, parse_tsv, read_tsv, render_tsv};
 pub use sources::{
     GatewaySource, GraphqlCrate, GraphqlSource, GraphqlTypeMapping, HttpSource, ItemRef,
