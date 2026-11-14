@@ -10,6 +10,8 @@ import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import {
+  type Query,
+  type QueryClient,
   type QueryKey,
   queryOptions,
   useMutation,
@@ -296,11 +298,7 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
-          // Contact details carry the company name too.
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.contact._def,
-            predicate: (query) => contactOfCompany(query.state.data, companyId),
-          }),
+          refreshContactDetailsOfCompany(deps.client, companyId),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },
@@ -309,9 +307,41 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
   );
 }
 
-/** A detail still loading may be of the company, so it is refreshed too. */
+/**
+ * Contact details carry their company's name, so a rename refreshes those of
+ * the company's contacts, and any still loading, whose answer may predate the
+ * rename. A loading read is cancelled first: invalidating it would only join
+ * the read already in flight, whose answer then clears the invalidation.
+ */
+async function refreshContactDetailsOfCompany(
+  client: QueryClient,
+  companyId: string
+): Promise<void> {
+  const loading = new Set(
+    client
+      .getQueryCache()
+      .findAll({ queryKey: crmKeys.contact._def, predicate: isFirstLoad })
+      .map((query) => query.queryHash)
+  );
+  await client.cancelQueries({
+    queryKey: crmKeys.contact._def,
+    predicate: (query) => loading.has(query.queryHash),
+  });
+  await client.invalidateQueries({
+    queryKey: crmKeys.contact._def,
+    predicate: (query) =>
+      loading.has(query.queryHash) ||
+      contactOfCompany(query.state.data, companyId),
+  });
+}
+
+function isFirstLoad(query: Query): boolean {
+  return (
+    query.state.data === undefined && query.state.fetchStatus === 'fetching'
+  );
+}
+
 function contactOfCompany(data: unknown, companyId: string): boolean {
-  if (data === undefined) return true;
   return (
     !!data &&
     typeof data === 'object' &&

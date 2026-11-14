@@ -1,5 +1,9 @@
 import { cleanup, render } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmRecordDependencies } from './dependencies';
@@ -112,24 +116,31 @@ it("refreshes the details of the renamed company's contacts only", async () => {
   expect(client.getQueryState(other)?.isInvalidated).toBe(false);
 });
 
-it('refreshes a contact detail still loading when a company is renamed', async () => {
+it('reads a contact detail again when it was loading during a rename', async () => {
   storage.setCompanyName.mockResolvedValue(ok({}));
-  const loading = crmKeys.contact('contact-3').queryKey;
-  let release!: (value: unknown) => void;
-  const read = client
-    .fetchQuery({
-      queryKey: loading,
-      queryFn: () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    })
-    .catch(() => undefined);
+  const key = crmKeys.contact('contact-3').queryKey;
+  const answers: Array<(value: unknown) => void> = [];
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn: () => new Promise((resolve) => answers.push(resolve)),
+    staleTime: 60_000,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
   const mutations = mount();
 
-  await mutations.rename.mutateAsync({ companyId: 'company-1', name: 'Acme' });
+  const rename = mutations.rename.mutateAsync({
+    companyId: 'company-1',
+    name: 'Acme',
+  });
+  await vi.waitFor(() => expect(answers).toHaveLength(2));
+  // The read started before the rename answers with the old name.
+  answers[0]?.({ id: 'contact-3', company: { name: 'Old' } });
+  answers[1]?.({ id: 'contact-3', company: { name: 'Acme' } });
+  await rename;
 
-  expect(client.getQueryState(loading)?.isInvalidated).toBe(true);
-  release({ id: 'contact-3', companyId: 'company-1' });
-  await read;
+  expect(client.getQueryData(key)).toEqual({
+    id: 'contact-3',
+    company: { name: 'Acme' },
+  });
+  unsubscribe();
 });
