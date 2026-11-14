@@ -22,6 +22,35 @@ it works: [architecture](../architecture/stripe-event-inbox.md).
 The inbox migration only adds tables and types, so code from before the inbox
 runs unchanged with it applied.
 
+## Rollout window
+
+Deploy at low traffic. During the ECS rolling deploy, old tasks still take
+some webhooks and apply them synchronously with the old handler: those
+events bypass the inbox and are never stored. Once every task runs the new
+version (the deploy job finished and ECS shows one task definition):
+
+1. List the events Stripe delivered during the rollout window, by created
+   time (Unix seconds, from just before `deploy-services` started to when it
+   finished):
+
+   ```sh
+   stripe get /v1/events -d "created[gte]=<unix start>" -d "created[lte]=<unix end>" -d limit=100
+   # next page: add -d starting_after=<last evt_id of the previous page> while has_more is true
+   ```
+
+2. Resend each one to the production endpoint, from the dashboard
+   (Developers → Events → the event → Resend) or the CLI:
+
+   ```sh
+   stripe events resend <evt_id> --webhook-endpoint <we_id>
+   ```
+
+   Against production, add `--live` (or `--api-key` with a live restricted
+   key) to both commands. Events the new version already stored dedupe on
+   their id. The rest apply
+   in created order, rewinding a cursor where needed (consumers are
+   idempotent).
+
 ## Before a rollback: drain
 
 Events stored but not yet applied when the old code takes over are applied by
@@ -53,8 +82,8 @@ WHERE state <> 'idle' GROUP BY consumer, state;
 
 1. List the events of the rollback window, from just before the rollback
    deployed to just after the roll forward:
-   `stripe events list --created[gte]=<unix start> --created[lte]=<unix end> --limit 100`
-   (page with `--starting-after`). The next daily audit also records them as
+   `stripe get /v1/events -d "created[gte]=<unix start>" -d "created[lte]=<unix end>" -d limit=100`
+   (page with `-d starting_after=<evt_id>`), as in the rollout window above. The next daily audit also records them as
    `missing_event` (`stripe_audit_mismatch`), within its 26-hour lookback.
 2. Resend each to the production endpoint: in the Stripe dashboard, open
    Developers → Events → the event, and choose Resend; or use
@@ -66,6 +95,34 @@ WHERE state <> 'idle' GROUP BY consumer, state;
      for dedupe but never rewinds a cursor or applies. Stripe keeps events for
      30 days anyway.
 3. Replay dead cursors once their cause is fixed (below).
+
+## Unknown price on a grant
+
+A personal subscription granting access on a price that is neither a sold
+seat price nor in `LEGACY_PREMIUM_PRICE_IDS` dead-letters by design: Macro
+does not guess a tier. Revokes on such a price still apply (they remove
+Premium). The `personal_plan` dead-letter monitor pages on-call. Recover:
+
+1. Add the price id to `LEGACY_PREMIUM_PRICE_IDS` in
+   `crates/teams/src/domain/model.rs` (when it should keep Premium; another
+   tier is a code change to `SeatPrices`).
+2. Ship it through the normal full deploy (`deploy_all_services.yml`).
+3. Once it is live, replay the dead `personal_plan` cursors, retrying each
+   dead event (do not skip it):
+
+   ```sh
+   curl -sS -X POST "https://gateway.macro.com/auth/internal/stripe_inbox/replay_dead" \
+     -H "x-internal-auth-key: $INTERNAL_API_KEY" \
+     -H "content-type: application/json" \
+     -d '{"consumer": "personal_plan", "skipDeadEvent": false, "limit": 100}'
+   # {"rearmed": 3}; repeat until it answers {"rearmed": 0}
+   ```
+
+   `INTERNAL_API_KEY` is the value of that key in the authentication-service
+   Doppler config of the environment; the base URL is `AuthServiceUrl`
+   (`crates/macro_service_urls`), `https://dev-gateway.macro.com/auth` on dev.
+4. Check the dead count is gone: the `stripe inbox dead cursors` log stops
+   and the monitor recovers within 30 minutes.
 
 ## Replaying dead cursors
 
