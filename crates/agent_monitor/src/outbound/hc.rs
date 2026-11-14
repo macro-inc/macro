@@ -49,8 +49,8 @@ impl HcSource {
 
 #[async_trait]
 impl AgentSource for HcSource {
-    fn name(&self) -> &'static str {
-        SourceKind::Hc.name()
+    fn kind(&self) -> SourceKind {
+        SourceKind::Hc
     }
 
     async fn run(
@@ -58,7 +58,7 @@ impl AgentSource for HcSource {
         out: mpsc::Sender<Observation>,
         cancel: CancellationToken,
     ) -> Result<(), SourceError> {
-        let span = tracing::info_span!("macrod.monitor.source.run", source = self.name());
+        let span = tracing::info_span!("macrod.monitor.source.run", source = SourceKind::Hc.name());
         self.follow(out, cancel).instrument(span).await
     }
 }
@@ -127,7 +127,7 @@ impl HcSource {
                     let count = u32::try_from(facts.len()).unwrap_or(u32::MAX);
                     tracing::info_span!(
                         "macrod.monitor.source.batch",
-                        source = self.name(),
+                        source = SourceKind::Hc.name(),
                         observations = count,
                         bytes = line.len(),
                     )
