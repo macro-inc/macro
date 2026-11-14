@@ -89,8 +89,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   Hidden companies, their contacts, and hidden company-less contacts stay out.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
-  the caller's mailbox. Keep browser requests bounded; never expand every CRM
-  record into client-side filters or raise ingress limits to fit them.
+  the caller's mailbox. It reads only what the request's sources can return
+  (`ActivityReads`): a source pinned to the nil id (`exclusions`) reads
+  nothing, so each Sales view reads one source, and the edges come from one
+  statement over the Companies and Contacts property rows
+  (`CrmService::activity_property_edges`) instead of every record's ids. A
+  request that reads database rows still takes the record path. Keep browser
+  requests bounded; never expand every CRM record into client-side filters or
+  raise ingress limits to fit them.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the

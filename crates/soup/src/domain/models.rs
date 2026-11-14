@@ -6,7 +6,7 @@ pub mod sort;
 pub use sort::{DynamicSort, DynamicSortValue};
 
 #[cfg(feature = "ports")]
-mod exclusions;
+pub(crate) mod exclusions;
 
 #[cfg(all(test, feature = "ports"))]
 mod test;

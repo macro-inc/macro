@@ -28,8 +28,29 @@ const SIBLING_CONTACT: Uuid = Uuid::from_u128(0xc2);
 const CHANNEL: Uuid = Uuid::from_u128(0xc4a);
 
 /// Resolves the company to its two contacts; any other record is not visible.
-#[derive(Clone)]
-struct FakeCrm;
+/// The activity scope has one domain and one address, and one property edge
+/// per item kind ([`ACTIVITY_EDGES`]); its calls are recorded.
+#[derive(Clone, Default)]
+struct FakeCrm {
+    activity_calls: Arc<Mutex<Vec<ActivityCall>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ActivityCall {
+    Participants,
+    Edges(Vec<PropertyEntityType>),
+}
+
+const ACTIVITY_DOCUMENT: Uuid = Uuid::from_u128(0xad);
+const ACTIVITY_TASK: Uuid = Uuid::from_u128(0xa7);
+const ACTIVITY_CALL: Uuid = Uuid::from_u128(0xac);
+const ACTIVITY_CHAT: Uuid = Uuid::from_u128(0xa1);
+const ACTIVITY_EDGES: [(PropertyEntityType, Uuid); 4] = [
+    (PropertyEntityType::Document, ACTIVITY_DOCUMENT),
+    (PropertyEntityType::Task, ACTIVITY_TASK),
+    (PropertyEntityType::CallRecord, ACTIVITY_CALL),
+    (PropertyEntityType::Chat, ACTIVITY_CHAT),
+];
 
 impl EmailPrivacyService for FakeCrm {
     async fn contribution_mailbox(
@@ -70,10 +91,43 @@ impl CrmService for FakeCrm {
                 vec![CONTACT, SIBLING_CONTACT],
             )),
             CrmAssociation::Contact(CONTACT) => Ok(CrmRecordAssociation::contact(CONTACT)),
-            CrmAssociation::Activity => Ok(CrmRecordAssociation::default()),
+            CrmAssociation::Activity => {
+                self.activity_calls
+                    .lock()
+                    .unwrap()
+                    .push(ActivityCall::Participants);
+                Ok(CrmRecordAssociation {
+                    domains: vec!["example.com".into()],
+                    addresses: vec!["pat@example.org".into()],
+                    ..CrmRecordAssociation::default()
+                })
+            }
             CrmAssociation::Company(_) => Err(CrmError::CompanyNotFoundForTeam),
             CrmAssociation::Contact(_) => Err(CrmError::ContactNotFoundForTeam),
         }
+    }
+
+    async fn activity_property_edges(
+        &self,
+        user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[PropertyEntityType],
+    ) -> Result<Vec<crm::domain::association::CrmActivityEdge>, CrmError> {
+        assert_eq!(user_id, USER);
+        self.activity_calls
+            .lock()
+            .unwrap()
+            .push(ActivityCall::Edges(entity_types.to_vec()));
+        Ok(ACTIVITY_EDGES
+            .into_iter()
+            .filter(|(entity_type, _)| entity_types.contains(entity_type))
+            .map(
+                |(entity_type, id)| crm::domain::association::CrmActivityEdge {
+                    entity_type,
+                    entity_id: id.to_string(),
+                },
+            )
+            .collect())
     }
 
     async fn list_contacts_for_soup(
@@ -426,10 +480,7 @@ fn request(filters: EntityFilterAst) -> SoupRequest<EntityFilterAst> {
     }
 }
 
-fn service(
-    repo: MockSoupRepo,
-    comms: ReferencingComms,
-) -> SoupImpl<
+type Service = SoupImpl<
     MockSoupRepo,
     FrecencyQueryServiceImpl<MockFrecencyStorage>,
     NoopEmailPreviewService,
@@ -437,14 +488,20 @@ fn service(
     NoopCallRecordQueryService,
     FakeCrm,
     NoopPullRequestListing,
-> {
+>;
+
+fn service(repo: MockSoupRepo, comms: ReferencingComms) -> Service {
+    service_with(repo, comms, FakeCrm::default())
+}
+
+fn service_with(repo: MockSoupRepo, comms: ReferencingComms, crm: FakeCrm) -> Service {
     SoupImpl::new(
         repo,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
         NoopEmailPreviewService,
         comms,
         NoopCallRecordQueryService,
-        FakeCrm,
+        crm,
         NoopPullRequestListing,
     )
 }
@@ -655,4 +712,122 @@ async fn associations_require_an_expanded_query() {
         assert_matches!(result, Err(SoupErr::AstErr(_)));
     }
     assert!(comms.targets.lock().unwrap().is_empty());
+}
+
+/// Runs a Sales view (`crm_association::test::sales_view`) through the
+/// service, checks the filter its candidate query receives, and returns what
+/// it read of the activity scope.
+async fn sales_view_reads(
+    filters: EntityFilterAst,
+    check: impl Fn(&EntityFilterAst) + Send + 'static,
+) -> Vec<ActivityCall> {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_generic_cursor_soup()
+        .times(1)
+        .returning(move |request| {
+            let SimpleSortQuery::ItemsFilter(query) = request.cursor else {
+                panic!("filtered query")
+            };
+            assert_eq!(query.filter().crm_association, None);
+            check(query.filter());
+            Box::pin(async { Ok(Vec::new()) })
+        });
+    service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup(request(filters), None)
+        .await
+        .unwrap();
+    crm.activity_calls.lock().unwrap().clone()
+}
+
+fn sales_view(tab: &str) -> EntityFilterAst {
+    use crate::domain::service::crm_association::test::{ast, sales_view};
+    ast(sales_view(tab))
+}
+
+#[tokio::test]
+async fn sales_tasks_read_only_document_and_task_edges() {
+    let calls = sales_view_reads(sales_view("tasks"), |filter| {
+        let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+        documents.sort();
+        assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+    })
+    .await;
+    assert_eq!(
+        calls,
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
+}
+
+#[tokio::test]
+async fn sales_calls_read_only_call_edges() {
+    use item_filters::ast::call::CallLiteral;
+    let calls = sales_view_reads(sales_view("calls"), |filter| {
+        assert_matches!(
+            filter.call_filter.as_deref(),
+            Some(Expr::Literal(CallLiteral::CallId(id))) if *id == ACTIVITY_CALL
+        );
+    })
+    .await;
+    assert_eq!(
+        calls,
+        [ActivityCall::Edges(vec![PropertyEntityType::CallRecord])]
+    );
+}
+
+#[tokio::test]
+async fn sales_email_reads_only_participants() {
+    use item_filters::ast::email::{Email, EmailLiteral};
+    let calls = sales_view_reads(sales_view("email"), |filter| {
+        let tree = serde_json::to_string(&filter.email_filter.tree).unwrap();
+        for literal in [
+            EmailLiteral::Sender(Email::Domain("example.com".into())),
+            EmailLiteral::Bcc(Email::Domain("example.com".into())),
+        ] {
+            let literal = serde_json::to_string(&literal).unwrap();
+            assert!(tree.contains(&literal), "{tree} names {literal}");
+        }
+        assert!(tree.contains("pat@example.org"), "{tree}");
+        // No edge was read, so every property-matched source is pinned.
+        assert_eq!(
+            document_ids(filter.document_filter.as_deref().unwrap()),
+            [Uuid::nil()]
+        );
+    })
+    .await;
+    // The edge call only authorizes the scope: it names no item kind.
+    assert_eq!(
+        calls,
+        [ActivityCall::Participants, ActivityCall::Edges(Vec::new())]
+    );
+}
+
+#[tokio::test]
+async fn activity_with_database_rows_takes_the_record_path() {
+    let mut filters = sales_view("tasks");
+    filters.database_row_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::database_row::DatabaseRowLiteral::Include,
+    )));
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_crm_property_edges()
+        .times(1)
+        .returning(|companies, contacts| {
+            assert!(companies.is_empty() && contacts.is_empty());
+            Box::pin(async { Ok(Vec::new()) })
+        });
+    repo.expect_expanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup(request(filters), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Participants]
+    );
 }
