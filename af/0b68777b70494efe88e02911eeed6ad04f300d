@@ -1,0 +1,38 @@
+Cargo.lock
+  h_659b58cf3b37bf 908,926
+crates/agent_monitor/AGENTS.md
+  h_659b58cf3b37bf 12-17,23,25-33,50-56
+crates/agent_monitor/Cargo.toml
+  h_659b58cf3b37bf 48-54
+crates/agent_monitor/examples/monitor.rs
+  h_659b58cf3b37bf 1-205
+crates/agent_monitor/src/client.rs
+  h_659b58cf3b37bf 23-26,136-137,152-155,158,168,171-174
+crates/agent_monitor/src/domain/model.rs
+  h_659b58cf3b37bf 118-119,125
+crates/agent_monitor/src/domain/store.rs
+  h_659b58cf3b37bf 17,48-49,54-57,71,176-222,298-300,389-396,398-402,408-415,464-472,484-488,503,507,526-536,615,632,656
+crates/agent_monitor/src/domain/store/test.rs
+  h_659b58cf3b37bf 139-144
+crates/agent_monitor/src/domain/supervisor.rs
+  h_659b58cf3b37bf 33-35,37,40-50,53,56,70
+crates/agent_monitor/src/inbound/grpc.rs
+  h_659b58cf3b37bf 3,5,13,35,38-43,57-81,84-93,96-104,109-112,115,117,121,259,300,312,314-317,323,328-341
+crates/agent_monitor/src/outbound/demo.rs
+  h_659b58cf3b37bf 24,28-29,39,108-113,124-128,130-134,136-137,169-197,1046-1058,1060,1062
+crates/agent_monitor/src/outbound/demo/test.rs
+  h_659b58cf3b37bf 58-79
+crates/agent_monitor/tests/rpc.rs
+  h_659b58cf3b37bf 1-358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "af0b68777b70494efe88e02911eeed6ad04f300d",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
