@@ -64,11 +64,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
 
     let short = area.height < SHORT;
     let board_height = if short { 1 } else { 4 };
-    let ticker_height = if short { 0 } else { 1 };
-    let [header, tabs, ticker_area, board_area, body, command] = Layout::vertical([
+    let [header, tabs, board_area, body, command] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(ticker_height),
         Constraint::Length(board_height),
         Constraint::Min(0),
         Constraint::Length(1),
@@ -77,9 +75,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
 
     draw_header(frame, header, app, clock);
     draw_tabs(frame, tabs, app);
-    if ticker_height > 0 {
-        draw_ticker(frame, ticker_area, app, clock);
-    }
     board::draw(frame, board_area, app);
 
     match app.page().clone() {
@@ -227,56 +222,6 @@ fn host_spans(app: &App) -> Vec<Span<'static>> {
         spans.push(Span::styled(" ○ OFFLINE", theme::bold(theme::RED)));
     }
     spans
-}
-
-/// Tape lines on the ticker.
-const TICKER_EVENTS: usize = 40;
-
-/// Milliseconds per ticker step of one column.
-const TICKER_STEP_MS: i64 = 110;
-
-/// A stock-ticker line of the newest tape lines, scrolling left with the clock.
-fn draw_ticker(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
-    let mut cells: Vec<(char, Style)> = Vec::new();
-    let skip = app.view.tape.len().saturating_sub(TICKER_EVENTS);
-    for event in app.view.tape.iter().skip(skip) {
-        let (tag, color) = panes::tape_tag(event.kind);
-        let arrow = match event.severity {
-            agent_monitor::domain::model::Severity::Error
-            | agent_monitor::domain::model::Severity::Warning => ("▼ ", theme::bold(theme::RED)),
-            _ => ("▲ ", theme::bold(theme::GREEN)),
-        };
-        let pieces = [
-            (
-                app.view.name_of(&event.agent).to_uppercase(),
-                theme::bold(theme::AMBER),
-            ),
-            (String::from(" "), theme::base()),
-            (String::from(arrow.0), arrow.1),
-            (format!("{} ", tag.trim()), theme::bold(color)),
-            (event.text.clone(), theme::ink(theme::DIM)),
-            (String::from("   ┃   "), theme::ink(theme::FAINT)),
-        ];
-        for (text, style) in pieces {
-            cells.extend(text.chars().map(|character| (character, style)));
-        }
-    }
-    if cells.is_empty() {
-        return;
-    }
-
-    let width = usize::from(area.width);
-    let steps = clock.now.timestamp_millis() / TICKER_STEP_MS;
-    let offset =
-        usize::try_from(steps.rem_euclid(i64::try_from(cells.len()).unwrap_or(1))).unwrap_or(0);
-    let spans: Vec<Span<'static>> = (0..width)
-        .filter_map(|column| cells.get((offset + column) % cells.len()))
-        .map(|(character, style)| Span::styled(character.to_string(), *style))
-        .collect();
-    frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::new().bg(theme::BG)),
-        area,
-    );
 }
 
 fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
