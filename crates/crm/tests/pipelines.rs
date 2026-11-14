@@ -1341,6 +1341,301 @@ async fn entries_come_only_from_primary_references_of_tracked_pipelines(pool: Pg
     );
 }
 
+/// Copy a row's cell of `definition` onto another entity, as raw storage.
+async fn copy_cell(
+    pool: &PgPool,
+    row: RowId,
+    definition: Uuid,
+    entity_id: &str,
+    entity_type: &str,
+) {
+    let copied = sqlx::query!(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           SELECT $1, $2, $3::text::property_entity_type, property_definition_id, values
+           FROM entity_properties
+           WHERE entity_id = $4 AND entity_type = 'DATABASE_ROW' AND property_definition_id = $5"#,
+        Uuid::now_v7(),
+        entity_id,
+        entity_type,
+        row.into_uuid().to_string(),
+        definition,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    assert_eq!(copied.rows_affected(), 1);
+}
+
+/// The lookup the card starts from and the guard it takes next, each on its
+/// own: cells that only look like a primary reference, and pipelines trashed
+/// before the lookup or between it and the guard.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn referencing_rows_and_the_live_guard_keep_only_live_primary_references(pool: PgPool) {
+    let (s, _db, a, team, company) = fixture(&pool).await;
+    let repo = PgPipelineRepo::new(
+        pool.clone(),
+        PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone())),
+    );
+    let other = Uuid::now_v7();
+    sqlx::query!("INSERT INTO crm_companies (id, team_id, first_interaction, last_interaction) VALUES ($1, $2, now(), now())", other, team).execute(&pool).await.unwrap();
+    let tracked = create(&s, team, PipelineRecordType::Company).await;
+    let held = inserted(
+        &write(&s, &a, &tracked, vec![insert(&tracked, company)])
+            .await
+            .unwrap(),
+    );
+    let unrelated = inserted(
+        &write(&s, &a, &tracked, vec![insert(&tracked, other)])
+            .await
+            .unwrap(),
+    );
+    let second = create(&s, team, PipelineRecordType::Company).await;
+    let second_row = inserted(
+        &write(&s, &a, &second, vec![insert(&second, company)])
+            .await
+            .unwrap(),
+    );
+    let trashed = create(&s, team, PipelineRecordType::Company).await;
+    write(&s, &a, &trashed, vec![insert(&trashed, company)])
+        .await
+        .unwrap();
+    s.set_trashed(
+        access(&a, trashed.id, EntityType::CrmPipeline, OWNER).await,
+        true,
+    )
+    .await
+    .unwrap();
+
+    // Copies of the tracked pipeline's cell naming the company: on another
+    // entity type under a row's id, on a row of another table that also has
+    // the primary column's definition, and under a row id that is no uuid.
+    let definition = sqlx::query_scalar!(
+        "SELECT property_definition_id FROM database_columns WHERE id = $1",
+        tracked.primary_column_id.into_uuid()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    copy_cell(
+        &pool,
+        held,
+        definition,
+        &unrelated.into_uuid().to_string(),
+        "DOCUMENT",
+    )
+    .await;
+    sqlx::query!(
+        "INSERT INTO database_columns (id, table_id, property_definition_id, position) VALUES ($1, $2, $3, 'zz')",
+        Uuid::now_v7(),
+        second.table_id.into_uuid(),
+        definition
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    copy_cell(
+        &pool,
+        held,
+        definition,
+        &second_row.into_uuid().to_string(),
+        "DATABASE_ROW",
+    )
+    .await;
+    // The row-membership trigger refuses that last cell today; one written
+    // around it must still neither match nor fail the lookup.
+    sqlx::query!("ALTER TABLE entity_properties DISABLE TRIGGER database_row_cell_membership")
+        .execute(&pool)
+        .await
+        .unwrap();
+    copy_cell(&pool, held, definition, "not-a-row", "DATABASE_ROW").await;
+    sqlx::query!("ALTER TABLE entity_properties ENABLE TRIGGER database_row_cell_membership")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let found = |references: Vec<PipelineReference>| {
+        references
+            .into_iter()
+            .map(|r| (r.pipeline_id, r.row_id, r.record_id))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        found(
+            repo.referencing_rows(PipelineRecordType::Company, &[company], None)
+                .await
+                .unwrap()
+        ),
+        vec![
+            (tracked.id, held, company),
+            (second.id, second_row, company)
+        ],
+        "only primary cells of live company pipelines"
+    );
+    assert_eq!(
+        found(
+            repo.referencing_rows(PipelineRecordType::Company, &[company], Some(second.id))
+                .await
+                .unwrap()
+        ),
+        vec![(second.id, second_row, company)]
+    );
+    assert!(
+        repo.referencing_rows(PipelineRecordType::Contact, &[company], None)
+            .await
+            .unwrap()
+            .is_empty(),
+        "a contact lookup reads no company pipeline"
+    );
+
+    // Trashed after the lookup: the guard leaves it out.
+    s.set_trashed(
+        access(&a, second.id, EntityType::CrmPipeline, OWNER).await,
+        true,
+    )
+    .await
+    .unwrap();
+    let (guard, live) = repo.lock_live_many(&[tracked.id, second.id]).await.unwrap();
+    assert_eq!(
+        live.iter().map(|p| p.id).collect::<Vec<_>>(),
+        vec![tracked.id]
+    );
+    drop(guard);
+}
+
+async fn create_as(s: &Service, team: Uuid, actor: &str) -> Pipeline {
+    s.create(
+        team_receipt(team, actor),
+        CreatePipeline {
+            name: "Renewals".into(),
+            record_type: Some(PipelineRecordType::Company),
+            sharing: PipelineSharing::Private,
+        },
+    )
+    .await
+    .unwrap()
+    .pipeline
+}
+
+async fn write_as(s: &Service, a: &Access, p: &Pipeline, actor: &str, ops: Vec<DatabaseOp>) {
+    s.apply_ops(
+        access(a, p.id, EntityType::CrmPipeline, actor).await,
+        None,
+        ops.into(),
+    )
+    .await
+    .unwrap();
+}
+
+/// Each pipeline the entries come from, with the grant they carry.
+async fn entry_grants(
+    s: &Service,
+    viewer: &str,
+    record: Uuid,
+) -> std::collections::BTreeMap<Uuid, AccessLevel> {
+    s.entries(&user(viewer), PipelineRecordType::Company, &[record])
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| (e.pipeline.pipeline.id, e.pipeline.grant))
+        .collect()
+}
+
+/// Another team's pipeline can hold a record this team works on. Its entries
+/// reach only those it is shared with, never this team's viewer, whatever
+/// grants the viewer holds on their own team's pipelines.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn entries_leave_out_another_teams_pipeline_holding_the_record(pool: PgPool) {
+    use std::collections::BTreeMap;
+    let (s, _db, a, team, company) = fixture(&pool).await;
+    let lead = fresh_user(&pool, Some(team)).await;
+    let viewer = fresh_user(&pool, Some(team)).await;
+    let to_viewer = direct_message(&pool, &[&lead, &viewer]).await;
+    let other_team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Other CRM', $2)",
+        other_team,
+        OUTSIDER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, true)",
+        other_team
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rival = fresh_user(&pool, Some(other_team)).await;
+    let rival_teammate = fresh_user(&pool, Some(other_team)).await;
+
+    // The viewer owns one pipeline holding the company, edits one shared with
+    // the team, and views one shared with them in a direct message.
+    let owned = create_as(&s, team, &viewer).await;
+    let edited = create_as(&s, team, &lead).await;
+    s.share(
+        access(&a, edited.id, EntityType::CrmPipeline, &lead).await,
+        PipelineSharing::Team,
+    )
+    .await
+    .unwrap();
+    let viewed = create_as(&s, team, &lead).await;
+    s.update_share_permissions(
+        access(&a, viewed.id, EntityType::CrmPipeline, &lead).await,
+        channel_grants(&[(to_viewer, Some(AccessLevel::View))]),
+    )
+    .await
+    .unwrap();
+    for (p, actor) in [(&owned, &viewer), (&edited, &lead), (&viewed, &lead)] {
+        write_as(&s, &a, p, actor, vec![insert(p, company)]).await;
+    }
+    // The other team's pipeline, shared with that team. Membership is limited
+    // to one team, so moving its owner keeps their owner grant while giving
+    // them the company to reference.
+    let rivals = create_as(&s, other_team, &rival).await;
+    s.share(
+        access(&a, rivals.id, EntityType::CrmPipeline, &rival).await,
+        PipelineSharing::Team,
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE team_user SET team_id = $1 WHERE user_id = $2",
+        team,
+        rival
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    write_as(&s, &a, &rivals, &rival, vec![insert(&rivals, company)]).await;
+
+    assert_eq!(
+        entry_grants(&s, &viewer, company).await,
+        BTreeMap::from([
+            (owned.id, AccessLevel::Owner),
+            (edited.id, AccessLevel::Edit),
+            (viewed.id, AccessLevel::View),
+        ])
+    );
+    // The other team's pipeline does hold the company, for those it is shared with.
+    assert_eq!(
+        entry_grants(&s, &rival_teammate, company).await,
+        BTreeMap::from([(rivals.id, AccessLevel::Edit)])
+    );
+    assert_eq!(
+        entry_grants(&s, &rival, company).await.get(&rivals.id),
+        Some(&AccessLevel::Owner)
+    );
+    // The owner of a shared pipeline keeps the owner's level.
+    assert_eq!(
+        entry_grants(&s, &lead, company).await,
+        BTreeMap::from([
+            (edited.id, AccessLevel::Owner),
+            (viewed.id, AccessLevel::Owner),
+        ])
+    );
+}
+
 /// A user no other test shares, so cached source ids cannot leak across tests.
 async fn fresh_user(pool: &PgPool, team: Option<Uuid>) -> String {
     let id = format!("macro|sharing-{}@macro.com", Uuid::now_v7());
