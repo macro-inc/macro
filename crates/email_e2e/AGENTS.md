@@ -195,10 +195,18 @@ shared with the web app's suite) and backend entry points second.
   the routes the API served with the shape of each request, the GraphQL
   queries document storage answered, the queue messages workers handled,
   the lambda and agent tool runs, the provider methods called, the events
-  published and what was sent to other services. Shapes, not content: keys,
-  enum-like words and booleans stay, other strings and numbers do not
-  (`src/evidence.rs`). It records what happened until the scenario ended,
-  after the Outlook work that was due.
+  published and what was sent to other services. It records what happened
+  until the scenario ended, after the Outlook work that was due.
+- A record holds shapes, not content (`src/evidence.rs`): route templates,
+  operation names and field names. A string value is kept only under a key
+  in `KIND_KEYS` (and only when it reads as a short tag) or, in a query
+  string, when it is `true` or `false`; every other string becomes `<str>`,
+  a number `0` (booleans stay), and a path segment that is not a plain
+  word `{}`. GraphQL documents are stored without the contents of their
+  string literals. When
+  the report must tell two requests apart by a value, add its key to
+  `KIND_KEYS`, only if every value under that key is the name of a kind
+  and never something a person typed, and cover it in `src/evidence/test.rs`.
 - `coverage/entrypoints.tsv` lists every backend entry point and is
   generated from the code: `cargo x email-coverage list`. CI fails when it
   is out of date.
