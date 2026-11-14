@@ -75,6 +75,8 @@ enum Source {
   SOURCE_MANAGER = 6;
   SOURCE_RUN_RECORD = 7;
   SOURCE_DEMO = 8;
+  // The macrod hosting the collector; health only.
+  SOURCE_DAEMON = 9;
 }
 
 enum AgentKind {

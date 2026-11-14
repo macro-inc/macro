@@ -83,6 +83,7 @@ impl From<SourceKind> for wire::Source {
             SourceKind::Manager => Self::Manager,
             SourceKind::RunRecord => Self::RunRecord,
             SourceKind::Demo => Self::Demo,
+            SourceKind::Daemon => Self::Daemon,
         }
     }
 }
@@ -101,6 +102,7 @@ fn source_from_wire(value: i32) -> Result<SourceKind, WireError> {
         wire::Source::Manager => Ok(SourceKind::Manager),
         wire::Source::RunRecord => Ok(SourceKind::RunRecord),
         wire::Source::Demo => Ok(SourceKind::Demo),
+        wire::Source::Daemon => Ok(SourceKind::Daemon),
         wire::Source::Unspecified => Err(unknown),
     }
 }

@@ -19,7 +19,8 @@ pub const HOURS_PER_DAY: usize = 24;
 /// A stable agent identity, prefixed by the source namespace that minted it:
 /// `hc:<address>`, `claude:<session>`, `claude:<session>/<agent>`, `codex:<id>`,
 /// `run:<id>`, `demo:<n>`.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct AgentId(String);
 
 impl AgentId {
@@ -68,7 +69,8 @@ impl fmt::Display for AgentId {
 /// Where a fact came from: one value per source adapter, so a source's
 /// [`Change::Reset`](crate::domain::observation::Change::Reset) replaces only
 /// its own facts.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceKind {
     /// hc terminals (`hc events`).
     Hc,
@@ -86,11 +88,14 @@ pub enum SourceKind {
     RunRecord,
     /// The scripted demo fleet.
     Demo,
+    /// The macrod process hosting the collector: its runtime connection,
+    /// open prompts and harness. Reported as source health only.
+    Daemon,
 }
 
 impl SourceKind {
     /// Every source, in display order.
-    pub const ALL: [SourceKind; 8] = [
+    pub const ALL: [SourceKind; 9] = [
         SourceKind::Hc,
         SourceKind::ClaudeRegistry,
         SourceKind::ClaudeTranscripts,
@@ -99,6 +104,7 @@ impl SourceKind {
         SourceKind::Manager,
         SourceKind::RunRecord,
         SourceKind::Demo,
+        SourceKind::Daemon,
     ];
 
     /// A short lowercase name, used in span fields and the SOURCES pane.
@@ -112,6 +118,7 @@ impl SourceKind {
             SourceKind::Manager => "manager",
             SourceKind::RunRecord => "run_record",
             SourceKind::Demo => "demo",
+            SourceKind::Daemon => "daemon",
         }
     }
 
@@ -143,6 +150,21 @@ impl SourceSet {
     }
 }
 
+/// A per-minute series as a list: serde derives arrays only up to 32.
+fn serialize_series<S: serde::Serializer, T: serde::Serialize>(
+    series: &[T],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_seq(series)
+}
+
+/// Serialized as the list of source names.
+impl serde::Serialize for SourceSet {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter())
+    }
+}
+
 impl FromIterator<SourceKind> for SourceSet {
     fn from_iter<I: IntoIterator<Item = SourceKind>>(sources: I) -> Self {
         let mut set = SourceSet::default();
@@ -154,7 +176,8 @@ impl FromIterator<SourceKind> for SourceSet {
 }
 
 /// What role an agent plays.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentKind {
     /// Runs a multi-step project through helpers.
     Manager,
@@ -203,7 +226,8 @@ impl AgentKind {
 }
 
 /// An agent's state, in the order the AGENTS pane sorts by.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Status {
     /// Running a turn.
     Working,
@@ -229,7 +253,8 @@ impl Status {
 }
 
 /// What an agent has cost. Never shown as `$0` when unknown.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Cost {
     /// Reported by the agent's own records.
     Known(f64),
@@ -264,7 +289,7 @@ impl Cost {
 }
 
 /// Token usage by class.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Tokens {
     /// Uncached input tokens.
     pub input: u64,
@@ -295,7 +320,7 @@ impl Tokens {
 }
 
 /// One agent, built by the reducer from every source that knows it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Agent {
     /// Stable identity.
     pub id: AgentId,
@@ -356,6 +381,7 @@ pub struct Agent {
     /// Failures in the last 24 hours.
     pub failures: u32,
     /// Tool calls plus turns per minute over the last hour, oldest first.
+    #[serde(serialize_with = "serialize_series")]
     pub activity: [u16; ACTIVITY_MINUTES],
 }
 
@@ -398,7 +424,8 @@ impl Agent {
 }
 
 /// What a tape line records.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TapeKind {
     /// An agent appeared.
     Spawned,
@@ -423,7 +450,8 @@ pub enum TapeKind {
 }
 
 /// How loudly a tape line should show.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Severity {
     /// Routine.
     Info,
@@ -436,7 +464,7 @@ pub enum Severity {
 }
 
 /// One line of the tape.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct TapeEvent {
     /// The store's sequence number when this line was written.
     pub seq: u64,
@@ -453,7 +481,7 @@ pub struct TapeEvent {
 }
 
 /// The board numbers.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Totals {
     /// Agents working now.
     pub working: u32,
@@ -474,6 +502,7 @@ pub struct Totals {
     /// Spend per hour of the local day.
     pub cost_by_hour: [f32; HOURS_PER_DAY],
     /// Tokens per minute over the last hour, oldest first.
+    #[serde(serialize_with = "serialize_series")]
     pub tokens_per_min: [u32; ACTIVITY_MINUTES],
 }
 
@@ -495,7 +524,8 @@ impl Default for Totals {
 }
 
 /// Whether a source is working.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceState {
     /// Started, nothing reported yet.
     Starting,
@@ -508,7 +538,7 @@ pub enum SourceState {
 }
 
 /// Progress through a bounded job.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Progress {
     /// Items finished.
     pub done: u32,
@@ -517,7 +547,7 @@ pub struct Progress {
 }
 
 /// One source's health, for the SOURCES pane.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct SourceHealth {
     /// Which source.
     pub source: SourceKind,
@@ -551,7 +581,7 @@ impl SourceHealth {
 }
 
 /// Everything a new subscriber needs to draw.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub struct Snapshot {
     /// Every agent.
     pub agents: Vec<Agent>,
@@ -564,7 +594,8 @@ pub struct Snapshot {
 }
 
 /// One change the store publishes.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum UpdateKind {
     /// The whole state; replaces anything the viewer holds.
     Snapshot(Snapshot),
@@ -584,7 +615,7 @@ pub enum UpdateKind {
 
 /// A sequenced change. Sequence numbers rise by one per published update; a
 /// snapshot carries the sequence number of the last update it includes.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Update {
     /// Sequence number.
     pub seq: u64,
@@ -593,7 +624,8 @@ pub struct Update {
 }
 
 /// What a transcript item is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TranscriptItemKind {
     /// A message from the user or the harness.
     User,
@@ -606,7 +638,7 @@ pub enum TranscriptItemKind {
 }
 
 /// One row of an agent's transcript, for the drill-in page.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct TranscriptItem {
     /// When it was written.
     pub at: Timestamp,
@@ -625,7 +657,7 @@ pub struct TranscriptItem {
 }
 
 /// The collector's own status, for `Status` and the viewer's header.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct MonitorStatus {
     /// The wire protocol version the collector speaks.
     pub protocol: u32,
