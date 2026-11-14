@@ -8,8 +8,25 @@ use http_body_util::BodyExt; // for `collect`
 use tower::ServiceExt;
 
 #[tokio::test]
+async fn a_nearly_full_disk_fails_the_route() {
+    let root = tempfile::tempdir().unwrap();
+    let response = router_checking(root.path(), u64::MAX)
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
 async fn test_health_check() {
-    let api = router();
+    let root = tempfile::tempdir().unwrap();
+    let api = router_checking(root.path(), 0);
 
     let response = api
         .oneshot(

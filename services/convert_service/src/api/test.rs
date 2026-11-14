@@ -7,8 +7,9 @@ use tower::ServiceExt;
 
 #[tokio::test]
 async fn health_is_reachable_at_root_and_gateway_prefix() {
+    let root = tempfile::tempdir().unwrap();
     for path in ["/health", "/convert/health"] {
-        let response = mount_at_root_and_prefix(health::router())
+        let response = mount_at_root_and_prefix(health::router_checking(root.path(), 0))
             .oneshot(
                 Request::builder()
                     .uri(path)

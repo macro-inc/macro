@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
-use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use model::response::EmptyResponse;
 
 use crate::job_folder::{MIN_FREE_BYTES, free_bytes};
@@ -17,11 +17,18 @@ use crate::job_folder::{MIN_FREE_BYTES, free_bytes};
             (status = 503, description = "too little free disk space for conversions", body = EmptyResponse),
         )
     )]
-pub async fn health_handler() -> impl IntoResponse {
+pub async fn health_handler(State(disk): State<DiskCheck>) -> impl IntoResponse {
     (
-        disk_status(&std::env::temp_dir(), MIN_FREE_BYTES),
+        disk_status(&disk.path, disk.min_free_bytes),
         Json(EmptyResponse::default()),
     )
+}
+
+/// The filesystem `/health` watches and the free space it requires.
+#[derive(Clone)]
+pub struct DiskCheck {
+    path: Arc<Path>,
+    min_free_bytes: u64,
 }
 
 /// `OK` when the filesystem holding `path` has at least `min_free_bytes` free.
@@ -43,7 +50,17 @@ fn disk_status(path: &Path, min_free_bytes: u64) -> StatusCode {
 }
 
 pub fn router() -> Router {
-    Router::new().route("/health", get(health_handler))
+    router_checking(&std::env::temp_dir(), MIN_FREE_BYTES)
+}
+
+/// A health router that requires `min_free_bytes` free on `path`'s filesystem.
+pub(super) fn router_checking(path: &Path, min_free_bytes: u64) -> Router {
+    Router::new()
+        .route("/health", get(health_handler))
+        .with_state(DiskCheck {
+            path: path.into(),
+            min_free_bytes,
+        })
 }
 
 #[cfg(test)]
