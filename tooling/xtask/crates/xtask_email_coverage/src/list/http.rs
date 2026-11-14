@@ -172,6 +172,18 @@ impl Walker<'_> {
         // adds routes some other way (`router = router.route(..)`, an `if`)
         // would be missed, so it is an error.
         for statement in statements {
+            // A `return` ends the function with a router the final
+            // expression does not show.
+            let mut returns = Returns::default();
+            returns.visit_stmt(statement);
+            if let Some(span) = returns.first {
+                bail!(
+                    "{}: `{name}` returns before its final expression; \
+                     build the router in `let` bindings and one final expression",
+                    Loc::new(file, span)
+                );
+            }
+
             if let Stmt::Local(local) = statement
                 && let Some(bound) = bound_name(&local.pat)
                 && let Some(init) = &local.init
@@ -446,6 +458,25 @@ fn nested_path(prefix: &str, path: &str) -> String {
     } else {
         format!("{prefix}{path}")
     }
+}
+
+/// Finds the first `return` of the function itself: one in a closure or an
+/// `async` block returns from that, not from the function.
+#[derive(Default)]
+struct Returns {
+    first: Option<proc_macro2::Span>,
+}
+
+impl<'ast> Visit<'ast> for Returns {
+    fn visit_expr_return(&mut self, returned: &'ast syn::ExprReturn) {
+        self.first.get_or_insert(returned.span());
+    }
+
+    fn visit_expr_closure(&mut self, _: &'ast syn::ExprClosure) {}
+
+    fn visit_expr_async(&mut self, _: &'ast syn::ExprAsync) {}
+
+    fn visit_item(&mut self, _: &'ast syn::Item) {}
 }
 
 /// Finds the first assignment.

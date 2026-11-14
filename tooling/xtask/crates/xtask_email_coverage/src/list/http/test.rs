@@ -214,3 +214,30 @@ pub fn app() -> Router {
         "{error}"
     );
 }
+
+#[test]
+fn fails_on_a_return_before_the_final_router() {
+    let root = tempfile::tempdir().unwrap();
+    write(root.path(), "services/svc/Cargo.toml", "");
+    write(
+        root.path(),
+        "services/svc/src/api.rs",
+        r#"
+pub fn app() -> Router {
+    if enabled() {
+        return other();
+    }
+    Router::new().route("/alpha", get(alpha))
+}
+"#,
+    );
+
+    let error = list(&Repo::new(root.path()), &source()).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("services/svc/src/api.rs:4: `app` returns before its final expression"),
+        "{error}"
+    );
+}
