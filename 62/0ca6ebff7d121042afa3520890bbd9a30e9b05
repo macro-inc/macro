@@ -1,0 +1,29 @@
+packages/sdk-ocaml/test/all_operations.ml
+  s_4353875c05718c::t_3184d814220fb6 1-27
+packages/sdk-ocaml/test/check_interface.ml
+  s_4353875c05718c::t_fc9205618a1221 1-80
+packages/sdk-ocaml/test/dune
+  s_4353875c05718c::t_eab55140572743 1-31
+packages/sdk-ocaml/test/duplicate_check.ml
+  s_4353875c05718c::t_9be50d94987a48 1-32
+packages/sdk-ocaml/test/fake_proxy.ml
+  s_4353875c05718c::t_d4e50c4aac53dd 1-101
+packages/sdk-ocaml/test/test_duplicate_check.ml
+  s_4353875c05718c::t_e3da3b63e91ce6 1-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "620ca6ebff7d121042afa3520890bbd9a30e9b05",
+  "prompts": {},
+  "sessions": {
+    "s_4353875c05718c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5827e4a3-eda8-4875-a436-0e2536c4f87a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
