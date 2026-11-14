@@ -1,0 +1,26 @@
+packages/sdk-ocaml/spec/specs.ts
+  s_37352257cfc126::t_00136ce7d1db6a 1-79,85-96
+  s_37352257cfc126::t_5a918ffa87f542 80-84
+packages/sdk-ocaml/spec/build.ts
+  s_37352257cfc126::t_2e08ee263a9748 1-89
+packages/sdk-ocaml/spec/renames.json
+  s_37352257cfc126::t_9b3fcaaf1361db 1-6
+packages/sdk-ocaml/spec/tsconfig.json
+  s_37352257cfc126::t_9b3fcaaf1361db 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fca35ae540745d8afce7e775d1909452a2d3857d",
+  "prompts": {},
+  "sessions": {
+    "s_37352257cfc126": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "79707ab4-a660-4b3d-8768-92b97c641c3f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
