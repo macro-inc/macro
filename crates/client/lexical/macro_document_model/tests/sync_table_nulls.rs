@@ -59,7 +59,18 @@ fn source_table_unset_fields_reconstruct_without_changing_loro() -> Result<()> {
     doc.commit();
     let before = doc.export(ExportMode::Snapshot).expect("source snapshot");
     let vv = doc.oplog_vv();
-    let expected = lexical_loro::synced_json(editor.state(), &MACRO_SYNC_POLICY)?;
+    // A Source load keeps the stored null colWidths raw (@lexical/table TableNode
+    // updateFromJSON's setColWidths, LexicalTable.dev.mjs :3747-3751, :3775), so the
+    // reconstructed table holds it; the other three table options alias (Source
+    // coerces them to 0/false) and the cell width is a named model gap.
+    let mut expected = lexical_loro::synced_json(editor.state(), &MACRO_SYNC_POLICY)?;
+    expected.root["children"][0]["colWidths"] = serde_json::Value::Null;
+    // The cell's paragraph omitted direction and indent; the writer stores both as
+    // null (probe 1d9a47d4) and Paragraph keeps a stored null indent raw, as
+    // ElementNode's setIndent does (Lexical.dev.mjs :11257-11261).
+    let paragraph = &mut expected.root["children"][0]["children"][0]["children"][0]["children"][0];
+    paragraph["direction"] = serde_json::Value::Null;
+    paragraph["indent"] = serde_json::Value::Null;
     assert_eq!(reconstruct_state(&doc, &MACRO_SYNC_POLICY)?, expected);
     projection
         .check(&doc, editor.state())
