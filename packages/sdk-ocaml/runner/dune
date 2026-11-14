@@ -1,0 +1,5 @@
+(executable
+ (name main)
+ (public_name macro-sdk-run)
+ (package macro_sdk_tools)
+ (libraries macro_sdk_analyzer macro_sdk_http yojson unix))

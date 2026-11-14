@@ -1,0 +1,16 @@
+; Runs the analyzer against the macro_sdk_mini fixture, found through the
+; install tree like a real SDK.
+
+(test
+ (name test_analyzer)
+ (libraries macro_sdk_analyzer)
+ (deps
+  (package macro_sdk_mini))
+ (action
+  (setenv
+   OCAMLPATH
+   "%{workspace_root}/../install/default/lib:%{env:OCAMLPATH=}"
+   (setenv
+    MACRO_SDK_PACKAGE
+    macro_sdk_mini
+    (run %{test})))))

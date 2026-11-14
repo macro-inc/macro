@@ -1,0 +1,8 @@
+{
+  "operations": [
+    { "name": "storage.task_similarity_search_handler", "service": "storage", "operationId": "task_similarity_search_handler", "method": "POST", "path": "/documents/similarity_search", "group": "tasks", "action": "read", "ocaml": "Macro.Tasks.find_similar" },
+    { "name": "storage.create_task_handler", "service": "storage", "operationId": "create_task_handler", "method": "POST", "path": "/documents/create_task", "group": "tasks", "action": "create", "ocaml": "Macro.Tasks.create" },
+    { "name": "storage.get_document", "service": "storage", "operationId": "get_document", "method": "GET", "path": "/documents/{document_id}", "group": "documents", "action": "read", "ocaml": "Macro.Document.content" },
+    { "name": "storage.delete_document", "service": "storage", "operationId": "delete_document", "method": "DELETE", "path": "/documents/{document_id}", "group": "documents", "action": "destroy", "ocaml": "Macro.Document.delete" }
+  ]
+}

@@ -3,3 +3,11 @@
 (package
  (name macro_sdk)
  (synopsis "Typed OCaml client for Macro's HTTP APIs, generated from their OpenAPI specs, through the SDK proxy"))
+
+(package
+ (name macro_sdk_tools)
+ (synopsis "Analyzer and runner for programs written against macro_sdk"))
+
+(package
+ (name macro_sdk_mini)
+ (synopsis "Test fixture: a four-operation SDK that follows the macro_sdk contract"))

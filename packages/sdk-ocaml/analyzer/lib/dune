@@ -1,0 +1,4 @@
+(library
+ (name macro_sdk_analyzer)
+ (public_name macro_sdk_tools.analyzer)
+ (libraries compiler-libs.common unix yojson))

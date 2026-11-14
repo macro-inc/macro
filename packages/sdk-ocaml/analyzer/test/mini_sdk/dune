@@ -1,0 +1,15 @@
+; A stand-in for the generated macro_sdk (contract D5): the same top module
+; Macro, four operations, pure JSON helpers, and a transport that programs must
+; not reach. Unwrapped so its modules are Macro and Mini_transport, like a
+; library whose internals sit beside its public module.
+
+(library
+ (name macro_sdk_mini)
+ (public_name macro_sdk_mini)
+ (wrapped false)
+ (libraries yojson macro_sdk_tools.http))
+
+(install
+ (section lib)
+ (package macro_sdk_mini)
+ (files operations.json))

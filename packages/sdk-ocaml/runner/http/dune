@@ -1,0 +1,4 @@
+(library
+ (name macro_sdk_http)
+ (public_name macro_sdk_tools.http)
+ (libraries unix))
