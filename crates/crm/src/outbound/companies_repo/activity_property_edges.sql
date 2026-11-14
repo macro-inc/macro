@@ -3,10 +3,13 @@
 -- team; $3 the item kinds to return.
 --
 -- The scan starts from the Companies and Contacts property rows, which are few
--- across every team, and probes each named record by primary key, so the cost
--- does not follow the scope's record count. The property ids are literals so
--- the planner reads them from the `property_definition_id` index; `test` pins
--- them to `SystemPropertyKey`.
+-- across every team, and probes each named contact by primary key. Named
+-- companies are probed the same way, or matched against the scope's visible
+-- company ids, read from their team index alone. Beyond the property rows and
+-- the records they name (with a named contact's company), the cost is at most
+-- that one index read. The property ids are literals so the planner reads
+-- them from the `property_definition_id` index; `test` pins them to
+-- `SystemPropertyKey`.
 --
 -- A reference matches exactly when the old containment test
 -- `values->'value' @> [{"entity_id": "<id>"}]` would match the record's id: the

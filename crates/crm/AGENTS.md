@@ -94,8 +94,9 @@ tools/HTTP/GraphQL surfaces over them.
   domains and addresses constrain the viewer's mailbox, not team email access.
   `activity_property_edges` returns the items whose Companies or Contacts
   property names a record of the same scope, starting from those property rows
-  and probing each named record by key, so its cost does not follow the
-  scope's record count; keep its visibility rules identical to the Activity
+  and the records they name, so its cost follows those rows rather than the
+  scope's contacts and addresses (at most one index-only read of the
+  scope's companies); keep its visibility rules identical to the Activity
   arm's.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
