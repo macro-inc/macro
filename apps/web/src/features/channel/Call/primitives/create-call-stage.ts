@@ -2,9 +2,8 @@ import { beginInteraction } from '@app/observability/flow';
 import { makePersisted } from '@solid-primitives/storage';
 import type { RemoteParticipant } from 'livekit-client';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
-import { createStore, produce, unwrap } from 'solid-js/store';
+import { createStore } from 'solid-js/store';
 import {
-  activeCallPin,
   type CallLayout,
   type CallPin,
   callTileGridPosition,
@@ -12,15 +11,14 @@ import {
   sameCallPin,
   selectCallStageParticipant,
 } from '../core/call-layout';
+import type { createCallPin } from './create-call-pin';
 
 type CallStageState = {
-  pin?: CallPin<RemoteParticipant>;
-  pinRevision: number;
   hidden: boolean;
   hiddenShareRevision: number;
 };
-type ActivePin = { revision: number; pin?: CallPin<RemoteParticipant> };
 type CallStageSources = {
+  pin: ReturnType<typeof createCallPin<RemoteParticipant>>;
   participants: Accessor<RemoteParticipant[]>;
   screens: Accessor<RemoteParticipant[]>;
   screenSharing: Accessor<boolean>;
@@ -31,44 +29,14 @@ type CallStageSources = {
 };
 
 export function createCallStage(options: CallStageSources) {
-  // The same selection owns participant and screen pins. A removed target never
-  // becomes pinned again if its identity reconnects later.
   const [state, setState] = createStore<CallStageState>({
-    pinRevision: 0,
     hidden: false,
     hiddenShareRevision: 0,
   });
-  const selectedPin = () => unwrap(state.pin);
-  const setSelectedPin = (pin: CallPin<RemoteParticipant> | undefined) =>
-    setState(
-      produce((state) => {
-        state.pin = pin;
-        state.pinRevision += 1;
-      })
-    );
-  const selected = createMemo<ActivePin>((previous) => {
-    const revision = state.pinRevision;
-    // Once a publication or participant leaves, the same selection stays retired.
-    if (previous?.revision === revision && !previous.pin) return previous;
-    return {
-      revision,
-      pin: activeCallPin(
-        selectedPin(),
-        options.participants(),
-        options.screens(),
-        options.screenSharing()
-      ),
-    };
-  });
-  const activePin = () => selected().pin;
+  const activePin = options.pin.activePin;
   const togglePin = (target: CallPin<RemoteParticipant>) => {
-    const interaction = beginInteraction('call.pin');
-    try {
-      setSelectedPin(sameCallPin(activePin(), target) ? undefined : target);
-      setHideParticipants(false);
-    } finally {
-      interaction.end();
-    }
+    options.pin.togglePin(target);
+    setHideParticipants(false);
   };
 
   const hasAnyScreenShare = createMemo(
