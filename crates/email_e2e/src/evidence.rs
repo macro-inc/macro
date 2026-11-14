@@ -65,6 +65,9 @@ const NOT_JSON: &str = "<not json>";
 const GRAPHQL_SUFFIX: &str = "/graphql";
 /// The variable nextest sets to the attempt a test run is.
 const ATTEMPT_ENV: &str = "NEXTEST_ATTEMPT";
+/// The variable nextest sets to the id of the run a test is part of, which
+/// its results file names too.
+const RUN_ENV: &str = "NEXTEST_RUN_ID";
 
 /// What happened to a queue message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -301,6 +304,7 @@ impl Recorder {
             "binary": binary,
             "test": test,
             "attempt": attempt(),
+            "run": run(),
             "providers": providers,
             "links": collected.links.len(),
             "http": seen.http.iter().map(|(request, count)| json!({
@@ -548,6 +552,17 @@ fn scenario() -> (String, String) {
         .unwrap_or_default();
     let test = std::thread::current().name().unwrap_or_default().to_owned();
     (binary, test)
+}
+
+/// The nextest run the test is part of, or none outside nextest. The
+/// coverage report counts a record only for the run that wrote it.
+fn run() -> Option<String> {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "test support: nextest tells a test its run through the process environment"
+    )]
+    let run = std::env::var(RUN_ENV);
+    run.ok()
 }
 
 /// Which attempt of the test this is: 1 unless nextest is retrying it.

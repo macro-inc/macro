@@ -261,7 +261,7 @@ fn results_tell_flaky_from_passed_and_failed() {
     std::fs::write(
         job.join("junit.xml"),
         r#"<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="nextest-run" tests="3" failures="1" errors="0" time="12.5">
+<testsuites name="nextest-run" tests="3" failures="1" errors="0" uuid="run-1" time="12.5">
     <testsuite name="email_e2e::state" tests="3" failures="1">
         <testcase name="gmail_stars" classname="email_e2e::state" time="1.0"/>
         <testcase name="outlook_stars" classname="email_e2e::state" time="2.0">
@@ -308,14 +308,14 @@ fn a_results_file_that_is_not_whole_is_an_error() {
     assert!(error.contains("is cut short"), "{error}");
     // Cut after the first whole test.
     let error = error_of(format!(
-        "<testsuites tests=\"2\"><testsuite>{PASSED}<testcase name=\"outlook_st"
+        "<testsuites tests=\"2\" uuid=\"run-1\"><testsuite>{PASSED}<testcase name=\"outlook_st"
     ));
     assert!(error.contains("is cut short"), "{error}");
-    let error = error_of("<testsuites tests=\"0\"></testsuites>".to_owned());
+    let error = error_of("<testsuites tests=\"0\" uuid=\"run-1\"></testsuites>".to_owned());
     assert!(error.contains("holds no test results"), "{error}");
     // Closed, and still not all the tests it says it holds.
     let error = error_of(format!(
-        "<testsuites tests=\"2\"><testsuite>{PASSED}</testsuite></testsuites>"
+        "<testsuites tests=\"2\" uuid=\"run-1\"><testsuite>{PASSED}</testsuite></testsuites>"
     ));
     assert!(
         error.contains("says it holds 2 tests and holds 1"),
@@ -335,7 +335,7 @@ fn the_worse_of_two_runs_of_a_scenario_counts() {
         std::fs::write(
             job.join("junit.xml"),
             format!(
-                "<testsuites tests=\"1\"><testsuite><testcase name=\"gmail_stars\" \
+                "<testsuites tests=\"1\" uuid=\"{name}\"><testsuite><testcase name=\"gmail_stars\" \
                  classname=\"email_e2e::state\">{body}</testcase></testsuite></testsuites>"
             ),
         )
@@ -894,4 +894,46 @@ fn a_selection_a_directive_may_leave_out_is_not_counted() {
             "Thread.snippet"
         ]
     );
+}
+
+/// A record counts only for the run that wrote it: one an earlier run left
+/// behind is not credited to a later run in which the scenario passed and
+/// left none.
+#[test]
+fn a_record_of_another_run_is_not_counted() {
+    use super::junit::Outcome;
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: checks("function\tscenario\n").unwrap(),
+        proofs: Vec::new(),
+        waivers: Waivers::default(),
+    };
+    let scenario = "state gmail_stars".to_owned();
+    let mut results = Results::default();
+    results.outcomes.insert(scenario.clone(), Outcome::Passed);
+    results
+        .passed_in
+        .entry(scenario)
+        .or_default()
+        .insert("new".to_owned());
+    let record_of = |run: Option<&str>| {
+        let mut record = record("gmail_stars", "gmail", true);
+        record.run = run.map(str::to_owned);
+        record
+    };
+
+    let recorded = |run| build(&reader, &ledger, vec![record_of(run)], &results).suite;
+    assert_eq!(recorded(Some("old")).recorded, 0);
+    assert_eq!(recorded(Some("old")).unrecorded, ["state gmail_stars"]);
+    assert_eq!(recorded(None).recorded, 0);
+    assert_eq!(recorded(Some("new")).recorded, 1);
 }

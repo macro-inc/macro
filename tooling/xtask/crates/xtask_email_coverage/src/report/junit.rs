@@ -6,7 +6,7 @@
 //! failed test and `<flakyFailure>` children for the failed attempts of one
 //! that passed in the end.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use lazy_regex::regex;
@@ -40,6 +40,8 @@ pub(crate) struct Results {
     pub(crate) runs: Vec<Run>,
     /// `binary test` to how it ended.
     pub(crate) outcomes: BTreeMap<String, Outcome>,
+    /// `binary test` to the runs (nextest's run ids) it passed in.
+    pub(crate) passed_in: BTreeMap<String, BTreeSet<String>>,
 }
 
 /// Reads the results files.
@@ -48,7 +50,7 @@ pub(crate) fn load(files: &[PathBuf]) -> Result<Results, Report> {
     for file in files {
         let text =
             std::fs::read_to_string(file).context(format!("could not read {}", file.display()))?;
-        let run = read(file, &text, &mut results.outcomes)?;
+        let run = read(file, &text, &mut results)?;
         results.runs.push(run);
     }
     Ok(results)
@@ -56,7 +58,7 @@ pub(crate) fn load(files: &[PathBuf]) -> Result<Results, Report> {
 
 /// Reads one results file, which must be whole: a file cut short or empty
 /// would otherwise pass for a run in which nothing failed.
-fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Result<Run, Report> {
+fn read(file: &Path, text: &str, results: &mut Results) -> Result<Run, Report> {
     if !text.trim_end().ends_with("</testsuites>") {
         bail!(
             "{} is cut short: it does not end with </testsuites>",
@@ -66,6 +68,16 @@ fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Re
     let declared: Option<usize> = regex!(r#"<testsuites\b[^>]*\btests="([0-9]+)""#)
         .captures(text)
         .and_then(|found| found[1].parse().ok());
+    // The run id joins a record to the run that wrote it.
+    let Some(id) = regex!(r#"<testsuites\b[^>]*\buuid="([^"]+)""#)
+        .captures(text)
+        .map(|found| found[1].to_owned())
+    else {
+        bail!(
+            "{} names no run (uuid): it is not nextest's",
+            file.display()
+        );
+    };
     let seconds = regex!(r#"<testsuites\b[^>]*\btime="([0-9.]+)""#)
         .captures(text)
         .and_then(|found| found[1].parse().ok())
@@ -109,8 +121,17 @@ fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Re
         }
         // Of two runs of one scenario the worse counts: which file is read
         // last says nothing of which run was later.
-        outcomes
-            .entry(format!("{binary} {name}"))
+        let scenario = format!("{binary} {name}");
+        if outcome != Outcome::Failed {
+            results
+                .passed_in
+                .entry(scenario.clone())
+                .or_default()
+                .insert(id.clone());
+        }
+        results
+            .outcomes
+            .entry(scenario)
             .and_modify(|known| *known = worse(*known, outcome))
             .or_insert(outcome);
     }

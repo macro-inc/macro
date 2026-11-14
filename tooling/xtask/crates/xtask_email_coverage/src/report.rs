@@ -349,11 +349,21 @@ pub(crate) fn build(
         if results.outcomes.is_empty() {
             known.insert(name.clone());
         }
+        // The record must be of a run the scenario passed in: a log
+        // directory keeps the records of earlier runs, and a later run in
+        // which the scenario left none must not be credited with theirs.
+        let of_a_passing_run = || {
+            let runs = results.passed_in.get(&name);
+            record
+                .run
+                .as_ref()
+                .is_some_and(|run| runs.is_some_and(|runs| runs.contains(run)))
+        };
         let passed = results.outcomes.is_empty()
-            || matches!(
+            || (matches!(
                 results.outcomes.get(&name),
                 Some(Outcome::Passed | Outcome::Flaky(_))
-            );
+            ) && of_a_passing_run());
         if passed {
             scenarios.insert(name, Scenario::new(record, reader));
         }

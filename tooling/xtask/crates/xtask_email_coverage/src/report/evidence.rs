@@ -22,6 +22,9 @@ pub(crate) struct Evidence {
     pub(crate) binary: String,
     /// The test within the binary.
     pub(crate) test: String,
+    /// The nextest run that wrote the record, when nextest ran the scenario.
+    #[serde(default)]
+    pub(crate) run: Option<String>,
     /// The providers of the inboxes the scenario linked.
     pub(crate) providers: Vec<String>,
     #[serde(default)]
@@ -118,16 +121,22 @@ pub(crate) struct ServiceRequest {
     pub(crate) body: Option<Value>,
 }
 
-/// Reads the evidence files under `dirs`: for each scenario the one written
-/// last, since a log directory keeps the records of earlier runs.
+/// Reads the evidence files under `dirs`: for each scenario and run the one
+/// written last. A log directory keeps the records of earlier runs, which
+/// the report tells apart by their run.
 pub(crate) fn load(dirs: &[PathBuf]) -> Result<Vec<Evidence>, Report> {
-    let mut latest: BTreeMap<(String, String), (SystemTime, Evidence)> = BTreeMap::new();
+    type Key = (String, String, Option<String>);
+    let mut latest: BTreeMap<Key, (SystemTime, Evidence)> = BTreeMap::new();
     for file in files_named(dirs, FILE_NAME)? {
         let written = std::fs::metadata(&file)
             .and_then(|metadata| metadata.modified())
             .context(format!("could not read {}", file.display()))?;
         let evidence = read(&file)?;
-        let scenario = (evidence.binary.clone(), evidence.test.clone());
+        let scenario = (
+            evidence.binary.clone(),
+            evidence.test.clone(),
+            evidence.run.clone(),
+        );
         match latest.get(&scenario) {
             Some((newest, _)) if *newest >= written => {}
             _ => {
