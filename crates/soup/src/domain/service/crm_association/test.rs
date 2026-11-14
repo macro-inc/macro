@@ -352,3 +352,370 @@ fn activity_uses_property_edges_only_and_matches_email_in_every_direction() {
     assert_matches!(empty.email_filter.tree.as_deref(), Some(Expr::Literal(EmailLiteral::ThreadId(nil))) if nil.is_nil());
     assert_matches!(empty.call_filter.as_deref(), Some(Expr::Literal(CallLiteral::CallId(nil))) if nil.is_nil());
 }
+
+const NIL: &str = "00000000-0000-0000-0000-000000000000";
+
+/// The Sales views' activity requests, as the web sends them
+/// (`crmActivityBody`): every source pinned to the nil id but the tab's own.
+/// The Tasks view's grouped request pins projects by their own id (`pids`)
+/// and adds a status filter. The email tree is in its materialized form
+/// (`t`), as the router builds it.
+pub(in crate::domain::service) fn sales_view(tab: &str) -> serde_json::Value {
+    let mut body = serde_json::json!({
+        "crma": "activity",
+        "calf": { "l": { "id": NIL } },
+        "df": { "l": { "id": NIL } },
+        "chanf": { "l": { "ChannelId": NIL } },
+        "cthf": { "l": { "ThreadId": NIL } },
+        "cf": { "l": { "cid": NIL } },
+        "pf": { "l": { "pid": NIL } },
+        "callf": { "l": { "CallId": NIL } },
+        "ccf": { "l": { "id": NIL } },
+        "fef": { "l": { "id": NIL } },
+        "ef": { "t": { "l": { "ThreadId": NIL } } },
+    });
+    let object = body.as_object_mut().unwrap();
+    match tab {
+        "email" => {
+            object.remove("ef");
+        }
+        "calls" => {
+            object.remove("callf");
+        }
+        "tasks" => {
+            object.insert("df".into(), serde_json::json!({ "l": { "dst": "task" } }));
+            object.insert("pf".into(), serde_json::json!({ "l": { "pids": NIL } }));
+            let status = |option: &str| {
+                serde_json::json!({ "l": {
+                    "pd": "00000001-0000-0000-0000-000000000002",
+                    "v": { "so": option },
+                } })
+            };
+            object.insert(
+                "propf".into(),
+                serde_json::json!({ "|": [
+                    status("00000001-0000-0000-0002-000000000002"),
+                    { "|": [
+                        status("00000001-0000-0000-0002-000000000003"),
+                        status("00000001-0000-0000-0002-000000000001"),
+                    ] },
+                ] }),
+            );
+        }
+        "notes" => {
+            object.insert(
+                "df".into(),
+                serde_json::json!({ "&": [
+                    { "l": { "ft": "md" } },
+                    { "!": { "|": [
+                        { "l": { "dst": "task" } },
+                        { "|": [{ "l": { "dst": "snippet" } }, { "l": { "dst": "skill" } }] },
+                    ] } },
+                ] }),
+            );
+        }
+        other => panic!("unknown tab {other}"),
+    }
+    body
+}
+
+pub(in crate::domain::service) fn ast(value: serde_json::Value) -> EntityFilterAst {
+    serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn sales_views_read_only_their_own_source() {
+    use PropertyEntityType::{CallRecord, Document, Task};
+    let reads = |tab| ActivityReads::of(&ast(sales_view(tab))).unwrap();
+    assert_eq!(
+        reads("tasks"),
+        ActivityReads {
+            email: false,
+            entity_types: vec![Document, Task],
+        }
+    );
+    assert_eq!(reads("notes"), reads("tasks"));
+    assert!(ast(sales_view("tasks")).properties_filter.is_some());
+    assert_eq!(
+        reads("calls"),
+        ActivityReads {
+            email: false,
+            entity_types: vec![CallRecord],
+        }
+    );
+    assert_eq!(
+        reads("email"),
+        ActivityReads {
+            email: true,
+            entity_types: vec![],
+        }
+    );
+}
+
+/// Requests whose reads differ, each compared with reading everything.
+fn activity_requests() -> Vec<(&'static str, EntityFilterAst)> {
+    let real = id(0x5ea1).to_string();
+    let with = |tab, key: &str, value: serde_json::Value| {
+        let mut body = sales_view(tab);
+        body.as_object_mut().unwrap().insert(key.into(), value);
+        ast(body)
+    };
+    vec![
+        ("tasks", ast(sales_view("tasks"))),
+        ("notes", ast(sales_view("notes"))),
+        ("calls", ast(sales_view("calls"))),
+        ("email", ast(sales_view("email"))),
+        (
+            "nothing pinned",
+            ast(serde_json::json!({ "crma": "activity" })),
+        ),
+        (
+            "nil or a real document",
+            with(
+                "email",
+                "df",
+                serde_json::json!({ "|": [{ "l": { "id": NIL } }, { "l": { "id": real } }] }),
+            ),
+        ),
+        (
+            "not nil",
+            with(
+                "tasks",
+                "cf",
+                serde_json::json!({ "!": { "l": { "cid": NIL } } }),
+            ),
+        ),
+        (
+            "nil and a real company",
+            with(
+                "tasks",
+                "ccf",
+                serde_json::json!({ "&": [{ "l": { "id": NIL } }, { "l": { "id": real } }] }),
+            ),
+        ),
+        (
+            "contacts and initiatives",
+            with("tasks", "crmf", serde_json::json!({ "l": "include" })),
+        ),
+        (
+            "initiatives",
+            with("tasks", "if", serde_json::json!({ "l": "inc" })),
+        ),
+        (
+            "documents naming the scope",
+            EntityFilterAst {
+                document_filter: Some(Arc::new(Expr::val(DocumentLiteral::CrmAssociated(
+                    CrmAssociation::Activity,
+                )))),
+                ..EntityFilterAst::default()
+            },
+        ),
+        (
+            "documents naming the scope, pinned to nil",
+            EntityFilterAst {
+                document_filter: Some(Arc::new(Expr::and(
+                    Expr::val(DocumentLiteral::CrmAssociated(CrmAssociation::Activity)),
+                    Expr::val(DocumentLiteral::Id(Uuid::nil())),
+                ))),
+                ..EntityFilterAst::default()
+            },
+        ),
+    ]
+}
+
+fn json<T: serde::Serialize>(value: &T) -> serde_json::Value {
+    serde_json::to_value(value).unwrap()
+}
+
+/// Every source either gets the tree reading everything gives it, or matches
+/// nothing either way.
+#[test]
+fn reads_leave_out_only_what_matches_nothing() {
+    let all_types = [
+        PropertyEntityType::CalendarEvent,
+        PropertyEntityType::CallRecord,
+        PropertyEntityType::Channel,
+        PropertyEntityType::Chat,
+        PropertyEntityType::Company,
+        PropertyEntityType::DatabaseRow,
+        PropertyEntityType::Contact,
+        PropertyEntityType::Document,
+        PropertyEntityType::Initiative,
+        PropertyEntityType::Project,
+        PropertyEntityType::Task,
+        PropertyEntityType::Thread,
+        PropertyEntityType::User,
+    ];
+    let edges = |types: &[PropertyEntityType]| {
+        all_types
+            .iter()
+            .enumerate()
+            .filter(|(_, entity_type)| types.contains(entity_type))
+            .map(|(index, entity_type)| edge(*entity_type, 0xe0 + index as u128))
+            .collect::<Vec<_>>()
+    };
+    let participants = participant_tree(&CrmRecordAssociation {
+        domains: vec!["example.com".into()],
+        addresses: vec!["pat@example.org".into()],
+        ..CrmRecordAssociation::default()
+    });
+    assert!(participants.is_some());
+    for (name, request) in activity_requests() {
+        let reads = ActivityReads::of(&request).unwrap();
+        let resolve = |types: &[PropertyEntityType], email: bool| ResolvedAssociations {
+            entities: HashMap::from([(
+                CrmAssociation::Activity,
+                AssociatedEntities::from_edges(CrmAssociation::Activity, edges(types), vec![]),
+            )]),
+            activity_email: email.then(|| participants.clone()).flatten(),
+        };
+        let everything = resolve(&all_types, true);
+        let read = resolve(&reads.entity_types, reads.email);
+        let old = everything.apply(request.clone());
+        let new = read.apply(request.clone());
+        let same_or_empty =
+            |field: &str,
+             old_tree: serde_json::Value,
+             new_tree: serde_json::Value,
+             empty: fn(Option<&EntityFilterAst>) -> bool| {
+                assert!(
+                    old_tree == new_tree || (empty(Some(&old)) && empty(Some(&new))),
+                    "{name}: {field} differs and is not empty: {old_tree} vs {new_tree}"
+                );
+            };
+        same_or_empty(
+            "documents",
+            json(&old.document_filter),
+            json(&new.document_filter),
+            exclusions::document,
+        );
+        same_or_empty(
+            "chats",
+            json(&old.chat_filter),
+            json(&new.chat_filter),
+            exclusions::chat,
+        );
+        same_or_empty(
+            "projects",
+            json(&old.project_filter),
+            json(&new.project_filter),
+            exclusions::project,
+        );
+        same_or_empty(
+            "channels",
+            json(&old.channel_filter),
+            json(&new.channel_filter),
+            exclusions::channel,
+        );
+        same_or_empty(
+            "calls",
+            json(&old.call_filter),
+            json(&new.call_filter),
+            exclusions::call,
+        );
+        same_or_empty(
+            "calendar events",
+            json(&old.calendar_event_filter),
+            json(&new.calendar_event_filter),
+            exclusions::calendar_event,
+        );
+        same_or_empty(
+            "email",
+            json(&old.email_filter.tree),
+            json(&new.email_filter.tree),
+            exclusions::email,
+        );
+        for (field, old_tree, new_tree) in [
+            (
+                "channel threads",
+                json(&old.channel_thread_filter),
+                json(&new.channel_thread_filter),
+            ),
+            (
+                "foreign entities",
+                json(&old.foreign_entity_filter),
+                json(&new.foreign_entity_filter),
+            ),
+            (
+                "initiatives",
+                json(&old.initiative_filter),
+                json(&new.initiative_filter),
+            ),
+            (
+                "contacts",
+                json(&old.crm_contact_filter),
+                json(&new.crm_contact_filter),
+            ),
+            (
+                "companies",
+                json(&old.crm_company_filter),
+                json(&new.crm_company_filter),
+            ),
+        ] {
+            assert_eq!(old_tree, new_tree, "{name}: {field}");
+        }
+        // Only a top-level scope narrows the company leg.
+        let companies = |resolved: &ResolvedAssociations| {
+            resolved
+                .get(&CrmAssociation::Activity)
+                .unwrap()
+                .crm_companies
+                .clone()
+        };
+        assert!(
+            request.crm_association.is_none()
+                || companies(&everything) == companies(&read)
+                || company_ids_all_nil(request.crm_company_filter.as_deref()),
+            "{name}: companies"
+        );
+    }
+}
+
+#[test]
+fn database_rows_take_the_record_path() {
+    let mut body = sales_view("tasks");
+    body.as_object_mut()
+        .unwrap()
+        .insert("drf".into(), serde_json::json!({ "l": "inc" }));
+    assert_eq!(ActivityReads::of(&ast(body)), None);
+    // Rows read through a document literal are not constrained by the scope.
+    let rows = EntityFilterAst {
+        database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::Include))),
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::CrmAssociated(
+            CrmAssociation::Activity,
+        )))),
+        ..EntityFilterAst::default()
+    };
+    assert!(ActivityReads::of(&rows).is_some());
+}
+
+#[test]
+fn company_ids_all_nil_follows_the_id_list() {
+    let tree = |value: serde_json::Value| {
+        serde_json::from_value::<Expr<CrmCompanyLiteral>>(value).unwrap()
+    };
+    let real = id(0x5ea1).to_string();
+    for (value, all_nil) in [
+        (serde_json::json!({ "l": { "id": NIL } }), true),
+        (
+            serde_json::json!({ "&": [{ "l": { "id": NIL } }, { "l": { "hidden": true } }] }),
+            true,
+        ),
+        (
+            serde_json::json!({ "|": [{ "l": { "id": NIL } }, { "l": { "id": NIL } }] }),
+            true,
+        ),
+        (
+            serde_json::json!({ "&": [{ "l": { "id": NIL } }, { "l": { "id": real } }] }),
+            false,
+        ),
+        (serde_json::json!({ "l": { "hidden": false } }), false),
+    ] {
+        assert_eq!(
+            company_ids_all_nil(Some(&tree(value.clone()))),
+            all_nil,
+            "{value}"
+        );
+    }
+    assert!(!company_ids_all_nil(None));
+}

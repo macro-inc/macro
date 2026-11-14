@@ -14,8 +14,16 @@
 //! filters, sort, limit, grouping, and cursor apply. Nothing here grants
 //! access: an edge only narrows a source query that already enforces the
 //! viewer's access to each item.
+//!
+//! Activity covers every visible record of the viewer's teams, so it is not
+//! expanded to ids: the CRM service finds the items whose property names a
+//! record of the scope in one statement (`activity_property_edges`), and reads
+//! the scope's domains and addresses only when email is a source. Edges are
+//! read only for the sources a request does not pin to the nil id
+//! ([`ActivityReads`]). A request that reads database rows takes the record
+//! path, which also matches entity-column cells.
 use super::*;
-use crate::domain::models::CrmPropertyEdge;
+use crate::domain::models::{CrmPropertyEdge, exclusions};
 use channels::domain::models::{MessageParent, ReferenceSource, ReferenceTarget};
 use crm::domain::{
     association::{CrmAssociation, CrmRecordAssociation},
@@ -25,15 +33,16 @@ use crm::domain::{
 use item_filters::ast::email::Email;
 use item_filters::ast::{
     agent_session::AgentSessionLiteral, calendar_event::CalendarEventLiteral, call::CallLiteral,
-    chat::ChatLiteral, crm_contact::CrmContactLiteral, database_row::DatabaseRowLiteral,
-    document::DocumentLiteral, initiative::InitiativeLiteral, project::ProjectLiteral,
+    chat::ChatLiteral, crm_company::CrmCompanyLiteral, crm_contact::CrmContactLiteral,
+    database_row::DatabaseRowLiteral, document::DocumentLiteral, initiative::InitiativeLiteral,
+    project::ProjectLiteral,
 };
 use macro_user_id::email::EmailStr;
 use models_properties::EntityType as PropertyEntityType;
 use std::collections::BTreeSet;
 
 #[cfg(test)]
-mod test;
+pub(super) mod test;
 
 /// Upper bound on distinct CRM records one request may restrict to; each
 /// costs an authorization read and an edge read.
@@ -141,6 +150,137 @@ impl AssociatedEntities {
         }
         entities
     }
+}
+
+/// What a request reads of the activity scope. A source pinned to the nil id
+/// returns nothing whatever it is constrained to, so the edges only it would
+/// use, and the email participants when it is the email source, are not read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ActivityReads {
+    /// The scope's domains and addresses, as email participants.
+    pub email: bool,
+    /// The item kinds whose Companies and Contacts property edges are read.
+    pub entity_types: Vec<PropertyEntityType>,
+}
+
+impl ActivityReads {
+    /// `None` when the request reads database rows: the entity-column cells
+    /// that link a row to a record are read only from the scope's ids.
+    pub(super) fn of(ast: &EntityFilterAst) -> Option<Self> {
+        let top_level = ast.crm_association == Some(CrmAssociation::Activity);
+        if top_level
+            && item_filters::ast::database_row::database_rows_requested(
+                ast.database_row_filter.as_deref(),
+            )
+        {
+            return None;
+        }
+        let filter = Some(ast);
+        let in_documents = ast.document_filter.as_deref().is_some_and(names_activity);
+        let mut entity_types = Vec::new();
+        if (top_level || in_documents) && !exclusions::document(filter) {
+            entity_types.extend([PropertyEntityType::Document, PropertyEntityType::Task]);
+        }
+        if top_level {
+            for (excluded, entity_type) in [
+                (exclusions::chat(filter), PropertyEntityType::Chat),
+                (exclusions::project(filter), PropertyEntityType::Project),
+                (exclusions::channel(filter), PropertyEntityType::Channel),
+                (exclusions::call(filter), PropertyEntityType::CallRecord),
+                (
+                    exclusions::calendar_event(filter),
+                    PropertyEntityType::CalendarEvent,
+                ),
+                (
+                    !item_filters::ast::initiative::initiatives_requested(
+                        ast.initiative_filter.as_deref(),
+                    ),
+                    PropertyEntityType::Initiative,
+                ),
+                (
+                    ast.crm_contact_filter.is_none(),
+                    PropertyEntityType::Contact,
+                ),
+                (
+                    company_ids_all_nil(ast.crm_company_filter.as_deref()),
+                    PropertyEntityType::Company,
+                ),
+            ] {
+                if !excluded {
+                    entity_types.push(entity_type);
+                }
+            }
+        }
+        // Email threads take participants rather than edges, and users are
+        // not a Soup source.
+        Some(Self {
+            email: top_level && !exclusions::email(filter),
+            entity_types,
+        })
+    }
+}
+
+/// Whether the company leg matches nothing. It reads its filter as the list of
+/// every `Id` literal in it, or skips a filter it cannot read that way
+/// (`build_crm_company_request`), so the tree proof the other sources use does
+/// not hold: `nil AND id` matches `id` there. Ids that are all nil match none.
+fn company_ids_all_nil(filter: Option<&Expr<CrmCompanyLiteral>>) -> bool {
+    fn collect(expr: &Expr<CrmCompanyLiteral>, ids: &mut Vec<Uuid>) {
+        match expr {
+            Expr::Literal(CrmCompanyLiteral::Id(id)) => ids.push(*id),
+            Expr::Literal(CrmCompanyLiteral::Hidden(_)) => {}
+            Expr::And(a, b) | Expr::Or(a, b) => {
+                collect(a, ids);
+                collect(b, ids);
+            }
+            Expr::Not(a) => collect(a, ids),
+        }
+    }
+    let mut ids = Vec::new();
+    if let Some(filter) = filter {
+        collect(filter, &mut ids);
+    }
+    !ids.is_empty() && ids.iter().all(Uuid::is_nil)
+}
+
+/// Whether a document filter names the activity scope.
+fn names_activity(expr: &Expr<DocumentLiteral>) -> bool {
+    match expr {
+        Expr::Literal(DocumentLiteral::CrmAssociated(CrmAssociation::Activity)) => true,
+        Expr::Literal(_) => false,
+        Expr::And(a, b) | Expr::Or(a, b) => names_activity(a) || names_activity(b),
+        Expr::Not(a) => names_activity(a),
+    }
+}
+
+/// Email participants from a resolved association's domains and addresses.
+fn participant_tree(association: &CrmRecordAssociation) -> Option<Arc<Expr<EmailLiteral>>> {
+    let values = association
+        .domains
+        .iter()
+        .cloned()
+        .map(Email::Domain)
+        .chain(association.addresses.iter().filter_map(|address| {
+            EmailStr::parse_from_str(address)
+                .ok()
+                .map(|email| Email::Complete(email.into_owned()))
+        }));
+    balanced_or_tree(
+        values
+            .map(|email| {
+                Expr::or(
+                    Expr::or(
+                        Expr::val(EmailLiteral::Sender(email.clone())),
+                        Expr::val(EmailLiteral::Recipient(email.clone())),
+                    ),
+                    Expr::or(
+                        Expr::val(EmailLiteral::Cc(email.clone())),
+                        Expr::val(EmailLiteral::Bcc(email)),
+                    ),
+                )
+            })
+            .collect(),
+    )
 }
 
 /// The reference targets a resolved association matches.
@@ -351,16 +491,25 @@ where
     F: GithubPullRequestListing,
 {
     /// Authorize and resolve every CRM record `ast` restricts to.
-    #[tracing::instrument(name = "soup.crm_associations", skip_all, err)]
+    #[tracing::instrument(
+        name = "soup.crm_associations",
+        skip_all,
+        fields(
+            activity_email = tracing::field::Empty,
+            activity_kinds = tracing::field::Empty,
+        ),
+        err
+    )]
     pub(super) async fn resolve_crm_associations(
         &self,
         user: &MacroUserIdStr<'_>,
         team_receipt: Option<&EntityAccessReceipt<MemberTeamRole>>,
         ast: Option<&EntityFilterAst>,
     ) -> Result<Option<ResolvedAssociations>, SoupErr> {
-        let records = ast
-            .map(EntityFilterAst::crm_associations)
-            .unwrap_or_default();
+        let Some(ast) = ast else {
+            return Ok(None);
+        };
+        let records = ast.crm_associations();
         if records.is_empty() {
             return Ok(None);
         }
@@ -377,75 +526,126 @@ where
         let mut resolved = HashMap::with_capacity(records.len());
         let mut activity_email = None;
         for record in records {
-            let association = self
-                .crm_service
-                .resolve_association(user.as_ref(), access.as_ref(), record)
-                .await
-                .map_err(crm_error)?;
-            let targets = reference_targets(&association);
-            let (property_edges, reference_sources) = tokio::join!(
-                async {
-                    self.soup_storage
-                        .crm_property_edges(&association.company_ids, &association.contact_ids)
-                        .await
-                        .map_err(anyhow::Error::from)
-                        .map_err(SoupErr::from)
-                },
-                async {
-                    if record == CrmAssociation::Activity {
-                        return Ok(Vec::new());
-                    }
-                    self.comms_service
-                        .get_reference_sources(&targets)
-                        .await
-                        .inspect_err(
-                            |error| tracing::error!(error = ?error, "failed to read CRM references"),
-                        )
-                        .map_err(|_| SoupErr::CommsErr)
-                },
-            );
-            if record == CrmAssociation::Activity {
-                let values = association
-                    .domains
-                    .iter()
-                    .cloned()
-                    .map(Email::Domain)
-                    .chain(association.addresses.iter().filter_map(|address| {
-                        EmailStr::parse_from_str(address)
-                            .ok()
-                            .map(|email| Email::Complete(email.into_owned()))
-                    }));
-                activity_email = balanced_or_tree(
-                    values
-                        .map(|email| {
-                            Expr::or(
-                                Expr::or(
-                                    Expr::val(EmailLiteral::Sender(email.clone())),
-                                    Expr::val(EmailLiteral::Recipient(email.clone())),
-                                ),
-                                Expr::or(
-                                    Expr::val(EmailLiteral::Cc(email.clone())),
-                                    Expr::val(EmailLiteral::Bcc(email)),
-                                ),
-                            )
-                        })
-                        .collect(),
-                );
+            if resolved.contains_key(&record) {
+                continue;
             }
-            let entities =
-                AssociatedEntities::from_edges(record, property_edges?, reference_sources?);
-            tracing::debug!(
-                contacts = association.contact_ids.len(),
-                documents = entities.documents.len(),
-                channel_threads = entities.channel_threads.len(),
-                calls = entities.calls.len(),
-                "resolved CRM association"
-            );
+            let reads = match record {
+                CrmAssociation::Activity => ActivityReads::of(ast),
+                CrmAssociation::Company(_) | CrmAssociation::Contact(_) => None,
+            };
+            let entities = if let Some(reads) = reads {
+                let span = tracing::Span::current();
+                span.record("activity_email", reads.email);
+                span.record("activity_kinds", reads.entity_types.len());
+                let (email, entities) =
+                    self.resolve_activity(user, access.as_ref(), &reads).await?;
+                activity_email = email;
+                entities
+            } else {
+                let (association, entities) =
+                    self.resolve_record(user, access.as_ref(), record).await?;
+                if record == CrmAssociation::Activity {
+                    activity_email = participant_tree(&association);
+                }
+                entities
+            };
             resolved.insert(record, entities);
         }
         Ok(Some(ResolvedAssociations {
             entities: resolved,
             activity_email,
         }))
+    }
+
+    /// The activity scope, reading only what `reads` names: the scope's
+    /// participants through the record query, and the edges through one
+    /// statement that probes each property's records against the scope, so
+    /// the cost does not follow the scope's record count.
+    async fn resolve_activity(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        reads: &ActivityReads,
+    ) -> Result<(Option<Arc<Expr<EmailLiteral>>>, AssociatedEntities), SoupErr> {
+        let (association, edges) = tokio::join!(
+            async {
+                if !reads.email {
+                    return Ok(None);
+                }
+                self.crm_service
+                    .resolve_association(user.as_ref(), access, CrmAssociation::Activity)
+                    .await
+                    .map(Some)
+            },
+            // Called with no item kinds too: it authorizes the scope without
+            // a query.
+            self.crm_service
+                .activity_property_edges(user.as_ref(), access, &reads.entity_types),
+        );
+        let email = association
+            .map_err(crm_error)?
+            .as_ref()
+            .and_then(participant_tree);
+        let edges = edges
+            .map_err(crm_error)?
+            .into_iter()
+            .map(|edge| CrmPropertyEdge {
+                entity_type: edge.entity_type,
+                entity_id: edge.entity_id,
+            })
+            .collect();
+        let entities = AssociatedEntities::from_edges(CrmAssociation::Activity, edges, Vec::new());
+        tracing::debug!(
+            documents = entities.documents.len(),
+            calls = entities.calls.len(),
+            "resolved the activity scope"
+        );
+        Ok((email, entities))
+    }
+
+    /// A record's entities from its ids: their property edges and, for a
+    /// company or contact, the references to them.
+    async fn resolve_record(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        record: CrmAssociation,
+    ) -> Result<(CrmRecordAssociation, AssociatedEntities), SoupErr> {
+        let association = self
+            .crm_service
+            .resolve_association(user.as_ref(), access, record)
+            .await
+            .map_err(crm_error)?;
+        let targets = reference_targets(&association);
+        let (property_edges, reference_sources) = tokio::join!(
+            async {
+                self.soup_storage
+                    .crm_property_edges(&association.company_ids, &association.contact_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+                    .map_err(SoupErr::from)
+            },
+            async {
+                if record == CrmAssociation::Activity {
+                    return Ok(Vec::new());
+                }
+                self.comms_service
+                    .get_reference_sources(&targets)
+                    .await
+                    .inspect_err(
+                        |error| tracing::error!(error = ?error, "failed to read CRM references"),
+                    )
+                    .map_err(|_| SoupErr::CommsErr)
+            },
+        );
+        let entities = AssociatedEntities::from_edges(record, property_edges?, reference_sources?);
+        tracing::debug!(
+            contacts = association.contact_ids.len(),
+            documents = entities.documents.len(),
+            channel_threads = entities.channel_threads.len(),
+            calls = entities.calls.len(),
+            "resolved CRM association"
+        );
+        Ok((association, entities))
     }
 }
