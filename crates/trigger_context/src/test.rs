@@ -7,6 +7,7 @@ use super::*;
 fn a_channel_follow_up_has_a_stable_wire_shape() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::ExplicitReply,
+        confidence: None,
         discussion: DiscussionContext {
             agent_request: None,
             surface: DiscussionSurface::Channel {

@@ -142,6 +142,8 @@ export type AddressedBy = 'mention' | 'explicit_reply' | 'inferred';
 /** A message for a session that is already running. */
 export type FollowUpContext = {
   addressed_by: AddressedBy;
+  /** For an inferred message, the judge's confidence as a whole percentage. */
+  confidence?: number;
   discussion: DiscussionContext;
 };
 
@@ -426,6 +428,16 @@ export type AgentContextPerson = {
   name: string;
 };
 
+/** The agent reading a prompt, as people in its discussions name it. */
+export type AgentContextAgent = {
+  /** Its sender id, `bot|{id}`. */
+  id: string;
+  /** Display name. */
+  name: string;
+  /** `@` handle, without the `@`. */
+  handle: string;
+};
+
 /** When a prompt was sent, as the person reading the reply keeps time. */
 export type AgentContextCurrentTime = {
   /** ISO 8601 timestamp carrying the time zone's UTC offset. */
@@ -441,6 +453,8 @@ export type AgentContextPrompt = {
   promptMarkdown: string;
   /** Trusted session instructions supplied by the agent harness. */
   instructions?: string;
+  /** The agent reading the prompt, so it knows its own name. Supplied by the harness. */
+  agent?: AgentContextAgent;
   /** Whose access the session runs with. Supplied by the harness. */
   owner?: AgentContextPerson;
   /** Who sent the prompt; absent when a bot sent it on nobody's behalf. */
@@ -1220,7 +1234,15 @@ function mentionedNode(discussion: DiscussionContext): FxpNode {
   );
 }
 
-function followUpNode({ addressed_by, discussion }: FollowUpContext): FxpNode {
+function followUpNode({
+  addressed_by,
+  confidence,
+  discussion,
+}: FollowUpContext): FxpNode {
+  const judged =
+    confidence === undefined
+      ? 'a model judged'
+      : `a model judged, ${confidence}% confident,`;
   const { marker, explanation } = match(addressed_by)
     .with('mention', () => ({
       marker: 'mentioned_you',
@@ -1233,8 +1255,7 @@ function followUpNode({ addressed_by, discussion }: FollowUpContext): FxpNode {
     }))
     .with('inferred', () => ({
       marker: 'addressed_to_you',
-      explanation:
-        'It neither mentions you nor quote-replies to you: a model judged from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it.',
+      explanation: `It neither mentions you nor quote-replies to you: ${judged} from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it.`,
     }))
     .exhaustive();
   return el(
@@ -1249,7 +1270,11 @@ function followUpNode({ addressed_by, discussion }: FollowUpContext): FxpNode {
         repliesHere: true,
       }),
     ],
-    { kind: 'follow_up', addressed_by }
+    present({
+      kind: 'follow_up',
+      addressed_by,
+      confidence: confidence === undefined ? undefined : String(confidence),
+    })
   );
 }
 
@@ -1542,6 +1567,23 @@ function triggerNode(trigger: TriggerContext): FxpNode {
 }
 
 /**
+ * Tell the agent who it is. Nothing else in its prompt names it, so without
+ * this it cannot tell a message calling it by name from one calling someone
+ * else.
+ */
+function agentNode(agent: AgentContextAgent): FxpNode {
+  return el(
+    'you',
+    [
+      note(
+        `You are ${agent.name}, an agent in Macro. People address you as ${agent.name} or @${agent.handle}. A message that names another person or agent is meant for them, not you.`
+      ),
+    ],
+    { name: agent.name, handle: agent.handle, id: agent.id }
+  );
+}
+
+/**
  * Name who the session acts for and who is asking. The agent runs with the
  * owner's access, so a prompt from anyone else must not be able to spend it
  * on things only the owner should see or do.
@@ -1606,6 +1648,7 @@ function renderContext(input: AgentContextPrompt): string | undefined {
     ? triggerNode(input.trigger)
     : renderConversation(input);
   const nodes = [
+    ...(input.agent ? [agentNode(input.agent)] : []),
     ...(input.owner ? [sessionNode(input.owner, input.sender)] : []),
     ...(input.currentTime ? [currentTimeNode(input.currentTime)] : []),
     ...(body ? [body] : []),

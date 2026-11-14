@@ -232,11 +232,13 @@ pub trait MessagePromptContext: Send + Sync + 'static {
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime:
     /// the sanitized prompt behind a private context node that states the
-    /// current time and whatever instructions, people, and trigger it has.
+    /// current time and whatever instructions, agent identity, people, and
+    /// trigger it has.
     fn compose(
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        agent: Option<&agent_session::domain::model::SessionBot>,
         people: Option<&super::model::PromptPeople>,
         trigger: Option<&trigger_context::TriggerContext>,
     ) -> impl Future<Output = Result<String>> + Send;

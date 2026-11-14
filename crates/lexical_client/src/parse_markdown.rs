@@ -334,6 +334,17 @@ pub struct AgentContextPerson<'a> {
     pub name: &'a str,
 }
 
+/// The agent a prompt is for, so it knows the name people call it by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextAgent<'a> {
+    /// Its sender id, `bot|{id}`.
+    pub id: &'a str,
+    /// Its display name.
+    pub name: &'a str,
+    /// Its `@` handle, without the `@`.
+    pub handle: &'a str,
+}
+
 /// Whose access an agent session runs with, and who sent the prompt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct AgentContextPeople<'a> {
@@ -363,6 +374,8 @@ struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     instructions: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent: Option<&'a AgentContextAgent<'a>>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     people: Option<&'a AgentContextPeople<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -696,6 +709,7 @@ impl LexicalClient {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        agent: Option<&AgentContextAgent<'_>>,
         people: Option<&AgentContextPeople<'_>>,
         current_time: Option<&AgentContextCurrentTime<'_>>,
         trigger: Option<&TriggerContext>,
@@ -707,6 +721,7 @@ impl LexicalClient {
                 .json(&AgentContextRequest {
                     prompt_markdown,
                     instructions,
+                    agent,
                     people,
                     current_time,
                     trigger,
