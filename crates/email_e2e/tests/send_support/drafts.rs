@@ -80,6 +80,17 @@ pub async fn operation_state(inbox: &Inbox, id: &str) -> Result<Option<String>, 
     Ok(read["operation"]["state"].as_str().map(str::to_owned))
 }
 
+/// The draft's mailbox operation as `GET /email/drafts/{id}/operation`
+/// answers it (`state`, `issue`, `revision`, `remote_version`), or null when
+/// it has none.
+pub async fn operation(inbox: &Inbox, id: &str) -> Result<Value, Report> {
+    let read = inbox
+        .get(&format!("/email/drafts/{id}/operation"))
+        .await?
+        .ok()?;
+    Ok(read["operation"].clone())
+}
+
 /// Waits until the mailbox holds the draft as Macro has it. A Gmail draft is
 /// not written to the mailbox, so there is nothing to wait for.
 pub async fn wait_until_in_mailbox(inbox: &Inbox, id: &str, subject: &str) -> Result<(), Report> {

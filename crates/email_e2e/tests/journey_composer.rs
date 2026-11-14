@@ -620,6 +620,9 @@ async fn gmail_from_list_is_the_verified_aliases_and_follows_gmail() -> Result<(
     );
     let preview = to.wait_for_preview("inbox", "Invoice").await?;
     assert_eq!(preview["senderEmail"], billing, "{preview}");
+    // Ada's own Sent shows the alias as the sender too.
+    let own = inbox.wait_for_preview("sent", "Invoice").await?;
+    assert_eq!(own["senderEmail"], billing, "{own}");
 
     let offered = send_as(&inbox).await?;
     let addresses: Vec<&str> = offered.iter().map(|(email, _)| email.as_str()).collect();

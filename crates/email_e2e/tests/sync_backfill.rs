@@ -1289,3 +1289,75 @@ async fn backfill_reads_each_thread_once() -> Result<(), Report> {
 
     stack.finish().await
 }
+
+/// A running import that is cancelled stops: the user cancels the first
+/// import of a mailbox once it has listed the mailbox's threads. The job
+/// says it is cancelled and is no longer the inbox's running import, a
+/// second cancel is refused, and the threads that were still to be read are
+/// not brought in afterwards, while new mail keeps arriving. When it fails,
+/// cancelling answers success and the import goes on reading the mailbox,
+/// or the job still says it is running.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_cancelled_import_stops_reading_the_mailbox() -> Result<(), Report> {
+    const THREADS: usize = 30;
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let mallory = stack.user("mallory").await?;
+    let outsider = mallory.link_gmail().await?;
+    let (inbox, held) = backfill_held_after_listing(&stack, &ada, THREADS).await?;
+    let jobs = backfill_jobs(&inbox).await?;
+    let job_id = jobs[0]["id"].as_str().unwrap_or_default().to_owned();
+    let cancel = json!({ "job_id": job_id });
+
+    let refused = outsider
+        .delete("/email/backfill/gmail", Some(&cancel))
+        .await?;
+    assert_eq!(refused.status, 404, "{}", refused.text);
+
+    let cancelled = inbox.delete("/email/backfill/gmail", Some(&cancel)).await?;
+    assert_eq!(cancelled.status, 204, "{}", cancelled.text);
+    let job = inbox
+        .get(&format!("/email/backfill/gmail/{job_id}"))
+        .await?
+        .ok()?;
+    assert_eq!(job["job"]["status"], "Cancelled", "{job}");
+    let active = inbox.get("/email/backfill/gmail/active").await?;
+    assert_eq!(active.status, 204, "{}", active.text);
+    let again = inbox.delete("/email/backfill/gmail", Some(&cancel)).await?;
+    assert_eq!(again.status, 400, "{}", again.text);
+
+    // With the provider answering again, whatever the import still had
+    // queued is handled; mail that arrives after that is the event by which
+    // a continuing import would have brought the threads in.
+    stack.gmail().remove_fault(held);
+    eventually("the backfill queue to empty", DEFAULT_TIMEOUT, async || {
+        Ok((stack.queue_depth("backfill").await? == 0).then_some(()))
+    })
+    .await?;
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "After the cancel",
+        "Marker.",
+    ))?;
+    inbox.wait_for_preview("inbox", "After the cancel").await?;
+    let imported = inbox
+        .previews("all")
+        .await?
+        .iter()
+        .filter(|preview| {
+            preview["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("Note "))
+        })
+        .count();
+    assert!(
+        imported < THREADS,
+        "the cancelled import brought in all {THREADS} threads"
+    );
+    let jobs = backfill_jobs(&inbox).await?;
+    assert_eq!(jobs[0]["status"], "Cancelled", "{jobs:?}");
+    assert_eq!(backfill_done_events(&stack, &inbox), 0, "done events");
+    assert_eq!(stack.dead_letters("backfill").await?, 0);
+
+    stack.finish().await
+}

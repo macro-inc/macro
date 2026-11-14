@@ -1126,3 +1126,101 @@ async fn outlook_init_with_a_spent_sign_in_is_a_client_error() -> Result<(), Rep
     // The same lookup runs before the provider is known.
     init_with_a_spent_sign_in_is_a_client_error(Provider::Outlook).await
 }
+
+/// A deleted account takes its inbox with it: once the account service
+/// announces that Ada's account is gone, her inbox is no longer listed, its
+/// threads cannot be opened and its rows are purged, and the provider is
+/// told to stop announcing the mailbox's changes (Gmail `users.stop`, the
+/// Graph subscription deleted, and the Microsoft grant given back). Ben's
+/// inbox is untouched. When this fails, the mail of a deleted account stays
+/// readable and keeps syncing, or deleting one account breaks another's.
+async fn deleting_the_account_removes_its_inbox_and_mail(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let ben = stack.user("ben").await?;
+    let held = ["Standup notes".to_owned(), "Invoice 14".to_owned()];
+    seed_mailbox(&stack, provider, ada.email(), &held)?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let standup = inbox.wait_for_preview("inbox", "Standup notes").await?;
+    inbox.wait_for_preview("inbox", "Invoice 14").await?;
+    let other = ben.link(provider, ben.email()).await?;
+    other.deliver(&mail("Side project"))?;
+    other.wait_for_preview("inbox", "Side project").await?;
+
+    stack
+        .send_to_queue(
+            LINK_MANAGER,
+            &json!({ "operation": "DeleteUser", "fusionauth_user_id": ada.fusion_id() }),
+        )
+        .await?;
+    wait_until_purged(&stack, inbox.link_id()).await?;
+    other.deliver(&mail("After the deletion"))?;
+    other
+        .wait_for_preview("inbox", "After the deletion")
+        .await?;
+    wait_until_link_jobs_are_done(&stack).await?;
+
+    assert!(listed_links(&ada).await?.is_empty());
+    assert_eq!(listed_addresses(&ben).await?, [ben.email()]);
+    let thread_path = format!(
+        "/email/threads/{}",
+        standup["id"].as_str().unwrap_or_default()
+    );
+    let opened = ada.get(&thread_path).await?;
+    assert!(
+        matches!(opened.status, 401 | 403 | 404),
+        "a thread of the deleted account still opens: {} {}",
+        opened.status,
+        opened.text
+    );
+    assert_eq!(
+        subjects(&other, "inbox").await?,
+        ["After the deletion", "Side project"]
+    );
+
+    assert!(!provider_announces_changes(&stack, provider, ada.email()));
+    assert!(provider_announces_changes(&stack, provider, ben.email()));
+    let stop = match provider {
+        Provider::Gmail => "stop",
+        Provider::Outlook => "subscriptions.delete",
+    };
+    assert_eq!(
+        (
+            provider_calls(&stack, provider, ada.email(), stop),
+            provider_calls(&stack, provider, ben.email(), stop),
+        ),
+        (1, 0)
+    );
+    if provider == Provider::Outlook {
+        let revoked: Vec<(String, bool)> = stack
+            .outlook()
+            .mailboxes()
+            .iter()
+            .map(|mailbox| (mailbox.email.clone(), mailbox.revoked))
+            .collect();
+        assert!(
+            revoked.contains(&(ada.email().to_owned(), true)),
+            "{revoked:?}"
+        );
+        assert!(
+            revoked.contains(&(ben.email().to_owned(), false)),
+            "{revoked:?}"
+        );
+    }
+    for table in ["email_threads", "email_messages"] {
+        assert_eq!(rows_of_link(&stack, table, inbox.link_id()).await?, 0);
+    }
+    assert_eq!(stack.dead_letters(LINK_MANAGER).await?, 0);
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_deleting_the_account_removes_its_inbox_and_mail() -> Result<(), Report> {
+    deleting_the_account_removes_its_inbox_and_mail(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_deleting_the_account_removes_its_inbox_and_mail() -> Result<(), Report> {
+    deleting_the_account_removes_its_inbox_and_mail(Provider::Outlook).await
+}

@@ -16,11 +16,12 @@ mod drafts;
 mod support;
 
 use drafts::{
-    draft_previews, generation_of, id_of, refused, reopened, try_discard, try_save,
+    draft_previews, generation_of, id_of, operation, refused, reopened, try_discard, try_save,
     wait_for_no_draft_preview, wait_until_in_mailbox,
 };
 use email_e2e::outlook_emulator::{Fault, FaultError, Route};
-use email_e2e::{Mail, Provider, Report, Stack};
+use email_e2e::{DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, eventually};
+use rootcause::prelude::*;
 use serde_json::{Value, json};
 use support::{
     first_message, html, message_in_thread, provider_copies, provider_drafts,
@@ -722,6 +723,214 @@ async fn outlook_draft_can_be_discarded_while_it_is_being_saved() -> Result<(), 
     assert_eq!(reopened(&inbox, &draft).await?, Value::Null);
 
     stack.finish().await
+}
+
+/// Rewrites a draft in Outlook itself, as its owner does in another mail
+/// client, and returns the version Outlook then holds.
+async fn rewrite_in_outlook(
+    stack: &Stack,
+    inbox: &Inbox,
+    provider_id: &str,
+    subject: &str,
+    text: &str,
+) -> Result<String, Report> {
+    let response = reqwest::Client::new()
+        .patch(format!(
+            "{}/me/messages/{provider_id}",
+            stack.outlook().graph_url()
+        ))
+        .bearer_auth(stack.outlook().access_token(inbox.email())?)
+        .json(&json!({
+            "subject": subject,
+            "body": {
+                "contentType": "html",
+                "content": format!("<html><body><div>{text}</div></body></html>"),
+            },
+        }))
+        .send()
+        .await?;
+    let status = response.status();
+    let written: Value = response.json().await?;
+    if !status.is_success() {
+        bail!("Outlook answered {status} for the rewrite of a draft: {written}");
+    }
+    written["@odata.etag"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| report!("Outlook named no version for the rewritten draft: {written}"))
+}
+
+/// Which version of a draft the user keeps when Macro and Outlook disagree.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Keep {
+    Mine,
+    Outlooks,
+}
+
+/// A draft changed in Macro and, before that change reached the mailbox,
+/// rewritten in Outlook as well: Macro reports the conflict instead of
+/// overwriting either side, and the user's choice settles it. "Keep mine"
+/// writes Macro's text over the item in Outlook's Drafts; "use Outlook's"
+/// brings the mailbox's text into Macro. Either way one draft is left,
+/// the same on both sides, and synchronized again.
+///
+/// When it fails, an edit made in the other client is silently lost, the
+/// conflict is never shown, or the choice is accepted and the draft stays
+/// stuck in conflict.
+async fn conflicting_draft_is_resolved(keep: Keep) -> Result<(), Report> {
+    /// How long Outlook tells the draft worker to wait before it writes
+    /// again: the rewrite in Outlook happens in between.
+    const WRITE_AGAIN_AFTER_SECS: u64 = 3;
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook().await?;
+
+    let draft = inbox
+        .save_draft(&json!({
+            "subject": "Offer",
+            "to": [{ "email": "grace@example.com", "name": "Grace" }],
+            "body_text": "First wording.",
+            "body_html": html("<html><body><div>First wording.</div></body></html>"),
+        }))
+        .await?;
+    let id = id_of(&draft);
+    wait_until_in_mailbox(&inbox, &id, "Offer").await?;
+    let in_drafts = wait_for_provider_draft(&inbox, "Offer").await?.id;
+
+    // Outlook refuses the worker's next write once, so the edit made in
+    // Macro is still on its way when the draft is rewritten in Outlook.
+    stack.outlook().inject_fault(Fault {
+        mailbox: Some(inbox.email().to_owned()),
+        route: Some(Route::MessagesUpdate),
+        error: Some(FaultError::RateLimit),
+        retry_after_seconds: Some(WRITE_AGAIN_AFTER_SECS),
+        times: Some(1),
+        ..Fault::default()
+    });
+    let mine = inbox
+        .save_draft(&json!({
+            "db_id": id,
+            "draft_generation": generation_of(&draft),
+            "subject": "Offer from Macro",
+            "to": [{ "email": "grace@example.com", "name": "Grace" }],
+            "body_text": "Worded in Macro.",
+            "body_html": html("<html><body><div>Worded in Macro.</div></body></html>"),
+        }))
+        .await?;
+    eventually(
+        "Outlook to refuse the draft worker's write",
+        DEFAULT_TIMEOUT,
+        async || {
+            let refused = stack.outlook().requests().into_iter().any(|request| {
+                request.route == Some(Route::MessagesUpdate)
+                    && request.status == 429
+                    && request.mailbox.as_deref() == Some(inbox.email())
+            });
+            Ok(refused.then_some(()))
+        },
+    )
+    .await?;
+    let outlooks_version = rewrite_in_outlook(
+        &stack,
+        &inbox,
+        &in_drafts,
+        "Offer from Outlook",
+        "Worded in Outlook.",
+    )
+    .await?;
+
+    // The conflict is reported once Macro has seen Outlook's version, and
+    // neither side has been overwritten.
+    let conflict = eventually(
+        "the draft to be reported as conflicting with Outlook's version",
+        DEFAULT_TIMEOUT,
+        async || {
+            let seen = operation(&inbox, &id).await?;
+            let reported =
+                seen["state"] == "CONFLICT" && seen["remote_version"] == outlooks_version.as_str();
+            Ok(reported.then_some(seen))
+        },
+    )
+    .await?;
+    assert_eq!(conflict["issue"], "DRAFT_CONFLICT", "{conflict}");
+    let read = reopened(&inbox, &mine).await?;
+    assert_eq!(read["subject"], "Offer from Macro", "{read}");
+    assert_eq!(
+        wire(&stack, &inbox, &in_drafts).await?.subject,
+        "Offer from Outlook"
+    );
+
+    let action = match keep {
+        Keep::Mine => "keep_local",
+        Keep::Outlooks => "use_provider",
+    };
+    let resolved = inbox
+        .post(
+            &format!("/email/drafts/{id}/resolve"),
+            Some(&json!({
+                "revision": conflict["revision"],
+                "remote_version": conflict["remote_version"],
+                "action": action,
+            })),
+        )
+        .await?;
+    assert_eq!(resolved.status, 204, "{}", resolved.text);
+    let settled = operation(&inbox, &id).await?;
+    assert_ne!(
+        settled["state"], "CONFLICT",
+        "the choice was accepted and the draft is still in conflict: {settled}"
+    );
+
+    let (subject, text, other) = match keep {
+        Keep::Mine => ("Offer from Macro", "Worded in Macro.", "Worded in Outlook."),
+        Keep::Outlooks => (
+            "Offer from Outlook",
+            "Worded in Outlook.",
+            "Worded in Macro.",
+        ),
+    };
+    // Macro shows the kept version.
+    let read = eventually(
+        &format!("the draft to read {subject:?} in Macro"),
+        DEFAULT_TIMEOUT,
+        async || {
+            let read = reopened(&inbox, &mine).await?;
+            Ok((read["subject"] == subject).then_some(read))
+        },
+    )
+    .await?;
+    assert_eq!(read["is_draft"], true, "{read}");
+    let body = read["body_text"].as_str().unwrap_or_default();
+    assert!(body.contains(text) && !body.contains(other), "{read}");
+    // Outlook holds it too, in the item the draft always was, and the two
+    // are in step again.
+    wait_until_in_mailbox(&inbox, &id, subject).await?;
+    let drafts = provider_drafts(&inbox)?;
+    assert_eq!(drafts.len(), 1, "one draft, one item in Drafts: {drafts:?}");
+    assert_eq!(drafts[0].id, in_drafts);
+    let in_mailbox = wire(&stack, &inbox, &in_drafts).await?;
+    assert_eq!(in_mailbox.subject, subject);
+    assert!(
+        in_mailbox.html.contains(text) && !in_mailbox.html.contains(other),
+        "the item in Drafts does not hold the kept version: {}",
+        in_mailbox.html
+    );
+    inbox.wait_for_preview("drafts", subject).await?;
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_keeping_my_version_of_a_conflicting_draft_overwrites_outlooks()
+-> Result<(), Report> {
+    conflicting_draft_is_resolved(Keep::Mine).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_taking_outlooks_version_of_a_conflicting_draft_brings_it_into_macro()
+-> Result<(), Report> {
+    conflicting_draft_is_resolved(Keep::Outlooks).await
 }
 
 /// HTML written in Macro passes the sanitizer before it is stored, for a

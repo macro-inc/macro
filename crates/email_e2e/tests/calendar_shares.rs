@@ -7,7 +7,10 @@
 
 use email_e2e::chrono::{DateTime, Duration, Utc};
 use email_e2e::gmail_emulator::{SeedCalendar, SeedMailbox};
-use email_e2e::{Calendar, DEFAULT_TIMEOUT, Report, Stack, StackOptions, User, events, eventually};
+use email_e2e::{
+    Calendar, DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, User, events,
+    eventually,
+};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -657,4 +660,285 @@ async fn a_copy_that_becomes_an_invitation_can_be_answered() -> Result<(), Repor
     assert_eq!(answered.status, 200, "{}", answered.text);
 
     stack.finish().await
+}
+
+/// The file Forward by email attaches for the meeting `uid`: the event
+/// published, naming its organizer and no guests.
+fn shared_event_file(uid: &str, title: &str, start: DateTime<Utc>, organizer: &str) -> String {
+    let at = |time: DateTime<Utc>| time.format("%Y%m%dT%H%M%SZ").to_string();
+    let lines = [
+        "BEGIN:VCALENDAR".to_owned(),
+        "VERSION:2.0".to_owned(),
+        "PRODID:-//Macro//Calendar//EN".to_owned(),
+        "METHOD:PUBLISH".to_owned(),
+        "BEGIN:VEVENT".to_owned(),
+        format!("UID:{uid}"),
+        format!("DTSTAMP:{}", at(start - Duration::days(1))),
+        format!("DTSTART:{}", at(start)),
+        format!("DTEND:{}", at(start + Duration::hours(1))),
+        format!("SUMMARY:{title}"),
+        "SEQUENCE:0".to_owned(),
+        format!("ORGANIZER:mailto:{organizer}"),
+        "END:VEVENT".to_owned(),
+        "END:VCALENDAR".to_owned(),
+    ];
+    lines.join("\r\n") + "\r\n"
+}
+
+/// A forwarded event is added to the calendar from its mail: a mail with
+/// an event's file arrives in an inbox at `provider`, and the reader adds
+/// the event to their Google calendar from the mail. The copy is on that
+/// calendar at Google under the meeting's own UID, the answer is the copy,
+/// and Macro's calendar shows it. A reader whose mail is in Outlook picks
+/// the Google calendar of their other inbox, since only Google takes an
+/// event under another meeting's UID.
+///
+/// When it fails, Add to calendar on a forwarded event adds nothing, or
+/// puts the event somewhere other than the calendar that was picked.
+async fn a_forwarded_event_is_added_to_the_calendar_from_its_mail(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    let (inbox, google_address) = match provider {
+        Provider::Gmail => (
+            ada.link_gmail_with_calendar().await?,
+            ada.email().to_owned(),
+        ),
+        Provider::Outlook => {
+            let personal = "ada.personal@example.com";
+            let inbox = ada.link_outlook_with_calendar().await?;
+            ada.link_with_calendar(Provider::Gmail, personal).await?;
+            (inbox, personal.to_owned())
+        }
+    };
+    let calendar = ada.calendar()?;
+    let calendars = calendar.get("/calendars").await?.ok()?;
+    let picked = calendars["calendars"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|listed| {
+            listed["emailAddress"] == google_address.as_str() && listed["isPrimary"] == true
+        })
+        .and_then(|listed| listed["id"].as_str())
+        .unwrap_or_else(|| panic!("no primary Google calendar is listed: {calendars}"))
+        .to_owned();
+
+    let uid = "offsite-7f3a@example.com";
+    let start = events::hour_in_days(3);
+    let file = shared_event_file(uid, "Offsite", start, "olga@example.com");
+    inbox.deliver(
+        &Mail::new("Olga <olga@example.com>", "Fwd: Offsite", "Come along.").with_attachment(
+            "Offsite.ics",
+            "text/calendar",
+            file.as_bytes(),
+        ),
+    )?;
+    let preview = inbox.wait_for_preview("inbox", "Fwd: Offsite").await?;
+    let thread_id = preview["id"].as_str().unwrap_or_default();
+    let thread = inbox
+        .wait_for_thread(
+            thread_id,
+            "the mail to show the event it carries",
+            |thread| thread["messages"][0]["calendar_invitations"][0]["id"].is_string(),
+        )
+        .await?;
+    let message = &thread["messages"][0];
+    let saved = &message["calendar_invitations"][0];
+    assert_eq!(saved["title"], "Offsite", "{saved}");
+    assert_eq!(imports_of(&stack, &google_address), 0);
+
+    let copied = inbox
+        .post(
+            &format!(
+                "/email/threads/{thread_id}/messages/{}/calendar-invitations/{}/copy",
+                message["db_id"].as_str().unwrap_or_default(),
+                saved["id"].as_str().unwrap_or_default(),
+            ),
+            Some(&json!({ "calendarId": picked })),
+        )
+        .await?;
+    assert_eq!(copied.status, 201, "{}", copied.text);
+    assert_eq!(copied.json["title"], "Offsite", "{}", copied.text);
+    assert_eq!(
+        copied.json["calendarId"],
+        picked.as_str(),
+        "{}",
+        copied.text
+    );
+
+    assert_eq!(imports_of(&stack, &google_address), 1);
+    let held = stack.gmail().events(&google_address, PRIMARY)?;
+    let copy = held.iter().find(|event| event["summary"] == "Offsite");
+    let copy = copy.unwrap_or_else(|| panic!("the Google calendar holds no Offsite: {held:?}"));
+    assert_eq!(copy["iCalUID"], uid, "{copy}");
+    assert_eq!(copy["organizer"]["email"], "olga@example.com", "{copy}");
+    let item = calendar.wait_for_event("Offsite").await?;
+    assert_eq!(item["event"]["id"], copied.json["id"], "{item}");
+
+    stack.finish().await
+}
+
+/// The `events.import` calls Google answered for the mailbox `address`.
+fn imports_of(stack: &Stack, address: &str) -> usize {
+    let requests = stack.gmail().requests();
+    let imports = requests.iter().filter(|request| {
+        request.route == Some(email_e2e::gmail_emulator::Route::EventsImport)
+            && request.mailbox.as_deref() == Some(address)
+            && request.status < 300
+    });
+    imports.count()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_forwarded_event_is_added_to_the_calendar_from_its_mail() -> Result<(), Report> {
+    a_forwarded_event_is_added_to_the_calendar_from_its_mail(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_forwarded_event_is_added_to_the_calendar_from_its_mail() -> Result<(), Report> {
+    a_forwarded_event_is_added_to_the_calendar_from_its_mail(Provider::Outlook).await
+}
+
+/// The names of the files a message at the provider carries.
+async fn provider_file_names(
+    stack: &Stack,
+    inbox: &Inbox,
+    subject: &str,
+) -> Result<Vec<String>, Report> {
+    match inbox.provider() {
+        Provider::Outlook => {
+            let held = stack.outlook().messages(inbox.email())?;
+            let message = held.into_iter().find(|message| message.subject == subject);
+            Ok(message
+                .map(|message| message.attachments)
+                .unwrap_or_default())
+        }
+        Provider::Gmail => {
+            // Read through Gmail's own API, as another mail client would.
+            let held = stack.gmail().messages(inbox.email())?;
+            let Some(message) = held
+                .into_iter()
+                .find(|message| message.subject.as_deref() == Some(subject))
+            else {
+                return Ok(Vec::new());
+            };
+            let full: Value = reqwest::Client::new()
+                .get(format!(
+                    "{}/users/me/messages/{}?format=full",
+                    stack.gmail().gmail_url(),
+                    message.id
+                ))
+                .bearer_auth(stack.gmail().access_token(inbox.email())?)
+                .send()
+                .await?
+                .error_for_status()?
+                .json()
+                .await?;
+            let mut names = Vec::new();
+            let mut parts = vec![&full["payload"]];
+            while let Some(part) = parts.pop() {
+                if let Some(name) = part["filename"].as_str().filter(|name| !name.is_empty()) {
+                    names.push(name.to_owned());
+                }
+                parts.extend(part["parts"].as_array().into_iter().flatten());
+            }
+            Ok(names)
+        }
+    }
+}
+
+/// An event forwarded by email arrives with its file: Ada forwards an
+/// event on her calendar to Ben, who is not a guest. The mail leaves from
+/// the inbox that holds her copy, and reaches Ben's mailbox at the
+/// provider carrying the event's file, which Macro lists on the mail and
+/// which publishes the event without naming guests.
+///
+/// When it fails, forwarding an event sends nothing, or sends a mail
+/// without the event, so the recipient has nothing to add to a calendar.
+async fn a_forwarded_event_arrives_with_its_file(provider: Provider) -> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    let ben = stack.user("ben").await?;
+    let from = ada.link_with_calendar(provider, ada.email()).await?;
+    let to = ben.link(provider, ben.email()).await?;
+    let calendar = ada.calendar()?;
+    let start = events::hour_in_days(3);
+    match provider {
+        Provider::Gmail => {
+            stack
+                .gmail()
+                .add_event(ada.email(), PRIMARY, events::google("Offsite", start))?;
+        }
+        Provider::Outlook => {
+            stack.outlook().add_event(
+                ada.email(),
+                "default",
+                &events::outlook("Offsite", start),
+            )?;
+            calendar.poll_outlook_now(ada.email()).await?;
+        }
+    }
+    let item = calendar.wait_for_event("Offsite").await?;
+
+    let forwarded = from
+        .post(
+            &format!(
+                "/email/calendar-events/{}/forward",
+                item["event"]["id"].as_str().unwrap_or_default()
+            ),
+            Some(&json!({
+                "to": [{ "email": ben.email(), "name": "Ben" }],
+                "bodyText": "Join us at the offsite.",
+            })),
+        )
+        .await?;
+    assert_eq!(forwarded.status, 202, "{}", forwarded.text);
+    assert!(
+        forwarded.json["messageId"].is_string(),
+        "{}",
+        forwarded.text
+    );
+
+    let preview = to.wait_for_preview("inbox", "Offsite").await?;
+    assert_eq!(
+        provider_file_names(&stack, &to, "Offsite").await?,
+        ["Offsite.ics"]
+    );
+    let thread = to
+        .wait_for_thread(
+            preview["id"].as_str().unwrap_or_default(),
+            "the forwarded mail to list the event's file",
+            |thread| thread["messages"][0]["attachments"][0]["db_id"].is_string(),
+        )
+        .await?;
+    let message = &thread["messages"][0];
+    assert_eq!(message["attachments"][0]["filename"], "Offsite.ics");
+    let file = to
+        .download_attachment(
+            message["attachments"][0]["db_id"]
+                .as_str()
+                .unwrap_or_default(),
+        )
+        .await?;
+    let file = String::from_utf8_lossy(&file);
+    assert!(file.contains("METHOD:PUBLISH"), "{file}");
+    assert!(file.contains("SUMMARY:Offsite"), "{file}");
+    assert!(!file.contains("ATTENDEE"), "{file}");
+    // The sender keeps it as sent mail of the inbox that holds the event.
+    let sent = from.wait_for_preview("sent", "Offsite").await?;
+    assert_eq!(sent["id"], forwarded.json["threadId"], "{sent}");
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_forwarded_event_arrives_with_its_file() -> Result<(), Report> {
+    a_forwarded_event_arrives_with_its_file(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_forwarded_event_arrives_with_its_file() -> Result<(), Report> {
+    a_forwarded_event_arrives_with_its_file(Provider::Outlook).await
 }

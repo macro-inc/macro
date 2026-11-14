@@ -11,6 +11,9 @@ use uuid::Uuid;
 const WRITTEN: &str = "hello";
 /// The undo window of a scenario that undoes, in seconds.
 const UNDO_WINDOW_SECS: &str = "5";
+/// The undo window of an Outlook send that must still be waiting when its
+/// draft has settled in the mailbox, in seconds.
+const OUTLOOK_SETTLING_WINDOW_SECS: &str = "20";
 
 /// A stack that also serves the GraphQL API.
 async fn stack_with_graphql() -> Result<Stack, Report> {
@@ -189,11 +192,29 @@ async fn outlook_undo_restores_the_draft_as_written() -> Result<(), Report> {
 
 /// The queue refuses the message that would trigger delivery; the Send is
 /// still accepted, and the scheduled sweep delivers it once.
+/// An Outlook send is not delivered by a queue message at all: the mailbox's
+/// draft worker finds the draft already settled in the mailbox once its send
+/// is due, which is what delivers it here too.
 /// When this fails a mail the user sent is silently never delivered.
 async fn sweep_delivers_a_send_whose_queue_message_was_lost(
     provider: Provider,
 ) -> Result<(), Report> {
-    let stack = stack_with_graphql().await?;
+    let stack = match provider {
+        Provider::Gmail => stack_with_graphql().await?,
+        // Long enough that the draft is settled in the mailbox before its
+        // send is due: nothing but its coming due can deliver it then.
+        Provider::Outlook => {
+            Stack::start_with(StackOptions {
+                document_storage: true,
+                env: vec![(
+                    "SENT_UNDO_DELAY_SECS".to_owned(),
+                    OUTLOOK_SETTLING_WINDOW_SECS.to_owned(),
+                )],
+                ..StackOptions::default()
+            })
+            .await?
+        }
+    };
     let ada = stack.user("ada").await?;
     let grace = stack.user("grace").await?;
     let from = ada.link(provider, ada.email()).await?;
@@ -205,6 +226,30 @@ async fn sweep_delivers_a_send_whose_queue_message_was_lost(
     let accepted = from.send_attempt(attempt_id, &mail, &json!({})).await?;
     assert_eq!(accepted["status"], "ACCEPTED", "{accepted}");
     assert_eq!(stack.queue_send_refusals_left("scheduled")?, 0);
+    if provider == Provider::Outlook {
+        let draft_id = accepted["message"]["id"].as_str().unwrap_or_default();
+        eventually(
+            "the draft to be settled in the mailbox",
+            DEFAULT_TIMEOUT,
+            async || {
+                let read = from
+                    .get(&format!("/email/drafts/{draft_id}/operation"))
+                    .await?;
+                // The draft is not written the moment its Send is accepted.
+                if read.status == 404 {
+                    return Ok(None);
+                }
+                let read = read.ok()?;
+                Ok((read["operation"]["state"] == "SYNCHRONIZED").then_some(()))
+            },
+        )
+        .await?;
+        let waiting = from.send_attempt_state(attempt_id).await?;
+        assert_eq!(
+            waiting["status"], "ACCEPTED",
+            "the send did not wait for its window: {waiting}"
+        );
+    }
 
     eventually(
         "the sweep to deliver the send",
