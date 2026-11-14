@@ -107,7 +107,7 @@ export const REST: readonly Operation[] = [
     id: 'POST /email/email/settings/import-signature',
     kind: 'rest',
     scope: 'email',
-    providers: ['gmail'],
+    appliesTo: ['gmail'],
   },
   { id: 'GET /email/email/settings/operations', kind: 'rest', scope: 'email' },
   { id: 'DELETE /email/email/sync', kind: 'rest', scope: 'email' },

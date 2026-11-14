@@ -85,8 +85,11 @@ export type Operation = {
    * equals what the source defines, not counted.
    */
   scope: 'email' | 'shared' | 'other';
-  /** Where the app makes it; left out, with both providers. */
-  providers?: readonly Provider[];
+  /**
+   * The providers the app makes it for; left out, both. (`providers` on a
+   * row of the report is where it was seen.)
+   */
+  appliesTo?: readonly Provider[];
   needs?: string;
   note?: string;
 };

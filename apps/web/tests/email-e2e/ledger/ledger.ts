@@ -636,7 +636,7 @@ export function buildLedger(
   const operations = OPERATIONS.map((operation): OperationRow => {
     const entry = seen.get(operation.id);
     const status: OperationRow['status'] = entry?.real
-      ? (operation.providers ?? BOTH_PROVIDERS).every((provider) =>
+      ? (operation.appliesTo ?? BOTH_PROVIDERS).every((provider) =>
           entry.providers.has(provider)
         )
         ? 'covered'
