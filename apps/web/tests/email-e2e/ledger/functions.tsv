@@ -183,3 +183,5 @@ F-181	list	Show or hide the Email sidebar	yes	yes	yes	ui
 F-182	labels	Open the folder or project a thread is filed in	yes	yes	yes	ui
 F-183	list	Learn Mail: tutorial video and view tour	yes	yes	yes	ui
 F-184	list	See the keyboard shortcuts for Mail	yes	yes	yes	ui
+F-185	attachments	Open and preview an attachment on a draft	yes	yes	yes	service
+F-186	compose	See the Macro watermark without a paid plan and open the upgrade prompt	yes	yes	yes	ui
