@@ -322,7 +322,9 @@ Team rows show a profile photo when available, otherwise a
 letter avatar at the same 16px size as channel list icons. Team uses the same Soup
 row component as Emails, Files, and Calls: the avatar, name, and email are inline,
 the last-contacted timestamp sits at the right, and the side gutters and row
-spacing match. There is no column-heading row.
+spacing match. There is no column-heading row. Team loads 50 contacts at a time
+(name, else email, A to Z) and fetches the next page as you scroll to the end;
+its search asks the server, so it finds people on pages not yet loaded.
 Emails, Files, and Calls search the loaded row titles and supporting text and
 continue loading pages when the current pages have no match.
 Emails, Files, Calls, and References rows open their items without selection

@@ -86,7 +86,7 @@ export async function editContact(
         if (fresh.companyId) {
           const companyId = fresh.companyId;
           const company = await span.span('crm.contact_edit.company', () =>
-            deps.storage.getCompany({ companyId })
+            deps.storage.getCompany({ companyId, includeContacts: false })
           );
           if (company.isOk()) companyName = company.value.name ?? null;
         }
@@ -118,9 +118,7 @@ export async function editContact(
       if (contact.companyId && !company) {
         const companyId = contact.companyId;
         const result = await span.span('crm.contact_edit.company', () =>
-          deps.storage.getCompany({
-            companyId,
-          })
+          deps.storage.getCompany({ companyId, includeContacts: false })
         );
         if (result.isOk()) company = result.value;
       }

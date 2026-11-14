@@ -355,3 +355,56 @@ it('leaves an address list changed by another edit for an authoritative refresh'
   expect(client.getQueryData(key)).toEqual(concurrent);
   client.clear();
 });
+
+it('moves a contact out of the Team list it left and refreshes the one it joins', async () => {
+  const client = new QueryClient();
+  const team = (companyId: string) => [
+    ...crmKeys.companyContacts(companyId).queryKey,
+    false,
+    '',
+  ];
+  const other = { ...before, id: 'contact-2' };
+  const page = (contacts: CrmContactResponse[]) => ({
+    pages: [{ contacts, nextCursor: null, search: '' }],
+    pageParams: [null],
+  });
+  client.setQueryData(team('company-1'), page([before, other]));
+  client.setQueryData(team('company-2'), page([]));
+  client.setQueryData(team('unrelated'), page([]));
+  expect(
+    client
+      .getQueryCache()
+      .findAll({ predicate: contactEditDetailsFilter(client, before, after) })
+      .map((query) => query.queryKey)
+  ).toEqual([team('company-1'), team('company-2')]);
+
+  expect(
+    await updateContactEditDetails(client, before, after, () => true)
+  ).toBe(true);
+  expect(client.getQueryData(team('company-1'))).toEqual(page([other]));
+  expect(client.getQueryState(team('company-2'))?.isInvalidated).toBe(true);
+  expect(client.getQueryState(team('unrelated'))?.isInvalidated).toBe(false);
+  client.clear();
+});
+
+it("patches a contact's new address in place in its Team list", async () => {
+  const client = new QueryClient();
+  const key = [...crmKeys.companyContacts('company-1').queryKey, false, ''];
+  client.setQueryData(key, {
+    pages: [{ contacts: [before], nextCursor: null, search: '' }],
+    pageParams: [null],
+  });
+  const edited = {
+    ...before,
+    email: 'new@example.com',
+    updatedAt: '2026-10-02',
+  };
+  expect(
+    await updateContactEditDetails(client, before, edited, () => true)
+  ).toBe(true);
+  expect(
+    client.getQueryData<{ pages: { contacts: CrmContactResponse[] }[] }>(key)
+      ?.pages[0].contacts[0].email
+  ).toBe('new@example.com');
+  client.clear();
+});

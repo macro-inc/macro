@@ -1,6 +1,10 @@
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import type { Query, QueryClient } from '@tanstack/solid-query';
+import {
+  isCompanyContactsQuery,
+  patchCompanyContacts,
+} from './company-contacts';
 import { crmKeys } from './keys';
 import { listCanIncludeCrm, listCanIncludeCrmContacts } from './list-refresh';
 
@@ -62,6 +66,12 @@ export function visibilityDetailsFilter(change: CrmVisibilityChange) {
   return (query: Query): boolean => {
     const key = query.queryKey;
     if (key[0] !== 'crm') return false;
+    // A contact moves between a company's active and archived lists; which
+    // company it belongs to is not part of the change.
+    if (isCompanyContactsQuery(key))
+      return (
+        change.kind === 'contact' || isCompanyContactsQuery(key, change.id)
+      );
     if (key[1] === 'contact' && change.kind === 'contact')
       return key[2] === change.id;
     const data = query.state.data;
@@ -116,6 +126,7 @@ export async function updateVisibilityDetails(
     { queryKey: crmKeys.contactByEmail._def },
     (contact) => (contact ? patchContact(contact) : contact)
   );
+  patchCompanyContacts(client, (contact) => patchContact(contact));
   client.setQueriesData<CrmCompanyResponse>(
     { queryKey: crmKeys.company._def },
     (company) => {

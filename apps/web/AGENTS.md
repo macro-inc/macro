@@ -849,7 +849,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   a later observer may share an in-flight request without forwarding its context.
   Preserve company cascade semantics and require company restoration before a person.
   Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
-  `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.
+  `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters;
+  `browser-test/team` also scrolls a 120-person company through three Team pages.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.

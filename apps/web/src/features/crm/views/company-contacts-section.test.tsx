@@ -5,8 +5,9 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { CrmContact } from '../core/contact';
 import { CompanyContactsSection } from './company-contacts-section';
 
-const { openCreateContact } = vi.hoisted(() => ({
+const { openCreateContact, team } = vi.hoisted(() => ({
   openCreateContact: vi.fn(),
+  team: { contacts: [] as CrmContact[] },
 }));
 
 vi.mock('../components/record-visibility-filter', () => ({
@@ -71,10 +72,26 @@ vi.mock('../context/crm-context', () => ({
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     createContactPhoto: (email: string) => () =>
       email === 'avery@example.com' ? '/avery.jpg' : undefined,
+    // The server's page; the section still narrows it by archive state and
+    // the search typed before the debounced read.
+    createCompanyContactsSource: () => ({
+      get contacts() {
+        return team.contacts;
+      },
+      isPending: false,
+      isSearching: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage: async () => undefined,
+      refetch: async () => undefined,
+    }),
   }),
 }));
 afterEach(() => {
   cleanup();
+  team.contacts = [];
   vi.clearAllMocks();
 });
 
@@ -114,7 +131,6 @@ it('opens contact creation for a company with no domain from either action', () 
         hidden: false,
         domains: [],
       }}
-      contacts={[]}
     />
   ));
   const actions = screen.getAllByRole('button', { name: 'Add contact' });
@@ -128,11 +144,11 @@ it('opens contact creation for a company with no domain from either action', () 
 });
 
 it('shows contact photos or a letter avatar and opens the chosen contact', () => {
+  team.contacts = contacts;
   const open = vi.fn();
   const { container } = render(() => (
     <CompanyContactsSection
       company={{ id: 'co' } as CrmCompanyEntity}
-      contacts={contacts}
       onOpenContact={open}
     />
   ));
@@ -145,11 +161,9 @@ it('shows contact photos or a letter avatar and opens the chosen contact', () =>
 });
 
 it('filters by email and keeps the search available with no results', () => {
+  team.contacts = contacts;
   render(() => (
-    <CompanyContactsSection
-      company={{ id: 'co' } as CrmCompanyEntity}
-      contacts={contacts}
-    />
+    <CompanyContactsSection company={{ id: 'co' } as CrmCompanyEntity} />
   ));
   const search = screen.getByRole('textbox', { name: 'Search team' });
   fireEvent.input(search, { target: { value: 'procurement' } });
@@ -170,11 +184,9 @@ it('excludes hidden contacts from an admin response, including search matches', 
     name: 'Removed person',
   };
   const response = [...contacts, removed];
+  team.contacts = response;
   render(() => (
-    <CompanyContactsSection
-      company={{ id: 'co' } as CrmCompanyEntity}
-      contacts={response}
-    />
+    <CompanyContactsSection company={{ id: 'co' } as CrmCompanyEntity} />
   ));
   screen.getByRole('button', { name: /Avery Chen/ });
   expect(screen.queryByRole('button', { name: /Removed person/ })).toBeNull();

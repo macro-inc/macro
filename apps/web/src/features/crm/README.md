@@ -113,8 +113,13 @@ People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
 preserves search and other display choices, and sanitizes shared/persisted contact
 filters. Archived People is current-administered-team scoped, server filtered
-before pagination; visible People remains viewer-wide. Team applies the same
-exclusive choice to its embedded contact response, including effective parent state.
+before pagination; visible People remains viewer-wide. Team reads its contacts a
+page at a time from `GET /crm/companies/{id}/contacts/page` (`queries/company-contacts.ts`):
+the server applies the Visible/Archived choice (a contact is archived when it or
+its company is) and the search, in the order the full list had, and the list loads
+the next page as its end scrolls into view. The company read itself passes
+`includeContacts=false`. Confirmed visibility and contact edits patch cached Team
+pages in place and refresh the lists a contact can move between.
 
 Successful REST mutations write confirmed flags through the normalized Soup update
 path and patch paginated suggestions, company search pages, REST Soup and embedded
