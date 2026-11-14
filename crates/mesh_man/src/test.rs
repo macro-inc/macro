@@ -6,7 +6,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
 
-use crate::model::Model;
 use crate::project::{CAMERA_DISTANCE, TILT, View, project};
 use crate::{Body, ColorDepth, PulseKind};
 
@@ -67,7 +66,7 @@ fn a_quarter_turn_brings_the_left_side_forward() {
 
 #[test]
 fn the_figure_fits_inside_the_unit_cube() {
-    let model = Model::build();
+    let model = crate::model::mesh_man();
     let inside = |point: Vec3| point.abs().max_element() <= 1.0;
 
     for segment in &model.segments {
@@ -85,7 +84,7 @@ fn the_figure_fits_inside_the_unit_cube() {
 
 #[test]
 fn every_nerve_starts_at_the_brain_and_has_length() {
-    let model = Model::build();
+    let model = crate::model::mesh_man();
     let brain = model.nerves.first().map(|nerve| nerve.points[0]);
 
     assert!(model.nerves.len() >= 24);
@@ -99,7 +98,7 @@ fn every_nerve_starts_at_the_brain_and_has_length() {
 fn an_outward_pulse_advances_and_expires_at_the_far_end() {
     let mut body = Body::new();
     body.fire("left_median", PulseKind::ToolStart);
-    let length = body.model.nerves[body.nerve_index("left_median")].length();
+    let length = body.figure().nerves[body.nerve_index("left_median")].length();
 
     assert_eq!(body.pulses.len(), 1);
     assert_eq!(body.pulses[0].position, 0.0);
@@ -116,7 +115,7 @@ fn an_outward_pulse_advances_and_expires_at_the_far_end() {
 fn a_result_pulse_runs_back_to_the_brain() {
     let mut body = Body::new();
     body.fire("right_tibial", PulseKind::ToolResult);
-    let length = body.model.nerves[body.nerve_index("right_tibial")].length();
+    let length = body.figure().nerves[body.nerve_index("right_tibial")].length();
 
     assert_eq!(body.pulses[0].position, length);
 
@@ -265,4 +264,81 @@ fn an_indexed_body_draws_only_indexed_colours() {
             .iter()
             .any(|cell| matches!(cell.fg, Color::Indexed(_)))
     );
+}
+
+#[test]
+fn every_catalog_figure_fits_the_unit_cube_and_has_nerves() {
+    let inside = |point: Vec3| point.abs().max_element() <= 1.0 + 1e-5;
+
+    for figure in crate::catalog() {
+        let name = figure.name().to_owned();
+        assert!(!figure.nerves.is_empty(), "{name} has no nerves");
+        for segment in &figure.segments {
+            assert!(inside(segment.a) && inside(segment.b), "{name}: {segment:?}");
+        }
+        for (a, b) in figure.brain.iter().chain(&figure.nerve_lines) {
+            assert!(inside(*a) && inside(*b), "{name}: {a} {b}");
+        }
+        for nerve in &figure.nerves {
+            assert!(nerve.length() > 0.0, "{name}: {}", nerve.name);
+            for point in &nerve.points {
+                assert!(inside(*point), "{name}: {} at {point}", nerve.name);
+            }
+        }
+    }
+}
+
+#[test]
+fn the_default_figure_is_the_mesh_man() {
+    let body = Body::new();
+    assert_eq!(body.figure_index(), 0);
+    assert_eq!(body.figure_name(), "MESH MAN");
+}
+
+#[test]
+fn cycling_figures_wraps_and_drops_pulses() {
+    let a = crate::Figure::builder("A")
+        .bone(Vec3::new(0.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0))
+        .nerve("cord", vec![Vec3::new(0.0, 0.9, 0.0), Vec3::new(0.0, -0.5, 0.0)])
+        .build();
+    let b = crate::Figure::builder("B")
+        .skin(Vec3::new(0.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0))
+        .nerve("left", vec![Vec3::ZERO, Vec3::X * 0.5])
+        .nerve("right", vec![Vec3::ZERO, -Vec3::X * 0.5])
+        .build();
+    let mut body = Body::with_figures(vec![a, b]);
+    body.fire("cord", PulseKind::Error);
+    assert_eq!(body.pulses.len(), 1);
+
+    body.next_figure();
+    assert_eq!(body.figure_name(), "B");
+    assert!(body.pulses.is_empty() && body.flashes.is_empty());
+    assert_eq!(body.glow.len(), 2);
+
+    body.next_figure();
+    assert_eq!(body.figure_name(), "A");
+    body.prev_figure();
+    assert_eq!(body.figure_name(), "B");
+    assert!(body.select_figure("a"));
+    assert_eq!(body.figure_index(), 0);
+    assert!(!body.select_figure("nobody"));
+
+    // Every figure draws without panicking.
+    for _ in 0..body.figure_count() {
+        render_text(&body, 30, 20);
+        body.next_figure();
+    }
+}
+
+#[test]
+fn normalising_scales_to_two_tall_on_the_pelvis() {
+    let figure = crate::Figure::builder("N")
+        .skin(Vec3::new(10.0, 0.0, 5.0), Vec3::new(10.0, 170.0, 5.0))
+        .nerve("n", vec![Vec3::new(10.0, 160.0, 5.0), Vec3::new(30.0, 100.0, 5.0)])
+        .build_normalised(Vec3::new(10.0, 90.0, 5.0));
+    let (low, high) = figure.bounds();
+    assert!((low.y + 1.0).abs() < 1e-5 && (high.y - 1.0).abs() < 1e-5);
+    assert!(low.x.abs() < 1e-5 && low.z.abs() < 1e-5);
+    let nerve = &figure.nerves[0];
+    assert!((nerve.length() - (20.0_f32.hypot(60.0) * 2.0 / 170.0)).abs() < 1e-4);
 }

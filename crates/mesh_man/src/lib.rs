@@ -26,6 +26,7 @@
 use std::f32::consts::TAU;
 use std::time::Duration;
 
+mod figure;
 mod model;
 mod project;
 mod pulse;
@@ -34,9 +35,9 @@ mod widget;
 #[cfg(test)]
 mod test;
 
+pub use figure::{Core, Figure, FigureBuilder, catalog};
 pub use pulse::PulseKind;
 
-use model::Model;
 use pulse::{Flash, Pulse};
 
 /// Seconds for one full turn.
@@ -60,7 +61,10 @@ const PEAK_BPM: f32 = 150.0;
 /// The figure and everything that moves on it.
 #[derive(Clone, Debug)]
 pub struct Body {
-    model: Model,
+    /// The figures it can wear; never empty.
+    figures: Vec<Figure>,
+    /// Index of the figure it wears now.
+    current: usize,
     /// Current turn about the vertical axis, in radians, in `[0, 2π)`.
     angle: f32,
     /// Position in the current heartbeat, in `[0, 1)`.
@@ -104,13 +108,25 @@ impl Default for Body {
 }
 
 impl Body {
-    /// A figure facing the viewer, at rest.
+    /// A figure facing the viewer, at rest, wearing the first of the
+    /// built-in figures ([`catalog`]) and able to cycle through the rest.
     pub fn new() -> Self {
-        let model = Model::build();
-        let glow = vec![0.0; model.nerves.len()];
+        Self::with_figures(catalog())
+    }
+
+    /// A body that cycles through `figures`, wearing the first. An empty list
+    /// falls back to the built-in catalog.
+    pub fn with_figures(figures: Vec<Figure>) -> Self {
+        let figures = if figures.is_empty() {
+            catalog()
+        } else {
+            figures
+        };
+        let glow = vec![0.0; figures.first().map_or(0, |figure| figure.nerves.len())];
 
         Self {
-            model,
+            figures,
+            current: 0,
             angle: 0.0,
             heart_phase: 0.0,
             scan_phase: 0.0,
@@ -122,18 +138,85 @@ impl Body {
         }
     }
 
+    /// The figure it wears now.
+    pub(crate) fn figure(&self) -> &Figure {
+        // `figures` is never empty; `with_figures` guarantees it.
+        self.figures
+            .get(self.current)
+            .or_else(|| self.figures.first())
+            .unwrap_or_else(|| unreachable_figure())
+    }
+
+    /// The name of the figure it wears now, such as `MESH MAN`.
+    pub fn figure_name(&self) -> &str {
+        self.figure().name()
+    }
+
+    /// The index of the figure it wears now, from 0.
+    pub fn figure_index(&self) -> usize {
+        self.current
+    }
+
+    /// How many figures it can wear.
+    pub fn figure_count(&self) -> usize {
+        self.figures.len()
+    }
+
+    /// The names of all its figures, in order.
+    pub fn figure_names(&self) -> impl Iterator<Item = &str> {
+        self.figures.iter().map(Figure::name)
+    }
+
+    /// Switches to the next figure, wrapping round.
+    pub fn next_figure(&mut self) {
+        self.set_figure(self.current + 1);
+    }
+
+    /// Switches to the previous figure, wrapping round.
+    pub fn prev_figure(&mut self) {
+        self.set_figure(self.current + self.figures.len().saturating_sub(1));
+    }
+
+    /// Switches to figure `index` (wrapping round). Pulses and flashes in
+    /// flight are dropped, since they ran along the old figure's nerves; the
+    /// turn, heartbeat and load carry on.
+    pub fn set_figure(&mut self, index: usize) {
+        let index = index % self.figures.len().max(1);
+        if index == self.current {
+            return;
+        }
+        self.current = index;
+        self.pulses.clear();
+        self.flashes.clear();
+        self.glow = vec![0.0; self.figure().nerves.len()];
+    }
+
+    /// Switches to the figure called `name` (ignoring case); returns whether
+    /// there was one.
+    pub fn select_figure(&mut self, name: &str) -> bool {
+        let found = self
+            .figures
+            .iter()
+            .position(|figure| figure.name().eq_ignore_ascii_case(name));
+        if let Some(index) = found {
+            self.set_figure(index);
+        }
+        found.is_some()
+    }
+
     /// Draws with the colours a terminal of `depth` can show.
     pub fn set_color_depth(&mut self, depth: ColorDepth) {
         self.color_depth = depth;
     }
 
-    /// The names of the nerves, in a fixed order: `spinal_cord`; then for the
+    /// The names of the current figure's nerves. For the default figure, in
+    /// a fixed order: `spinal_cord`; then for the
     /// left side and then the right, the arm nerves (`left_radial`,
     /// `left_median`, `left_ulnar`), the rib nerves (`left_intercostal_1` to
     /// `_4`), the leg nerves (`left_tibial`, `left_peroneal`,
     /// `left_femoral`) and `left_optic`; then `vagus`.
     pub fn nerve_names(&self) -> impl Iterator<Item = &str> {
-        self.model.nerves.iter().map(|nerve| nerve.name.as_str())
+        self.figure().nerves.iter().map(|nerve| nerve.name.as_str())
     }
 
     /// Fires a nerve. `key` is either a nerve name from [`Body::nerve_names`]
@@ -141,7 +224,7 @@ impl Body {
     /// (see [`Body::nerve_for`]).
     pub fn fire(&mut self, key: &str, kind: PulseKind) {
         let nerve = self.nerve_index(key);
-        let Some(path) = self.model.nerves.get(nerve) else {
+        let Some(length) = self.figure().nerves.get(nerve).map(|path| path.length()) else {
             return;
         };
 
@@ -149,7 +232,7 @@ impl Body {
             if self.pulses.len() >= MAX_PULSES {
                 self.pulses.remove(0);
             }
-            self.pulses.push(Pulse::new(nerve, kind, path.length()));
+            self.pulses.push(Pulse::new(nerve, kind, length));
         }
 
         if kind.flashes() {
@@ -187,7 +270,10 @@ impl Body {
         self.heart_phase = (self.heart_phase + seconds * self.heart_rate() / 60.0).fract();
         self.scan_phase = (self.scan_phase + seconds / SCAN_SECONDS).fract();
 
-        let nerves = &self.model.nerves;
+        let nerves = self
+            .figures
+            .get(self.current)
+            .map_or(&[][..], |figure| figure.nerves.as_slice());
         self.pulses.retain_mut(|pulse| {
             let length = nerves.get(pulse.nerve).map_or(0.0, |path| path.length());
             pulse.advance(seconds, length)
@@ -209,7 +295,7 @@ impl Body {
     /// name, or one picked by a stable hash of the key. Several keys can share
     /// a nerve, and adding a nerve to the figure moves hashed keys.
     pub fn nerve_for(&self, key: &str) -> &str {
-        self.model
+        self.figure()
             .nerves
             .get(self.nerve_index(key))
             .map_or("", |nerve| nerve.name.as_str())
@@ -217,7 +303,7 @@ impl Body {
 
     /// The index of the nerve a key fires.
     fn nerve_index(&self, key: &str) -> usize {
-        if let Some(index) = self.model.nerves.iter().position(|nerve| nerve.name == key) {
+        if let Some(index) = self.figure().nerves.iter().position(|nerve| nerve.name == key) {
             return index;
         }
 
@@ -228,7 +314,14 @@ impl Body {
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
 
-        let count = self.model.nerves.len().max(1) as u64;
+        let count = self.figure().nerves.len().max(1) as u64;
         usize::try_from(hash % count).unwrap_or(0)
     }
+}
+
+/// Never reached: a body always has a figure. Builds the default rather than
+/// panicking.
+fn unreachable_figure() -> &'static Figure {
+    static FALLBACK: std::sync::LazyLock<Figure> = std::sync::LazyLock::new(model::mesh_man);
+    &FALLBACK
 }

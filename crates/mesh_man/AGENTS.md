@@ -9,7 +9,12 @@ monitor is meant to drive it.
 
 ## How it works
 
-`Model::build` authors the figure in code (no asset). Each frame `Body` rotates
+A `Figure` (`src/figure.rs`) is a named set of line layers (skin, bone,
+extra), brain lines, drawn-only nerve lines, pulse nerve paths and an optional
+`Core` (heart or reactor), all in the shared figure units. `catalog()` lists
+the built-in figures; the first, `model::mesh_man` (authored in code), is the
+default. `Body` holds a list of figures and cycles them (`next_figure`,
+`prev_figure`, `select_figure`, `figure_name`). Each frame `Body` rotates
 every vertex (`project::View`), projects it in perspective, and paints canvas
 layers far to near. A braille cell has one colour and a later layer replaces
 the cell, so layer order is the depth cue.
@@ -18,11 +23,15 @@ the cell, so layer order is the depth cue.
 
 - `src/lib.rs`: the public API (`Body::fire`, `set_load`, `tick`, `nerve_names`, `nerve_for`, `heart_rate`).
 - `src/widget.rs`: layers, palette, pulses and flashes on screen.
-- `src/model.rs`: joints, skin rings, bones, nerve paths.
+- `src/figure.rs`: `Figure`, its builder (`build_normalised` for figures in
+  other units) and `catalog()`.
+- `src/model.rs`: the default figure's joints, skin rings, bones, nerve paths.
 
 ## Recipes
 
-- Add a nerve: `side_nerves` (or `Model::build`) in `src/model.rs`; it must
+- Add a figure: build it with `Figure::builder` and add it to `catalog()`;
+  the catalog test checks every figure fits the unit cube.
+- Add a nerve: `side_nerves` (or `mesh_man`) in `src/model.rs`; it must
   start at `BRAIN` and stay inside the unit cube (tests check both). Update the
   name list in `Body::nerve_names`' doc. A new nerve moves every hashed key (`Body::nerve_for`).
 - Change the look: `src/widget.rs` constants and layer order, then refresh the

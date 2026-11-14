@@ -18,7 +18,7 @@ use ratatui::symbols::Marker;
 use ratatui::widgets::Widget;
 use ratatui::widgets::canvas::{Canvas, Line};
 
-use crate::model::Tissue;
+use crate::figure::{Core, Tissue};
 use crate::project::{CAMERA_DISTANCE, TILT, View, project};
 use crate::pulse::{FLASH_SECONDS, PulseKind};
 use crate::{Body, ColorDepth};
@@ -41,6 +41,8 @@ const WHITE: Rgb = (255, 255, 255);
 const BONE_IDLE: Rgb = (150, 150, 155);
 const BONE_FAR: Rgb = (70, 70, 76);
 const BONE_FAR_BUSY: Rgb = (125, 125, 130);
+const FLESH: Rgb = (196, 74, 60);
+const FLESH_FAR: Rgb = (92, 34, 28);
 
 /// Half the canvas height in figure units: the figure (2.0) plus the
 /// turntable under his feet and room for perspective.
@@ -185,15 +187,17 @@ impl Frame {
 // skeleton reads; a nerve that has just fired moves on top of everything.
 const FLOOR: usize = 0;
 const SKIN_FAR: usize = 1;
-const BONE_FAR_LAYER: usize = 2;
-const SKIN_NEAR: usize = 3;
-const NERVES_RESTING: usize = 4;
-const BONE_NEAR: usize = 5;
-const NERVES_FIRING: usize = 6;
-const SCAN: usize = 7;
-const HEART: usize = 8;
-const PULSES: usize = 9;
-const LAYERS: usize = 10;
+const EXTRA_FAR: usize = 2;
+const BONE_FAR_LAYER: usize = 3;
+const SKIN_NEAR: usize = 4;
+const EXTRA_NEAR: usize = 5;
+const NERVES_RESTING: usize = 6;
+const BONE_NEAR: usize = 7;
+const NERVES_FIRING: usize = 8;
+const SCAN: usize = 9;
+const HEART: usize = 10;
+const PULSES: usize = 11;
+const LAYERS: usize = 12;
 
 /// Bones and nerves lie near the body's centre, so the plain near/far split
 /// would flicker a centred bone between layers as he turns. They count as
@@ -217,13 +221,15 @@ impl Body {
         let bone_far = mix(BONE_FAR, BONE_FAR_BUSY, load);
         let skin_near = mix(AMBER_DIM, AMBER, load * 0.35);
         let scan = self.scan_height();
-        for segment in &self.model.segments {
+        for segment in &self.figure().segments {
             let depth = frame.view.depth((segment.a + segment.b) * 0.5);
             let (layer, rgb) = match segment.tissue {
                 Tissue::Skin if depth >= 0.0 => (SKIN_NEAR, skin_near),
                 Tissue::Skin => (SKIN_FAR, AMBER_FAINT),
                 Tissue::Bone if depth >= INNER_DEPTH => (BONE_NEAR, bone_near),
                 Tissue::Bone => (BONE_FAR_LAYER, bone_far),
+                Tissue::Extra if depth >= INNER_DEPTH => (EXTRA_NEAR, FLESH),
+                Tissue::Extra => (EXTRA_FAR, FLESH_FAR),
             };
             frame.line(layer, segment.a, segment.b, rgb);
 
@@ -311,11 +317,17 @@ impl Body {
             CYAN_HOT,
             hottest * 0.6,
         );
-        for (a, b) in &self.model.brain {
+        for (a, b) in &self.figure().brain {
             frame.line(NERVES_FIRING, *a, *b, brain);
         }
 
-        for (index, nerve) in self.model.nerves.iter().enumerate() {
+        for (a, b) in &self.figure().nerve_lines {
+            let near = frame.view.depth((*a + *b) * 0.5) >= INNER_DEPTH;
+            let base = if near { near_base } else { far_base };
+            frame.line(NERVES_RESTING, *a, *b, base);
+        }
+
+        for (index, nerve) in self.figure().nerves.iter().enumerate() {
             let mut glow = self.glow.get(index).copied().unwrap_or(0.0);
             if nerve.name == "vagus" {
                 glow = glow.max(heartbeat * (0.3 + 0.5 * load));
@@ -337,6 +349,14 @@ impl Body {
     /// A heart-shaped loop at the end of the vagus nerve, swelling on each
     /// beat.
     fn draw_heart(&self, frame: &mut Frame) {
+        let heart = match self.figure().core {
+            Some(Core::Heart(centre)) => centre,
+            Some(Core::Reactor(centre)) => {
+                self.draw_reactor(frame, centre);
+                return;
+            }
+            None => return,
+        };
         let heartbeat = beat(self.heart_phase);
         let size = 0.0022 * (1.0 + 0.4 * heartbeat);
         let rgb = mix(RED_DARK, RED, 0.35 + 0.65 * heartbeat);
@@ -349,7 +369,7 @@ impl Body {
                     - 5.0 * (2.0 * t).cos()
                     - 2.0 * (3.0 * t).cos()
                     - (4.0 * t).cos();
-                self.model.heart + Vec3::new(x, y, 0.0) * size
+                heart + Vec3::new(x, y, 0.0) * size
             })
             .collect();
 
@@ -362,9 +382,19 @@ impl Body {
         }
     }
 
+    /// A reactor core: two screen-space rings that brighten and swell on
+    /// each beat.
+    fn draw_reactor(&self, frame: &mut Frame, centre: Vec3) {
+        let heartbeat = beat(self.heart_phase);
+        let rgb = mix(CYAN_DIM, CYAN_HOT, 0.3 + 0.7 * heartbeat);
+        let centre = frame.screen(centre);
+        frame.ring(HEART, centre, 0.035 * (1.0 + 0.3 * heartbeat), 12, rgb);
+        frame.ring(HEART, centre, 0.015, 8, mix(CYAN, WHITE, heartbeat));
+    }
+
     fn draw_pulses(&self, frame: &mut Frame) {
         for pulse in &self.pulses {
-            let Some(nerve) = self.model.nerves.get(pulse.nerve) else {
+            let Some(nerve) = self.figure().nerves.get(pulse.nerve) else {
                 continue;
             };
 
@@ -399,7 +429,7 @@ impl Body {
         }
 
         for flash in &self.flashes {
-            let Some(nerve) = self.model.nerves.get(flash.nerve) else {
+            let Some(nerve) = self.figure().nerves.get(flash.nerve) else {
                 continue;
             };
 

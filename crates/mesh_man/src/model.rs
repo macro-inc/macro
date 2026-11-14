@@ -1,4 +1,5 @@
-//! The figure, authored in code: joints, skin rings, bones and nerve paths.
+//! The original mesh man, authored in code: joints, skin rings, bones and
+//! nerve paths.
 //!
 //! Units: the figure is 2.0 tall, feet at `y = -1`, crown at `y = +1`, origin at
 //! the pelvis, `+x` the figure's left, `+z` the way it faces.
@@ -7,88 +8,7 @@ use std::f32::consts::{PI, TAU};
 
 use glam::Vec3;
 
-/// Which tissue a static segment belongs to; it picks the segment's layer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Tissue {
-    Skin,
-    Bone,
-}
-
-/// One straight piece of the static figure.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Segment {
-    pub a: Vec3,
-    pub b: Vec3,
-    pub tissue: Tissue,
-}
-
-/// A nerve: a named polyline from the brain outward, with cumulative lengths.
-#[derive(Clone, Debug)]
-pub(crate) struct NervePath {
-    pub name: String,
-    pub points: Vec<Vec3>,
-    /// `lengths[i]` is the distance along the path from `points[0]` to `points[i]`.
-    pub lengths: Vec<f32>,
-}
-
-impl NervePath {
-    fn new(name: String, points: Vec<Vec3>) -> Self {
-        let mut lengths = Vec::with_capacity(points.len());
-        let mut total = 0.0;
-        let mut previous = points.first().copied().unwrap_or(Vec3::ZERO);
-
-        for point in &points {
-            total += point.distance(previous);
-            lengths.push(total);
-            previous = *point;
-        }
-
-        Self {
-            name,
-            points,
-            lengths,
-        }
-    }
-
-    /// The path's total length.
-    pub fn length(&self) -> f32 {
-        self.lengths.last().copied().unwrap_or(0.0)
-    }
-
-    /// The point at distance `s` along the path, clamped to its ends.
-    pub fn point_at(&self, s: f32) -> Vec3 {
-        let s = s.clamp(0.0, self.length());
-
-        for (index, pair) in self.points.windows(2).enumerate() {
-            let start = self.lengths.get(index).copied().unwrap_or(0.0);
-            let end = self.lengths.get(index + 1).copied().unwrap_or(start);
-
-            if s <= end {
-                let span = end - start;
-                let t = if span > 0.0 { (s - start) / span } else { 0.0 };
-                return pair[0].lerp(pair[1], t);
-            }
-        }
-
-        self.points.last().copied().unwrap_or(Vec3::ZERO)
-    }
-
-    /// The far end of the path.
-    pub fn end(&self) -> Vec3 {
-        self.points.last().copied().unwrap_or(Vec3::ZERO)
-    }
-}
-
-/// The whole static figure.
-#[derive(Clone, Debug)]
-pub(crate) struct Model {
-    pub segments: Vec<Segment>,
-    /// The brain's folds, drawn with the nerves.
-    pub brain: Vec<(Vec3, Vec3)>,
-    pub nerves: Vec<NervePath>,
-    /// Centre of the heart loop, at the end of the vagus nerve.
-    pub heart: Vec3,
-}
+use crate::figure::{Core, Figure, NervePath, Segment, Tissue};
 
 /// Points per skin ring on a limb.
 const LIMB_RING: usize = 8;
@@ -174,9 +94,9 @@ impl Side {
     }
 }
 
-impl Model {
-    /// Builds the figure. Pure and deterministic.
-    pub fn build() -> Self {
+/// The original mesh man, the default figure. Pure and deterministic.
+pub(crate) fn mesh_man() -> Figure {
+    {
         let mut segments = Vec::new();
         let sides = [Side::new(1.0), Side::new(-1.0)];
 
@@ -199,11 +119,13 @@ impl Model {
             ],
         ));
 
-        Self {
+        Figure {
+            name: "MESH MAN".to_owned(),
             segments,
             brain: brain_folds(),
             nerves,
-            heart: HEART,
+            nerve_lines: Vec::new(),
+            core: Some(Core::Heart(HEART)),
         }
     }
 }
