@@ -1,0 +1,42 @@
+crates/mesh_man/examples/spin.rs
+  s_ff1990c7efc01b::t_c1ccd20e3c99cc 4
+crates/agent_monitor_tui/AGENTS.md
+  s_ff1990c7efc01b::t_c1ccd20e3c99cc 95
+crates/mesh_man/src/assets.rs
+  s_ff1990c7efc01b::t_c1ccd20e3c99cc 1
+  s_ff1990c7efc01b::t_f26521b7e02399 2-4
+crates/mesh_man/convert/src/main.rs
+  s_ff1990c7efc01b::t_6bf54d300071c9 13,249-250
+crates/mesh_man/AGENTS.md
+  s_ff1990c7efc01b::t_f26521b7e02399 35-39,51-56
+crates/mesh_man/convert/src/rig.rs
+  s_ff1990c7efc01b::t_0f600790c4987a 52,81,133,140,143
+Cargo.toml
+  s_ff1990c7efc01b::t_f26521b7e02399 4-5
+crates/agent_monitor_tui/Cargo.toml
+  s_ff1990c7efc01b::t_078e6b8c5eef1d 30
+crates/coding_agent_worker/Cargo.toml
+  s_ff1990c7efc01b::t_078e6b8c5eef1d 77
+crates/mesh_man/convert/README.md
+  s_ff1990c7efc01b::t_48779525f85336 1-41
+crates/mesh_man/convert/Cargo.toml
+  s_ff1990c7efc01b::t_f26521b7e02399 2-3
+crates/mesh_man/assets/SOURCES.md
+  s_ff1990c7efc01b::t_79fe500e6f8f62 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a0a8adf2d85dfba3f3e2c1d8c657e615cdd26bae",
+  "prompts": {},
+  "sessions": {
+    "s_ff1990c7efc01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3a69d3a5-381a-4cba-ad93-c25d8fb5d45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
