@@ -235,6 +235,9 @@ the existing gateway prefixes.
   bun run generate`; do not copy deployed schemas over a local API change.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
+- `../sdk-ocaml` generates its OCaml client from these same `specs/`; after a
+  spec change, run `just generate` there (in its `shell.nix`) and commit the
+  result, or its drift test fails.
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
   (`crates/code_mode_assets`) are generated from this source at build time and
   never committed; run `bun run test` in `../sdk-docs` and `../code-mode-sdk`
