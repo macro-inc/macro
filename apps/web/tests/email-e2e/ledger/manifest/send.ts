@@ -1622,5 +1622,14 @@ export const send = {
         'src/lib/queries/email/attachment.ts#Failed to save attachments',
       ],
     },
+    {
+      id: 'STC-961',
+      surface: 'SC-19',
+      fn: ['F-118'],
+      state:
+        'result: the composer reopens with the recipients, subject and text of the draft',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-compose/views/email-compose.tsx'],
+    },
   ],
 } as const satisfies Group;

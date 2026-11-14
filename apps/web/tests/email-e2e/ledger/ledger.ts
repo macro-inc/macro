@@ -446,6 +446,14 @@ function manifestDrift(): Drift[] {
       items: undoable.map((fn) => `${fn.id} ${fn.name}`),
     });
   }
+  const seeable = new Set(states.flatMap((row) => row.fn ?? []));
+  const unseen = FUNCTIONS.filter((fn) => fn.ui && !seeable.has(fn.id));
+  if (unseen.length) {
+    drift.push({
+      check: 'Functions with a UI and no state a test could see',
+      items: unseen.map((fn) => `${fn.id} ${fn.name}`),
+    });
+  }
   const twiceFn = FUNCTIONS.map((fn) => fn.id).filter(
     (id, index, ids) => ids.indexOf(id) !== index
   );

@@ -131,6 +131,6 @@ under "Manifest against the source":
 - every source file a row names exists, ids are unique, rows are on a surface
   of their group;
 - every row belongs to a function of `functions.tsv`, and every function
-  with a UI has a row.
+  with a UI has a row, and a state row to see its result by.
 
 Requests the app made that the manifest does not list are reported too.

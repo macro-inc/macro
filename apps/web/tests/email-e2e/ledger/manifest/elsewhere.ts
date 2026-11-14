@@ -800,5 +800,33 @@ export const elsewhere = {
       trigger: 'start the Email tour',
       source: ['src/features/email-view/tour.ts'],
     },
+    {
+      id: 'STX-944',
+      surface: 'SX-24',
+      fn: ['F-163'],
+      state: 'result: the thread of the notification is open',
+      trigger: 'after the action succeeds',
+      source: ['src/features/notifications/notification-navigation.ts'],
+    },
+    {
+      id: 'STX-949',
+      surface: 'SX-25',
+      fn: ['F-191'],
+      state: 'result: a chip naming the thread shows in the text',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx',
+        'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEmailSearchMention.ts',
+        'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/mentionHandlers.ts',
+      ],
+    },
+    {
+      id: 'STX-950',
+      surface: 'SX-26',
+      fn: ['F-192'],
+      state: 'result: the domain shows in the excluded list',
+      trigger: 'after the action succeeds',
+      source: ['src/features/crm/views/email-privacy.tsx'],
+    },
   ],
 } as const satisfies Group;

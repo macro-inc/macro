@@ -1296,5 +1296,39 @@ export const organise = {
       ],
       flag: 'enable-reminders',
     },
+    {
+      id: 'STL-942',
+      surface: 'SL-33',
+      fn: ['F-160'],
+      state: 'result: the dialog reads Access requested',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/lib/core/component/TopBar/ShareButton.tsx',
+        'src/features/access-requests/views/RequestAccessView.tsx',
+      ],
+    },
+    {
+      id: 'STL-945',
+      surface: 'SL-30',
+      fn: ['F-167'],
+      state:
+        'result: the task composer or the assistant opens with the thread attached',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/block-email/views/email-thread-parts.tsx',
+        'src/features/chat/ChatWithAgentButton.tsx',
+      ],
+    },
+    {
+      id: 'STL-948',
+      surface: 'SL-25',
+      fn: ['F-187'],
+      state: 'result: the thread ID is on the clipboard',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/soup/createSoupEntityActions.ts',
+        'src/features/next-soup/actions/make-copy-entity-id-action.ts',
+      ],
+    },
   ],
 } as const satisfies Group;

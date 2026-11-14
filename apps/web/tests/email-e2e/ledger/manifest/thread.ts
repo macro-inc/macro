@@ -825,6 +825,14 @@ export const thread = {
       trigger: 'click its row in Shared, or its link',
       source: ['src/features/email-thread/email-thread.tsx'],
     },
+    {
+      id: 'AL-910',
+      surface: 'SL-28',
+      fn: ['F-053'],
+      action: 'open a thread by its address',
+      trigger: 'load /app/mail/<thread-id>',
+      source: ['src/features/email-thread/email-thread.tsx'],
+    },
   ],
   states: [
     // SL-54
@@ -1407,6 +1415,87 @@ export const thread = {
         'src/features/email-message/views/email-message-body.tsx',
         'src/features/email-message/rendering-adapter.ts',
       ],
+    },
+    {
+      id: 'STL-928',
+      surface: 'SL-28',
+      fn: ['F-062'],
+      state: 'result: the focused message moves to the next or previous one',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/block-email/util/emailHotkeys.ts',
+        'src/features/email-thread/primitives/thread-navigation.ts',
+      ],
+    },
+    {
+      id: 'STL-929',
+      surface: 'SL-28',
+      fn: ['F-070'],
+      state: 'result: the opened thread loses its unread mark in the list',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/block-email/component/EmailThreadLoadGate.tsx',
+        'src/lib/queries/email/read-state.ts',
+      ],
+    },
+    {
+      id: 'STL-940',
+      surface: 'SL-36',
+      fn: ['F-141'],
+      state: 'result: the reply shows in the shared thread',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-message/components/message-actions.tsx'],
+    },
+    {
+      id: 'STL-941',
+      surface: 'SL-40',
+      fn: ['F-155'],
+      state: 'result: the event opens in Calendar, or the meeting link opens',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/email-message/components/calendar-invite-card.tsx',
+      ],
+    },
+    {
+      id: 'STL-952',
+      surface: 'SL-28',
+      fn: ['F-061'],
+      state: 'result: the next or previous thread is open',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/components/entity-detail/use-list-navigation-hotkeys.ts',
+        'src/features/email-view/components/EmailDetailView.tsx',
+        'src/features/block-email/EmailBlockAdapter.tsx',
+        'src/lib/core/hotkey/tokens.ts',
+      ],
+    },
+    {
+      id: 'STL-962',
+      surface: 'SL-35',
+      fn: ['F-117'],
+      state: 'result: the reply draft reopens inside its message with its text',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/email-thread/components/draft-reply-preview.tsx',
+        'src/features/email-thread/views/message-container.tsx',
+      ],
+    },
+    {
+      id: 'STL-966',
+      surface: 'SL-28',
+      fn: ['F-177'],
+      state: 'result: the list shows again',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-view/components/EmailDetailView.tsx'],
+    },
+    {
+      id: 'STL-971',
+      surface: 'SL-36',
+      fn: ['F-124'],
+      state:
+        'result: the forward carries a pill for each attachment of the message',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-message/components/message-actions.tsx'],
     },
   ],
 } as const satisfies Group;
