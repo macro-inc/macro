@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use mesh_man::{Body, PulseKind};
+use mesh_man::{Body, ColorDepth, PulseKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget as _;
@@ -16,10 +16,28 @@ use crate::body::BodyPane;
 /// Tokens per minute at which the heart reaches its peak rate.
 const PEAK_TOKENS_PER_MIN: f32 = 5_000_000.0;
 
+mod environment {
+    macro_env_var::maybe_env_var! {
+        pub struct Colorterm;
+    }
+}
+
 /// The mesh man as the BODY pane.
 #[derive(Clone, Debug, Default)]
 pub struct MeshBody {
     body: Body,
+}
+
+impl MeshBody {
+    /// The mesh man in the colours this terminal shows: truecolor when
+    /// `COLORTERM` says so, else the 256 indexed colours.
+    pub fn for_terminal() -> Self {
+        let colorterm = environment::Colorterm::new();
+        let depth = ColorDepth::from_colorterm(colorterm.as_ref().and_then(|value| value.value()));
+        let mut body = Body::new();
+        body.set_color_depth(depth);
+        Self { body }
+    }
 }
 
 impl BodyPane for MeshBody {

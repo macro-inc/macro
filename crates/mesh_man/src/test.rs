@@ -8,7 +8,7 @@ use ratatui::widgets::Widget;
 
 use crate::model::Model;
 use crate::project::{CAMERA_DISTANCE, TILT, View, project};
-use crate::{Body, PulseKind};
+use crate::{Body, ColorDepth, PulseKind};
 
 fn render_text(body: &Body, width: u16, height: u16) -> String {
     let area = Rect::new(0, 0, width, height);
@@ -214,4 +214,41 @@ fn quarter_turn_snapshot() {
     // A quarter of the 30 s turn.
     body.tick(Duration::from_millis(7500));
     insta::assert_snapshot!(render_text(&body, 44, 30));
+}
+
+#[test]
+fn colorterm_announces_truecolor_only_for_its_two_values() {
+    assert_eq!(ColorDepth::from_colorterm(Some("truecolor")), ColorDepth::TrueColor);
+    assert_eq!(ColorDepth::from_colorterm(Some("24bit")), ColorDepth::TrueColor);
+    assert_eq!(ColorDepth::from_colorterm(Some("256color")), ColorDepth::Indexed);
+    assert_eq!(ColorDepth::from_colorterm(None), ColorDepth::Indexed);
+}
+
+#[test]
+fn indexed_colours_pick_the_nearest_cube_or_grey() {
+    use crate::widget::indexed;
+    assert_eq!(indexed((0, 0, 0)), 16);
+    assert_eq!(indexed((255, 255, 255)), 231);
+    assert_eq!(indexed((255, 0, 0)), 196);
+    // Amber lands on the cube's orange, a mid grey on the ramp.
+    assert_eq!(indexed((255, 165, 43)), 214);
+    assert_eq!(indexed((128, 128, 128)), 244);
+}
+
+#[test]
+fn an_indexed_body_draws_only_indexed_colours() {
+    use ratatui::style::Color;
+    let mut body = Body::new();
+    body.set_color_depth(ColorDepth::Indexed);
+    let area = ratatui::layout::Rect::new(0, 0, 40, 24);
+    let mut buffer = ratatui::buffer::Buffer::empty(area);
+    ratatui::widgets::Widget::render(&body, area, &mut buffer);
+    assert!(
+        buffer
+            .content()
+            .iter()
+            .all(|cell| !matches!(cell.fg, Color::Rgb(..))),
+        "no truecolor cell"
+    );
+    assert!(buffer.content().iter().any(|cell| matches!(cell.fg, Color::Indexed(_))));
 }

@@ -12,6 +12,7 @@ async-stream = { workspace = true }
 chrono = { workspace = true }
 crossterm = { workspace = true }
 futures = { workspace = true }
+macro_env_var = { path = "../macro_env_var", optional = true }
 mesh_man = { path = "../mesh_man", optional = true }
 ratatui = { workspace = true }
 rootcause = { workspace = true }
@@ -27,7 +28,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [features]
 default = ["mesh-man"]
 # Draw the BODY pane with the mesh man instead of the vitals panel.
-mesh-man = ["dep:mesh_man"]
+mesh-man = ["dep:mesh_man", "dep:macro_env_var"]
 
 [dev-dependencies]
 clap = { workspace = true }

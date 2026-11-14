@@ -67,7 +67,7 @@ mod unix {
     /// The BODY pane: the mesh man.
     #[cfg(feature = "mesh-man")]
     fn body() -> Box<dyn crate::body::BodyPane> {
-        Box::new(crate::body::mesh::MeshBody::default())
+        Box::new(crate::body::mesh::MeshBody::for_terminal())
     }
 
     /// The BODY pane: the vitals panel, built without the mesh man.

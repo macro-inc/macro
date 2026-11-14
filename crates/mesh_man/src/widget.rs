@@ -16,7 +16,7 @@ use ratatui::symbols::Marker;
 use ratatui::widgets::Widget;
 use ratatui::widgets::canvas::{Canvas, Line};
 
-use crate::Body;
+use crate::{Body, ColorDepth};
 use crate::model::Tissue;
 use crate::project::{CAMERA_DISTANCE, TILT, View, project};
 use crate::pulse::{FLASH_SECONDS, PulseKind};
@@ -67,8 +67,48 @@ fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
     (channel(a.0, b.0), channel(a.1, b.1), channel(a.2, b.2))
 }
 
-fn color(rgb: Rgb) -> Color {
-    Color::Rgb(rgb.0, rgb.1, rgb.2)
+/// The levels of each channel in the xterm 256-colour cube (indexes 16-231).
+const CUBE_LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
+/// The colour as the terminal can show it: itself on a truecolor terminal,
+/// else the nearest of the 256 indexed colours (the 6x6x6 cube or the
+/// 24-step grey ramp).
+fn color(rgb: Rgb, depth: ColorDepth) -> Color {
+    match depth {
+        ColorDepth::TrueColor => Color::Rgb(rgb.0, rgb.1, rgb.2),
+        ColorDepth::Indexed => Color::Indexed(indexed(rgb)),
+    }
+}
+
+/// The nearest xterm 256-colour index to `rgb`.
+pub(crate) fn indexed(rgb: Rgb) -> u8 {
+    let nearest_level = |value: u8| {
+        CUBE_LEVELS
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, level)| level.abs_diff(value))
+            .map_or(0, |(index, _)| index)
+    };
+    let (r, g, b) = (nearest_level(rgb.0), nearest_level(rgb.1), nearest_level(rgb.2));
+    let level = |index: usize| CUBE_LEVELS.get(index).copied().unwrap_or(0);
+    let cube = (level(r), level(g), level(b));
+
+    // Greys 232-255 run from 8 to 238 in steps of 10.
+    let mean = (u16::from(rgb.0) + u16::from(rgb.1) + u16::from(rgb.2)) / 3;
+    let grey_step = (mean.saturating_sub(3) / 10).min(23);
+    let grey_value = u8::try_from(8 + grey_step * 10).unwrap_or(u8::MAX);
+    let grey = (grey_value, grey_value, grey_value);
+
+    let distance = |other: Rgb| {
+        let channel = |a: u8, b: u8| u32::from(a.abs_diff(b)).pow(2);
+        channel(rgb.0, other.0) + channel(rgb.1, other.1) + channel(rgb.2, other.2)
+    };
+    if distance(grey) < distance(cube) {
+        232 + u8::try_from(grey_step).unwrap_or(23)
+    } else {
+        let index = 16 + 36 * r + 6 * g + b;
+        u8::try_from(index).unwrap_or(u8::MAX)
+    }
 }
 
 /// The two-beat shape of a heartbeat over one phase: a strong beat, then a
@@ -83,13 +123,15 @@ fn beat(phase: f32) -> f32 {
 /// Canvas lines, grouped into layers painted in order.
 struct Frame {
     view: View,
+    depth: ColorDepth,
     layers: Vec<Vec<Line>>,
 }
 
 impl Frame {
-    fn new(view: View, layer_count: usize) -> Self {
+    fn new(view: View, depth: ColorDepth, layer_count: usize) -> Self {
         Self {
             view,
+            depth,
             layers: (0..layer_count).map(|_| Vec::new()).collect(),
         }
     }
@@ -113,7 +155,7 @@ impl Frame {
                 f64::from(a.y),
                 f64::from(b.x),
                 f64::from(b.y),
-                color(rgb),
+                color(rgb, self.depth),
             ));
         }
     }
@@ -160,7 +202,7 @@ const FIRING_GLOW: f32 = 0.12;
 
 impl Body {
     fn frame(&self) -> Frame {
-        let mut frame = Frame::new(View::new(self.angle, TILT), LAYERS);
+        let mut frame = Frame::new(View::new(self.angle, TILT), self.color_depth, LAYERS);
         let load = self.load;
 
         self.draw_turntable(&mut frame);

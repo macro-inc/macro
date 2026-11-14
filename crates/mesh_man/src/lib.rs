@@ -72,6 +72,29 @@ pub struct Body {
     flashes: Vec<Flash>,
     /// Per nerve, how recently it fired: 1 just after, falling toward 0.
     glow: Vec<f32>,
+    /// The colours the terminal can show.
+    color_depth: ColorDepth,
+}
+
+/// How many colours the terminal shows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ColorDepth {
+    /// 24-bit colour.
+    #[default]
+    TrueColor,
+    /// The 256 indexed colours, for terminals without truecolor.
+    Indexed,
+}
+
+impl ColorDepth {
+    /// The depth a `COLORTERM` value announces: truecolor only for
+    /// `truecolor` or `24bit`, as terminals set it.
+    pub fn from_colorterm(colorterm: Option<&str>) -> Self {
+        match colorterm.map(str::to_ascii_lowercase).as_deref() {
+            Some("truecolor" | "24bit") => ColorDepth::TrueColor,
+            _ => ColorDepth::Indexed,
+        }
+    }
 }
 
 impl Default for Body {
@@ -95,7 +118,13 @@ impl Body {
             pulses: Vec::new(),
             flashes: Vec::new(),
             glow,
+            color_depth: ColorDepth::default(),
         }
+    }
+
+    /// Draws with the colours a terminal of `depth` can show.
+    pub fn set_color_depth(&mut self, depth: ColorDepth) {
+        self.color_depth = depth;
     }
 
     /// The names of the nerves, in a fixed order: `spinal_cord`; then for the

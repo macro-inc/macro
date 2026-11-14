@@ -939,6 +939,7 @@ dependencies = [
  "crossterm 0.28.1",
  "futures",
  "insta",
+ "macro_env_var",
  "mesh_man",
  "ratatui",
  "rootcause",
