@@ -1,7 +1,9 @@
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
+import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { useCompanyContactsQuery } from './company-contacts';
 import { editContact } from './contact-edit';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
@@ -92,5 +94,50 @@ it('authoritatively refreshes a successful save when editable fields changed dur
   expect(read).toHaveBeenCalledOnce();
   expect(client.getQueryData(key)).toEqual(committed);
   unsubscribe();
+  client.clear();
+});
+
+it('refetches a searched Team list when a new primary address stops matching it', async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const anna = {
+    ...before,
+    companyId: 'company-1',
+    name: null,
+    email: 'anna@example.com',
+  };
+  let stored: CrmContactResponse = anna;
+  const listCompanyContactsPage = vi.fn(async ({ query }: { query?: string }) =>
+    ok({
+      contacts: !query || stored.email?.includes(query) ? [stored] : [],
+      nextCursor: null,
+    })
+  );
+  const deps = {
+    client,
+    storage: {
+      listCompanyContactsPage,
+      getCompany: async () => ok({ id: 'company-1', name: 'Example' }),
+    },
+  } as unknown as CrmRecordDependencies;
+  const { source, dispose } = createRoot((dispose) => ({
+    source: useCompanyContactsQuery(deps, () => ({
+      companyId: 'company-1',
+      archived: false,
+      search: 'anna',
+    })),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(source.contacts).toEqual([anna]));
+
+  const edited = { ...anna, email: 'bo@example.com', updatedAt: '2026-10-02' };
+  await editContact(deps, anna, 'email', async () => {
+    stored = edited;
+    return ok(edited);
+  });
+  expect(listCompanyContactsPage).toHaveBeenCalledTimes(2);
+  expect(source.contacts).toEqual([]);
+  dispose();
   client.clear();
 });
