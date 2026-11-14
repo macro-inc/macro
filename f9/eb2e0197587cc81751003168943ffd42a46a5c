@@ -1,0 +1,24 @@
+crates/agent_monitor/src/outbound/git/backend.rs
+  s_9accbcd761184e::t_4b99fe04ceaafd 26,29-31,156,229-231,233-245,247-251
+crates/agent_monitor/src/outbound/git.rs
+  s_9accbcd761184e::t_d2bf7e7d3447d6 522-523
+  s_9accbcd761184e::t_4b99fe04ceaafd 318,505-509,514,524-527,557-560
+  s_9accbcd761184e::t_6dbcde144797fa 36
+  s_9accbcd761184e::t_6451d16cf155e0 561
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f9eb2e0197587cc81751003168943ffd42a46a5c",
+  "prompts": {},
+  "sessions": {
+    "s_9accbcd761184e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2f6b3b32-0017-4fb1-872f-a56ce4ce858e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
