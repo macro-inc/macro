@@ -80,11 +80,16 @@ const SESSION_CHECK_BACK: &str = include_str!("toolset/session/check_back.md");
 const PROGRAM: &str = include_str!("toolset/shared/program.md");
 const RUNTIME: &str = include_str!("toolset/shared/runtime.md");
 
+/// The running-code text's sentence on a program's `reviews` result.
+const REVIEWS_RESULT: &str = " Optional reviews: [{kind: \"email\" | \"calendar\", id: \"...\"}] defaults to an empty list when omitted.";
+
 /// `ExecuteCode`'s description for a session nobody watches, such as a
-/// routine draft: no reviews or views to present, so neither their guidance
-/// nor the PresentView schema, which is most of the full description.
+/// routine draft: no reviews or views to present, so neither their guidance,
+/// the `reviews` result, nor the PresentView schema, which is most of the
+/// full description.
 pub fn unseen_execute_code_description() -> String {
-    format!("{SESSION_EXECUTE_CODE}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
+    let running = SESSION_EXECUTE_CODE.replacen(REVIEWS_RESULT, "", 1);
+    format!("{running}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
 }
 
 /// Execute a JavaScript module with the real Macro SDK.
