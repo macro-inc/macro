@@ -31,6 +31,7 @@ export function SoupEntityActionsDropdown(
   props: SoupEntityActionsDropdownProps
 ) {
   const [trigger, setTrigger] = createSignal<HTMLElement>();
+  const [open, setOpen] = createSignal(false);
   const entities = () => [props.entity];
 
   const pickers = createSoupEntityMenuPickers({
@@ -46,7 +47,11 @@ export function SoupEntityActionsDropdown(
 
   return (
     <>
-      <Dropdown placement={props.placement ?? 'bottom-start'}>
+      <Dropdown
+        open={open()}
+        onOpenChange={setOpen}
+        placement={props.placement ?? 'bottom-start'}
+      >
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
@@ -66,6 +71,7 @@ export function SoupEntityActionsDropdown(
               entities={entities()}
               list={props.list}
               viewContext={props.viewContext}
+              onActionComplete={() => setOpen(false)}
               onSetProject={pickers.openProjectPicker}
               onEditTags={pickers.openTagPicker()}
               extraItems={props.extraItems}

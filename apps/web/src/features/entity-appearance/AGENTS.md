@@ -8,6 +8,7 @@ snippets, task projects (initiatives), forms, and databases.
 ## Start here
 
 - `entity-appearance.tsx`: lazy editor launcher and header-only trigger.
+- `appearance-menu.tsx`: device entry for desktop `views/appearance-menu.tsx` and touch `views/mobile/appearance-menu.tsx`.
 - `core/appearance.ts`: eligibility and appearance comparisons.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
@@ -46,7 +47,9 @@ snippets, task projects (initiatives), forms, and databases.
 - Filter restored and newly recorded recent picks against the current picker set; retired and unknown names are never offered, while stored retired icons and aliases still render.
 - Preserve independent appearance overrides on unknown wire values: unknown colors fall back to type color, and unknown icon kinds retain their valid color.
 - Show colors only on Icons; Default uses the entity type color and Remove clears only the icon.
-- Keep the compact shared-visibility footer on both tabs; label editing actions “Change icon” without an ellipsis or leading menu icon.
+- Keep the compact shared-visibility footer on both tabs; label editing actions “Change icon” without an ellipsis and with the shared appearance icon.
+- Embed the existing picker in desktop Change icon submenus; keep header popovers and mobile sheets, with picker keyboard events scoped to the submenu.
+- Match lazy-loaded submenu content with a picker-shaped skeleton, not the branded logo loader.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
@@ -55,7 +58,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including inbox cards, project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
-- Keep document header icons editable outside breadcrumb navigation buttons; content titles have no leading icon.
+- Keep editable header icons outside breadcrumb navigation buttons; keep read-only and flag-disabled icons inside those buttons so icon clicks still navigate. Project breadcrumbs use the lightweight identity read, including owner metadata, without loading task counts or membership.
 - Keep header icon buttons at 24px with 16px glyphs; retain the shared larger touch targets.
 - Pass document identity through the `MarkdownDocument` context's `entity` accessor from each host; do not read legacy block metadata inside `Notebook`.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.

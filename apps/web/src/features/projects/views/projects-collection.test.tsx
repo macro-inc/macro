@@ -315,7 +315,7 @@ async function openMenu(name: string) {
 const entries = () =>
   screen
     .getAllByRole('menuitem')
-    .map((item) => item.firstChild?.textContent ?? '');
+    .map((item) => item.querySelector('.flex-1')?.textContent ?? '');
 
 function choose(name: string | RegExp) {
   fireEvent.keyDown(screen.getByRole('menuitem', { name }), { key: 'Enter' });

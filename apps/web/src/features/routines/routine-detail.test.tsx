@@ -455,14 +455,18 @@ describe('routine execution target autosave', () => {
     render(() => <Routine />);
     mocks.changePrompt('Use my latest instructions');
     openRunOptions();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Copy prompt' }), {
-      key: 'Enter',
-    });
+    await vi.advanceTimersByTimeAsync(0);
+    const copyItem = screen.getByRole('menuitem', { name: 'Copy prompt' });
+    copyItem.focus();
+    fireEvent.keyDown(copyItem, { key: 'Enter' });
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.writeClipboardData).toHaveBeenCalledExactlyOnceWith({
       'text/plain': 'Use my latest instructions',
     });
-    expect(toast.success).toHaveBeenCalledWith('Prompt copied');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.getByRole('menuitem', { name: 'Copy prompt' })).toBe(
+      document.activeElement
+    );
     expect(mocks.update).not.toHaveBeenCalled();
     expect(screen.queryByText('All changes saved')).toBeNull();
   });

@@ -1,28 +1,17 @@
-import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
+import Check from '@icon/system/regular/check.svg';
 import type { PolymorphicProps } from '@kobalte/core/polymorphic';
 import { mergeRefs } from '@solid-primitives/refs';
-import {
-  children,
-  createSignal,
-  type JSX,
-  onCleanup,
-  onMount,
-  Show,
-  splitProps,
-  type ValidComponent,
-} from 'solid-js';
+import { type JSX, Show, splitProps, type ValidComponent } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { cn } from '../utils/classname';
+import { createCopyState } from '../utils/create-copy-state';
 import { Button, type ButtonProps } from './Button';
 
 export type CopyButtonProps<T extends ValidComponent = 'button'> =
-  PolymorphicProps<T, Omit<ButtonProps, 'as'>>;
-
-const TRANSITION_MS = 160;
-const SUCCESS_MS = 1400;
+  PolymorphicProps<T, Omit<ButtonProps, 'as'>> & { icon?: JSX.Element };
 
 /**
- * Button with copy-success feedback, using the same props and children.
- * The first SVG fades to a check-circle without changing its layout or size.
+ * Button with an explicit icon that blurs and fades to a check on copy success.
  *
  * @do Return the clipboard promise from onClick so feedback waits for success.
  * @do Return false (or reject) when copying fails; report errors in the handler.
@@ -32,112 +21,28 @@ const SUCCESS_MS = 1400;
 export function CopyButton<T extends ValidComponent = 'button'>(
   props: CopyButtonProps<T>
 ) {
-  const [local, rest] = splitProps(props, ['onClick', 'children', 'ref', 'as']);
-  const [feedback, setFeedback] = createSignal<JSX.CSSProperties>();
+  const [local, rest] = splitProps(props, [
+    'onClick',
+    'children',
+    'ref',
+    'as',
+    'icon',
+  ]);
   let button!: HTMLButtonElement;
-  let check: SVGSVGElement | undefined;
-  let animations: Animation[] = [];
-  let resetTimer: ReturnType<typeof setTimeout> | undefined;
-  let exitTimer: ReturnType<typeof setTimeout> | undefined;
-  let pending = false;
-  let disposed = false;
-
-  function clearFeedback() {
-    clearTimeout(resetTimer);
-    clearTimeout(exitTimer);
-    for (const animation of animations) animation.cancel();
-    animations = [];
-    setFeedback(undefined);
-    check = undefined;
-  }
-
-  onCleanup(() => {
-    disposed = true;
-    clearFeedback();
-  });
-
-  function animate(element: SVGSVGElement, entering: boolean) {
-    const frames = [
-      { opacity: 0, scale: '0.75', transformOrigin: 'center' },
-      { opacity: 1, scale: '1', transformOrigin: 'center' },
-    ];
-    animations.push(
-      element.animate(entering ? frames : frames.toReversed(), {
-        duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-          ? 0
-          : TRANSITION_MS,
-        easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-        fill: 'forwards',
-      })
-    );
-  }
-
-  function showSuccess() {
-    clearFeedback();
-    const icon = button.querySelector<SVGSVGElement>('svg');
-    if (!icon) return;
-    const iconRect = icon.getBoundingClientRect();
-    const buttonRect = button.getBoundingClientRect();
-    animate(icon, false);
-    setFeedback({
-      left: `${iconRect.left - buttonRect.left - button.clientLeft}px`,
-      top: `${iconRect.top - buttonRect.top - button.clientTop}px`,
-      width: `${iconRect.width}px`,
-      height: `${iconRect.height}px`,
-    });
-    resetTimer = setTimeout(() => {
-      for (const animation of animations) animation.cancel();
-      animations = [];
-      animate(icon, true);
-      if (check) animate(check, false);
-      exitTimer = setTimeout(clearFeedback, TRANSITION_MS);
-    }, SUCCESS_MS);
-  }
+  const { copy, copied } = createCopyState();
 
   const onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent> = async (
     event
   ) => {
     const handler = local.onClick;
-    if (!handler || pending || button.disabled) return;
-    pending = true;
-    clearFeedback();
-    try {
-      const result: unknown = await (typeof handler === 'function'
+    if (!handler || button.disabled) return;
+    await copy(() =>
+      typeof handler === 'function'
         ? handler(event)
-        : handler[0](handler[1], event));
-      if (!disposed && result !== false) showSuccess();
-    } catch {
-      // The caller owns error reporting; rejected copies never show success.
-    } finally {
-      pending = false;
-    }
+        : handler[0](handler[1], event)
+    );
   };
 
-  function FeedbackIcon(props: { style: JSX.CSSProperties }) {
-    let icon!: SVGSVGElement;
-    onMount(() => {
-      check = icon;
-      animate(icon, true);
-    });
-    return (
-      <CheckCircle
-        ref={icon}
-        data-copy-feedback
-        aria-hidden="true"
-        class="pointer-events-none absolute text-success opacity-0"
-        style={props.style}
-      />
-    );
-  }
-
-  const content = children(() => (
-    <>
-      {local.children}
-      <Show when={feedback()}>
-        {(style) => <FeedbackIcon style={style()} />}
-      </Show>
-    </>
-  ));
   return (
     <Dynamic
       component={local.as ?? Button}
@@ -145,7 +50,36 @@ export function CopyButton<T extends ValidComponent = 'button'>(
       ref={mergeRefs((element) => (button = element), local.ref)}
       on:click={onClick}
     >
-      {content()}
+      <Show when={local.icon}>
+        {(icon) => <CopyFeedback copied={copied()}>{icon()}</CopyFeedback>}
+      </Show>
+      {local.children}
     </Dynamic>
+  );
+}
+
+/** Transition the explicitly supplied icon without measuring or inspecting it. */
+export function CopyFeedback(props: {
+  copied: boolean;
+  children: JSX.Element;
+}) {
+  return (
+    <span class="relative inline-flex shrink-0" aria-hidden="true">
+      <span
+        class={cn(
+          'inline-flex transition-[opacity,filter] duration-150 motion-reduce:transition-none',
+          props.copied ? 'opacity-0 blur-xs' : 'opacity-100 blur-none'
+        )}
+      >
+        {props.children}
+      </span>
+      <Check
+        data-copy-feedback={props.copied ? '' : undefined}
+        class={cn(
+          'absolute inset-0 size-full text-success transition-[opacity,filter] duration-150 motion-reduce:transition-none',
+          props.copied ? 'opacity-100 blur-none' : 'opacity-0 blur-xs'
+        )}
+      />
+    </span>
   );
 }

@@ -10,6 +10,9 @@ alwaysApply: false
 
 Components, styling, and interaction conventions.
 
+- Give top-level More-menu actions one appropriate shared interface icon; keep simple choice lists such as mute durations text-only.
+- Keep clipboard menu actions open and transition their explicit icon to a plain green check with CSS blur/fade after success; share copy state, not DOM inspection, and preserve failure feedback and labels.
+
 - **FE-22** Pending or permission-gated actions render as a dimmed version of
   the real UI with inline accept/reject controls — not a generic placeholder
   icon.
@@ -54,8 +57,9 @@ Components, styling, and interaction conventions.
 
 ## Components
 
-- Place skeletons at the loaded content's position and dimensions; use the shared
-  Macro `LoadingSpinner` when that geometry is unknown.
+- Place skeletons at the loaded content's position and dimensions; use them for
+  menu and picker loading instead of the Macro-logo `LoadingSpinner`, which is
+  reserved for dedicated branded loading surfaces.
 - Prefer composition over configurability. Follow slot-based patterns (see
   src/features/channel, src/features/entity, or Kobalte).
 - Keep reusable components small, atomic, and decoupled from queries/complex

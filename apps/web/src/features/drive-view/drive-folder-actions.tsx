@@ -11,11 +11,22 @@ import {
 } from '@app/features/next-soup/actions';
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
+import {
+  CopyMenuItem,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ProjectEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { invalidateProjects } from '@queries/storage/projects';
 import { Show } from 'solid-js';
@@ -35,8 +46,8 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
 
   const favorite = makeFavoriteAction();
 
-  const copyLink = makeCopyLinkAction();
-  const copyEntityId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyEntityId = makeCopyEntityIdAction({ silent: true });
   const duplicate = makeCopyAction();
   const share = makeShareAction();
   const notificationSource = useGlobalNotificationSource();
@@ -72,6 +83,7 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
       <Show when={entity().ownerId === userId()}>
         <MenuItem
           text={t('entityActions.rename')}
+          icon={PencilIcon}
           onClick={() => editFolder('rename')}
         />
       </Show>
@@ -81,6 +93,7 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
             ? t('entityActions.unfavorite')
             : t('entityActions.favorite')
         }
+        icon={StarIcon}
         onClick={() =>
           fireAndForget(favorite.execute([entity()]), 'drive-view')
         }
@@ -91,37 +104,39 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
       <Show when={entity().ownerId === userId()}>
         <MenuItem
           text={t('entityActions.moveToFolder')}
+          icon={FolderIcon}
           onClick={() => editFolder('moveToProject')}
         />
       </Show>
       <Show when={duplicate.canExecute(entity())}>
         <MenuItem
           text={t('entityActions.duplicate')}
+          icon={CopyIcon}
           onClick={() =>
             fireAndForget(duplicate.execute([entity()]), 'drive-view')
           }
         />
       </Show>
-      <MenuItem
+      <CopyMenuItem
         text={t('entityActions.copyLink')}
-        onClick={() =>
-          fireAndForget(copyLink.execute([entity()]), 'drive-view')
-        }
+        icon={LinkIcon}
+        onCopy={() => copyLink.execute([entity()])}
       />
-      <MenuItem
+      <CopyMenuItem
         text={t('entityActions.copyId')}
-        onClick={() =>
-          fireAndForget(copyEntityId.executeById(entity().id), 'drive-view')
-        }
+        icon={CopyIcon}
+        onCopy={() => copyEntityId.executeById(entity().id)}
       />
       <MenuItem
         text={t('entityActions.share')}
+        icon={ShareIcon}
         onClick={() => fireAndForget(share.execute([entity()]), 'drive-view')}
       />
       <Show when={deleteFolder.canExecute(entity())}>
         <MenuSeparator />
         <MenuItem
           text={t('entityActions.delete')}
+          icon={TrashIcon}
           class="text-failure-ink"
           onClick={() =>
             fireAndForget(deleteFolder.execute([entity()]), 'drive-view')

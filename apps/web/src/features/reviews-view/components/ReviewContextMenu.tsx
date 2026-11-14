@@ -5,8 +5,11 @@ import {
   canOpenInNewTab,
   openInNewTab,
 } from '@components/app/tab-layout/open-in-new-tab';
-import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  ContextMenuContent,
+  CopyMenuItem,
+  MenuItem,
+} from '@core/component/ContextMenu';
 import { openExternalUrl } from '@core/util/url';
 import type { GithubPullRequestEntity } from '@entity';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -16,7 +19,7 @@ import BrowserTabIcon from '@icon/system/regular/tabs.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Show } from 'solid-js';
 
-const copyLink = makeCopyLinkAction();
+const copyLink = makeCopyLinkAction({ silent: true });
 
 /** A pull request's right-click actions, for list rows and board cards alike. */
 export function ReviewContextMenuContent(props: {
@@ -44,12 +47,10 @@ export function ReviewContextMenuContent(props: {
             }
           />
         </Show>
-        <MenuItem
+        <CopyMenuItem
           icon={CopyIcon}
           text={t('entityActions.copyLinkCommand')}
-          onClick={() =>
-            fireAndForget(copyLink.execute([props.review]), 'reviews-view')
-          }
+          onCopy={() => copyLink.execute([props.review])}
         />
         <MenuItem
           icon={ArrowSquareOutIcon}

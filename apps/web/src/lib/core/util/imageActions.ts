@@ -50,8 +50,9 @@ async function toPng(blob: Blob): Promise<Blob> {
 
 export async function copyImageToClipboard(
   getBlob: () => Promise<Blob | undefined>,
-  fallbackUrl: string
-): Promise<void> {
+  fallbackUrl: string,
+  options: { silent?: boolean } = {}
+): Promise<boolean> {
   try {
     const blob = await getBlob();
     if (!blob) throw new Error('No blob');
@@ -62,8 +63,8 @@ export async function copyImageToClipboard(
         `image.${extensionForImageBlob(blob)}`,
         'copy'
       );
-      if (!canceled) toast.success('Copied to clipboard');
-      return;
+      if (!canceled && !options.silent) toast.success('Copied to clipboard');
+      return !canceled;
     }
 
     if (isTouchDevice() && navigator.share) {
@@ -75,18 +76,20 @@ export async function copyImageToClipboard(
             }),
           ],
         });
-        return;
+        return false;
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
+        if (err instanceof Error && err.name === 'AbortError') return false;
         // navigator.share failed (e.g. gesture context expired in dev) —
         // fall back to copying the URL.
         try {
-          if (fallbackUrl) await navigator.clipboard.writeText(fallbackUrl);
-          toast.success('Copied image URL to clipboard');
+          if (!fallbackUrl) throw new Error('No image URL');
+          await navigator.clipboard.writeText(fallbackUrl);
+          if (!options.silent) toast.success('Copied image URL to clipboard');
+          return true;
         } catch {
           toast.failure('Failed to copy image');
+          return false;
         }
-        return;
       }
     }
 
@@ -97,18 +100,24 @@ export async function copyImageToClipboard(
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': pngBlob }),
       ]);
-      toast.success('Copied to clipboard');
+      if (!options.silent) toast.success('Copied to clipboard');
+      return true;
     } catch {
+      if (!fallbackUrl) throw new Error('No image URL');
       await navigator.clipboard.writeText(fallbackUrl);
-      toast.success('Copied image URL to clipboard');
+      if (!options.silent) toast.success('Copied image URL to clipboard');
+      return true;
     }
   } catch (err) {
     console.error('Share/clipboard operation failed:', err);
     try {
-      if (fallbackUrl) await navigator.clipboard.writeText(fallbackUrl);
-      toast.success('Copied image URL to clipboard');
+      if (!fallbackUrl) throw new Error('No image URL');
+      await navigator.clipboard.writeText(fallbackUrl);
+      if (!options.silent) toast.success('Copied image URL to clipboard');
+      return true;
     } catch {
       toast.failure('Failed to copy image');
+      return false;
     }
   }
 }

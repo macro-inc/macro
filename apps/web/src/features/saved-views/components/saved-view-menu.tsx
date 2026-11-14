@@ -1,10 +1,9 @@
 import { t } from '@app/lib/i18n';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Dropdown } from '@ui';
 import { Show } from 'solid-js';
 
@@ -14,7 +13,7 @@ export function SavedViewMenuItems(props: {
   onEdit: () => void;
   onDuplicate: () => void;
   /** Offered only by consumers whose links can open the view for someone. */
-  onCopyLink?: () => void;
+  onCopyLink?: () => void | boolean | Promise<void | boolean>;
   onDelete: () => void;
   /** Present only in lists the viewer can reorder; absent at either end. */
   onMoveUp?: () => void;
@@ -35,10 +34,9 @@ export function SavedViewMenuItems(props: {
         </Dropdown.Item>
         <Show when={props.onCopyLink}>
           {(onCopyLink) => (
-            <Dropdown.Item onSelect={onCopyLink()}>
-              <LinkIcon class="size-4" />
+            <Dropdown.CopyItem disabled={props.disabled} onCopy={onCopyLink()}>
               Copy link
-            </Dropdown.Item>
+            </Dropdown.CopyItem>
           )}
         </Show>
       </Dropdown.Group>

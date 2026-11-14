@@ -72,6 +72,7 @@ export function mapInitiativeIdentity(
     id: project.id,
     name: project.displayName ?? 'Untitled project',
     appearance: readEntityAppearance(project.appearance),
+    ownerId: project.metadata.ownerId ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
@@ -87,7 +88,6 @@ export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
     taskCount: project.taskCount,
     completedTaskCount: project.completedTaskCount,
     properties: mapGraphqlProperties(project.properties),
-    ownerId: project.metadata.ownerId ?? '',
     memberIds: project.memberIds,
     taskIds: project.taskIds,
     createdAt: project.metadata.createdAt ?? '',

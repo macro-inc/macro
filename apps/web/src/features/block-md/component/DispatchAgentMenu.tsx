@@ -8,7 +8,6 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
-import GitBranch from '@icon/system/regular/git-branch.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
@@ -297,9 +296,8 @@ export function useDispatchAgentSplitFileActions(): {
   const copyAsPrompt: CustomFileOperation = {
     label: COPY_ACTION.name,
     icon: COPY_ACTION.icon,
-    action: () => {
-      fireAndForget(executeAction(COPY_ACTION), 'dispatch-agent');
-    },
+    copy: true,
+    action: () => executeAction(COPY_ACTION, { silent: true }),
   };
 
   return {
@@ -328,6 +326,12 @@ export function DispatchAgentButton(
   const [open, setOpen] = createSignal(false);
   const { blockId, isTask, lastUsed, executeAction, executeLastUsed } =
     useDispatchAgentAction();
+  const primaryIcon = () => (
+    <Dynamic
+      component={lastUsed().buttonIcon ?? lastUsed().icon}
+      class="size-3.5!"
+    />
+  );
 
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
@@ -341,15 +345,14 @@ export function DispatchAgentButton(
           component={
             lastUsed().key === 'copy' ? CopyButton : ButtonGroup.Button
           }
-          {...(lastUsed().key === 'copy' ? { as: ButtonGroup.Button } : {})}
+          {...(lastUsed().key === 'copy'
+            ? { as: ButtonGroup.Button, icon: primaryIcon() }
+            : {})}
           onClick={executeLastUsed}
           tooltip={lastUsed().name}
           class="@max-[600px]/split-header:w-7 @max-[600px]/split-header:p-0"
         >
-          <Dynamic
-            component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3.5!"
-          />
+          <Show when={lastUsed().key !== 'copy'}>{primaryIcon()}</Show>
           <Show when={props.showPrimaryLabel}>
             <span class="max-w-36 truncate @max-[600px]/split-header:hidden">
               {lastUsed().name}
@@ -369,28 +372,19 @@ export function DispatchAgentButton(
       </ButtonGroup>
       <Dropdown.Content>
         <Dropdown.Group>
-          <Dropdown.Item
-            onSelect={() => {
-              fireAndForget(executeAction(COPY_ACTION), 'dispatch-agent');
-              setOpen(false);
-            }}
+          <Dropdown.CopyItem
+            onCopy={() => executeAction(COPY_ACTION, { silent: true })}
           >
-            <Dynamic component={COPY_ACTION.icon} class="size-4 shrink-0" />
             <span class="flex-1 truncate">{COPY_ACTION.name}</span>
-          </Dropdown.Item>
+          </Dropdown.CopyItem>
           <Show when={isTask()}>
-            <Dropdown.Item
-              onSelect={() => {
-                fireAndForget(
-                  copyBranchNameToClipboard(blockId),
-                  'dispatch-agent'
-                );
-                setOpen(false);
-              }}
+            <Dropdown.CopyItem
+              onCopy={() =>
+                copyBranchNameToClipboard(blockId, { silent: true })
+              }
             >
-              <GitBranch class="size-4 shrink-0" />
               <span class="flex-1 truncate">Copy branch name</span>
-            </Dropdown.Item>
+            </Dropdown.CopyItem>
           </Show>
           <Dropdown.Item
             onSelect={() => {

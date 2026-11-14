@@ -233,7 +233,7 @@ export function createProjectDetailQuery(
   );
 }
 
-/** Chips, previews, and labels read only id, name, appearance, and viewer access. */
+/** Chips, previews, and labels read only identity and viewer access. */
 export function createProjectIdentityQuery(
   client: () => Client,
   userId: Accessor<string | undefined>,
@@ -248,6 +248,7 @@ export function createProjectIdentityQuery(
       return {
         id: project.id,
         name: project.name,
+        ownerId: project.ownerId,
         appearance:
           pendingAppearance('initiative', project.id, failedRead) ??
           project.appearance,

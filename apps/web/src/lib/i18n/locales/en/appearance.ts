@@ -1,6 +1,5 @@
 export default {
   title: 'Change icon',
-  addIcon: 'Add icon',
   shared: 'Everyone with access sees this icon',
   source: 'Icon source',
   icons: 'Icons',

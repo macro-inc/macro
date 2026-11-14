@@ -308,9 +308,8 @@ function PullRequestLinkActions(props: { url: string }) {
           e.stopPropagation();
           return copyPullRequestUrl(props.url);
         }}
-      >
-        <LinkIcon class="size-4" />
-      </CopyButton>
+        icon={<LinkIcon class="size-4" />}
+      ></CopyButton>
       <a
         href={props.url}
         target="_blank"

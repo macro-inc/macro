@@ -58,24 +58,38 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## More menus
+
+Top-level action rows use one appropriate shared interface icon, including Mute
+and Change icon; simple choices such as mute durations stay text-only. Copy actions
+retain the open menu and focused row; the explicit icon blurs and fades to a plain
+green check after the clipboard write succeeds, then resets after the last copy.
+Labels remain unchanged and success toasts do not appear. A failed copy keeps the
+original icon and reports the error. The same behavior applies to mobile action
+sheets. Ordinary actions close immediately without waiting; desktop Change icon
+and Add tag open the existing pickers inside submenus instead.
+
 ## Entity icons and colors
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
-**Change icon** after Rename in an entity menu, without a leading menu icon.
-Document header icons open the picker separately from their breadcrumb name's
-navigation button. Header buttons are 24px with unchanged 16px glyphs and the
-shared larger touch targets. Row icons still navigate. Sidebar category icons do
+**Change icon** after Rename in an entity menu, with its appearance icon.
+Editable document and task-project header icons open the picker separately from
+their breadcrumb name's navigation button. Read-only and flag-disabled icons stay
+inside that navigation button. Header buttons are 24px with unchanged 16px glyphs
+and the shared larger touch targets. Row icons still navigate. Sidebar category icons do
 not change. Drive folders, tasks, skills, and internal descriptions do not have
 appearance editing.
-Document content titles have no leading icon. Without a custom icon, **Add icon**
-appears before the other title pills for editors.
+Document content titles have no leading icon or Add icon pill; use the header
+icon or More menu to edit appearance.
 Editing requires `enable-entity-appearance`; disabled or loading flags hide all
 entry points, and disabling closes an open picker. Saved appearance remains
 visible, including public/read-only views; API/SDK access and permissions do not
 change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
 
-Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+Desktop header icons use a compact 344px anchored popover; desktop menu entries
+use the same picker inside a submenu, with a matching skeleton while its code
+loads instead of the branded logo loader. Phones retain a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
 stays open. Escape, outside clicks, and Done close without undoing saved choices.
 There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
