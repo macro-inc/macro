@@ -1,0 +1,215 @@
+# What the email end-to-end suite leaves uncovered, and why. Four kinds:
+# waived for good, deferred to the full-stack tier, thought dead, and (in
+# functions.toml, `bug`) held open by a known product bug. Anything waived,
+# deferred or thought dead here that a scenario does cover or reach is
+# reported as stale. A fifth kind is not left uncovered: entry points owned
+# by the functions of another product, counted there.
+#
+# A function no scenario is asked to cover:
+#
+# [[function]]
+# id = "F-000"            # from apps/web/tests/email-e2e/ledger/functions.tsv
+# provider = "outlook"    # optional: gmail or outlook; both when absent
+# reason = "..."
+#
+# An entry point no scenario is asked to reach:
+#
+# [[entry_point]]
+# entry = "http GET /health"   # `kind key`, as in entrypoints.tsv
+# provider = "gmail"           # optional
+# reason = "..."
+#
+# An entry point left to the full-stack tier (a provider's sign-in route,
+# say): not waived and not open, counted in its own column. An entry point
+# is waived or deferred on a provider, never both.
+#
+# [[deferred]]
+# entry = "http GET /email/oauth/callback"
+# provider = "gmail"           # optional
+# reason = "..."
+#
+# An entry point nothing in the repository calls: waived on both providers
+# and listed under "Dead code candidates" with its source. The reason says
+# how it was found to have no caller.
+#
+# [[dead_code]]
+# entry = "http GET /email/unused"
+# reason = "..."
+#
+# An entry point the functions of another product call, not email's: not
+# waived, deferred or open, and in none of email's totals. It is counted
+# with its owner's functions; the report lists it under "Counted with the
+# <owner> functions" and says whether a scenario reached it. It cannot also
+# be waived, deferred, dead code or named in functions.toml.
+#
+# [[owned]]
+# entry = "provider gmail:events.list"
+# provider = "gmail"           # optional
+# owner = "calendar"
+#
+# Functions another service carries out are deferred to the full-stack tier
+# by `outside` in functions.toml, not here.
+
+# ------------------------------------------------- provider methods unused
+
+[[entry_point]]
+entry = "provider gmail:messages.batchDelete"
+reason = "served by the emulator, never called by the product: every Gmail request goes through gmail_client, which has no batch delete"
+
+[[entry_point]]
+entry = "provider gmail:messages.delete"
+reason = "served by the emulator, never called by the product: gmail_client only reads messages by id; the product trashes, it never deletes"
+
+[[entry_point]]
+entry = "provider gmail:messages.import"
+reason = "served by the emulator, never called by the product: sending is messages.send; nothing posts to messages/import"
+
+[[entry_point]]
+entry = "provider gmail:labels.update"
+reason = "served by the emulator, never called by the product: the Gmail label adapter lists, creates and deletes; nothing sends a PUT or PATCH"
+
+[[entry_point]]
+entry = "provider outlook:messages.copy"
+reason = "served by the emulator, never called by the product: archive and move use /move; no Graph request ends in /copy"
+
+[[entry_point]]
+entry = "provider outlook:messages.sendMail"
+reason = "served by the emulator, never called by the product: Outlook sends by creating a draft and posting /send on it"
+
+[[entry_point]]
+entry = "provider outlook:messages.reply"
+reason = "served by the emulator, never called by the product: the product calls createReply, a separate row"
+
+[[entry_point]]
+entry = "provider outlook:messages.forward"
+reason = "served by the emulator, never called by the product: no Graph request ends in /forward"
+
+[[entry_point]]
+entry = "provider outlook:batch"
+reason = "served by the emulator, never called by the product: every Graph call is a single request; nothing posts to $batch"
+
+# ---------------------------------------------------- sign-in, full stack
+
+[[deferred]]
+entry = "provider gmail:oauth.userinfo"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.adminconsent"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.discovery"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.keys"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.userinfo"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+# ------------------------------------------------------------- no caller
+
+[[dead_code]]
+entry = "queue gmail-ops:DeleteLabel"
+reason = "the handler has no sender: nothing in the repository builds this message"
+
+[[dead_code]]
+entry = "http GET /internal/messages/{id}"
+reason = "no client in the repository requests this internal route"
+
+[[dead_code]]
+entry = "http POST /internal/messages/batch"
+reason = "no client in the repository requests this internal route"
+
+[[dead_code]]
+entry = "http GET /internal/threads/{id}/messages"
+reason = "no client in the repository requests this internal route"
+
+[[dead_code]]
+entry = "http GET /internal/threads/{id}/owner"
+reason = "no client in the repository requests this internal route"
+
+# ------------------------------------------- calendar provider methods
+#
+# The calendar product calls these, not email. `provider gmail:events.import`
+# is not here: adding a forwarded invitation to the calendar (F-156) is a
+# function of email and calls it.
+
+[[owned]]
+entry = "provider gmail:calendarList.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.delete"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.insert"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.instances"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.patch"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.watch"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendarView.delta"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendarView.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendars.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendars.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.create"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.delete"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.instances"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.respond"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.update"
+owner = "calendar"

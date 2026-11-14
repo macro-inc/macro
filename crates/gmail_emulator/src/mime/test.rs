@@ -41,3 +41,48 @@ fn removing_a_header_keeps_the_rest_of_the_message() {
         b"To: b@example.com\r\nSubject: Hi\r\n\r\nBody\r\n"
     );
 }
+
+#[test]
+fn a_wrapped_message_is_the_child_of_its_part() {
+    let raw = b"From: mailer-daemon@example.com\r\nTo: a@example.com\r\nSubject: Undeliverable\r\n\
+        Content-Type: multipart/report; report-type=delivery-status; boundary=\"b\"\r\n\r\n\
+        --b\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nYour message was not delivered.\r\n\
+        --b\r\nContent-Type: message/rfc822\r\n\r\n\
+        From: a@example.com\r\nTo: gone@example.com\r\nSubject: Offer\r\n\
+        Content-Type: text/html; charset=utf-8\r\n\r\n<p>The original</p>\r\n--b--\r\n";
+
+    let parsed = parse(raw).unwrap();
+
+    assert_eq!(parsed.snippet, "Your message was not delivered.");
+    let json = part_json(&parsed.payload, Format::Full, 7);
+    let wrapper = &json["parts"][1];
+    assert_eq!(wrapper["mimeType"], "message/rfc822");
+    assert_eq!(wrapper["body"]["size"], 0);
+    let original = &wrapper["parts"][0];
+    assert_eq!(original["partId"], "1.0");
+    assert_eq!(original["mimeType"], "text/html");
+    assert_eq!(original["headers"][2]["value"], "Offer");
+    assert_eq!(
+        original["body"]["data"],
+        encode_body(b"<p>The original</p>")
+    );
+}
+
+#[test]
+fn a_wrapped_message_does_not_give_the_snippet_or_the_attachment_mark() {
+    let raw = b"From: mailer-daemon@example.com\r\nTo: a@example.com\r\nSubject: Undeliverable\r\n\
+        Content-Type: multipart/report; boundary=\"b\"\r\n\r\n\
+        --b\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>Not delivered.</p>\r\n\
+        --b\r\nContent-Type: message/rfc822\r\n\r\n\
+        From: a@example.com\r\nSubject: Offer\r\n\
+        Content-Type: multipart/mixed; boundary=\"c\"\r\n\r\n\
+        --c\r\nContent-Type: text/plain\r\n\r\nThe original\r\n\
+        --c\r\nContent-Type: application/pdf; name=\"a.pdf\"\r\n\
+        Content-Disposition: attachment; filename=\"a.pdf\"\r\n\r\nx\r\n--c--\r\n--b--\r\n";
+
+    let parsed = parse(raw).unwrap();
+
+    assert_eq!(parsed.snippet, "Not delivered.");
+    assert!(!parsed.has_attachment);
+    assert!(!parsed.search_text.contains("original"));
+}

@@ -72,6 +72,7 @@ members = [
   "crates/web_search",
   "crates/dictation",
   "crates/email_api_client",
+  "crates/email_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -259,6 +260,7 @@ arboard = { version = "3.6.1", default-features = false, features = ["wayland-da
 # Templates use built-in defaults; omit the unused config parser and basic-toml.
 askama = { version = "0.14", default-features = false, features = ["derive", "std", "urlencode"] }
 async-graphql = "7.2.1"
+async-graphql-parser = "7.2.1"
 async-lock = "3"
 async-openai = { version = "0.36.1", features = [
   "byot",
@@ -324,6 +326,7 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 h2 = "0.4"
+heck = "0.5"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -405,6 +408,7 @@ postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+proc-macro2 = "1"
 prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
@@ -465,6 +469,7 @@ sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strsim = "0.11"
 strum = { version = "0.27.1", features = ["derive"] }
+syn = { version = "2", features = ["full"] }
 symphonia = { version = "0.6.1", default-features = false, features = [
   "isomp4",
   "mkv",

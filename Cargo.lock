@@ -7597,6 +7597,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_e2e"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "aws-sdk-sqs",
+ "axum",
+ "base64 0.22.1",
+ "calendar_events",
+ "chrono",
+ "crm",
+ "email",
+ "entity_access",
+ "entity_access_management",
+ "frecency",
+ "gmail_emulator",
+ "hex",
+ "lexical_client",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_event_topics",
+ "macro_user_id",
+ "outlook_emulator",
+ "rdkafka",
+ "redis",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustix 1.1.6",
+ "rustls",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
@@ -24029,6 +24073,26 @@ dependencies = [
  "serde",
  "serde_json",
  "xtask_graph",
+]
+
+[[package]]
+name = "xtask_email_coverage"
+version = "0.1.0"
+dependencies = [
+ "async-graphql-parser",
+ "clap",
+ "glob",
+ "heck 0.5.0",
+ "lazy-regex",
+ "proc-macro2",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "syn 2.0.117",
+ "tempfile",
+ "toml 0.8.23",
+ "xtask_paths",
 ]
 
 [[package]]

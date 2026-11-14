@@ -1,0 +1,112 @@
+//! `cargo x email-coverage <command>`
+//!
+//! - `list` writes `crates/email_e2e/coverage/entrypoints.tsv` from the code.
+//! - `list --check` fails when the checked-in file differs from the code.
+//! - `report` joins what the scenarios recorded with the ledger.
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use clap::{Parser, Subcommand};
+use rootcause::prelude::*;
+use xtask_email_coverage::{
+    ENTRYPOINTS_PATH, ReportOptions, diff, generate, read_tsv, render_tsv, report,
+};
+
+#[derive(Parser)]
+#[command(
+    name = "email-coverage",
+    about = "Email end-to-end coverage of backend entry points"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// List every backend email entry point into entrypoints.tsv.
+    List {
+        /// Compare with the checked-in file instead of writing it.
+        #[arg(long)]
+        check: bool,
+    },
+    /// Report which functions of email and which entry points the scenarios
+    /// cover, from the records they left.
+    Report {
+        /// A directory holding `evidence.json` and `junit.xml` files, at any
+        /// depth. Repeat for several.
+        #[arg(long, required = true)]
+        results: Vec<PathBuf>,
+        /// Where to write coverage.json, coverage.md and index.html.
+        #[arg(long)]
+        out: PathBuf,
+        /// Fail when a function or an entry point is neither covered nor
+        /// waived, or a scenario failed.
+        #[arg(long)]
+        enforce: bool,
+    },
+}
+
+fn main() -> ExitCode {
+    let outcome = match Cli::parse().command {
+        Command::List { check } => list(check),
+        Command::Report {
+            results,
+            out,
+            enforce,
+        } => report(
+            &xtask_paths::repo_root(),
+            &ReportOptions {
+                results,
+                out,
+                enforce,
+            },
+        )
+        .map(|failed| {
+            if failed {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }),
+    };
+
+    // Printed with `Display`: `Debug`, which a returned error gets, quotes
+    // and escapes the message.
+    outcome.unwrap_or_else(|report| {
+        eprintln!("{report}");
+        ExitCode::FAILURE
+    })
+}
+
+fn list(check: bool) -> Result<ExitCode, Report> {
+    let root = xtask_paths::repo_root();
+    let rows = generate(&root)?;
+    let path = root.join(ENTRYPOINTS_PATH);
+    let text = render_tsv(&rows);
+
+    if !check {
+        std::fs::write(&path, text).context(format!("could not write {ENTRYPOINTS_PATH}"))?;
+        println!("wrote {} entry points to {ENTRYPOINTS_PATH}", rows.len());
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let checked_in = read_tsv(&path)?;
+    let differences = diff(&checked_in, &rows);
+    if differences.is_empty() {
+        println!(
+            "{ENTRYPOINTS_PATH} lists the code's {} entry points",
+            rows.len()
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    eprintln!("{ENTRYPOINTS_PATH} does not list the entry points the code has.");
+    eprintln!("`-` rows are only in the file, `+` rows only in the code:\n");
+    for difference in &differences {
+        eprintln!("{difference}");
+    }
+    eprintln!("\nRun `cargo x email-coverage list` and commit the result.");
+    Ok(ExitCode::FAILURE)
+}
