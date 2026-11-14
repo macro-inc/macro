@@ -30,8 +30,9 @@ times a second, and ticks at `fps` only while something animates.
   or `Rule`), the `Theme` that colours them, and the HUD dressing: bracket
   frames, orange title chips, segmented meters, the dot grid and the glitch
   on fresh errors. The themes (`ThemeName`: classic, ember, phosphor, dusk)
-  are in `src/theme/themes.rs`; `t` cycles them, `[monitor] theme` and
-  `--theme` pick the first.
+  are in `src/theme/themes.rs`; Ctrl-T or the `THEME [name]` command line
+  switches them, `[monitor] theme` and `--theme` pick the first (names in any
+  case).
 
 ## Scope
 
@@ -46,7 +47,8 @@ times a second, and ticks at `fps` only while something animates.
 - Add a command mnemonic: `keys::Command::parse` → `HELP` in `ui.rs` → a key test.
 - Add a theme: a `ThemeName` variant and its `Spec` in `src/theme/themes.rs`
   (keep `text`, `accent` and `bg`: the amber ink is the product's look; keep
-  `Ok` and `Info` calm so `Alert` and `Attention` draw the eye) → the theme
+  `Ok` and `Info` calm, and `Highlight` near the ink, so `Alert` and
+  `Attention` draw the eye) → the theme
   list in `config.rs`, `config.example.toml` and the README of
   `crates/coding_agent_worker`. Look at it with
   `cargo run -p agent_monitor_tui --example demo -- --theme <name>`.
@@ -67,6 +69,9 @@ times a second, and ticks at `fps` only while something animates.
   is the "on" phase.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
+- A bare letter starts the command line, so never bind a lowercase letter
+  that begins a mnemonic (`t` would swallow TAPE and TREE); use Ctrl or a
+  command instead, as the theme does (Ctrl-T, `THEME`).
 - Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never
   write a `Color` outside the theme definitions in `src/theme/themes.rs`.
   `theme::active()` is thread-local and `ui::draw` sets it from `App::theme`

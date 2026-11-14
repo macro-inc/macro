@@ -111,7 +111,8 @@ pub struct App {
     pub label: Option<String>,
     /// The colour theme frames are drawn in.
     pub theme: ThemeName,
-    /// Whether the command line names the theme, after `t` switched it,
+    /// Whether the command line names the theme, after Ctrl-T or `THEME`
+    /// switched it,
     /// until the next key.
     pub theme_notice: bool,
     /// Set when the user quits.
@@ -196,9 +197,14 @@ impl App {
                 self.open(command.page);
             }
             Action::ToggleAll => self.filter.all = !self.filter.all,
-            Action::CycleTheme => {
-                self.set_theme(self.theme.next());
+            Action::Theme(theme) => {
+                self.set_theme(theme.unwrap_or_else(|| self.theme.next()));
                 self.theme_notice = true;
+            }
+            Action::UnknownTheme(name) => {
+                use strum::IntoEnumIterator as _;
+                let known: Vec<String> = ThemeName::iter().map(|name| name.to_string()).collect();
+                self.message = Some(format!("UNKNOWN THEME: {name} ({})", known.join(", ")));
             }
             Action::Unknown(line) => {
                 self.message = Some(format!("UNKNOWN COMMAND: {line}"));

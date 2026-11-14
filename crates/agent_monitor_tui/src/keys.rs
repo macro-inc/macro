@@ -10,6 +10,8 @@ use tui_input::{Input, InputRequest};
 
 use agent_monitor::domain::model::{AgentId, RepoId};
 
+use crate::theme::ThemeName;
+
 /// A key the viewer reacts to, decoded from a terminal event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Key {
@@ -43,6 +45,8 @@ pub enum Key {
     Backspace,
     /// Ctrl-C.
     Interrupt,
+    /// Ctrl-T: the next colour theme.
+    NextTheme,
 }
 
 impl Key {
@@ -55,6 +59,7 @@ impl Key {
         let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
         let key = match event.code {
             KeyCode::Char('c') if ctrl => Key::Interrupt,
+            KeyCode::Char('t') if ctrl => Key::NextTheme,
             KeyCode::Char(_) if ctrl => return None,
             KeyCode::Char(character) => Key::Char(character),
             KeyCode::Enter => Key::Enter,
@@ -318,8 +323,10 @@ pub enum Action {
     Find(String),
     /// Show ended agents too, or only current ones again.
     ToggleAll,
-    /// Switch to the next colour theme.
-    CycleTheme,
+    /// Switch to this colour theme, or to the next one when `None`.
+    Theme(Option<ThemeName>),
+    /// A `THEME` command naming no theme, to report.
+    UnknownTheme(String),
     /// A CHANGES page key.
     Changes(ChangeKey),
 }
@@ -377,8 +384,10 @@ impl ChangeKey {
 
 /// The next state and action for `key` in `mode` on `page`.
 pub fn step(mode: Mode, key: Key, page: &Page) -> (Mode, Action) {
-    if key == Key::Interrupt {
-        return (mode, Action::Quit);
+    match key {
+        Key::Interrupt => return (mode, Action::Quit),
+        Key::NextTheme => return (mode, Action::Theme(None)),
+        _ => {}
     }
 
     match mode {
@@ -425,7 +434,6 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Char('q') => (stay, Action::Quit),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
         Key::Char('a') => (stay, Action::ToggleAll),
-        Key::Char('t') => (stay, Action::CycleTheme),
         Key::Char('/') => (
             Mode::Find {
                 input: Input::default(),
@@ -443,7 +451,7 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
             input.handle(InputRequest::InsertChar(letter));
             (Mode::Command { input, base }, Action::None)
         }
-        Key::Char(_) | Key::Backspace | Key::Interrupt => (stay, Action::None),
+        Key::Char(_) | Key::Backspace | Key::Interrupt | Key::NextTheme => (stay, Action::None),
     }
 }
 
@@ -490,10 +498,12 @@ fn step_command(mut input: Input, base: Base, key: Key) -> (Mode, Action) {
         Key::Esc => (Mode::Base(base), Action::None),
         Key::Enter => {
             let line = input.value().trim().to_owned();
-            let action = match Command::parse(&line) {
-                Some(command) => Action::Run(command),
-                None if line.is_empty() => Action::None,
-                None => Action::Unknown(line),
+            let action = match (theme_command(&line), Command::parse(&line)) {
+                (Some(Ok(theme)), _) => Action::Theme(theme),
+                (Some(Err(name)), _) => Action::UnknownTheme(name),
+                (None, Some(command)) => Action::Run(command),
+                (None, None) if line.is_empty() => Action::None,
+                (None, None) => Action::Unknown(line),
             };
             (Mode::Base(base), action)
         }
@@ -503,6 +513,21 @@ fn step_command(mut input: Input, base: Base, key: Key) -> (Mode, Action) {
             (Mode::Command { input, base }, Action::None)
         }
     }
+}
+
+/// A `THEME [name]` command line: `Ok(None)` for the next theme,
+/// `Ok(Some(name))` for that one, `Err(word)` for a name that is no theme,
+/// and `None` when the line is not a theme command.
+fn theme_command(line: &str) -> Option<Result<Option<ThemeName>, String>> {
+    let mut words = line.split_whitespace();
+    if !words.next()?.eq_ignore_ascii_case("THEME") {
+        return None;
+    }
+    let theme = match words.next() {
+        None => Ok(None),
+        Some(word) => word.parse().map(Some).map_err(|_| word.to_owned()),
+    };
+    Some(theme)
 }
 
 fn step_find(mut input: Input, base: Base, key: Key) -> (Mode, Action) {

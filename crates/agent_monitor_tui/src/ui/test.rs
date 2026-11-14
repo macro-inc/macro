@@ -283,9 +283,9 @@ fn drill_in_200x56() {
 }
 
 #[test]
-fn t_names_the_new_theme_on_the_command_line() {
+fn ctrl_t_names_the_new_theme_on_the_command_line() {
     let mut app = app();
-    app.key(Key::Char('t'));
+    app.key(Key::NextTheme);
     let screen = render(&mut app, 200, 56);
     let command = screen.lines().last().unwrap_or_default();
     assert!(command.contains("THEME EMBER"), "{command}");

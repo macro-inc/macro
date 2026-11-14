@@ -84,7 +84,7 @@ fn monitor_settings_default_when_the_table_or_file_is_missing() {
             run_id_labels: Vec::new(),
             pr_poll_secs: 60,
             changes: true,
-            theme: agent_monitor_tui::ThemeName::Classic,
+            theme: String::from("classic"),
         }
     );
 
@@ -116,17 +116,34 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
             run_id_labels: vec![String::from("run.id")],
             pr_poll_secs: 0,
             changes: false,
-            theme: agent_monitor_tui::ThemeName::Ember,
+            theme: String::from("ember"),
         }
     );
 }
 
 #[test]
-fn an_unknown_theme_fails_to_parse() {
+fn an_unknown_theme_still_reads_the_monitor_table() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("macrod.toml");
-    std::fs::write(&path, "[monitor]\ntheme = \"neon\"\n").unwrap();
-    assert!(MonitorSettings::read(&path).is_err());
+    std::fs::write(&path, "[monitor]\nenabled = false\ntheme = \"neon\"\n").unwrap();
+    let settings = MonitorSettings::read(&path).unwrap();
+    assert!(!settings.enabled, "the collector still gets its settings");
+    assert_eq!(settings.theme, "neon");
+}
+
+#[test]
+fn the_viewer_theme_ignores_case_and_falls_back_to_classic() {
+    use agent_monitor_tui::ThemeName;
+
+    assert_eq!(viewer_theme(None, "Ember"), (ThemeName::Ember, None));
+    assert_eq!(
+        viewer_theme(Some(ThemeName::Dusk), "neon"),
+        (ThemeName::Dusk, None),
+        "the flag wins"
+    );
+    let (theme, notice) = viewer_theme(None, "neon");
+    assert_eq!(theme, ThemeName::Classic);
+    assert!(notice.is_some_and(|notice| notice.contains("neon")));
 }
 
 #[test]
