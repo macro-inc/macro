@@ -3,13 +3,19 @@ import {
   type GraphicsDocument,
   worldBounds,
 } from '@macro-inc/graphics';
+import type { Presentation } from '@macro-inc/graphics/loro';
 import {
   richTextPlainText,
   validCanvasText,
 } from '@macro-inc/lexical-core/canvas-text';
 
 /** Semantic graph, not raster ASCII: exact IDs and connections, approximate spatial rows. */
-export function canvasOverview(document: GraphicsDocument, itemIds?: string[]) {
+export function canvasOverview(
+  document: GraphicsDocument,
+  itemIds?: string[],
+  /** Present only when the user has artifacts. */
+  presentation?: Presentation
+) {
   const all = drawableIds(document).filter(
     (id) => !itemIds || itemIds.includes(id)
   );
@@ -39,12 +45,19 @@ export function canvasOverview(document: GraphicsDocument, itemIds?: string[]) {
       const end = item.geometry.end.binding?.targetId;
       return `${names.get(id)}: ${start ? (names.get(start) ?? start) : 'free'} -> ${end ? (names.get(end) ?? end) : 'free'} ${JSON.stringify(label)}`;
     }
-    return `${names.get(id)}: ${item.type} ${JSON.stringify(label)} @(${Math.round(bounds.x)},${Math.round(bounds.y)}) ${Math.round(bounds.width)}x${Math.round(bounds.height)}`;
+    const transition =
+      item.type === 'artifact' && item.geometry.transition
+        ? ` transition=${JSON.stringify(item.geometry.transition)}`
+        : '';
+    return `${names.get(id)}: ${item.type} ${JSON.stringify(label)} @(${Math.round(bounds.x)},${Math.round(bounds.y)}) ${Math.round(bounds.width)}x${Math.round(bounds.height)}${transition}`;
   });
   return {
     approximate: true,
     truncated: all.length > ids.length || labelsTruncated,
     legend: Object.fromEntries([...names].map(([id, name]) => [name, id])),
     graph: lines.join('\n'),
+    ...(presentation
+      ? { deckTransition: presentation.transition ?? null }
+      : {}),
   };
 }

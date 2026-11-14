@@ -52,6 +52,9 @@ export function boxShapeDefinition<
       Object.freeze({
         ...g,
         ...('source' in g ? { source: Object.freeze({ ...g.source }) } : {}),
+        ...('transition' in g && g.transition
+          ? { transition: Object.freeze({ ...g.transition }) }
+          : {}),
       }) as ShapeGeometryMap[K],
     bounds,
     sameGeometry: (a, b) =>

@@ -22,6 +22,7 @@ import {
   type ArtifactLibrary,
   createLoroGraphicsBackendFromDoc,
   type PeerPresence,
+  type Presentation,
 } from '@macro-inc/graphics/loro';
 import {
   richTextPlainText,
@@ -38,7 +39,11 @@ import {
 import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { CanvasScheduler, dependencies, dependencyState } from './dependencies';
 import { canvasUserMentions } from './mentions';
-import { artifactLibraryEdits, prepareCanvasEdit } from './operations';
+import {
+  artifactLibraryEdits,
+  prepareCanvasEdit,
+  presentationEdit,
+} from './operations';
 import { canvasOverview } from './overview';
 import type { CanvasMeasurer, CanvasSnapshot } from './render';
 import { type CanvasOp, isArtifactOp } from './schema';
@@ -198,12 +203,16 @@ export async function withCanvasSession<T>(
       format: 'scene' | 'overview' = 'scene'
     ) => {
       check();
+      const presentation = artifacts ? backend.presentation.read() : undefined;
       return format === 'overview'
-        ? JSON.stringify(canvasOverview(backend.getDocument(), itemIds))
+        ? JSON.stringify(
+            canvasOverview(backend.getDocument(), itemIds, presentation)
+          )
         : describeCanvas(
             backend.getDocument(),
             itemIds,
-            artifacts ? backend.artifactLibrary.read() : undefined
+            artifacts ? backend.artifactLibrary.read() : undefined,
+            presentation
           );
     };
     const present = (value: CanvasPresentation | undefined) => {
@@ -339,7 +348,11 @@ export async function withCanvasSession<T>(
                 ops.filter(isArtifactOp).length
               );
               stage.committed = true;
-              backend.commit(next, artifactLibraryEdits(ops));
+              backend.commit(
+                next,
+                artifactLibraryEdits(ops),
+                presentationEdit(ops)
+              );
               try {
                 await lastAppend;
                 await wal.flush();
@@ -382,6 +395,7 @@ export async function withCanvasSession<T>(
           artifactLibrary: artifacts
             ? backend.artifactLibrary.read()
             : undefined,
+          presentation: artifacts ? backend.presentation.read() : undefined,
         };
       },
       async apply(ops, options = {}) {
@@ -429,7 +443,9 @@ export function describeCanvas(
   document: GraphicsDocument,
   itemIds?: string[],
   /** Present only when the user has artifacts. */
-  artifactLibrary?: ArtifactLibrary
+  artifactLibrary?: ArtifactLibrary,
+  /** Present only when the user has artifacts. */
+  presentation?: Presentation
 ): string {
   const all = Object.values(document.items).filter(
     (item) => item.type !== 'surface'
@@ -494,6 +510,8 @@ export function describeCanvas(
     ...(artifactLibrary
       ? {
           artifactGuide: ARTIFACT_GUIDE,
+          // Slides without their own transition use this one.
+          deckTransition: presentation?.transition ?? null,
           artifactLibrary: withSource
             ? artifactLibrary
             : {

@@ -78,7 +78,8 @@ shows its title and no script runs. The headless render bundle has no flag reade
 so its caller says whether to run artifacts, in the same sandbox.
 
 Each canvas has a library of named styles and components, in root Loro maps beside
-the scene, edited from the inspector. An artifact uses them with
+the scene. Only AI edits it; the inspector shows an artifact's title, its place in
+the presentation and its transition, never its HTML or the library. An artifact uses them with
 `<macro-style name="brand"></macro-style>` and
 `<macro-component name="card">children</macro-component>`, whose children replace
 the component's `<slot>`. They expand when the document is composed, so a library
@@ -88,7 +89,17 @@ downloaded canvas loses its library.
 AI can create and edit artifacts and the library for users with the flag. See
 [Canvas architecture](../../../../../docs/architecture/canvas.md#artifacts).
 
-**Present** on a node opens `views/artifact-presentation.tsx`, full screen where the
+`views/artifact-controls.tsx` draws a bar just above each artifact's top-right
+corner, always visible (no hover): the slide's place in the presentation (`1/5`),
+**Interact** (**Done** while interacting) and **Present**. It is drawn in screen
+space over the scene, so it keeps its size at any zoom; it hides while shapes are
+moved or resized, while presenting, and when the artifact is narrower on screen
+than the bar. A narrow selected artifact lifts the bar above its rotation handle.
+Read-only canvases show the same bar. Canvas pointer handlers ignore presses
+inside it (`ARTIFACT_CONTROLS_SELECTOR`), and the active artifact's bar counts as
+inside the artifact, so **Done** is not taken for a click elsewhere.
+
+**Present** on the bar or in the inspector opens `views/artifact-presentation.tsx`, full screen where the
 browser allows and otherwise covering the window. It steps through artifacts only,
 in `presentOrder`, stopping at each end; new artifacts go last, and the inspector
 reorders them. Arrow keys, Space and Page Up/Down step, and Esc exits. Focus inside
@@ -96,6 +107,42 @@ a frame keeps keys from the host, so `composeArtifactDocument` adds a small scri
 that forwards these keys unless the artifact handled them or the user is typing.
 The host treats those messages only as navigation. Touch devices use the on-screen
 buttons.
+
+Each step plays the entered slide's transition, or the deck default; going back
+plays the slide being left in mirror, like Google Slides. `views/transitions/`
+holds the player: `SlideStage` keeps the outgoing and incoming slides mounted
+while classic kinds animate them with the Web Animations API (transform, opacity,
+clip-path, filter), using keyframes from `core/transitions/classic-keyframes.ts`.
+Canvas kinds (pan, fly, overview, path) mount `CanvasFlight`, a read-only scene
+drawn once into a layer whose single transform follows a camera path from
+`core/transitions/camera-path.ts` (van Wijk–Nuij smooth zoom for fly; `path`
+follows the connector bound to both slides, else flies). Masks letterbox its
+first and last frames exactly as present mode shows each slide. A key during a
+transition finishes it at once and starts the next; nothing queues. With
+`prefers-reduced-motion` every kind plays as a 200 ms fade. Canvas kinds hold
+the flight's last frame until the live slide has loaded (at most 400 ms). Each
+transition is one `canvas.artifact.transition` interaction whose join window
+closes at once; `Interaction.hold()` keeps its span open for the animation, with
+its kind, timing (`played_ms` for the animation, `hold_ms` for a canvas kind's
+wait on the live slide after it), outcome (`completed`, `skipped`, `cancelled`)
+and the animation's frame counts. The stage also exposes the last transition's
+counts as `data-canvas-transition-frames` and
+`data-canvas-transition-dropped-frames`; the browser suite checks that every
+kind keeps painting, on plain and on dense slides. Most kinds animate only
+transform and opacity; wipe, split and iris animate `clip-path`, and dissolve
+and cube animate `filter`. Chromium runs the sandboxed slide frames in their own
+process and redraws a frame's page at every new size, so kinds that scale a
+slide or turn it in 3D (zoom, flip, cube) cost the most. Dissolve does not
+scale, and zoom's outgoing slide is gone by halfway.
+
+The inspector's **Transition** section picks a kind from live thumbnails (hover
+or focus plays them; a tap selects and plays once), then duration, easing and,
+for directional kinds, direction. **Default** clears the slide's own transition.
+**Apply to all** makes this transition the deck default and clears every slide's
+own in one undo step; **Set default** changes only the deck default. **Preview**
+plays the transition into the slide on a small stage. `context/presentation.ts`
+supplies the deck default from the canvas's Loro root map, or for the session
+on a canvas without one.
 
 ## Controls
 

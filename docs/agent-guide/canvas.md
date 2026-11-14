@@ -30,15 +30,29 @@ for multiple selections, groups, videos, and non-image shapes.
 ## Artifacts
 
 Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
-**Artifact**, which places a node with starter HTML. The Canvas inspector edits its
-title and HTML. The document runs in a sandboxed frame; **Interact** or a
-double-click passes pointer input to it, and **Done** or a click elsewhere returns
-to the canvas. With the flag off, an artifact shows only its title and no script runs.
-The inspector also adds and edits styles and components shared across the canvas;
-HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
-**Present** on a node opens the artifacts full screen in presentation order, which
+**Artifact**, which places a node with starter HTML. A bar above each artifact's
+top-right corner (`[data-canvas-artifact-controls="<id>"]`, always visible, hidden
+when zoomed too far out to fit and while presenting) shows its slide position
+(`1/2`), **Interact** and **Present**. The document runs in a sandboxed frame;
+**Interact** or a double-click passes pointer input to it, and **Done** on the bar,
+Esc or a click elsewhere returns to the canvas. With the flag off, an artifact
+shows only its title, no bar, and no script runs. The Canvas inspector edits the
+title; it does not show HTML or the shared styles and components, which only AI
+edits (HTML uses them with `<macro-style name="…">` and
+`<macro-component name="…">`). **Present** on the bar or in the inspector opens
+the artifacts full screen in presentation order, which
 **Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
-before and after clicking inside the frame. For an agent, `ReadCanvas` returns
+before and after clicking inside the frame. The inspector's **Transition** section sets how
+present mode moves onto the selected artifact: a grid of live thumbnails
+(classic kinds, then canvas kinds that move the camera across the canvas), with
+duration, easing, direction for directional kinds, **Apply to all**, **Set
+default** and **Preview**. Check that a key pressed mid-transition lands on the
+next slide at once, and that canvas kinds show the surrounding canvas and the
+connector `path` follows. With reduced motion every kind is a short fade. The
+backend-free run is the artifact suite (`artifact.e2e.ts` under
+`block-canvas/browser-test`, reference config); its
+`transitions-evidence.artifact.e2e.ts` writes per-kind frames, a video and
+inspector screenshots when `CANVAS_TRANSITION_EVIDENCE_DIR` is set. For an agent, `ReadCanvas` returns
 `artifactGuide` when the flag is on for the user, and artifact SDK operations in
 `ApplyCanvasEdits` fail without changing anything when it is off.
 

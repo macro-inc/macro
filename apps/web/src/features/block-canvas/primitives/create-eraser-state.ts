@@ -7,6 +7,7 @@ import {
   selectedShapeIds,
 } from '@macro-inc/graphics';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
+import { ARTIFACT_CONTROLS_SELECTOR } from '../constants';
 import { eraseCommand, eraserHits } from '../core/eraser';
 
 export function createEraserState(
@@ -101,6 +102,12 @@ export function createEraserState(
       surface = element;
       const down = (event: PointerEvent) => {
         if (!active() || event.button !== 0 || pointer !== undefined) return;
+        // An artifact's Interact and Present stay pressable with the eraser.
+        if (
+          event.target instanceof Element &&
+          event.target.closest(ARTIFACT_CONTROLS_SELECTOR)
+        )
+          return;
         event.preventDefault();
         event.stopImmediatePropagation();
         element.focus({ preventScroll: true });

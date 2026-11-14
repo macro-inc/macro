@@ -98,7 +98,11 @@ hold releases.
   admission (before auth or queueing) and `.run(...)` the send in it.
 - **User actions: `beginInteraction('channel.tab')`** for an in-view action
   that mounts content without navigation: update state, then `.end()` in a
-  `finally`. The window is synchronous; flows created inside it join it. Use
+  `finally`. The window is synchronous; flows created inside it join it. For
+  an action whose work outlasts its input (an animation), take
+  `interaction.hold()` before `.end()` and call its release when the work
+  finishes: the span stays open without keeping the window open for
+  unrelated views and interactions. Use
   `startUiOperation` directly only for a measured action that mounts no flow (a
   cell commit, a submit), calling `afterPaint()` once the UI updated.
 - **Sampling** is per trace; see [What gets exported](#what-gets-exported).

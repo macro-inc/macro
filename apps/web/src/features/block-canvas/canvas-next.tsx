@@ -12,7 +12,10 @@ import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
 import {
   createGraphicsEditor,
   createGraphicsEditorFromBackend,
+  type SlideTransition,
   screenToWorld,
+  setAllTransitionsCommand,
+  validSlideTransition,
 } from '@macro-inc/graphics';
 import {
   createLoroGraphicsBackendFromDoc,
@@ -27,6 +30,7 @@ import {
   ArtifactLibraryContext,
   NO_ARTIFACT_LIBRARY,
 } from './context/artifact-library';
+import { PresentationContext } from './context/presentation';
 import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { registerCanvasNextHotkeys } from './hotkeys';
@@ -95,43 +99,91 @@ export function CanvasNextEditor(props: {
         setArtifactLibrary(backend.artifactLibrary.read())
       )
     );
+  // Shared canvases keep the deck default in their root map; a canvas without
+  // a backend (fixtures, local scenes) keeps it for the session.
+  const [deckDefault, setDeckDefaultValue] = createSignal<
+    SlideTransition | undefined
+  >(backend?.presentation.read().transition);
+  if (backend)
+    onCleanup(
+      backend.presentation.subscribe(() =>
+        setDeckDefaultValue(backend.presentation.read().transition)
+      )
+    );
+  const setDeckDefault = (
+    transition: SlideTransition | null,
+    everySlide: boolean
+  ) => {
+    // Same check the shared root map makes, so both paths refuse alike.
+    if (transition && !validSlideTransition(transition))
+      throw new Error('Invalid slide transition');
+
+    // Applying "nothing" to a deck with nothing set would commit an unchanged
+    // scene: an undo step that undoes nothing.
+    const anySlideHasOwn = Object.values(editor.document.items).some(
+      (item) => item.type === 'artifact' && item.geometry.transition
+    );
+    if (everySlide && !transition && !anySlideHasOwn && !deckDefault()) return;
+
+    if (!backend) {
+      if (everySlide)
+        editor.execute(setAllTransitionsCommand, { transition: null });
+      setDeckDefaultValue(transition ?? undefined);
+      return;
+    }
+    if (!everySlide) {
+      backend.presentation.edit({ transition });
+      return;
+    }
+    // One commit, so one undo step restores both the slides and the default.
+    const cleared = setAllTransitionsCommand.apply(
+      { document: editor.document, selection: [] },
+      { transition: null }
+    ).document;
+    backend.commit(cleared, [], { transition });
+  };
   return (
-    <ArtifactLibraryContext.Provider
+    <PresentationContext.Provider
       value={{
-        library: artifactLibrary,
-        // Read when used, so a change of access while open takes effect.
-        get edit() {
-          return backend && props.canEdit && !props.isEmbedded
-            ? backend.artifactLibrary.edit
+        deckDefault,
+        get setDeckDefault() {
+          return props.canEdit && !props.isEmbedded
+            ? setDeckDefault
             : undefined;
         },
       }}
     >
-      <StaticMarkdownContext>
-        <Show
-          when={props.canEdit && !props.isEmbedded}
-          fallback={
-            <CanvasReadOnlyView
+      <ArtifactLibraryContext.Provider
+        value={{
+          library: artifactLibrary,
+        }}
+      >
+        <StaticMarkdownContext>
+          <Show
+            when={props.canEdit && !props.isEmbedded}
+            fallback={
+              <CanvasReadOnlyView
+                editor={editor}
+                fitOnLoad={props.fitOnLoad}
+                presence={presence}
+              />
+            }
+          >
+            <EditableCanvasNext
+              documentId={props.documentId}
               editor={editor}
-              fitOnLoad={props.fitOnLoad}
               presence={presence}
+              measureText={measurement.measure}
+              fitOnLoad={props.fitOnLoad}
+              canEdit={() => props.canEdit}
+              onFinishReady={(finish) => {
+                finishText = finish;
+              }}
             />
-          }
-        >
-          <EditableCanvasNext
-            documentId={props.documentId}
-            editor={editor}
-            presence={presence}
-            measureText={measurement.measure}
-            fitOnLoad={props.fitOnLoad}
-            canEdit={() => props.canEdit}
-            onFinishReady={(finish) => {
-              finishText = finish;
-            }}
-          />
-        </Show>
-      </StaticMarkdownContext>
-    </ArtifactLibraryContext.Provider>
+          </Show>
+        </StaticMarkdownContext>
+      </ArtifactLibraryContext.Provider>
+    </PresentationContext.Provider>
   );
 }
 

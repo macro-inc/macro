@@ -43,7 +43,6 @@ import {
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import { ArtifactInspector } from '../components/artifact-inspector';
-import { ArtifactLibraryInspector } from '../components/artifact-library-inspector';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
@@ -51,7 +50,7 @@ import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
-import { useArtifactLibrary } from '../context/artifact-library';
+import { ARTIFACT_CONTROLS_SELECTOR } from '../constants';
 import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
@@ -67,6 +66,7 @@ import type {
 import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { useCanvasMediaSource } from '../queries/media';
+import { ArtifactControls } from './artifact-controls';
 import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasContextMenu } from './canvas-context-menu';
@@ -80,6 +80,7 @@ import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
 import { CanvasInsertMenu } from './insert-menu';
 import { CanvasTextContent } from './text-content';
 import { TextEditingView } from './text-editing-view';
+import { SlideTransitionInspector } from './transitions/slide-transition-inspector';
 
 export function CanvasView(props: {
   state: CanvasState;
@@ -123,7 +124,6 @@ export function CanvasView(props: {
     return item?.type === 'artifact' ? item : undefined;
   };
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
-  const artifacts = useArtifactLibrary();
   const [presenting, setPresenting] = createSignal<string>();
   const selectedImage = () => {
     const item = selectedItem();
@@ -503,14 +503,10 @@ export function CanvasView(props: {
                               });
                           }}
                         />
-                        <Show when={artifacts.edit}>
-                          {(edit) => (
-                            <ArtifactLibraryInspector
-                              library={artifacts.library()}
-                              onEdit={edit()}
-                            />
-                          )}
-                        </Show>
+                        <SlideTransitionInspector
+                          editor={editor}
+                          slide={artifact()}
+                        />
                       </>
                     )}
                   </Show>
@@ -712,7 +708,6 @@ export function CanvasView(props: {
                       active={state.embeds.active() === itemProps.item.id}
                       onEnter={() => state.embeds.enter(itemProps.item.id)}
                       onExit={exitEmbed}
-                      onPresent={() => setPresenting(itemProps.item.id)}
                     />
                   ),
                   document: (itemProps) => (
@@ -754,12 +749,13 @@ export function CanvasView(props: {
                 input={{
                   ignoreTarget: (target) =>
                     target instanceof Element &&
-                    !!target.closest(
-                      '[data-canvas-document],[data-canvas-artifact]'
-                    ) &&
-                    !!target.closest(
-                      'button,a,input,select,textarea,[role="button"]'
-                    ),
+                    (!!target.closest(ARTIFACT_CONTROLS_SELECTOR) ||
+                      (!!target.closest(
+                        '[data-canvas-document],[data-canvas-artifact]'
+                      ) &&
+                        !!target.closest(
+                          'button,a,input,select,textarea,[role="button"]'
+                        ))),
                   tool: () =>
                     state.tool() === 'text' ||
                     state.tool() === 'eraser' ||
@@ -784,6 +780,16 @@ export function CanvasView(props: {
                 }
               >
                 <EraserTrail points={state.eraser.trail()} />
+                <Show when={artifactsFlag().enabled && !presenting()}>
+                  <ArtifactControls
+                    editor={editor}
+                    editable
+                    activeId={state.embeds.active()}
+                    onInteract={state.embeds.enter}
+                    onDone={exitEmbed}
+                    onPresent={setPresenting}
+                  />
+                </Show>
                 <MediaUploadPreviews
                   previews={props.assets.previews()}
                   camera={state.camera()}

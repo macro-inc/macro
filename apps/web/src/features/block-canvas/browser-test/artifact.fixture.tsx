@@ -2,12 +2,23 @@ import '../../../index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { UserContextProvider } from '@core/context/user';
-import { createScene, type ShapeItem, translation } from '@macro-inc/graphics';
+import {
+  createScene,
+  type GraphicsEditor,
+  type ShapeItem,
+  type SlideTransition,
+  setAllTransitionsCommand,
+  translation,
+} from '@macro-inc/graphics';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../theme/themes/macro-dark';
+import { macroLightTheme } from '../../theme/themes/macro-light';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { CanvasNextEditor } from '../canvas-next';
+import { plainRichText } from '../core/text-codec';
 
 const artifact = (
   id: string,
@@ -29,14 +40,137 @@ const artifact = (
     presentOrder,
   },
 });
+const params = new URLSearchParams(location.search);
+
+/** `?dense` slides look like a real deck's: dark cards full of small text,
+ * which costs far more to paint than a flat color. */
+const denseHtml = (id: string, color: string) => {
+  const card = (index: number) =>
+    `<div class="card"><h2>${id}.${index + 1} Quarterly review</h2><p>${'Revenue grew across every region while churn held flat; the pipeline for next quarter is the largest on record, led by enterprise renewals and two new partner channels. '.repeat(3)}</p><ul>${'<li>Margin up 4 points on infrastructure savings</li>'.repeat(4)}</ul></div>`;
+  return `<style>html,body{margin:0;height:100%}body{box-sizing:border-box;padding:40px;background:radial-gradient(circle at 20% 0%,${color},#0b0d12 60%);color:#e8eaf0;font:15px/1.45 system-ui}header{display:flex;align-items:baseline;gap:24px;margin-bottom:24px}#target{font:800 72px system-ui}header span{opacity:.7;font-size:22px}main{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px;box-shadow:0 12px 32px rgba(0,0,0,.45)}h2{margin:0 0 8px;font-size:18px}p,ul{margin:0 0 8px}</style><header><span id="target">${id}</span><span>Operating plan, board update</span></header><main>${[0, 1, 2, 3, 4, 5].map(card).join('')}</main>`;
+};
+
+/** A full-bleed slide with a big number, so frames are easy to tell apart. */
+const slide = (
+  id: string,
+  x: number,
+  y: number,
+  sortKey: string,
+  color: string,
+  size = { width: 320, height: 180 }
+): ShapeItem<'artifact'> => ({
+  id,
+  type: 'artifact',
+  placement: { parentId: 'scene-root', sortKey },
+  transform: translation(x, y),
+  appearance: { fill: 'transparent', stroke: 'transparent' },
+  geometry: {
+    ...size,
+    title: id,
+    html: params.has('dense')
+      ? denseHtml(id, color)
+      : `<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${color};color:white;font:700 160px system-ui}</style><span id="target">${id}</span>`,
+    designWidth: 1280,
+    designHeight: 720,
+    presentOrder: sortKey,
+  },
+});
+
+/**
+ * `?deck` lays four slides out across the canvas, with notes and an elbow
+ * arrow from slide 2 to slide 3, for the canvas transitions. The deck sits away
+ * from the origin, where a bound arrow's hit box starts.
+ */
+const deck = createScene([
+  slide('1', 1000, 1000, 'a2', '#3d5afe'),
+  slide('2', 2400, 1200, 'a3', '#00897b'),
+  slide('3', 1600, 2100, 'a4', '#e65100', { width: 480, height: 270 }),
+  slide('4', 500, 1900, 'a5', '#6a1b9a'),
+  {
+    id: 'notes',
+    type: 'rectangle',
+    placement: { parentId: 'scene-root', sortKey: 'a1' },
+    transform: translation(1500, 1350),
+    geometry: {
+      width: 320,
+      height: 160,
+      label: {
+        content: plainRichText('Notes between slides'),
+        fontSize: 28,
+        fontFamily: 'sans',
+        height: 40,
+      },
+    },
+    appearance: {
+      fill: 'var(--color-accent-bg)',
+      stroke: 'var(--color-accent)',
+      strokeWidth: 2,
+      cornerRadius: 16,
+    },
+  },
+  {
+    id: 'arrow',
+    type: 'connector',
+    placement: { parentId: 'scene-root', sortKey: 'a0' },
+    transform: translation(0, 0),
+    appearance: {
+      fill: 'transparent',
+      stroke: 'var(--color-ink)',
+      strokeWidth: 4,
+    },
+    geometry: {
+      start: {
+        point: { x: 0, y: 0 },
+        binding: { targetId: '2', anchor: 'bottom' },
+      },
+      end: {
+        point: { x: 0, y: 0 },
+        binding: { targetId: '3', anchor: 'right' },
+      },
+      route: 'stepped',
+      startHead: 'none',
+      endHead: 'arrow',
+    },
+  },
+]);
+
 const initial = {
   version: 2,
-  document: createScene([
-    artifact('First', 100, 'a0'),
-    artifact('Second', 500, 'a1'),
-  ]),
+  document: params.has('deck')
+    ? deck
+    : createScene([
+        artifact('First', 100, 'a0'),
+        artifact('Second', 500, 'a1'),
+      ]),
 } as const;
-const editable = new URLSearchParams(location.search).has('edit');
+const editable = params.has('edit');
+
+// `?theme=light` or `?theme=dark` applies that app theme; touch devices get
+// the app's touch styles, as boot sets them.
+const theme = params.get('theme');
+if (theme) {
+  const light = theme === 'light';
+  for (const [key, token] of Object.entries(
+    themeCssVars(light ? macroLightTheme : macroDarkTheme)
+  ))
+    document.documentElement.style.setProperty(key, token);
+  document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+  document.documentElement.dataset.themeLight = String(light);
+}
+document.documentElement.dataset.touchDevice = String(
+  matchMedia('(pointer: coarse)').matches
+);
+
+declare global {
+  interface Window {
+    /** Gives every slide the same transition, for tests and captures. */
+    setSlideTransitions?: (transition: SlideTransition | null) => void;
+  }
+}
+const exposeEditor = (editor: GraphicsEditor) => {
+  window.setSlideTransitions = (transition) =>
+    editor.execute(setAllTransitionsCommand, { transition });
+};
 
 render(
   () => (
@@ -50,7 +184,8 @@ render(
                   documentId="canvas"
                   initial={initial}
                   canEdit={editable}
-                  fitOnLoad={false}
+                  fitOnLoad={params.has('deck')}
+                  onReady={exposeEditor}
                 />
               </DragDropProvider>
             </UserContextProvider>
