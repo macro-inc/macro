@@ -67,7 +67,7 @@ export type CompanyContactsSource = {
   readonly isPending: boolean;
   /** Rows of the previous search stay on screen while this one loads. */
   readonly isSearching: boolean;
-  /** The first page or a refetch failed. */
+  /** The first page or a refetch failed; a failed continuation is not one. */
   readonly isError: boolean;
   readonly hasNextPage: boolean;
   readonly isFetchingNextPage: boolean;

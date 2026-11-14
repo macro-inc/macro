@@ -1,9 +1,20 @@
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { QueryClient } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
-import { createRoot, createSignal } from 'solid-js';
+import { err, ok } from 'neverthrow';
+import {
+  createComponent,
+  createMemo,
+  createRoot,
+  createSignal,
+  type JSX,
+  Suspense,
+} from 'solid-js';
+import { render } from 'solid-js/web';
 import { expect, it, vi } from 'vitest';
-import type { CompanyContactsFilter } from '../context/crm-sources';
+import type {
+  CompanyContactsFilter,
+  CompanyContactsSource,
+} from '../context/crm-sources';
 import {
   companyContactsHold,
   flattenCompanyContactsPages,
@@ -129,6 +140,137 @@ it('names the search its rows answer, the earlier one while the next is loading'
   held.resolve();
   await vi.waitFor(() => expect(source.loadedSearch).toBe('an'));
   expect(source.contacts.map((row) => row.id)).toEqual(['an']);
+  dispose();
+  client.clear();
+});
+
+it('keeps loaded rows when a continuation fails, and reports a failed refetch', async () => {
+  let fail = false;
+  const listCompanyContactsPage = vi.fn(
+    async ({ cursor }: { cursor?: string }) => {
+      if (fail) return err([{ code: 'HTTP_ERROR', message: 'unavailable' }]);
+      return ok({
+        contacts: [contact(cursor ?? 'first', 'company-1')],
+        nextCursor: cursor ? null : 'second',
+      });
+    }
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const deps = {
+    client,
+    storage: { listCompanyContactsPage },
+  } as unknown as CrmRecordDependencies;
+  const { source, dispose } = createRoot((dispose) => ({
+    source: useCompanyContactsQuery(deps, () => ({
+      companyId: 'company-1',
+      archived: false,
+      search: 'a',
+    })),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(source.contacts).toHaveLength(1));
+
+  fail = true;
+  await source.fetchNextPage();
+  expect(source.isFetchNextPageError).toBe(true);
+  expect(source.isError).toBe(false);
+  expect(source.contacts.map((row) => row.id)).toEqual(['first']);
+  expect(source.loadedSearch).toBe('a');
+
+  await source.refetch();
+  expect(source.isError).toBe(true);
+  expect(source.contacts.map((row) => row.id)).toEqual(['first']);
+  expect(source.loadedSearch).toBe('a');
+  dispose();
+  client.clear();
+});
+
+it('reports an error when the first page fails', async () => {
+  const listCompanyContactsPage = vi.fn(async () =>
+    err([{ code: 'HTTP_ERROR', message: 'unavailable' }])
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const deps = {
+    client,
+    storage: { listCompanyContactsPage },
+  } as unknown as CrmRecordDependencies;
+  const { source, dispose } = createRoot((dispose) => ({
+    source: useCompanyContactsQuery(deps, () => ({
+      companyId: 'company-1',
+      archived: false,
+      search: '',
+    })),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(source.isError).toBe(true));
+  expect(source.contacts).toEqual([]);
+  expect(source.loadedSearch).toBeUndefined();
+  dispose();
+  client.clear();
+});
+
+it('retries a failed search without suspending the list', async () => {
+  const listCompanyContactsPage = vi.fn(
+    async ({ query }: { query?: string }) =>
+      query === 'ab'
+        ? err([{ code: 'HTTP_ERROR', message: 'unavailable' }])
+        : ok({
+            contacts: [contact(query ?? 'all', 'company-1')],
+            nextCursor: null,
+          })
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const deps = {
+    client,
+    storage: { listCompanyContactsPage },
+  } as unknown as CrmRecordDependencies;
+  const [search, setSearch] = createSignal('');
+  let source!: CompanyContactsSource;
+  let fallbacks = 0;
+  let child: JSX.Element;
+  function List() {
+    source = useCompanyContactsQuery(deps, () => ({
+      companyId: 'company-1',
+      archived: false,
+      search: search(),
+    }));
+    return createMemo(
+      () => `${source.contacts.map((row) => row.id)}|${source.loadedSearch}`
+    ) as unknown as JSX.Element;
+  }
+  const element = document.createElement('div');
+  const dispose = render(
+    () =>
+      createComponent(Suspense, {
+        get fallback() {
+          fallbacks++;
+          return 'loading';
+        },
+        get children() {
+          child ??= createComponent(List, {});
+          return child;
+        },
+      }),
+    element
+  );
+  await vi.waitFor(() => expect(element.textContent).toBe('all|'));
+
+  setSearch('ab');
+  await vi.waitFor(() => expect(source.isError).toBe(true));
+  const before = fallbacks;
+  await source.refetch();
+  await vi.waitFor(() =>
+    expect(listCompanyContactsPage).toHaveBeenCalledTimes(3)
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(fallbacks).toBe(before);
+  expect(source.contacts).toEqual([]);
   dispose();
   client.clear();
 });

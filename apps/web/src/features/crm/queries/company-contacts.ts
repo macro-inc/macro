@@ -106,15 +106,22 @@ export function useCompanyContactsQuery(
     () => companyContactsQueryOptions(deps, filter() ?? NO_FILTER),
     () => deps.client
   );
+  // A failed continuation keeps its loaded pages (status `error` with data),
+  // so rows are read whenever there is data, never only on `isSuccess`. With
+  // no data, `data` is not read: that read would suspend on the next retry.
   const contacts = createMemo<CrmContactResponse[]>(() =>
-    query.isSuccess ? flattenCompanyContactsPages(query.data.pages) : []
+    query.isPending || query.isLoadingError
+      ? []
+      : flattenCompanyContactsPages(query.data.pages)
   );
   return {
     get contacts() {
       return contacts();
     },
     get loadedSearch() {
-      return query.isSuccess ? query.data.pages[0]?.search : undefined;
+      return query.isPending || query.isLoadingError
+        ? undefined
+        : query.data.pages[0]?.search;
     },
     get isPending() {
       return query.isPending;
@@ -131,6 +138,8 @@ export function useCompanyContactsQuery(
         current.toLowerCase().includes(previous.toLowerCase())
       );
     },
+    // Like `recordListFailure`: a failed refetch means the loaded rows may no
+    // longer be current (access revoked), so only a continuation keeps them.
     get isError() {
       return query.isError && !query.isFetchNextPageError;
     },
