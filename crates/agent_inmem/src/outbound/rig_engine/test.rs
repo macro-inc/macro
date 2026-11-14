@@ -219,6 +219,40 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     )));
 }
 
+/// A session nobody watches reads its own short prompt, not the
+/// conversation's preamble and tool guidance, and no pointer to a
+/// ContentSearch it does not have; the rest of its part and its turn's
+/// documentation stay.
+#[test]
+fn an_unseen_turn_reads_its_own_short_prompt() {
+    let session = AgentSessionId::new();
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let prompt = system_prompt(
+        &TOOLS,
+        "<macro_sdk>routines</macro_sdk>",
+        session,
+        ReplyDelivery::Unseen,
+        Some(&identity),
+        Some("be terse"),
+        Some("prefers Rust"),
+    );
+    let text = prompt.to_string();
+
+    assert!(text.starts_with(unseen::PROMPT));
+    assert!(!text.contains(TOOLS));
+    assert!(!text.contains(&prompt::agent_session::PROMPT.to_string()));
+    assert!(!text.contains("<agent_session>"));
+    assert!(!text.contains(opener::NOT_OPENED));
+    assert!(text.contains(&prompt::agent_identity::render("Grunk", "grunk")));
+    assert!(text.contains("<session_instructions>\nbe terse\n</session_instructions>"));
+    assert!(text.contains("<user_memory>\nprefers Rust\n</user_memory>"));
+    assert!(text.ends_with("<macro_sdk>routines</macro_sdk>"));
+}
+
 /// A named agent is told who it is before its instructions, even when it
 /// has no session instructions — otherwise "who are you" has nothing to go on.
 #[test]
