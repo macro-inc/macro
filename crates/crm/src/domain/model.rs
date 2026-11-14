@@ -200,6 +200,40 @@ pub struct CrmContact {
     pub company_domain_emails: Vec<String>,
 }
 
+/// Which of a company's contacts one page of its Team list holds.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyContactsQuery {
+    /// The archived contacts instead of the visible ones. Under an archived
+    /// company every contact is archived.
+    pub archived: bool,
+    /// Text the contact's name or primary email must contain,
+    /// case-insensitively. Empty matches every contact.
+    pub search: String,
+    /// Where the previous page stopped; `None` for the first page.
+    pub cursor: Option<CrmCompanyContactsCursor>,
+    /// The most contacts the page holds.
+    pub limit: i64,
+}
+
+/// The last contact of a Team list page, in the list's order: by
+/// lowercased name (the email when unnamed), then by id descending.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CrmCompanyContactsCursor {
+    /// The contact's lowercased name, or email when it has no name.
+    pub sort_name: Option<String>,
+    /// The contact's id.
+    pub id: uuid::Uuid,
+}
+
+/// One page of a company's Team list.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyContactsPage {
+    /// The page's contacts, in the list's order.
+    pub contacts: Vec<CrmContact>,
+    /// Where the next page starts; `None` on the last page.
+    pub next_cursor: Option<CrmCompanyContactsCursor>,
+}
+
 /// What a depopulate teardown actually removed. Every field is `false` on
 /// the no-op paths (unknown contact, malformed email), so
 /// [`Self::removed_anything`] distinguishes a real teardown from a call

@@ -365,6 +365,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _include_hidden: bool,
+        _query: &CrmCompanyContactsQuery,
+    ) -> Result<CrmCompanyContactsPage, CrmError> {
+        unimplemented!()
+    }
+
     async fn get_contact_for_team(
         &self,
         _team_id: &uuid::Uuid,
@@ -398,6 +408,7 @@ impl CompaniesRepository for StubRepo {
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
         _include_hidden: bool,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
