@@ -612,7 +612,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         // EVAL ONLY (never commit): no settle after a passing check when the
         // container has /tmp/session-fast-nosettle.
         if !(matches!(ending, Ok(Ok(Ending::Checked)))
-            && Path::new("/tmp/session-fast-nosettle").exists())
+            && std::path::Path::new("/tmp/session-fast-nosettle").exists())
         {
             tokio::time::sleep(ACTIVITY_SETTLE).await;
         }
