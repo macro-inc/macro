@@ -341,10 +341,14 @@ pub(crate) fn build(
     // with its services healthy.
     let mut scenarios: BTreeMap<String, Scenario> = BTreeMap::new();
     // Every scenario the results know, passed or not: a proof may name one.
+    // A record alone does not make its scenario known: a log directory keeps
+    // the records of scenarios that no longer exist.
     let mut known: BTreeSet<String> = results.outcomes.keys().cloned().collect();
     for record in records {
         let name = record.scenario();
-        known.insert(name.clone());
+        if results.outcomes.is_empty() {
+            known.insert(name.clone());
+        }
         let passed = results.outcomes.is_empty()
             || matches!(
                 results.outcomes.get(&name),
@@ -675,7 +679,19 @@ pub(crate) fn build(
                 proof.provider
             ));
         }
-        if !known.contains(&proof.scenario) {
+        // A known bug may have its scenario ignored, so out of the results.
+        let held_open = ledger
+            .map
+            .functions
+            .get(&proof.function)
+            .is_some_and(|mapping| {
+                mapping.bug.is_some()
+                    && mapping
+                        .bug_on
+                        .as_deref()
+                        .is_none_or(|on| on == proof.provider)
+            });
+        if !held_open && !known.contains(&proof.scenario) {
             wrong.push(format!(
                 "the scenario `{}` is not in the results",
                 proof.scenario
@@ -818,10 +834,10 @@ pub(crate) fn build(
                 Some(cell_of(Status::Proved, &by, Some(&proof.broke)))
             } else if !checking.is_empty() {
                 Some(cell_of(Status::Claimed, &checking, None))
-            } else if !names.is_empty() {
-                Some(cell_of(Status::Performed, &names, None))
             } else if waiver.is_some() {
                 Some(cell_of(Status::Waived, &names, waiver))
+            } else if !names.is_empty() {
+                Some(cell_of(Status::Performed, &names, None))
             } else {
                 Some(cell_of(Status::Open, &names, None))
             }
