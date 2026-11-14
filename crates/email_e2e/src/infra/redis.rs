@@ -13,6 +13,9 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// How long a lease outlives a scenario that died without releasing it.
 const LEASE: Duration = Duration::from_secs(30);
 const RENEW_EVERY: Duration = Duration::from_secs(10);
@@ -194,9 +197,21 @@ async fn lease_index(
                 .arg(LEASE.as_millis() as u64)
                 .query_async(registry)
                 .await?;
-            if taken {
+            if !taken {
+                continue;
+            }
+            // A lease that ran out says nothing of its holder's services:
+            // those of a scenario that stalled are still connected and would
+            // write into this one's state. Such a database is left alone
+            // until they are gone.
+            if !in_use(registry, index).await? {
                 return Ok(index);
             }
+            let _released: i32 = redis::Script::new(RELEASE)
+                .key(lease_key(index))
+                .arg(owner)
+                .invoke_async(registry)
+                .await?;
         }
 
         if tokio::time::Instant::now() >= deadline {
@@ -208,6 +223,25 @@ async fn lease_index(
         // Another process holds the lease, so nothing here can signal its release.
         tokio::time::sleep(LEASE_RETRY).await;
     }
+}
+
+/// Whether any client of the server is connected to database `index`. A
+/// former writer that is not connected at this moment is not seen.
+async fn in_use(registry: &mut MultiplexedConnection, index: u32) -> Result<bool, Report> {
+    let clients: String = redis::cmd("CLIENT")
+        .arg("LIST")
+        .query_async(registry)
+        .await
+        .context("could not list the Redis server's clients")?;
+    Ok(selects(&clients, index))
+}
+
+/// Whether a `CLIENT LIST` answer has a client on database `index`.
+fn selects(clients: &str, index: u32) -> bool {
+    let database = format!("db={index}");
+    clients
+        .lines()
+        .any(|client| client.split(' ').any(|field| field == database))
 }
 
 async fn renew(
