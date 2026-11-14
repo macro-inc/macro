@@ -190,6 +190,7 @@ async fn labels_can_be_created_applied_and_deleted() {
                 id: None,
                 name: "Receipts".to_string(),
             }],
+            signature: Some("<b>Ada</b>".to_string()),
             send_as: vec![SeedSendAs {
                 email: "ada@alias.example.com".to_string(),
                 name: Some("Ada Alias".to_string()),
@@ -277,6 +278,7 @@ async fn labels_can_be_created_applied_and_deleted() {
     let aliases = client.list_send_as(&ada).await.unwrap().send_as.unwrap();
     assert_eq!(aliases.len(), 2);
     assert_eq!(aliases[0].is_primary, Some(true));
+    assert_eq!(aliases[0].signature.as_deref(), Some("<b>Ada</b>"));
     assert_eq!(aliases[1].send_as_email, "ada@alias.example.com");
     assert_eq!(
         aliases[1].verification_status,

@@ -28,6 +28,8 @@ a local stack, without Google accounts.
   one redirects back with an authorization code, which `/token` exchanges for
   an access token, a refresh token and an ID token signed by the same key.
   `/v1/userinfo` names the token's user.
+- `settings/sendAs` lists the primary address with the `signature` its seed
+  gives it (empty when it gives none), then the seed's `send_as` addresses.
 - Every mailbox is also a Google Calendar user, with a primary calendar and
   any others its seed lists. A recurring event is expanded in the zone its
   start names; changing or deleting one occurrence stores an exception under

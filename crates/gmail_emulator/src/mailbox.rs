@@ -150,6 +150,8 @@ pub(crate) struct Mailbox {
     /// The history id of the last push notification queued.
     pub(crate) notified_history_id: u64,
     pub(crate) filters: Vec<(String, Value)>,
+    /// The HTML signature of the primary address.
+    pub(crate) signature: Option<String>,
     pub(crate) send_as: Vec<SeedSendAs>,
     /// Draft id to the id of the message holding its current revision.
     pub(crate) drafts: BTreeMap<String, String>,
@@ -192,6 +194,7 @@ impl Mailbox {
             history_floor: history_id,
             notified_history_id: history_id,
             filters: Vec::new(),
+            signature: seed.signature.clone(),
             send_as: seed.send_as.clone(),
             drafts: BTreeMap::new(),
             contacts: ContactBook::new("people/c", &seed.contacts),
