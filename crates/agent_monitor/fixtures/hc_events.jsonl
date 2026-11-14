@@ -1,0 +1,12 @@
+{"channel":null,"seq":100,"terminals":[{"address":"t1","argv":["claude"],"created_ms":1800000000000,"cwd":"/work/alpha","exit_code":null,"finished_ms":null,"foreground":{"argv":["claude"],"cwd":"/work/alpha","name":".claude-wrapped","pid":4001},"labels":{"herdr.kind":"manager","herdr.model":"claude-opus-5-5","herdr.space":"sp1","herdr.goal":"Ship the widget","herdr.manager-dir":"/state/managers/t1-1","run.id":"run-7","herdr.tag":"alpha, beta"},"name":"lead","parent":null,"pid":4001,"reason":null,"state":"live","status":{"app":"claude-code","state":"working","msg":"Running tests"},"status_ms":1800000001000,"title":"","turn":3,"future_field":{"x":1}},{"address":"t2","argv":["bash"],"created_ms":1800000002000,"cwd":"/work/beta","foreground":{"name":"bash","pid":4002},"labels":{},"name":null,"parent":null,"state":"live","status":null,"title":"","turn":0}]}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"address":"t3","created_ms":1800000003000,"cwd":"/work/alpha","labels":{"herdr.kind":"builder","herdr.spawned-by":"t1"},"name":"helper","parent":null,"state":"live","status":null,"title":"","turn":0},"seq":101,"terminal":"t3","type":"created"}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"argv":["claude"],"cwd":"/work/alpha","name":".claude-wrapped","pid":4003},"seq":102,"terminal":"t3","type":"foreground"}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"records":{"a1b2":{"state":"working"}},"reported":true,"status":{"app":"claude-code","msg":"Editing","state":"working"}},"seq":103,"terminal":"t3","type":"status"}}
+{"jsonrpc":"2.0","method":"heartbeat","params":{"seq":103}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"state":"done","turn":4},"seq":104,"terminal":"t1","type":"turn"}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"labels":{"herdr.kind":"builder","herdr.spawned-by":"t1","herdr.waiting":"needs a decision"}},"seq":105,"terminal":"t3","type":"labels"}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"some":"thing"},"seq":106,"terminal":"t3","type":"brand_new_event_kind"}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{"exit_code":1,"finished_ms":1800000009000,"reason":"exited","signal":null},"seq":107,"terminal":"t2","type":"finished"}}
+{"jsonrpc":"2.0","method":"event","params":{"data":{},"seq":108,"terminal":"t2","type":"removed"}}
+{"jsonrpc":"2.0","method":"missed","params":{"seq":120}}
+{"channel":null,"seq":120,"terminals":[{"address":"t1","created_ms":1800000000000,"labels":{},"name":"lead","state":"finished","reason":"killed","exit_code":null,"finished_ms":1800000020000}]}

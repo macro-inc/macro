@@ -11,12 +11,24 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 hyper-util = { workspace = true }
+notify = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 prost = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "process",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
 tokio-stream = { workspace = true, features = ["net"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tonic = { workspace = true }

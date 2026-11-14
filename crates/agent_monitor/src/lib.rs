@@ -8,6 +8,7 @@
 //! - [`domain::store`]: the single-writer store and its broadcast.
 //! - [`outbound::demo`]: the scripted demo fleet.
 //! - [`inbound::grpc`] and [`client`]: the server and client (Unix only).
+//! - [`outbound`]: the source adapters.
 //! - [`proto`]: the generated wire types and their conversions.
 #![deny(missing_docs)]
 
