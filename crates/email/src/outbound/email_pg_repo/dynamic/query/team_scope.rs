@@ -62,9 +62,13 @@ pub(crate) struct TeamReadTuning {
 }
 
 impl TeamReadTuning {
+    /// Chosen on a production-size team: past 5,000 superset rows a record
+    /// usually fills its page within 100 threads per row of the inboxes, and
+    /// a window that doesn't costs about a quarter second before the
+    /// superset reads the page.
     pub(crate) const DEFAULT: Self = Self {
         superset_limit: 5_000,
-        window_per_row: 20,
+        window_per_row: 100,
     };
 }
 
