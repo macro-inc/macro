@@ -68,12 +68,13 @@ message Heartbeat {
 enum Source {
   SOURCE_UNSPECIFIED = 0;
   SOURCE_HC = 1;
-  SOURCE_CLAUDE = 2;
-  SOURCE_CODEX = 3;
-  SOURCE_MACROD = 4;
-  SOURCE_MANAGER = 5;
-  SOURCE_RUN_RECORD = 6;
-  SOURCE_DEMO = 7;
+  SOURCE_CLAUDE_REGISTRY = 2;
+  SOURCE_CLAUDE_TRANSCRIPTS = 3;
+  SOURCE_CODEX = 4;
+  SOURCE_MACROD = 5;
+  SOURCE_MANAGER = 6;
+  SOURCE_RUN_RECORD = 7;
+  SOURCE_DEMO = 8;
 }
 
 enum AgentKind {
@@ -121,6 +122,8 @@ message Tokens {
   uint64 output = 2;
   uint64 cache_read = 3;
   uint64 cache_write = 4;
+  // Of cache_write, the tokens written with a one-hour lifetime.
+  uint64 cache_write_1h = 5;
 }
 
 message Agent {

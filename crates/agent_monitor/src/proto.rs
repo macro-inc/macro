@@ -76,7 +76,8 @@ impl From<SourceKind> for wire::Source {
     fn from(source: SourceKind) -> Self {
         match source {
             SourceKind::Hc => Self::Hc,
-            SourceKind::Claude => Self::Claude,
+            SourceKind::ClaudeRegistry => Self::ClaudeRegistry,
+            SourceKind::ClaudeTranscripts => Self::ClaudeTranscripts,
             SourceKind::Codex => Self::Codex,
             SourceKind::Macrod => Self::Macrod,
             SourceKind::Manager => Self::Manager,
@@ -93,7 +94,8 @@ fn source_from_wire(value: i32) -> Result<SourceKind, WireError> {
     };
     match wire::Source::try_from(value).map_err(|_| unknown.clone())? {
         wire::Source::Hc => Ok(SourceKind::Hc),
-        wire::Source::Claude => Ok(SourceKind::Claude),
+        wire::Source::ClaudeRegistry => Ok(SourceKind::ClaudeRegistry),
+        wire::Source::ClaudeTranscripts => Ok(SourceKind::ClaudeTranscripts),
         wire::Source::Codex => Ok(SourceKind::Codex),
         wire::Source::Macrod => Ok(SourceKind::Macrod),
         wire::Source::Manager => Ok(SourceKind::Manager),
@@ -201,6 +203,7 @@ impl From<Tokens> for wire::Tokens {
             output: tokens.output,
             cache_read: tokens.cache_read,
             cache_write: tokens.cache_write,
+            cache_write_1h: tokens.cache_write_1h,
         }
     }
 }
@@ -212,6 +215,7 @@ impl From<wire::Tokens> for Tokens {
             output: tokens.output,
             cache_read: tokens.cache_read,
             cache_write: tokens.cache_write,
+            cache_write_1h: tokens.cache_write_1h,
         }
     }
 }

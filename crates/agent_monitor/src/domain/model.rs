@@ -65,13 +65,17 @@ impl fmt::Display for AgentId {
     }
 }
 
-/// Where a fact came from.
+/// Where a fact came from: one value per source adapter, so a source's
+/// [`Change::Reset`](crate::domain::observation::Change::Reset) replaces only
+/// its own facts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SourceKind {
     /// hc terminals (`hc events`).
     Hc,
-    /// Claude Code: the session registry and transcripts.
-    Claude,
+    /// The Claude Code session registry (running processes).
+    ClaudeRegistry,
+    /// Claude Code transcripts.
+    ClaudeTranscripts,
     /// Codex rollouts.
     Codex,
     /// Sessions macrod dispatched.
@@ -86,9 +90,10 @@ pub enum SourceKind {
 
 impl SourceKind {
     /// Every source, in display order.
-    pub const ALL: [SourceKind; 7] = [
+    pub const ALL: [SourceKind; 8] = [
         SourceKind::Hc,
-        SourceKind::Claude,
+        SourceKind::ClaudeRegistry,
+        SourceKind::ClaudeTranscripts,
         SourceKind::Codex,
         SourceKind::Macrod,
         SourceKind::Manager,
@@ -100,7 +105,8 @@ impl SourceKind {
     pub fn name(self) -> &'static str {
         match self {
             SourceKind::Hc => "hc",
-            SourceKind::Claude => "claude",
+            SourceKind::ClaudeRegistry => "claude_registry",
+            SourceKind::ClaudeTranscripts => "claude_transcripts",
             SourceKind::Codex => "codex",
             SourceKind::Macrod => "macrod",
             SourceKind::Manager => "manager",
@@ -268,10 +274,12 @@ pub struct Tokens {
     pub cache_read: u64,
     /// Input tokens written to the prompt cache.
     pub cache_write: u64,
+    /// Of `cache_write`, the tokens written with a one-hour lifetime (priced higher).
+    pub cache_write_1h: u64,
 }
 
 impl Tokens {
-    /// Every class summed.
+    /// Every class summed (`cache_write_1h` is part of `cache_write`).
     pub fn total(self) -> u64 {
         self.input + self.output + self.cache_read + self.cache_write
     }
@@ -282,6 +290,7 @@ impl Tokens {
         self.output += other.output;
         self.cache_read += other.cache_read;
         self.cache_write += other.cache_write;
+        self.cache_write_1h += other.cache_write_1h;
     }
 }
 
