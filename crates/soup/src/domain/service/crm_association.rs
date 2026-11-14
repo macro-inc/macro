@@ -15,8 +15,8 @@
 //! access: an edge only narrows a source query that already enforces the
 //! viewer's access to each item.
 //!
-//! Activity covers every visible record of the viewer's teams, so it is not
-//! expanded to ids: the CRM service finds the items whose property names a
+//! Activity covers every visible record of the viewer's teams, so Soup never
+//! holds its ids: the CRM service finds the items whose property names a
 //! record of the scope in one statement (`activity_property_edges`), and reads
 //! the scope's domains and addresses only when email is a source. Edges are
 //! read only for the sources a request does not pin to the nil id
