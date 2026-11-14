@@ -156,6 +156,13 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   that make a racing link and participant write wait for each other; never
   read it without the filter's chain recheck, and add a locking trigger when
   a new write can link a document to a message or a message to a contact.
+  Every such writer locks a message before its attachments (a link locks its
+  attachment's message before its foreign key check, in
+  `document_email_participants_lock_linked_message`); a new writer that
+  takes an attachment first and then waits for its message can deadlock with
+  one that holds the message and deletes or moves the attachment. It has no
+  foreign key to `"Document"`: an `AFTER DELETE` statement trigger deletes a
+  deleted document's rows.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and
