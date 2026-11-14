@@ -89,9 +89,11 @@ for (const provider of PROVIDERS) {
         .toEqual([zeppelin.id]);
       confirmed('F-050');
 
-      // Asked again now that the index has it.
+      // Asked again now that the index has it, by another word of the
+      // message: the app keeps an answer for some minutes, and the first
+      // one may have come before the index had the thread.
       await field.fill('');
-      await page.keyboard.type('zeppelin');
+      await page.keyboard.type('leaves');
       await expect.poll(() => rowIds(page)).toEqual([zeppelin.id]);
       saw('STL-987');
 
