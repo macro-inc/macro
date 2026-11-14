@@ -6,22 +6,24 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+async-stream = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+hyper-util = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
 prost = { workspace = true }
+rand = { workspace = true }
 rootcause = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [
-  "macros",
-  "rt-multi-thread",
-  "sync",
-  "time",
-] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-stream = { workspace = true, features = ["net"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
+tower = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]

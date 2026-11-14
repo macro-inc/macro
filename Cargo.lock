@@ -897,19 +897,26 @@ dependencies = [
 name = "agent_monitor"
 version = "0.1.0"
 dependencies = [
+ "async-stream",
  "async-trait",
  "chrono",
  "futures",
+ "hyper-util",
+ "opentelemetry",
  "prost 0.14.3",
  "protox",
+ "rand 0.9.4",
  "rootcause",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
+ "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
  "workspace-hack",
 ]
 

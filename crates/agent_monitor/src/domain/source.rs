@@ -8,7 +8,7 @@ use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::model::{Agent, TranscriptItem};
+use crate::domain::model::{Agent, SourceKind, TranscriptItem};
 use crate::domain::observation::Observation;
 
 /// Why a source stopped.
@@ -33,8 +33,8 @@ impl From<rootcause::Report> for SourceError {
 /// `async_trait` because the supervisor holds sources as `Box<dyn AgentSource>`.
 #[async_trait]
 pub trait AgentSource: Send + 'static {
-    /// A short name for spans and health.
-    fn name(&self) -> &'static str;
+    /// Which source this is; its facts and health are filed under it.
+    fn kind(&self) -> SourceKind;
 
     /// Runs until cancelled. Sends a full [`Change::Reset`] first, then
     /// changes. Returning an error marks the source unhealthy; the supervisor
