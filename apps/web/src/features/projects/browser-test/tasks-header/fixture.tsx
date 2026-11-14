@@ -33,6 +33,7 @@ function Fixture() {
     userId: () => 'owner',
     createCollectionSource: unavailable,
     createProjectSource: unavailable,
+    createProjectIdentitySource: unavailable,
     createPropertyDefinitionsSource: unavailable,
     createCommands: () => ({
       createTask: unavailable,
