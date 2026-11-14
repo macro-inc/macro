@@ -1,0 +1,21 @@
+# The end-to-end email suite starts real service processes and needs an SQS
+# server besides Postgres and Redis, so it runs by itself: `just email-e2e`
+# (profile `email-e2e`), not with the workspace's tests.
+[profile.default]
+default-filter = "not package(email_e2e)"
+
+[profile.email-e2e]
+default-filter = "package(email_e2e)"
+# A scenario that hangs is a failure, not something to wait an hour for.
+slow-timeout = { period = "120s", terminate-after = 3 }
+failure-output = "immediate-final"
+fail-fast = false
+
+# Each scenario runs two service processes, or three when it serves the
+# GraphQL API, with their own connection pools.
+[test-groups.email-e2e]
+max-threads = 6
+
+[[profile.email-e2e.overrides]]
+filter = "package(email_e2e)"
+test-group = "email-e2e"

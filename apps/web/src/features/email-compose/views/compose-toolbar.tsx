@@ -129,6 +129,7 @@ export function EmailComposeToolbar(props: {
           <Button
             variant="ghost"
             tooltip="Format"
+            aria-label="Format"
             size="icon-md"
             disabled={ctx.disabled()}
             onClick={() => setShowFormatRibbon(!showFormatRibbon())}
