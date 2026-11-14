@@ -2,14 +2,14 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
- MACROD  MON >_  DEMO  ACTIVE  ● LIVE  WORK 79  WAIT 0  BLOCK 1  ERR 50  DAY ~$28.60  AGENTS 97  SEQ 1                                                                              FRI 02 JAN 10:01:40 
+ MACROD  MON >_  DEMO  ACTIVE  ● LIVE  WORK 25  WAIT 0  BLOCK 1  ERR 50  DAY ~$28.60  AGENTS 34  SEQ 1                                                                              FRI 02 JAN 10:01:40 
  0 MON  1 AGENTS  2 TAPE  3 SPEND  4 FAILURES  5 TREE  6 SOURCES  7 BODY  w WALL                                                                                               / FIND  ? KEYS  ESC BACK 
-P ▲ TOOL Write README.md   ┃   SCRATCH-NOTES ▲ TURN turn start   ┃   SCRATCH-NOTES ▲ TOOL Write README.md   ┃   EXPLORE THE REDUCER ▲ STAT idle   ┃   UI-PAGES ▲ STAT idle   ┃   UI-PAGES ▲ TEND turn en
+urn end   ┃   FIX-18 ▲ STAT idle   ┃   FIX-18 ▲ TEND turn end   ┃   RPC-SERVER ▲ STAT working   ┃   LINT-SWEEP SESSION ▲ TOOL Grep subscribe   ┃   RPC-SERVER ▲ TURN turn start   ┃   Q4-ROADMAP ▲ STAT 
 ┌ WORKING ──────────────┐┌ WAITING ──────────────┐┌ BLOCKED ──────────────┐┌ TURNS 24H ────────────┐┌ TOOLS 24H ────────────┐┌ ERR 24H ──────────────┐┌ TOK/MIN ──────────────┐┌ DAY ──────────────────┐
-│79                     ││0                      ││1                      ││297                    ││707                    ││50                     ││5.0M                   ││~$28.60                │
-│of 93 live · 13 idle   ││on a person            ││permission / stuck     ││12/h avg               ││6.8% failed            ││2 agents failed        ││▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ││▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁│
+│25                     ││0                      ││1                      ││234                    ││644                    ││50                     ││5.0M                   ││~$28.60                │
+│of 30 live · 4 idle    ││on a person            ││permission / stuck     ││9/h avg                ││7.5% failed            ││2 agents failed        ││▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ││▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁│
 └───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘
-┌ WALL  97 AGENTS · PAGE 1/5 · ←→↑↓ MOVE · ENTER OPEN ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ WALL  34 AGENTS · PAGE 1/2 · ←→↑↓ MOVE · ENTER OPEN ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │┏■ explore the reducer  subagent ━━━━━┓┌■ fix-19  builder ───────────────────┐┌■ rpc-server  builder ───────────────┐┌■ fix-16  builder ───────────────────┐┌■ release-train  manager ────────────┐   │
 │┃WORK   claude-haiku-5-5              ┃│WORK   claude-sonnet-5-5             ││WORK   claude-opus-5-5               ││WORK   claude-sonnet-5-5             ││WORK building  claude-opus-5-5       │   │
 │┃explore the reducer                  ┃│Follow-up from review                ││▶ Task explore the reducer           ││Follow-up from review                ││Ship the release branch              │   │
@@ -47,10 +47,10 @@ P ▲ TOOL Write README.md   ┃   SCRATCH-NOTES ▲ TURN turn start   ┃   SCR
 ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              │   │
 ││explore the reducer                  ││explore the reducer                  ││explore the reducer                  ││explore the reducer                  ││explore the reducer                  │   │
 ││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█│   │
-││TRN 1 TLS 1 ERR 0 — 6s               ││TRN 1 TLS 1 ERR 0 — 8s               ││TRN 1 TLS 1 ERR 0 — 9s               ││TRN 1 TLS 1 ERR 0 — 13s              ││TRN 1 TLS 1 ERR 0 — 13s              │   │
-││10:01:33 TEND turn end               ││10:01:32 TEND turn end               ││10:01:31 TEND turn end               ││10:01:26 TEND turn end               ││10:01:26 TEND turn end               │   │
-││10:01:33 TOOL Read store.rs          ││10:01:32 TOOL Read store.rs          ││10:01:31 TOOL Read store.rs          ││10:01:26 TOOL Read store.rs          ││10:01:26 TOOL Read store.rs          │   │
-││10:01:33 SPWN subagent explore the re││10:01:32 SPWN subagent explore the re││10:01:31 SPWN subagent explore the re││10:01:26 SPWN subagent explore the re││10:01:26 SPWN subagent explore the re│   │
+││TRN 1 TLS 1 ERR 0 — 6s               ││TRN 1 TLS 1 ERR 0 — 8s               ││TRN 1 TLS 1 ERR 0 — 9s               ││TRN 1 TLS 1 ERR 0 — 13s              ││TRN 1 TLS 1 ERR 0 — 16s              │   │
+││10:01:33 TEND turn end               ││10:01:32 TEND turn end               ││10:01:31 TEND turn end               ││10:01:26 TEND turn end               ││10:01:24 TEND turn end               │   │
+││10:01:33 TOOL Read store.rs          ││10:01:32 TOOL Read store.rs          ││10:01:31 TOOL Read store.rs          ││10:01:26 TOOL Read store.rs          ││10:01:24 TOOL Read store.rs          │   │
+││10:01:33 SPWN subagent explore the re││10:01:32 SPWN subagent explore the re││10:01:31 SPWN subagent explore the re││10:01:26 SPWN subagent explore the re││10:01:24 SPWN subagent explore the re│   │
 ││                                     ││                                     ││                                     ││                                     ││                                     │   │
 ││                                     ││                                     ││                                     ││                                     ││                                     │   │
 │└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘   │

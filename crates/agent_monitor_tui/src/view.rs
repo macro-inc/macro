@@ -223,11 +223,16 @@ impl ViewState {
             }
     }
 
-    /// The agent's display name, or its id when it is gone.
+    /// The agent's display name or, once it is gone, the last part of its id.
     pub fn name_of(&self, id: &AgentId) -> String {
-        self.agents
-            .get(id)
-            .map_or_else(|| id.to_string(), |agent| agent.name.clone())
+        match self.agents.get(id) {
+            Some(agent) => agent.name.clone(),
+            None => {
+                let id = id.as_str();
+                let start = id.rfind(['/', ':']).map_or(0, |index| index + 1);
+                id.get(start..).unwrap_or(id).to_owned()
+            }
+        }
     }
 
     /// Agents for the AGENTS pane: live ones (ended agents last), sorted

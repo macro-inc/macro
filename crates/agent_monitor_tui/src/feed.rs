@@ -11,7 +11,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tokio_util::task::TaskTracker;
 
-use agent_monitor::client::{ClientEvent, MonitorClient, watch};
+use agent_monitor::client::{ClientError, ClientEvent, MonitorClient, watch};
 use agent_monitor::domain::clock::{Clock, SystemClock};
 use agent_monitor::domain::model::{Agent, MonitorStatus};
 use agent_monitor::domain::source::{TranscriptError, TranscriptFeed, TranscriptStream};
@@ -56,7 +56,13 @@ impl TranscriptFeed for SocketTranscripts {
         let stream = client
             .follow_transcript(&agent.id, tail)
             .await
-            .map_err(|error| TranscriptError::Internal(rootcause::Report::new(error).into_dynamic()))?;
+            .map_err(|error| match error {
+                // The collector's way of saying this agent has no transcript.
+                ClientError::Call(status) if status.code() == tonic::Code::FailedPrecondition => {
+                    TranscriptError::Unavailable
+                }
+                error => TranscriptError::Internal(rootcause::Report::new(error).into_dynamic()),
+            })?;
 
         // A failed item ends the stream; the page shows what it has.
         let items = stream
