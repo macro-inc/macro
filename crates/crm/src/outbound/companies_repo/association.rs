@@ -15,6 +15,21 @@ use crate::domain::{
 };
 
 impl CompaniesRepositoryImpl {
+    /// A transaction whose statements stop after 15 seconds, for
+    /// the activity scope's reads.
+    async fn bounded_read(&self) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CrmError> {
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        Ok(transaction)
+    }
+
     pub(super) async fn query_association(
         &self,
         scope: CrmContactListScope<'_>,
@@ -52,15 +67,7 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
         // The read's cost follows the team's record count, so bound it.
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *transaction)
-            .await
-            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        let mut transaction = self.bounded_read().await?;
         // Every step is a probe by key, so the cost stays with the team's own
         // records whatever the planner knows about the tables. The teams are
         // collected into an array first, so every arm starts from its team
@@ -160,15 +167,22 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
+        // Bounded like the scope read it stands beside, in case the planner
+        // ever leaves the property index.
+        let mut transaction = self.bounded_read().await?;
         let rows = sqlx::query_file!(
             "src/outbound/companies_repo/activity_property_edges.sql",
             viewer,
             team_id,
             entity_types as &[EntityType],
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await
         .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
         tracing::Span::current().record("edges", rows.len());
         Ok(rows
             .into_iter()
