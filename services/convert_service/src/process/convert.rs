@@ -150,16 +150,19 @@ pub async fn convert(
         .context("unable to get object from S3")?;
 
     let job_id_owned = job_id.to_string();
+    let span = tracing::Span::current();
     let output = tokio::task::spawn_blocking(move || {
-        convert_file(
-            &JOBS_ROOT,
-            &job_id_owned,
-            &LOK_PATH,
-            &input,
-            &from_file_type,
-            &to_file_type,
-            &filter,
-        )
+        span.in_scope(|| {
+            convert_file(
+                &JOBS_ROOT,
+                &job_id_owned,
+                &LOK_PATH,
+                &input,
+                &from_file_type,
+                &to_file_type,
+                &filter,
+            )
+        })
     })
     .await
     .context("conversion task failed")??;

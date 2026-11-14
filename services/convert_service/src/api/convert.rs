@@ -109,16 +109,19 @@ pub async fn handler(
 
     let output = tokio::task::spawn_blocking({
         let job_id = job_id.clone();
+        let span = tracing::Span::current();
         move || {
-            convert_file(
-                &JOBS_ROOT,
-                &job_id,
-                &LOK_PATH,
-                &input,
-                &from_file_type,
-                &to_file_type,
-                &filter,
-            )
+            span.in_scope(|| {
+                convert_file(
+                    &JOBS_ROOT,
+                    &job_id,
+                    &LOK_PATH,
+                    &input,
+                    &from_file_type,
+                    &to_file_type,
+                    &filter,
+                )
+            })
         }
     })
     .await
