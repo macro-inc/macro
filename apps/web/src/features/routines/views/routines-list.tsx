@@ -1,6 +1,7 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
+import type { RoutineRowMenuActions } from '../components/routine-row-menu';
 import {
   type RoutinesDiscover,
   RoutinesList,
@@ -21,6 +22,8 @@ export function RoutinesListView(props: {
   onTemplate?: (template: RoutineTemplate) => void;
   /** Suggestions: a row above the list and the Discover tab. */
   discover?: RoutinesDiscover;
+  /** What each row's context menu does; absent where rows have none. */
+  menu?: RoutineRowMenuActions;
 }) {
   // A phone lists top-level routines only; what they created is on their pages.
   const rows = createRoutineRows(
@@ -43,6 +46,7 @@ export function RoutinesListView(props: {
       templates={props.templates}
       onTemplate={props.onTemplate}
       discover={props.discover}
+      menu={props.menu}
     />
   );
 }

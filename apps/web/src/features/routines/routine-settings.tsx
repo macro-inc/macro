@@ -6,6 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineListSource } from './queries/routine-sources';
+import { useRoutineRowMenuActions } from './routine-row-menu-actions';
 import { RoutinesListView } from './views/routines-list';
 
 /** Settings → Routines: the touch entry to the list the Agents sidebar links on desktop. */
@@ -20,6 +21,8 @@ export function RoutineSettings() {
     settings.close();
     openAgentsPage(layout, 'routines', { routineId: id });
   };
+  // Settings is one pane: nothing opens beside the list.
+  const menu = useRoutineRowMenuActions(source, { open });
   const create = () => {
     settings.close();
     // Starting a routine opens its page in Agents, as on desktop.
@@ -33,6 +36,7 @@ export function RoutineSettings() {
         showTitle={false}
         onCreate={create}
         onOpen={open}
+        menu={menu}
       />
     </SettingsPage>
   );

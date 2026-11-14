@@ -53,3 +53,20 @@ export type RoutineListSource = {
   setEnabled(id: string, enabled: boolean): void;
   pendingId: Accessor<string | undefined>;
 };
+/** What a routine row's menu does to the routine, by id. */
+export type RoutineRowOperations = {
+  /** The routine as an entity, for links, sharing and delete. */
+  entity(id: string): RoutineEntity | undefined;
+  run(id: string): void;
+  /** Its "Run now" was chosen and the server hasn't answered yet. */
+  runPending(id: string): boolean;
+  duplicate(id: string): void;
+  /** Make a sub-routine the owner's own: it stops following its parent. */
+  keepAsOwn(id: string): void;
+  /**
+   * How many routines its runs created, as its page lists them (finished
+   * one-time ones too, up to the server's cap): deleting it deletes them.
+   * Undefined when they couldn't be read.
+   */
+  createdCount(id: string): Promise<number | undefined>;
+};

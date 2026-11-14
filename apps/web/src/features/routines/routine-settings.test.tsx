@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   openAgentsPage: vi.fn(),
   popoverSplit: vi.fn(),
+  menuHost: vi.fn(),
 }));
 const layout = { openWithSplit: vi.fn(), popoverSplit: mocks.popoverSplit };
 
@@ -33,6 +34,13 @@ vi.mock('@app/features/agents-view/primitives/open-page', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
+}));
+// The row menu has its own coverage; here, only where it opens a routine.
+vi.mock('./routine-row-menu-actions', () => ({
+  useRoutineRowMenuActions: (_source: unknown, host: unknown) => {
+    mocks.menuHost(host);
+    return undefined;
+  },
 }));
 vi.mock('./queries/routine-sources', () => ({
   createRoutineListSource: (): RoutineListSource => ({
@@ -79,6 +87,17 @@ describe('routine settings', () => {
     ));
     expect(screen.queryByRole('heading', { name: 'Routines' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Morning briefing' }));
+    expect(mocks.close).toHaveBeenCalledOnce();
+    expect(mocks.openAgentsPage).toHaveBeenCalledWith(layout, 'routines', {
+      routineId: 'briefing',
+    });
+  });
+
+  it('gives the row menu nothing to open beside the sheet', () => {
+    render(() => <RoutineSettings />);
+    const host = mocks.menuHost.mock.calls[0]?.[0];
+    expect(host).toEqual({ open: expect.any(Function) });
+    host.open('briefing');
     expect(mocks.close).toHaveBeenCalledOnce();
     expect(mocks.openAgentsPage).toHaveBeenCalledWith(layout, 'routines', {
       routineId: 'briefing',

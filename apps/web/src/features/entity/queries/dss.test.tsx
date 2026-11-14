@@ -395,6 +395,33 @@ describe('bulk delete GraphQL optimism', () => {
     );
   });
 
+  it('drops a deleted sub-routine, and those of a deleted routine, from the list', async () => {
+    const invalidate = vi
+      .spyOn(client, 'invalidateQueries')
+      .mockResolvedValue(undefined);
+    const subRoutines = [
+      { id: 'deleted-child', sub_routine: { parent_id: 'kept-parent' } },
+      { id: 'orphaned-child', sub_routine: { parent_id: 'deleted-parent' } },
+      { id: 'other-child', sub_routine: { parent_id: 'kept-parent' } },
+    ];
+    client.setQueryData(scheduledActionKeys.subRoutines.queryKey, subRoutines);
+    mocks.deleteSchedule.mockResolvedValue(ok(undefined));
+    const { mutation } = mount();
+    await mutation.mutateAsync([
+      entity('deleted-child', 'routine'),
+      entity('deleted-parent', 'routine'),
+    ]);
+    expect(
+      client.getQueryData(scheduledActionKeys.subRoutines.queryKey)
+    ).toEqual([subRoutines[2]]);
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: scheduledActionKeys.subRoutines.queryKey,
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: scheduledActionKeys.children._def,
+    });
+  });
+
   it('re-reads the database and form lists after a folder is deleted', async () => {
     const invalidate = vi
       .spyOn(client, 'invalidateQueries')
