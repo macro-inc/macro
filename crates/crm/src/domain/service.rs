@@ -1201,22 +1201,9 @@ where
         let team_id = access.team_id();
         let contact_id = access.contact_id()?;
         let include_hidden = access.include_hidden();
-        let Some(contact) = self
-            .companies_repository
-            .get_contact_for_team(&team_id, &contact_id, include_hidden)
-            .await?
-        else {
-            return Ok(None);
-        };
-        let company = match contact.company_id {
-            Some(company_id) => {
-                self.companies_repository
-                    .get_company_summary_for_team(&team_id, &company_id, include_hidden)
-                    .await?
-            }
-            None => None,
-        };
-        Ok(Some(CrmContactDetail { contact, company }))
+        self.companies_repository
+            .get_contact_detail_for_team(&team_id, &contact_id, include_hidden)
+            .await
     }
 
     #[tracing::instrument(skip(self, access), err)]

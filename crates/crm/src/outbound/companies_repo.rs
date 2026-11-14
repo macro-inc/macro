@@ -12,7 +12,7 @@ use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
         CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanySummary,
-        CrmCompanyWithContacts, CrmContact, CrmDomain, CrmDomainStatus, CrmError,
+        CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmDomain, CrmDomainStatus, CrmError,
         CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
         DepopulateContactOutcome, DomainMetadata,
     },
@@ -2589,44 +2589,97 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_company_summary_for_team(
+    async fn get_contact_detail_for_team(
         &self,
         team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
         include_hidden: bool,
-    ) -> Result<Option<CrmCompanySummary>, CrmError> {
-        // The name resolves as `get_company_for_team` resolves it: the team's
-        // override, else the directory name of the oldest domain, which is
-        // also the domain shown when the company has no name.
-        sqlx::query_as!(
-            CrmCompanySummary,
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
+        // `read_contact` with its company's summary in the same statement.
+        // Visibility is `read_contact`'s: a member never reaches a contact
+        // under a hidden company, so a summary is hidden only for admins.
+        // The name resolves as `get_company_for_team` resolves it: the
+        // team's override, else the directory name of the oldest domain,
+        // which is also the domain shown when the company has no name.
+        let Some(row) = sqlx::query!(
             r#"
             SELECT
-                c.id,
-                COALESCE(c.custom_name, primary_domain.name) AS name,
-                primary_domain.domain AS "domain?",
-                c.hidden
-            FROM crm_companies c
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at,
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY ce.created_at, ce.email
+                ) AS "company_domain_emails!",
+                CASE WHEN co.team_id = ct.team_id THEN co.id END AS "summary_id?",
+                COALESCE(co.custom_name, primary_domain.name) AS "summary_name?",
+                primary_domain.domain AS "summary_domain?",
+                co.hidden AS "summary_hidden?"
+            FROM crm_contacts ct
+            LEFT JOIN crm_companies co ON co.id = ct.company_id
             LEFT JOIN LATERAL (
                 SELECT d.domain, dd.name
                 FROM crm_domains d
                 LEFT JOIN crm_domain_directory dd
                     ON LOWER(dd.domain) = LOWER(d.domain)
-                WHERE d.company_id = c.id
-                ORDER BY d.created_at ASC
+                WHERE d.company_id = co.id
+                ORDER BY d.created_at ASC NULLS LAST, d.id
                 LIMIT 1
             ) primary_domain ON TRUE
-            WHERE c.id = $1
-              AND c.team_id = $2
-              AND ($3 OR c.hidden = FALSE)
+            WHERE ct.id = $1
+              AND ct.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
             "#,
-            company_id,
+            contact_id,
             team_id,
             include_hidden,
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        else {
+            return Ok(None);
+        };
+        let company = row.summary_id.map(|id| CrmCompanySummary {
+            id,
+            name: row.summary_name,
+            domain: row.summary_domain,
+            hidden: row.summary_hidden.unwrap_or_default(),
+        });
+        Ok(Some(CrmContactDetail {
+            contact: CrmContact {
+                id: row.id,
+                company_id: row.company_id,
+                email: row.email,
+                name: row.name,
+                hidden: row.hidden,
+                first_interaction: row.first_interaction,
+                last_interaction: row.last_interaction,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                emails: row.emails,
+                company_domain_emails: row.company_domain_emails,
+            },
+            company,
+        }))
     }
 
     #[tracing::instrument(skip(self), err)]
