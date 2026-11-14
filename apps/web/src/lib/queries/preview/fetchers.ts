@@ -10,6 +10,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import type { ResultError } from '@core/util/result';
 import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
@@ -507,10 +508,23 @@ function doFetch(
   return Promise.resolve([]);
 }
 
+/**
+ * A batch's previews by item id, and the items whose request failed, with
+ * its errors. A failed item has no preview: it is not an answer to cache.
+ */
+export type PreviewBatch = {
+  previews: Map<string, PreviewItem>;
+  failed: Map<string, ResultError<string>[]>;
+};
+
 export async function fetchRestPreviewBatch(
   items: ItemEntity[]
-): Promise<Map<string, PreviewItem>> {
-  const results = await Promise.all([
+): Promise<PreviewBatch> {
+  const [records, ...results] = await Promise.all([
+    fetchCrmRecordPreviews(
+      filterMapToId(items, 'crm_company'),
+      filterMapToId(items, 'crm_contact')
+    ),
     doFetch(fetchSessionPreviews, filterMapToId(items, 'agent_session')),
     doFetch(fetchChatPreviews, filterMapToId(items, 'chat')),
     doFetch(fetchCallPreviews, filterMapToId(items, 'call')),
@@ -519,21 +533,17 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
     doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
-    fetchCrmRecordPreviews(
-      filterMapToId(items, 'crm_company'),
-      filterMapToId(items, 'crm_contact')
-    ),
     doFetch(fetchCrmPipelinePreviews, filterMapToId(items, 'crm_pipeline')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
     doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
     doFetch(fetchFormPreviews, filterMapToId(items, 'form')),
     doFetch(fetchRoutinePreviews, filterMapToId(items, 'routine')),
   ]);
-  const resultMap = new Map<string, PreviewItem>();
-  results.flat().forEach((result) => {
-    resultMap.set(result.id, result);
+  const previews = new Map<string, PreviewItem>();
+  [...records.previews, ...results.flat()].forEach((result) => {
+    previews.set(result.id, result);
   });
-  return resultMap;
+  return { previews, failed: records.failed };
 }
 
 export function defaultNameTransform(item: PreviewItem): PreviewItem {

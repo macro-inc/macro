@@ -2,7 +2,11 @@ import type { CrmPreviews } from '@service-storage/generated/schemas/crmPreviews
 import type { CrmPreviewsRequest } from '@service-storage/generated/schemas/crmPreviewsRequest';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { fetchCrmRecordPreviews } from './previews';
+import {
+  canonicalRecordId,
+  fetchCrmRecordPreviews,
+  MAX_PREVIEW_IDS,
+} from './previews';
 
 const COMPANY_NAMED = '019a0000-0000-7000-8000-000000000001';
 const COMPANY_DOMAIN = '019a0000-0000-7000-8000-000000000002';
@@ -64,12 +68,13 @@ describe('CRM record previews', () => {
   it('titles companies and contacts from one request, and leaves out none', async () => {
     const { requests, previewRecords } = recording(ok(previews));
 
-    const items = await fetchCrmRecordPreviews(
+    const { previews: items, failed } = await fetchCrmRecordPreviews(
       previewRecords,
       [COMPANY_NAMED, COMPANY_DOMAIN, COMPANY_BARE, COMPANY_HIDDEN],
       [CONTACT_NAMED, CONTACT_BLANK, CONTACT_OTHER_TEAM]
     );
 
+    expect(failed).toEqual(new Map());
     expect(requests).toEqual([
       {
         companyIds: [
@@ -124,22 +129,54 @@ describe('CRM record previews', () => {
   it('sends nothing for an empty batch', async () => {
     const { requests, previewRecords } = recording(ok(previews));
 
-    expect(await fetchCrmRecordPreviews(previewRecords, [], [])).toEqual([]);
+    expect(await fetchCrmRecordPreviews(previewRecords, [], [])).toEqual({
+      previews: [],
+      failed: new Map(),
+    });
     expect(requests).toEqual([]);
   });
 
-  it('leaves ids that are not UUIDs out of the request, and matches ids in any case', async () => {
+  it('sends ids in each spelling the server parses, once, and answers each spelling', async () => {
     const { requests, previewRecords } = recording(ok(previews));
+    const simple = COMPANY_NAMED.replaceAll('-', '').toUpperCase();
+    const braced = `{${COMPANY_DOMAIN.toUpperCase()}}`;
+    const urn = `urn:uuid:${CONTACT_NAMED}`;
 
-    const items = await fetchCrmRecordPreviews(
+    const { previews: items } = await fetchCrmRecordPreviews(
       previewRecords,
-      ['not-a-uuid', COMPANY_NAMED.toUpperCase()],
-      ['']
+      [simple, COMPANY_NAMED, braced, COMPANY_NAMED.toUpperCase()],
+      [urn, CONTACT_NAMED]
     );
 
     expect(requests).toEqual([
-      { companyIds: [COMPANY_NAMED.toUpperCase()], contactIds: [] },
+      {
+        companyIds: [COMPANY_NAMED, COMPANY_DOMAIN],
+        contactIds: [CONTACT_NAMED],
+      },
     ]);
+    expect(items).toEqual([
+      expect.objectContaining({ id: simple, name: 'Acme' }),
+      expect.objectContaining({ id: COMPANY_NAMED, name: 'Acme' }),
+      expect.objectContaining({ id: braced, name: 'globex.example' }),
+      expect.objectContaining({
+        id: COMPANY_NAMED.toUpperCase(),
+        name: 'Acme',
+      }),
+      expect.objectContaining({ id: urn, name: 'Ada Lovelace' }),
+      expect.objectContaining({ id: CONTACT_NAMED, name: 'Ada Lovelace' }),
+    ]);
+  });
+
+  it('previews an id the server would refuse as no access, without sending it', async () => {
+    const { requests, previewRecords } = recording(ok(previews));
+
+    const { previews: items } = await fetchCrmRecordPreviews(
+      previewRecords,
+      ['not-a-uuid', COMPANY_NAMED],
+      ['']
+    );
+
+    expect(requests).toEqual([{ companyIds: [COMPANY_NAMED], contactIds: [] }]);
     expect(items).toEqual([
       {
         id: 'not-a-uuid',
@@ -147,11 +184,7 @@ describe('CRM record previews', () => {
         loading: false,
         access: 'no_access',
       },
-      expect.objectContaining({
-        id: COMPANY_NAMED.toUpperCase(),
-        access: 'access',
-        name: 'Acme',
-      }),
+      expect.objectContaining({ id: COMPANY_NAMED, access: 'access' }),
       { id: '', type: 'crm_contact', loading: false, access: 'no_access' },
     ]);
 
@@ -177,7 +210,7 @@ describe('CRM record previews', () => {
       })
     );
 
-    const items = await fetchCrmRecordPreviews(
+    const { previews: items } = await fetchCrmRecordPreviews(
       previewRecords,
       [],
       [unversioned]
@@ -193,30 +226,125 @@ describe('CRM record previews', () => {
     ]);
   });
 
-  it('reads a failed batch as no access to each record', async () => {
-    const { previewRecords } = recording(
-      err([{ code: 'HTTP_ERROR', message: 'unavailable' }])
+  it('splits a batch into requests of at most the server cap of each kind', async () => {
+    const { requests, previewRecords } = recording(
+      ok({ companies: [], contacts: [] })
     );
+    const companies = ids(0, 250);
+    const contacts = ids(1000, 120);
 
-    const items = await fetchCrmRecordPreviews(
+    await fetchCrmRecordPreviews(previewRecords, companies, contacts);
+
+    expect(MAX_PREVIEW_IDS).toBe(100);
+    expect(
+      requests.map((request) => [
+        request.companyIds?.length,
+        request.contactIds?.length,
+      ])
+    ).toEqual([
+      [100, 100],
+      [100, 20],
+      [50, 0],
+    ]);
+    expect(requests.flatMap((request) => request.companyIds)).toEqual(
+      companies
+    );
+    expect(requests.flatMap((request) => request.contactIds)).toEqual(contacts);
+  });
+
+  it('leaves the chips of a failed request unanswered, with its errors', async () => {
+    const errors = [{ code: 'HTTP_ERROR' as const, message: 'unavailable' }];
+    const { previewRecords } = recording(err(errors));
+
+    const result = await fetchCrmRecordPreviews(
       previewRecords,
-      [COMPANY_NAMED],
+      [COMPANY_NAMED, 'not-a-uuid'],
       [CONTACT_NAMED]
     );
 
-    expect(items).toEqual([
+    expect(result.previews).toEqual([
       {
-        id: COMPANY_NAMED,
+        id: 'not-a-uuid',
         type: 'crm_company',
         loading: false,
         access: 'no_access',
       },
-      {
-        id: CONTACT_NAMED,
-        type: 'crm_contact',
-        loading: false,
-        access: 'no_access',
-      },
     ]);
+    expect(result.failed).toEqual(
+      new Map([
+        [COMPANY_NAMED, errors],
+        [CONTACT_NAMED, errors],
+      ])
+    );
+  });
+
+  it('answers the chips of the requests that succeeded when another fails', async () => {
+    const errors = [{ code: 'HTTP_ERROR' as const, message: 'unavailable' }];
+    const companies = ids(0, MAX_PREVIEW_IDS + 1);
+    let sent = 0;
+    const previewRecords: PreviewRecords = async (body) => {
+      sent += 1;
+      if (sent === 2) return err(errors);
+      return ok({
+        companies: (body.companyIds ?? []).map((id) => ({
+          id,
+          name: `Company ${id}`,
+          primaryDomain: null,
+          updatedAt: '2025-01-02T00:00:00.000Z',
+        })),
+        contacts: [],
+      });
+    };
+
+    const result = await fetchCrmRecordPreviews(previewRecords, companies, []);
+
+    expect(sent).toBe(2);
+    expect(result.previews).toHaveLength(MAX_PREVIEW_IDS);
+    expect(
+      result.previews.every((item) => !item.loading && item.access === 'access')
+    ).toBe(true);
+    expect([...result.failed.keys()]).toEqual([companies[MAX_PREVIEW_IDS]]);
   });
 });
+
+describe('canonicalRecordId', () => {
+  const id = '0065efd2-deae-0a7b-619f-ecc19ab60ec5';
+
+  it.each([
+    [id, id],
+    [id.toUpperCase(), id],
+    [id.replaceAll('-', ''), id],
+    [id.replaceAll('-', '').toUpperCase(), id],
+    [`{${id}}`, id],
+    [`{${id.toUpperCase()}}`, id],
+    [`urn:uuid:${id}`, id],
+    [`urn:uuid:${id.toUpperCase()}`, id],
+  ])('reads %s as the server does', (spelling, canonical) => {
+    expect(canonicalRecordId(spelling)).toBe(canonical);
+  });
+
+  it.each([
+    '',
+    'not-a-uuid',
+    `${id} `,
+    `${id}0`,
+    id.slice(1),
+    `URN:UUID:${id}`,
+    `{${id.replaceAll('-', '')}}`,
+    `urn:uuid:${id.replaceAll('-', '')}`,
+    `{${id}`,
+    id.replace('-', ''),
+    id.replace('0', 'g'),
+  ])('refuses %j as the server does', (spelling) => {
+    expect(canonicalRecordId(spelling)).toBeUndefined();
+  });
+});
+
+/** `count` distinct record ids, numbered from `from`. */
+function ids(from: number, count: number): string[] {
+  return Array.from(
+    { length: count },
+    (_, index) =>
+      `019a0000-0000-7000-8000-${(from + index).toString(16).padStart(12, '0')}`
+  );
+}

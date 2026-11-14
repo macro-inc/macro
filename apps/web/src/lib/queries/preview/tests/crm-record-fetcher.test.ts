@@ -42,7 +42,7 @@ it('titles a batch of companies and contacts with one request', async () => {
       ],
     })
   );
-  const previews = await fetchRestPreviewBatch([
+  const batch = await fetchRestPreviewBatch([
     { type: 'crm_company', id: COMPANY },
     { type: 'crm_contact', id: CONTACT },
     { type: 'crm_contact', id: DENIED },
@@ -53,17 +53,17 @@ it('titles a batch of companies and contacts with one request', async () => {
     companyIds: [COMPANY],
     contactIds: [CONTACT, DENIED],
   });
-  expect(previews.get(COMPANY)).toMatchObject({
+  expect(batch.previews.get(COMPANY)).toMatchObject({
     access: 'access',
     name: 'Acme',
     type: 'crm_company',
   });
-  expect(previews.get(CONTACT)).toMatchObject({
+  expect(batch.previews.get(CONTACT)).toMatchObject({
     access: 'access',
     name: 'Alex Morgan',
     type: 'crm_contact',
   });
-  expect(previews.get(DENIED)).toEqual({
+  expect(batch.previews.get(DENIED)).toEqual({
     id: DENIED,
     type: 'crm_contact',
     access: 'no_access',
@@ -77,15 +77,12 @@ it('sends no CRM request for a batch without CRM records', async () => {
   expect(previewCrmRecords).not.toHaveBeenCalled();
 });
 
-it('reads a failed request as no access to each record', async () => {
-  previewCrmRecords.mockResolvedValueOnce(err([{ code: 'HTTP_ERROR' }]));
-  const previews = await fetchRestPreviewBatch([
+it('leaves the records of a failed request unanswered, with its errors', async () => {
+  const errors = [{ code: 'HTTP_ERROR', message: 'unavailable' }];
+  previewCrmRecords.mockResolvedValueOnce(err(errors));
+  const batch = await fetchRestPreviewBatch([
     { type: 'crm_contact', id: CONTACT },
   ]);
-  expect(previews.get(CONTACT)).toEqual({
-    id: CONTACT,
-    type: 'crm_contact',
-    access: 'no_access',
-    loading: false,
-  });
+  expect(batch.previews.has(CONTACT)).toBe(false);
+  expect(batch.failed.get(CONTACT)).toEqual(errors);
 });
