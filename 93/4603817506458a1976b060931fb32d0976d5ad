@@ -1,0 +1,56 @@
+.gitignore
+  s_f2380eb080e56a::t_13f7b812a6580f 73-74
+crates/mesh_man/convert/src/mesh.rs
+  s_f2380eb080e56a::t_9efe21dd841dad 129-157
+  s_f2380eb080e56a::t_9ec03182dcee99 1-128,158-271
+crates/mesh_man/convert/src/rig.rs
+  s_f2380eb080e56a::t_cabd88a385c716 1-237
+crates/mesh_man/convert/src/format.rs
+  s_f2380eb080e56a::t_9ff35ae5735d56 1-115
+crates/mesh_man/src/assets.rs
+  s_f2380eb080e56a::t_c7b7fc22605189 14-15
+  s_f2380eb080e56a::t_86e3dd77f6d6ba 1-13,16-114
+crates/mesh_man/convert/src/main.rs
+  s_f2380eb080e56a::t_e6d9970c5d5695 54,293,311,566
+  s_f2380eb080e56a::t_9efe21dd841dad 134-145,298-303,305,312-313
+  s_f2380eb080e56a::t_a973ce18147af3 1-53,55-133,146-292,294-297,304,306-310,314-334,337-565,567-603
+  s_f2380eb080e56a::t_02f612ff212af0 335-336
+crates/mesh_man/convert/Cargo.toml
+  s_f2380eb080e56a::t_9aae138dbf30ae 1-16
+Cargo.lock
+  s_f2380eb080e56a::t_901ffe4765b96c 13484
+crates/mesh_man/Cargo.toml
+  s_f2380eb080e56a::t_6e84ad6d51db12 12-15,17
+crates/mesh_man/examples/spin.rs
+  s_f2380eb080e56a::t_42e2864a32146d 3-5,11,41-48,59-66,78-85,158-165,169,196-197,212-218,229,231
+crates/mesh_man/src/figure.rs
+  s_1fae59996f8c16::t_8a9365ce649d96 292-296
+crates/mesh_man/src/lib.rs
+  s_1fae59996f8c16::t_bfa30d9bb062e8 29-30
+crates/mesh_man/convert/Cargo.lock
+  s_1fae59996f8c16::t_e3b1be9476b828 1-593
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "934603817506458a1976b060931fb32d0976d5ad",
+  "prompts": {},
+  "sessions": {
+    "s_1fae59996f8c16": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ea26b31-05d6-47eb-a27c-69e38afdb1f0",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f2380eb080e56a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4404a78-1231-4bc5-a738-064998a50e3d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
