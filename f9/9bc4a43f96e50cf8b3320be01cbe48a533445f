@@ -1,0 +1,23 @@
+crates/coding_agent_worker/src/monitor/test.rs
+  s_cfe0e68707efd8::t_2713bb6ca2fff6 196-232
+crates/coding_agent_worker/src/monitor.rs
+  s_cfe0e68707efd8::t_2713bb6ca2fff6 61-64,250-257,265,274-277,280,283,286-290,292-314,317-321,324,326-352
+crates/coding_agent_worker/README.md
+  s_cfe0e68707efd8::t_4fc001a4ae1677 225-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f99bc4a43f96e50cf8b3320be01cbe48a533445f",
+  "prompts": {},
+  "sessions": {
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
