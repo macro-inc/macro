@@ -822,13 +822,21 @@ export const organise = {
         'src/features/access-requests/views/RequestAccessView.tsx',
       ],
     },
+    {
+      id: 'AL-904',
+      surface: 'SL-25',
+      fn: ['F-196'],
+      action: 'Unblock a sender',
+      trigger: 'Undo on the "Sender block queued" toast',
+      source: ['src/lib/queries/email/thread.ts'],
+    },
   ],
   states: [
     // SL-25 row action menu
     {
       id: 'STL-050',
       surface: 'SL-25',
-      fn: ['F-080', 'F-083'],
+      fn: ['F-080', 'F-083', 'F-196'],
       state:
         'toast "Sender block queued" + Undo; Undo shows "Sender unblock queued"',
       trigger: 'Block Sender',

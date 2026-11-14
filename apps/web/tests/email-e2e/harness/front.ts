@@ -50,6 +50,7 @@ export type RecordedRequest = {
   /** `WS` for a message sent over a service's websocket. */
   method: string;
   path: string;
+  /** 500 for a GraphQL answer that carries errors, whatever its status. */
   status: number;
   /** The GraphQL operations in the request's body. */
   operations: string[];
@@ -136,6 +137,22 @@ function upstream(
     }
   }
   return undefined;
+}
+
+/** Whether a GraphQL answer, single or batched, carries errors. */
+export function graphqlFailed(answer: string): boolean {
+  if (!answer.includes('"errors"')) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(answer);
+  } catch {
+    return false;
+  }
+  return [parsed].flat().some((each) => {
+    if (typeof each !== 'object' || each === null) return false;
+    const { errors } = each as Record<string, unknown>;
+    return Array.isArray(errors) && errors.length > 0;
+  });
 }
 
 /** The names of the GraphQL operations in a request body or socket message. */
@@ -349,16 +366,20 @@ export async function startFront(options: FrontOptions): Promise<Front> {
       answer.headers.forEach((value, name) => {
         if (!HOP_BY_HOP.has(name)) answerHeaders[name] = value;
       });
+      const answered = Buffer.from(await answer.arrayBuffer());
+      const operations = graphqlOperations(body.toString('utf8'));
+      const failed =
+        operations.length > 0 && graphqlFailed(answered.toString('utf8'));
       requests.push({
         answeredBy: target.service,
         fromTest,
         method,
         path: target.path,
-        status: answer.status,
-        operations: graphqlOperations(body.toString('utf8')),
+        status: failed ? 500 : answer.status,
+        operations,
       });
       response.writeHead(answer.status, answerHeaders);
-      response.end(Buffer.from(await answer.arrayBuffer()));
+      response.end(answered);
       return;
     }
 

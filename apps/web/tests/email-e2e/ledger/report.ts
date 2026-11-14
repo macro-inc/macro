@@ -40,7 +40,7 @@ type Table = { head: string[]; rows: (string | number)[][] };
 
 function markdown(table: Table): string {
   const line = (cells: (string | number)[]) =>
-    `| ${cells.map((cell) => String(cell).replace(/\|/g, '\\|')).join(' | ')} |`;
+    `| ${cells.map((cell) => String(cell).replace(/[|<>`]/g, '\\$&')).join(' | ')} |`;
   return [
     line(table.head),
     line(table.head.map(() => '---')),
@@ -439,10 +439,7 @@ ${section('Tests that passed only on a retry', tests.flaky.length ? html(flaky) 
   return { summary, page };
 }
 
-function main(): void {
-  const enforce =
-    process.argv.includes('--enforce') ||
-    process.env.EMAIL_E2E_LEDGER_ENFORCE === '1';
+function report(enforce: boolean): void {
   const gating = readRun('gating');
   if (!gating.found) {
     console.error('no run to report: run the suite first');
@@ -502,6 +499,22 @@ function main(): void {
       `\nnot covered: ${openFunctions.length} functions, ${open.length} rows, ${openOperations.length} network operations; ${drift} differences between the manifest and the source`
     );
     process.exit(1);
+  }
+}
+
+/**
+ * While the report only reports, nothing in it fails the job: a run cut
+ * short leaves evidence it cannot read, and that is the suite's failure.
+ */
+function main(): void {
+  const enforce =
+    process.argv.includes('--enforce') ||
+    process.env.EMAIL_E2E_LEDGER_ENFORCE === '1';
+  try {
+    report(enforce);
+  } catch (error) {
+    if (enforce) throw error;
+    console.error('no coverage report:', error);
   }
 }
 

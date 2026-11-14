@@ -170,6 +170,7 @@ fn known_bugs() -> Step<Run> {
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)
+        .if_condition(Expression::new("!cancelled()"))
 }
 
 /// What the suite covers of the email UI, from what the two runs above

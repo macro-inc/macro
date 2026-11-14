@@ -1720,6 +1720,7 @@ export const compose = {
         'src/features/email-compose/components/from-inbox-selector.tsx',
         'src/features/email-compose/core/email-sender.ts',
       ],
+      providers: ['gmail'],
     },
     {
       id: 'STC-956',

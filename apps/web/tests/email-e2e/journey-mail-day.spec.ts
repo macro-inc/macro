@@ -143,11 +143,11 @@ for (const provider of PROVIDERS) {
           (await draftThreads(mailbox)).map((thread) => thread.name)
         )
         .toEqual(['Offsite plan']);
+      confirmed('F-115');
       if (provider === 'OUTLOOK') {
         await expect
           .poll(async () => (await held('Offsite plan')) !== undefined)
           .toBe(true);
-        confirmed('F-115');
       }
       await page.reload();
       await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
@@ -159,8 +159,8 @@ for (const provider of PROVIDERS) {
       await discardButton(page).click();
       did('AC-060');
       await expect.poll(() => draftThreads(mailbox)).toEqual([]);
+      confirmed('F-119');
       await expect.poll(() => held('Offsite plan')).toBeUndefined();
-      if (provider === 'OUTLOOK') confirmed('F-119');
 
       // Done, and taken back with undo.
       await mailbox.open();

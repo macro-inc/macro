@@ -274,7 +274,17 @@ function rowsOf(
     const surface = surfaces.get(row.surface);
     const providers = row.providers ?? BOTH_PROVIDERS;
     const viewports = row.viewports ?? surface?.viewports ?? [];
-    const seen = [...(cells.get(row.id) ?? [])].sort();
+    // A mark made where the row does not apply (another provider, another
+    // layout) proves nothing about it.
+    const seen = [...(cells.get(row.id) ?? [])]
+      .filter((cell) => {
+        const [provider, viewport] = cell.split('/');
+        return (
+          providers.some((each) => each === provider) &&
+          viewports.some((each) => each === viewport)
+        );
+      })
+      .sort();
     const missing = [
       ...providers.filter(
         (provider) => !seen.some((cell) => cell.startsWith(`${provider}/`))

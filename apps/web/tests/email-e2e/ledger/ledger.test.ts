@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { graphqlOperations, socketMessages } from '../harness/front';
+import {
+  graphqlFailed,
+  graphqlOperations,
+  socketMessages,
+} from '../harness/front';
 import { functionRows, restMatcher } from './ledger';
 import { parseFunctions } from './manifest/functions';
 
@@ -58,6 +62,22 @@ describe('graphqlOperations', () => {
   });
 });
 
+describe('graphqlFailed', () => {
+  it('finds the errors of an answer and of one answer in a batch', () => {
+    expect(graphqlFailed('{"data":{"a":1}}')).toBe(false);
+    expect(graphqlFailed('{"data":{"errors":"a field"},"errors":[]}')).toBe(
+      false
+    );
+    expect(graphqlFailed('{"data":null,"errors":[{"message":"no"}]}')).toBe(
+      true
+    );
+    expect(graphqlFailed('[{"data":{}},{"errors":[{"message":"no"}]}]')).toBe(
+      true
+    );
+    expect(graphqlFailed('"errors" but not json')).toBe(false);
+  });
+});
+
 describe('restMatcher', () => {
   const match = restMatcher([
     { id: 'GET /email/email/threads/{}', kind: 'rest', scope: 'email' },
@@ -109,6 +129,9 @@ describe('parseFunctions', () => {
     expect(() => parseFunctions(TABLE.replace('yes\tui', 'maybe\tui'))).toThrow(
       'F-002'
     );
+    expect(() =>
+      parseFunctions(TABLE.replace('yes\tno\tno', 'no\tno\tno'))
+    ).toThrow('F-003');
     expect(() => parseFunctions('id\tname\n')).toThrow('head');
   });
 });

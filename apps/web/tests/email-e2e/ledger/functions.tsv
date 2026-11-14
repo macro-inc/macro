@@ -13,7 +13,7 @@ F-011	connect	Link Gmail automatically on Google sign-in	yes	no	no	service
 F-012	connect	Refresh provider access tokens	yes	yes	no	provider
 F-013	connect	Renew the provider's change notifications (Gmail watch, Outlook subscriptions)	yes	yes	no	provider
 F-014	connect	Show inbox health and prompt to reconnect	yes	yes	yes	ui
-F-015	connect	Send-as aliases: list them and keep them in sync	yes	yes	yes	provider
+F-015	connect	Send-as aliases: list them and keep them in sync	yes	no	yes	provider
 F-016	sync	Import existing mail when an inbox is connected (backfill)	yes	yes	yes	service
 F-017	sync	Receive a new message from the provider	yes	yes	yes	service
 F-018	sync	Show a new message in the open list without reloading	yes	yes	yes	ui
@@ -113,11 +113,11 @@ F-111	compose	Include or leave out the quoted original	yes	yes	yes	provider
 F-112	compose	Switch an open reply between reply, reply all and forward	yes	yes	yes	ui
 F-113	compose	Compose on a phone (full-screen composer)	yes	yes	yes	provider
 F-114	compose	Create a calendar event from a draft or thread	yes	yes	yes	service
-F-115	drafts	Save a draft automatically while typing	yes	yes	yes	provider
-F-116	drafts	Reopen a draft from Drafts and keep editing	yes	yes	yes	provider
-F-117	drafts	Keep a reply draft with its thread and reopen it there	yes	yes	yes	provider
+F-115	drafts	Save a draft automatically while typing	yes	yes	yes	service
+F-116	drafts	Reopen a draft from Drafts and keep editing	yes	yes	yes	service
+F-117	drafts	Keep a reply draft with its thread and reopen it there	yes	yes	yes	service
 F-118	drafts	Restore an unsent draft after reload or offline	yes	yes	yes	ui
-F-119	drafts	Discard a draft	yes	yes	yes	provider
+F-119	drafts	Discard a draft	yes	yes	yes	service
 F-120	drafts	See and resolve a draft that failed to save or conflicts with the mailbox	yes	yes	yes	ui
 F-121	drafts	Keep local drafts across sign-out confirmation	yes	yes	yes	ui
 F-122	attachments	Attach a file to a message (picker, drop, paste)	yes	yes	yes	provider
@@ -136,7 +136,7 @@ F-134	send	Undo send	yes	yes	yes	provider
 F-135	send	See that a message is sending, sent or failed	yes	yes	yes	ui
 F-136	send	Retry or cancel a failed or queued send and get the draft back	yes	yes	yes	provider
 F-137	send	Send exactly once across retries, reloads and two tabs	yes	yes	yes	provider
-F-138	send	Send from an alias	yes	yes	yes	provider
+F-138	send	Send from an alias	yes	no	yes	provider
 F-139	send	Send while offline and deliver on reconnect	yes	yes	yes	provider
 F-140	send	Handle a bounce or a provider rejection	yes	yes	yes	service
 F-141	send	Reply on a thread shared by a teammate	yes	yes	yes	provider
@@ -191,3 +191,8 @@ F-189	connect	See the connected inboxes in Settings (provider, primary or shared
 F-190	ai	See what the assistant read, listed or changed in mail (tool cards)	yes	yes	yes	ui
 F-191	elsewhere	Mention an email thread in a document, message or chat	yes	yes	yes	ui
 F-192	elsewhere	Exclude domains from the mail shared with CRM	yes	yes	yes	service
+F-193	labels	Create and delete a provider label	yes	yes	no	provider
+F-194	calendar	Forward a calendar event by email	yes	yes	no	provider
+F-195	sync	Cancel a running mail import	yes	no	no	service
+F-196	organise	Unblock a sender	yes	yes	yes	service
+F-197	organise	Report a thread as spam	yes	yes	no	provider

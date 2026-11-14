@@ -44,6 +44,8 @@ export function parseFunctions(table: string): EmailFunction[] {
     const providers: Provider[] = [];
     if (yes(gmail)) providers.push('gmail');
     if (yes(outlook)) providers.push('outlook');
+    if (providers.length === 0)
+      throw new Error(`functions.tsv: ${id}: on no provider`);
     return { id, area, name, providers, ui: yes(ui), checkedAt };
   });
 }
