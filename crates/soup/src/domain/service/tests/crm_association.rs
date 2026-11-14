@@ -737,8 +737,7 @@ async fn sales_view_reads(
         .get_user_soup(request(filters), None)
         .await
         .unwrap();
-    let calls = crm.activity_calls.lock().unwrap().clone();
-    calls
+    crm.activity_calls.lock().unwrap().clone()
 }
 
 fn sales_view(tab: &str) -> EntityFilterAst {

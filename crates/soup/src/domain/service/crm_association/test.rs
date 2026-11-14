@@ -332,7 +332,7 @@ fn activity_uses_property_edges_only_and_matches_email_in_every_direction() {
     assert_eq!(ast.email_filter.crm_scope, None);
     assert_eq!(
         serde_json::to_value(&ast.email_filter.tree).unwrap(),
-        serde_json::to_value(&Some(email_tree)).unwrap()
+        serde_json::to_value(Some(email_tree)).unwrap()
     );
     assert_matches!(ast.call_filter.as_deref(), Some(Expr::Literal(CallLiteral::CallId(id))) if *id == Uuid::from_u128(2));
     assert!(
