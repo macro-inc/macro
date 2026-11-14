@@ -1,12 +1,14 @@
 //! Source adapters: each reads one kind of local fact and sends it to the
-//! store as [`Observation`](crate::domain::observation::Observation)s. All of
-//! them are push-driven (a child process's stdout, or file-system
-//! notifications); a 30 s reconcile only re-checks what is already known.
+//! store as [`Observation`](crate::domain::observation::Observation)s. All but
+//! one are push-driven (a child process's stdout, or file-system
+//! notifications; a 30 s reconcile only re-checks what is already known);
+//! [`github`] polls GitHub for pull request status.
 
 pub mod claude_registry;
 pub mod claude_transcripts;
 pub mod codex_rollouts;
 pub mod demo;
+pub mod github;
 pub mod hc;
 pub mod local;
 pub mod macrod_sessions;

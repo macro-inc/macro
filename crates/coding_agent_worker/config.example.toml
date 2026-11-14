@@ -57,3 +57,5 @@ repo_url = "https://github.com/macro-inc/macro"
 # fps = 12                    # Viewer animation; 0 turns it off.
 # run_record_dirs = []        # Work-run record directories (<id>.json, <id>.cost); ~ is home.
 # run_id_labels = []          # hc labels holding a run's id, joining it to its terminal.
+# pr_poll_secs = 60           # PR status from GitHub via the gh CLI while a viewer watches
+#                             # (at most every 5 min with none); 0 turns PRs' status off.

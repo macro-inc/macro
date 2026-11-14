@@ -74,6 +74,10 @@ pub struct MonitorSettings {
     /// hc terminal labels whose value is a work run's id, joining the run to
     /// its terminal.
     pub run_id_labels: Vec<String>,
+    /// Seconds between pull request status queries to GitHub (through the
+    /// `gh` CLI) while a viewer watches; at most every 5 minutes with none.
+    /// 0 turns pull request status off.
+    pub pr_poll_secs: u32,
 }
 
 impl Default for MonitorSettings {
@@ -84,6 +88,7 @@ impl Default for MonitorSettings {
             fps: 12,
             run_record_dirs: Vec::new(),
             run_id_labels: Vec::new(),
+            pr_poll_secs: 60,
         }
     }
 }

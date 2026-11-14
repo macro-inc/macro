@@ -903,6 +903,7 @@ dependencies = [
  "clap",
  "futures",
  "hyper-util",
+ "lazy-regex",
  "notify",
  "opentelemetry",
  "opentelemetry_sdk",

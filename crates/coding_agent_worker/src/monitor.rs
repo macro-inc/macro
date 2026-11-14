@@ -242,6 +242,7 @@ impl Collector {
         let mut local = LocalSources::in_home(home, macrod_home.directory().to_owned(), history);
         local.run_record_dirs = run_record_dirs;
         local.hc_labels.run_id = settings.run_id_labels.clone();
+        local.pr_poll = Some(Duration::from_secs(u64::from(settings.pr_poll_secs)));
 
         let tracker = TaskTracker::new();
         let cancel = CancellationToken::new();
@@ -254,7 +255,8 @@ impl Collector {
             &tracker,
             cancel.clone(),
         );
-        for make in local.makers() {
+        let github = local.github(store.pr_interest());
+        for make in local.makers().into_iter().chain(github) {
             spawn_source(&store, make, &tracker, cancel.clone());
         }
         if let Some(daemon) = daemon {

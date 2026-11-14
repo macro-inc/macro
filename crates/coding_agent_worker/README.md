@@ -243,6 +243,19 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   with an optional `<id>.cost`; a leading `~` is the home directory). A run
   joins its terminal by the record's terminal name, or by an hc label named
   in `run_id_labels` whose value is the run's id.
+- **Pull requests** come from what agents leave behind, with no polling:
+  a Claude Code session's record of a PR it created (or a `gh pr create`
+  call and the PR URL it printed; Codex rollouts the same way) makes that
+  agent the PR's author; a herdr manager's `prs` file ties its PRs to the
+  manager; and an agent whose working directory is a clone of a GitHub
+  repository, on a PR's head branch, works on it. Their status (state, CI
+  as the `CI gate` status or else the check rollup, review, conflicts) is
+  the one polled source, `github`: one batched GraphQL query through the
+  `gh` CLI (`gh api graphql`, as whatever account `gh` is signed in to)
+  every `[monitor] pr_poll_secs` (60 by default, with jitter) while a viewer
+  watches and at most every 5 minutes otherwise; 0 turns it off. Without
+  `gh` the source shows absent. Merged and closed PRs older than
+  `history_hours` are dropped.
 - **`macrod monitor dump`** prints `{"connected": ...}`, then one
   `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
   stops after N updates. `--transcript <agent id>` prints that agent's
@@ -258,7 +271,8 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
 - The Config tab toggles hosting (`Agent monitor`), which writes a
   `[monitor]` table; new configs leave it out (hosting is on by default),
   because a macrod older than the monitor rejects a file that has one.
-  `history_hours`, `fps` and `run_record_dirs` take effect on the next start.
+  `history_hours`, `fps`, `run_record_dirs` and `pr_poll_secs` take effect
+  on the next start.
 - **History is bounded**: transcripts are indexed back `history_hours`
   (24 by default), and an agent that ended or last wrote longer ago is
   dropped unless a live terminal or running process still holds it, so a

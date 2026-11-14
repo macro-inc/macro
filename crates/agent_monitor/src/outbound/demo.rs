@@ -25,13 +25,13 @@ use tracing::Instrument as _;
 
 use crate::domain::clock::Clock;
 use crate::domain::model::{
-    Agent, AgentKind, Cost, Snapshot, SourceHealth, SourceKind, SourceState, Timestamp, Tokens,
-    TranscriptItem, TranscriptItemKind,
+    Agent, AgentKind, CiState, Cost, Mergeable, PrRef, PrState, RepoName, ReviewState, Snapshot,
+    SourceHealth, SourceKind, SourceState, Timestamp, Tokens, TranscriptItem, TranscriptItemKind,
 };
 use crate::domain::observation::{
-    Change, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact, Observation,
-    TerminalActivity, TerminalFact, TerminalState, TranscriptDelta, TranscriptEvent,
-    TranscriptEventKind, TranscriptKey, TranscriptProgram,
+    Change, CheckoutFact, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact,
+    Observation, PrStatusFact, TerminalActivity, TerminalFact, TerminalState, TranscriptDelta,
+    TranscriptEvent, TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
 use crate::domain::source::{
     AgentSource, SourceError, TranscriptError, TranscriptFeed, TranscriptStream,
@@ -52,6 +52,127 @@ const HISTORY_MINUTES: i64 = 60;
 
 /// Transcript items kept per agent for `FollowTranscript`.
 const LOG_ITEMS: usize = 200;
+
+/// The demo's repository.
+const DEMO_REPO: &str = "demo-org/app";
+
+/// One scripted pull request.
+struct DemoPr {
+    /// The roster agent that opened it (and works on its branch), if any.
+    agent: Option<&'static str>,
+    /// The manager that recorded it.
+    manager: &'static str,
+    number: u32,
+    title: &'static str,
+    state: PrState,
+    review: ReviewState,
+    mergeable: Mergeable,
+    /// Minutes before the demo's start it was opened.
+    opened_minutes: i64,
+    /// Its CI by step: from each step on, the state given.
+    ci: &'static [(u64, CiState)],
+}
+
+const DEMO_PRS: &[DemoPr] = &[
+    DemoPr {
+        agent: Some("rpc-server"),
+        manager: "release-train",
+        number: 4211,
+        title: "feat(monitor): serve the store over a Unix socket",
+        state: PrState::Open,
+        review: ReviewState::ReviewRequired,
+        mergeable: Mergeable::Mergeable,
+        opened_minutes: 12,
+        ci: &[(0, CiState::Failed), (60, CiState::Running), (150, CiState::Passed)],
+    },
+    DemoPr {
+        agent: Some("store-reducer"),
+        manager: "release-train",
+        number: 4207,
+        title: "feat(monitor): single-writer store and reducer",
+        state: PrState::Open,
+        review: ReviewState::Approved,
+        mergeable: Mergeable::Mergeable,
+        opened_minutes: 18,
+        ci: &[(0, CiState::Running), (40, CiState::Passed)],
+    },
+    DemoPr {
+        agent: Some("ui-pages"),
+        manager: "billing-revamp",
+        number: 4215,
+        title: "feat(monitor): pages and drill-in",
+        state: PrState::Draft,
+        review: ReviewState::None,
+        mergeable: Mergeable::Unknown,
+        opened_minutes: 6,
+        ci: &[(0, CiState::None), (90, CiState::Running), (200, CiState::Failed)],
+    },
+    DemoPr {
+        agent: Some("invoice-export"),
+        manager: "billing-revamp",
+        number: 4190,
+        title: "feat(billing): CSV export for invoices",
+        state: PrState::Open,
+        review: ReviewState::ChangesRequested,
+        mergeable: Mergeable::Conflicting,
+        opened_minutes: 40,
+        ci: &[(0, CiState::Passed)],
+    },
+    DemoPr {
+        agent: None,
+        manager: "billing-revamp",
+        number: 4188,
+        title: "chore(billing): drop the legacy exporter",
+        state: PrState::Merged,
+        review: ReviewState::Approved,
+        mergeable: Mergeable::Unknown,
+        opened_minutes: 55,
+        ci: &[(0, CiState::Passed)],
+    },
+];
+
+impl DemoPr {
+    fn pr(&self) -> Option<PrRef> {
+        Some(PrRef {
+            repo: RepoName::parse(DEMO_REPO)?,
+            number: self.number,
+        })
+    }
+
+    /// Its CI at `step`.
+    fn ci_at(&self, step: u64) -> CiState {
+        self.ci
+            .iter()
+            .rev()
+            .find(|(from, _)| *from <= step)
+            .map_or(CiState::None, |(_, ci)| *ci)
+    }
+
+    fn status(&self, start: Timestamp, step: u64, now: Timestamp) -> Option<PrStatusFact> {
+        let pr = self.pr()?;
+        let opened = start - TimeDelta::minutes(self.opened_minutes);
+        let closed = self
+            .state
+            .is_final()
+            .then(|| opened + TimeDelta::minutes(20));
+        Some(PrStatusFact {
+            url: pr.url(),
+            pr,
+            title: Some(self.title.to_owned()),
+            state: self.state,
+            ci: self.ci_at(step),
+            review: self.review,
+            mergeable: self.mergeable,
+            branch: Some(
+                self.agent
+                    .map_or_else(|| format!("chore/{}", self.number), |agent| format!("feat/{agent}")),
+            ),
+            created: Some(opened),
+            updated: Some(closed.unwrap_or(now)),
+            closed,
+        })
+    }
+}
 
 /// How the demo runs.
 #[derive(Clone, Copy, Debug)]
@@ -784,8 +905,24 @@ impl DemoFleet {
     pub fn reset(&mut self) -> DemoReset {
         let mut reset = DemoReset::default();
         for index in 0..self.agents.len() {
-            let history = self.history(index);
+            let mut history = self.history(index);
             let agent = &self.agents[index];
+            for demo in DEMO_PRS.iter().filter(|demo| demo.agent == Some(agent.name.as_str())) {
+                let at = (self.start - TimeDelta::minutes(demo.opened_minutes))
+                    .max(agent.created + TimeDelta::minutes(1));
+                if let Some(pr) = demo.pr() {
+                    history.0.push(TranscriptEvent {
+                        at,
+                        kind: TranscriptEventKind::PrOpened(pr),
+                    });
+                }
+                if let Some(repo) = RepoName::parse(DEMO_REPO) {
+                    reset.facts.push(Fact::Checkout(CheckoutFact {
+                        cwd: agent.cwd.clone(),
+                        repo,
+                    }));
+                }
+            }
             reset.items.extend(history.1);
             if let Some(terminal) = agent.terminal() {
                 reset.facts.push(Fact::Terminal(Box::new(terminal)));
@@ -809,7 +946,17 @@ impl DemoFleet {
                     state: Some(String::from("building")),
                     reviews: 1,
                     last_verdict: Some(String::from("changes requested")),
+                    prs: DEMO_PRS
+                        .iter()
+                        .filter(|demo| demo.manager == agent.name)
+                        .filter_map(DemoPr::pr)
+                        .collect(),
                 }));
+            }
+        }
+        for demo in DEMO_PRS {
+            if let Some(status) = demo.status(self.start, 0, self.start) {
+                reset.facts.push(Fact::PrStatus(Box::new(status)));
             }
         }
         reset
@@ -975,6 +1122,16 @@ impl DemoFleet {
             self.spawn_one(now, &mut step);
         }
         self.remove_expired(&mut step);
+
+        // Scripted CI changes on the demo's pull requests.
+        for demo in DEMO_PRS {
+            if demo.ci.iter().any(|(from, _)| *from == self.steps)
+                && let Some(status) = demo.status(self.start, self.steps, now)
+            {
+                step.changes
+                    .push(Change::Upsert(Fact::PrStatus(Box::new(status))));
+            }
+        }
         step
     }
 
