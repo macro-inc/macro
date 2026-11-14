@@ -174,6 +174,48 @@ key = "email_refresh_handler"
 providers = "gmail"
 reason = "It selects Gmail links only, to renew their watches and probe their grants."
 
+[[applies]]
+kind = "gateway"
+key = "refresh_email:DeleteMessage"
+providers = "gmail"
+reason = "Pushed only by the Gmail inbox sync; an Outlook deletion arrives through the mailbox projection, which pushes UpsertMessage."
+
+[[applies]]
+kind = "gateway"
+key = "refresh_email:UpdateLabels"
+providers = "gmail"
+reason = "Pushed only by the Gmail inbox sync; an Outlook change arrives through the mailbox projection, which pushes UpsertMessage."
+
+[[applies]]
+kind = "gateway"
+key = "refresh_email:Backfill"
+providers = "gmail"
+reason = "Pushed when a backfill job fails for good, and only Gmail links have backfill jobs."
+
+[[applies]]
+kind = "kafka"
+key = "macro.email:MessageDeleted"
+providers = "gmail"
+reason = "Published by the Gmail inbox sync and its deferred deletions; the Outlook projection publishes ThreadsReindexRequested instead."
+
+[[applies]]
+kind = "http"
+key = "POST /email/settings/import-signature"
+providers = "gmail"
+reason = "It reads the Gmail send-as aliases; the app offers it for Gmail inboxes only."
+
+[[applies]]
+kind = "queue"
+key = "link-manager:NotifyReauthRequired"
+providers = "gmail"
+reason = "Sent when a Google token or calendar grant is dead; an Outlook grant that dies is published by the mailbox projection directly."
+
+[[applies]]
+kind = "queue"
+key = "sfs-uploader:SFSUploaderMessage"
+providers = "gmail"
+reason = "Sent by the Gmail contact sync for a contact with a photo URL; Outlook photos are read from the provider by the mailbox sync."
+
 # kind `elsewhere`: routes of other services that carry a function of email
 # out, where a scenario's stack starts that service and records its
 # requests. Listed by hand: `file` must register each, with a `.route(` that
