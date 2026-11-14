@@ -9,7 +9,7 @@ expression: "render(&mut app(), 200, 56)"
 ┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
 ┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛
 ┏━ 01 // AGENTS  30 LIVE · 34 ROWS / 34 ALL  a SHOWS ENDED ───────────────────────────────────────────────────────────━━━┓┏━ 07 // BODY  BIOSCAN  VITALS ─────━━━┓┏━ 03 // SPEND TODAY  ~$25.28 ────━━━┓
-┃  KIND     NAME                STAT DOING              AGE  TRN  TOOLS ERR TOKENS  COST     ACTIVITY 60M                ┃┃┌╴SCAN 0x001                   REC ●╶┐┃┃          █                         ┃
+┃  KIND     NAME                STAT DOING              AGE  TRN  TOOLS ERR TOKENS  COST     ACTIVITY 60M                ┃┃┌╴SCAN 0x001                        ╶┐┃┃          █                         ┃
 │◆ subagent rpc-server/explore  WORK explore the reduce   0s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││♥ 168 BPM  5.0M TOK/M  25 WORKING     ││         ██                         │
 │◆ builder  fix-19              WORK Follow-up from rev  28s    2     4   0  163.8k   ~$0.13 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶            █        █        █     ╴││         ██                         │
 │◆ builder  rpc-server    #4211 WORK Task explore the r  33m   18    52   6    1.7M   ~$2.01 ▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││╶  ▁  ▄     ▁█ ▄     ▁█ ▄     ▁█ ▄   ╴││         ██                         │

@@ -35,7 +35,7 @@ pub fn draw(
         Pane::Spend => spend(frame, area, app, focused),
         Pane::Failures => failures(frame, area, app, clock, focused),
         Pane::Sources => sources(frame, area, app, clock, focused),
-        Pane::Body => body(frame, area, app, clock, focused),
+        Pane::Body => body(frame, area, app, focused),
         Pane::Prs => prs(frame, area, app, clock, focused),
         Pane::Transcript | Pane::Children | Pane::AgentPrs => {}
     }
@@ -924,7 +924,7 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
+fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
     let block = theme::pane(
         "7 BODY",
         vec![
@@ -936,19 +936,18 @@ fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused:
     let inner = block.inner(area);
     frame.render_widget(block, area);
     app.view.body.render(inner, frame.buffer_mut());
-    scanner(frame, inner, app, clock);
+    scanner(frame, inner, app);
 }
 
 /// The scanner readout over the BODY figure: crosshair corners with a label
 /// in each, and tick marks down both edges.
-fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
+fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if area.width < 24 || area.height < 6 {
         return;
     }
     let rule = theme::ink(theme::CYAN_DIM);
     let label = theme::bold(theme::CYAN);
     let tokens = app.view.totals.tokens_per_min.last().copied().unwrap_or(0);
-    let rec = if clock.blink() { "○" } else { "●" };
 
     let corner = |x: u16, y: u16, spans: Vec<Span<'static>>, right: bool| {
         let line = Line::from(spans);
@@ -970,11 +969,7 @@ fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
         corner(
             area.right(),
             area.y,
-            vec![
-                Span::styled("REC ", theme::ink(theme::DIM)),
-                Span::styled(rec, theme::bold(theme::RED)),
-                Span::styled("╶┐", rule),
-            ],
+            vec![Span::styled("╶┐", rule)],
             true,
         ),
         corner(
