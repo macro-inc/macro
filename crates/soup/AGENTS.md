@@ -111,11 +111,12 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   email, channel, channel-thread (by thread or channel id), call, and
   foreign-entity requests, the calendar and agent-session legs return early,
   and a dynamic query whose every arm is impossible (`DynamicArms`) skips its
-  transaction and source-id read. The CRM company request is dropped when the
-  ids its extractor collects are all nil, read from the extract because it
-  unions `And`ed ids; a hidden-company request keeps the leg so the admin check
-  still answers it. Prove a new pin impossible the same way; `nil OR real id`
-  must keep its leg.
+  transaction and source-id read; a project or parent id pinned to nil makes
+  the project arm impossible, so a union with other live arms leaves it out.
+  The CRM company request is dropped when the ids its extractor collects are
+  all nil, read from the extract because it unions `And`ed ids; a
+  hidden-company request keeps the leg so the admin check still answers it.
+  Prove a new pin impossible the same way; `nil OR real id` must keep its leg.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
