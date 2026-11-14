@@ -265,7 +265,8 @@ export function NativeBodyFormatPopup(props: {
                     <TouchSelectionToolbar
                       canEdit={props.host.interactable()}
                       canComment={touch.canComment()}
-                      hasSelection={true}
+                      // Source MarkdownPopup :849: text emptiness, not collapse.
+                      hasSelection={props.popup.selectionText() !== ''}
                       showCreateTaskOption={taskOption() !== undefined}
                       createTaskLabel={taskOption()?.label ?? ''}
                       isConverting={taskOption()?.converting ?? false}

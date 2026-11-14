@@ -214,6 +214,8 @@ export default function RustMarkdownEditor(props: {
         highlighted: () => state.comments.highlightedCommentThreads,
         activate: (thread) =>
           state.setCommentState('activeCommentThread', thread),
+        caretCommentIds: (selection) =>
+          runtime()?.overlays?.comments?.caretCommentIds(selection) ?? null,
       },
     },
     aiEdit: {

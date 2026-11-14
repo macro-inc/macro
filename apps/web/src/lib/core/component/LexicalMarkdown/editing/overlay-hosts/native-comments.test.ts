@@ -376,3 +376,103 @@ test('draft text refuses disposed and stale generation without querying the sess
     }
   });
 });
+
+/** The Source control's caret table (caret-mode.source-controls.test.tsx,
+ *  `$getMarkIdsAtCaret` at each caret placement), over the same paragraph:
+ *  "Before ", a comment mark (`ids`) around "marked", " after". */
+async function caretTable(ids: string[]) {
+  const runtime = mount();
+  runtime.port.setState(
+    JSON.stringify({
+      root: {
+        type: 'root',
+        version: 1,
+        children: [
+          {
+            type: 'paragraph',
+            version: 1,
+            children: [text('Before '), comment(ids, 'marked'), text(' after')],
+          },
+        ],
+      },
+    })
+  );
+  return createRoot(async (dispose) => {
+    const comments = createNativeComments(runtime.view);
+    try {
+      const before = textNode(runtime, 'Before ');
+      const marked = textNode(runtime, 'marked');
+      const after = textNode(runtime, ' after');
+      if (marked.parent === null || before.parent === null)
+        throw new Error('Unexpected seed shape');
+      const at = (key: number, offset: number, type: 'text' | 'element') =>
+        comments.caretCommentIds({
+          kind: 'range',
+          anchor: { key, offset, type },
+          focus: { key, offset, type },
+        });
+      return {
+        insideMark: at(marked.key, 2, 'text'),
+        textEndBeforeMark: at(before.key, 7, 'text'),
+        offsetZeroAfterMark: at(after.key, 0, 'text'),
+        markElement: at(marked.parent, 1, 'element'),
+        outside: at(before.key, 2, 'text'),
+        paragraphElement: at(before.parent, 3, 'element'),
+        noSelection: comments.caretCommentIds({ kind: 'none' }),
+      };
+    } finally {
+      comments.dispose();
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+}
+
+test('caretCommentIds is Source $getMarkIdsAtCaret at each caret placement', async () => {
+  expect(await caretTable(['mark-a'])).toEqual({
+    insideMark: ['mark-a'],
+    textEndBeforeMark: ['mark-a'],
+    offsetZeroAfterMark: ['mark-a'],
+    markElement: ['mark-a'],
+    outside: null,
+    paragraphElement: null,
+    noSelection: null,
+  });
+  // An id-less mark: [] (not null), so `!= null` admits it, as Source.
+  expect(await caretTable([])).toEqual({
+    insideMark: [],
+    textEndBeforeMark: [],
+    offsetZeroAfterMark: [],
+    markElement: [],
+    outside: null,
+    paragraphElement: null,
+    noSelection: null,
+  });
+});
+
+test('caretMarkIds keeps the Source $selectMarksAtCaret outcome its caller depends on', async () => {
+  // NativeMessageCommentsProvider (selectMarksAtCaret): null returns early and
+  // leaves the selected marks; [] clears them. Unchanged by caretCommentIds.
+  const runtime = mount();
+  await createRoot(async (dispose) => {
+    const comments = createNativeComments(runtime.view);
+    try {
+      caret(runtime, textNode(runtime, 'two').key, 1);
+      expect(comments.caretMarkIds()).toEqual(['mark-a']);
+      // The caret leaves the comment: clear (not null).
+      caret(runtime, textNode(runtime, ' three ').key, 3);
+      expect(comments.caretMarkIds()).toEqual([]);
+      const outside = runtime.view.selection().selection;
+      expect(comments.caretCommentIds(outside)).toBeNull();
+      // No selection: leave the current state.
+      runtime.port.selectionFromView({ kind: 'none' });
+      expect(comments.caretMarkIds()).toBeNull();
+    } finally {
+      comments.dispose();
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+});

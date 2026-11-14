@@ -39,6 +39,9 @@ export interface DocumentFormattingHost {
 /** Popup presentation from the current native view; rectangle() performs only DOM reads. */
 export interface BodyFormattingPopupHost {
   rectangle(): DOMRect | undefined;
+  /** The published model selection's plain text; '' for a caret or a
+   *  zero-text range (Source MarkdownPopup `selection()?.text`). */
+  selectionText: Accessor<string>;
   registerPopup: FormatMenuHost['registerPopup'];
   registerListeners: FormatMenuHost['registerListeners'];
 }

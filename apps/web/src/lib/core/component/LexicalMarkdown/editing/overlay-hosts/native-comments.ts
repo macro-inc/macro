@@ -5,6 +5,7 @@ import type {
   NodeKey,
   Point,
   ViewNode,
+  ViewSelection,
 } from '@macro-inc/lexical-wasm-view/view/types';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createSignal } from 'solid-js';
@@ -49,8 +50,14 @@ export interface NativeComments {
   subscribe(listener: (commit: NativeCommentCommit) => void): () => void;
   /** Every rendered comment mark, keyed by mark id in document order. */
   readonly anchors: Accessor<readonly NativeCommentAnchor[]>;
-  /** Mark ids at the caret (Source `$getMarkIdsAtCaret`); null without a selection. */
+  /** Source `$selectMarksAtCaret`'s outcome for the published selection: null
+   *  for no selection (leave the selected marks), [] to clear them (no mark,
+   *  or not a range), otherwise the caret's mark ids. */
   readonly caretMarkIds: Accessor<readonly string[] | null>;
+  /** Source `$getMarkIdsAtCaret` at a range selection's anchor: null when no
+   *  comment touches it (and for any other selection kind), otherwise the
+   *  mark's ids, which can be empty for an id-less mark. */
+  caretCommentIds(selection: ViewSelection): readonly string[] | null;
   captureSelection(): NativeCommentBookmark | null;
   /** Current model points of a bookmark's durable cursors; null once deleted. */
   resolveBookmark(
@@ -139,6 +146,27 @@ export function createNativeComments(view: EditorView): NativeComments {
     )
       if (isMark(current)) return markIds(current);
     return null;
+  };
+  // Source $getMarkIdsAtCaret.
+  const caretCommentIds = (selection: ViewSelection): string[] | null => {
+    if (selection.kind !== 'range') return null;
+    const { key, offset } = selection.anchor;
+    const anchor = node(key);
+    if (!anchor) return null;
+    if (anchor.kind === 'text') {
+      const ids = getMarkIds(key, offset);
+      if (ids) return ids;
+      if (offset !== 0) return null;
+      const parent = node(anchor.parent);
+      const index = parent?.children.indexOf(key) ?? -1;
+      const previous =
+        parent && index > 0 ? node(parent.children[index - 1]) : null;
+      if (previous?.kind === 'text')
+        return getMarkIds(previous.key, previous.text.length);
+      if (previous?.type === 'comment-mark') return markIds(previous);
+      return null;
+    }
+    return anchor.type === 'comment-mark' ? markIds(anchor) : null;
   };
   const readCaretMarkIds = (): string[] | null => {
     const { selection } = view.selection();
@@ -286,6 +314,7 @@ export function createNativeComments(view: EditorView): NativeComments {
     },
     anchors,
     caretMarkIds,
+    caretCommentIds,
     captureSelection() {
       if (disposed || view.mirror.keyGeneration === null) return null;
       const info = view.selection();

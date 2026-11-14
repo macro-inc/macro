@@ -13,8 +13,18 @@ import type { BodyFormattingPopupHost, DocumentFormattingHost } from './types';
 // edit menu suppressed while the popup is visible, and each option wired to
 // its native action.
 
-const edit = vi.hoisted(() => ({ suppressed: [] as boolean[] }));
+const edit = vi.hoisted(() => ({ suppressed: [] as boolean[], ios: false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
+vi.mock('@core/util/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@core/util/platform')>();
+  const platform = () => (edit.ios ? 'ios' : actual.getPlatform());
+  return {
+    ...actual,
+    getPlatform: platform,
+    isPlatform: (target: Parameters<typeof actual.isPlatform>[0]) =>
+      (Array.isArray(target) ? target : [target]).includes(platform()),
+  };
+});
 vi.mock('@core/mobile/nativeEditMenu', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/mobile/nativeEditMenu')>()),
   setNativeEditMenuSuppressed: (suppressed: boolean) =>
@@ -30,6 +40,7 @@ const offsetWidth = Object.getOwnPropertyDescriptor(
 beforeEach(() => {
   vi.useFakeTimers();
   edit.suppressed.length = 0;
+  edit.ios = false;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -83,6 +94,10 @@ function mount(
     /** The Task slot's Source label; undefined models a slot without one. */
     taskLabel?: string | null;
     converting?: boolean;
+    /** The controller's model-derived selection text; '' for a caret or a
+     *  zero-text range (Source MarkdownPopup :849). */
+    text?: string;
+    canEdit?: boolean;
   } = {}
 ) {
   const scope = document.createElement('div');
@@ -96,7 +111,7 @@ function mount(
     selection: () => undefined,
     focused: () => true,
     editable: () => true,
-    interactable: () => true,
+    interactable: () => options.canEdit ?? true,
     root: () => root,
     focus: vi.fn(),
     formatText: vi.fn(),
@@ -106,6 +121,7 @@ function mount(
   };
   const bodyPopup: BodyFormattingPopupHost = {
     rectangle: () => DOMRect.fromRect({ x: 10, y: 10, width: 80, height: 16 }),
+    selectionText: () => options.text ?? 'Select this phrase',
     registerPopup: (callbacks) => {
       popup = callbacks;
     },
@@ -288,4 +304,103 @@ test('a Task slot without a Source label is not offered on touch (C-TOUCH-TASK-L
   show(true);
   vi.advanceTimersByTime(100);
   expect(options()).toEqual(['Copy', 'Cut', 'Share', 'Edit with AI']);
+});
+
+/** Whether a toolbar element renders at all, and how many options it shows,
+ *  as caret-mode.source-controls.test.tsx records for Source. */
+function toolbar() {
+  return {
+    rendered: document.querySelector('.z-action-menu') !== null,
+    options: options().length,
+    suppressed: edit.suppressed.at(-1) ?? false,
+  };
+}
+
+// C-TOUCH-CARET-MODE-01: an empty-text selection the controller admitted
+// (a caret, or a zero-text range, in a comment) gets Source's caret options
+// only. Expected values are the Source control's literal facts.
+
+test('caret mode with a highlighted thread shows only Show comment', () => {
+  const { show } = mount({ text: '', threads: true, canComment: true });
+  show(true);
+  vi.advanceTimersByTime(100);
+  expect(options()).toEqual(['Show comment']);
+  expect(toolbar()).toEqual({ rendered: true, options: 1, suppressed: true });
+});
+
+test('caret mode on iOS with Edit adds Paste', () => {
+  edit.ios = true;
+  const { show } = mount({ text: '', threads: true });
+  show(true);
+  vi.advanceTimersByTime(100);
+  expect(options()).toEqual(['Show comment', 'Paste']);
+  expect(edit.suppressed.at(-1)).toBe(true);
+});
+
+test('caret mode on iOS read-only keeps suppression and offers no Paste', () => {
+  edit.ios = true;
+  const { show } = mount({ text: '', threads: true, canEdit: false });
+  show(true);
+  vi.advanceTimersByTime(100);
+  expect(options()).toEqual(['Show comment']);
+  expect(edit.suppressed.at(-1)).toBe(true);
+});
+
+test('caret mode at an id-less mark: no Show comment, the same pill as Source', () => {
+  const rows = [];
+  for (const [row, ios, canEdit] of [
+    ['android, edit', false, true],
+    ['android, read-only', false, false],
+    ['iOS, edit', true, true],
+    ['iOS, read-only', true, false],
+  ] as const) {
+    cleanup();
+    document.body.replaceChildren();
+    edit.ios = ios;
+    edit.suppressed.length = 0;
+    const { show } = mount({ text: '', threads: false, canEdit });
+    show(true);
+    vi.advanceTimersByTime(100);
+    rows.push({ row, labels: options(), ...toolbar() });
+  }
+  expect(rows).toEqual([
+    {
+      row: 'android, edit',
+      labels: [],
+      rendered: true,
+      options: 0,
+      suppressed: true,
+    },
+    {
+      row: 'android, read-only',
+      labels: [],
+      rendered: true,
+      options: 0,
+      suppressed: true,
+    },
+    {
+      row: 'iOS, edit',
+      labels: ['Paste'],
+      rendered: true,
+      options: 1,
+      suppressed: true,
+    },
+    {
+      row: 'iOS, read-only',
+      labels: [],
+      rendered: true,
+      options: 0,
+      suppressed: true,
+    },
+  ]);
+});
+
+test('Paste in caret mode reaches the native paste action', async () => {
+  edit.ios = true;
+  const { show, calls } = mount({ text: '', threads: false });
+  show(true);
+  vi.advanceTimersByTime(100);
+  fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
+  await vi.advanceTimersByTimeAsync(100);
+  expect(calls).toEqual(['paste']);
 });

@@ -51,6 +51,10 @@ export function createNativeDocumentFormattingHost(
     canEdit: Accessor<boolean>;
     alive: Accessor<boolean>;
     links: NativeDocumentLinkMenuHost;
+    /** Source popupPlugin `$allowEmptySelection`: on a touch device, whether a
+     *  range selection with no text still shows the popup. Called with the
+     *  selection of the commit being decided on. */
+    allowEmptySelection?: (selection: ViewSelection) => boolean;
   }
 ) {
   const scope = createNativeListenerScope();
@@ -78,6 +82,7 @@ export function createNativeDocumentFormattingHost(
   }>();
   const [canConvertList, setCanConvertList] = createSignal(false);
   let selectionText = '';
+  const [text, setText] = createSignal('');
   let previousSelection: ViewSelection | undefined;
   let previousGeneration: number | null = null;
   const [focused, setFocused] = createSignal(
@@ -106,6 +111,7 @@ export function createNativeDocumentFormattingHost(
     scope.add(() => setSelection(undefined));
     scope.add(() => setTables(undefined));
     scope.add(() => setCanConvertList(false));
+    scope.add(() => setText(''));
     scope.dispose();
   };
 
@@ -205,7 +211,14 @@ export function createNativeDocumentFormattingHost(
         if (popup.visible(true)) popup.selection(undefined);
         return;
       }
-      if (current.kind !== 'range' || selectionText.length === 0) return;
+      if (current.kind !== 'range') return;
+      // Source popupPlugin :190-195: an empty-text range shows only through
+      // $allowEmptySelection, which MarkdownPopup supplies on touch only.
+      if (
+        selectionText.length === 0 &&
+        !(isTouchDevice() && options.allowEmptySelection?.(current))
+      )
+        return;
       const dom = view.root.ownerDocument.getSelection();
       if (!dom || dom.rangeCount === 0) return;
       if (popup.visible(true)) popup.selection(dom);
@@ -226,6 +239,7 @@ export function createNativeDocumentFormattingHost(
             textSelection.anchor.type !== textSelection.focus.type)
             ? readNativeSelectionText(view)
             : '';
+        setText(selectionText);
         setSelection(selected);
         setTables(table);
         setCanConvertList(convertible);
@@ -335,6 +349,7 @@ export function createNativeDocumentFormattingHost(
     };
     const bodyPopup: BodyFormattingPopupHost = {
       rectangle,
+      selectionText: text,
       registerPopup: menu.registerPopup,
       registerListeners: menu.registerListeners,
     };

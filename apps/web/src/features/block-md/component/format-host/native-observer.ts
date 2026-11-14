@@ -4,6 +4,7 @@ import type {
   LatestPublishedObserver,
   LatestPublishedUnavailable,
 } from '@macro-inc/lexical-wasm-view';
+import type { ViewSelection } from '@macro-inc/lexical-wasm-view/view/types';
 import {
   type Accessor,
   createSignal,
@@ -23,6 +24,8 @@ export function createNativeDocumentFormattingObserver(options: {
   alive: Accessor<boolean>;
   /** Copy link to snippet: the document whose URL is shared. */
   snippetLink?: { readonly documentId: Accessor<string> };
+  /** Source popupPlugin `$allowEmptySelection` (consulted on touch only). */
+  allowEmptySelection?: (selection: ViewSelection) => boolean;
 }) {
   const owner = getOwner();
   if (!owner) throw new Error('Native formatting requires its actual UI owner');

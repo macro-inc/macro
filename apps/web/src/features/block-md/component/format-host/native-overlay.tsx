@@ -3,6 +3,7 @@ import { HostedFloatingLinkMenu } from '@core/component/LexicalMarkdown/componen
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { toast } from '@core/component/Toast/Toast';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import type { ViewSelection } from '@macro-inc/lexical-wasm-view/view/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -39,6 +40,8 @@ export function createNativeBodyFormattingOverlay(options: {
     readonly comments: {
       readonly highlighted: Accessor<readonly ThreadId[]>;
       activate(thread: ThreadId): void;
+      /** Source `$getMarkIdsAtCaret` for a selection of the mounted view. */
+      caretCommentIds(selection: ViewSelection): readonly string[] | null;
     };
   };
   /** Source AI edit selection action. */
@@ -68,7 +71,14 @@ export function createNativeBodyFormattingOverlay(options: {
     ),
   };
   return createRoot((disposeRoot) => {
-    const formatting = createNativeDocumentFormattingObserver(options);
+    const touchComments = options.touch?.comments;
+    const formatting = createNativeDocumentFormattingObserver({
+      ...options,
+      // Source MarkdownPopup :183-191: on touch, a caret touching a comment.
+      allowEmptySelection:
+        touchComments &&
+        ((selection) => touchComments.caretCommentIds(selection) !== null),
+    });
     const aiEdit = options.aiEdit;
     const ai =
       aiEdit &&
