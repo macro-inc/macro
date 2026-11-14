@@ -1,0 +1,31 @@
+crates/agent_monitor/src/domain/pricing.rs
+  s_7a07194ea723e2::t_e6353025f43931 1-189
+crates/agent_monitor/src/domain.rs
+  s_52b778d7b06e4b::t_e47c1eb5479989 6
+crates/agent_monitor/src/domain/pricing/test.rs
+  s_52b778d7b06e4b::t_d370428e10ec4f 1-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7cbca717c22cdd2b653edaac4d9e4f3e47ba40d8",
+  "prompts": {},
+  "sessions": {
+    "s_52b778d7b06e4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb1c9354-6ebd-4559-ba14-05d8d00f4534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
