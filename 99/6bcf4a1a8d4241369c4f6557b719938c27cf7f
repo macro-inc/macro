@@ -1,0 +1,44 @@
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_e722a0e50d8d61::t_b196530541bada 191-199,201,204,211-227
+  s_e722a0e50d8d61::t_8ebab48b709e88 179,332-333
+packages/sdk-ocaml/runner/dune
+  s_e722a0e50d8d61::t_5f7db3f9b24bbf 1-5
+packages/sdk-ocaml/analyzer/test/test_analyzer.ml
+  s_e722a0e50d8d61::t_8ebab48b709e88 28-30
+  s_e722a0e50d8d61::t_abc9134ba4f1f5 1-27,31-266
+packages/sdk-ocaml/runner/main.ml
+  s_e722a0e50d8d61::t_5f7db3f9b24bbf 1-87,95-126,128-130,138,140-144
+  s_e722a0e50d8d61::t_580c3bae33d513 88-94,127,131-137,139
+packages/sdk-ocaml/analyzer/test/dune
+  s_e722a0e50d8d61::t_abc9134ba4f1f5 1-16
+packages/sdk-ocaml/e2e/fixtures.json
+  s_e722a0e50d8d61::t_c483d9d45316ae 1-5
+packages/sdk-ocaml/e2e/programs/delete_document.ml
+  s_e722a0e50d8d61::t_bcbb7b0dd86d12 1-4
+packages/sdk-ocaml/e2e/programs/duplicate_check.ml
+  s_e722a0e50d8d61::t_dc82f4b8f260ba 1-21
+packages/sdk-ocaml/e2e/rules-permissive.json
+  s_e722a0e50d8d61::t_07dbb664f68869 1
+packages/sdk-ocaml/e2e/rules-strict.json
+  s_e722a0e50d8d61::t_df14095a9a2e3c 1-8
+packages/sdk-ocaml/e2e/run.sh
+  s_e722a0e50d8d61::t_75f80b63ef515e 1-115
+packages/sdk-ocaml/shell.nix
+  s_e722a0e50d8d61::t_a4200bd2274479 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "996bcf4a1a8d4241369c4f6557b719938c27cf7f",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
