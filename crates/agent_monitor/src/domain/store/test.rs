@@ -136,6 +136,11 @@ async fn unchanged_rows_emit_nothing_and_bursts_coalesce() {
 
 #[test]
 fn totals_never_show_zero_spend_when_nothing_reported() {
-    let totals = totals(&BTreeMap::new(), &BTreeMap::new(), start());
+    let totals = totals(
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        start(),
+        FixedOffset::east_opt(0).expect("a valid offset"),
+    );
     assert_eq!(totals.cost_today, Cost::Unpriced);
 }

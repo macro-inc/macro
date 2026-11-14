@@ -903,10 +903,12 @@ dependencies = [
  "futures",
  "hyper-util",
  "opentelemetry",
+ "opentelemetry_sdk",
  "prost 0.14.3",
  "protox",
  "rand 0.9.4",
  "rootcause",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -917,6 +919,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 

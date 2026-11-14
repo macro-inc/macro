@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use chrono::{Local, TimeDelta, Timelike};
+use chrono::{FixedOffset, Local, Offset as _, TimeDelta, Timelike};
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
@@ -50,6 +50,10 @@ pub struct StoreConfig {
     /// Transcript records older than this do not become tape lines, so a
     /// startup index does not flood the tape.
     pub tape_recent: TimeDelta,
+    /// The UTC offset whose midnight starts "today" for spend; `None` uses the
+    /// machine's local time zone. Fixed in tests so totals do not depend on
+    /// where they run.
+    pub day_offset: Option<FixedOffset>,
 }
 
 impl Default for StoreConfig {
@@ -63,6 +67,7 @@ impl Default for StoreConfig {
             tick: Duration::from_secs(1),
             heartbeat: Duration::from_secs(15),
             tape_recent: TimeDelta::minutes(5),
+            day_offset: None,
         }
     }
 }
@@ -165,6 +170,53 @@ fn apply_to_state(state: &mut State, kind: &UpdateKind) {
 pub struct Store {
     shared: Arc<Shared>,
     observations: mpsc::Sender<Observation>,
+}
+
+/// Runs observations through the store's reducer synchronously at a fixed
+/// clock and returns the state it would publish. Each step is a time and the
+/// observations that arrived by then; the reducer rebuilds agents once per
+/// step and recomputes totals and source health after it, as a live store
+/// does once per coalescing window and tick. For tests and recordings that
+/// need a fixed state.
+pub fn replay(
+    config: StoreConfig,
+    steps: impl IntoIterator<Item = (Timestamp, Vec<Observation>)>,
+) -> Snapshot {
+    let (updates, _) = broadcast::channel(1);
+    let (totals, _) = watch::channel(Arc::new(Totals::default()));
+    let shared = Arc::new(Shared {
+        config,
+        state: Mutex::new(State::default()),
+        updates,
+        totals,
+    });
+    let clock = Arc::new(ReplayClock(Mutex::new(Timestamp::default())));
+    let mut reducer = Reducer::new(shared.clone(), clock.clone());
+
+    for (now, observations) in steps {
+        *clock.0.lock().unwrap_or_else(PoisonError::into_inner) = now;
+        for observation in observations {
+            reducer.apply(observation);
+        }
+        reducer.reduce();
+        reducer.publish_totals();
+        reducer.publish_health();
+    }
+
+    let state = shared.lock();
+    match &shared.snapshot(&state).kind {
+        UpdateKind::Snapshot(snapshot) => snapshot.clone(),
+        _ => Snapshot::default(),
+    }
+}
+
+/// The clock a replay sets before each step.
+struct ReplayClock(Mutex<Timestamp>);
+
+impl Clock for ReplayClock {
+    fn now(&self) -> Timestamp {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 impl Store {
@@ -438,7 +490,17 @@ impl Reducer {
 
     fn publish_totals(&mut self) {
         let now = self.clock.now();
-        let totals = totals(&self.published, &minute_counts(&self.facts, now), now);
+        let offset = self
+            .shared
+            .config
+            .day_offset
+            .unwrap_or_else(|| now.with_timezone(&Local).offset().fix());
+        let totals = totals(
+            &self.published,
+            &minute_counts(&self.facts, now),
+            now,
+            offset,
+        );
         if **self.shared.totals.borrow() == totals {
             return;
         }
@@ -517,6 +579,7 @@ fn totals(
     agents: &BTreeMap<AgentId, Agent>,
     minutes: &BTreeMap<Timestamp, MinuteCounts>,
     now: Timestamp,
+    offset: FixedOffset,
 ) -> Totals {
     let mut totals = Totals::default();
     let day_ago = now - TimeDelta::hours(24);
@@ -533,7 +596,7 @@ fn totals(
         }
     }
 
-    let local_now = now.with_timezone(&Local);
+    let local_now = now.with_timezone(&offset);
     let midnight = local_now
         .with_hour(0)
         .and_then(|at| at.with_minute(0))
@@ -557,7 +620,7 @@ fn totals(
         }
 
         if *minute >= midnight {
-            let hour = minute.with_timezone(&Local).hour();
+            let hour = minute.with_timezone(&offset).hour();
             if let Some(slot) = usize::try_from(hour)
                 .ok()
                 .and_then(|hour| totals.cost_by_hour.get_mut(hour))

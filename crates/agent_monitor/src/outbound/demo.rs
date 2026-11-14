@@ -24,7 +24,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::domain::clock::Clock;
 use crate::domain::model::{
-    Agent, AgentKind, Cost, SourceKind, Timestamp, Tokens, TranscriptItem, TranscriptItemKind,
+    Agent, AgentKind, Cost, Snapshot, SourceKind, Timestamp, Tokens, TranscriptItem,
+    TranscriptItemKind,
 };
 use crate::domain::observation::{
     Change, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact, Observation,
@@ -34,6 +35,7 @@ use crate::domain::observation::{
 use crate::domain::source::{
     AgentSource, SourceError, TranscriptError, TranscriptFeed, TranscriptStream,
 };
+use crate::domain::store::{StoreConfig, replay};
 
 /// The live fleet stays around this size: finished agents are replaced.
 const FLEET_SIZE: usize = 15;
@@ -145,6 +147,35 @@ pub fn script(seed: u64, start: Timestamp, step: Duration, steps: u32) -> Vec<Ob
         observations.extend(fleet.step(now).changes.into_iter().map(observation));
     }
     observations
+}
+
+/// The state a live store would publish after `steps` steps of the script,
+/// reduced once per step at a fixed clock. Deterministic for a seed, start
+/// time and step count; "today" for spend is the UTC day.
+pub fn snapshot(seed: u64, start: Timestamp, step: Duration, steps: u32) -> Snapshot {
+    let observations = |changes: Vec<Change>| {
+        changes
+            .into_iter()
+            .map(|change| Observation {
+                source: SourceKind::Demo,
+                change,
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut fleet = DemoFleet::new(seed, start);
+    let reset = vec![Change::Reset(fleet.reset().facts)];
+    let step = TimeDelta::from_std(step).unwrap_or(TimeDelta::zero());
+
+    let mut timeline = vec![(start, observations(reset))];
+    for index in 1..=steps {
+        let now = start + step * i32::try_from(index).unwrap_or(i32::MAX);
+        timeline.push((now, observations(fleet.step(now).changes)));
+    }
+    let config = StoreConfig {
+        day_offset: chrono::FixedOffset::east_opt(0),
+        ..StoreConfig::default()
+    };
+    replay(config, timeline)
 }
 
 /// The demo's transcripts: the items its agents "wrote", for `FollowTranscript`.
