@@ -106,12 +106,15 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 
 | Files | Area | Helpers |
 | --- | --- | --- |
-| `reply`, `send-*` | what a reply, forward or new message sends, undo, send outcome | `harness/send.ts` |
-| `draft-*`, `attachment` | draft saving, discarding and recovery, attachments, the editor | `harness/drafts.ts` |
-| `list`, `state`, `inbox`, `folders` | the list, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
+| `reply`, `send-*`, `compose-*`, `scheduled-failure` | starting and writing a message, what a reply, forward or new message sends, undo, send outcome, a scheduled send that failed | `harness/send.ts` |
+| `draft-*`, `attachment*`, `signature` | draft saving, discarding and recovery, attachments, the editor, the signature | `harness/drafts.ts` |
+| `list*`, `state`, `inbox`, `folders`, `saved-views` | the list, its views, controls and search, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
+| `organise-*`, `labels`, `reminders` | marking, moving and muting threads and senders, labels, reminders | `harness/organise.ts` |
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
-| `link*`, `notify` | connecting inboxes and calendars, the Mail badge | `harness/linking.ts` |
-| `calendar-invitation` | the invitation card in a thread | |
+| `link*`, `connect-more`, `settings-accounts`, `notify` | connecting, reconnecting and sharing inboxes, calendars, onboarding, the Mail badge | `harness/linking.ts` |
+| `sync-provider*` | what reaches the app from the provider: existing and new mail, changes made in the provider's own client, threading, classification | `harness/sync.ts` |
+| `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
+| `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |
 | `ledger/` | the coverage manifest, the recorder and the report | |
 | `journey-*` | whole user journeys for a Gmail and an Outlook inbox: a mail day, a new message, scheduled send, triage, a received attachment, phone width, Settings › Email | `harness/journeys.ts` |
 
