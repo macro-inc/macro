@@ -89,8 +89,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   Hidden companies, their contacts, and hidden company-less contacts stay out.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
-  the caller's mailbox. Keep browser requests bounded; never expand every CRM
-  record into client-side filters or raise ingress limits to fit them.
+  the caller's mailbox. It reads only what the request's sources can return
+  (`ActivityReads`): a source pinned to the nil id (`exclusions`) reads
+  nothing, so each Sales view reads one source, and the edges come from one
+  statement that probes the Companies and Contacts property indexes with the
+  scope's record ids (`CrmService::activity_property_edges`), without its
+  domains, addresses or database rows. A request that reads database rows
+  still takes the record path. Keep browser requests bounded; never expand
+  every CRM record into client-side filters or raise ingress limits to fit
+  them.
+- Property edges reach database-row cells from the requested records through
+  `idx_ep_database_row_references_gin`: keep that arm's literal
+  `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
+  partial index applies, and join the row by the guarded uuid cast, never
+  `r.id::text = ep.entity_id`, which reads every row cell of every database.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the
@@ -106,6 +118,19 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`agent_session_follower`, people who prompted the session from the session
   itself), who may also read them through the thread's parent. The notified
   and work feeds share that rule through `notified::agent_session_gate`.
+- A source pinned to the nil id (how CRM tabs, Home, Tasks, and GraphQL
+  hydration leave a source out) runs no statement: `exclusions.rs` drops the
+  email, channel, channel-thread (by thread or channel id), call, and
+  foreign-entity requests, the calendar and agent-session legs return early,
+  and a dynamic query that can return no row (`DynamicArms::can_match`) skips
+  its transaction and source-id read. A project parent pinned to nil counts
+  only there: a union with another live arm keeps that project arm, because
+  dropping it leaves one read of `TopItems`, Postgres inlines the CTE, and
+  CRM record Files then scanned `document_sub_type` once per page row.
+  The CRM company request is dropped when the ids its extractor collects are
+  all nil, read from the extract because it unions `And`ed ids; a
+  hidden-company request keeps the leg so the admin check still answers it.
+  Prove a new pin impossible the same way; `nil OR real id` must keep its leg.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.

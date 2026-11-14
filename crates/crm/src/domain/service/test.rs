@@ -116,6 +116,14 @@ impl CompaniesRepository for StubRepo {
             .map(Option::unwrap_or_default)
     }
 
+    async fn activity_property_edges(
+        &self,
+        scope: CrmContactListScope<'_>,
+        _entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
+        self.resolve_activity(scope).await.map(|_| Vec::new())
+    }
+
     async fn resolve_association(
         &self,
         scope: CrmContactListScope<'_>,
@@ -807,6 +815,34 @@ async fn association_uses_the_viewer_scope_and_reports_invisible_records() {
             .resolve_association(viewer, None, CrmAssociation::Contact(contact))
             .await,
         Err(CrmError::ContactNotFoundForTeam)
+    ));
+}
+
+#[tokio::test]
+async fn activity_edges_use_the_scope_resolve_association_uses() {
+    use models_properties::EntityType;
+    let found = service();
+    let types = [EntityType::Task];
+    found
+        .activity_property_edges("macro|user@example.com", None, &types)
+        .await
+        .unwrap();
+    let team_id = uuid::Uuid::from_u128(42);
+    let bot = bot_receipt(team_id, BotReceiptScope::Team { team_id }, TeamRole::Member);
+    found
+        .activity_property_edges("bot-viewer", Some(&bot), &types)
+        .await
+        .unwrap();
+    assert_eq!(
+        *found.companies_repository.association_calls.lock().unwrap(),
+        vec![None, Some((team_id, false))]
+    );
+    let member = receipt_with_role(TeamRole::Member);
+    assert!(matches!(
+        found
+            .activity_property_edges("macro|other@example.com", Some(&member), &types)
+            .await,
+        Err(CrmError::InvalidRequest(_))
     ));
 }
 
