@@ -781,6 +781,17 @@ service_url! {
 }
 
 service_url! {
+    /// TypeSafe API base, which serves the Jev decision models. TypeSafe's
+    /// host in every environment; override it to run against the model
+    /// stand-in of `crates/email_e2e`.
+    pub struct TypesafeApiUrl {
+        local: "https://api.typesafe.ai",
+        dev: "https://api.typesafe.ai",
+        prod: "https://api.typesafe.ai",
+    }
+}
+
+service_url! {
     /// The Microsoft identity platform's host, for the calls a service
     /// makes: code exchange, token refresh, the OpenID discovery document
     /// and its signing keys. Microsoft's host in every environment; override
