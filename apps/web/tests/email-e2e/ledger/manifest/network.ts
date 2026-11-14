@@ -278,7 +278,119 @@ export const GRAPHQL: readonly Operation[] = [
 ];
 
 /** What email surfaces ask of other services, as the front sees the path. */
-export const ELSEWHERE: readonly Operation[] = [];
+export const ELSEWHERE: readonly Operation[] = [
+  {
+    id: 'POST /auth/link/gmail',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the auth service',
+    note: 'starts the Gmail consent',
+  },
+  {
+    id: 'POST /auth/link/outlook',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the auth service',
+    note: 'starts the Outlook consent',
+  },
+  {
+    id: 'GET /auth/link/email/providers',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the auth service',
+  },
+  {
+    id: 'GET /auth/link/gmail/status',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the auth service',
+  },
+  {
+    id: 'GET /dss/reminders/email/collection',
+    kind: 'rest',
+    scope: 'email',
+    note: 'the Reminders tab',
+  },
+  { id: 'GET /dss/reminders/email/{}', kind: 'rest', scope: 'email' },
+  { id: 'PUT /dss/reminders/email/{}', kind: 'rest', scope: 'email' },
+  { id: 'PATCH /dss/reminders/email/{}', kind: 'rest', scope: 'email' },
+  {
+    id: 'POST /dss/favorites',
+    kind: 'rest',
+    scope: 'email',
+    note: 'star a thread',
+  },
+  { id: 'DELETE /dss/favorites/{}/{}', kind: 'rest', scope: 'email' },
+  {
+    id: 'POST /dss/items/soup/ast',
+    kind: 'rest',
+    scope: 'email',
+    note: 'the mail lists',
+  },
+  { id: 'POST /dss/items/soup', kind: 'rest', scope: 'shared' },
+  {
+    id: 'GET /dss/entities/email_thread/{}/access-requests',
+    kind: 'rest',
+    scope: 'email',
+  },
+  {
+    id: 'GET /dss/channels/attachments/thread/{}/references',
+    kind: 'rest',
+    scope: 'email',
+    note: 'References in the thread side panel',
+  },
+  {
+    id: 'POST /dss/search',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the search index',
+    note: 'full-text search of mail',
+  },
+  {
+    id: 'GET /image-proxy/proxy',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the image proxy',
+    note: 'remote images in a message',
+  },
+  {
+    id: 'GET /static-file/file/{}',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the static file service',
+    note: 'inline images of a draft',
+  },
+  {
+    id: 'PUT /static-file/api/file',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the static file service',
+  },
+  {
+    id: 'PUT /static-file/stored/{}',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the static file service',
+  },
+  {
+    id: 'GET /notification/user_notifications/preferences',
+    kind: 'rest',
+    scope: 'shared',
+    needs: 'the notification service',
+  },
+  {
+    id: 'PUT /notification/user_notifications/preferences/new_email/enable',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the notification service',
+  },
+  {
+    id: 'PUT /notification/user_notifications/preferences/new_email/disable',
+    kind: 'rest',
+    scope: 'email',
+    needs: 'the notification service',
+  },
+];
 
 export const OPERATIONS: readonly Operation[] = [
   ...REST,
