@@ -102,7 +102,9 @@ export function useEmailSearchMention(
   });
 
   const emails = createLazyMemo((): EntityItem[] => {
-    if (usesQuickAccess()) return cachedEmails.items();
+    // Drafts, local ones included, are not threads a mention can point to.
+    if (usesQuickAccess())
+      return cachedEmails.items().filter((item) => !item.data.isDraft);
 
     const term = searchTerm();
     const remoteEmails = remoteEmailList();
@@ -113,7 +115,10 @@ export function useEmailSearchMention(
   return {
     emails,
     totalCount: () =>
-      usesQuickAccess() ? cachedEmails.totalCount() : emails().length,
+      usesQuickAccess()
+        ? cachedEmails.totalCount() -
+          (cachedEmails.items().length - emails().length)
+        : emails().length,
     hasMore: () =>
       usesQuickAccess()
         ? cachedEmails.hasMore()
