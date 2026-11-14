@@ -311,6 +311,26 @@ fn only_a_background_session_with_instructions_skips_picked_documentation() {
     assert!(routes_documentation(ReplyDelivery::Whole, Some("be terse")));
 }
 
+/// An unseen turn (a routine draft) runs at low effort where its model takes
+/// one; any other turn keeps the effort it was given.
+#[test]
+fn an_unseen_turn_runs_at_low_effort_where_its_model_takes_one() {
+    use agent::ReasoningEffort;
+    let model = "anthropic/claude-sonnet-5-5";
+    assert_eq!(
+        unseen_effort(true, model, ReasoningEffort::default()),
+        ReasoningEffort::Low
+    );
+    assert_eq!(
+        unseen_effort(false, model, ReasoningEffort::High),
+        ReasoningEffort::High
+    );
+    assert_eq!(
+        unseen_effort(true, "some/model", ReasoningEffort::default()),
+        ReasoningEffort::default()
+    );
+}
+
 /// A named agent is told who it is before its instructions, even when it
 /// has no session instructions — otherwise "who are you" has nothing to go on.
 #[test]

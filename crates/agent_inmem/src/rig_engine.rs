@@ -580,9 +580,10 @@ async fn drive_turn(
     // reads no memory, offers the model no tools, and is read, not shown, so
     // no opening line races it.
     let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
-    // A turn nobody watches gets code mode and the documentation its request
-    // needs, not a conversation's prompt and tools (see `unseen`).
+    // A turn nobody watches gets code mode and what its opener gave it, not a
+    // conversation's prompt and tools (see `unseen`).
     let unseen = delivery == ReplyDelivery::Unseen;
+    let reasoning_effort = unseen_effort(unseen, &model, reasoning_effort);
     if let Some(key) = &agent_key
         && agent_api_keys::domain::ModelProvider::of_model(&model) != Some(key.key.provider())
     {
@@ -1096,6 +1097,22 @@ fn system_prompt(
         rest.push_str("\n</user_memory>");
     }
     SystemPrompt::split(shared, rest).with_turn(sdk_docs)
+}
+
+/// The effort a turn runs at. Someone waits on an unseen turn (a routine
+/// draft) and its opener wrote out what the work needs, so it runs at low
+/// effort where its model takes one.
+fn unseen_effort(
+    unseen: bool,
+    model: &str,
+    effort: agent::ReasoningEffort,
+) -> agent::ReasoningEffort {
+    let low = agent::ReasoningEffort::Low;
+    if unseen && agent::ReasoningEffort::supported(model).contains(&low) {
+        low
+    } else {
+        effort
+    }
 }
 
 /// Whether a turn's request picks the SDK documentation its prompt carries.
