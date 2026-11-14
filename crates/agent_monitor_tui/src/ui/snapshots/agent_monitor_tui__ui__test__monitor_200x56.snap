@@ -1,0 +1,60 @@
+---
+source: crates/agent_monitor_tui/src/ui/test.rs
+expression: "render(&mut app(), 200, 56)"
+---
+ MACROD  MON >_  DEMO  ACTIVE  ● LIVE  WORK 79  WAIT 0  BLOCK 1  ERR 50  DAY ~$28.60  AGENTS 97  SEQ 1                                                                              FRI 02 JAN 10:01:40 
+ 0 MON  1 AGENTS  2 TAPE  3 SPEND  4 FAILURES  5 TREE  6 SOURCES  7 BODY  w WALL                                                                                               / FIND  ? KEYS  ESC BACK 
+P ▲ TOOL Write README.md   ┃   SCRATCH-NOTES ▲ TURN turn start   ┃   SCRATCH-NOTES ▲ TOOL Write README.md   ┃   EXPLORE THE REDUCER ▲ STAT idle   ┃   UI-PAGES ▲ STAT idle   ┃   UI-PAGES ▲ TEND turn en
+┌ WORKING ──────────────┐┌ WAITING ──────────────┐┌ BLOCKED ──────────────┐┌ TURNS 24H ────────────┐┌ TOOLS 24H ────────────┐┌ ERR 24H ──────────────┐┌ TOK/MIN ──────────────┐┌ DAY ──────────────────┐
+│79                     ││0                      ││1                      ││297                    ││707                    ││50                     ││5.0M                   ││~$28.60                │
+│of 93 live · 13 idle   ││on a person            ││permission / stuck     ││12/h avg               ││6.8% failed            ││2 agents failed        ││▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ││▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁│
+└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘
+┌ 1 AGENTS  93 LIVE / 97 ROWS ───────────────────────────────────────────────────────────────────────────────────────────┐┌ 7 BODY  VITALS ──────────────────────┐┌ 3 SPEND TODAY  ~$28.60 ────────────┐
+│  KIND     NAME           STAT DOING                 AGE  TRN  TOOLS ERR TOKENS  COST     ACTIVITY 60M                  ││♥ 168 BPM  5.0M TOK/M  79 WORKING     ││          █                         │
+│■ subagent explore the re WORK explore the reducer     0s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││             █        █        █      ││         ▇█                         │
+│■ builder  fix-19         WORK Follow-up from review  28s    2     4   0  163.8k   ~$0.28 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││   ▁  ▄     ▁█ ▄     ▁█ ▄     ▁█ ▄    ││         ██                         │
+│■ builder  rpc-server     WORK Task explore the redu  33m   18    52   6    1.7M   ~$2.29 ▁▁▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││▃▃▃█ ▃█▃▃▃▃▃██▃█▃▃▃▃▃██▃█▃▃▃▃▃██▃█▃▃▃▃││         ██                         │
+│■ builder  fix-16         WORK Follow-up from review   1m    9    24   4  850.2k   ~$1.15 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██││                                      ││         ██                         │
+│■ manager  release-train  WORK building               22m   14    38  12    1.5M   ~$1.68 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▂▁█▅││                                      ││         ██                         │
+│■ other    scratch-notes  WORK scratch-notes session  36m   20    65  16    2.0M   ~$2.71 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁█▆││EVENT      /MIN                       ││         ██                         │
+│■ other    lint-sweep ses WORK lint-sweep session     26m   14    39   8    1.4M   ~$1.82 ▁▁▁▂▂▂▁▁▁▂▂▁▁▁▂▁▁▁▁▂▁▁▂▁▁▁▂▁██││TOOL    ██████████████░░░░░░░░░░░  194││00    06    12    18                │
+│■ builder  fix-18         WORK Follow-up from review  54s    6    16   4  510.8k   ~$0.73 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃█││TURN    ██████████░░░░░░░░░░░░░░░  143││KIND        USD    %                │
+│■ chatter  chat-desk      WORK Answer questions       46m   22    53   6    2.1M   ~$2.81 ▁▁▂▁▂▁▁▁▂▁▁▁▂▂▁▂▁▁▂▂▁▂▁▁▁▂▂▂██││SPWN    ██░░░░░░░░░░░░░░░░░░░░░░░   33││builder    ~$9.59  34 ▮▮▮▮          │
+│■ planner  q4-roadmap     WORK Draft the quarter's p  21m   15    45   2    1.8M   ~$2.25 ▁▁▁▁▁▁▁▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▅█││ERR     █░░░░░░░░░░░░░░░░░░░░░░░░   14││other      ~$4.53  16 ▮▮            │
+│■ builder  fix-20         WORK Follow-up from review  12s    1     2   0  163.5k   ~$0.19 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││DONE    ░░░░░░░░░░░░░░░░░░░░░░░░░    7││manager    ~$4.37  15 ▮▮            │
+│■ subagent explore the re WORK explore the reducer     2s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││SOURCE     /MIN                       ││planner    ~$4.33  15 ▮▮            │
+│■ planner  mesh-plan      WORK Plan the figure widge  31m   15    42   2    1.7M   ~$2.07 ▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▅││hc      █████████████████████████  351││chatter    ~$2.81  10 ▮             │
+│■ subagent explore the re WORK explore the reducer     4s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││claude  █████████░░░░░░░░░░░░░░░░  127│└────────────────────────────────────┘
+│■ subagent explore the re WORK explore the reducer     4s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││codex   ██░░░░░░░░░░░░░░░░░░░░░░░   22│┌ 6 SOURCES  1/1 OK ─────────────────┐
+│■ subagent explore the re WORK explore the reducer     6s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││TOOL       /MIN                       ││  SOURCE            AGT  ITEMS LAST │
+│■ subagent explore the re WORK explore the reducer     8s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Read    ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮   60││◆ demo                97      —    —│
+│■ subagent explore the re WORK explore the reducer     9s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Task    ▮▮▮▮▮▮▮▮▮▮▮▮▮               30││                                    │
+│■ subagent explore the re WORK explore the reducer    13s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Edit    ▮▮▮▮▮▮▮▮▮▮▮▮▮               29││                                    │
+│■ subagent explore the re WORK explore the reducer    13s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Bash    ▮▮▮▮▮▮▮▮▮▮▮▮                27││                                    │
+│■ subagent explore the re WORK explore the reducer    15s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮                 26││                                    │
+│■ subagent explore the re WORK explore the reducer    16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Grep    ▮▮▮▮▮▮▮▮▮▮                  22││                                    │
+│■ subagent explore the re WORK explore the reducer    16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││                                      ││                                    │
+│■ subagent explore the re WORK explore the reducer    16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││                                      ││                                    │
+│■ subagent explore the re WORK explore the reducer    16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││                                      ││                                    │
+│■ subagent explore the re WORK explore the reducer    18s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││                                      ││                                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘└──────────────────────────────────────┘└────────────────────────────────────┘
+┌ 2 TAPE  500 LINES  ▼ FOLLOWING ──────────────────────────────────────────────────────────────────────────────────┐┌ 4 FAILURES  15 24H ──────────────────────────────────────────────────────────────┐
+│10:01:40 fix-19         TURN turn start                                                                           ││  6s tool  builder  fix-16         Edit failed                                    │
+│10:01:40 rpc-server     TOOL Task explore the reducer                                                             ││  6s tool  other    lint-sweep se… Read failed                                    │
+│10:01:40 explore the r… TEND turn end                                                                             ││ 10s tool  builder  fix-18         Bash failed                                    │
+│10:01:40 explore the r… TOOL Read store.rs                                                                        ││ 15s tool  other    lint-sweep se… Write failed                                   │
+│10:01:40 mesh-plan      STAT working                                                                              ││ 18s tool  other    lint-sweep se… Grep failed                                    │
+│10:01:40 fix-19         STAT working                                                                              ││ 18s tool  builder  fix-18         Task failed                                    │
+│10:01:40 explore the r… SPWN subagent explore the reducer                                                         ││ 26s tool  builder  rpc-server     Task failed                                    │
+│10:01:39 fix-16         TOOL Bash just check                                                                      ││ 28s tool  other    scratch-notes  Grep failed                                    │
+│10:01:39 lint-sweep se… TEND turn end                                                                             ││ 31s agent explorer find-17        failed (exit 1)                                │
+│10:01:39 explore the r… STAT idle                                                                                 ││ 31s tool  other    scratch-notes  Task failed                                    │
+│10:01:39 explore the r… STAT idle                                                                                 ││ 32s tool  explorer find-15        Write failed                                   │
+│10:01:38 ui-pages       TEND turn end                                                                             ││ 34s tool  builder  rpc-server     Write failed                                   │
+│10:01:38 ui-pages       STAT idle                                                                                 ││ 35s tool  reviewer review-rpc     Grep failed                                    │
+│10:01:38 explore the r… STAT idle                                                                                 ││ 41s tool  explorer find-17        Task failed                                    │
+│10:01:38 scratch-notes  TOOL Write README.md                                                                      ││  5m agent builder  flaky-tests    exit 1                                         │
+│10:01:38 scratch-notes  TURN turn start                                                                           ││                                                                                  │
+│10:01:38 q4-roadmap     TOOL Write README.md                                                                      ││                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────────────────┘
+ >  TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
