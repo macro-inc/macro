@@ -349,6 +349,7 @@ async fn allowed_restates_the_privacy_function(pool: sqlx::PgPool) -> anyhow::Re
             ("ph:blocked-spam-to", false),
             ("ph:dense-spam", true),
             ("ph:draft-only", false),
+            ("ph:spam-and-draft", true),
         ]
     );
 

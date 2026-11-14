@@ -212,6 +212,9 @@ FROM (VALUES
   -- Only a spam message is to a blocked domain.
   ('blocked-spam-to', 24, 0, false, 'INBOX', 'p0@dense.test', 'u0@gamma.test'),
   ('blocked-spam-to', 24, 1, false, 'SPAM', 'p0@dense.test', 'p2@blocked.test'),
+  -- Its only message that isn't a draft is spam, which counts.
+  ('spam-and-draft', 25, 0, false, 'SPAM', 'p0@dense.test', 'u0@gamma.test'),
+  ('spam-and-draft', 25, 1, true, 'SENT', 'u0@gamma.test', 'p0@dense.test'),
   -- Only a spam message is from the company.
   ('dense-spam', 23, 0, false, 'INBOX', 'p0@other7.test', 'u0@gamma.test'),
   ('dense-spam', 23, 1, false, 'SPAM', 'p2@dense.test', 'u0@gamma.test')
