@@ -664,7 +664,14 @@ async fn a_link_locks_the_message_its_attachment_moved_to(db: PgPool) -> anyhow:
     let mut mover = db.acquire().await?;
     let mover_pid = backend_pid(&mut mover).await?;
     let mut moving = mover.begin().await?;
-    Write::MovedAttachment.apply(&chain, &mut moving).await?;
+    // A link that took the attachment before its message would hold the
+    // move until the holder commits, which comes only after the move.
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        Write::MovedAttachment.apply(&chain, &mut moving),
+    )
+    .await
+    .context("the move waits for the link")??;
     let mut deleter = db.acquire().await?;
     let deleter_pid = backend_pid(&mut deleter).await?;
     let (took_message, message_taken) = tokio::sync::oneshot::channel();
@@ -833,6 +840,10 @@ async fn the_backfill_resumes_after_its_last_committed_batch(db: PgPool) -> anyh
     .execute(&mut *conn)
     .await?;
 
+    // A backfill that never finishes fails here instead of hanging.
+    sqlx::query!("SET statement_timeout = '30s'")
+        .execute(&mut *conn)
+        .await?;
     sqlx::raw_sql(include_str!(
         "../../../../../../../../macro_db_client/migrations/20261114135612_document_email_participants_backfill.sql"
     ))
