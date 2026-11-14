@@ -24,6 +24,8 @@ times a second, and ticks at `fps` only while something animates.
   never a sum of rows' lifetime costs, so it adds up to the day total.
 - `src/ui.rs`: layout and its width breakpoints; panes and pages live in `src/ui/`.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
+- `src/theme.rs`: the palette and the HUD dressing: bracket frames, slanted
+  title strips, segmented meters, the dot grid and the glitch on fresh errors.
 
 ## Scope
 
@@ -53,6 +55,12 @@ times a second, and ticks at `fps` only while something animates.
   is the "on" phase.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
+- Box every pane with `theme::pane` or `theme::frame`: `ui::draw` finishes
+  each frame with `theme::grid` (dots on blank pane rows) and
+  `theme::brackets` (keys on the `┏┓┗┛` corners), so never draw those four
+  glyphs as content.
+- The glitch follows the frame clock, so it moves only while frames are drawn
+  and settles after `theme::GLITCH_MS`; snapshots at the fixed clock are stable.
 - Unix only beyond the pure modules: `feed`, `runner` and `run` are `cfg(unix)`
   because the client is.
 

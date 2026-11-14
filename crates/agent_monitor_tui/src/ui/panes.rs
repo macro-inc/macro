@@ -31,7 +31,7 @@ pub fn draw(
         Pane::Spend => spend(frame, area, app, focused),
         Pane::Failures => failures(frame, area, app, clock, focused),
         Pane::Sources => sources(frame, area, app, clock, focused),
-        Pane::Body => body(frame, area, app, focused),
+        Pane::Body => body(frame, area, app, clock, focused),
         Pane::Transcript | Pane::Children => {}
     }
 }
@@ -314,6 +314,15 @@ pub fn tape_line(
         TapeKind::ToolError | TapeKind::Failure => theme::RED,
         _ => theme::severity_color(event.severity),
     };
+    // An error flickers for a moment as it lands.
+    let text = match event.kind {
+        TapeKind::ToolError | TapeKind::Failure => theme::glitch(
+            &event.text,
+            (clock.now - event.at).num_milliseconds(),
+            clock.now.timestamp_millis(),
+        ),
+        _ => event.text.clone(),
+    };
     let line = Line::from(vec![
         Span::styled(clock.time_of(event.at), theme::ink(theme::DIM)),
         Span::raw(" "),
@@ -324,7 +333,7 @@ pub fn tape_line(
         Span::raw(" "),
         Span::styled(tag, theme::bold(tag_color)),
         Span::raw(" "),
-        Span::styled(event.text.clone(), theme::ink(text_color)),
+        Span::styled(text, theme::ink(text_color)),
     ]);
     if highlight {
         line.style(theme::selected())
@@ -436,19 +445,23 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         let share = if total > 0.0 { usd / total } else { 0.0 };
         // Display rounding of a share in [0, 1].
         let filled = ((share * bar_room as f64).round() as usize).min(bar_room);
-        let line = Line::from(vec![
-            Span::styled(format::cell(kind.label(), 8), theme::ink(theme::AMBER)),
-            Span::styled(
-                format::right(&format::cost(*cost), 9),
-                theme::bold(theme::YELLOW),
-            ),
-            Span::styled(
-                format::right(&format!("{:.0}", share * 100.0), 4),
-                theme::ink(theme::DIM),
-            ),
-            Span::raw(" "),
-            Span::styled("▮".repeat(filled), theme::ink(theme::STRIP)),
-        ]);
+        let line = Line::from(
+            vec![
+                Span::styled(format::cell(kind.label(), 8), theme::ink(theme::AMBER)),
+                Span::styled(
+                    format::right(&format::cost(*cost), 9),
+                    theme::bold(theme::YELLOW),
+                ),
+                Span::styled(
+                    format::right(&format!("{:.0}", share * 100.0), 4),
+                    theme::ink(theme::DIM),
+                ),
+                Span::raw(" "),
+            ]
+            .into_iter()
+            .chain(theme::meter(filled, bar_room, theme::STRIP))
+            .collect::<Vec<_>>(),
+        );
         lines.push(if focused && index == app.cursors.spend {
             line.style(theme::selected())
         } else {
@@ -501,14 +514,31 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
                     theme::ink(theme::DIM),
                 ),
                 Span::raw(" "),
-                Span::styled(format::cell(row.what, 6), theme::bold(theme::RED)),
+                Span::styled(
+                    format::cell(
+                        if row.what == "tool" {
+                            "✕ tool"
+                        } else {
+                            "▲ agent"
+                        },
+                        8,
+                    ),
+                    theme::bold(theme::RED),
+                ),
                 Span::styled(format::cell(kind, 9), theme::ink(theme::DIM)),
                 Span::styled(
                     format::cell(&app.view.name_of(&row.agent), 14),
                     theme::ink(theme::AMBER),
                 ),
                 Span::raw(" "),
-                Span::styled(row.detail.clone(), theme::ink(theme::RED)),
+                Span::styled(
+                    theme::glitch(
+                        &row.detail,
+                        (clock.now - row.at).num_milliseconds(),
+                        clock.now.timestamp_millis(),
+                    ),
+                    theme::ink(theme::RED),
+                ),
             ]);
             if focused && index == cursor {
                 line.style(theme::selected())
@@ -519,7 +549,7 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
         .collect();
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
-            "  ✓ no failures in the last 24 hours",
+            "  ◆ ALL CLEAR // no failures in the last 24 hours",
             theme::ink(theme::GREEN),
         )));
     }
@@ -607,15 +637,17 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
                 usize::try_from(done * u64::try_from(room).unwrap_or(0) / u64::from(total))
                     .unwrap_or(0)
                     .min(room);
-            lines.push(Line::from(vec![
-                Span::styled("  idx ", theme::ink(theme::FAINT)),
-                Span::styled("█".repeat(filled), theme::ink(theme::YELLOW)),
-                Span::styled("░".repeat(room - filled), theme::ink(theme::GHOST)),
-                Span::styled(
-                    format!(" {}/{}", progress.done, progress.total),
-                    theme::ink(theme::DIM),
-                ),
-            ]));
+            let mut spans = vec![Span::styled("  idx ", theme::ink(theme::FAINT))];
+            spans.extend(theme::meter(filled, room, theme::YELLOW));
+            lines.push(Line::from(
+                spans
+                    .into_iter()
+                    .chain([Span::styled(
+                        format!(" {}/{}", progress.done, progress.total),
+                        theme::ink(theme::DIM),
+                    )])
+                    .collect::<Vec<_>>(),
+            ));
         }
         if let Some(detail) = &health.detail
             && health.state != SourceState::Healthy
@@ -635,13 +667,109 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
+fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
     let block = theme::pane(
         "7 BODY",
-        vec![count_span(app.view.body.title().to_owned())],
+        vec![
+            Span::styled(" BIOSCAN ", theme::bold(theme::CYAN)),
+            count_span(app.view.body.title().to_owned()),
+        ],
         focused,
     );
     let inner = block.inner(area);
     frame.render_widget(block, area);
     app.view.body.render(inner, frame.buffer_mut());
+    scanner(frame, inner, app, clock);
+}
+
+/// The scanner readout over the BODY figure: crosshair corners with a label
+/// in each, and tick marks down both edges.
+fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
+    if area.width < 24 || area.height < 6 {
+        return;
+    }
+    let rule = theme::ink(theme::CYAN_DIM);
+    let label = theme::bold(theme::CYAN);
+    let tokens = app.view.totals.tokens_per_min.last().copied().unwrap_or(0);
+    let rec = if clock.blink() { "○" } else { "●" };
+
+    let corner = |x: u16, y: u16, spans: Vec<Span<'static>>, right: bool| {
+        let line = Line::from(spans);
+        let width = u16::try_from(line.width()).unwrap_or(0).min(area.width);
+        let x = if right { x.saturating_sub(width) } else { x };
+        (Rect::new(x, y, width, 1), line)
+    };
+    let readouts = [
+        corner(
+            area.x,
+            area.y,
+            vec![
+                Span::styled("┌╴", rule),
+                Span::styled("SCAN", label),
+                Span::styled(format!(" 0x{:03X}", app.view.seq % 0x1000), rule),
+            ],
+            false,
+        ),
+        corner(
+            area.right(),
+            area.y,
+            vec![
+                Span::styled("REC ", theme::ink(theme::DIM)),
+                Span::styled(rec, theme::bold(theme::RED)),
+                Span::styled("╶┐", rule),
+            ],
+            true,
+        ),
+        corner(
+            area.x,
+            area.bottom() - 1,
+            vec![
+                Span::styled("└╴", rule),
+                Span::styled("SUBJ ", theme::ink(theme::DIM)),
+                Span::styled(
+                    format!("{:02}", app.view.totals.working),
+                    theme::bold(theme::GREEN),
+                ),
+                Span::styled(" LIVE", theme::ink(theme::DIM)),
+            ],
+            false,
+        ),
+        corner(
+            area.right(),
+            area.bottom() - 1,
+            vec![
+                Span::styled("TOK/M ", theme::ink(theme::DIM)),
+                Span::styled(
+                    format::compact(u64::from(tokens)),
+                    theme::bold(theme::YELLOW),
+                ),
+                Span::styled("╶┘", rule),
+            ],
+            true,
+        ),
+    ];
+    for (rect, line) in readouts {
+        frame.render_widget(Paragraph::new(line), rect);
+    }
+
+    // Tick marks down both edges, a long one every fourth row.
+    let buffer = frame.buffer_mut();
+    for y in area.y + 2..area.bottom().saturating_sub(2) {
+        let long = (y - area.y).is_multiple_of(4);
+        let (left, right, width) = if long {
+            ("╶─", "─╴", 2)
+        } else {
+            ("╶", "╴", 1)
+        };
+        for (x, mark) in [(area.x, left), (area.right() - width, right)] {
+            for (offset, symbol) in mark.chars().enumerate() {
+                let x = x + u16::try_from(offset).unwrap_or(0);
+                if let Some(cell) = buffer.cell_mut((x, y))
+                    && cell.symbol() == " "
+                {
+                    cell.set_char(symbol).set_fg(theme::CYAN_DARK);
+                }
+            }
+        }
+    }
 }

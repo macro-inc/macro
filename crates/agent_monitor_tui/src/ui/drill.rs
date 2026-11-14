@@ -8,7 +8,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Color;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use agent_monitor::domain::model::{
     Agent, AgentId, TapeKind, Timestamp, TranscriptItem, TranscriptItemKind,
@@ -77,8 +77,8 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
         ]
     };
 
-    let title = Line::from(vec![
-        Span::styled(format!(" {} ", agent.name), theme::strip()),
+    let mut title = theme::strip_title(&agent.name);
+    title.extend([
         Span::styled(
             format!(" {} ", agent.kind.label()),
             theme::bold(theme::YELLOW),
@@ -92,14 +92,9 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
             agent.status_detail.clone().unwrap_or_default(),
             theme::ink(theme::status_color(agent.status)),
         ),
-        Span::styled(format!(" {} ", agent.id), theme::ink(theme::FAINT)),
+        Span::styled(format!(" {} ", agent.id), theme::ink(theme::CYAN_DIM)),
     ]);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
-        .border_style(theme::ink(theme::FAINT))
-        .title(title)
-        .style(theme::base());
+    let block = theme::frame(theme::EDGE).title(Line::from(title));
 
     let mut first = Vec::new();
     first.extend(field("PROGRAM", agent.program.clone()));
@@ -204,14 +199,10 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     ];
     let areas = Layout::horizontal([Constraint::Ratio(1, 9); 9]).split(area);
     for ((label, value, color, series), cell) in cells.into_iter().zip(areas.iter()) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(theme::ink(theme::FAINT))
-            .title(Span::styled(
-                format!(" {label} "),
-                theme::bold(theme::STRIP),
-            ))
-            .style(theme::base());
+        let block = theme::frame(theme::EDGE).title(Line::from(vec![
+            Span::styled("▸", theme::ink(theme::STRIP)),
+            Span::styled(format!("{label} "), theme::bold(theme::STRIP)),
+        ]));
         let mut lines = vec![Line::from(Span::styled(value, theme::bold(color)))];
         if let Some(series) = series {
             lines.push(Line::from(format::spark(
@@ -490,14 +481,21 @@ fn item_lines(
         TranscriptItemKind::ToolResult => vec![Line::from(vec![
             time,
             Span::styled("ERR  ", theme::bold(theme::RED)),
-            Span::styled(one_line(&item.text), theme::ink(theme::RED)),
+            Span::styled(
+                theme::glitch(
+                    &one_line(&item.text),
+                    (clock.now - item.at).num_milliseconds(),
+                    clock.now.timestamp_millis(),
+                ),
+                theme::ink(theme::RED),
+            ),
         ])],
         TranscriptItemKind::ToolCall => {
             let result = item.tool_id.as_ref().and_then(|id| results.get(id));
             let (status, color) = match result {
-                Some(result) if result.is_error => ("ERROR", theme::RED),
-                Some(_) => ("OK", theme::GREEN),
-                None => ("…", theme::YELLOW),
+                Some(result) if result.is_error => ("✕ ERR", theme::RED),
+                Some(_) => ("◆ OK", theme::GREEN),
+                None => ("◇ …", theme::YELLOW),
             };
             let duration = result
                 .and_then(|result| result.duration_ms)

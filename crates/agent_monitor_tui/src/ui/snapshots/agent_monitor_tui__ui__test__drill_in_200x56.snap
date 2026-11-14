@@ -2,59 +2,59 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
- MACROD  MON >_  DEMO  ACTIVE  ● LIVE  WORK 25  WAIT 0  BLOCK 1  ERR 50  DAY ~$25.28  AGENTS 34  SEQ 1                                                                              FRI 02 JAN 10:01:40 
- 0 MON  1 AGENTS  2 TAPE  3 SPEND  4 FAILURES  5 TREE  6 SOURCES  7 BODY  w WALL  ▸ release-train                                                                              / FIND  ? KEYS  ESC BACK 
-urn end   ┃   FIX-18 ▲ STAT idle   ┃   FIX-18 ▲ TEND turn end   ┃   RPC-SERVER ▲ STAT working   ┃   LINT-SWEEP SESSION ▲ TOOL Grep subscribe   ┃   RPC-SERVER ▲ TURN turn start   ┃   Q4-ROADMAP ▲ STAT 
-┌ WORKING ──────────────┐┌ WAITING ──────────────┐┌ BLOCKED ──────────────┐┌ TURNS 24H ────────────┐┌ TOOLS 24H ────────────┐┌ ERR 24H ──────────────┐┌ TOK/MIN ──────────────┐┌ DAY ──────────────────┐
-│25                     ││0                      ││1                      ││234                    ││644                    ││50                     ││5.0M                   ││~$25.28                │
-│of 30 live · 4 idle    ││on a person            ││permission / stuck     ││9/h avg                ││7.5% failed            ││2 agents failed        ││▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ││▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁│
-└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘
-┌ release-train  manager ■ WORK building hc:t1 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│PROGRAM claude   MODEL claude-opus-5-5   CWD /srv/work/release-train   BRANCH feat/release-train   SPACE demo                                                                                         │
-│TERMINAL t1   SESSION demo-session-001   PID 40002   STARTED 09:39:00   PARENT —   TASK Ship the release branch                                                                                       │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌ DURATION ──────────┐┌ COST ──────────────┐┌ TURNS ──────────────┐┌ TOOLS ─────────────┐┌ ERRORS ────────────┐┌ TOKENS ────────────┐┌ TOK IN ─────────────┐┌ TOK OUT ───────────┐┌ CACHE RD/WR ───────┐
-│22m40s              ││~$1.43              ││14                   ││38                  ││6                   ││1.5M                ││146.9k               ││17.4k               ││1.3M/47.3k          │
-│                    ││▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▃█▂││▁▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▂█▃││▁▁▂▁▁▁▁▂▂▁▁▁▁▁▁▁▂▁█▅││▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▄▁█▁││▂▁▁▁▁▁▁▁▁▂▁▁▃▁▁▁▁▂█▂││                     ││                    ││                    │
-└────────────────────┘└────────────────────┘└─────────────────────┘└────────────────────┘└────────────────────┘└────────────────────┘└─────────────────────┘└────────────────────┘└────────────────────┘
-┌ TIMELINE  7 EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│▲·····▪·▮············································································✖···▮·│·········································································································▮│
-│10:00:02                                                                                                                                                                                      10:01:30│
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌ TRANSCRIPT  7 ITEMS  ▼ FOLLOWING  ENTER EXPANDS A TOOL CALL ─────────────────────────────────────────────────────────────────┐┌ CHILDREN  9 · TAB HERE, ENTER DRILLS ────────────────────────────────┐
-│10:00:02 USER Run the store tests and fix what fails.                                                                         ││■ subagent explore the red… WORK        —                             │
+◢ MACROD://MON ◤ >_  DEMO  ACTIVE SYS.LINK ● LIVE ╱ WORK 25 ╱ WAIT 0 ╱ BLOCK 1 ╱ ERR 50 ╱ DAY ~$25.28 ╱ AGENTS 34 ╱ SEQ 0x0001                                                   FRI 02 JAN ⟦ 10:01:40 ⟧
+ 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES   5 TREE   6 SOURCES   7 BODY   w WALL  ◢▸ release-train◤ ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄ / FIND  ? KEYS  ESC BACK 
+┏▸WORKING ────────── Q1 ┓┏▸WAITING ────────── Q2 ┓┏▸BLOCKED ────────── Q3 ┓┏▸TURNS 24H ──────── Q4 ┓┏▸TOOLS 24H ──────── Q5 ┓┏▸ERR 24H ────────── Q6 ┓┏▸TOK/MIN ────────── Q7 ┓┏▸DAY ────────────── Q8 ┓
+┃25 ▰▰▰▰▰▰▰▰▰▰▱▱        ┃┃0 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃1 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃234                    ┃┃644                    ┃┃50                     ┃┃5.0M                   ┃┃~$25.28                ┃
+┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
+┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛
+┏◢ release-train ◤ manager ◆ WORK building hc:t1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┓
+┃PROGRAM claude   MODEL claude-opus-5-5   CWD /srv/work/release-train   BRANCH feat/release-train   SPACE demo                                                                                         ┃
+┃TERMINAL t1   SESSION demo-session-001   PID 40002   STARTED 09:39:00   PARENT —   TASK Ship the release branch                                                                                       ┃
+┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛
+┏▸DURATION ───────━━━┓┏▸COST ───────────━━━┓┏▸TURNS ───────────━━━┓┏▸TOOLS ──────────━━━┓┏▸ERRORS ─────────━━━┓┏▸TOKENS ─────────━━━┓┏▸TOK IN ──────────━━━┓┏▸TOK OUT ────────━━━┓┏▸CACHE RD/WR ────━━━┓
+┃22m40s              ┃┃~$1.43              ┃┃14                   ┃┃38                  ┃┃6                   ┃┃1.5M                ┃┃146.9k               ┃┃17.4k               ┃┃1.3M/47.3k          ┃
+┃   ·   ·   ·   ·    ┃┃▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▃█▂┃┃▁▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▂█▃┃┃▁▁▂▁▁▁▁▂▂▁▁▁▁▁▁▁▂▁█▅┃┃▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▄▁█▁┃┃▂▁▁▁▁▁▁▁▁▂▁▁▃▁▁▁▁▂█▂┃┃  ·   ·   ·   ·   ·  ┃┃   ·   ·   ·   ·    ┃┃     ·   ·   ·   ·  ┃
+┗━━━──────────────━━━┛┗━━━──────────────━━━┛┗━━━───────────────━━━┛┗━━━──────────────━━━┛┗━━━──────────────━━━┛┗━━━──────────────━━━┛┗━━━───────────────━━━┛┗━━━──────────────━━━┛┗━━━──────────────━━━┛
+┏━◢ TIMELINE ◤ 7 EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┓
+┃▲·····▪·▮············································································✖···▮·│·········································································································▮┃
+┃10:00:02                                                                                                                                                                                      10:01:30┃
+┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛
+┏━◢ TRANSCRIPT ◤ 7 ITEMS  ▼ FOLLOWING  ENTER EXPANDS A TOOL CALL ───────────────────────────────────────────────────────────━━━┓┏━◢ CHILDREN ◤ 9 · TAB HERE, ENTER DRILLS ──────────────────────────━━━┓
+┃10:00:02 USER Run the store tests and fix what fails.                                                                         ┃┃◆ subagent explore the red… WORK        —                             ┃
 │10:00:05 TURN Running the tests first.                                                                                        ││· explorer find-15          DONE   ~$0.21                             │
-│10:00:06 TOOL Bash        cargo test -p store                                                                      34.0s ERROR││■ builder  fix-18           WORK   ~$0.32                             │
-│         ┌ ARGUMENTS                                                                                                          ││■ builder  fix-19           WORK   ~$0.13                             │
-│         │ cargo test -p store                                                                                                ││■ builder  rpc-server       WORK   ~$2.01 Task explore the reducer    │
-│         ├ RESULT                                                                                                             ││■ builder  fix-20           WORK   ~$0.08                             │
-│         │ 1 failed: replay_orders                                                                                            ││▪ explorer find-21          IDLE        —                             │
+│10:00:06 TOOL Bash        cargo test -p store                                                                    34.0s ✕ ERR  ││◆ builder  fix-18           WORK   ~$0.32                             │
+│         ┌ ARGUMENTS                                                                                                          ││◆ builder  fix-19           WORK   ~$0.13                             │
+│         │ cargo test -p store                                                                                                ││◆ builder  rpc-server       WORK   ~$2.01 Task explore the reducer    │
+│         ├ RESULT                                                                                                             ││◆ builder  fix-20           WORK   ~$0.08                             │
+│         │ 1 failed: replay_orders                                                                                            ││◇ explorer find-21          IDLE        —                             │
 │         └                                                                                                                    ││· builder  store-reducer    DONE   ~$1.69                             │
-│10:00:40 ERR  1 failed: replay_orders                                                                                         ││▪ reviewer review-rpc       IDLE   ~$3.78                             │
-│10:00:42 TOOL Read        src/store.rs                                                                              0.3s OK   ││                                                                      │
-│10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                           …      ││                                                                      │
+│10:00:40 ERR  1 failed: replay_orders                                                                                         ││◇ reviewer review-rpc       IDLE   ~$3.78                             │
+│10:00:42 TOOL Read        src/store.rs                                                                            0.3s ◆ OK   ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                         ◇ …      ││                                                                      │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                              ││                                                                      │
-│                                                                                                                              ││                                                                      │
-│                                                                                                                              ││                                                                      │
-│                                                                                                                              │└──────────────────────────────────────────────────────────────────────┘
-│                                                                                                                              │┌ TAPE ────────────────────────────────────────────────────────────────┐
-│                                                                                                                              ││10:01:37 release-t… TOOL Grep Snapshot                                │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│                                                                                                                              │┃                                                                      ┃
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┗━━━────────────────────────────────────────────────────────────────━━━┛
+│                                                                                                                              │┏━◢ TAPE ◤──────────────────────────────────────────────────────────━━━┓
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┃10:01:37 release-t… TOOL Grep Snapshot                                ┃
 │                                                                                                                              ││10:01:36 release-t… STAT working (building)                           │
-│                                                                                                                              ││10:01:31 release-t… STAT blocked (permission)                         │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:31 release-t… STAT blocked (permission)                         │
 │                                                                                                                              ││10:01:27 release-t… TOOL Bash just check                              │
-│                                                                                                                              ││10:01:26 release-t… TURN turn start                                   │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… TURN turn start                                   │
 │                                                                                                                              ││10:01:26 release-t… STAT working (building)                           │
-│                                                                                                                              ││10:01:26 release-t… TEND turn end                                     │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… TEND turn end                                     │
 │                                                                                                                              ││10:01:26 release-t… STAT idle (building)                              │
-│                                                                                                                              ││10:01:23 release-t… TOOL Task explore the reducer                     │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:23 release-t… TOOL Task explore the reducer                     │
 │                                                                                                                              ││10:01:19 release-t… TOOL Task explore the reducer                     │
-│                                                                                                                              ││10:01:18 release-t… TOOL Edit store.rs                                │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:18 release-t… TOOL Edit store.rs                                │
 │                                                                                                                              ││10:01:12 release-t… TOOL Edit pages.rs                                │
-│                                                                                                                              ││10:01:09 release-t… TOOL Edit client.rs                               │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:09 release-t… TOOL Edit client.rs                               │
 │                                                                                                                              ││10:01:07 release-t… TURN turn start                                   │
-│                                                                                                                              ││10:01:07 release-t… STAT working (building)                           │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:07 release-t… STAT working (building)                           │
 │                                                                                                                              ││10:01:04 release-t… TEND turn end                                     │
-│                                                                                                                              ││10:01:04 release-t… STAT idle (building)                              │
-│                                                                                                                              ││10:01:01 release-t… TOOL Bash git status                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────┘
- >  TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:04 release-t… STAT idle (building)                              │
+┃                                                                                                                              ┃┃10:01:01 release-t… TOOL Bash git status                              ┃
+┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛┗━━━────────────────────────────────────────────────────────────────━━━┛
+◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
