@@ -12,6 +12,8 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
+// Calls of one operation that, unfinished at the deadline, read as a loop.
+const LOOP_HINT_CALLS = 50;
 function emit(frame) {
   const bytes = encoder.encode(`${stringify(frame)}\n`);
   let offset = 0;
@@ -66,6 +68,8 @@ globalThis.console = {
 // turn. A worker would bring fresh timers; imports of node timer modules are
 // remapped to timers.mjs.
 // A function, not an arrow, so `new Worker(...)` reaches the throw.
+// The bootstrap keeps one timer for itself: the loop report before the deadline.
+const bootstrapTimeout = globalThis.setTimeout.bind(globalThis);
 const sleepBanned = (name) => function () {
   throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
 };
@@ -74,7 +78,7 @@ AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
-  const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, maxCallsPerOperation, remainingMs, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
@@ -83,8 +87,43 @@ try {
     ...operation,
     pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
   }));
-  if (dryRun) gateRequests(({service, operation}) =>
-    catalog.get(`${service}.${operation}`)?.write === false ? undefined : {skip: {data: {}}});
+  // A program stuck in a loop (reading the same thread over and over, walking
+  // every page of a search for a match that never comes) would call one API
+  // until the deadline and end with only "timed out", which tells the agent
+  // nothing. So the run stops, naming the operation, when one operation passes
+  // its budget, or near the deadline if one has been called often enough to
+  // look like a loop. Either way it stops at once, even if the program catches
+  // errors: a catch-and-retry loop must not spin on to the deadline.
+  const calls = new Map();
+  const mostCalled = () => {
+    let top = ["", 0];
+    for (const entry of calls) if (entry[1] > top[1]) top = entry;
+    return top;
+  };
+  const advice = "Calls already started, writes included, may have taken effect: check what they did before running anything again. Then rewrite the program: stop iterating once you have what you need (break out of for await loops), read each item once and reuse it, prefer list and batch reads over one read per item, or narrow the search.";
+  const stop = (message) => {
+    emit({type: "error", message});
+    exit(0);
+  };
+  gateRequests(({service, operation}) => {
+    const key = `${service}.${operation}`;
+    const count = (calls.get(key) ?? 0) + 1;
+    if (count > maxCallsPerOperation) {
+      stop(`Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. ${advice} A job that truly needs more calls of one operation must be split into smaller jobs.`);
+    }
+    calls.set(key, count);
+    if (dryRun && catalog.get(key)?.write !== false) return {skip: {data: {}}};
+    return undefined;
+  });
+  if (remainingMs > 0) {
+    const timer = bootstrapTimeout(() => {
+      const [key, count] = mostCalled();
+      if (count >= LOOP_HINT_CALLS) {
+        stop(`Stopped near the deadline: this program called ${key} ${count} times and did not finish, so it may be looping, or the job is too big for one run. ${advice}`);
+      }
+    }, remainingMs - Math.min(1500, remainingMs / 4));
+    Deno.unrefTimer(timer);
+  }
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));

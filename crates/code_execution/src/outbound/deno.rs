@@ -187,8 +187,16 @@ impl DenoRunner {
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
         let execution = async {
-            let candidate =
-                bridge(&job.environment, stdin, stdout, stderr, events, &job.limits).await?;
+            let candidate = bridge(
+                &job.environment,
+                stdin,
+                stdout,
+                stderr,
+                events,
+                &job.limits,
+                job.deadline,
+            )
+            .await?;
             // Both streams have closed, so the process is exiting.
             let status = child.wait().await.map_err(internal)?;
             if std::os::unix::process::ExitStatusExt::signal(&status)
@@ -301,6 +309,10 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
+    max_calls_per_operation: u32,
+    /// Time left before the host stops the run, so the program can report a
+    /// loop before then.
+    remaining_ms: u128,
     /// For an unattended program, the catalog a dry run tells reads from
     /// writes with, both for SDK operations and the requests they send.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -355,10 +367,15 @@ async fn bridge(
     stderr: tokio::process::ChildStderr,
     events: &mut EventSink,
     limits: &Limits,
+    deadline: tokio::time::Instant,
 ) -> Result<Option<Outcome>, ExecutionFailure> {
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         max_result_bytes: limits.max_result_bytes,
+        max_calls_per_operation: limits.max_calls_per_operation,
+        remaining_ms: deadline
+            .saturating_duration_since(tokio::time::Instant::now())
+            .as_millis(),
         operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
     })
     .map_err(internal)?;

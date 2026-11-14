@@ -88,6 +88,8 @@ fingerprint stays valid until it changes.
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |
+| Calls of one SDK operation (`Limits::max_calls_per_operation`); the next call stops the run with an error naming it | 200 (routine steps: 1000) |
+| Unfinished at the deadline after 50+ calls of one operation | the run stops just before the deadline, naming it as a likely loop |
 | V8 old-space target per child | 128 MiB |
 | CPU time per child (`Limits::max_cpu`, off by default) | kernel stops it (SIGXCPU) |
 | Scheduling (`Limits::background`, off by default) | niceness 10 |

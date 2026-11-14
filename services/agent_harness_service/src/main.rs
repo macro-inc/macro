@@ -191,6 +191,8 @@ const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 /// Routine code programs the harness runs at once. Steps beyond it wait for a
 /// slot before their credential is minted, so they never queue in the executor.
 const ROUTINE_CODE_SLOTS: usize = 4;
+/// Calls of one SDK operation a routine code step may make; sessions get 200.
+const ROUTINE_CALLS_PER_OPERATION: u32 = 1000;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -706,6 +708,10 @@ async fn run() -> anyhow::Result<()> {
                     max_queued: 16,
                     max_cpu: Some(std::time::Duration::from_secs(10)),
                     background: true,
+                    // A routine step is reviewed code that may update every
+                    // row it was given, one call each; only a runaway loop
+                    // gets this far.
+                    max_calls_per_operation: ROUTINE_CALLS_PER_OPERATION,
                     ..Default::default()
                 },
             )?;
