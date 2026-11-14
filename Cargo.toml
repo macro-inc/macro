@@ -506,6 +506,8 @@ tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 tui-input = { version = "0.14.0", default-features = false }
+# 0.23: the last line built on ratatui 0.29; 0.24 moved to ratatui-core.
+tui-tree-widget = "0.23.1"
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
 turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }

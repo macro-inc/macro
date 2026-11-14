@@ -1,0 +1,34 @@
+---
+source: crates/agent_monitor_tui/src/ui/test.rs
+expression: "render(&mut app(), 100, 30)"
+---
+ MACROD  MON >_  DEMO  ● LIVE  WORK 25  WAIT 0  BLOCK 1  ERR 50  DAY ~$28.60               10:01:40 
+ 0 MON  1 AGENTS  2 TAPE  3 SPEND  4 FAILURES  5 TREE  6 SOURCES  7 BODY  w WALL                    
+ WORKING 25 │ WAITING 0 │ BLOCKED 1 │ TURNS 24H 234 │ TOOLS 24H 644 │ ERR 24H 50 │ TOK/MIN 5.0M │ DA
+┌ 1 AGENTS  30 LIVE / 34 ROWS ───────────────────────────────────┐┌ 3 SPEND TODAY  ~$28.60 ────────┐
+│  NAME               DOING              AGE  TRN  TOOLS COST    ││          █                     │
+│■ rpc-server/explore explore the reduce   0s    1     1        —││         ▇█                     │
+│■ fix-19             Follow-up from rev  28s    2     4   ~$0.28││         ██                     │
+│■ rpc-server         Task explore the r  33m   18    52   ~$2.29││         ██                     │
+│■ fix-16             Follow-up from rev   1m    9    24   ~$1.15││         ██                     │
+│■ release-train      building            22m   14    38   ~$1.68││         ██                     │
+│■ scratch-notes      scratch-notes sess  36m   20    65   ~$2.71││         ██                     │
+│■ lint-sweep session lint-sweep session  26m   14    39   ~$1.82││00    06    12    18            │
+│■ fix-18             Follow-up from rev  54s    6    16   ~$0.73││KIND        USD    %            │
+│■ chat-desk          Answer questions    46m   22    53   ~$2.81││builder    ~$9.59  34 ▮▮▮       │
+│■ q4-roadmap         Draft the quarter'  21m   15    45   ~$2.25││other      ~$4.53  16 ▮         │
+│■ fix-20             Follow-up from rev  12s    1     2   ~$0.19││manager    ~$4.37  15 ▮         │
+│■ fix-16/explore the explore the reduce   2s    1     1        —││planner    ~$4.33  15 ▮         │
+│■ mesh-plan          Plan the figure wi  31m   15    42   ~$2.07││chatter    ~$2.81  10 ▮         │
+└────────────────────────────────────────────────────────────────┘└────────────────────────────────┘
+┌ 2 TAPE  500 LINES  ▼ FOLLOWING ────────────────────────┐┌ 4 FAILURES  50 24H 48 TOOL · 2 AGENT ──┐
+│10:01:40 fix-19         TURN turn start                 ││  6s tool  builder  fix-16         Edit │
+│10:01:40 rpc-server     TOOL Task explore the reducer   ││  6s tool  other    lint-sweep se… Read │
+│10:01:40 explore the r… TEND turn end                   ││ 10s tool  builder  fix-18         Bash │
+│10:01:40 explore the r… TOOL Read store.rs              ││ 15s tool  other    lint-sweep se… Write│
+│10:01:40 agent-toolu_d… GONE removed                    ││ 18s tool  other    lint-sweep se… Grep │
+│10:01:40 mesh-plan      STAT working                    ││ 18s tool  builder  fix-18         Task │
+│10:01:40 fix-19         STAT working                    ││ 26s tool  builder  rpc-server     Task │
+│10:01:40 explore the r… SPWN subagent explore the reduce││ 28s tool  other    scratch-notes  Grep │
+└────────────────────────────────────────────────────────┘└────────────────────────────────────────┘
+ >  TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
