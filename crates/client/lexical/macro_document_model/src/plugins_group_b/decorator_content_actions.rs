@@ -6,6 +6,7 @@ use crate::nodes::{
 };
 use indexmap::IndexMap;
 
+mod agent_session_insert;
 mod insert;
 
 #[derive(serde::Deserialize)]
@@ -102,6 +103,9 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
     if let Some(command) = insert::decode(name, json, generation)? {
         return Ok(Some(command));
     }
+    if let Some(command) = agent_session_insert::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if name == SNAPSHOT_DELETE.name() {
         let target: Target = serde_json::from_str(json)?;
         return Ok(Some(Command::Extension(ExtensionCommand::new(
@@ -177,11 +181,11 @@ pub(super) fn query(
 }
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    insert::register(
+    agent_session_insert::register(insert::register(
         builder
             .plugin(ContentActions)
             .plugin(DocumentMentionActions),
-    )
+    ))
 }
 struct DocumentMentionActions;
 static COMMANDS: [CommandRegistration; 3] = [

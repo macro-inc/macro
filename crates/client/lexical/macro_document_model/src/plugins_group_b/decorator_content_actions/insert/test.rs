@@ -556,3 +556,265 @@ fn mixed_text_destinations_match_source_text_and_trailing_text_caret() -> Result
     }
     Ok(())
 }
+
+// Source INSERT_AGENT_SESSION_MENTION (mentionsPlugin.ts:657-667): $insertNodes at the
+// selection current at dispatch, a paragraph wrap at the root, then selectEnd.
+// Expected values are the Source rows of agent-session-control run-03.
+fn agent_editor() -> Editor {
+    surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+        .extension_state(NodeClock(Arc::new(|| 1234)))
+        .build()
+        .expect("actual Macro surface")
+}
+
+/// One paragraph holding the text left after the mention search was removed.
+fn agent_seed(editor: &mut Editor) -> Result<(NodeKey, NodeKey), Error> {
+    let (keys, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let text = tx.create_text("Hello  world")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_end(text)?;
+        Ok((paragraph.key(), text.key()))
+    })?;
+    Ok(keys)
+}
+
+fn agent_insert(editor: &mut Editor, json: &str) -> Result<(Handled, Commit), Error> {
+    let command = surface::decode_command(
+        "group-b.insert-agent-session-mention",
+        json,
+        editor.state().max_key().generation(),
+        None,
+    )?
+    .expect("dedicated agent-session insertion must decode");
+    editor.dispatch(&command)
+}
+
+/// The paragraph's children as exported JSON without node ids.
+fn agent_children(editor: &Editor) -> Result<Vec<serde_json::Value>, Error> {
+    let view = editor.state().view();
+    let paragraph = view.first_child(NodeKey::ROOT).expect("paragraph");
+    view.children_keys(paragraph)?
+        .into_iter()
+        .map(|key| {
+            let mut json = view.export_json(key)?;
+            json.retain(|name, _| !name.starts_with('$'));
+            Ok(serde_json::Value::Object(json))
+        })
+        .collect()
+}
+
+/// The collapsed caret as (index path from the root, is text, offset).
+fn agent_caret(editor: &Editor) -> (Vec<usize>, bool, u32) {
+    let state = editor.state();
+    let view = state.view();
+    let range = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("Source selectEnd caret");
+    assert!(range.is_collapsed());
+    let mut path = Vec::new();
+    let mut key = range.anchor.key();
+    while let Some(parent) = view.parent(key) {
+        let index = view
+            .children_keys(parent)
+            .expect("parent children")
+            .iter()
+            .position(|child| *child == key)
+            .expect("child index");
+        path.insert(0, index);
+        key = parent;
+    }
+    (
+        path,
+        matches!(range.anchor, Point::Text { .. }),
+        range.anchor.offset(),
+    )
+}
+
+const AGENT_FULL: &str = r#"{"id":"session","label":"Fix mentions","mentionUuid":"mention-uuid"}"#;
+
+fn agent_mention() -> serde_json::Value {
+    serde_json::json!({
+        "type": "agent-session-mention", "version": 3,
+        "id": "session", "label": "Fix mentions", "mentionUuid": "mention-uuid"
+    })
+}
+
+fn agent_text(text: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "text", "version": 1, "text": text,
+        "detail": 0, "format": 0, "mode": "normal", "style": ""
+    })
+}
+
+#[test]
+fn agent_session_insert_at_a_caret_splits_the_text() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+    let (handled, commit) = agent_insert(&mut editor, AGENT_FULL)?;
+    assert_eq!(handled, Handled::Yes);
+    // Source dispatches inside its own update: no extra tags.
+    assert_eq!(commit.tags.iter().count(), 0, "{:?}", commit.tags);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("Hello "), agent_mention(), agent_text(" world")]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0, 2], true, 0));
+    Ok(())
+}
+
+#[test]
+fn agent_session_insert_replaces_a_forward_range_without_a_space() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(1), text, Utf16Offset(6)))?;
+    assert_eq!(agent_insert(&mut editor, AGENT_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("H"), agent_mention(), agent_text(" world")]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0, 2], true, 0));
+    Ok(())
+}
+
+#[test]
+fn agent_session_insert_replaces_a_backward_range_without_a_space() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(5), text, Utf16Offset(0)))?;
+    assert_eq!(agent_insert(&mut editor, AGENT_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_mention(), agent_text("  world")]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0, 1], true, 0));
+    Ok(())
+}
+
+#[test]
+fn agent_session_insert_at_an_element_caret_appends_and_selects_the_paragraph_end()
+-> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (paragraph, _) = agent_seed(&mut editor)?;
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(paragraph, ChildIndex(1)),
+            Point::element(paragraph, ChildIndex(1)),
+        ))))
+    })?;
+    assert_eq!(agent_insert(&mut editor, AGENT_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("Hello  world"), agent_mention()]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0], false, 2));
+    Ok(())
+}
+
+#[test]
+fn agent_session_insert_without_a_selection_appends_and_selects_the_paragraph_end()
+-> Result<(), Error> {
+    let mut editor = agent_editor();
+    agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_selection(None))?;
+    assert_eq!(agent_insert(&mut editor, AGENT_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("Hello  world"), agent_mention()]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0], false, 2));
+    Ok(())
+}
+
+#[test]
+fn agent_session_insert_keeps_its_payload_exactly() -> Result<(), Error> {
+    for (json, expected) in [
+        (
+            r#"{"id":"session"}"#,
+            serde_json::json!({"type":"agent-session-mention","version":3,"id":"session"}),
+        ),
+        (
+            r#"{"id":"session","label":""}"#,
+            serde_json::json!({"type":"agent-session-mention","version":3,"id":"session","label":""}),
+        ),
+        (
+            r#"{"id":"session","label":"Fix mentions","mentionUuid":""}"#,
+            serde_json::json!({"type":"agent-session-mention","version":3,"id":"session","label":"Fix mentions","mentionUuid":""}),
+        ),
+    ] {
+        let mut editor = agent_editor();
+        let (_, text) = agent_seed(&mut editor)?;
+        editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+        assert_eq!(agent_insert(&mut editor, json)?.0, Handled::Yes);
+        assert_eq!(agent_children(&editor)?[1], expected, "{json}");
+    }
+    Ok(())
+}
+
+#[test]
+fn agent_session_insert_rejects_unknown_fields_and_stale_generations() -> Result<(), Error> {
+    assert!(
+        surface::decode_command(
+            "group-b.insert-agent-session-mention",
+            r#"{"id":"session","blockName":"agent"}"#,
+            0,
+            None,
+        )
+        .is_err()
+    );
+    assert!(
+        surface::decode_command(
+            "group-b.insert-agent-session-mention",
+            r#"{"id":"session","expanded":true}"#,
+            0,
+            None,
+        )
+        .is_err(),
+        "expanded is not a native menu field"
+    );
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+    let stale = surface::decode_command(
+        "group-b.insert-agent-session-mention",
+        AGENT_FULL,
+        editor.state().max_key().generation() + 1,
+        None,
+    )?
+    .expect("dedicated agent-session insertion must decode");
+    assert_eq!(editor.dispatch(&stale)?.0, Handled::No);
+    assert_eq!(agent_children(&editor)?, [agent_text("Hello  world")]);
+    Ok(())
+}
+
+// The document-mention command's agent branch keeps Source INSERT_DOCUMENT_MENTION
+// (mentionsPlugin.ts:515-545): an expanded range collapses and a space comes first.
+#[test]
+fn document_mention_agent_branch_still_collapses_and_adds_a_space() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(1), text, Utf16Offset(6)))?;
+    let command = surface::decode_command(
+        "group-b.insert-document-mention",
+        r#"{"documentId":"session","documentName":"Fix mentions","blockName":"agent"}"#,
+        editor.state().max_key().generation(),
+        None,
+    )?
+    .expect("document insertion");
+    assert_eq!(editor.dispatch(&command)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [
+            agent_text("Hello  "),
+            serde_json::json!({
+                "type": "agent-session-mention", "version": 3,
+                "id": "session", "label": "Fix mentions"
+            }),
+            agent_text(" world"),
+        ]
+    );
+    Ok(())
+}
