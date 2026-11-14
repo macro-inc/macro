@@ -2,6 +2,7 @@
 // holds, and the set-up a test of them needs.
 
 import type { Mailbox } from './fixtures';
+import { localStackAddresses } from './local-stack';
 
 const JSON_BODY = { 'content-type': 'application/json' };
 
@@ -161,6 +162,16 @@ export async function setFollowup(
  * Nothing in the per-test stack sends it otherwise.
  */
 export async function tickReminders(mailbox: Mailbox): Promise<void> {
+  // The local stack has one queue, which every test's reminders share: a
+  // tick there looks at all of them, and each belongs to its own user.
+  const local = localStackAddresses();
+  if (local) {
+    if (!local.sqsUrl)
+      throw new Error(
+        "EMAIL_E2E_STACK_SQS_URL is not set: the address of the stack's LocalStack"
+      );
+    return sendSweep(`${local.sqsUrl}/000000000000/reminder-dispatch-queue`);
+  }
   const sqs = process.env.EMAIL_E2E_SQS_URL;
   if (!sqs) throw new Error('EMAIL_E2E_SQS_URL is not set');
   // The stack's queues are named after its own id, of which the test only
@@ -176,6 +187,10 @@ export async function tickReminders(mailbox: Mailbox): Promise<void> {
   )?.[1];
   if (!queue)
     throw new Error(`no reminder dispatch queue of the stack ...${suffix}`);
+  await sendSweep(queue);
+}
+
+async function sendSweep(queue: string): Promise<void> {
   const sent = await fetch(queue, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -189,4 +204,32 @@ export async function tickReminders(mailbox: Mailbox): Promise<void> {
     throw new Error(
       `the sweep message was refused: ${sent.status}\n${await sent.text()}`
     );
+}
+
+/**
+ * Makes the pending reminder of a thread due a minute ago, in the stack's
+ * database: the service refuses a time that has passed, and no test can wait
+ * for tomorrow. Both places that hold the time move together, the reminder's
+ * own record first, so a tick in between finds nothing due. Answers the time.
+ */
+export async function makeFollowupDue(
+  mailbox: Mailbox,
+  threadId: string
+): Promise<Date> {
+  // To the second: the two records must hold the very same time.
+  const due = new Date(Math.floor(Date.now() / 1000) * 1000 - 60_000);
+  const mine = `user_id = '${mailbox.user.macroUserId}' AND thread_id = '${threadId}' AND state = 'pending'`;
+  const records = await mailbox.stack.sql(
+    `UPDATE reminder_email_followup
+     SET payload = jsonb_set(payload, '{followup,remindAt}', to_jsonb('${due.toISOString()}'::text))
+     WHERE ${mine} RETURNING reminder_id`
+  );
+  if (records.length !== 1)
+    throw new Error(`${records.length} pending reminders on ${threadId}`);
+  await mailbox.stack.sql(
+    `UPDATE reminder SET remind_at = '${due.toISOString()}', next_run_at = '${due.toISOString()}'
+     WHERE id IN (SELECT reminder_id FROM reminder_email_followup WHERE ${mine})
+     RETURNING id`
+  );
+  return due;
 }

@@ -15,6 +15,7 @@ import { type Answer, send, sendJson } from './http';
 import { clearSignUpCounters } from './sign-up-limit';
 import type {
   EmailStack,
+  InboxAccess,
   LinkedInbox,
   Mail,
   Provider,
@@ -33,6 +34,11 @@ export type LocalStackAddresses = {
   databaseUrl: string;
   /** The stack's own Redis, where sign-ups are counted (`sign-up-limit.ts`). */
   redisUrl: string;
+  /**
+   * The stack's queues (LocalStack), for a test that plays a scheduler's
+   * tick. Not every run names it.
+   */
+  sqsUrl?: string;
 };
 
 /** The running stack's addresses, or nothing when tests bring their own. */
@@ -50,6 +56,7 @@ export function localStackAddresses(): LocalStackAddresses | undefined {
     outlookUrl: need('EMAIL_E2E_STACK_OUTLOOK_URL').replace(/\/$/, ''),
     databaseUrl: need('EMAIL_E2E_STACK_DATABASE_URL'),
     redisUrl: need('EMAIL_E2E_STACK_REDIS_URL'),
+    sqsUrl: process.env.EMAIL_E2E_STACK_SQS_URL?.replace(/\/$/, ''),
   };
 }
 
@@ -249,21 +256,28 @@ export class LocalStack implements EmailStack {
    * Links a mailbox as the app does: the authentication service starts the
    * connection, the provider's consent is given for the mailbox's account,
    * the service's callback records the grant, and the email service takes
-   * the inbox. Answers once its first sync is complete.
+   * the inbox. Answers once its first sync is complete. `access` also asks
+   * the consent for the account's calendars, as a calendar surface does.
    */
   async link(
     user: SignedInUser,
     provider: Provider,
-    named = user.email
+    named = user.email,
+    access: InboxAccess = 'mail'
   ): Promise<LinkedInbox> {
     const address = this.address(named);
     await this.mailbox(provider, address);
     const back = `${this.addresses.proxyUrl}/app/mail`;
+    // What the app asks for from a calendar surface; nothing for mail alone.
+    const scopes =
+      access === 'mail'
+        ? ''
+        : `&scopes=${provider === 'GMAIL' ? 'gmail_and_calendar' : 'mail_and_calendar'}`;
     const { authorization_url: authorization } = await this.as<{
       authorization_url: string;
     }>(
       user,
-      `/auth/link/${provider === 'GMAIL' ? 'gmail' : 'outlook'}?original_url=${encodeURIComponent(back)}`,
+      `/auth/link/${provider === 'GMAIL' ? 'gmail' : 'outlook'}?original_url=${encodeURIComponent(back)}${scopes}`,
       { method: 'POST' }
     );
 
@@ -452,4 +466,29 @@ export function askAs(
     ...init,
     headers: { cookie: user.cookie ?? '', ...init.headers },
   });
+}
+
+/**
+ * Makes the user the owner of a new team at the authentication service, as
+ * the app's "Create team" does: what a team has (the CRM) needs one. Colleagues
+ * at the user's domain do not join it by themselves.
+ */
+export async function createTeam(
+  user: SignedInUser,
+  name: string
+): Promise<{ id: string; name: string }> {
+  const answer = await askAs(user, '/auth/team', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, allow_domain_join: false }),
+  });
+  if (answer.status !== 200) {
+    throw new Error(
+      `the team ${name} was not created (${answer.status}):\n${answer.body.toString('utf8')}`
+    );
+  }
+  return JSON.parse(answer.body.toString('utf8')) as {
+    id: string;
+    name: string;
+  };
 }

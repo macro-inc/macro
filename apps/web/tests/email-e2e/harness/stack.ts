@@ -79,6 +79,12 @@ async function call<T>(
 }
 
 /**
+ * What a linked inbox lets Macro reach: the mail alone, or the mail and the
+ * account's calendars (the consent then also asks for the calendar).
+ */
+export type InboxAccess = 'mail' | 'mail-and-calendar';
+
+/**
  * What a test asks of the stack it runs on: a stack of its own
  * (`Stack`) or the local stack every test shares (`LocalStack`).
  */
@@ -112,8 +118,14 @@ export class Stack {
   link(
     user: SignedInUser,
     provider: Provider,
-    address = user.email
+    address = user.email,
+    access: InboxAccess = 'mail'
   ): Promise<LinkedInbox> {
+    if (access !== 'mail') {
+      throw new Error(
+        'an inbox with its calendar needs the local stack: tag the test @full-stack'
+      );
+    }
     return call('POST', this.path('/inboxes'), {
       user: user.email,
       provider,

@@ -13,6 +13,7 @@ import { FROM_TEST, type Front, type SignedInUser, startFront } from './front';
 import { LocalStack, localStackAddresses } from './local-stack';
 import {
   type EmailStack,
+  type InboxAccess,
   type LinkedInbox,
   type Mail,
   type Provider,
@@ -58,6 +59,8 @@ type Options = {
   stackEnv: Record<string, string>;
   /** The signed-in user's and the mailbox's address. */
   address: string;
+  /** What the mailbox is linked with; the calendar needs the local stack. */
+  access: InboxAccess;
 };
 
 /**
@@ -122,6 +125,7 @@ export const test = base.extend<
   provider: ['GMAIL', { option: true }],
   stackEnv: [{}, { option: true }],
   address: ['ada@example.com', { option: true }],
+  access: ['mail', { option: true }],
 
   evidence: [
     async ({ page, provider, hasTouch }, use, testInfo) => {
@@ -133,7 +137,7 @@ export const test = base.extend<
   ],
 
   mailbox: async (
-    { page, provider, stackEnv, address, evidence },
+    { page, provider, stackEnv, address, access, evidence },
     use,
     testInfo
   ) => {
@@ -160,7 +164,7 @@ export const test = base.extend<
 
     async function serve(stack: EmailStack): Promise<void> {
       const user = await stack.user(stack.address(address));
-      const inbox = await stack.link(user, provider);
+      const inbox = await stack.link(user, provider, undefined, access);
       const front = await startFront({
         dist: DIST,
         emailUrl: stack.info.emailUrl,
