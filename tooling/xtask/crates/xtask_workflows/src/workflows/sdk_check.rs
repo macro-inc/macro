@@ -9,6 +9,8 @@ mod test;
 /// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk/**"),
+    // The SDK resolves its dependencies from the root workspace lockfile.
+    xtask_paths::repo_glob!("bun.lock"),
     xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
 ];
 
@@ -35,6 +37,7 @@ pub fn sdk_check() -> Workflow {
 /// but Bun and Node, including isolated consumers of the packed SDK.
 fn check_package() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .name("SDK Package Check")
         .runs_on("ubuntu-latest")
         .add_step(steps::checkout(false, false))

@@ -349,7 +349,7 @@
             }
           },
           "503": {
-            "description": "Transient provider failure",
+            "description": "Transient provider failure, or the Macro call could not be created",
             "content": {
               "application/json": {
                 "schema": {
@@ -3652,6 +3652,10 @@
           "location": {
             "type": ["string", "null"],
             "description": "Replacement location; an empty string clears it."
+          },
+          "macroCall": {
+            "type": "boolean",
+            "description": "Switch the event to a Macro call in this write: mint one, write its\njoin link into the description and location, and detach any provider\nconference. An event already holding a Macro call keeps it. Cannot be\ncombined with `conference`."
           },
           "outOfOffice": {
             "oneOf": [

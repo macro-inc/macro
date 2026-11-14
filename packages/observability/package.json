@@ -8,7 +8,8 @@
 		"./core": "./src/core.ts",
 		"./node": "./src/node.ts",
 		"./web": "./src/web.ts",
-		"./worker": "./src/worker.ts"
+		"./worker": "./src/worker.ts",
+		"./server": "./src/server.ts"
 	},
 	"scripts": {
 		"lint": "biome check .",
@@ -37,6 +38,6 @@
 		"typescript": "^5.9.3",
 		"vitest": "5.1.0",
 		"@playwright/test": "1.62.0",
-		"vite": "^6.4.1"
+		"vite": "8.3.7"
 	}
 }

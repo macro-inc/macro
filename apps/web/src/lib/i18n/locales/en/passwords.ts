@@ -71,7 +71,7 @@ export default {
   field_address: 'Address',
   field_environment: 'Environment',
   new: 'New',
-  newItemOrFolder: 'New item or folder in {{destination}}',
+  newItemOrFolder: 'New item in {{destination}}',
   createIn: 'Create in',
   folder: 'Folder',
   draft: 'Draft',
@@ -179,5 +179,6 @@ export default {
   loadCode: 'Show verification code',
   lock: 'Lock Passwords',
   folderCreated: 'Folder created',
+  folderCreateFailed: 'Could not create the folder',
   seconds: { other: '{{count}} seconds remaining' },
 };

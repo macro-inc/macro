@@ -12,7 +12,7 @@ type Viewport = (typeof VIEWPORTS)[number];
 async function startNew(page: Page, viewport: Viewport, kind: string) {
   if (viewport.name === 'desktop') {
     await page
-      .getByRole('button', { name: /^New item or folder in/ })
+      .getByRole('button', { name: /^New item in/ })
       .last()
       .click();
     await page.getByRole('menuitem', { name: kind, exact: true }).click();
@@ -199,9 +199,7 @@ test.describe('desktop pointer', () => {
       page.getByRole('button', { name: 'Edit', exact: true })
     ).toBeVisible();
 
-    const trigger = page
-      .getByRole('button', { name: /^New item or folder in/ })
-      .first();
+    const trigger = page.getByRole('button', { name: /^New item in/ }).first();
     // An open menu hides the rest of the page from role queries; keep the element.
     const triggerElement = await trigger.elementHandle();
     await pointTo(page, trigger);
@@ -433,6 +431,87 @@ test.describe('tablet device', () => {
   });
 });
 
+test.describe('desktop creation', () => {
+  test('New creates items only, and a failed folder create offers Retry under the same parent', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
+    });
+    const tree = page.getByRole('navigation', { name: 'Folders' });
+
+    // Both New menus list item kinds and no folder entry.
+    for (const trigger of await page
+      .getByRole('button', { name: /^New item in/ })
+      .filter({ visible: true })
+      .all()) {
+      await trigger.click();
+      await expect(
+        page.getByRole('menuitem', { name: 'Login', exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('menuitem', { name: 'Folder', exact: true })
+      ).toHaveCount(0);
+      await page.keyboard.press('Escape');
+    }
+
+    // Folders come from the sidebar's "+"; the first create of this name fails.
+    await press(page, viewport, 'New folder');
+    await page.getByLabel('Folder name', { exact: true }).fill('Ops');
+    await page.getByLabel('Folder name', { exact: true }).press('Enter');
+    await tree.getByRole('button', { name: 'Ops', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Folder actions for Ops', exact: true })
+      .click();
+    await page
+      .getByRole('menuitem', { name: 'New subfolder', exact: true })
+      .click();
+    const field = page.getByLabel('Folder name', { exact: true });
+    await field.fill('Unreachable folder');
+    await field.press('Enter');
+    const failure = page.getByText('Could not create the folder');
+    await expect(failure).toBeVisible();
+    await expect(
+      tree.getByRole('button', { name: 'Unreachable folder', exact: true })
+    ).toHaveCount(0);
+    await page
+      .getByRole('button', { name: 'Retry', exact: true })
+      .evaluate((button) => {
+        if (button instanceof HTMLButtonElement) {
+          button.click();
+          button.click();
+        }
+      });
+    const created = tree.getByRole('button', {
+      name: 'Unreachable folder',
+      exact: true,
+    });
+    await expect(created).toBeVisible();
+    await expect(created).toHaveCount(1);
+    await expect(failure).not.toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Retry', exact: true })
+    ).toHaveCount(0);
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-folder-create-attempts',
+      '2'
+    );
+    // Retried under Ops, not at the top level.
+    await created.click();
+    await expect(
+      page.getByRole('button', {
+        name: /^New item in Ops \/ Unreachable folder$/,
+      })
+    ).toHaveCount(2);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('desktop folders', () => {
   test('creates, nests, renames and deletes folders; items move to All items', async ({
     page,
@@ -503,3 +582,48 @@ test.describe('desktop folders', () => {
     expect(errors).toEqual([]);
   });
 });
+
+for (const viewport of VIEWPORTS.slice(1)) {
+  test.describe(`${viewport.name} folder creation`, () => {
+    test.use({ hasTouch: true, isMobile: true });
+    test('item New has no Folder; the Folders navigation keeps its create action', async ({
+      page,
+    }) => {
+      test.setTimeout(360_000);
+      await page.setViewportSize(viewport);
+      await page.goto('/src/features/passwords/browser-test/vault.html', {
+        timeout: 240_000,
+      });
+      await page.getByRole('button', { name: 'New', exact: true }).last().tap();
+      await expect(
+        page.getByRole('button', { name: 'Folder', exact: true })
+      ).toHaveCount(0);
+      await page
+        .getByRole('button', { name: 'Login', exact: true })
+        .last()
+        .tap();
+      await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
+      await backToList(page, viewport);
+      const main = page.locator('[data-view-shell-main]');
+      const folders = main.getByRole('button', {
+        name: 'Folders',
+        exact: true,
+      });
+      await folders.scrollIntoViewIfNeeded();
+      await folders.tap();
+      await main.getByRole('button', { name: 'New folder', exact: true }).tap();
+      await expect(page.getByLabel('Folder name', { exact: true })).toHaveCount(
+        1
+      );
+      await main
+        .getByLabel('Folder name', { exact: true })
+        .fill('Touch folder');
+      await page.getByLabel('Folder name', { exact: true }).press('Enter');
+      await expect(
+        main
+          .getByRole('navigation', { name: 'Folders' })
+          .getByRole('button', { name: 'Touch folder', exact: true })
+      ).toBeVisible();
+    });
+  });
+}

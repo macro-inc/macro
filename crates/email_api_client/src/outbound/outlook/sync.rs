@@ -17,6 +17,10 @@ use crate::domain::ports::{FolderChangeReader, MailboxWatchClient};
 mod test;
 
 impl FolderChangeReader for OutlookApiClientRepository {
+    // 1: a round is not capped at 100 items by `$top`. Rounds started before
+    // it hold at most the folder's newest 100 messages.
+    const READER_REVISION: i16 = 1;
+
     async fn folder_changes(
         &self,
         token: &AccessToken,
@@ -61,6 +65,7 @@ impl FolderChangeReader for OutlookApiClientRepository {
             changed,
             removed,
             position,
+            reader_revision: Self::READER_REVISION,
         })
     }
 }

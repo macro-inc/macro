@@ -17,6 +17,11 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 
 Document sync: [DSS sync router](architecture/sync-router.md).
 
+Email: [frontend architecture](architecture/email.md) and
+[backend composition and boundaries](architecture/email-backend.md).
+
+Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
+
 Macro computers: [architecture](architecture/macro-computers.md) and the
 [setup trace runbook](runbooks/computer-setup-traces.md).
 

@@ -1,37 +1,26 @@
 import { useAgentCodeExecutionQuery } from '@queries/agent-session/code-execution';
-import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ToolUsePart } from '../component/parts/shared';
 import {
   codeExecutionInput,
-  isExecutionId,
+  codeExecutionReceipt,
   programEnded,
+  programFailures,
   programSteps,
 } from '../state/code-execution';
 import { isToolActive } from '../ui/types';
 
 /**
  * A program call's saved record, and the steps it shows. Its tool group reads
- * the same record to count them, and the cache shares the one request.
+ * the same record to count them and name them on its live line, and the cache
+ * shares the one request.
  */
 export function useCodeExecutionRecord(
   part: Accessor<ToolUsePart>,
   sessionId: Accessor<string>,
   inFlight: Accessor<boolean>
 ) {
-  const receipt = createMemo(() => {
-    const detail = part().detail;
-    const raw =
-      detail.kind === 'other'
-        ? (detail.result ?? detail.output)
-        : detail.kind === 'macro'
-          ? detail.output
-          : undefined;
-    const parsed = ExecutionReceipt.safeParse(raw);
-    return parsed.success && isExecutionId(parsed.data.executionId)
-      ? parsed.data
-      : undefined;
-  });
+  const receipt = createMemo(() => codeExecutionReceipt(part()));
   const requestedExecutionId = () => codeExecutionInput(part())?.executionId;
   const executionId = () => {
     const saved = receipt()?.executionId;
@@ -63,6 +52,17 @@ export function useCodeExecutionRecord(
       calls: record()?.calls.length ?? 0,
       ended: ended(),
     });
+  const failures = () => {
+    const saved = record();
+    return programFailures({
+      statuses: [
+        ...(saved?.activity ?? []).map((operation) => operation.status),
+        ...(saved?.calls ?? []).map((call) => call.status),
+      ],
+      ended: ended(),
+      cancelled: (saved?.status ?? receipt()?.status) === 'cancelled',
+    });
+  };
 
   return {
     receipt,
@@ -74,5 +74,6 @@ export function useCodeExecutionRecord(
     error,
     ended,
     steps,
+    failures,
   };
 }

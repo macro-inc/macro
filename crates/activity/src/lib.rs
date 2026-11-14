@@ -22,7 +22,7 @@
 //! available.
 
 pub mod domain;
-#[cfg(any(feature = "ai_tools", feature = "consumer"))]
+#[cfg(any(feature = "axum", feature = "consumer"))]
 pub mod inbound;
 #[cfg(any(feature = "outbound", feature = "consumer"))]
 pub mod outbound;
@@ -46,7 +46,7 @@ pub use domain::realtime::{
     ActivitySubscriptionService, ActivitySubscriptionUpdate, ActivityTopicEventConsumer,
     NoOpActivitySubscriptionService,
 };
-#[cfg(feature = "ai_tools")]
+#[cfg(feature = "reads")]
 pub use domain::{
     ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
     service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},

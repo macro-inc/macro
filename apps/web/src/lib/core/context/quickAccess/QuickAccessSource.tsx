@@ -73,7 +73,7 @@ import {
   searchQuickAccessItems,
 } from './entity-search';
 import { createPersonList } from './person-list';
-import { createProjectedList } from './projected-list';
+import { createProjectedList, searchRowHost } from './projected-list';
 import type {
   Bucket,
   BucketCombination,
@@ -85,6 +85,7 @@ import type {
   QuickAccessListOptions,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 /**
  * index entry for sorted lists.
@@ -1175,6 +1176,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const [cacheRevision, setCacheRevision] = createSignal(0);
     createEffect(() => {
       if (!projectionHost || cacheHost() !== projectionHost) return;
+      // A disabled list searches afresh when enabled, so it has no use for
+      // change notifications; in a busy workspace they arrive constantly.
+      if (options?.enabled?.() === false) return;
       onCleanup(
         subscribeToVisibleCacheChanges(
           projectionHost,
@@ -1216,7 +1220,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   channelIndex.buildDurationMs,
               };
             },
-            materialize: async (documents) => {
+            materialize: async (documents, query) => {
+              const rowHost = searchRowHost(projectionHost, query);
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
               const missing = documents.filter(
@@ -1230,12 +1235,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedEmails,
                 cachedInitiatives,
               ] = await Promise.all([
-                materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                materializeCachedGraphqlChannels(projectionHost, documents),
-                materializeCachedGraphqlCrmCompanies(projectionHost, missing),
-                materializeCachedGraphqlCrmContacts(projectionHost, missing),
-                materializeCachedEmailItems(projectionHost, documents),
-                materializeCachedGraphqlInitiatives(projectionHost, documents),
+                materializeCachedGraphqlHistoryItems(rowHost, missing),
+                materializeCachedGraphqlChannels(rowHost, documents),
+                materializeCachedGraphqlCrmCompanies(rowHost, missing),
+                materializeCachedGraphqlCrmContacts(rowHost, missing),
+                materializeCachedEmailItems(rowHost, documents),
+                materializeCachedGraphqlInitiatives(rowHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1343,7 +1348,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           })
         : undefined;
 
-    const list = createLazyMemo(() => {
+    const buildList = (): QuickAccessItem[] => {
       const local = [...localItems(), ...personList.items()];
       if (!projected || options?.enabled?.() === false)
         return deduplicateContactItems(local);
@@ -1395,7 +1400,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         ),
         combined
       );
-    });
+    };
+    const list = createLazyMemo<QuickAccessItem[]>(
+      (listed) => keepUnchangedRows(listed, buildList()),
+      []
+    );
     return {
       items: list,
       windowKey: personList.windowKey,
@@ -1409,6 +1418,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             historyQuery.isLoading ||
             (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading())
         ),
+      isSearching: () =>
+        options?.enabled?.() !== false && (projected?.isSearching() ?? false),
       isLoadingMore: () =>
         personList.isLoadingMore() || (projected?.isLoadingMore() ?? false),
       error: () => personList.error() ?? projected?.error(),

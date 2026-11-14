@@ -38,10 +38,13 @@ committed withdrawal or exclusion cannot be undone by replica lag during refresh
 Ordinary inbox lists retain replica reads; primary failures never fall back to
 stale CRM eligibility.
 
-`crm_email_thread_allowed` is shared by ingestion, CRM-scoped email listing, and
-direct thread access. It verifies the mailbox, current membership, explicit consent,
-and whole-thread participant exclusions. `crm_email_domain_blocked` also honors
-legacy company `email_sync = false` exclusions. Writers and privacy changes use
+`crm_email_thread_allowed` is shared by CRM-scoped email listing and direct thread
+access. It verifies the mailbox, current membership, explicit consent, and
+whole-thread participant exclusions. `crm_email_domain_blocked` also honors
+legacy company `email_sync = false` exclusions. The ingestion interaction scan
+(`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) applies
+the same rules set-based, once per call instead of once per thread and participant;
+change both together, and keep its parity tests against the functions passing. Writers and privacy changes use
 shared/exclusive transaction advisory locks keyed by `crm-email:{team}`. Population
 takes the shared privacy lock before the per-domain lock, parent-team `KEY SHARE`,
 then mailbox `SHARE` and membership `KEY SHARE` before entity writes. Privacy changes take the exclusive lock first. Consent admission

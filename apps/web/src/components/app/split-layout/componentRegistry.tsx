@@ -330,7 +330,11 @@ registerComponent(
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
-registerComponent('passwords', () => <PasswordsRouteView />);
+registerComponent(
+  'passwords',
+  () => <PasswordsRouteView />,
+  () => composableLayout()
+);
 registerComponent(
   'notifications',
   () => <NotificationsRouteView />,

@@ -191,6 +191,13 @@ pub struct CrmContact {
     pub created_at: DateTime<Utc>,
     /// When the contact record was last updated
     pub updated_at: DateTime<Utc>,
+    /// Every address the contact is known by, lowercased: the primary
+    /// (`email`) first, then the rest oldest first
+    pub emails: Vec<String>,
+    /// The addresses on a domain of the contact's company. A contact with
+    /// any is a company-domain contact: it cannot be unlinked or moved, and
+    /// the last of these addresses cannot be removed
+    pub company_domain_emails: Vec<String>,
 }
 
 /// What a depopulate teardown actually removed. Every field is `false` on

@@ -20,6 +20,7 @@ use tokio::sync::mpsc::Sender;
 use super::appearance::ChangeAppearance;
 use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
+use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
@@ -48,12 +49,13 @@ pub struct ScheduledActionServiceImpl<
     Github = NoGithubLinks,
     Code = NoRoutineCode,
     Upgrades = NoCodeUpgrades,
+    Rollout = EventRoutinesOff,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
     grants: Arc<Grants>,
     dispatcher_tx: Sender<DispatchEvent>,
-    event_management_enabled: bool,
+    rollout: Rollout,
     conditions_enabled: bool,
     targets: Targets,
     github: Github,
@@ -95,7 +97,7 @@ impl GithubInstallationClaims for NoGithubLinks {
 }
 
 impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe, Grants> {
-    /// Event management defaults off until explicitly enabled by composition.
+    /// Event triggers stay off until composition supplies a rollout.
     pub fn new(
         repo: Arc<Rpo>,
         executor: Arc<Exe>,
@@ -107,7 +109,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             executor,
             grants,
             dispatcher_tx,
-            event_management_enabled: false,
+            rollout: EventRoutinesOff,
             conditions_enabled: false,
             targets: ModelOnlyTargets,
             github: NoGithubLinks,
@@ -120,19 +122,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades, Rollout> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
-            event_management_enabled: self.event_management_enabled,
+            rollout: self.rollout,
             conditions_enabled: self.conditions_enabled,
             targets,
             github: self.github,
@@ -148,16 +150,38 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades, Rollout> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
-            event_management_enabled: self.event_management_enabled,
+            rollout: self.rollout,
             conditions_enabled: self.conditions_enabled,
             targets: self.targets,
             github,
+            code: self.code,
+            upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
+        }
+    }
+
+    /// Decides, per owner, who may save event triggers.
+    pub fn with_event_routines<R: EventRoutineRollout>(
+        self,
+        rollout: R,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, R> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            rollout,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
             code: self.code,
             upgrades: self.upgrades,
             drafts: self.drafts,
@@ -172,13 +196,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         self,
         code: Arc<C>,
         upgrades: Arc<U>,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U, Rollout> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
-            event_management_enabled: self.event_management_enabled,
+            rollout: self.rollout,
             conditions_enabled: self.conditions_enabled,
             targets: self.targets,
             github: self.github,
@@ -214,11 +238,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
     /// routine's sub-routines, finding the session through `sessions`.
     pub fn with_run_sessions(mut self, sessions: Arc<dyn RequestSessions>) -> Self {
         self.run_sessions = Some(sessions);
-        self
-    }
-
-    pub fn with_event_management_enabled(mut self, enabled: bool) -> Self {
-        self.event_management_enabled = enabled;
         self
     }
 
@@ -259,8 +278,28 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Ok(())
     }
 
-    fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
-        if trigger.event_filters().is_some() && !self.event_management_enabled {
+    /// Event triggers need the owner's rollout; a flag that cannot be read
+    /// counts as off.
+    async fn check_event_management(
+        &self,
+        trigger: &ActionTrigger,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()>
+    where
+        Rollout: EventRoutineRollout,
+    {
+        if trigger.event_filters().is_none() {
+            return Ok(());
+        }
+        let enabled = self
+            .rollout
+            .enabled_for(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "feature flags unavailable; event triggers stay off");
+            })
+            .unwrap_or(false);
+        if !enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
         }
         Ok(())
@@ -290,6 +329,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Rollout: EventRoutineRollout,
     {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
@@ -301,7 +341,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         let mut input = input;
         input.task = named_steps(&input.task);
         let description = description(&input.description)?;
-        self.check_event_management(&input.trigger)?;
+        self.check_event_management(&input.trigger, owner_user)
+            .await?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
         let task = checked_task(self.code.as_ref(), &input.task, None).await?;
@@ -353,6 +394,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Rollout: EventRoutineRollout,
     {
         let mut input = input;
         input.task = named_steps(&input.task);
@@ -360,7 +402,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         let mut steps = Vec::new();
         let found = [
             description(&input.description).map(|_| ()),
-            self.check_event_management(&input.trigger),
+            self.check_event_management(&input.trigger, owner).await,
             self.check_conditions(&input.trigger),
             self.targets.validate_task(&input.task, owner).await,
         ];
@@ -451,6 +493,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Rollout: EventRoutineRollout,
     {
         let was_enabled = action.enabled;
         let updated = self.replace_one(action, input, false).await?;
@@ -472,6 +515,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Rollout: EventRoutineRollout,
     {
         require_explicit_selection(&action.task, &input.task)?;
         input.task = named_steps(&input.task);
@@ -490,8 +534,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         // A rollout gate must not prevent an owner from stopping an existing
         // event action. Deletion, history and explicit manual runs also remain available.
         if !disable_only {
-            self.check_event_management(&action.trigger)?;
-            self.check_event_management(&input.trigger)?;
+            let owner = action.owner_user()?;
+            self.check_event_management(&action.trigger, owner).await?;
+            self.check_event_management(&input.trigger, owner).await?;
             self.check_conditions(&input.trigger)?;
         }
         let now = Utc::now();
@@ -703,12 +748,13 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
 where
     Github: GithubInstallationClaims,
     Code: RoutineCode,
     Upgrades: CodeUpgrades,
+    Rollout: EventRoutineRollout,
     Rpo: ScheduledActionRepo + SubRoutines,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,

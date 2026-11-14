@@ -1062,7 +1062,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                           onClear={clear}
                         />
                         <Button
-                          size="icon-md"
+                          size="icon-xs"
                           variant="ghost"
                           aria-label={t('notificationsInbox.settings')}
                           tooltip={t('notificationsInbox.settings')}

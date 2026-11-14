@@ -84,12 +84,14 @@ enum CodeHost {
     )
 )]
 pub struct ExecuteCode {
-    /// Fresh UUID for this execution, recorded in the tool input so results can
-    /// be recovered even if the session stops before the tool replies.
+    /// Optional caller-chosen ID, recorded in the tool input so a call whose
+    /// reply was lost can be retried without running twice. When absent, the
+    /// server assigns one; the receipt always reports the ID used.
+    #[serde(default)]
     #[schemars(
-        description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; different source is rejected. If an ID is unavailable, choose a fresh UUID."
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
     )]
-    pub execution_id: ExecutionId,
+    pub execution_id: Option<ExecutionId>,
     /// Choose whose account authenticates every SDK operation in this execution.
     pub acting_as: ai_toolset::actor::ToolActor,
     /// Copy the current server-issued turn_id from the prompt's execution context.
@@ -130,7 +132,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
             .service
             .execute(
                 &context.session,
-                self.execution_id,
+                self.execution_id.unwrap_or_else(ExecutionId::mint),
                 self.acting_as,
                 self.turn_id,
                 ExecuteRequest {

@@ -8,8 +8,7 @@ import {
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
-import { authKeys } from '@queries/auth/keys';
-import type { UserInfoData } from '@queries/auth/user-info';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -319,10 +318,6 @@ export function invalidatePreview(itemId?: string) {
     predicate: (query) => query.isActive(),
   });
   return Promise.all([graphqlRefresh, restRefresh]);
-}
-
-function cachedUserId(): string | undefined {
-  return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
 }
 
 function runGraphqlPreviewWrite(write: Promise<void>) {

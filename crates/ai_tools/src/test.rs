@@ -216,7 +216,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         );
         assert!(!prompt.contains(name), "{name}");
     }
-    assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
+    assert!(!tools.toolset.tools.contains_key("ListAgentUpdates"));
     assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
@@ -249,6 +249,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "CreateContact",
         "ImportCompaniesCsv",
         "ListPipelines",
+        "CreatePipeline",
         "FindPipelineEntries",
         "AddToPipeline",
         "UpdatePipelineEntries",
@@ -258,6 +259,10 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "ExportPipelineCsv",
         "ReadChannelMessageContext",
         "ShareWithChannel",
+        "ListImportEntities",
+        "CreateImportEntity",
+        "DeleteImportEntity",
+        "ImportNotionPage",
         "ListInitiatives",
         "ReadInitiative",
         "CreateInitiative",
@@ -855,6 +860,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ReadCanvas",
         "EditCanvas",
         "ApplyCanvasEdits",
+        "ListAgentUpdates",
         "ReadSpreadsheet",
         "CalculateSpreadsheet",
         "EditSpreadsheet",
@@ -867,12 +873,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
-    // The SDK cannot show the model a render, create a pipeline with its
-    // stages and fields, or render the answer cards for agent updates.
+    // The SDK cannot show the model a render.
     for name in [
         "RenderCanvas",
-        "CreatePipeline",
-        "ListAgentUpdates",
         "SearchTools",
         "LoadTools",
         "BashCodeExecution",
@@ -1071,7 +1074,6 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
         "ReadMemory",
         "UpdateMemory",
         "GetUserActivity",
-        "ReadActivity",
         "ReadInitiativeActivity",
     ];
     let code_mode = tools_for_agent_code_mode();
@@ -1080,4 +1082,14 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(direct.toolset.tools.contains_key(name), "{name}");
     }
+    // Deleted: the SDK's macro.activity.mine() reads the same range.
+    for host in [
+        AiHost::AgentSession,
+        AiHost::Chat,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        assert!(!tools_for(host).toolset.tools.contains_key("ReadActivity"));
+    }
+    assert!(!code_mode.toolset.tools.contains_key("ReadActivity"));
 }

@@ -231,6 +231,8 @@ pub struct MailboxChangePage {
     pub removed: Vec<ProviderId>,
     /// The continuation or committed checkpoint returned by the provider.
     pub position: StreamPosition,
+    /// The `FolderChangeReader::READER_REVISION` that read the page.
+    pub reader_revision: i16,
 }
 
 /// An opaque continuation/checkpoint which must be validated by its adapter.

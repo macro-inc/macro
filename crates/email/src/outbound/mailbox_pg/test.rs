@@ -32,7 +32,58 @@ pub(super) fn page() -> MailboxChangePage {
             ProviderId::new("moved").unwrap(),
         ],
         position: StreamPosition::Checkpoint(StreamToken::new("opaque-checkpoint".into())),
+        reader_revision: 1,
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let first = repo
+        .claim_stream(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &first,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("a").unwrap()],
+            removed: vec![],
+            position: StreamPosition::Continue(StreamToken::new("page-2".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    let next = repo
+        .claim_stream(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &next,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("b").unwrap()],
+            removed: vec![],
+            position: StreamPosition::Checkpoint(StreamToken::new("delta".into())),
+            reader_revision: 2,
+        },
+    )
+    .await
+    .unwrap();
+
+    let revision = sqlx::query_scalar!(
+        "SELECT reader_revision FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder'",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        revision,
+        Some(1),
+        "only a round's first page records its revision"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -664,6 +715,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
             ],
             removed: vec![],
             position: StreamPosition::Checkpoint(StreamToken::new("finished".into())),
+            reader_revision: 1,
         },
     )
     .await

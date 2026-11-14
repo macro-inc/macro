@@ -175,28 +175,13 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         })
     }
 
+    /// The tasks among `ids` the caller can open, in input order, checked together.
     pub(super) async fn visible_tasks(
         &self,
         auth: &EntityAccessAuth,
         ids: Vec<String>,
     ) -> Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, InitiativeError> {
-        let mut visible = Vec::new();
-        for id in ids {
-            if let Some(receipt) = self
-                .resources
-                .view(
-                    auth.clone(),
-                    Entity {
-                        entity_id: id,
-                        entity_type: EntityType::Document,
-                    },
-                )
-                .await?
-            {
-                visible.push(receipt);
-            }
-        }
-        Ok(visible)
+        self.resources.view_documents(auth.clone(), ids).await
     }
 
     pub(super) async fn read_page(
@@ -334,23 +319,17 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         let mut tasks_by_project = HashMap::new();
         let mut task_receipts = Vec::new();
         for row in &rows {
-            let mut ids = Vec::new();
-            for id in self.resources.project_tasks(row.initiative.id).await? {
-                if let Some(receipt) = self
-                    .resources
-                    .view(
-                        auth.clone(),
-                        Entity {
-                            entity_id: id.clone(),
-                            entity_type: EntityType::Document,
-                        },
-                    )
-                    .await?
-                {
-                    ids.push(id);
-                    task_receipts.push(receipt);
-                }
-            }
+            let visible = self
+                .visible_tasks(
+                    &auth,
+                    self.resources.project_tasks(row.initiative.id).await?,
+                )
+                .await?;
+            let ids = visible
+                .iter()
+                .map(|receipt| receipt.entity().entity_id.clone())
+                .collect::<Vec<_>>();
+            task_receipts.extend(visible);
             tasks_by_project.insert(row.initiative.id, ids);
         }
         let task_properties = self.resources.properties(task_receipts).await?;

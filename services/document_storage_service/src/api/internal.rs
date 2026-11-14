@@ -192,24 +192,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             post(populate_items::populate_items_handler),
         )
         // Project routes
-        .route(
-            "/projects/upload",
-            post(
-                projects_hex::inbound::axum_router::upload_folder::upload_folder_handler::<
-                    ProjectService,
-                    EntityAccessService,
-                    AuthorizationService,
-                >,
-            ),
-        )
-        .route(
-            "/projects/mark_uploaded",
-            post(
-                projects_hex::inbound::axum_router::upload_folder::mark_uploaded_handler::<
-                    ProjectService,
-                    EntityAccessService,
-                    AuthorizationService,
-                >,
+        .nest(
+            "/projects",
+            projects_hex::inbound::axum_router::internal_upload_router(
+                state.projects_state.clone(),
             ),
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))

@@ -171,6 +171,14 @@ pub fn resolve(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
                 "http://otel-collector:4317".into(),
             );
+            // Forwarded to the hosted Grafana, a machine's stacks share one
+            // `host.name`: the instance tells them apart.
+            let existing = env.get("OTEL_RESOURCE_ATTRIBUTES").map(String::as_str);
+            if let Some(attributes) =
+                super::grafana_forwarder::resource_attributes(instance, existing)
+            {
+                env.insert("OTEL_RESOURCE_ATTRIBUTES".into(), attributes);
+            }
         }
     }
 
@@ -191,6 +199,21 @@ pub fn resolve(
         {
             env.insert(key, v);
         }
+    }
+
+    // A local stack with no real Google client runs the Gmail emulator in
+    // Google's place. Decided last, on the env the services will see, so a
+    // client from Doppler, `--env-file` or the process env keeps real Google.
+    if super::google_emulator::stands_in(mode, &env) {
+        env.extend(super::google_emulator::env(instance));
+    }
+
+    // A local stack with no real Microsoft client runs the Outlook emulator
+    // in Microsoft's place. Decided last, on the env the services will see,
+    // so a client from Doppler, `--env-file` or the process env keeps real
+    // Microsoft.
+    if super::microsoft_emulator::stands_in(mode, &env) {
+        env.extend(super::microsoft_emulator::env(instance));
     }
 
     // Remote-AWS modes (dev): pin ENVIRONMENT/project, strip any leaked local

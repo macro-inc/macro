@@ -30,6 +30,10 @@ name = "backfill_outlook_snippets"
 path = "src/bin/backfill_outlook_snippets/backfill_outlook_snippets.rs"
 
 [[bin]]
+name = "reimport_outlook_folders"
+path = "src/bin/reimport_outlook_folders/reimport_outlook_folders.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
@@ -118,7 +122,6 @@ entity_access_management = { path = "../../crates/entity_access_management" }
 email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
-filter_ast = { path = "../../crates/filter_ast" }
 frecency = { path = "../../crates/frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../../crates/gmail_client" }
@@ -126,7 +129,6 @@ google_token = { path = "../../crates/google_token" }
 html-escape = { workspace = true }
 http-body-util = { workspace = true }
 infer = { workspace = true }
-item_filters = { path = "../../crates/item_filters" }
 lol_html = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
@@ -154,7 +156,6 @@ model-entity = { path = "../../crates/model-entity" }
 model_file_type = { path = "../../crates/model_file_type" }
 model_notifications = { path = "../../crates/model_notifications" }
 models_email = { path = "../../crates/models_email" }
-models_pagination = { path = "../../crates/models_pagination", features = ["axum"] }
 models_properties = { path = "../../crates/models_properties" }
 rand = { workspace = true }
 redis = { workspace = true, features = [

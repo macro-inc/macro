@@ -42,6 +42,8 @@ type PreviewProjectAccess = {
   loading: false;
   rawName: string;
   name: string;
+  /** Folder names from the root down to this folder, on REST previews. */
+  path?: string[];
   fileType?: never;
   subType?: never;
   channelType?: never;

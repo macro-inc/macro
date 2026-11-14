@@ -264,3 +264,94 @@ it('publishes personal-provider eligibility with a committed email addition', as
   ).toBe(true);
   client.clear();
 });
+
+it('publishes a removed address and clears only its lookup', async () => {
+  const client = new QueryClient();
+  const held = {
+    ...before,
+    emails: ['old@example.com', 'second@example.org', 'third@example.org'],
+    companyDomain: true,
+    companyDomainEmails: ['old@example.com'],
+  };
+  const removed = {
+    ...held,
+    emails: ['old@example.com', 'third@example.org'],
+    updatedAt: '2026-10-02',
+  };
+  client.setQueryData(crmKeys.contact(held.id).queryKey, held);
+  for (const email of held.emails)
+    client.setQueryData(crmKeys.contactByEmail('team-1', email).queryKey, held);
+  expect(
+    await updateContactEditDetails(client, held, removed, () => true)
+  ).toBe(true);
+  expect(client.getQueryData(crmKeys.contact(held.id).queryKey)).toEqual(
+    removed
+  );
+  expect(
+    client.getQueryData(
+      crmKeys.contactByEmail('team-1', 'second@example.org').queryKey
+    )
+  ).toBeNull();
+  expect(
+    client.getQueryData(
+      crmKeys.contactByEmail('team-1', 'third@example.org').queryKey
+    )
+  ).toEqual(removed);
+  expect(
+    client.getQueryData(
+      crmKeys.contactByEmail('team-1', 'old@example.com').queryKey
+    )
+  ).toEqual(removed);
+  client.clear();
+});
+
+it('publishes a new primary with its eligibility and keeps the demoted address resolvable', async () => {
+  const client = new QueryClient();
+  const held = {
+    ...before,
+    emails: ['old@example.com', 'second@example.org'],
+    companyDomain: false,
+    companyDomainEmails: [],
+  };
+  const promoted = {
+    ...held,
+    email: 'second@example.org',
+    emails: ['second@example.org', 'old@example.com'],
+    updatedAt: '2026-10-02',
+  };
+  client.setQueryData(crmKeys.contact(held.id).queryKey, held);
+  client.setQueryData(
+    crmKeys.contactByEmail('team-1', 'old@example.com').queryKey,
+    held
+  );
+  expect(
+    await updateContactEditDetails(client, held, promoted, () => true)
+  ).toBe(true);
+  expect(
+    client.getQueryData(
+      crmKeys.contactByEmail('team-1', 'old@example.com').queryKey
+    )
+  ).toEqual(promoted);
+  client.clear();
+});
+
+it('leaves an address list changed by another edit for an authoritative refresh', async () => {
+  const client = new QueryClient();
+  const key = crmKeys.contact(before.id).queryKey;
+  const held = { ...before, emails: ['old@example.com'] };
+  const concurrent = {
+    ...held,
+    emails: ['old@example.com', 'other@example.org'],
+  };
+  const added = {
+    ...held,
+    emails: ['old@example.com', 'second@example.org'],
+    updatedAt: '2026-10-02',
+  };
+  client.setQueryData(key, concurrent);
+  expect(await updateContactEditDetails(client, held, added, () => true)).toBe(
+    false
+  );
+  expect(client.getQueryData(key)).toEqual(concurrent);
+  client.clear();
+});

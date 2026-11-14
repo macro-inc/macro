@@ -325,7 +325,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Open pretty much any file type.',
         description:
-          'Photoshop, Illustrator, Figma, PowerPoint, Word, PDFs: open them right in Macro, without leaving your workspace.',
+          'Photoshop, Illustrator, Figma, PowerPoint, Word, PDFs, and video: open them right in Macro, without leaving your workspace. Notes open in Macro Docs, sheets in Macro Spreadsheets, and whiteboards in Macro Canvas.',
       },
       {
         title: 'Macro Agents can read everything in Drive.',
@@ -336,6 +336,21 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
         title: 'Folders and Macro Databases, side by side.',
         description:
           'Folders are good for compatibility and sharing, and databases are good when you want to track and sort things by their properties. Drag files onto a folder to upload them, and narrow any list by type, tag, or creator.',
+      },
+      {
+        title: 'Auto-organized with Macro Tags.',
+        description:
+          'Files are tagged by customer, project, or topic as they arrive, with the same tags you use on emails and tasks. Filter Drive by a tag to pull up everything for a customer, wherever it came from.',
+      },
+      {
+        title: 'Files show up on Macro CRM records.',
+        description:
+          'Every file a customer sends is on their company record, under Files, next to their emails and calls. @mention a file in Macro Tasks and it’s attached to the work it belongs to.',
+      },
+      {
+        title: 'Macro Skills and Macro Snippets live here too.',
+        description:
+          'Skills and snippets are documents in Drive, so you organize and share them like any other file. Keep your contract-review skill in the same folder as the contracts it reviews.',
       },
     ],
     faq: [

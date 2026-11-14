@@ -22,9 +22,18 @@ vi.mock('./queries/live-session', () => ({
     return { messages };
   },
 }));
-vi.mock('@app/features/block-agent/ui', () => ({
+vi.mock('@app/features/block-agent/ui/TextShimmer', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
+}));
+vi.mock('@app/features/block-agent/ui/WorkingDots', () => ({
   WorkingDots: () => null,
+}));
+// The real line, over the plain text and dots above.
+vi.mock('@app/features/block-agent/ui', async () => ({
+  ActivityLine: (await import('@app/features/block-agent/ui/ActivityLine'))
+    .ActivityLine,
+  TextShimmer: (await import('@app/features/block-agent/ui/TextShimmer'))
+    .TextShimmer,
   DisclosureCaret: () => null,
 }));
 vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', () => ({

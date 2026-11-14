@@ -50,8 +50,7 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
 /// Builds the complete production HTTP surface without opening a listener.
 pub(crate) fn app(state: ApiContext) -> Router {
-    let correlation =
-        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
+    let correlation = state.correlation.clone();
     let traced_api = traced(api_router(state.clone()).with_state(state).layer(
         axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
     ));

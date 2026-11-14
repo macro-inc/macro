@@ -181,6 +181,8 @@ describe('model-owned search fields', () => {
         [type]: { in: [], from: [julia.id] },
       });
       expect(searchNeedsKeywords(state, '')).toBe(true);
+      expect(searchNeedsKeywords(state, '  ')).toBe(true);
+      expect(searchNeedsKeywords(state, 'pr')).toBe(false);
       expect(searchNeedsKeywords(state, 'budget')).toBe(false);
     }
   });

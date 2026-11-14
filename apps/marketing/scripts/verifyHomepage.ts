@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { chromium, expect } from '@playwright/test';
+import { chromium, expect, type Page } from '@playwright/test';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
@@ -99,19 +99,24 @@ export async function verifyHomepage(
           'rgb(0, 0, 0)'
         );
 
-        // Lower sections are prerendered too: their lazy chunk's CSS must be
-        // available before scripts run, or the GitHub SVG fills the page.
-        const githubMark = page.locator('.homepage-github-mark');
-        await expect(githubMark).toHaveCSS(
-          'background-color',
-          'rgb(30, 30, 30)'
+        // Lazy chapter styles must also be linked before hydration.
+        await expect(page.locator('#email .homepage-feature-title')).toHaveCSS(
+          'display',
+          'flex'
         );
-        const markBounds = await githubMark.boundingBox();
-        const iconBounds = await githubMark.locator('svg').boundingBox();
-        expect(markBounds?.width).toBeGreaterThan(100);
-        expect(markBounds?.width).toBeLessThanOrEqual(152);
-        expect(iconBounds?.width).toBeGreaterThan(50);
-        expect(iconBounds?.width).toBeLessThanOrEqual(76);
+        await expect(page.locator('#email-title')).toHaveCSS(
+          'font-family',
+          /Roboto Slab Variable/
+        );
+
+        // The welcome graphic must retain its dimensions before scripts run.
+        const mark = page.locator('.homepage-feature-links .ob-welcome-logo');
+        await expect(mark).toHaveCSS('width', '96px');
+        await expect(mark.locator('svg')).toHaveCSS('width', '48px');
+        await expect(headingLocator).toHaveCSS(
+          'font-family',
+          /Roboto Slab Variable/
+        );
 
         releaseScripts();
         await page.waitForLoadState('load');
@@ -132,56 +137,26 @@ export async function verifyHomepage(
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           );
         });
-        if (viewport.width >= 700) {
-          if (!(await heading.evaluate((element) => element.isConnected)))
-            throw new Error(
-              `Homepage replaced its first-painted heading during hydration (${label})`
-            );
-          if ((await heading.textContent()) !== initialText)
-            throw new Error(
-              `Homepage changed heading text during hydration (${label})`
-            );
-          const after = await heading.boundingBox();
-          if (
-            !before ||
-            !after ||
-            (['x', 'y', 'width', 'height'] as const).some(
-              (key) => Math.abs(before[key] - after[key]) > 1
-            )
+        if (!(await heading.evaluate((element) => element.isConnected)))
+          throw new Error(
+            `Homepage replaced its first-painted heading during hydration (${label})`
+          );
+        if ((await heading.textContent()) !== initialText)
+          throw new Error(
+            `Homepage changed heading text during hydration (${label})`
+          );
+        const after = await heading.boundingBox();
+        if (
+          !before ||
+          !after ||
+          (['x', 'y', 'width', 'height'] as const).some(
+            (key) => Math.abs(before[key] - after[key]) > 1
           )
-            throw new Error(
-              `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
-            );
-        } else {
-          // Mobile replaces the desktop SSR fallback with its landing composition.
-          await expect(page.locator('.ob-welcome')).toHaveCSS(
-            'display',
-            'flex'
+        )
+          throw new Error(
+            `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
           );
-          await expect(page.locator('[data-onboarding-hero]')).toHaveCSS(
-            'display',
-            'flex'
-          );
-          await expect(page.locator('.ob-welcome-logo')).toHaveCSS(
-            'width',
-            '96px'
-          );
-          await expect(page.locator('.ob-welcome-logo svg')).toHaveCSS(
-            'width',
-            '48px'
-          );
-          await expect(page.locator('.ob-welcome h1')).toHaveCSS(
-            'font-family',
-            /Roboto Slab Variable/
-          );
-          await expect(
-            page.locator('.ob-welcome [data-welcome-heading]')
-          ).toBeVisible();
-          await expect(
-            page.locator('.ob-welcome [data-welcome-heading]')
-          ).toHaveText(/The unified workspace\s*for your company\./);
-          await expect(page.locator('.homepage-hero-cta')).toBeVisible();
-        }
+        await expect(page.locator('.homepage-hero-cta')).toBeVisible();
         await heading.dispose();
 
         if (viewport.width < 768)
@@ -214,26 +189,19 @@ export async function verifyHomepage(
           .locator('[data-onboarding-scroll]')
           .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
         expect(overflow).toBe(false);
-        if (viewport.width >= 700) {
-          const graphic = await page
-            .locator('.homepage-feature-links .feature-flow')
-            .boundingBox();
-          expect(graphic).not.toBeNull();
-          expect(graphic!.x).toBeGreaterThanOrEqual(0);
-          expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(
-            viewport.width
-          );
-        }
+        const graphic = await page
+          .locator('.homepage-feature-links [data-context-scene]')
+          .boundingBox();
+        if (!graphic)
+          throw new Error(`Homepage has no feature diagram (${label})`);
+        expect(graphic.x).toBeGreaterThanOrEqual(0);
+        expect(graphic.x + graphic.width).toBeLessThanOrEqual(viewport.width);
         await page
           .locator('#email')
           .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
-        await page.goBack();
-        await page.locator('.homepage-hero-cta').click();
-        await expect(page).toHaveURL(
-          `${origin}${viewport.width < 640 ? '/mobile-signup' : '/app/signup'}`
-        );
+        await verifySignupNavigation(page, origin, viewport.width < 640);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
@@ -250,5 +218,41 @@ export async function verifyHomepage(
   } finally {
     await browser?.close();
     server.stop(true);
+  }
+}
+
+async function verifySignupNavigation(
+  page: Page,
+  origin: string,
+  phone: boolean
+): Promise<void> {
+  // App signup belongs to a separate application. A URL change alone
+  // can pass while the website router renders an empty shell.
+  await page.route(`${origin}/app/signup`, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<h1>Signup application</h1>',
+    })
+  );
+  const signupUrl = `${origin}${phone ? '/mobile-signup' : '/app/signup'}`;
+  for (const selector of [
+    '.homepage-hero-cta',
+    '.site-header-actions .site-nav-start',
+  ]) {
+    await page.goBack();
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() === signupUrl &&
+          response.request().isNavigationRequest()
+      ),
+      page.locator(selector).click(),
+    ]);
+    expect(response.ok()).toBe(true);
+    await expect(page).toHaveURL(signupUrl);
+    if (!phone)
+      await expect(
+        page.getByRole('heading', { name: 'Signup application' })
+      ).toBeVisible();
   }
 }

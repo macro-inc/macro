@@ -53,6 +53,7 @@ impl FleetEnrollment for TestEnrollment {
             name: ComputerName::try_new("Fixture computer").unwrap(),
             deployment: crate::domain::fakes::deployment(),
             traceparent: None,
+            agent: None,
         })
     }
 }
@@ -72,7 +73,10 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
         let mut fleet = DockerFleet::new(
             DockerFleetConfig {
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-                image: GuestImage::try_new("fixture-image").unwrap(),
+                images: GuestImages {
+                    regular: GuestImage::try_new("fixture-image").unwrap(),
+                    agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
+                },
                 network: "fixture-network".to_owned(),
                 enrollment_dir: root.path().to_owned(),
                 host_name: "fixture-host".to_owned(),
@@ -177,7 +181,10 @@ async fn docker_destroy_removes_the_container_then_its_volumes() {
     let mut fleet = DockerFleet::new(
         DockerFleetConfig {
             control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-            image: GuestImage::try_new("macro-box:2026-11-01").unwrap(),
+            images: GuestImages {
+                regular: GuestImage::try_new("macro-box:2026-11-01").unwrap(),
+                agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
+            },
             network: "fixture-network".to_owned(),
             enrollment_dir: root.path().to_owned(),
             host_name: "fixture-host".to_owned(),
@@ -194,4 +201,116 @@ async fn docker_destroy_removes_the_container_then_its_volumes() {
         *runner.calls.lock().unwrap(),
         [remove_args(COMPUTER_ID), remove_volumes_args(COMPUTER_ID)]
     );
+}
+
+/// A daemon without the container, recording what `docker create` was given.
+#[derive(Debug, Default)]
+struct EmptyDocker {
+    created: Mutex<Vec<String>>,
+}
+
+impl DockerCommand for EmptyDocker {
+    fn run(&self, command: &str, args: &[String]) -> Result<String, DockerFleetError> {
+        if command == "create" {
+            *self.created.lock().unwrap() = args.to_vec();
+        }
+        Ok(String::new())
+    }
+}
+
+struct AgentEnrollment {
+    agent: bool,
+}
+
+impl FleetEnrollment for AgentEnrollment {
+    async fn claimed(&self, _: PairingId) -> Result<bool, EnrollmentIssueError> {
+        Ok(false)
+    }
+
+    async fn issue(&self) -> Result<Enrollment, EnrollmentIssueError> {
+        Ok(crate::domain::fakes::enrollment(COMPUTER_ID, self.agent))
+    }
+}
+
+#[tokio::test]
+async fn an_agent_computer_is_created_and_recreated_from_the_agent_image() {
+    // First creation, then a recreation after the guest was lost (a newer
+    // generation of a computer that already records the image it ran).
+    for (agent, generation, recorded, expected) in [
+        (true, 1, None, "macro-box-agent:latest"),
+        (
+            true,
+            2,
+            Some("macro-box-agent:latest"),
+            "macro-box-agent:latest",
+        ),
+        (false, 1, None, "macro-box:latest"),
+        (false, 2, Some("macro-box:latest"), "macro-box:latest"),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let runner = Arc::new(EmptyDocker::default());
+        let mut fleet = DockerFleet::new(
+            DockerFleetConfig {
+                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                images: GuestImages {
+                    regular: GuestImage::try_new("macro-box:latest").unwrap(),
+                    agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
+                },
+                network: "fixture-network".to_owned(),
+                enrollment_dir: root.path().to_owned(),
+                host_name: "fixture-host".to_owned(),
+                memory_gb: 31,
+                reserve_gb: 7,
+                oversell_factor: 3,
+            },
+            Environment::Local,
+        )
+        .unwrap();
+        fleet.command = Some(runner.clone());
+        let computer = Computer {
+            id: COMPUTER_ID,
+            team_id: Uuid::nil(),
+            name: ComputerName::try_new("Fixture computer").unwrap(),
+            size: crate::domain::size::ComputerSize::Standard,
+            resources: crate::domain::size::ComputerResources {
+                vcpus: crate::domain::size::Vcpus::new(4),
+                memory_gib: crate::domain::size::MemoryGib::new(8),
+                disk_gib: crate::domain::size::DiskGib::new(100),
+            },
+            catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                "standard@2026-11".to_owned(),
+            )
+            .unwrap(),
+            funding: crate::domain::models::Funding::Comped {
+                reason: "fixture".to_owned(),
+            },
+            host: crate::domain::ids::HostId::new(Uuid::nil()),
+            state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Provisioning {
+                start: true,
+            }),
+            harness_id: None,
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+            created_at: Utc::now(),
+            enrolled_at: None,
+            setup_completed_at: None,
+            default_agent_id: None,
+            image: recorded.map(|image| GuestImage::try_new(image).unwrap()),
+            enrollment_generation: EnrollmentGeneration::new(generation),
+        };
+
+        let image = fleet
+            .create(
+                &computer,
+                EnrollmentGeneration::new(generation),
+                &AgentEnrollment { agent },
+                true,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(image.as_str(), expected);
+        let created = runner.created.lock().unwrap();
+        assert_eq!(created.last().map(String::as_str), Some(expected));
+        assert!(created.contains(&format!("{IMAGE_LABEL}={expected}")));
+    }
 }

@@ -455,6 +455,13 @@ Phases you will see:
   `quick_access.materialize` and the `search.page_count`,
   `search.materialized_count` and `search.index.count` attributes;
   `search.index.last_build_ms` is the latest index rebuild, not another phase.
+  `search.refresh` is false on the first answer for a query or category and
+  true when a cache change replays a window already on screen, so filter on
+  `search.refresh:false` with `search.query_length` above 0 for what a person
+  waited on after typing.
+  `search.engine_restarted` is true when the cache engine was replaced while
+  the search was pending, which is a search issued in the restart window after
+  returning to the tab.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel

@@ -1,12 +1,15 @@
 //! Persistence for message-label batches, preserving their transaction boundaries.
-
 use anyhow::Context;
+use email::domain::message_labels::state as label_state;
 use email::domain::message_labels::{
     MessageLabelDefinition, MessageLabelInbox, MessageLabelRepository, MessageLabelTarget,
     StageFailure, StagedLabelWrite,
 };
+use email::outbound::label_state_pg::PgLabelState;
 use models_email::service;
 use uuid::Uuid;
+
+pub mod gmail_ops;
 
 #[cfg(test)]
 mod test;
@@ -128,8 +131,8 @@ impl MessageLabelRepository for PgMessageLabels {
                 .collect();
             let provider_message_ids: Vec<Uuid> =
                 provider_messages.iter().map(|(id, _)| *id).collect();
-            email_db_client::labels::pending_writes::mark_pending_label_writes(
-                &mut *tx,
+            label_state::mark_pending_label_writes(
+                &mut PgLabelState(&mut tx),
                 link_id,
                 &provider_message_ids,
                 &provider_label_id,
@@ -140,8 +143,8 @@ impl MessageLabelRepository for PgMessageLabels {
             .context("Failed to mark pending label writes")?;
 
             if is_adding {
-                email_db_client::labels::insert::insert_message_labels_batch(
-                    &mut *tx,
+                label_state::insert_message_labels_batch(
+                    &mut PgLabelState(&mut tx),
                     &message_db_ids,
                     &provider_label_id,
                     link_id,
@@ -149,8 +152,8 @@ impl MessageLabelRepository for PgMessageLabels {
                 .await
                 .context("Failed to add label to messages in database")?;
             } else {
-                email_db_client::labels::delete::delete_message_labels_batch(
-                    &mut *tx,
+                label_state::delete_message_labels_batch(
+                    &mut PgLabelState(&mut tx),
                     &message_db_ids,
                     &provider_label_id,
                     link_id,
@@ -160,8 +163,8 @@ impl MessageLabelRepository for PgMessageLabels {
             }
 
             if provider_label_id.as_str() == service::label::system_labels::UNREAD {
-                email_db_client::messages::update::update_message_read_status_batch(
-                    &mut *tx,
+                label_state::update_message_read_status_batch(
+                    &mut PgLabelState(&mut tx),
                     message_db_ids.clone(),
                     link_id,
                     !is_adding,
@@ -169,8 +172,8 @@ impl MessageLabelRepository for PgMessageLabels {
                 .await
                 .context("Failed to update message read status")?;
             } else if provider_label_id.as_str() == service::label::system_labels::STARRED {
-                email_db_client::messages::update::update_message_starred_status_batch(
-                    &mut *tx,
+                label_state::update_message_starred_status_batch(
+                    &mut PgLabelState(&mut tx),
                     message_db_ids.clone(),
                     link_id,
                     is_adding,
@@ -237,8 +240,8 @@ impl PgMessageLabels {
         let mut tx = self.0.begin().await?;
         email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, thread_ids)
             .await?;
-        let restored = email_db_client::labels::pending_writes::abandon_pending_label_writes(
-            &mut tx,
+        let restored = label_state::abandon_pending_label_writes(
+            &mut PgLabelState(&mut tx),
             link_id,
             message_ids,
             write_id,

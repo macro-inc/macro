@@ -667,7 +667,7 @@ export function ChannelAgentDemo() {
           >
             Back to conversation
           </button>
-          <h3 class="text-sm font-semibold mb-6">
+          <h3 class="text-sm font-medium mb-6">
             Cursor · Check the signup button
           </h3>
           <p class="text-sm text-ink-muted mb-4">

@@ -1,39 +1,12 @@
-import type { UpdateSession } from '@app/features/agent-updates/core/agent-update';
+import { sessionsOf } from '@app/features/agent-updates/core/agent-update';
 import { AgentUpdatesStack } from '@app/features/agent-updates/views/AgentUpdatesStack';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useUserId } from '@core/context/user';
 import List from '@phosphor-icons/core/regular/list.svg';
-import type { AgentUpdates } from '@service-cognition/generated/tools/types';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
-
-/**
- * One entry per session in the tool result. Waiting sessions are opened live,
- * so their cards show the current request and leave once it is answered.
- */
-export function sessionsOf(
-  updates: AgentUpdates,
-  ownerId: string | undefined
-): UpdateSession[] {
-  if (!ownerId) return [];
-  const sessions = new Map<string, UpdateSession>();
-  for (const item of updates.items) {
-    if (sessions.has(item.sessionId)) continue;
-    sessions.set(item.sessionId, {
-      id: item.sessionId,
-      name: item.sessionName,
-      ownerId,
-      archivedBy: null,
-      harness: item.harness,
-      botId: '',
-      turnState: item.kind === 'stalled' ? 'running' : 'blocked',
-      updatedAt: item.since,
-    });
-  }
-  return [...sessions.values()];
-}
 
 export const listAgentUpdatesHandler = createToolRenderer({
   name: 'ListAgentUpdates',

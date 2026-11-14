@@ -8,11 +8,12 @@ import {
 } from '@queries/harnesses/harnesses';
 import { harnessKeys } from '@queries/harnesses/keys';
 import {
+  BILLING_PROVIDER_FAILED,
+  COMPUTERS_UNAVAILABLE,
   type ComputerStatus,
   type ComputerStatusKind,
   computersClient,
   type PurchaseComputerRequest,
-  TEAM_ON_TRIAL,
 } from '@service-auth/computers';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { createEffect, on } from 'solid-js';
@@ -139,18 +140,46 @@ export function useComputersQuery(enabled: () => boolean) {
   return computers;
 }
 
+/** Failures a second request may get past: the server or the network. */
+const RETRYABLE_OFFERS_FAILURES: readonly string[] = [
+  'SERVER_ERROR',
+  COMPUTERS_UNAVAILABLE,
+  BILLING_PROVIDER_FAILED,
+  'NETWORK_ERROR',
+];
+
+/**
+ * Whether to ask for the sizes again: once after a 5xx or a dropped
+ * connection, never after a refusal the server will repeat (a trial, no paid
+ * plan, no rollout, any other 4xx), and never after a timeout, which has
+ * already cost the client's whole request deadline; the user gets Retry.
+ */
+export function retryComputerOffers(failures: number, error: unknown): boolean {
+  return (
+    failures < 1 &&
+    RETRYABLE_OFFERS_FAILURES.some((code) =>
+      thrownResultErrorHasCode(error, code)
+    )
+  );
+}
+
 function computerOffersQueryOptions(enabled: boolean) {
   return queryOptions({
     queryKey: computerKeys.offers.queryKey,
     enabled,
     queryFn: () => throwOnErr(computersClient.offers),
-    // A trial doesn't end by retrying; show why at once.
-    retry: (failures, error) =>
-      !thrownResultErrorHasCode(error, TEAM_ON_TRIAL) && failures < 3,
+    retry: retryComputerOffers,
+    // The dialog opens on a query the Runtimes row already ran; a refusal
+    // shows at once rather than being asked again on every opening.
+    retryOnMount: false,
   });
 }
 
-/** Sizes the team can buy, with their price and availability. */
+/**
+ * Sizes the team can buy, with their price and availability. The Runtimes
+ * row and the Agents entry run it as soon as they show the offer, so the
+ * purchase dialog opens with the sizes already loaded.
+ */
 export function useComputerOffersQuery(enabled: () => boolean) {
   return useQuery(() => computerOffersQueryOptions(enabled()));
 }

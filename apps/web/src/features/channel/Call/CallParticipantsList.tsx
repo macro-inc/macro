@@ -21,6 +21,7 @@ import { CallParticipantVolume } from './views/CallParticipantVolume';
 function ParticipantRow(props: {
   name: string;
   userId?: string;
+  accessMode?: 'guest' | 'member';
   local?: boolean;
   compact?: boolean;
   isProgram: boolean;
@@ -45,7 +46,7 @@ function ParticipantRow(props: {
         )}
       >
         <Show
-          when={props.userId}
+          when={props.accessMode === 'guest' ? undefined : props.userId}
           fallback={
             <Avatar size="fill">
               <Avatar.Fallback>
@@ -133,6 +134,7 @@ function ParticipantRow(props: {
 
 function RemoteParticipantRow(props: {
   participant: RemoteParticipant;
+  accessMode?: 'guest' | 'member';
   compact?: boolean;
 }) {
   const call = useCallContext();
@@ -153,6 +155,7 @@ function RemoteParticipantRow(props: {
       name={name()}
       compact={props.compact}
       userId={userId()}
+      accessMode={props.accessMode}
       isProgram={isProgramParticipant(props.participant.attributes)}
       speaking={call.isParticipantSpeaking(props.participant)}
       muted={publication(LK_TRACK_SOURCE.Microphone)?.isMuted ?? true}
@@ -165,6 +168,7 @@ function RemoteParticipantRow(props: {
 /** Shows current human attendees from the live room, not channel membership. */
 export function CallParticipantsList(props: {
   localName?: string;
+  accessMode?: 'guest' | 'member';
   compact?: boolean;
 }) {
   const call = useCallContext();
@@ -194,6 +198,7 @@ export function CallParticipantsList(props: {
         name={localName()}
         compact={props.compact}
         userId={localUserId()}
+        accessMode={props.accessMode}
         local
         isProgram={isProgramParticipant(
           call.room()?.localParticipant.attributes
@@ -206,6 +211,7 @@ export function CallParticipantsList(props: {
         {(participant) => (
           <RemoteParticipantRow
             participant={participant}
+            accessMode={props.accessMode}
             compact={props.compact}
           />
         )}

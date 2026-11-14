@@ -6,6 +6,13 @@ use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+/// Provider settlement and retry policy for queued Gmail label writes.
+#[cfg(feature = "mailbox")]
+pub mod gmail_ops;
+
+/// Label-state rules over narrow persistence operations.
+pub mod state;
+
 #[cfg(test)]
 mod test;
 

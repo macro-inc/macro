@@ -1,19 +1,27 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   useComputerOffersQuery,
   usePurchaseComputerMutation,
 } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
-import { ActionDialogShell, Dialog } from '@ui';
+import { ActionDialogShell, Button, Dialog } from '@ui';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { ComputerPurchaseStep } from '../components/computer-purchase-dialog';
-import { computerFailureMessage } from '../core/computer-display';
+import {
+  computerFailureMessage,
+  offersFailure,
+} from '../core/computer-display';
+import { showComputerSetupNotice } from '../primitives/setup-notice';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
   ComputerSetupSteps,
@@ -37,9 +45,38 @@ function defaultComputerName(firstName: string | undefined): string {
 }
 
 /**
- * Guided setup in one modal, from Buy to Try it: Computer · Agent · Claude ·
- * Ready. Opened from Settings → Machines, the Agents list and an agent's
- * Where it runs, or with `computerId` from a row's Finish setup.
+ * Setup resumed from a row's Finish setup, before the team's computer list
+ * has the computer. The dialog can be closed meanwhile.
+ */
+function ResumingStep(props: { step: SetupStepId; onClose: () => void }) {
+  return (
+    <>
+      <ActionDialogShell.Body>
+        <StepHeader step={props.step} claude="step" />
+        <ActionDialogShell.Header>
+          <ActionDialogShell.Title>
+            {t('computers.setupAgentTitle')}
+          </ActionDialogShell.Title>
+        </ActionDialogShell.Header>
+        <p role="status" class="flex items-center gap-2 text-sm text-ink-muted">
+          <SpinnerIcon class="size-4 animate-spin" />
+          {t('common.loading')}
+        </p>
+      </ActionDialogShell.Body>
+      <ActionDialogShell.Footer>
+        <Button type="button" variant="ghost" onClick={props.onClose}>
+          {t('common.close')}
+        </Button>
+      </ActionDialogShell.Footer>
+    </>
+  );
+}
+
+/**
+ * Guided setup in one modal, from Buy to Try it: Buy computer → Configure
+ * agent → Bring your AI → Create agent. Opened from Settings → Machines, the Agents
+ * list and an agent's Where it runs, or with `computerId` from a row's Finish
+ * setup.
  *
  * It keeps its place when closed. Closed while waiting for the Claude
  * sign-in link, it toasts once the link is ready, and the toast reopens it on
@@ -50,14 +87,19 @@ export function ComputerBuyFlow(props: {
   open: boolean;
   /** Resume setup of this computer instead of buying one. */
   computerId?: string;
+  /** Where resuming starts; Configure agent unless a link names a step. */
+  resumeStep?: Exclude<SetupStepId, 'computer'>;
   onClose: () => void;
   onFinished?: (computer: ComputerStatus) => void;
+  /** Opened from an agent's Where it runs, which `onFinished` updates. */
+  selectsForAgent?: boolean;
 }) {
   const firstName = useViewerFirstName();
   const offers = useComputerOffersQuery(() => props.open && !props.computerId);
   const { computers } = useTeamComputers();
   const harnesses = useHarnessesQuery();
   const purchase = usePurchaseComputerMutation();
+  const settings = useSettingsState();
   const [error, setError] = createSignal<string>();
   // One key per Buy dialog, sent again on every retry, so a retried Buy
   // never charges twice. An error means nothing was charged.
@@ -68,6 +110,12 @@ export function ComputerBuyFlow(props: {
   const [choice, setChoice] = createSignal<ClaudeMode>();
   const [reopened, setReopened] = createSignal(false);
   const [waitingForLink, setWaitingForLink] = createSignal(false);
+  // Choosing credits after opening the sign-in completes Bring your AI
+  // rather than skipping it.
+  const [signInVisited, setSignInVisited] = createSignal(false);
+  createEffect(() => {
+    if (step() === 'claude') setSignInVisited(true);
+  });
 
   const computerId = () => props.computerId ?? boughtId();
   const computer = () => computers().find((item) => item.id === computerId());
@@ -78,6 +126,16 @@ export function ComputerBuyFlow(props: {
       : false;
   };
   const up = () => computerConnected(computer(), connected());
+  // An agent teammate's computer runs only its agent: nothing to try or
+  // create on it.
+  const teamAgentComputer = () => {
+    const id = computer()?.harnessId;
+    return harnesses.isSuccess
+      ? harnesses.data.some(
+          (harness) => harness.id === id && isTeamAgentComputer(harness)
+        )
+      : false;
+  };
   const visible = () => props.open || reopened();
   const setupStep = (): Exclude<SetupStepId, 'computer'> => {
     const current = step();
@@ -96,12 +154,19 @@ export function ComputerBuyFlow(props: {
     })
   );
 
-  // Opening from Finish setup starts on the agent step.
+  // Resuming starts on the agent step, or where a setup link points; a
+  // link for another computer than the one shown moves there too.
   createEffect(
     on(
-      () => props.open,
-      (open) => {
-        if (open && props.computerId && step() === 'computer') setStep('agent');
+      () => [props.open, props.computerId, props.resumeStep] as const,
+      ([open, computerId, resumeStep], previous) => {
+        if (!open || !computerId) return;
+        if (
+          resumeStep &&
+          (resumeStep !== previous?.[2] || computerId !== previous?.[1])
+        )
+          setStep(resumeStep);
+        else if (step() === 'computer') setStep('agent');
       }
     )
   );
@@ -119,25 +184,31 @@ export function ComputerBuyFlow(props: {
     if (current) props.onFinished?.(current);
   };
 
+  // Billing is where a trial ends or a plan starts; the dialog is done.
+  const openBilling = () => {
+    close();
+    settings.openSettings('Billing');
+  };
+
   // The link the user was waiting for is ready: say so, once.
   createEffect(() => {
     const current = computer();
     if (!waitingForLink() || visible() || !current || !up()) return;
     setWaitingForLink(false);
-    toast.success(t('computers.signInReadyToast', { name: current.name }), {
-      // Long enough for someone who switched tabs to come back to it.
-      duration: 60_000,
-      actions: [
-        {
-          label: t('computers.signInReadyAction'),
-          variant: 'primary',
-          onClick: () => {
-            setStep('claude');
-            setReopened(true);
-          },
-        },
-      ],
-    });
+    // The same notice the computer's setup notification shows, so the two
+    // never stack; this one reopens this dialog in place.
+    showComputerSetupNotice(
+      {
+        computerId: current.id,
+        harnessId: current.harnessId ?? null,
+        computerName: current.name,
+        outcome: { kind: 'ready' },
+      },
+      () => {
+        setStep('claude');
+        setReopened(true);
+      }
+    );
   });
 
   const buy = async (offer: SizeOffer, computerName: string | undefined) => {
@@ -150,6 +221,9 @@ export function ComputerBuyFlow(props: {
       });
       setBoughtId(result.computerId);
       setStep('agent');
+      // A phone's toast sits over the sheet's footer, and the progress list
+      // the next step opens with already says the charge is being confirmed.
+      if (isMobile()) return;
       // Confirming is a success too: the computer shows as purchasing
       // until its charge is confirmed.
       toast.success(
@@ -178,20 +252,32 @@ export function ComputerBuyFlow(props: {
           <Show
             when={step() !== 'computer' && computer()}
             fallback={
-              <Show when={offers.isSuccess && offers.data}>
-                {(offerList) => (
-                  <ComputerPurchaseStep
-                    header={<StepHeader step="computer" skipsClaude={false} />}
-                    offers={offerList()}
-                    defaultName={defaultComputerName(firstName())}
-                    pending={purchase.isPending}
-                    error={error()}
-                    onClose={close}
-                    onConfirm={(offer, computerName) =>
-                      fireAndForget(buy(offer, computerName), 'macro-computers')
-                    }
-                  />
-                )}
+              <Show
+                when={!props.computerId}
+                fallback={
+                  // Resuming setup waits for the computer, not for sizes.
+                  <ResumingStep step={setupStep()} onClose={close} />
+                }
+              >
+                <ComputerPurchaseStep
+                  header={<StepHeader step="computer" claude="step" />}
+                  offers={offers.isSuccess ? offers.data : undefined}
+                  failure={
+                    offers.isError ? offersFailure(offers.error) : undefined
+                  }
+                  retrying={offers.isFetching}
+                  defaultName={defaultComputerName(firstName())}
+                  pending={purchase.isPending}
+                  error={error()}
+                  onClose={close}
+                  onRetry={() =>
+                    fireAndForget(offers.refetch(), 'macro-computers')
+                  }
+                  onBilling={openBilling}
+                  onConfirm={(offer, computerName) =>
+                    fireAndForget(buy(offer, computerName), 'macro-computers')
+                  }
+                />
               </Show>
             }
           >
@@ -207,6 +293,9 @@ export function ComputerBuyFlow(props: {
                 onChoice={setChoice}
                 onStep={setStep}
                 onClose={close}
+                selectsForAgent={props.selectsForAgent}
+                teamAgentComputer={teamAgentComputer()}
+                signInVisited={signInVisited()}
               />
             )}
           </Show>
