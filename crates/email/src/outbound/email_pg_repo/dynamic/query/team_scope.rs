@@ -63,9 +63,12 @@ pub(crate) struct TeamReadTuning {
 
 impl TeamReadTuning {
     /// Chosen on a production-size team: past 5,000 superset rows a record
-    /// usually fills its page within 100 threads per row of the inboxes, and
-    /// a window that doesn't costs about a quarter second before the
-    /// superset reads the page.
+    /// usually fills its page within 100 threads per row of the inboxes; a
+    /// window that doesn't costs about a quarter second on a warm cache
+    /// before the superset reads the page. The superset reads all its rows
+    /// before the first thread, so a higher limit made records of 10,000 to
+    /// 20,000 rows slower warm and, from a cold cache, overran the
+    /// statement budget.
     pub(crate) const DEFAULT: Self = Self {
         superset_limit: 5_000,
         window_per_row: 100,
