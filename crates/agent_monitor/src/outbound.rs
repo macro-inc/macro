@@ -8,6 +8,7 @@ pub mod claude_transcripts;
 pub mod codex_rollouts;
 pub mod demo;
 pub mod hc;
+pub mod local;
 pub mod macrod_sessions;
 pub mod managers;
 mod records;
