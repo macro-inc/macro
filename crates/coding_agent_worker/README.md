@@ -244,8 +244,9 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   joins its terminal by the record's terminal name, or by an hc label named
   in `run_id_labels` whose value is the run's id.
 - **Pull requests** come from what agents leave behind, with no polling:
-  a Claude Code session's record of a PR it created (or a `gh pr create`
-  call and the PR URL it printed; Codex rollouts the same way) makes that
+  a Claude Code session's record of a PR it created (or a call whose
+  command runs `gh pr create`, not one that only mentions it, and the PR URL
+  in that call's own successful result; Codex rollouts the same way) makes that
   agent the PR's author; a herdr manager's `prs` file ties its PRs to the
   manager; and an agent whose working directory is a clone of a GitHub
   repository, on a PR's head branch, works on it. Their status (state, CI

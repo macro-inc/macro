@@ -13,6 +13,7 @@ pub mod hc;
 pub mod local;
 pub mod macrod_sessions;
 pub mod managers;
+mod pr_create;
 mod records;
 pub mod run_records;
 mod tail;

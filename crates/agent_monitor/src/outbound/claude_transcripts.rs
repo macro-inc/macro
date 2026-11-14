@@ -8,7 +8,8 @@
 //! cost (`cost-state.totalCostUSD`, a running total that includes its
 //! subagents), its title, and the pull requests it opened: Claude Code's own
 //! `toolUseResult.gitOperation.pr` record with `action: created`, or a Bash
-//! call running `gh pr create` paired with the PR URL its result printed.
+//! call whose command runs `gh pr create` (`outbound::pr_create`) paired
+//! with the PR URL in that call's own successful result.
 //! Every field is optional: the layout is not a contract.
 
 #[cfg(test)]
@@ -29,6 +30,7 @@ use crate::domain::observation::{
     Observation, TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
 use crate::domain::source::{AgentSource, SourceError};
+use crate::outbound::pr_create::invokes_pr_create;
 use crate::outbound::transcripts::{self, Deltas, LineParser, TranscriptConfig, TranscriptFormat};
 
 const SUBAGENTS_DIR: &str = "subagents";
@@ -40,9 +42,6 @@ const SYNTHETIC_MODEL: &str = "<synthetic>";
 
 /// Stop reasons that end a turn (anything but a pause for a tool call).
 const TURN_ENDING_STOPS: &[&str] = &["end_turn", "stop_sequence", "max_tokens", "refusal"];
-
-/// The command that opens a pull request.
-pub(crate) const PR_CREATE: &str = "gh pr create";
 
 /// Lines that may carry Claude Code's record of a git operation.
 const GIT_OPERATION: &[u8] = b"\"gitOperation\":{\"pr\"";
@@ -346,7 +345,7 @@ impl ClaudeParser {
                     let opens_pr = input
                         .as_ref()
                         .and_then(|input| input.command.as_deref())
-                        .is_some_and(|command| command.contains(PR_CREATE));
+                        .is_some_and(invokes_pr_create);
                     if opens_pr {
                         self.pr_calls.insert(id.clone());
                     }
@@ -389,8 +388,11 @@ impl ClaudeParser {
                 } => {
                     let is_error = is_error.unwrap_or(false);
                     if self.pr_calls.remove(&tool_use_id) && !is_error {
-                        opened = opened
-                            .or_else(|| std::str::from_utf8(line).ok().and_then(PrRef::last_in));
+                        opened = opened.or_else(|| {
+                            result_text(line, &tool_use_id)
+                                .as_deref()
+                                .and_then(PrRef::last_in)
+                        });
                     }
                     out.push(
                         at,
@@ -411,6 +413,58 @@ impl ClaudeParser {
             out.push(at, TranscriptEventKind::TurnStart);
         }
     }
+}
+
+/// The text of the result of call `tool_use_id` in this user record line.
+/// Decoded only for a `gh pr create` call's result, so other results' text
+/// is never read.
+fn result_text(line: &[u8], tool_use_id: &str) -> Option<String> {
+    let record: ResultRecord = serde_json::from_slice(line).ok()?;
+    let content = record
+        .message?
+        .content
+        .into_iter()
+        .find(|block| block.tool_use_id.as_deref() == Some(tool_use_id))?
+        .content?;
+    Some(match content {
+        ResultContent::Text(text) => text,
+        ResultContent::Blocks(blocks) => blocks
+            .into_iter()
+            .filter_map(|block| block.text)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    })
+}
+
+/// A user record's tool results with their text, for [`result_text`].
+#[derive(Deserialize)]
+struct ResultRecord {
+    message: Option<ResultMessage>,
+}
+
+#[derive(Deserialize)]
+struct ResultMessage {
+    #[serde(default)]
+    content: Vec<ResultBlock>,
+}
+
+#[derive(Deserialize)]
+struct ResultBlock {
+    tool_use_id: Option<String>,
+    content: Option<ResultContent>,
+}
+
+/// A tool result's content: text, or text blocks.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ResultContent {
+    Text(String),
+    Blocks(Vec<TextBlock>),
+}
+
+#[derive(Deserialize)]
+struct TextBlock {
+    text: Option<String>,
 }
 
 /// The pull request Claude Code recorded creating in this tool result line.

@@ -86,8 +86,10 @@ subscriber gets a fresh snapshot.
   `notify`'s inotify mask includes `IN_OPEN`, so busy transcript directories
   wake the watcher often; those are real writes, not polling.
 - PR authorship comes from transcripts, never from GitHub: Claude Code's
-  `toolUseResult.gitOperation.pr` (`action: created`), else a `gh pr create`
-  call paired with the PR URL in its result. A PR's agents list its author
+  `toolUseResult.gitOperation.pr` (`action: created`), else a call whose
+  shell command runs `gh pr create` (`outbound/pr_create.rs`: quoted text,
+  heredoc bodies and other programs' arguments don't count) paired with the
+  PR URL in that call's own result, and only a successful one. A PR's agents list its author
   first and managers last; merged and closed PRs older than the history
   window are retired (`Facts::prune`) and never asked for again.
 - Startup indexes only transcripts modified within the history window, newest

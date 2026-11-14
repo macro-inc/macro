@@ -154,14 +154,19 @@ async fn a_gh_pr_create_call_and_its_output_open_a_pr() {
             _ => None,
         })
         .collect();
+    let pr = |name: &str, number| PrRef {
+        repo: crate::domain::model::RepoName::parse(name).expect("repo"),
+        number,
+    };
+    // Not a command that only mentions it, nor a failed call that prints
+    // the existing pull request; code-mode `cmd` strings and `shell`
+    // argument lists count.
     assert_eq!(
         opened,
-        vec![(
-            at("2030-01-02T10:01:05Z"),
-            PrRef {
-                repo: crate::domain::model::RepoName::parse("example-org/widgets").expect("repo"),
-                number: 43,
-            }
-        )]
+        vec![
+            (at("2030-01-02T10:01:05Z"), pr("example-org/widgets", 43)),
+            (at("2030-01-02T10:05:05Z"), pr("example-org/widgets", 45)),
+            (at("2030-01-02T10:06:05Z"), pr("example-org/gadgets", 46)),
+        ]
     );
 }

@@ -307,13 +307,16 @@ async fn a_pr_is_opened_by_gh_pr_create_and_its_url_or_by_claude_codes_own_recor
 
     let deltas = deltas(source.until_ready().await);
     assert!(deltas.iter().all(|delta| delta.key == key("s-pr", None)));
-    // A URL printed by another command opens nothing, nor does an edit;
-    // the `pull/new/<branch>` hint is not a pull request.
+    // A URL printed by another command opens nothing, nor does an edit, a
+    // heredoc or a grep that only mentions `gh pr create`; the
+    // `pull/new/<branch>` hint is not a pull request; and the URL comes from
+    // the `gh pr create` call's own result, not a later one in the record.
     assert_eq!(
         opened(&deltas),
         vec![
             (at("2030-01-02T10:02:05Z"), pr("example-org/widgets", 42)),
             (at("2030-01-02T10:03:05Z"), pr("example-org/gadgets", 7)),
+            (at("2030-01-02T10:07:05Z"), pr("example-org/widgets", 52)),
         ]
     );
     source.stop().await;

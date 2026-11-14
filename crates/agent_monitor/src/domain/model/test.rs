@@ -3,7 +3,10 @@ use super::{PrRef, RepoName};
 #[test]
 fn a_repository_name_is_compared_without_regard_to_case() {
     let typed = RepoName::parse("Example-Org/Widgets").expect("a repo");
-    assert_eq!(typed, RepoName::parse("example-org/widgets").expect("a repo"));
+    assert_eq!(
+        typed,
+        RepoName::parse("example-org/widgets").expect("a repo")
+    );
     assert_eq!(typed.owner(), "example-org");
     assert_eq!(typed.name(), "widgets");
     assert_eq!(RepoName::parse("example-org"), None);

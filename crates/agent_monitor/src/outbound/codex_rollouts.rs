@@ -2,8 +2,9 @@
 //!
 //! Counts turns (`task_started` / `task_complete`), tool calls
 //! (`function_call` and `custom_tool_call` with their outputs), token usage,
-//! and pull requests opened: a call whose arguments run `gh pr create`,
-//! paired with the PR URL its output printed.
+//! and pull requests opened: a call whose command runs `gh pr create`
+//! (`outbound::pr_create`), paired with the PR URL its own output printed
+//! unless that output reports a non-zero exit code.
 //! Usage comes from per-response `token_usage_record`s; rollouts written
 //! before those existed only carry running totals in `token_count` events,
 //! which are turned into increases.
@@ -26,7 +27,7 @@ use crate::domain::observation::{
     Observation, TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
 use crate::domain::source::{AgentSource, SourceError};
-use crate::outbound::claude_transcripts::PR_CREATE;
+use crate::outbound::pr_create::invokes_pr_create;
 use crate::outbound::transcripts::{self, Deltas, LineParser, TranscriptConfig, TranscriptFormat};
 
 const ROLLOUT_PREFIX: &str = "rollout-";
@@ -245,10 +246,11 @@ impl LineParser for CodexParser {
             }
             (Some("response_item"), Some("function_call" | "custom_tool_call")) => {
                 if let (Some(id), Some(name)) = (payload.call_id, payload.name) {
-                    let opens_pr = [&payload.arguments, &payload.input]
-                        .into_iter()
-                        .flatten()
-                        .any(|text| text.contains(PR_CREATE));
+                    let opens_pr = payload
+                        .arguments
+                        .as_deref()
+                        .is_some_and(arguments_run_pr_create)
+                        || payload.input.as_deref().is_some_and(input_runs_pr_create);
                     if opens_pr {
                         self.pr_calls.insert(id.clone());
                     }
@@ -259,7 +261,9 @@ impl LineParser for CodexParser {
             (Some("response_item"), Some("function_call_output" | "custom_tool_call_output")) => {
                 if let Some(id) = payload.call_id {
                     if self.pr_calls.remove(&id)
-                        && let Some(pr) = std::str::from_utf8(line).ok().and_then(PrRef::last_in)
+                        && let Some(output) = output_text(line)
+                        && !reports_failure(&output)
+                        && let Some(pr) = PrRef::last_in(&output)
                     {
                         out.push(at, TranscriptEventKind::PrOpened(pr));
                     }
@@ -271,6 +275,91 @@ impl LineParser for CodexParser {
             _ => {}
         }
     }
+}
+
+/// Whether a `function_call`'s JSON arguments run `gh pr create`: its `cmd`
+/// (`exec_command`) or `command` (`shell`, text or an argument list).
+fn arguments_run_pr_create(arguments: &str) -> bool {
+    let Ok(arguments) = serde_json::from_str::<CallArguments>(arguments) else {
+        return false;
+    };
+    let command = match arguments.command {
+        Some(CallCommand::Text(text)) => invokes_pr_create(&text),
+        Some(CallCommand::Argv(argv)) => {
+            argv.last().is_some_and(|last| invokes_pr_create(last))
+                || invokes_pr_create(&argv.join(" "))
+        }
+        None => false,
+    };
+    command || arguments.cmd.as_deref().is_some_and(invokes_pr_create)
+}
+
+/// Whether a `custom_tool_call`'s input runs `gh pr create`: as shell text,
+/// or in a `cmd: "..."` string of a code-mode script.
+fn input_runs_pr_create(input: &str) -> bool {
+    invokes_pr_create(input)
+        || lazy_regex::regex!(r#"\bcmd\s*:\s*("(?:[^"\\]|\\.)*")"#)
+            .captures_iter(input)
+            .filter_map(|captures| serde_json::from_str::<String>(captures.get(1)?.as_str()).ok())
+            .any(|command| invokes_pr_create(&command))
+}
+
+/// Whether a call's output reports a non-zero exit code (a failed
+/// `gh pr create` prints the URL of the pull request that already exists).
+fn reports_failure(output: &str) -> bool {
+    lazy_regex::regex!(r#"(?:exit_code"?\s*:\s*|Process exited with code |Exit code:\s*)(\d+)"#)
+        .captures_iter(output)
+        .any(|captures| captures.get(1).is_some_and(|code| code.as_str() != "0"))
+}
+
+/// The output text of the call output record on this line, decoded only for
+/// a `gh pr create` call.
+fn output_text(line: &[u8]) -> Option<String> {
+    let record: OutputRecord = serde_json::from_slice(line).ok()?;
+    Some(match record.payload?.output? {
+        CallOutput::Text(text) => text,
+        CallOutput::Blocks(blocks) => blocks
+            .into_iter()
+            .filter_map(|block| block.text)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    })
+}
+
+#[derive(Deserialize)]
+struct CallArguments {
+    cmd: Option<String>,
+    command: Option<CallCommand>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CallCommand {
+    Text(String),
+    Argv(Vec<String>),
+}
+
+#[derive(Deserialize)]
+struct OutputRecord {
+    payload: Option<OutputPayload>,
+}
+
+#[derive(Deserialize)]
+struct OutputPayload {
+    output: Option<CallOutput>,
+}
+
+/// A call's output: text, or text blocks.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CallOutput {
+    Text(String),
+    Blocks(Vec<OutputBlock>),
+}
+
+#[derive(Deserialize)]
+struct OutputBlock {
+    text: Option<String>,
 }
 
 fn increase(before: Tokens, after: Tokens) -> Tokens {
