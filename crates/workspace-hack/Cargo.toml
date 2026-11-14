@@ -417,6 +417,7 @@ ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "fs", "mman"] }
 objc2 = { version = "0.6" }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFArray", "CFAttributedString", "CFCGTypes", "CFCalendar", "CFCharacterSet", "CFData", "CFDate", "CFDictionary", "CFError", "CFFileSecurity", "CFLocale", "CFMachPort", "CFMessagePort", "CFRunLoop", "CFSet", "CFStream", "CFString", "CFURL", "CFUUID", "objc2", "std"] }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
@@ -439,6 +440,7 @@ ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "fs", "mman"] }
 objc2 = { version = "0.6" }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFArray", "CFAttributedString", "CFCGTypes", "CFCalendar", "CFCharacterSet", "CFData", "CFDate", "CFDictionary", "CFError", "CFFileSecurity", "CFLocale", "CFMachPort", "CFMessagePort", "CFRunLoop", "CFSet", "CFStream", "CFString", "CFURL", "CFUUID", "objc2", "std"] }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }

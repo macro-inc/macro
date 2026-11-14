@@ -23994,6 +23994,7 @@ dependencies = [
  "num-iter",
  "num-traits",
  "objc2",
+ "objc2-core-foundation",
  "objc2-foundation",
  "once_cell",
  "openssl-sys",
