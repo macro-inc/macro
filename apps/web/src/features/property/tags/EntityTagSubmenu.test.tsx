@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   add: vi.fn(),
   ensure: vi.fn(),
   apply: vi.fn(),
+  openWithSplit: vi.fn(),
 }));
 vi.mock('./useDocTags', () => ({ useDocTags: mocks.source }));
 vi.mock('@queries/team/teams', () => ({
@@ -42,7 +43,7 @@ vi.mock('@queries/properties/tags', () => ({
   useUpdatePropertyOptionMutation: () => ({ isPending: false }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({}),
+  useSplitLayout: () => ({ openWithSplit: mocks.openWithSplit }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
@@ -86,6 +87,7 @@ beforeEach(() => {
     options: tagSets[0].options,
   });
   mocks.apply.mockReset().mockResolvedValue(undefined);
+  mocks.openWithSplit.mockReset();
   mocks.source.mockReset().mockReturnValue({
     tagSets: () => tagSets,
     appliedTags: () => [],
@@ -217,13 +219,27 @@ it('keeps checkbox selections open and saves them together with a row pick', asy
   );
 
   expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
-  expect(screen.getByRole('menuitem', { name: 'Add tag' })).toBeTruthy();
+  const trigger = screen.getByRole('menuitem', { name: 'Add tag' });
+  expect(trigger.hasAttribute('data-disabled')).toBe(true);
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+  expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
   finishSave?.();
   await save;
   expect(complete).not.toHaveBeenCalled();
   expect(mocks.save).toHaveBeenCalledOnce();
   expect(mocks.save).toHaveBeenCalledWith(new Set(['urgent', 'follow-up']));
   expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
+  await waitFor(() =>
+    expect(trigger.hasAttribute('data-disabled')).toBe(false)
+  );
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+  const reopenedSearch =
+    await screen.findByPlaceholderText('Change or add tags');
+  fireEvent.keyDown(reopenedSearch, { key: 'Enter' });
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(2));
+  expect(mocks.save).toHaveBeenLastCalledWith(new Set(['urgent']));
   const action = screen.getByRole('menuitem', { name: 'Another action' });
   action.focus();
   fireEvent.keyDown(action, { key: 'Enter' });
@@ -249,6 +265,7 @@ it('closes only the tag submenu on Escape and saves staged checkbox selections',
   fireEvent.keyDown(action, { key: 'Enter' });
   expect(otherAction).toHaveBeenCalledOnce();
 });
+
 it('toggles the focused checkbox with Enter without picking the highlighted row', async () => {
   setup();
   const search = await openTags();
@@ -313,6 +330,19 @@ it('goes back through creation steps without losing the name or chosen color', a
       option: { value: 'Renamed tag', display_order: 2, color: '#46A758' },
     },
   });
+});
+
+it('dismisses the parent menu when navigating to tagged items', async () => {
+  const { complete } = setup();
+  await openTags();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'View all items with tag Urgent' })
+  );
+
+  await waitFor(() => expect(mocks.openWithSplit).toHaveBeenCalledOnce());
+  expect(mocks.save).toHaveBeenCalledOnce();
+  expect(complete).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('menu')).toBeNull();
 });
 
 it('keeps tag editing alive after the parent menu unmounts', async () => {

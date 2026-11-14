@@ -41,7 +41,8 @@ export function EntityTagSubmenu(props: {
       <SubTrigger
         text={t('entityActions.addTag')}
         icon={TagIcon}
-        disabled={!tagEntityType(props.entity)}
+        // Keep the open trigger focusable until the picker returns focus.
+        disabled={(!open() && saving()) || !tagEntityType(props.entity)}
         ref={(element) => (trigger = element)}
       />
       <Show when={open() || saving()}>
@@ -92,9 +93,10 @@ function EntityTagSubmenuOwner(props: {
     docTags: trackedDocTags,
     onClose: () => {
       const restoreFocus = content?.contains(document.activeElement);
-      props.onClose();
       if (restoreFocus) props.focusTrigger();
+      props.onClose();
     },
+    onNavigate: props.onActionComplete,
     onOpenEditEditor: (mode) => {
       props.onClose();
       // Only a separate editor dialog needs the parent menu dismissed.

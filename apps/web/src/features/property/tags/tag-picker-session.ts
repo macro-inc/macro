@@ -53,6 +53,8 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 export function createTagPickerSession(props: {
   docTags: DocTags;
   onClose: () => void;
+  /** Dismiss an enclosing menu when opening the tag's item list. */
+  onNavigate?: () => void;
   onOpenEditEditor: (
     mode: Extract<TagEditorDialogMode, { type: 'edit' }>
   ) => void;
@@ -296,6 +298,7 @@ export function createTagPickerSession(props: {
   const openTaggedItems = async (item: TagOptionItem) => {
     if (!(await persistSelection())) return;
     props.onClose();
+    props.onNavigate?.();
     navigateToTag(
       split.openWithSplit,
       {
