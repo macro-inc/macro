@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.source_id, r.source_id AS \"root?\" FROM external_chat_message m\n        LEFT JOIN external_chat_message r ON r.id = m.thread_root\n        WHERE m.chat_id = $1 AND m.message_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "root?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ab7cdf1147fe1b56b785e982b693eeec79912157eaeda1a10784a97273b639d9"
+}

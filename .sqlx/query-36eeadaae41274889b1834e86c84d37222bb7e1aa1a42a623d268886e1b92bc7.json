@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat SET next_sequence = next_sequence + 1\n                WHERE id = $1 AND state = 'active' AND external_chat_can_view(id, $2)\n                RETURNING next_sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "36eeadaae41274889b1834e86c84d37222bb7e1aa1a42a623d268886e1b92bc7"
+}

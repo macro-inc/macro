@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.name, c.observed_at FROM slack_conversation c\n            JOIN slack_chat_membership m ON m.account_id = c.account_id AND m.chat_id = $1\n            WHERE c.conversation_id = $2 AND m.consent_ended_at IS NULL\n            ORDER BY c.observed_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "observed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "bcd4c9103326a7736a78100279d927144a839aeff3f274b593c0141d59a7cf78"
+}

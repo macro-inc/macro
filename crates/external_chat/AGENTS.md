@@ -2,19 +2,24 @@
 
 ## What it is
 
-External chats: a chat from another messaging service (WhatsApp is the one
-provider) added to Macro as an independently shared `ExternalChat` entity.
+External chats: a chat from another messaging service (WhatsApp today)
+added to Macro as an independently shared `ExternalChat` entity.
 This crate is the provider-neutral part: list and detail, timeline, read
 state, sharing, deliberate sends and uploads, attachment import into static
 files, notification effects and the `/external-chats` routes, over the
 `external_chat*` tables. A provider (`crates/whatsapp_linked`) implements the
-`ChatProvider` port; DSS composes `ExternalChatService<WhatsAppProvider>`.
+`ChatProvider` port; DSS puts each provider in a `ChatProviders` registry
+(one field per `ExternalChatProvider`) and composes `ExternalChatService`
+over it, which routes every call by the chat's or request's provider.
 
 ## Start here
 
-- `src/domain/ports.rs`: `ChatProvider` (accounts, who can send, members,
-  names, communities, pictures, adopt/detach, the provider's send outbox) and
-  the repository, publisher, file store (attachments and provider pictures,
+- `src/domain/ports.rs`: `ChatProvider` (accounts and their owners, who can
+  send, members, names, communities, pictures, adopt/detach, the provider's
+  send outbox, `read_advanced` for the owner's read positions),
+  `ChatProviders` (a new provider is a field and an arm in `get`),
+  `UnconfiguredProvider` (feature `test-support`) for test slots, and the
+  repository, publisher, file store (attachments and provider pictures,
   `store_picture`) and rate limiter ports.
 - `src/domain/service.rs` + `service/timeline.rs`: the use cases. The
   `ReplyBlock` decision (`reply_block`) combines `SendAuthority`, the
@@ -47,8 +52,11 @@ files, notification effects and the `/external-chats` routes, over the
 
 - No provider tables (`whatsapp_*`) in this crate's SQL: anything a provider
   stores is read through `ChatProvider`.
-- HTTP error JSON, codes and some messages still name WhatsApp; they are API
-  and change only with the web app.
+- HTTP error codes are API and change only with the web app; messages and
+  logs here never name a provider.
+- Threads: the timeline leaves out replies not also sent to the chat;
+  `?thread=` pages them, roots carry a `ThreadSummary`, and marking a reply
+  read advances `external_chat_thread_read_state`.
 - View access is `external_chat_access_level` (see
   `docs/architecture/external-chats.md`); bot view receipts read but never
   borrow a person's account, sends or unread cursor (`view_scope`).

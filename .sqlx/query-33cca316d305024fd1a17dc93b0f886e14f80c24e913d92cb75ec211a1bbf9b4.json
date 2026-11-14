@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_user_alias (chat_id, slack_user_id, person_id) VALUES ($1, $2, $3)\n        ON CONFLICT (chat_id, slack_user_id) DO UPDATE SET slack_user_id = excluded.slack_user_id\n        RETURNING person_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "person_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "33cca316d305024fd1a17dc93b0f886e14f80c24e913d92cb75ec211a1bbf9b4"
+}

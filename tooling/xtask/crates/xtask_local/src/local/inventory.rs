@@ -302,6 +302,18 @@ pub const RUST_SERVICES: &[RustService] = &[
         modes: &[Mode::Local],
         opt_in: false,
     },
+    RustService {
+        compose_name: "slack_session_service",
+        cargo_bin: "slack_session_service",
+        package: "slack_session_service",
+        // Nothing calls it: it only dials out (Slack, Postgres, KMS).
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        // Local-only, like the WhatsApp session service.
+        modes: &[Mode::Local],
+        opt_in: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

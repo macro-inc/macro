@@ -14,10 +14,10 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "ti
 tokio-util = { workspace = true, features = ["rt"] }
 uuid = { workspace = true }
 whatsapp_fake_server = { path = "../whatsapp_fake_server" }
-external_chat = { path = "../external_chat", features = ["outbound"] }
+external_chat = { path = "../external_chat", features = ["outbound", "test-support"] }
 whatsapp_linked = { path = "../whatsapp_linked", features = ["outbound"] }
 whatsapp_session_service = { path = "../../services/whatsapp_session_service" }
-whatsapp_store_pg = { path = "../whatsapp_store_pg", features = ["fake-kms"] }
+kms_envelope = { path = "../kms_envelope", features = ["fake"] }
 whatsmeow = { path = "../whatsmeow" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }

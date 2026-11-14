@@ -88,10 +88,11 @@ describe('sending to an external chat', () => {
     expect(state.notify).toHaveBeenCalledWith(
       "Your WhatsApp can't send to this chat."
     );
-    expect(state.restore).toHaveBeenCalledWith(draft, {
-      kind: 'reply',
-      message: messages[0],
-    });
+    expect(state.restore).toHaveBeenCalledWith(
+      draft,
+      { kind: 'reply', message: messages[0] },
+      undefined
+    );
     state.dispose();
   });
 
@@ -119,7 +120,7 @@ describe('sending to an external chat', () => {
     expect(state.notify).toHaveBeenCalledWith(
       "Couldn't reach WhatsApp. Check your connection and try again."
     );
-    expect(state.restore).toHaveBeenCalledWith(draft, undefined);
+    expect(state.restore).toHaveBeenCalledWith(draft, undefined, undefined);
     expect(state.conversation.rows().some((row) => row.pending)).toBe(false);
     state.fake.capabilities.send.mockResolvedValue(
       ok({ id: 'send-1', state: 'pending' })
@@ -143,8 +144,69 @@ describe('sending to an external chat', () => {
     expect(state.notify).toHaveBeenCalledWith(
       "WhatsApp wasn't reachable for 10 minutes, so this wasn't sent."
     );
-    expect(state.restore).toHaveBeenCalledWith(draft, undefined);
+    expect(state.restore).toHaveBeenCalledWith(draft, undefined, undefined);
     expect(state.conversation.rows().some((row) => row.pending)).toBe(false);
+    state.dispose();
+  });
+
+  it('replies in a thread off the timeline, and drops the row once accepted', async () => {
+    const state = mountConversation(
+      createFakeChat({
+        chat: { ...chat, limits: { ...chat.limits, threads: true } },
+      })
+    );
+    state.conversation.reply(messages[1]);
+    const delivery = state.conversation.submit(
+      { markdown: 'In the thread', attachments: [] },
+      'message-1'
+    );
+    expect(delivery.isOk()).toBe(true);
+    expect(state.conversation.rows().some((row) => row.pending)).toBe(false);
+    expect(state.conversation.threadPending('message-1')).toMatchObject([
+      { body: 'In the thread', pending: true, threadRoot: 'message-1' },
+    ]);
+    expect(state.conversation.target()?.message.id).toBe('message-2');
+    await delivery._unsafeUnwrap();
+    const key = state.fake.capabilities.send.mock.calls[0]?.[1];
+    expect(state.fake.capabilities.send).toHaveBeenCalledWith(
+      {
+        kind: 'text',
+        text: 'In the thread',
+        mentions: [],
+        thread: 'message-1',
+      },
+      key
+    );
+    state.fake.setDelivery([
+      { id: `send-${key}`, state: 'accepted', messageId: 'message-9' },
+    ]);
+    expect(state.conversation.threadPending('message-1')).toEqual([]);
+    state.dispose();
+  });
+
+  it('gives a refused thread reply back to its thread', async () => {
+    const state = mountConversation(
+      createFakeChat({
+        chat: { ...chat, limits: { ...chat.limits, threads: true } },
+      })
+    );
+    state.fake.capabilities.send.mockResolvedValueOnce(
+      err({ kind: 'refused', reason: 'Not now.' })
+    );
+    const draft = { markdown: 'Hello', attachments: [] };
+    await state.conversation.submit(draft, 'message-1')._unsafeUnwrap();
+    expect(state.restore).toHaveBeenCalledWith(draft, undefined, 'message-1');
+    state.dispose();
+  });
+
+  it('refuses a thread reply where the provider has no threads', () => {
+    const state = mountConversation();
+    const delivery = state.conversation.submit(
+      { markdown: 'Hello', attachments: [] },
+      'message-1'
+    );
+    expect(delivery._unsafeUnwrapErr()).toBe('WhatsApp has no threads.');
+    expect(state.fake.capabilities.send).not.toHaveBeenCalled();
     state.dispose();
   });
 
@@ -249,6 +311,33 @@ describe('sending to an external chat', () => {
     await state.conversation.react(messages[0], '🎉');
     expect(state.notify).toHaveBeenCalledWith(
       "Your WhatsApp can't send to this chat."
+    );
+    state.dispose();
+  });
+
+  it('adds and removes one emoji at a time where a person may hold several', async () => {
+    const state = mountConversation(
+      createFakeChat({
+        chat: {
+          ...chat,
+          limits: {
+            ...chat.limits,
+            mutations: ['reaction', 'remove_reaction', 'edit', 'delete'],
+          },
+        },
+      })
+    );
+    // 👍 is the viewer's: clicking it removes only that one.
+    await state.conversation.react(messages[0], '👍');
+    expect(state.fake.capabilities.send).toHaveBeenLastCalledWith(
+      { kind: 'unreact', messageId: 'message-1', emoji: '👍' },
+      expect.any(String)
+    );
+    // A new emoji is added beside it, not instead of it.
+    await state.conversation.react(messages[0], '🎉');
+    expect(state.fake.capabilities.send).toHaveBeenLastCalledWith(
+      { kind: 'reaction', messageId: 'message-1', emoji: '🎉' },
+      expect.any(String)
     );
     state.dispose();
   });

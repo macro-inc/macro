@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_chat_membership (chat_id, account_id, generation, consent_at, observed_at)\n                VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())\n                ON CONFLICT (chat_id, account_id) DO UPDATE SET generation = excluded.generation,\n                    consent_at = CASE WHEN slack_chat_membership.consent_ended_at IS NULL\n                        THEN slack_chat_membership.consent_at ELSE excluded.consent_at END,\n                    consent_ended_at = NULL, remote_member = true, can_post = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c2a77e99ac049b21f557e56565a71bdca8ac2409f4a2cf22b3b38855ba5ff1a"
+}

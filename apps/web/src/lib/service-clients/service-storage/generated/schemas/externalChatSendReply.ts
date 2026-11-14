@@ -6,9 +6,10 @@
  */
 import type { ExternalChatReplyContent } from './externalChatReplyContent';
 import type { ExternalChatSendReplyReplyTo } from './externalChatSendReplyReplyTo';
+import type { ExternalChatSendReplyThread } from './externalChatSendReplyThread';
 
 /**
- * Explicit send action from a person. Only deliberate sends reach WhatsApp.
+ * Explicit send action from a person. Only deliberate sends reach the provider.
  */
 export interface ExternalChatSendReply {
   /** Stable client intent key. A changed payload with this key is a conflict. */
@@ -17,4 +18,7 @@ export interface ExternalChatSendReply {
   message: ExternalChatReplyContent;
   /** Message being quoted, within this chat. */
   replyTo?: ExternalChatSendReplyReplyTo;
+  /** Reply in the thread this message starts, where the provider has
+threads ([`Capabilities::threads`]). */
+  thread?: ExternalChatSendReplyThread;
 }

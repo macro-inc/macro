@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM external_chat_reaction WHERE message_id = $1 AND person_id = $2\n                AND (revision,updated_at,source_id) >= ($3,$4,$5)) AS \"superseded!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "superseded!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a17ea6fe354250b20b044c332c37d290ef044b51a371e676daa68d45f331b1e5"
+}

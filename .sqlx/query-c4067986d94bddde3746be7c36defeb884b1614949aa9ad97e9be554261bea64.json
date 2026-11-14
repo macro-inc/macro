@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_send SET state = 'failed', error_code = 'send_expired', updated_at = now()\n        WHERE account_id = $1 AND state = 'pending' AND created_at <= clock_timestamp() - make_interval(secs => $2)\n        RETURNING chat_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c4067986d94bddde3746be7c36defeb884b1614949aa9ad97e9be554261bea64"
+}

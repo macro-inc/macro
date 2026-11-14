@@ -75,7 +75,10 @@ export type ChatDetail = {
     attachmentBytes: number;
     attachmentTypes: string[];
     editSeconds: number;
-    mutations: ('reaction' | 'edit' | 'delete')[];
+    /** `remove_reaction`: a person may hold several reactions, removed one by one. */
+    mutations: ('reaction' | 'remove_reaction' | 'edit' | 'delete')[];
+    /** Messages start threads and sends can reply in one. */
+    threads: boolean;
   };
 };
 export type ChatMessage = {
@@ -95,18 +98,46 @@ export type ChatMessage = {
   edited: boolean;
   deleted: boolean;
   replyTo?: string;
+  /** The thread this message replies in. */
+  threadRoot?: string;
+  /** Replies to this message, when it starts a thread. */
+  thread?: ThreadSummary;
   /** Reactors earliest first; `mine` when the viewer is one of them. */
   reactions: { emoji: string; reactors: Person[]; mine: boolean }[];
   attachments: InboundAttachment[];
   /** Sent from this page and not yet in WhatsApp; never openable. */
   pending?: boolean;
 };
+/** A thread's replies, as its root shows them. */
+export type ThreadSummary = {
+  replyCount: number;
+  lastReplyAt: string;
+  /** The viewer has replies they haven't read. */
+  unread: boolean;
+};
 export type MessagePage = { messages: ChatMessage[]; before?: string };
 export type ChatSend =
-  /** `mentions`: participant ids; the text names each as `@<digits>`. */
-  | { kind: 'text'; text: string; replyTo?: string; mentions?: string[] }
-  | { kind: 'media'; uploadId: string; caption?: string; replyTo?: string }
+  /**
+   * `mentions`: participant ids; the text names each as `@<digits>`.
+   * `thread`: the root of the thread it replies in.
+   */
+  | {
+      kind: 'text';
+      text: string;
+      replyTo?: string;
+      mentions?: string[];
+      thread?: string;
+    }
+  | {
+      kind: 'media';
+      uploadId: string;
+      caption?: string;
+      replyTo?: string;
+      thread?: string;
+    }
   | { kind: 'reaction'; messageId: string; emoji: string }
+  /** Removes one of the viewer's reactions where they may hold several. */
+  | { kind: 'unreact'; messageId: string; emoji: string }
   | { kind: 'edit'; messageId: string; text: string }
   | { kind: 'delete'; messageId: string };
 
@@ -153,16 +184,14 @@ export function composerNote(
   /** Who owns the chat, for "Only Ana can reply in this chat". */
   ownerName = 'its owner'
 ): string {
-  const { label } = chatProvider(chat.provider);
+  const { label, disconnected } = chatProvider(chat.provider);
   if (chat.canSend)
     return chat.phone
       ? `Sending as ${chat.phone}`
       : `Sending from your ${label}`;
   return match(chat.sendReason)
-    .with(
-      P.union('no_account', 'disconnected'),
-      () => `Connect your ${label} to reply`
-    )
+    .with('no_account', () => `Connect your ${label} to reply`)
+    .with('disconnected', () => disconnected.note)
     .with('not_added', () =>
       chat.kind === 'direct'
         ? `Only ${ownerName} can reply in this chat`

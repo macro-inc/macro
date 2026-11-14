@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_team (team_id, name, domain, icon_url) VALUES ($1, $2, $3, $4)\n                ON CONFLICT (team_id) DO UPDATE SET name = excluded.name, domain = excluded.domain,\n                    icon_url = excluded.icon_url, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e63a28212476319eca49accfe7c9df1fcb267588cd876107d8ed823a10494773"
+}

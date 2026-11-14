@@ -11,6 +11,6 @@
 export interface ExternalChatReference {
   /** External chat entity id. */
   id: string;
-  /** Display name, following WhatsApp. */
+  /** Display name, following the provider. */
   name: string;
 }

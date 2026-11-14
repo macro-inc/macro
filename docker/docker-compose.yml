@@ -389,6 +389,33 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # slack_session_service
+  # Personal Slack sessions for Slack Connect chats: sign-ins and one
+  # outbound websocket per account, leased through Postgres advisory locks.
+  # Nothing calls it, so no host port and no proxy route. OVERRIDE_SLACK_*
+  # stay unset: those are for tests against the fake server.
+  # ============================================================================
+  slack_session_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/slack_session_service"]
+    restart: on-failure
+    # Drain releases accounts in batches before exiting, as on ECS.
+    stop_grace_period: 120s
+    depends_on:
+      - postgres
+    networks:
+      databases:
+      services:
+        aliases:
+          - slack-session-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   static_file_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/static_file_service"]

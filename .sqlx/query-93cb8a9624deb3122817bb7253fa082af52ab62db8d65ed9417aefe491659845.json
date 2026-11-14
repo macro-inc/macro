@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_chat_membership SET latest_ts = GREATEST(COALESCE(latest_ts, $3), $3), observed_at = now()\n                WHERE chat_id = $1 AND account_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93cb8a9624deb3122817bb7253fa082af52ab62db8d65ed9417aefe491659845"
+}

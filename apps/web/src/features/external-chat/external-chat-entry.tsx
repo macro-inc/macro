@@ -1,10 +1,9 @@
 import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate } from '@app/lib/split-router';
 import { homeSplitRoute } from '@app/routes/routes';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
-import { enableWhatsappLinked } from '@core/constant/featureFlags';
 import { type JSX, lazy, onMount, Show, Suspense } from 'solid-js';
+import { useEnabledProviders } from '../external-view/provider-flags';
 import { ExternalChatHeader } from './components/chat-header';
 
 const Chat = lazy(async () => ({
@@ -38,13 +37,13 @@ export function ExternalChatEntry(props: {
   chatId: string;
   leading?: JSX.Element;
 }) {
-  const flag = useFeatureFlag(enableWhatsappLinked);
+  const enabled = useEnabledProviders();
   return (
     <Show
-      when={flag().enabled}
+      when={enabled().providers.length > 0}
       fallback={
         <Show
-          when={!flag().loading}
+          when={!enabled().loading}
           fallback={<ExternalChatSkeleton leading={props.leading} />}
         >
           <DisabledChat />

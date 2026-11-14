@@ -1198,7 +1198,7 @@ export const listTypedNotificationsResponse = zod
                               'Stable message id; retries use it as their notification id.'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -1209,6 +1209,37 @@ export const listTypedNotificationsResponse = zod
                       tag: zod.enum(['external_chat_message']),
                     })
                     .describe('A live message in a shared external chat.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          accountId: zod
+                            .uuid()
+                            .describe('The provider account.'),
+                          accountName: zod
+                            .string()
+                            .describe(
+                              'What the account is called (a workspace or phone number).'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp', 'slack'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                          reason: zod
+                            .enum(['session_ended', 'restricted', 'unreadable'])
+                            .describe(
+                              "Why a provider stopped a person's linked external chat account."
+                            ),
+                        })
+                        .describe(
+                          "A person's linked external chat account stopped syncing; they must sign\nin again. Sent once per consent generation, to the account's owner."
+                        ),
+                      tag: zod.enum(['external_chat_account_ended']),
+                    })
+                    .describe(
+                      'A linked external chat account stopped syncing.'
+                    ),
                   zod
                     .object({
                       content: zod
@@ -3484,7 +3515,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               'Stable message id; retries use it as their notification id.'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -3495,6 +3526,37 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                       tag: zod.enum(['external_chat_message']),
                     })
                     .describe('A live message in a shared external chat.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          accountId: zod
+                            .uuid()
+                            .describe('The provider account.'),
+                          accountName: zod
+                            .string()
+                            .describe(
+                              'What the account is called (a workspace or phone number).'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp', 'slack'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                          reason: zod
+                            .enum(['session_ended', 'restricted', 'unreadable'])
+                            .describe(
+                              "Why a provider stopped a person's linked external chat account."
+                            ),
+                        })
+                        .describe(
+                          "A person's linked external chat account stopped syncing; they must sign\nin again. Sent once per consent generation, to the account's owner."
+                        ),
+                      tag: zod.enum(['external_chat_account_ended']),
+                    })
+                    .describe(
+                      'A linked external chat account stopped syncing.'
+                    ),
                   zod
                     .object({
                       content: zod
@@ -5720,7 +5782,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               'Stable message id; retries use it as their notification id.'
                             ),
                           provider: zod
-                            .enum(['whatsapp'])
+                            .enum(['whatsapp', 'slack'])
                             .describe(
                               'The messaging service an external chat lives in.'
                             ),
@@ -5731,6 +5793,37 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                       tag: zod.enum(['external_chat_message']),
                     })
                     .describe('A live message in a shared external chat.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          accountId: zod
+                            .uuid()
+                            .describe('The provider account.'),
+                          accountName: zod
+                            .string()
+                            .describe(
+                              'What the account is called (a workspace or phone number).'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp', 'slack'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                          reason: zod
+                            .enum(['session_ended', 'restricted', 'unreadable'])
+                            .describe(
+                              "Why a provider stopped a person's linked external chat account."
+                            ),
+                        })
+                        .describe(
+                          "A person's linked external chat account stopped syncing; they must sign\nin again. Sent once per consent generation, to the account's owner."
+                        ),
+                      tag: zod.enum(['external_chat_account_ended']),
+                    })
+                    .describe(
+                      'A linked external chat account stopped syncing.'
+                    ),
                   zod
                     .object({
                       content: zod
@@ -7881,7 +7974,7 @@ export const getTypedNotificationByIdResponse = zod
                       'Stable message id; retries use it as their notification id.'
                     ),
                   provider: zod
-                    .enum(['whatsapp'])
+                    .enum(['whatsapp', 'slack'])
                     .describe(
                       'The messaging service an external chat lives in.'
                     ),
@@ -7892,6 +7985,33 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['external_chat_message']),
             })
             .describe('A live message in a shared external chat.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  accountId: zod.uuid().describe('The provider account.'),
+                  accountName: zod
+                    .string()
+                    .describe(
+                      'What the account is called (a workspace or phone number).'
+                    ),
+                  provider: zod
+                    .enum(['whatsapp', 'slack'])
+                    .describe(
+                      'The messaging service an external chat lives in.'
+                    ),
+                  reason: zod
+                    .enum(['session_ended', 'restricted', 'unreadable'])
+                    .describe(
+                      "Why a provider stopped a person's linked external chat account."
+                    ),
+                })
+                .describe(
+                  "A person's linked external chat account stopped syncing; they must sign\nin again. Sent once per consent generation, to the account's owner."
+                ),
+              tag: zod.enum(['external_chat_account_ended']),
+            })
+            .describe('A linked external chat account stopped syncing.'),
           zod
             .object({
               content: zod

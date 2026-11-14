@@ -1,0 +1,46 @@
+[package]
+default-run = "slack_session_service"
+edition = "2024"
+name = "slack_session_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "slack_session_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "slack_session_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+aws-sdk-kms = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+external_chat = { path = "../../crates/external_chat", features = ["outbound"] }
+kms_envelope = { path = "../../crates/kms_envelope" }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+rootcause = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+session_fleet = { path = "../../crates/session_fleet" }
+slack_client = { path = "../../crates/slack_client" }
+slack_linked = { path = "../../crates/slack_linked", features = ["outbound"] }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+kms_envelope = { path = "../../crates/kms_envelope", features = ["fake"] }

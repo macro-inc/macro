@@ -1,7 +1,7 @@
 //! Typed GraphQL output models for realtime notification event metadata.
 
 mod external_chat;
-use external_chat::GraphqlExternalChatMessageMetadata;
+use external_chat::{GraphqlExternalChatAccountEndedMetadata, GraphqlExternalChatMessageMetadata};
 
 /// Schema-only stub for released clients; remove after 2026-11-30.
 mod whatsapp_group_stub;
@@ -1440,6 +1440,8 @@ impl GraphqlAgentSessionMentionedMetadata {
 pub enum GraphqlNotifEvent {
     /// A new live external chat message.
     ExternalChatMessage(GraphqlExternalChatMessageMetadata),
+    /// A linked external chat account stopped syncing.
+    ExternalChatAccountEnded(GraphqlExternalChatAccountEndedMetadata),
     /// Shared access workflow.
     EntityAccessGranted(GraphqlEntityAccessGrantedMetadata),
     /// Shared access workflow.
@@ -1519,6 +1521,9 @@ pub enum GraphqlNotifEvent {
 impl From<NotifEvent> for GraphqlNotifEvent {
     fn from(value: NotifEvent) -> Self {
         match value {
+            NotifEvent::ExternalChatAccountEnded(metadata) => {
+                Self::ExternalChatAccountEnded(GraphqlExternalChatAccountEndedMetadata(metadata))
+            }
             NotifEvent::ExternalChatMessage(metadata) => {
                 Self::ExternalChatMessage(GraphqlExternalChatMessageMetadata(metadata))
             }

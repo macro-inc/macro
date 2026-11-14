@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source_at, thread_root, thread_broadcast FROM external_chat_message WHERE id = $1 AND chat_id = $2 AND message_id IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_root",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_broadcast",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "e1ebf98385487eea98d4dd8bcba67e6dbca2dbff51e8cf6c39bb8a18a336d8d8"
+}

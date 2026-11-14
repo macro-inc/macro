@@ -39913,7 +39913,7 @@ export const externalChatsResponseItem = zod
         "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
       ),
     provider: zod
-      .enum(['whatsapp'])
+      .enum(['whatsapp', 'slack'])
       .describe('The messaging service an external chat lives in.'),
     sendReason: zod
       .union([
@@ -39948,7 +39948,7 @@ export const externalChatAddBody = zod
       .enum(['group', 'direct'])
       .describe('Whether an external chat is a group or a one-to-one chat.'),
     provider: zod
-      .enum(['whatsapp'])
+      .enum(['whatsapp', 'slack'])
       .describe('The messaging service an external chat lives in.'),
     remoteId: zod
       .string()
@@ -40047,7 +40047,7 @@ export const externalChatResponse = zod
         "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
       ),
     provider: zod
-      .enum(['whatsapp'])
+      .enum(['whatsapp', 'slack'])
       .describe('The messaging service an external chat lives in.'),
     sendReason: zod
       .union([
@@ -40103,7 +40103,7 @@ export const externalChatResponse = zod
           mutations: zod
             .array(
               zod
-                .enum(['reaction', 'edit', 'delete'])
+                .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                 .describe('Deliberate operations on an existing message.')
             )
             .describe('Supported message operations.'),
@@ -40111,6 +40111,11 @@ export const externalChatResponse = zod
             .number()
             .min(externalChatResponseLimitsTextLimitBytesMin)
             .describe('Maximum UTF-8 bytes per text send.'),
+          threads: zod
+            .boolean()
+            .describe(
+              'Messages can start threads, and sends can reply in one.'
+            ),
         })
         .describe(
           'Operations implemented for a chat, independent of current permission.'
@@ -40318,7 +40323,7 @@ export const externalChatDeliveryResponseItem = zod
                     'Existing message, resolved to its provider source by the server.'
                   ),
                 operation: zod
-                  .enum(['reaction', 'edit', 'delete'])
+                  .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                   .describe('Deliberate operations on an existing message.'),
                 text: zod
                   .string()
@@ -40335,9 +40340,15 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        thread: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+          ),
       })
       .describe(
-        'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+        'Explicit send action from a person. Only deliberate sends reach the provider.'
       ),
     state: zod
       .enum(['pending', 'sending', 'unknown', 'accepted', 'failed'])
@@ -40352,13 +40363,19 @@ export const externalChatDeliveryResponse = zod.array(
 );
 
 /**
- * @summary Newest-first timeline through ordinary view access.
+ * @summary Newest-first timeline, or one thread's replies, through ordinary view access.
  */
 export const externalChatMessagesParams = zod.object({
   chat_id: zod.uuid(),
 });
 
 export const externalChatMessagesQueryParams = zod.object({
+  thread: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'The replies in the thread this message starts, instead of the chat.'
+    ),
   before: zod
     .uuid()
     .nullish()
@@ -40380,6 +40397,8 @@ export const externalChatMessagesResponseMessagesItemAttachmentsItemWidthMin = 0
 export const externalChatMessagesResponseMessagesItemRichSelectableCountMin = 0;
 
 export const externalChatMessagesResponseMessagesItemRichCallDurationSecondsMin = 0;
+
+export const externalChatMessagesResponseMessagesItemThreadReplyCountMin = 0;
 
 export const externalChatMessagesResponse = zod
   .object({
@@ -40847,6 +40866,38 @@ export const externalChatMessagesResponse = zod
             sentAt: zod.iso
               .datetime({})
               .describe('Timestamp assigned by the provider.'),
+            thread: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    lastReplyAt: zod.iso
+                      .datetime({})
+                      .describe('When the newest reply was sent.'),
+                    replyCount: zod
+                      .number()
+                      .min(
+                        externalChatMessagesResponseMessagesItemThreadReplyCountMin
+                      )
+                      .describe(
+                        'Replies in the thread, deleted ones excluded.'
+                      ),
+                    unread: zod
+                      .boolean()
+                      .describe('The viewer has replies they have not read.'),
+                  })
+                  .describe(
+                    'The replies in a thread, as its root message shows them.'
+                  ),
+              ])
+              .optional(),
+            threadBroadcast: zod
+              .boolean()
+              .describe('A thread reply that was also sent to the chat.'),
+            threadRoot: zod
+              .uuid()
+              .nullish()
+              .describe('The thread this message replies in.'),
             viewOnce: zod
               .boolean()
               .describe('Sent as view-once; Macro shows it like any media.'),
@@ -40965,6 +41016,8 @@ export const externalChatMessageResponseAttachmentsItemWidthMin = 0;
 export const externalChatMessageResponseRichSelectableCountMin = 0;
 
 export const externalChatMessageResponseRichCallDurationSecondsMin = 0;
+
+export const externalChatMessageResponseThreadReplyCountMin = 0;
 
 export const externalChatMessageResponse = zod
   .object({
@@ -41373,6 +41426,32 @@ export const externalChatMessageResponse = zod
     sentAt: zod.iso
       .datetime({})
       .describe('Timestamp assigned by the provider.'),
+    thread: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            lastReplyAt: zod.iso
+              .datetime({})
+              .describe('When the newest reply was sent.'),
+            replyCount: zod
+              .number()
+              .min(externalChatMessageResponseThreadReplyCountMin)
+              .describe('Replies in the thread, deleted ones excluded.'),
+            unread: zod
+              .boolean()
+              .describe('The viewer has replies they have not read.'),
+          })
+          .describe('The replies in a thread, as its root message shows them.'),
+      ])
+      .optional(),
+    threadBroadcast: zod
+      .boolean()
+      .describe('A thread reply that was also sent to the chat.'),
+    threadRoot: zod
+      .uuid()
+      .nullish()
+      .describe('The thread this message replies in.'),
     viewOnce: zod
       .boolean()
       .describe('Sent as view-once; Macro shows it like any media.'),
@@ -41488,7 +41567,11 @@ export const externalChatReadParams = zod.object({
 
 export const externalChatReadBody = zod
   .object({
-    messageId: zod.uuid().describe('Message in the addressed group.'),
+    messageId: zod
+      .uuid()
+      .describe(
+        'Message in the addressed chat; a thread reply marks its thread read.'
+      ),
   })
   .describe('Mark messages through this message read.');
 
@@ -41554,7 +41637,7 @@ export const externalChatSendsResponseItem = zod
                     'Existing message, resolved to its provider source by the server.'
                   ),
                 operation: zod
-                  .enum(['reaction', 'edit', 'delete'])
+                  .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                   .describe('Deliberate operations on an existing message.'),
                 text: zod
                   .string()
@@ -41571,9 +41654,15 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        thread: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+          ),
       })
       .describe(
-        'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+        'Explicit send action from a person. Only deliberate sends reach the provider.'
       ),
     state: zod
       .enum(['pending', 'sending', 'unknown', 'accepted', 'failed'])
@@ -41639,7 +41728,7 @@ export const externalChatSendBody = zod
                 'Existing message, resolved to its provider source by the server.'
               ),
             operation: zod
-              .enum(['reaction', 'edit', 'delete'])
+              .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
               .describe('Deliberate operations on an existing message.'),
             text: zod
               .string()
@@ -41656,9 +41745,15 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    thread: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+      ),
   })
   .describe(
-    'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+    'Explicit send action from a person. Only deliberate sends reach the provider.'
   );
 
 export const externalChatSendResponse = zod
@@ -41716,7 +41811,7 @@ export const externalChatSendResponse = zod
                     'Existing message, resolved to its provider source by the server.'
                   ),
                 operation: zod
-                  .enum(['reaction', 'edit', 'delete'])
+                  .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                   .describe('Deliberate operations on an existing message.'),
                 text: zod
                   .string()
@@ -41733,9 +41828,15 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        thread: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+          ),
       })
       .describe(
-        'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+        'Explicit send action from a person. Only deliberate sends reach the provider.'
       ),
     state: zod
       .enum(['pending', 'sending', 'unknown', 'accepted', 'failed'])
@@ -81388,6 +81489,2467 @@ export const patchViewHandlerBody = zod.object({
 });
 
 /**
+ * @summary The caller's accounts.
+ */
+export const slackLinkedAccountsResponse = zod
+  .object({
+    accounts: zod
+      .array(
+        zod
+          .object({
+            authorizationGeneration: zod
+              .number()
+              .describe(
+                'Consent generation; reconnecting the websocket never changes it.'
+              ),
+            displayName: zod
+              .string()
+              .nullish()
+              .describe(
+                "The person's Slack display name, once the first boot ran."
+              ),
+            endedReason: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'revoked',
+                    'expired',
+                    'account_inactive',
+                    'team_disabled',
+                    'removed_from_team',
+                    'enterprise_restricted',
+                    'unreadable',
+                  ])
+                  .describe('Why Slack ended a session.'),
+              ])
+              .optional(),
+            enterpriseId: zod
+              .string()
+              .nullish()
+              .describe(
+                'Enterprise Grid org, whose admins can see the session.'
+              ),
+            id: zod.uuid().describe('Stable account id.'),
+            lastConnectedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the websocket last connected.'),
+            slackUserId: zod
+              .string()
+              .nullish()
+              .describe("The person's Slack user id, once the first boot ran."),
+            state: zod
+              .enum(['connecting', 'connected', 'logged_out', 'disconnected'])
+              .describe(
+                'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+              ),
+            teamDomain: zod
+              .string()
+              .describe('Workspace subdomain (`acme` of `acme.slack.com`).'),
+            teamIconUrl: zod.string().nullish().describe('Workspace icon.'),
+            teamId: zod.string().describe('The workspace.'),
+            teamName: zod.string().describe('Workspace name.'),
+          })
+          .describe("A person's Slack session in one workspace.")
+      )
+      .describe('Oldest first.'),
+  })
+  .describe("The caller's Slack accounts, in any state.");
+
+/**
+ * @summary End one account's consent.
+ */
+export const slackLinkedDisconnectParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedDisconnectBody = zod
+  .object({
+    authorizationGeneration: zod
+      .number()
+      .describe('Fences retries against a later sign-in.'),
+    signOut: zod
+      .boolean()
+      .optional()
+      .describe('Also sign the session out at Slack.'),
+  })
+  .describe('The consent generation the owner deliberately ends.');
+
+export const slackLinkedDisconnectResponse = zod
+  .object({
+    disconnected: zod
+      .boolean()
+      .describe("The account was connected at that generation and now isn't."),
+  })
+  .describe('Result of disconnecting.');
+
+/**
+ * @summary Import another page of a chat's earlier messages.
+ */
+export const slackLinkedImportHistoryParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedImportHistoryResponse = zod
+  .object({
+    started: zod
+      .boolean()
+      .describe('Started importing another page of earlier messages.'),
+  })
+  .describe("Where a chat's history import is.");
+
+/**
+ * @summary The caller's Slack Connect conversations; asks for a refresh.
+ */
+export const slackLinkedConversationsResponseConversationsItemUnreadCountMin = 0;
+
+export const slackLinkedConversationsResponse = zod
+  .object({
+    conversations: zod
+      .array(
+        zod
+          .object({
+            accounts: zod
+              .array(zod.uuid())
+              .describe("The caller's account ids that see it."),
+            added: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    id: zod.uuid().describe('External chat entity id.'),
+                    name: zod
+                      .string()
+                      .describe('Display name, following the provider.'),
+                  })
+                  .describe('An external chat entity bound to a remote chat.'),
+              ])
+              .optional(),
+            canAdd: zod.boolean().describe('\"Add to Macro\" works now.'),
+            cannotAddReason: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['archived', 'frozen', 'not_member'])
+                  .describe("Why a catalogue conversation can't be added."),
+              ])
+              .optional(),
+            connectedTeams: zod
+              .array(
+                zod
+                  .object({
+                    domain: zod.string().nullish().describe('Its subdomain.'),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod
+                      .string()
+                      .describe('Its name; the id when Slack never told us.'),
+                    teamId: zod.string().describe('Its id.'),
+                  })
+                  .describe('A Slack team as the catalogue names it.')
+              )
+              .describe('The other organizations.'),
+            directPerson: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    avatarUrl: zod.string().nullish().describe('Their avatar.'),
+                    name: zod
+                      .string()
+                      .describe('Display name, else real name, else the id.'),
+                    slackUserId: zod.string().describe('Their id.'),
+                    team: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            domain: zod
+                              .string()
+                              .nullish()
+                              .describe('Its subdomain.'),
+                            iconUrl: zod
+                              .string()
+                              .nullish()
+                              .describe('Its icon.'),
+                            name: zod
+                              .string()
+                              .describe(
+                                'Its name; the id when Slack never told us.'
+                              ),
+                            teamId: zod.string().describe('Its id.'),
+                          })
+                          .describe('A Slack team as the catalogue names it.'),
+                      ])
+                      .optional(),
+                  })
+                  .describe('A Slack user as the catalogue names them.'),
+              ])
+              .optional(),
+            frozen: zod
+              .boolean()
+              .describe('Disconnected from the other organization: read-only.'),
+            isArchived: zod.boolean().describe('Archived in Slack.'),
+            isPrivate: zod.boolean().describe('A private channel.'),
+            kind: zod
+              .enum(['group', 'direct'])
+              .describe(
+                'Whether an external chat is a group or a one-to-one chat.'
+              ),
+            lastActivityAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Newest activity.'),
+            name: zod
+              .string()
+              .describe(
+                "`#name` for a channel; the other person's name for a DM."
+              ),
+            remoteId: zod
+              .string()
+              .describe(
+                'Slack\'s conversation id; `POST \/external-chats {provider: \"slack\",\nremoteId, kind}` adds it.'
+              ),
+            shared: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    id: zod.uuid().describe('External chat entity id.'),
+                    name: zod
+                      .string()
+                      .describe('Display name, following the provider.'),
+                    ownerId: zod
+                      .string()
+                      .describe('Macro user who added the chat and shared it.'),
+                  })
+                  .describe(
+                    "Another person's external chat entity the caller can view."
+                  ),
+              ])
+              .optional(),
+            topic: zod.string().nullish().describe('The channel topic.'),
+            unreadCount: zod
+              .number()
+              .min(
+                slackLinkedConversationsResponseConversationsItemUnreadCountMin
+              )
+              .describe('Unread messages in Slack.'),
+          })
+          .describe("One Slack Connect conversation of the caller's accounts.")
+      )
+      .describe('Newest activity first.'),
+    refreshing: zod
+      .boolean()
+      .describe('A refresh was requested; refetch on `external_chat_changed`.'),
+  })
+  .describe("The caller's Slack Connect catalogue.");
+
+/**
+ * @summary Start an email sign-in.
+ */
+export const slackLinkedStartLoginBody = zod
+  .object({
+    email: zod.string().describe("The Slack account's email address."),
+  })
+  .describe('Start an email sign-in.');
+
+export const slackLinkedStartLoginResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Sign in with a pasted or desktop-captured session.
+ */
+export const slackLinkedSubmitSessionBody = zod
+  .object({
+    cookie: zod.string().describe('The `d` cookie.'),
+    cookieDs: zod
+      .string()
+      .nullish()
+      .describe('The `d-s` cookie, when the client has it.'),
+    source: zod
+      .enum(['manual', 'desktop'])
+      .describe('How a sign-in attempt started.'),
+    tokens: zod
+      .array(
+        zod
+          .object({
+            teamId: zod
+              .string()
+              .nullish()
+              .describe(
+                'The workspace it belongs to, when the client knows it.'
+              ),
+            token: zod.string().describe('The `xoxc-` token.'),
+          })
+          .describe('One workspace token of a pasted or captured session.')
+      )
+      .describe('One token per workspace.'),
+  })
+  .describe(
+    'A pasted or captured session, as DSS receives it and seals it at once.'
+  );
+
+export const slackLinkedSubmitSessionResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Poll the caller's sign-in.
+ */
+export const slackLinkedLoginParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedLoginResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Cancel the caller's sign-in.
+ */
+export const slackLinkedCancelLoginParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedCancelLoginResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Answer the captcha step.
+ */
+export const slackLinkedLoginCaptchaParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedLoginCaptchaBody = zod
+  .object({
+    solution: zod.string().describe('What the captcha widget returned.'),
+  })
+  .describe("The captcha's solution.");
+
+export const slackLinkedLoginCaptchaResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Answer the emailed-code step.
+ */
+export const slackLinkedLoginCodeParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedLoginCodeBody = zod
+  .object({
+    code: zod.string().describe('The code.'),
+  })
+  .describe('A code Slack sent (email confirmation or two-factor).');
+
+export const slackLinkedLoginCodeResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Answer the two-factor step.
+ */
+export const slackLinkedLoginTwoFactorParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedLoginTwoFactorBody = zod
+  .object({
+    code: zod.string().describe('The code.'),
+  })
+  .describe('A code Slack sent (email confirmation or two-factor).');
+
+export const slackLinkedLoginTwoFactorResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
+ * @summary Choose the workspaces to sign in to.
+ */
+export const slackLinkedLoginWorkspacesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const slackLinkedLoginWorkspacesBody = zod
+  .object({
+    teamIds: zod.array(zod.string()).describe('Their team ids.'),
+  })
+  .describe('The workspaces to sign in to.');
+
+export const slackLinkedLoginWorkspacesResponse = zod
+  .object({
+    expiresAt: zod.iso.datetime({}).describe('When it stops taking input.'),
+    id: zod.uuid().describe('Poll `GET \/slack\/login\/{id}` with it.'),
+    step: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['working']),
+          })
+          .describe('A session replica is calling Slack; poll again.'),
+        zod
+          .object({
+            kind: zod.enum(['captcha']),
+            pageUrl: zod.string().describe('The page the captcha belongs to.'),
+            retry: zod
+              .boolean()
+              .describe('The previous solution was rejected.'),
+            siteKey: zod
+              .string()
+              .describe(
+                "The captcha's site key, for a client that can render it."
+              ),
+          })
+          .describe('Slack wants a captcha solved before it emails the code.'),
+        zod
+          .object({
+            email: zod.string().describe('Where it went.'),
+            kind: zod.enum(['email_code']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+          })
+          .describe('Slack emailed a confirmation code.'),
+        zod
+          .object({
+            kind: zod.enum(['pick_workspaces']),
+            workspaces: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe('Every workspace the email signs in to.'),
+          })
+          .describe('Pick the workspaces to connect.'),
+        zod
+          .object({
+            kind: zod.enum(['two_factor']),
+            retry: zod.boolean().describe('The previous code was wrong.'),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe('The workspace asks for a two-factor code.'),
+        zod
+          .object({
+            kind: zod.enum(['finish_on_desktop']),
+            signInUrl: zod.string().describe("Slack's sign-in page for it."),
+            team: zod
+              .object({
+                alreadyConnected: zod
+                  .boolean()
+                  .describe(
+                    'The caller already has a connected account for it.'
+                  ),
+                domain: zod.string().describe('Its subdomain.'),
+                enterpriseName: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Its Enterprise Grid org's name: the org's admins see the session."
+                  ),
+                iconUrl: zod.string().nullish().describe('Its icon.'),
+                name: zod.string().describe('Its name.'),
+                signIn: zod
+                  .enum(['ready', 'two_factor', 'sso'])
+                  .describe(
+                    "Whether a workspace can be signed in to from Macro's servers."
+                  ),
+                teamId: zod.string().describe('The workspace.'),
+              })
+              .describe('A workspace the email signs in to.'),
+          })
+          .describe(
+            'The workspace requires SSO, which only the desktop app can finish.'
+          ),
+        zod
+          .object({
+            accounts: zod
+              .array(
+                zod
+                  .object({
+                    authorizationGeneration: zod
+                      .number()
+                      .describe(
+                        'Consent generation; reconnecting the websocket never changes it.'
+                      ),
+                    displayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack display name, once the first boot ran."
+                      ),
+                    endedReason: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'revoked',
+                            'expired',
+                            'account_inactive',
+                            'team_disabled',
+                            'removed_from_team',
+                            'enterprise_restricted',
+                            'unreadable',
+                          ])
+                          .describe('Why Slack ended a session.'),
+                      ])
+                      .optional(),
+                    enterpriseId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Enterprise Grid org, whose admins can see the session.'
+                      ),
+                    id: zod.uuid().describe('Stable account id.'),
+                    lastConnectedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the websocket last connected.'),
+                    slackUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The person's Slack user id, once the first boot ran."
+                      ),
+                    state: zod
+                      .enum([
+                        'connecting',
+                        'connected',
+                        'logged_out',
+                        'disconnected',
+                      ])
+                      .describe(
+                        'Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.'
+                      ),
+                    teamDomain: zod
+                      .string()
+                      .describe(
+                        'Workspace subdomain (`acme` of `acme.slack.com`).'
+                      ),
+                    teamIconUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Workspace icon.'),
+                    teamId: zod.string().describe('The workspace.'),
+                    teamName: zod.string().describe('Workspace name.'),
+                  })
+                  .describe("A person's Slack session in one workspace.")
+              )
+              .describe('Accounts created or reconnected.'),
+            kind: zod.enum(['done']),
+            skipped: zod
+              .array(
+                zod
+                  .object({
+                    alreadyConnected: zod
+                      .boolean()
+                      .describe(
+                        'The caller already has a connected account for it.'
+                      ),
+                    domain: zod.string().describe('Its subdomain.'),
+                    enterpriseName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Its Enterprise Grid org's name: the org's admins see the session."
+                      ),
+                    iconUrl: zod.string().nullish().describe('Its icon.'),
+                    name: zod.string().describe('Its name.'),
+                    signIn: zod
+                      .enum(['ready', 'two_factor', 'sso'])
+                      .describe(
+                        "Whether a workspace can be signed in to from Macro's servers."
+                      ),
+                    teamId: zod.string().describe('The workspace.'),
+                  })
+                  .describe('A workspace the email signs in to.')
+              )
+              .describe(
+                'Chosen workspaces that need SSO and were not signed in.'
+              ),
+          })
+          .describe('Signed in.'),
+        zod
+          .object({
+            kind: zod.enum(['failed']),
+            reason: zod
+              .enum([
+                'invalid_email',
+                'no_workspaces',
+                'code_expired',
+                'rate_limited',
+                'two_factor_expired',
+                'invalid_session',
+                'expired',
+                'slack_unavailable',
+              ])
+              .describe('Why a sign-in attempt failed.'),
+          })
+          .describe('Failed; start again.'),
+        zod
+          .object({
+            kind: zod.enum(['cancelled']),
+          })
+          .describe('The person cancelled.'),
+      ])
+      .describe('Where a sign-in attempt is, and what the web shows for it.'),
+  })
+  .describe('A sign-in attempt, as `GET \/slack\/login\/{id}` returns it.');
+
+/**
  * @summary List this administrator's team receipts, effective server limits and source binding.
  */
 export const listSlackImportsQueryParams = zod.object({
@@ -84638,7 +87200,7 @@ export const whatsappChatsResponse = zod
                     id: zod.uuid().describe('External chat entity id.'),
                     name: zod
                       .string()
-                      .describe('Display name, following WhatsApp.'),
+                      .describe('Display name, following the provider.'),
                   })
                   .describe('An external chat entity bound to a remote chat.'),
               ])
@@ -84650,10 +87212,12 @@ export const whatsappChatsResponse = zod
                 zod.null(),
                 zod
                   .enum([
-                    'not_in_group',
+                    'not_member',
                     'community',
                     'own_chat',
                     'not_in_chat_list',
+                    'archived',
+                    'frozen',
                   ])
                   .describe(
                     "Why a chat can't be added to Macro; the app words it from the code."
@@ -84712,7 +87276,7 @@ export const whatsappChatsResponse = zod
                     id: zod.uuid().describe('External chat entity id.'),
                     name: zod
                       .string()
-                      .describe('Display name, following WhatsApp.'),
+                      .describe('Display name, following the provider.'),
                     ownerId: zod
                       .string()
                       .describe('Macro user who added the chat and shared it.'),

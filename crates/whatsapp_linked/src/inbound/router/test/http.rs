@@ -18,7 +18,7 @@ use entity_access::{
 use external_chat::{
     domain::{
         models::*,
-        ports::{ExternalChatResult, SendRateLimiter},
+        ports::{ChatProviders, ExternalChatResult, SendRateLimiter, UnconfiguredProvider},
         service::ExternalChatService,
     },
     inbound::router::{ExternalChatRouterState, external_chats_router},
@@ -258,7 +258,10 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
     let service = Arc::new(WhatsAppService::new(repository.clone()));
     let chats = Arc::new(ExternalChatService::new(
-        Arc::new(WhatsAppProvider::new(repository.clone())),
+        ChatProviders {
+            whatsapp: Arc::new(WhatsAppProvider::new(repository.clone())),
+            slack: Arc::new(UnconfiguredProvider),
+        },
         Arc::new(PgExternalChatRepository::new(pool.clone())),
         Arc::new(Unlimited),
     ));

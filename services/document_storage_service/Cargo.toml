@@ -64,6 +64,7 @@ anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = "7.0.17"
 aws-sdk-dynamodb = { workspace = true }
+aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sns = { workspace = true }
@@ -258,6 +259,8 @@ secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["inbound", "outbound"] }
+slack_linked = { path = "../../crates/slack_linked", features = ["inbound", "outbound"] }
+kms_envelope = { path = "../../crates/kms_envelope" }
 external_chat = { path = "../../crates/external_chat", features = ["inbound", "outbound"] }
 slack_integration = { path = "../../crates/slack_integration", features = [
   "gateway",

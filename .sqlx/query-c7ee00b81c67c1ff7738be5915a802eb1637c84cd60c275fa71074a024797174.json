@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.source_at, m.deleted_at, array_remove(array_agg(a.slack_user_id), NULL) AS \"sent_by!\"\n            FROM external_chat_message m\n            LEFT JOIN slack_user_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id\n            WHERE m.chat_id = $1 AND m.message_id = $2\n            GROUP BY m.source_at, m.deleted_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "sent_by!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "c7ee00b81c67c1ff7738be5915a802eb1637c84cd60c275fa71074a024797174"
+}

@@ -39,7 +39,7 @@ async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool:
             participants: vec![BOB_JID.to_owned()],
             value: None,
             call: None,
-            by_whatsapp: false,
+            by_provider: false,
         })),
         None,
     );
@@ -48,7 +48,12 @@ async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool:
 
     let messages = linked
         .chats
-        .messages(&receipt::<MessageView>(BOB, binding.id), None, Some(50))
+        .messages(
+            &receipt::<MessageView>(BOB, binding.id),
+            None,
+            None,
+            Some(50),
+        )
         .await
         .unwrap()
         .messages;
@@ -114,7 +119,7 @@ fn vote(event: u128, voter: &str, source: &str, revision: i64, selected: &[&str]
 async fn tallies(linked: &Linked, group: Uuid) -> Vec<ExternalChatPollOption> {
     let messages = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, group), None, Some(50))
+        .messages(&receipt::<MessageView>(ALICE, group), None, None, Some(50))
         .await
         .unwrap()
         .messages;
@@ -218,7 +223,12 @@ async fn a_re_imported_placeholder_gains_its_content_and_mentions_read_as_names(
 
     let messages = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
+        .messages(
+            &receipt::<MessageView>(ALICE, binding.id),
+            None,
+            None,
+            Some(50),
+        )
         .await
         .unwrap()
         .messages;
@@ -248,7 +258,7 @@ async fn a_change_whatsapp_made_without_naming_anyone_is_the_groups_own_line(poo
             participants: vec![],
             value: Some("Launch".to_owned()),
             call: None,
-            by_whatsapp: true,
+            by_provider: true,
         })),
         None,
     );
@@ -264,7 +274,12 @@ async fn a_change_whatsapp_made_without_naming_anyone_is_the_groups_own_line(poo
 
     let messages = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
+        .messages(
+            &receipt::<MessageView>(ALICE, binding.id),
+            None,
+            None,
+            Some(50),
+        )
         .await
         .unwrap()
         .messages;

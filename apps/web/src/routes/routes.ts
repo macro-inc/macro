@@ -68,6 +68,7 @@ import {
   settingsTabToSlug,
 } from '@core/constant/settingsTabsConfig';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { z } from 'zod';
 import { APP_ROUTE_ID, NOT_FOUND_ROUTE_ID } from './app-route';
 
@@ -749,13 +750,16 @@ export const externalChatRoute = defineRoute({
   claim: ({ chatId }) => ({ namespace: 'external-chat', id: chatId }),
 });
 
-/** External: outside messaging accounts (WhatsApp) linked into Macro. */
+/** External: outside messaging accounts (WhatsApp, Slack) linked into Macro. */
 export const externalRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'view-external',
   path: 'external',
-  // A WhatsApp pairing handed off to Macro desktop, by id only.
-  externalSearch: ['whatsappPairing'],
+  // A WhatsApp pairing or Slack sign-in handed off to Macro desktop, by id
+  // only (`slackLogin=browser` opens Slack's own sign-in).
+  externalSearch: ['whatsappPairing', 'slackLogin'],
+  // The provider whose page to show, e.g. from an account notification.
+  state: z.object({ provider: z.enum(ExternalChatProvider) }),
 });
 
 export const bookingLinksRoute = defineRoute({

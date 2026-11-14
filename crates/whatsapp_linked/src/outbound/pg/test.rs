@@ -11,7 +11,10 @@ use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use external_chat::domain::{
-    ports::{ChatEffect, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
+    ports::{
+        ChatEffect, ChatProviders, ChatPublisher, EffectsRepository, Origin, SendRateLimiter,
+        UnconfiguredProvider,
+    },
     service::ExternalChatService,
     timeline::TimelineRepository,
 };
@@ -28,6 +31,7 @@ mod pairing;
 mod picture_reads;
 mod pictures;
 mod rich;
+mod threads;
 mod timeline;
 
 const GROUP: &str = "120363000000000001@g.us";
@@ -49,7 +53,7 @@ struct Allow;
 /// external chats with WhatsApp as their provider.
 struct Linked {
     whatsapp: WhatsAppService,
-    chats: ExternalChatService<WhatsAppProvider>,
+    chats: ExternalChatService,
     /// The external chat tables.
     store: Arc<PgExternalChatRepository>,
 }
@@ -61,7 +65,10 @@ fn services(pool: &PgPool) -> (Linked, SessionService, Arc<PgWhatsAppRepository>
         Linked {
             whatsapp: WhatsAppService::new(repository.clone()),
             chats: ExternalChatService::new(
-                Arc::new(WhatsAppProvider::new(repository.clone())),
+                ChatProviders {
+                    whatsapp: Arc::new(WhatsAppProvider::new(repository.clone())),
+                    slack: Arc::new(UnconfiguredProvider),
+                },
                 store.clone(),
                 Arc::new(Allow),
             ),
@@ -579,7 +586,7 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
     .unwrap();
     let page = linked
         .store
-        .messages(&binding, BOB, None, 50)
+        .messages(&binding, BOB, None, None, 50)
         .await
         .unwrap();
     assert_eq!(page.messages[0].id, message);
@@ -661,6 +668,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     assert!(matches!(
         linked
@@ -810,6 +818,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                     mentions: vec![],
                 },
                 reply_to: Some(question),
+                thread: None,
             },
             SendAuthority::UserApiToken,
         )
@@ -878,6 +887,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                     text: Some("rewritten".into()),
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -899,11 +909,37 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                     text: Some("Better answer".into()),
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
         .await
         .unwrap();
+
+    // WhatsApp keeps one reaction per person, so it offers no removal of one
+    // emoji; an empty reaction removes it instead.
+    let remove_one = linked
+        .chats
+        .send_reply(
+            &receipt::<MessageWrite>(BOB, binding.id),
+            &SendReply {
+                idempotency_key: Uuid::now_v7(),
+                message: ReplyContent::Mutation {
+                    message_id: question,
+                    operation: Mutation::RemoveReaction,
+                    text: Some("👍".into()),
+                },
+                reply_to: None,
+                thread: None,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        remove_one.current_context(),
+        ExternalChatError::Invalid(_)
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -920,6 +956,7 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -1013,6 +1050,7 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -1105,7 +1143,10 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 
     let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
     let chats = ExternalChatService::new(
-        Arc::new(WhatsAppProvider::new(repository)),
+        ChatProviders {
+            whatsapp: Arc::new(WhatsAppProvider::new(repository)),
+            slack: Arc::new(UnconfiguredProvider),
+        },
         linked.store,
         Arc::new(Denied),
     );
@@ -1116,6 +1157,7 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     let error = chats
         .send_reply(

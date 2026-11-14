@@ -23,7 +23,6 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableProjects,
-  enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -40,7 +39,14 @@ import type { PushNotificationNavigation } from '@service-notification/generated
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
-import { externalChatContent } from '../external-view/hosted-content';
+import {
+  externalChatContent,
+  externalContent,
+} from '../external-view/hosted-content';
+import {
+  anyProviderEnabled,
+  PROVIDER_FLAGS,
+} from '../external-view/provider-flags';
 import { projectRouteId } from '../projects/core/route';
 import { routineContent } from '../routines/routine-navigation';
 import {
@@ -77,6 +83,8 @@ type OpenOptions = {
   newSplit?: boolean;
   sourceHandle?: SplitHandle;
   onApplied?: VoidFunction;
+  /** Route state the destination validates. */
+  routeState?: unknown;
 };
 
 function openContent(
@@ -95,6 +103,7 @@ function openContent(
     referredFrom: null,
     preferNewSplit: options.newSplit,
     handle: options.sourceHandle,
+    routeState: options.routeState,
     ...(options.onApplied ? { onApplied: reportApplied } : {}),
   });
   if (result?.status === 'opened' || result?.status === 'reused')
@@ -253,7 +262,12 @@ function getSupportedHandler(
             })
       )
       .with('external_chat_message', () => {
-        if (!isFeatureEnabled(enableWhatsappLinked)) return null;
+        const meta = notification.notification_metadata;
+        if (
+          meta.tag !== 'external_chat_message' ||
+          !isFeatureEnabled(PROVIDER_FLAGS[meta.content.provider])
+        )
+          return null;
         return async (lm: SplitManager, newSplit: boolean = false) =>
           openExternalChat(lm, notification.entity_id, {
             newSplit,
@@ -296,8 +310,7 @@ function getSupportedHandler(
         );
         if (
           !target ||
-          (target.entityType === 'external_chat' &&
-            !isFeatureEnabled(enableWhatsappLinked))
+          (target.entityType === 'external_chat' && !anyProviderEnabled())
         )
           return null;
         // A runtime has no page of its own: its requests wait in its Share menu.
@@ -675,6 +688,22 @@ function getSupportedHandler(
         };
       })
       .with('inbox_reauth_required', () => null)
+      .with('external_chat_account_ended', () => {
+        const meta = notification.notification_metadata;
+        if (
+          meta.tag !== 'external_chat_account_ended' ||
+          !isFeatureEnabled(PROVIDER_FLAGS[meta.content.provider])
+        )
+          return null;
+        const provider = meta.content.provider;
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openContent(lm, externalContent(), {
+            newSplit,
+            sourceHandle,
+            onApplied,
+            routeState: { provider },
+          });
+      })
       .with('routine_run_finished', () => {
         return async (lm: SplitManager, newSplit: boolean = false) =>
           openContent(lm, routineContent(notification.entity_id), {

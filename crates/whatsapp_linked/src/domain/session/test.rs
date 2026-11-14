@@ -93,7 +93,7 @@ fn system_line(sender: &str) -> InboundEvent {
                 participants: vec![],
                 value: Some("Launch".into()),
                 call: None,
-                by_whatsapp: true,
+                by_provider: true,
             },
         ));
     }

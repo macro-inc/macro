@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_message SET deleted_at = $3, body = '', revision_content = NULL,\n                    effect_revision = effect_revision + 1, notification_retry_at = now()\n                WHERE chat_id = $1 AND source_id = $2 AND deleted_at IS NULL RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5a6d57ef8490f5ee494eb26e21214cc3d3ab880c73ec95076272251f3841fab0"
+}

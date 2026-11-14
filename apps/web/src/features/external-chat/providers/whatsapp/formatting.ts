@@ -6,6 +6,12 @@
 
 import { mentionPattern } from '../../core/mentions';
 import type { Mention } from '../../core/rich';
+import {
+  inlineCode,
+  literal,
+  mentionMarkdown,
+  urlLink,
+} from '../markdown-text';
 
 const FENCE = /^```/;
 
@@ -76,55 +82,7 @@ export function markdownToWhatsApp(markdown: string): string {
 const WHATSAPP_INLINE =
   /(`[^`\n]+`)|((?:https?:\/\/|www\.)[^\s<>]*[^\s<>.,;:!?'")\]*_~])|(^|[^\p{L}\p{N}*_~])([*_~])(?!\s)([^\n]*?[^\s*_~]|[^\s*_~])\4(?![\p{L}\p{N}*_~])/gu;
 
-/** ASCII punctuation, minus the `@` that mentions are found by. */
-const PUNCTUATION = /[!-/:-?[-`{-~]/g;
-
-/**
- * Received text as literal Markdown text: every punctuation mark becomes a
- * numeric character reference, which the Markdown importer decodes back to
- * the character after it has looked for syntax. No sender-written Markdown,
- * HTML or Macro tag (`<m-user-mention>`, `[[…]]`, `$$…$$`) can take effect.
- */
-function literal(text: string): string {
-  return text.replace(
-    PUNCTUATION,
-    (character) => `&#${character.charCodeAt(0)};`
-  );
-}
-
-/** A bare URL as a Markdown link, so it renders like Chat's links (with their preview). */
-function urlLink(url: string): string {
-  const href = (url.startsWith('www.') ? `https://${url}` : url)
-    .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29');
-  return `[${literal(url)}](${href})`;
-}
 const MARKDOWN_FOR: Record<string, string> = { '*': '**', _: '*', '~': '~~' };
-
-/** `macro|ana@example.com` → its email; the mention chip resolves the name. */
-function macroEmail(userId: string): string | undefined {
-  return userId.startsWith('macro|')
-    ? userId.slice('macro|'.length)
-    : undefined;
-}
-
-/**
- * A mentioned person: a verified Macro user becomes Chat's mention chip,
- * anyone else their WhatsApp name or number in bold, the way WhatsApp shows
- * it. The chip's JSON escapes `<` and `>`, so a name can't close the tag.
- */
-function mentionMarkdown(mention: Mention): string {
-  const email = mention.userId ? macroEmail(mention.userId) : undefined;
-  if (!mention.userId || !email) return `**@${literal(mention.name)}**`;
-  const json = JSON.stringify({
-    userId: mention.userId,
-    email,
-    displayName: mention.name,
-  })
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e');
-  return `<m-user-mention>${json}</m-user-mention>`;
-}
 
 function plainText(text: string, mentions: Mention[]): string {
   const pattern = mentionPattern(mentions);
@@ -138,24 +96,6 @@ function plainText(text: string, mentions: Mention[]): string {
     last = found.index + found[0].length;
   }
   return out + literal(text.slice(last));
-}
-
-/**
- * Characters a code span may hold. The importer neither decodes nor
- * transforms inside a code span, so it must hold nothing a Macro tag, link,
- * citation or equation could start with.
- */
-const SAFE_CODE = /^[\p{L}\p{N}\s.,;?'"()+\-=/#%@^{}|]+$/u;
-
-/**
- * `` `code` `` as a code span when that is safe and will form (not beside
- * another span's backtick); otherwise as literal text.
- */
-function inlineCode(code: string, before: string, after: string | undefined) {
-  const content = code.slice(1, -1);
-  if (SAFE_CODE.test(content) && !before.endsWith('`') && after !== '`')
-    return code;
-  return literal(code);
 }
 
 function whatsappInline(text: string, mentions: Mention[]): string {

@@ -1,4 +1,6 @@
+import SlackLogo from '@phosphor/slack-logo.svg';
 import WhatsappLogo from '@phosphor/whatsapp-logo.svg';
+import SlackLogoBold from '@phosphor-icons/core/bold/slack-logo-bold.svg';
 import WhatsappLogoBold from '@phosphor-icons/core/bold/whatsapp-logo-bold.svg';
 import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { Component, JSX } from 'solid-js';
@@ -11,6 +13,8 @@ export type ProviderIdentity = {
   label: string;
   icon: Icon;
   boldIcon: Icon;
+  /** Chat-list section titles: a provider's own word for its group chats. */
+  sectionLabels: { direct: string; groups: string };
 };
 
 /**
@@ -22,6 +26,13 @@ const IDENTITIES: Record<ExternalChatProvider, ProviderIdentity> = {
     label: 'WhatsApp',
     icon: WhatsappLogo,
     boldIcon: WhatsappLogoBold,
+    sectionLabels: { direct: 'Direct messages', groups: 'Groups' },
+  },
+  slack: {
+    label: 'Slack',
+    icon: SlackLogo,
+    boldIcon: SlackLogoBold,
+    sectionLabels: { direct: 'Direct messages', groups: 'Channels' },
   },
 };
 

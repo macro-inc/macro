@@ -7,6 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use external_chat::domain::models::{MediaKind, MediaShape};
+use kms_envelope::kms::EnvelopeKms;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -18,7 +19,6 @@ use whatsapp_linked::domain::events::{
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
-use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
 use whatsmeow::download::{DownloadError, MediaType};
 use whatsmeow::proto::wa_e2e;
@@ -62,7 +62,7 @@ pub struct WhatsmeowConnector<Kms> {
     pictures_http: reqwest::Client,
 }
 
-impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
+impl<Kms: EnvelopeKms + 'static> WhatsmeowConnector<Kms> {
     /// `signal` is `whatsmeow_signal::libsignal()` in production; `dialer`
     /// and `media_base_url` point at WhatsApp, or at a fake server in tests.
     pub fn new(
@@ -132,7 +132,7 @@ impl CurveSignatures for Signatures<'_> {
     }
 }
 
-impl<Kms: WhatsAppKms + 'static> SessionConnector for WhatsmeowConnector<Kms> {
+impl<Kms: EnvelopeKms + 'static> SessionConnector for WhatsmeowConnector<Kms> {
     type Session = WhatsmeowSession;
 
     async fn open(
@@ -155,7 +155,7 @@ impl<Kms: WhatsAppKms + 'static> SessionConnector for WhatsmeowConnector<Kms> {
     }
 }
 
-impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
+impl<Kms: EnvelopeKms + 'static> WhatsmeowConnector<Kms> {
     fn start(
         &self,
         scope: SessionScope,

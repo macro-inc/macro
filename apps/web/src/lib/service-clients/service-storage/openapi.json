@@ -18428,7 +18428,7 @@
     },
     "/external-chats": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "List external chats the caller can view, including without a provider account.",
         "operationId": "external_chats",
         "responses": {
@@ -18448,7 +18448,7 @@
         }
       },
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Add one of the caller's provider chats as their own external chat.",
         "operationId": "external_chat_add",
         "requestBody": {
@@ -18477,7 +18477,7 @@
     },
     "/external-chats/{chat_id}": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "An external chat the caller can read.",
         "operationId": "external_chat",
         "parameters": [
@@ -18505,7 +18505,7 @@
         }
       },
       "delete": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Stop syncing the chat, locally. Owner only, in their own session.",
         "operationId": "external_chat_remove",
         "parameters": [
@@ -18528,7 +18528,7 @@
     },
     "/external-chats/{chat_id}/attachments": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Stage one attachment for a later media send in this chat.",
         "operationId": "external_chat_upload",
         "parameters": [
@@ -18568,7 +18568,7 @@
     },
     "/external-chats/{chat_id}/delivery": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "The caller's send progress for intents or messages.",
         "operationId": "external_chat_delivery",
         "parameters": [
@@ -18615,8 +18615,8 @@
     },
     "/external-chats/{chat_id}/messages": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
-        "summary": "Newest-first timeline through ordinary view access.",
+        "tags": ["external_chat::inbound::router"],
+        "summary": "Newest-first timeline, or one thread's replies, through ordinary view access.",
         "operationId": "external_chat_messages",
         "parameters": [
           {
@@ -18625,6 +18625,16 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "thread",
+            "in": "query",
+            "description": "The replies in the thread this message starts, instead of the chat.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
               "format": "uuid"
             }
           },
@@ -18665,7 +18675,7 @@
     },
     "/external-chats/{chat_id}/messages/attachments": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Attachment states of messages, by message id (at most 100).",
         "operationId": "external_chat_message_attachments",
         "parameters": [
@@ -18712,7 +18722,7 @@
     },
     "/external-chats/{chat_id}/messages/{message_id}": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "One message of the timeline, as the timeline shows it.",
         "operationId": "external_chat_message",
         "parameters": [
@@ -18751,7 +18761,7 @@
     },
     "/external-chats/{chat_id}/permissions": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Generic Share dialog policy.",
         "operationId": "external_chat_permissions",
         "parameters": [
@@ -18779,7 +18789,7 @@
         }
       },
       "patch": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "The owner, in their own session, updates link, team and channel sharing.",
         "operationId": "external_chat_update_permissions",
         "parameters": [
@@ -18812,7 +18822,7 @@
     },
     "/external-chats/{chat_id}/read": {
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Advance this viewer's read position.",
         "operationId": "external_chat_read",
         "parameters": [
@@ -18845,7 +18855,7 @@
     },
     "/external-chats/{chat_id}/sends": {
       "get": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Caller-owned pending, failed and uncertain sends.",
         "operationId": "external_chat_sends",
         "parameters": [
@@ -18876,7 +18886,7 @@
         }
       },
       "post": {
-        "tags": ["whatsapp_linked::inbound::router"],
+        "tags": ["external_chat::inbound::router"],
         "summary": "Send to the chat from the caller's own provider account (one request per second per user).",
         "operationId": "external_chat_send",
         "parameters": [
@@ -27252,6 +27262,390 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/accounts": {
+      "get": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "The caller's accounts.",
+        "operationId": "slack_linked_accounts",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackAccounts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/accounts/{id}/disconnect": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "End one account's consent.",
+        "operationId": "slack_linked_disconnect",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackDisconnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackDisconnect"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/chats/{id}/history-import": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Import another page of a chat's earlier messages.",
+        "operationId": "slack_linked_import_history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackHistoryImport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/conversations": {
+      "get": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "The caller's Slack Connect conversations; asks for a refresh.",
+        "operationId": "slack_linked_conversations",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackConversationList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Start an email sign-in.",
+        "operationId": "slack_linked_start_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackEmailLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login/session": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Sign in with a pasted or desktop-captured session.",
+        "operationId": "slack_linked_submit_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackSessionSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login/{id}": {
+      "get": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Poll the caller's sign-in.",
+        "operationId": "slack_linked_login",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Cancel the caller's sign-in.",
+        "operationId": "slack_linked_cancel_login",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login/{id}/captcha": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Answer the captcha step.",
+        "operationId": "slack_linked_login_captcha",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackCaptchaSolution"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login/{id}/code": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Answer the emailed-code step.",
+        "operationId": "slack_linked_login_code",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackLoginCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login/{id}/two-factor": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Answer the two-factor step.",
+        "operationId": "slack_linked_login_two_factor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackLoginCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slack-linked/login/{id}/workspaces": {
+      "post": {
+        "tags": ["slack_linked::inbound::router"],
+        "summary": "Choose the workspaces to sign in to.",
+        "operationId": "slack_linked_login_workspaces",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackWorkspaceChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLogin"
                 }
               }
             }
@@ -43931,6 +44325,18 @@
         "description": "How a call went.",
         "enum": ["answered", "missed", "rejected", "other"]
       },
+      "ExternalChatCannotAdd": {
+        "type": "string",
+        "description": "Why a chat can't be added to Macro; the app words it from the code.",
+        "enum": [
+          "not_member",
+          "community",
+          "own_chat",
+          "not_in_chat_list",
+          "archived",
+          "frozen"
+        ]
+      },
       "ExternalChatCapabilities": {
         "type": "object",
         "description": "Operations implemented for a chat, independent of current permission.",
@@ -43940,7 +44346,8 @@
           "mutationWindowSeconds",
           "maxAttachments",
           "attachmentLimitBytes",
-          "attachmentTypes"
+          "attachmentTypes",
+          "threads"
         ],
         "properties": {
           "attachmentLimitBytes": {
@@ -43980,6 +44387,10 @@
             "format": "int32",
             "description": "Maximum UTF-8 bytes per text send.",
             "minimum": 0
+          },
+          "threads": {
+            "type": "boolean",
+            "description": "Messages can start threads, and sends can reply in one."
           }
         }
       },
@@ -44237,7 +44648,8 @@
           "kind",
           "forwarded",
           "viewOnce",
-          "mentions"
+          "mentions",
+          "threadBroadcast"
         ],
         "properties": {
           "attachments": {
@@ -44328,6 +44740,26 @@
             "format": "date-time",
             "description": "Timestamp assigned by the provider."
           },
+          "thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatThreadSummary",
+                "description": "Replies to this message, when it starts a thread."
+              }
+            ]
+          },
+          "threadBroadcast": {
+            "type": "boolean",
+            "description": "A thread reply that was also sent to the chat."
+          },
+          "threadRoot": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The thread this message replies in."
+          },
           "viewOnce": {
             "type": "boolean",
             "description": "Sent as view-once; Macro shows it like any media."
@@ -44380,7 +44812,7 @@
       "ExternalChatMutation": {
         "type": "string",
         "description": "Deliberate operations on an existing message.",
-        "enum": ["reaction", "edit", "delete"]
+        "enum": ["reaction", "remove_reaction", "edit", "delete"]
       },
       "ExternalChatParticipant": {
         "type": "object",
@@ -44493,7 +44925,7 @@
       "ExternalChatProvider": {
         "type": "string",
         "description": "The messaging service an external chat lives in.",
-        "enum": ["whatsapp"]
+        "enum": ["whatsapp", "slack"]
       },
       "ExternalChatReaction": {
         "type": "object",
@@ -44529,7 +44961,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Display name, following WhatsApp."
+            "description": "Display name, following the provider."
           }
         }
       },
@@ -44760,7 +45192,7 @@
       },
       "ExternalChatSendReply": {
         "type": "object",
-        "description": "Explicit send action from a person. Only deliberate sends reach WhatsApp.",
+        "description": "Explicit send action from a person. Only deliberate sends reach the provider.",
         "required": ["idempotencyKey", "message"],
         "properties": {
           "idempotencyKey": {
@@ -44776,6 +45208,11 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Message being quoted, within this chat."
+          },
+          "thread": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`])."
           }
         }
       },
@@ -44953,6 +45390,28 @@
           "value": {
             "type": ["string", "null"],
             "description": "New subject or description; disappearing-messages timer in seconds\n(`\"0\"` is off)."
+          }
+        }
+      },
+      "ExternalChatThreadSummary": {
+        "type": "object",
+        "description": "The replies in a thread, as its root message shows them.",
+        "required": ["replyCount", "lastReplyAt", "unread"],
+        "properties": {
+          "lastReplyAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the newest reply was sent."
+          },
+          "replyCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Replies in the thread, deleted ones excluded.",
+            "minimum": 0
+          },
+          "unread": {
+            "type": "boolean",
+            "description": "The viewer has replies they have not read."
           }
         }
       },
@@ -50262,7 +50721,7 @@
           "messageId": {
             "type": "string",
             "format": "uuid",
-            "description": "Message in the addressed group."
+            "description": "Message in the addressed chat; a thread reply marks its thread read."
           }
         }
       },
@@ -57367,7 +57826,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Display name, following WhatsApp."
+            "description": "Display name, following the provider."
           },
           "ownerId": {
             "type": "string",
@@ -57447,17 +57906,669 @@
           }
         }
       },
+      "SlackAccount": {
+        "type": "object",
+        "description": "A person's Slack session in one workspace.",
+        "required": [
+          "id",
+          "teamId",
+          "teamName",
+          "teamDomain",
+          "state",
+          "authorizationGeneration"
+        ],
+        "properties": {
+          "authorizationGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Consent generation; reconnecting the websocket never changes it."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "The person's Slack display name, once the first boot ran."
+          },
+          "endedReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackEndedReason",
+                "description": "Why Slack ended the session, while `logged_out`."
+              }
+            ]
+          },
+          "enterpriseId": {
+            "type": ["string", "null"],
+            "description": "Enterprise Grid org, whose admins can see the session."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable account id."
+          },
+          "lastConnectedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the websocket last connected."
+          },
+          "slackUserId": {
+            "type": ["string", "null"],
+            "description": "The person's Slack user id, once the first boot ran."
+          },
+          "state": {
+            "$ref": "#/components/schemas/SlackAccountState",
+            "description": "Lifecycle."
+          },
+          "teamDomain": {
+            "type": "string",
+            "description": "Workspace subdomain (`acme` of `acme.slack.com`)."
+          },
+          "teamIconUrl": {
+            "type": ["string", "null"],
+            "description": "Workspace icon."
+          },
+          "teamId": {
+            "type": "string",
+            "description": "The workspace."
+          },
+          "teamName": {
+            "type": "string",
+            "description": "Workspace name."
+          }
+        }
+      },
+      "SlackAccountState": {
+        "type": "string",
+        "description": "Account lifecycle. Websocket outages are not stored: a connected account\nstays connected while its session service reconnects.",
+        "enum": ["connecting", "connected", "logged_out", "disconnected"]
+      },
+      "SlackAccounts": {
+        "type": "object",
+        "description": "The caller's Slack accounts, in any state.",
+        "required": ["accounts"],
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlackAccount"
+            },
+            "description": "Oldest first."
+          }
+        }
+      },
+      "SlackCannotAdd": {
+        "type": "string",
+        "description": "Why a catalogue conversation can't be added.",
+        "enum": ["archived", "frozen", "not_member"]
+      },
+      "SlackCaptchaSolution": {
+        "type": "object",
+        "description": "The captcha's solution.",
+        "required": ["solution"],
+        "properties": {
+          "solution": {
+            "type": "string",
+            "description": "What the captcha widget returned."
+          }
+        }
+      },
       "SlackCompleteRequest": {
         "$ref": "#/components/schemas/CompleteUploads",
         "description": "At most fifty registered identities to verify and an optional immutable conversation seal."
+      },
+      "SlackConversation": {
+        "type": "object",
+        "description": "One Slack Connect conversation of the caller's accounts.",
+        "required": [
+          "remoteId",
+          "kind",
+          "name",
+          "isPrivate",
+          "isArchived",
+          "frozen",
+          "connectedTeams",
+          "accounts",
+          "unreadCount",
+          "canAdd"
+        ],
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The caller's account ids that see it."
+          },
+          "added": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatReference",
+                "description": "The caller's own external chat for it."
+              }
+            ]
+          },
+          "canAdd": {
+            "type": "boolean",
+            "description": "\"Add to Macro\" works now."
+          },
+          "cannotAddReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackCannotAdd",
+                "description": "Why it can't be added."
+              }
+            ]
+          },
+          "connectedTeams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlackTeam"
+            },
+            "description": "The other organizations."
+          },
+          "directPerson": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackPerson",
+                "description": "A DM's other person."
+              }
+            ]
+          },
+          "frozen": {
+            "type": "boolean",
+            "description": "Disconnected from the other organization: read-only."
+          },
+          "isArchived": {
+            "type": "boolean",
+            "description": "Archived in Slack."
+          },
+          "isPrivate": {
+            "type": "boolean",
+            "description": "A private channel."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExternalChatKind",
+            "description": "Channel or group DM (`group`), or a one-to-one DM (`direct`)."
+          },
+          "lastActivityAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Newest activity."
+          },
+          "name": {
+            "type": "string",
+            "description": "`#name` for a channel; the other person's name for a DM."
+          },
+          "remoteId": {
+            "type": "string",
+            "description": "Slack's conversation id; `POST /external-chats {provider: \"slack\",\nremoteId, kind}` adds it."
+          },
+          "shared": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SharedExternalChatReference",
+                "description": "Someone else's, shared with the caller."
+              }
+            ]
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The channel topic."
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Unread messages in Slack.",
+            "minimum": 0
+          }
+        }
+      },
+      "SlackConversationList": {
+        "type": "object",
+        "description": "The caller's Slack Connect catalogue.",
+        "required": ["conversations", "refreshing"],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlackConversation"
+            },
+            "description": "Newest activity first."
+          },
+          "refreshing": {
+            "type": "boolean",
+            "description": "A refresh was requested; refetch on `external_chat_changed`."
+          }
+        }
       },
       "SlackCreateRequest": {
         "$ref": "#/components/schemas/CreateImport",
         "description": "Bounded full-metadata create payload. Domain validation applies effective limits again."
       },
+      "SlackDisconnect": {
+        "type": "object",
+        "description": "Result of disconnecting.",
+        "required": ["disconnected"],
+        "properties": {
+          "disconnected": {
+            "type": "boolean",
+            "description": "The account was connected at that generation and now isn't."
+          }
+        }
+      },
+      "SlackDisconnectRequest": {
+        "type": "object",
+        "description": "The consent generation the owner deliberately ends.",
+        "required": ["authorizationGeneration"],
+        "properties": {
+          "authorizationGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Fences retries against a later sign-in."
+          },
+          "signOut": {
+            "type": "boolean",
+            "description": "Also sign the session out at Slack."
+          }
+        }
+      },
+      "SlackEmailLogin": {
+        "type": "object",
+        "description": "Start an email sign-in.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The Slack account's email address."
+          }
+        }
+      },
+      "SlackEndedReason": {
+        "type": "string",
+        "description": "Why Slack ended a session.",
+        "enum": [
+          "revoked",
+          "expired",
+          "account_inactive",
+          "team_disabled",
+          "removed_from_team",
+          "enterprise_restricted",
+          "unreadable"
+        ]
+      },
+      "SlackHistoryImport": {
+        "type": "object",
+        "description": "Where a chat's history import is.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "boolean",
+            "description": "Started importing another page of earlier messages."
+          }
+        }
+      },
+      "SlackLogin": {
+        "type": "object",
+        "description": "A sign-in attempt, as `GET /slack/login/{id}` returns it.",
+        "required": ["id", "step", "expiresAt"],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it stops taking input."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Poll `GET /slack/login/{id}` with it."
+          },
+          "step": {
+            "$ref": "#/components/schemas/SlackLoginStep",
+            "description": "Where it is."
+          }
+        }
+      },
+      "SlackLoginCode": {
+        "type": "object",
+        "description": "A code Slack sent (email confirmation or two-factor).",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The code."
+          }
+        }
+      },
+      "SlackLoginFailure": {
+        "type": "string",
+        "description": "Why a sign-in attempt failed.",
+        "enum": [
+          "invalid_email",
+          "no_workspaces",
+          "code_expired",
+          "rate_limited",
+          "two_factor_expired",
+          "invalid_session",
+          "expired",
+          "slack_unavailable"
+        ]
+      },
+      "SlackLoginStep": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A session replica is calling Slack; poll again.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["working"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Slack wants a captcha solved before it emails the code.",
+            "required": ["siteKey", "pageUrl", "retry", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["captcha"]
+              },
+              "pageUrl": {
+                "type": "string",
+                "description": "The page the captcha belongs to."
+              },
+              "retry": {
+                "type": "boolean",
+                "description": "The previous solution was rejected."
+              },
+              "siteKey": {
+                "type": "string",
+                "description": "The captcha's site key, for a client that can render it."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Slack emailed a confirmation code.",
+            "required": ["email", "retry", "kind"],
+            "properties": {
+              "email": {
+                "type": "string",
+                "description": "Where it went."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["email_code"]
+              },
+              "retry": {
+                "type": "boolean",
+                "description": "The previous code was wrong."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Pick the workspaces to connect.",
+            "required": ["workspaces", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["pick_workspaces"]
+              },
+              "workspaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SlackLoginWorkspace"
+                },
+                "description": "Every workspace the email signs in to."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The workspace asks for a two-factor code.",
+            "required": ["team", "retry", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["two_factor"]
+              },
+              "retry": {
+                "type": "boolean",
+                "description": "The previous code was wrong."
+              },
+              "team": {
+                "$ref": "#/components/schemas/SlackLoginWorkspace",
+                "description": "Which workspace."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The workspace requires SSO, which only the desktop app can finish.",
+            "required": ["team", "signInUrl", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["finish_on_desktop"]
+              },
+              "signInUrl": {
+                "type": "string",
+                "description": "Slack's sign-in page for it."
+              },
+              "team": {
+                "$ref": "#/components/schemas/SlackLoginWorkspace",
+                "description": "Which workspace."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Signed in.",
+            "required": ["accounts", "skipped", "kind"],
+            "properties": {
+              "accounts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SlackAccount"
+                },
+                "description": "Accounts created or reconnected."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["done"]
+              },
+              "skipped": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SlackLoginWorkspace"
+                },
+                "description": "Chosen workspaces that need SSO and were not signed in."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Failed; start again.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["failed"]
+              },
+              "reason": {
+                "$ref": "#/components/schemas/SlackLoginFailure",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The person cancelled.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          }
+        ],
+        "description": "Where a sign-in attempt is, and what the web shows for it."
+      },
+      "SlackLoginWorkspace": {
+        "type": "object",
+        "description": "A workspace the email signs in to.",
+        "required": ["teamId", "name", "domain", "signIn", "alreadyConnected"],
+        "properties": {
+          "alreadyConnected": {
+            "type": "boolean",
+            "description": "The caller already has a connected account for it."
+          },
+          "domain": {
+            "type": "string",
+            "description": "Its subdomain."
+          },
+          "enterpriseName": {
+            "type": ["string", "null"],
+            "description": "Its Enterprise Grid org's name: the org's admins see the session."
+          },
+          "iconUrl": {
+            "type": ["string", "null"],
+            "description": "Its icon."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "signIn": {
+            "$ref": "#/components/schemas/SlackWorkspaceSignIn",
+            "description": "How it signs in."
+          },
+          "teamId": {
+            "type": "string",
+            "description": "The workspace."
+          }
+        }
+      },
+      "SlackPerson": {
+        "type": "object",
+        "description": "A Slack user as the catalogue names them.",
+        "required": ["slackUserId", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Their avatar."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, else real name, else the id."
+          },
+          "slackUserId": {
+            "type": "string",
+            "description": "Their id."
+          },
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackTeam",
+                "description": "Their organization."
+              }
+            ]
+          }
+        }
+      },
       "SlackRegisterRequest": {
         "$ref": "#/components/schemas/RegisterUploads",
         "description": "At most fifty immutable upload descriptors, without client-supplied storage keys."
+      },
+      "SlackSessionSource": {
+        "type": "string",
+        "description": "How a sign-in attempt started.",
+        "enum": ["manual", "desktop"]
+      },
+      "SlackSessionSubmission": {
+        "type": "object",
+        "description": "A pasted or captured session, as DSS receives it and seals it at once.",
+        "required": ["source", "cookie", "tokens"],
+        "properties": {
+          "cookie": {
+            "type": "string",
+            "description": "The `d` cookie."
+          },
+          "cookieDs": {
+            "type": ["string", "null"],
+            "description": "The `d-s` cookie, when the client has it."
+          },
+          "source": {
+            "$ref": "#/components/schemas/SlackSessionSource",
+            "description": "Pasted or captured by the desktop app."
+          },
+          "tokens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlackSessionToken"
+            },
+            "description": "One token per workspace."
+          }
+        }
+      },
+      "SlackSessionToken": {
+        "type": "object",
+        "description": "One workspace token of a pasted or captured session.",
+        "required": ["token"],
+        "properties": {
+          "teamId": {
+            "type": ["string", "null"],
+            "description": "The workspace it belongs to, when the client knows it."
+          },
+          "token": {
+            "type": "string",
+            "description": "The `xoxc-` token."
+          }
+        }
+      },
+      "SlackTeam": {
+        "type": "object",
+        "description": "A Slack team as the catalogue names it.",
+        "required": ["teamId", "name"],
+        "properties": {
+          "domain": {
+            "type": ["string", "null"],
+            "description": "Its subdomain."
+          },
+          "iconUrl": {
+            "type": ["string", "null"],
+            "description": "Its icon."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name; the id when Slack never told us."
+          },
+          "teamId": {
+            "type": "string",
+            "description": "Its id."
+          }
+        }
       },
       "SlackTimestamp": {
         "type": "string",
@@ -57466,6 +58577,25 @@
       "SlackUserId": {
         "type": "string",
         "description": "Slack member identity (U or W prefix), including USLACKBOT."
+      },
+      "SlackWorkspaceChoice": {
+        "type": "object",
+        "description": "The workspaces to sign in to.",
+        "required": ["teamIds"],
+        "properties": {
+          "teamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Their team ids."
+          }
+        }
+      },
+      "SlackWorkspaceSignIn": {
+        "type": "string",
+        "description": "Whether a workspace can be signed in to from Macro's servers.",
+        "enum": ["ready", "two_factor", "sso"]
       },
       "SlideScale": {
         "type": "string",
@@ -64964,11 +66094,6 @@
           }
         }
       },
-      "WhatsAppCannotAdd": {
-        "type": "string",
-        "description": "Why a chat can't be added to Macro; the app words it from the code.",
-        "enum": ["not_in_group", "community", "own_chat", "not_in_chat_list"]
-      },
       "WhatsAppChat": {
         "type": "object",
         "description": "One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.",
@@ -64999,7 +66124,7 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/WhatsAppCannotAdd",
+                "$ref": "#/components/schemas/ExternalChatCannotAdd",
                 "description": "Why it can't be added, when it is neither added, shared nor addable."
               }
             ]

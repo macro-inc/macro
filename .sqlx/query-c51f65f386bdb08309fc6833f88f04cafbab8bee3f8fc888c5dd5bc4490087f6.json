@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM external_chat_message\n        WHERE chat_id = $1 AND source_id = $2 AND message_id IS NOT NULL\n        ORDER BY id LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c51f65f386bdb08309fc6833f88f04cafbab8bee3f8fc888c5dd5bc4490087f6"
+}

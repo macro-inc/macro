@@ -25,6 +25,7 @@ ignores:
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-md/component/Block.tsx
+  - apps/web/src/features/slack-linked/slack-linked-page.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx

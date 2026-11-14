@@ -6760,6 +6760,7 @@ dependencies = [
  "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sns",
@@ -6829,6 +6830,7 @@ dependencies = [
  "initiative",
  "initiative_description",
  "jsonwebtoken 10.3.0",
+ "kms_envelope",
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
@@ -6889,6 +6891,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "slack_integration",
+ "slack_linked",
  "soup",
  "soup_realtime",
  "sqlx",
@@ -11915,6 +11918,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "kms_envelope"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "aws-sdk-kms",
+ "rand 0.9.4",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -18884,6 +18902,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "session_fleet"
+version = "0.1.0"
+dependencies = [
+ "external_chat",
+ "rootcause",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19267,6 +19301,70 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "slack_client"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "cookie",
+ "futures",
+ "lazy-regex",
+ "macro_service_urls",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rustls",
+ "serde",
+ "serde_json",
+ "slack_fake_server",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
+ "tracing",
+ "url",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "slack_e2e"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "entity_access",
+ "external_chat",
+ "kms_envelope",
+ "macro_db_migrator",
+ "macro_user_id",
+ "serde_json",
+ "slack_client",
+ "slack_fake_server",
+ "slack_linked",
+ "slack_session_service",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "url",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "slack_fake_server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slack_import_worker"
 version = "0.1.0"
 dependencies = [
@@ -19323,6 +19421,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "slack_client",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -19333,6 +19432,73 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "slack_linked"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access_db_utils",
+ "entity_registry_db_utils",
+ "external_chat",
+ "kms_envelope",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_env",
+ "macro_user_id",
+ "model-entity",
+ "model_owner",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "share_permission_db_utils",
+ "slack_client",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "slack_session_service"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-kms",
+ "axum",
+ "chrono",
+ "database_env_vars",
+ "doppler-config",
+ "external_chat",
+ "kms_envelope",
+ "macro_aws_config",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "rootcause",
+ "rustls",
+ "serde",
+ "serde_json",
+ "session_fleet",
+ "slack_client",
+ "slack_linked",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -22806,6 +22972,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "external_chat",
+ "kms_envelope",
  "macro_db_migrator",
  "macro_user_id",
  "sqlx",
@@ -22815,7 +22982,6 @@ dependencies = [
  "whatsapp_fake_server",
  "whatsapp_linked",
  "whatsapp_session_service",
- "whatsapp_store_pg",
  "whatsmeow",
  "whatsmeow_signal",
  "workspace-hack",
@@ -22898,6 +23064,7 @@ dependencies = [
  "doppler-config",
  "external_chat",
  "futures",
+ "kms_envelope",
  "macro_aws_config",
  "macro_config",
  "macro_db_migrator",
@@ -22910,13 +23077,13 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "session_fleet",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "whatsapp_fake_server",
  "whatsapp_linked",
@@ -22930,12 +23097,11 @@ dependencies = [
 name = "whatsapp_store_pg"
 version = "0.1.0"
 dependencies = [
- "aes-gcm 0.10.3",
  "async-trait",
- "aws-sdk-kms",
  "chrono",
  "futures",
  "hex",
+ "kms_envelope",
  "macro_db_migrator",
  "postcard",
  "prost 0.14.3",
@@ -23743,6 +23909,7 @@ dependencies = [
  "chrono",
  "cipher 0.4.4",
  "cipher 0.5.2",
+ "cookie",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint 0.5.5",

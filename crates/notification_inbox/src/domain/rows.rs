@@ -474,6 +474,7 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::InboxReauthRequired(_)
         | NotifEvent::InviteToTeam(_)
         | NotifEvent::ExternalChatMessage(_)
+        | NotifEvent::ExternalChatAccountEnded(_)
         | NotifEvent::ChannelAccessRequested(_)
         | NotifEvent::RoutineRunFinished(_)
         | NotifEvent::AgentSignInExpiry(_)

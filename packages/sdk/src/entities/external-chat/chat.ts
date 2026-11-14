@@ -28,7 +28,11 @@ export type ExternalChatContent =
   | {
       type: 'mutation';
       message: ExternalChatMessage;
-      operation: 'reaction' | 'edit' | 'delete';
+      /**
+       * `remove_reaction` removes the emoji in `text` where the chat's
+       * provider lets a person hold several reactions.
+       */
+      operation: 'reaction' | 'remove_reaction' | 'edit' | 'delete';
       text?: string;
     };
 
@@ -106,6 +110,7 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     if (!community) return undefined;
     return match(provider)
       .with('whatsapp', () => communityOf(this.client, community))
+      .with('slack', () => undefined)
       .exhaustive();
   }
 

@@ -41,6 +41,7 @@ async fn shown(world: &World, binding: &ChatRef, source: &str) -> ExternalChatMe
         .messages(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             None,
+            None,
             Some(100),
         )
         .await
@@ -794,6 +795,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
                     mentions: vec![customer_lid.clone()],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -913,6 +915,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
         .external
         .messages(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
+            None,
             None,
             Some(100),
         )

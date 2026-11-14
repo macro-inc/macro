@@ -144,7 +144,7 @@ impl WhatsAppService {
                 ExternalChatKind::Direct if chat.jid == identity => Some(CannotAdd::OwnChat),
                 ExternalChatKind::Direct => None,
                 // Listed by WhatsApp but not in the account's groups any more.
-                ExternalChatKind::Group => Some(CannotAdd::NotInGroup),
+                ExternalChatKind::Group => Some(CannotAdd::NotMember),
             };
             let open = added.is_none() && shared.is_none();
             chats.push(Chat {
@@ -199,7 +199,7 @@ impl WhatsAppService {
             let reason = if info.community_parent {
                 Some(CannotAdd::Community)
             } else if info.participant(&identity).is_none() {
-                Some(CannotAdd::NotInGroup)
+                Some(CannotAdd::NotMember)
             } else {
                 None
             };
@@ -287,11 +287,6 @@ impl WhatsAppService {
     /// Delete old participant receipts, old consumed pairings and lookups.
     pub async fn expire_retained(&self) -> ExternalChatResult<u64> {
         self.accounts.expire_retained().await
-    }
-
-    /// The Macro user who linked this account.
-    pub async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>> {
-        self.accounts.account_owner(account).await
     }
 }
 

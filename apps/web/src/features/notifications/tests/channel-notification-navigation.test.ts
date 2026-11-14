@@ -461,6 +461,38 @@ it('opens an external chat notification in External without a channel block', as
   expect(navigate).not.toHaveBeenCalled();
 });
 
+it('opens External on the provider of an account that stopped syncing', async () => {
+  const { layout } = setup('closed');
+  const open = vi.spyOn(layout, 'openWithSplit');
+  await openNotification(
+    {
+      entity_id: 'macro|owner@example.test',
+      notification_metadata: {
+        tag: 'external_chat_account_ended',
+        content: {
+          provider: 'whatsapp',
+          accountId: '22222222-2222-4222-8222-222222222222',
+          accountName: 'Personal WhatsApp',
+          reason: 'session_ended',
+        },
+      },
+    } as UnifiedNotification,
+    layout
+  );
+  expect(open).toHaveBeenCalledWith(
+    {
+      type: 'component',
+      id: 'external',
+      entryMetadata: {
+        route: {
+          matches: [expect.anything(), { id: 'view-external', params: {} }],
+        },
+      },
+    },
+    expect.objectContaining({ routeState: { provider: 'whatsapp' } })
+  );
+});
+
 it('keeps external chat notifications behind the existing feature flag', async () => {
   vi.mocked(isFeatureEnabled).mockReturnValue(false);
   const { layout, createBlockInstance } = setup('closed');

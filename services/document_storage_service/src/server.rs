@@ -1756,6 +1756,11 @@ async fn run_server() -> anyhow::Result<()> {
         connection_gateway: conn_gateway_client.clone(),
         tracker: consumer_tracker.clone(),
         cancellation: consumer_cancellation_token.clone(),
+        slack_kms: kms_envelope::kms::AwsKms::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            slack_linked::outbound::kms::SlackKmsKey::for_environment(config.environment)
+                .to_owned(),
+        ),
     });
 
     // Held by value here and behind an `Arc` in the router state: the impl is a

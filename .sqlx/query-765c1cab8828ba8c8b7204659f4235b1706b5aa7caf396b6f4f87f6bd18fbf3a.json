@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_send SET state = 'accepted', message_id = $3, remote_ts = $4, claimed_epoch = NULL, updated_at = now()\n            WHERE id = $1 AND user_id = $2 AND state IN ('sending', 'unknown')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "765c1cab8828ba8c8b7204659f4235b1706b5aa7caf396b6f4f87f6bd18fbf3a"
+}

@@ -117,6 +117,7 @@ const CATEGORY_BY_EVENT: Record<
   runtime_access_removed: 'other',
   invite_to_team: 'other',
   inbox_reauth_required: 'other',
+  external_chat_account_ended: 'other',
   agent_sign_in_expiry: 'other',
   computer_setup: 'other',
   github_pr_status_changed: 'other',

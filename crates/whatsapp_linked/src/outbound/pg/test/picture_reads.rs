@@ -88,7 +88,12 @@ async fn everyone_sees_the_pictures_the_owner_sees_and_initials_once_hidden(pool
         async move {
             linked
                 .chats
-                .messages(&receipt::<MessageView>(viewer, binding.id), None, Some(50))
+                .messages(
+                    &receipt::<MessageView>(viewer, binding.id),
+                    None,
+                    None,
+                    Some(50),
+                )
                 .await
                 .unwrap()
                 .messages
@@ -205,7 +210,12 @@ async fn a_direct_chat_and_its_person_show_the_chats_picture_and_no_owner_alias_
     assert_eq!(detail.chat.picture_file_id, Some(customer));
     let senders: Vec<Option<Uuid>> = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
+        .messages(
+            &receipt::<MessageView>(ALICE, binding.id),
+            None,
+            None,
+            Some(50),
+        )
         .await
         .unwrap()
         .messages

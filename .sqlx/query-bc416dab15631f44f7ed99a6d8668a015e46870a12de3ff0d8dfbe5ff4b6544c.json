@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM slack_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state IN ('connecting', 'connected') FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bc416dab15631f44f7ed99a6d8668a015e46870a12de3ff0d8dfbe5ff4b6544c"
+}

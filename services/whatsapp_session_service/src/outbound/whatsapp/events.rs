@@ -1005,7 +1005,7 @@ fn system_event(
 ) -> InboundEvent {
     let group = group.to_non_ad().to_string();
     let actor = actor.and_then(person);
-    line.by_whatsapp = actor.is_none();
+    line.by_provider = actor.is_none();
     let source_at = at.unwrap_or(now);
     // The same change seen by several accounts is one line: its id comes
     // from what it says, never from who saw it.

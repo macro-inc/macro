@@ -2,7 +2,7 @@
 
 use whatsmeow::store::StoreError;
 
-use crate::kms::WhatsAppKmsError;
+use kms_envelope::kms::KmsError;
 
 /// Why a store operation failed.
 ///
@@ -23,7 +23,7 @@ pub enum WhatsAppStoreError {
     /// Wrapping or unwrapping the data key failed, including because the
     /// encryption context did not match.
     #[error(transparent)]
-    Kms(#[from] WhatsAppKmsError),
+    Kms(#[from] KmsError),
     /// The device row was written by a scheme this build does not know.
     #[error("whatsapp store uses unsupported encryption version {0}")]
     UnsupportedVersion(i16),

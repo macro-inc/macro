@@ -172,6 +172,7 @@ async fn signal_changes_in(
         notify_change(
             tx,
             Change::Chats {
+                provider: ExternalChatProvider::WhatsApp,
                 account_id: account.id,
             },
         )

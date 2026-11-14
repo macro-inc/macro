@@ -3,11 +3,12 @@
 //! with the sender's `traceparent`, so the receiver joins its trace. Provider
 //! processes send them too; not an adapter.
 
+use model_entity::ExternalChatProvider;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// `<blob_id>`: attachment bytes are ready to import (DSS listens).
-pub const MEDIA_READY: &str = "whatsapp_media_ready";
+pub const MEDIA_READY: &str = "external_chat_media_ready";
 /// `<message_id>`: an external chat message notification is ready (DSS listens).
 pub const CHAT_EFFECTS: &str = "external_chat_effects";
 /// A [`ChangeSignal`]: something a page shows changed (DSS listens and
@@ -37,6 +38,8 @@ impl Signal {
 pub enum Change {
     /// A provider account's own chat list changed: its owner's add list.
     Chats {
+        /// The provider the account is at.
+        provider: ExternalChatProvider,
         /// Account whose chat list changed.
         account_id: Uuid,
     },

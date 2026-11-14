@@ -5,16 +5,11 @@ publish = false
 version = "0.1.0"
 description = "Postgres implementation of the whatsmeow device stores, with per-account envelope encryption."
 
-[features]
-# The in-memory KMS stand-in, for tests of crates that open a store.
-fake-kms = []
-
 [dependencies]
-aes-gcm = { workspace = true }
 async-trait = { workspace = true }
-aws-sdk-kms = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
+kms_envelope = { path = "../kms_envelope" }
 postcard = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
@@ -31,6 +26,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+kms_envelope = { path = "../kms_envelope", features = ["fake"] }
 futures = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

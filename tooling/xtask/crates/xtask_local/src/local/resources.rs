@@ -54,6 +54,10 @@ pub const MICROSOFT_TOKEN_KMS_ALIAS: &str = "alias/macro-local-microsoft-token";
 /// computes this name from `ENVIRONMENT` (`SessionKmsKey` in its `config.rs`).
 pub const WHATSAPP_SESSION_KMS_ALIAS: &str = "alias/whatsapp-session-service-local";
 
+/// The Slack session service's and DSS's key for sealed Slack sessions
+/// (`SlackKmsKey` in `crates/slack_linked/src/outbound/kms.rs`).
+pub const SLACK_SESSION_KMS_ALIAS: &str = "alias/slack-session-service-local";
+
 /// The full LocalStack URL for `queue` (docker-network host — services run in
 /// containers and reach LocalStack by its compose alias).
 pub fn queue_url(queue: &str) -> String {

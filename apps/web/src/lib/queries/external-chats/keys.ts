@@ -4,7 +4,13 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const externalChatsKeys = createQueryKeys('external-chats', {
   list: (userId: string) => [userId],
   detail: (userId: string, chatId: string) => [userId, chatId],
-  messages: (userId: string, chatId: string) => [userId, chatId],
+  messages: (userId: string, chatId: string) => ({
+    queryKey: [userId, chatId],
+    // Under the timeline's key, so refreshing a chat refreshes its threads.
+    contextQueries: {
+      thread: (root: string) => ({ queryKey: [root] }),
+    },
+  }),
   delivery: (userId: string, chatId: string) => ({
     queryKey: [userId, chatId],
     contextQueries: {

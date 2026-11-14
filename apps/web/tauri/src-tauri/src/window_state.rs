@@ -18,8 +18,12 @@ const FLAGS: StateFlags = StateFlags::SIZE
     .union(StateFlags::MAXIMIZED)
     .union(StateFlags::FULLSCREEN);
 
+/// The Slack sign-in window always opens centred at its own size.
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new().with_state_flags(FLAGS).build()
+    Builder::new()
+        .with_state_flags(FLAGS)
+        .with_denylist(&[crate::slack_desktop::WINDOW_LABEL])
+        .build()
 }
 
 /// The plugin only writes to disk on `RunEvent::Exit`. The native updater's
