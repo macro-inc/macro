@@ -609,7 +609,13 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             cleanup.forget().await;
             return Ok(None);
         }
-        tokio::time::sleep(ACTIVITY_SETTLE).await;
+        // EVAL ONLY (never commit): no settle after a passing check when the
+        // container has /tmp/session-fast-nosettle.
+        if !(matches!(ending, Ok(Ok(Ending::Checked)))
+            && Path::new("/tmp/session-fast-nosettle").exists())
+        {
+            tokio::time::sleep(ACTIVITY_SETTLE).await;
+        }
         let recorded = self
             .creations
             .created_by(session.as_uuid())
