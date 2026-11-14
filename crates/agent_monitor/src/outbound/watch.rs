@@ -50,12 +50,15 @@ impl Watch {
 
     /// Waits for the next change, then takes every change already queued, so
     /// a burst of writes is handled once. `None` once the watcher has stopped.
+    /// Reads alone (opening or closing a file) are not changes.
     pub async fn next(&mut self) -> Option<Changes> {
-        let first = self.events.recv().await?;
         let mut changes = Changes::default();
-        absorb(&mut changes, first);
-        while let Ok(event) = self.events.try_recv() {
-            absorb(&mut changes, event);
+        while changes.paths.is_empty() && !changes.rescan {
+            let first = self.events.recv().await?;
+            absorb(&mut changes, first);
+            while let Ok(event) = self.events.try_recv() {
+                absorb(&mut changes, event);
+            }
         }
         Some(changes)
     }
@@ -75,7 +78,7 @@ fn absorb(changes: &mut Changes, event: notify::Result<notify::Event>) {
         changes.rescan = true;
     }
 
-    // Reads and metadata-only changes (atime) carry nothing to re-read.
+    // Opening, reading and closing a file carry nothing to re-read.
     if matches!(event.kind, EventKind::Access(_)) {
         return;
     }
