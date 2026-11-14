@@ -75,14 +75,34 @@ async fn seed_company(pool: &PgPool) -> anyhow::Result<(Uuid, Uuid, Vec<Uuid>)> 
     let mut hidden = Vec::new();
     insert_named(pool, company_id, Some("zoe@acme.test"), Some("Zoe Adams")).await?;
     insert_named(pool, company_id, Some("anna@acme.test"), Some("anna smith")).await?;
-    insert_named(pool, company_id, Some("anna2@acme.test"), Some("Anna Smith")).await?;
-    insert_named(pool, company_id, Some("anna3@acme.test"), Some("ANNA SMITH")).await?;
+    insert_named(
+        pool,
+        company_id,
+        Some("anna2@acme.test"),
+        Some("Anna Smith"),
+    )
+    .await?;
+    insert_named(
+        pool,
+        company_id,
+        Some("anna3@acme.test"),
+        Some("ANNA SMITH"),
+    )
+    .await?;
     insert_named(pool, company_id, Some("mike@acme.test"), None).await?;
     insert_named(pool, company_id, None, Some("Nobody Mailed")).await?;
     insert_named(pool, company_id, None, None).await?;
     insert_named(pool, company_id, None, None).await?;
     hidden.push(insert_named(pool, company_id, Some("bob@acme.test"), Some("Bob")).await?);
-    hidden.push(insert_named(pool, company_id, Some("anna4@acme.test"), Some("anna smith")).await?);
+    hidden.push(
+        insert_named(
+            pool,
+            company_id,
+            Some("anna4@acme.test"),
+            Some("anna smith"),
+        )
+        .await?,
+    );
     hidden.push(insert_named(pool, company_id, None, None).await?);
     for id in &hidden {
         hide_contact(pool, *id).await?;
