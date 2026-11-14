@@ -56,6 +56,9 @@ struct DepopulateTarget {
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
+    /// Where the activity edges are read: `pool` unless
+    /// [`Self::with_activity_edges_replica`] names a replica.
+    activity_edges_pool: PgPool,
     #[cfg(test)]
     after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
     #[cfg(test)]
@@ -68,6 +71,7 @@ impl CompaniesRepositoryImpl {
     /// Creates a new instance of CompaniesRepositoryImpl
     pub fn new(pool: PgPool) -> Self {
         Self {
+            activity_edges_pool: pool.clone(),
             pool,
             #[cfg(test)]
             after_depopulate_source: None,
@@ -76,6 +80,17 @@ impl CompaniesRepositoryImpl {
             #[cfg(test)]
             after_eligible_scan: None,
         }
+    }
+
+    /// Read the activity edges (`activity_property_edges`, the Sales views'
+    /// per-record probes) from `replica`, off the primary. They then follow
+    /// the replica's lag: a record hidden or a member removed a moment ago can
+    /// still match, and a record just added may not yet. Every item still
+    /// passes its own source's access check. Every other read and write stays
+    /// on the primary.
+    pub fn with_activity_edges_replica(mut self, replica: readonly_pool::ReadOnlyPool) -> Self {
+        self.activity_edges_pool = replica.0;
+        self
     }
 
     /// The transaction behind `populate_contact`, after its no-op precheck.
@@ -1065,6 +1080,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         scope: crate::domain::contact_listing::CrmContactListScope<'_>,
     ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
         self.query_activity(scope).await
+    }
+
+    async fn activity_property_edges(
+        &self,
+        scope: crate::domain::contact_listing::CrmContactListScope<'_>,
+        entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
+        self.query_activity_property_edges(scope, entity_types)
+            .await
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %link_id, skipped = tracing::field::Empty), err)]
