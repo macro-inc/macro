@@ -111,7 +111,8 @@ async fn get_json(app: &Router, user: &str, uri: &str) -> (StatusCode, Value) {
     )
 }
 
-/// One Team list page: its contacts' emails and its next cursor.
+/// One Team list page: its contacts' emails and its next cursor, escaped
+/// for a query string.
 async fn page(
     app: &Router,
     user: &str,
@@ -131,7 +132,13 @@ async fn page(
         .iter()
         .map(|c| c["email"].as_str().unwrap_or_default().to_string())
         .collect();
-    (emails, body["nextCursor"].as_str().map(str::to_string))
+    let cursor = body["nextCursor"].as_str().map(|cursor| {
+        cursor
+            .replace('+', "%2B")
+            .replace('/', "%2F")
+            .replace('=', "%3D")
+    });
+    (emails, cursor)
 }
 
 /// Adds `user` to the team as a plain member.
@@ -288,6 +295,17 @@ async fn page_route_refuses_cursors_from_another_list(pool: PgPool) -> anyhow::R
     assert_eq!(
         status(
             format!("query=%20anna%20&limit=1&cursor={cursor}"),
+            company_id
+        )
+        .await,
+        StatusCode::OK
+    );
+    // An archived list continues with its own cursor.
+    let (_, archived) = page(&app, "owner", company_id, "archived=true&limit=1").await;
+    let archived = archived.expect("three archived contacts make several pages");
+    assert_eq!(
+        status(
+            format!("archived=true&limit=1&cursor={archived}"),
             company_id
         )
         .await,
