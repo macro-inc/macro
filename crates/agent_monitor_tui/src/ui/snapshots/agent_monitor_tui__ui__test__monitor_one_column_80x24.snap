@@ -8,10 +8,10 @@ expression: "render(&mut app(), 80, 24)"
 ┌ 1 AGENTS  30 LIVE · 34 ROWS / 34 ALL  a SHOWS ENDED ─────────────────────────┐
 │  NAME                 DOING                  AGE  TRN  TOOLS TOKENS  COST    │
 │■ rpc-server/explore t explore the reducer      0s    1     1       0        —│
-│■ fix-19               Follow-up from review   28s    2     4  163.8k   ~$0.28│
-│■ rpc-server           Task explore the reduc  33m   18    52    1.7M   ~$2.29│
-│■ fix-16               Follow-up from review    1m    9    24  850.2k   ~$1.15│
-│■ release-train        building                22m   14    38    1.5M   ~$1.68│
+│■ fix-19               Follow-up from review   28s    2     4  163.8k   ~$0.13│
+│■ rpc-server           Task explore the reduc  33m   18    52    1.7M   ~$2.01│
+│■ fix-16               Follow-up from review    1m    9    24  850.2k   ~$0.51│
+│■ release-train        building                22m   14    38    1.5M   ~$1.43│
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌ 2 TAPE  500 LINES  ▼ FOLLOWING ──────────────────────────────────────────────┐
 │10:01:40 fix-19         TURN turn start                                       │
@@ -22,7 +22,7 @@ expression: "render(&mut app(), 80, 24)"
 ┌ 4 FAILURES  50 24H 48 TOOL · 2 AGENT ────────────────────────────────────────┐
 │  6s tool  builder  fix-16         Edit failed                                │
 └──────────────────────────────────────────────────────────────────────────────┘
-┌ 3 SPEND TODAY  ~$28.60 ──────────────────────────────────────────────────────┐
+┌ 3 SPEND TODAY  ~$25.28 ──────────────────────────────────────────────────────┐
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
  >  TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT

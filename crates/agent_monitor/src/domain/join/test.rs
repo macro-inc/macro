@@ -728,6 +728,31 @@ fn a_reported_total_replaces_the_estimate_and_rows_add_up_to_it() {
 }
 
 #[test]
+fn a_reported_estimate_does_not_become_a_known_cost() {
+    let now = at(10, 0);
+    let mut facts = Facts::default();
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![transcript(
+            "s-e",
+            None,
+            vec![
+                usage(at(1, 0), 1_000_000, 0),
+                TranscriptEvent {
+                    at: at(2, 0),
+                    kind: TranscriptEventKind::Cost(Cost::Estimated(99.0)),
+                },
+            ],
+        )]),
+        now,
+    );
+
+    let cost = build_agents(&facts, now).agents[&AgentId::claude_session("s-e")].cost;
+    assert!(matches!(cost, Cost::Estimated(_)), "{cost:?}");
+}
+
+#[test]
 fn spend_per_minute_follows_usage_and_sums_to_the_reported_total() {
     let now = at(10, 0);
     let mut facts = Facts::default();
