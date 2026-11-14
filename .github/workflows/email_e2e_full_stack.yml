@@ -204,6 +204,25 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
         WASM_PKG_HTTP_CACHE: '1'
+    - name: report the tier's tests for known bugs
+      if: '!cancelled()'
+      run: just test-email-e2e-full-stack "$EMAIL_E2E_INSTANCE" --pass-with-no-tests --retries 0 --output tests/email-e2e/test-results/known-bugs
+      env:
+        EMAIL_E2E_KNOWN_BUGS: '1'
+      continue-on-error: true
+      working-directory: apps/web
+    - name: check the tier's coverage of the email UI
+      if: '!cancelled()'
+      run: just email-e2e-ledger --enforce
+      working-directory: apps/web
+    - name: Upload email-e2e-full-stack-coverage artifact
+      if: '!cancelled()'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-full-stack-coverage
+        path: apps/web/tests/email-e2e/ledger-results/report
+        if-no-files-found: ignore
+        retention-days: '30'
     - name: collect the stack's logs
       if: failure()
       run: |-

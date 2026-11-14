@@ -77,10 +77,6 @@ const TRACES: xtask_paths::RuntimePath<'static> =
 const LEDGER: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("apps/web/tests/email-e2e/ledger-results/report");
 
-/// Whether an email action, state or request that no test covers fails the
-/// job. Off until the suite covers the manifest: the report only reports.
-const ENFORCE_LEDGER: bool = false;
-
 /// Build the workflow.
 pub fn email_e2e_browser() -> Workflow {
     let push = MAIN_PATHS
@@ -164,10 +160,15 @@ fn run_suite() -> Step<Run> {
 
 /// Tests kept for known, unfixed bugs fail by design, so this step never
 /// fails the job: its output says which still fail and which now pass. A
-/// test that is expected to fail is not retried.
+/// test that is expected to fail is not retried. One that passes fails the
+/// ledger step below, until its tag is removed. Its traces go beside the
+/// suite's, which a second run into the same directory would delete.
 fn known_bugs() -> Step<Run> {
     Step::new("report tests for known bugs")
-        .run("just test-email-e2e-browser --pass-with-no-tests --retries 0")
+        .run(
+            "just test-email-e2e-browser --pass-with-no-tests --retries 0 \
+             --output tests/email-e2e/test-results/known-bugs",
+        )
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)
@@ -176,15 +177,13 @@ fn known_bugs() -> Step<Run> {
 
 /// What the suite covers of the email UI, from what the two runs above
 /// recorded: the job summary and the `email-e2e-browser-coverage` artifact.
-/// It runs after a failed suite too, where it says what the tests that
-/// passed cover.
+/// It fails the job when a function or a row of the manifest has neither a
+/// passing test on this stack nor a waiver, when a waived one is covered, and
+/// when a test for a known bug passes (`ledger/README.md`). It runs after a
+/// failed suite too, where it says what the tests that passed cover.
 fn ledger() -> Step<Run> {
-    Step::new("report the coverage of the email UI")
-        .run("just email-e2e-ledger")
-        .add_env((
-            "EMAIL_E2E_LEDGER_ENFORCE",
-            if ENFORCE_LEDGER { "1" } else { "0" },
-        ))
+    Step::new("check the coverage of the email UI")
+        .run("just email-e2e-ledger --enforce")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .if_condition(Expression::new("!cancelled()"))
 }

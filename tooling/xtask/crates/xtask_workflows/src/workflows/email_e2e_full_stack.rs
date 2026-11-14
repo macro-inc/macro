@@ -54,6 +54,11 @@ const STACK_LOGS: xtask_paths::RuntimePath<'static> =
 const TRACES: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("apps/web/tests/email-e2e/test-results");
 
+/// What the coverage report of the email UI writes
+/// (`apps/web/tests/email-e2e/ledger/README.md`).
+const LEDGER: xtask_paths::RuntimePath<'static> =
+    xtask_paths::runtime_path!("apps/web/tests/email-e2e/ledger-results/report");
+
 /// Build the workflow.
 pub fn email_e2e_full_stack() -> Workflow {
     let push = MAIN_PATHS
@@ -100,6 +105,14 @@ fn tier() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
         .add_step(run_tier())
+        .add_step(known_bugs())
+        .add_step(ledger())
+        .add_step(
+            steps::upload_artifact("email-e2e-full-stack-coverage", LEDGER)
+                .add_with(("if-no-files-found", "ignore"))
+                .add_with(("retention-days", 30))
+                .if_condition(Expression::new("!cancelled()")),
+        )
         .add_step(stack_logs())
         .add_step(upload("email-e2e-full-stack-logs", STACK_LOGS))
         .add_step(upload("email-e2e-full-stack-traces", TRACES))
@@ -112,6 +125,33 @@ fn run_tier() -> Step<Run> {
     web_app_check_main::with_pr_wasm_env(
         Step::new("run the full-stack tier").run(include_str!("scripts/email_e2e_full_stack.sh")),
     )
+}
+
+/// The tier's tests kept for known, unfixed bugs fail by design, so this
+/// step never fails the job: its output says which still fail. One that
+/// passes fails the ledger step below, until its tag is removed.
+fn known_bugs() -> Step<Run> {
+    Step::new("report the tier's tests for known bugs")
+        .run(
+            "just test-email-e2e-full-stack \"$EMAIL_E2E_INSTANCE\" --pass-with-no-tests \
+             --retries 0 --output tests/email-e2e/test-results/known-bugs",
+        )
+        .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .continue_on_error(true)
+        .if_condition(Expression::new("!cancelled()"))
+}
+
+/// What the tier covers of the email UI, from what the two runs above
+/// recorded: the job summary and the `email-e2e-full-stack-coverage`
+/// artifact. It fails the job when something the tier alone covers
+/// (`ledger/full-stack-only.tsv`) has no passing test, and when a test for
+/// a known bug passes.
+fn ledger() -> Step<Run> {
+    Step::new("check the tier's coverage of the email UI")
+        .run("just email-e2e-ledger --enforce")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .if_condition(Expression::new("!cancelled()"))
 }
 
 /// What every container of the stack logged, and how its start went.
