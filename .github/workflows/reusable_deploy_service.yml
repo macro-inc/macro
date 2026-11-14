@@ -161,11 +161,28 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
+  check-migrations:
+    needs:
+    - setup
+    if: ${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}
+    name: Check ${{ inputs.service-name }} migrations are applied
+    runs-on: db-migrator
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        persist-credentials: 'false'
+        sparse-checkout: .github/
+    - name: Check migrations
+      uses: ./.github/actions/check-macro-db-migrations
+      with:
+        environment: ${{ inputs.environment }}
   deploy:
     needs:
     - setup
     - build-service-binaries
     - build-lambda-artifacts
+    - check-migrations
     if: ${{ !failure() && !cancelled() }}
     name: Deploy ${{ inputs.service-name }}
     runs-on: namespace-profile-linux-small

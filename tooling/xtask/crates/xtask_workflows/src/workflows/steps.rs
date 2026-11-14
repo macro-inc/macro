@@ -7,7 +7,7 @@
 use gh_workflow::{Env, Expression, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
-use crate::workflows::vars;
+use crate::workflows::{runners, vars};
 
 #[cfg(test)]
 mod test;
@@ -486,6 +486,28 @@ pub fn checkout_v4() -> Step<Use> {
             "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
         ) // v4
         .add_with(("persist-credentials", false))
+}
+
+/// A deploy that ships code built from this commit is blocked until every
+/// migration in the commit is applied to the environment it deploys to:
+/// single-service deploys apply none, and code running against a schema it is
+/// ahead of fails at runtime. `ships_code` is the `setup` job's expression for
+/// whether the deploy carries binaries or Lambdas; the deploy job must list
+/// this job in its `needs`.
+pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
+    Job::default()
+        .name(name)
+        .needs(vec!["setup".to_string()])
+        .cond(Expression::new(format!("${{{{ {ships_code} }}}}")))
+        .runs_on(runners::DB_MIGRATOR)
+        .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_step(
+            uses_local(
+                "Check migrations",
+                xtask_paths::repo_dir!(".github/actions/check-macro-db-migrations"),
+            )
+            .add_with(("environment", "${{ inputs.environment }}")),
+        )
 }
 
 /// Build Nix targets using Namespace's mounted `/nix` cache volume.
