@@ -202,7 +202,7 @@
     },
     {
       "id": "nested",
-      "title": "Inside the steps",
+      "title": "Nested steps",
       "description": "Steps that run inside another step, such as a computer image's Nix build and its Docker load.",
       "by": [
         "parent_step",

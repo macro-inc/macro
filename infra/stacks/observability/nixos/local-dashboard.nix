@@ -72,12 +72,31 @@ let
     description = "The foreground step that takes the biggest share of a ${start} bring-up's critical path in the range, and that share. See Critical path for the rest.";
     type = "stat";
     datasource = loki;
-    targets = [ (instant "A" "topk(1, ${shareExpr start})" "{{step}}") ];
+    targets = [ (instant "A" "topk(1, ${shareExpr start})" "") ];
+    # Instant Loki results reach panels as a table; name the share by its step.
+    transformations = [
+      {
+        id = "rowsToFields";
+        options.mappings = [
+          {
+            fieldName = "step";
+            handlerKey = "field.name";
+          }
+          {
+            fieldName = "Value #A";
+            handlerKey = "field.value";
+          }
+          {
+            fieldName = "Time";
+            handlerKey = "__ignore";
+          }
+        ];
+      }
+    ];
     fieldConfig.defaults = {
       unit = "percentunit";
       decimals = 0;
       noValue = "No runs with lanes yet";
-      displayName = "\${__field.labels.step}";
       color = {
         mode = "fixed";
         fixedColor = "orange";
@@ -162,6 +181,10 @@ let
             };
           }
           {
+            id = "custom.fillOpacity";
+            value = 0;
+          }
+          {
             id = "custom.hideFrom";
             value = {
               legend = true;
@@ -221,6 +244,12 @@ let
     // {
       fieldConfig = panel.fieldConfig // {
         overrides = panel.fieldConfig.overrides ++ [
+          (byName "step" [
+            {
+              id = "custom.minWidth";
+              value = 300;
+            }
+          ])
           (byName "Share" [
             {
               id = "custom.cellOptions";
@@ -288,7 +317,7 @@ let
   # telemetry settings say `services = true` (docs/development/running-locally.md).
   # Their forwarder tags everything `host.name` = the machine's name and
   # `deployment.environment` = local.
-  localTop = 132;
+  localTop = 140;
   machineFilter = ''host_name=~"$machine"'';
   serviceLogs = ''{deployment_environment="local", service_name!="local-telemetry"} | ${machineFilter}'';
   errorLogs = ''${serviceLogs} | severity_text=~"(?i)error|fatal|critical"'';
@@ -300,7 +329,7 @@ let
     title = "Recent bring-ups";
     description = "The latest bring-ups on the chosen machines. A trace id opens that run's trace here, as the fresh or resume run, or in Explore.";
     datasource = loki;
-    gridPos = grid 0 41 24 9;
+    gridPos = grid 0 49 24 9;
     targets = [
       {
         refId = "A";
@@ -415,7 +444,7 @@ let
     title = "Steps by machine, p50";
     description = "Each top-level step's median on each machine: a column that is darker than the others is a machine that is slow at that step.";
     datasource = loki;
-    gridPos = grid 0 89 24 12;
+    gridPos = grid 0 97 24 12;
     targets = [
       (instant "A"
         "quantile_over_time(0.5, $TOP | unwrap seconds | __error__=\"\" [$RANGE]) by (machine, step)"
@@ -508,26 +537,26 @@ let
       )
 
       (row 101 12 "One bring-up as a trace")
-      (tracePanel 14 (grid 0 13 24 14) "fresh" "Fresh start")
-      (tracePanel 15 (grid 0 27 24 14) "resume" "Resume")
+      (tracePanel 14 (grid 0 13 24 18) "fresh" "Fresh start")
+      (tracePanel 15 (grid 0 31 24 18) "resume" "Resume")
       recentRuns
 
-      (row 102 50 "Bottleneck: what a bring-up waits on")
-      (gantt 16 (grid 0 51 12 13) "fresh" "Fresh start")
-      (gantt 17 (grid 12 51 12 13) "resume" "Resume")
-      (criticalTable 18 (grid 0 64 12 9) "fresh" "Fresh start")
-      (criticalTable 19 (grid 12 64 12 9) "resume" "Resume")
+      (row 102 58 "Bottleneck: what a bring-up waits on")
+      (gantt 16 (grid 0 59 12 13) "fresh" "Fresh start")
+      (gantt 17 (grid 12 59 12 13) "resume" "Resume")
+      (criticalTable 18 (grid 0 72 12 9) "fresh" "Fresh start")
+      (criticalTable 19 (grid 12 72 12 9) "resume" "Resume")
 
-      (row 103 73 "Machines")
-      (lokiTable 30 "machines" (grid 0 74 24 7))
-      (lokiSeries 31 (grid 0 81 12 8) "Time to ready by machine, rolling 24 h p50"
+      (row 103 81 "Machines")
+      (lokiTable 30 "machines" (grid 0 82 24 7))
+      (lokiSeries 31 (grid 0 89 12 8) "Time to ready by machine, rolling 24 h p50"
         "Each point covers the 24 hours before it, fresh and resumed starts together."
         "s"
         "15m"
         [ (readyTarget "0.5" "{{machine}}" "machine") ]
         { }
       )
-      (lokiSeries 32 (grid 12 81 12 8) "Bring-ups by machine"
+      (lokiSeries 32 (grid 12 89 12 8) "Bring-ups by machine"
         "Bring-ups started per machine, ready or not. The Machines table has each machine's ready share."
         "short"
         "1h"
@@ -547,14 +576,14 @@ let
       )
       stepMatrix
 
-      (row 104 101 "Inside the steps")
+      (row 104 109 "Inside the steps")
       # Full width: step names are long.
-      (lokiTable 4 "steps" (grid 0 102 24 10))
-      (lokiTable 40 "nested" (grid 0 112 12 9))
-      (lokiTable 41 "crates" (grid 12 112 12 9))
-      (lokiTable 5 "services" (grid 0 121 12 11))
-      (lokiTable 7 "builds" (grid 12 121 12 5))
-      (lokiTable 8 "actions" (grid 12 126 12 6))
+      (lokiTable 4 "steps" (grid 0 110 24 10))
+      (lokiTable 40 "nested" (grid 0 120 12 9))
+      (lokiTable 41 "crates" (grid 12 120 12 9))
+      (lokiTable 5 "services" (grid 0 129 12 11))
+      (lokiTable 7 "builds" (grid 12 129 12 5))
+      (lokiTable 8 "actions" (grid 12 134 12 6))
 
       (row 105 localTop "Failures and local stacks (`services = true`)")
       (lokiTable 6 "failures" (grid 0 (localTop + 1) 12 8))
