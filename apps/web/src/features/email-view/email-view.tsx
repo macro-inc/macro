@@ -36,12 +36,13 @@ import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
-import { EMAIL_TABS } from './constants';
+import { canSearchEmailTab, EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { useEmailSearchHotkeys } from './use-email-search-hotkeys';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
 import {
@@ -98,12 +99,23 @@ function EmailPanes(props: {
   setListPane: (pane: EmailListPane | undefined) => void;
   onListWidthChange: (width: number) => void;
 }) {
+  const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
+  const { state, closeThread } = useEmailView();
+
+  const search = useEmailSearchHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    canSearch: () => canSearchEmailTab(state.tab),
+    showList: closeThread,
+  });
+
   const listColumn = (beside?: 'reader') => (
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
         onSearchEscape={props.focusList}
+        registerSearch={search.registerListSearch}
       />
       <ViewTour tour={emailTour} />
       <ViewShell.Content>{props.list}</ViewShell.Content>

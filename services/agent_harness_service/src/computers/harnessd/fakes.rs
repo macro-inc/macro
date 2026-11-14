@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use harness_id::HarnessId;
 use harnessd_protocol::{Request, Response};
 use harnesses::domain::account_logins::AccountLoginChange;
-use harnesses::domain::ports::MockHarnessRepo;
+use harnesses::domain::ports::{MockComputerTeamAgents, MockHarnessRepo};
 use harnesses::domain::service::HarnessServiceImpl;
 use hosted_runtimes::domain::ids::ComputerId;
 
@@ -89,12 +89,12 @@ impl ComputerLocks for FakeLocks {
 /// A harness service whose repo records every login change.
 pub(crate) fn recording_harnesses(
     changes: Arc<Mutex<Vec<(HarnessId, AccountLoginChange)>>>,
-) -> HarnessServiceImpl<MockHarnessRepo> {
+) -> HarnessServiceImpl<MockHarnessRepo, MockComputerTeamAgents> {
     let mut repo = MockHarnessRepo::new();
     repo.expect_record_account_login()
         .returning(move |harness_id, change| {
             changes.lock().unwrap().push((harness_id, change));
             Box::pin(async { Ok(true) })
         });
-    HarnessServiceImpl::new(repo)
+    HarnessServiceImpl::new(repo, MockComputerTeamAgents::new())
 }

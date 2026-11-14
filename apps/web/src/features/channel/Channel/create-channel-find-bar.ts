@@ -12,10 +12,7 @@ import {
 import { queryClient } from '@queries/client';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
 import { messageTimelineQueryOptions } from '@queries/messages/timeline';
-import {
-  useSearchChannelQuery,
-  validateSearchServiceText,
-} from '@queries/soup/search';
+import { useSearchChannelQuery } from '@queries/soup/search';
 import { ChannelSortTimestamp } from '@service-search/generated/models';
 import {
   type Accessor,
@@ -190,7 +187,6 @@ export function createChannelFindBar(
         results,
         totalCount,
         isFetching: () => searchQuery.isFetching,
-        validateText: validateSearchServiceText,
         // Only wrap past the most recent result once every page is loaded —
         // otherwise wrapping would jump to a "last" result that isn't truly
         // the global oldest hit.

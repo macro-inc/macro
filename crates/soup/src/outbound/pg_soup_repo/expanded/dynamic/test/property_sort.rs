@@ -88,7 +88,7 @@ fn continuation(
         limit: 2,
         val: CursorVal {
             sort_type: sort,
-            last_val: sort.position(key, timestamp),
+            last_val: sort.position(key, None, timestamp),
         },
         filter: documents(),
     })

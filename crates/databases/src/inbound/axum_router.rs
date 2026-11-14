@@ -236,6 +236,11 @@ pub(crate) fn agent_attribution<Authorization>(
 pub struct CreateDatabaseRequest {
     /// Display name.
     pub name: String,
+    /// The first table's display name; "Table 1" when omitted. Name it when
+    /// you are about to fill a table, and build into it rather than adding a
+    /// second table beside an empty "Table 1".
+    #[serde(default)]
+    pub first_table: Option<String>,
 }
 
 /// Path params for the column routes.
@@ -275,8 +280,8 @@ where
     Ok(Json(databases))
 }
 
-/// Create a database owned by the caller; its first table, "Table 1", holds a
-/// "Name" text column.
+/// Create a database owned by the caller; its first table, "Table 1" unless
+/// `firstTable` names it, holds a "Name" text column.
 #[utoipa::path(
     post,
     tag = "databases",
@@ -308,6 +313,7 @@ where
             name: request.name,
             owner_id: viewer_of(&user).user_id,
             acting_bot,
+            first_table: request.first_table,
         })
         .await?;
     Ok((StatusCode::CREATED, Json(database)))

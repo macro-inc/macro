@@ -261,6 +261,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 name: name.to_string(),
                 owner_id: user.clone(),
                 acting_bot: viewer.acting_bot,
+                first_table: None,
             })
             .await?;
         let receipt = database_receipt::<ViewAccessLevel, _>(

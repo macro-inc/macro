@@ -70,6 +70,8 @@ const blocks = {} as BlockOrchestrator;
 
 function Fixture() {
   const [surfaceOverride, setSurfaceOverride] = createSignal(false);
+  const [away, setAway] = createSignal(false);
+  const activePin = useCallContext().pin.activePin;
   useHotKeyRoot();
   const [tab, setTab] = createSignal<ChannelTabId>('call');
   const params = new URLSearchParams(location.search);
@@ -99,13 +101,24 @@ function Fixture() {
                           >
                             Refresh discussion
                           </button>
+                          <Show when={params.has('miniPlayerFocus') && !away()}>
+                            <button
+                              class="absolute top-0 right-0 z-50"
+                              onClick={() => setAway(true)}
+                            >
+                              Leave call view
+                            </button>
+                          </Show>
                           <ImperativeDialogHost />
                           <CallVolumeProvider>
                             <SeedVolume />
                             <CallFullscreenProvider
                               callId={() => 'fixture-call'}
                             >
-                              <main class="h-screen bg-page text-ink">
+                              <main
+                                class="h-screen bg-page text-ink"
+                                data-call-pin={activePin() ? 'pinned' : 'auto'}
+                              >
                                 <Show when={params.get('headerWidth')}>
                                   {(width) => (
                                     <header
@@ -124,11 +137,14 @@ function Fixture() {
                                 <Suspense>
                                   <Switch>
                                     <Match
-                                      when={params.get('surface') === 'player'}
+                                      when={
+                                        params.get('surface') === 'player' ||
+                                        away()
+                                      }
                                     >
                                       <CallMiniPlayer
                                         onCollapse={() => {}}
-                                        onOpenCall={() => {}}
+                                        onOpenCall={() => setAway(false)}
                                       />
                                     </Match>
                                     <Match

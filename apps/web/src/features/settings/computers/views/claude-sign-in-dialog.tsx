@@ -7,6 +7,7 @@ import {
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
 import { ActionDialogShell, Dialog } from '@ui';
+import type { JSX } from 'solid-js';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
 /** Sign in with Claude from a computer's or agent's row, outside guided setup. */
@@ -14,6 +15,12 @@ export function ClaudeSignInDialog(props: {
   harnessId: string;
   entry: ClaudeSignInEntry;
   onClose: () => void;
+  /** Replaces the default title, e.g. "Bring your AI to Ada". */
+  title?: string;
+  /** Shown above the title, e.g. the computer's setup progress. */
+  header?: JSX.Element;
+  /** Replaces the default toast once signed in. */
+  onSignedIn?: () => void;
 }) {
   const signOut = useClaudeSignOutMutation();
   const mode = useClaudeModeQuery(() => props.harnessId);
@@ -42,9 +49,13 @@ export function ClaudeSignInDialog(props: {
         <ClaudeSignInFlow
           harnessId={props.harnessId}
           entry={props.entry}
+          title={props.title}
+          header={props.header}
+          onClose={props.onClose}
           onSignedIn={() => {
             props.onClose();
-            toast.success(t('computers.claudeSignedIn'));
+            if (props.onSignedIn) props.onSignedIn();
+            else toast.success(t('computers.claudeSignedIn'));
           }}
           onUseCredits={() => fireAndForget(useCredits(), 'computer-claude')}
         />

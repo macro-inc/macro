@@ -1,6 +1,5 @@
 import {
   CollapsibleSection,
-  SearchBar,
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -158,7 +157,6 @@ export function TasksSidebar() {
   const panel = useSplitPanelOrThrow();
   const {
     state,
-    setState,
     projectsEnabled,
     setTab,
     selectedTask,
@@ -186,15 +184,6 @@ export function TasksSidebar() {
     <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
       <SidebarCreateHeader
         title="Tasks"
-        searchLabel="Search tasks"
-        search={() => (
-          <SearchBar
-            label="Search tasks"
-            placeholder="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-          />
-        )}
         createAction={
           !isTouchDevice() ? (
             <TasksCreateAction

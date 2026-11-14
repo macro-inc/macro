@@ -11244,7 +11244,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller; its first table, \"Table 1\" unless\n`firstTable` names it, holds a \"Name\" text column.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -22740,7 +22740,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -33916,6 +33916,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
@@ -35710,6 +35714,24 @@
           }
         }
       },
+      "CommercialFields": {
+        "type": "object",
+        "description": "CRM-owned roles for columns in the reusable table.",
+        "properties": {
+          "money": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyColumn"
+            },
+            "description": "Monetary fields, each with an independent per-row currency."
+          },
+          "outcome": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Outcome column, absent only for a pipeline from a pre-migration writer."
+          }
+        }
+      },
       "CommittedChange": {
         "type": "object",
         "description": "One change a committed batch journaled: a table, the version the batch\nproduced, and the journal's id for it.",
@@ -36525,6 +36547,10 @@
         "description": "Request body for creating a database.",
         "required": ["name"],
         "properties": {
+          "firstTable": {
+            "type": ["string", "null"],
+            "description": "The first table's display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\"."
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -43413,6 +43439,10 @@
               }
             ]
           },
+          "afterCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount now."
+          },
           "before": {
             "oneOf": [
               {
@@ -43423,6 +43453,10 @@
                 "description": "Its value before; missing when it was empty."
               }
             ]
+          },
+          "beforeCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount before."
           },
           "field": {
             "type": "string",
@@ -44376,6 +44410,11 @@
           "name": {
             "type": "string",
             "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           }
         }
       },
@@ -44387,6 +44426,11 @@
           "name": {
             "type": "string",
             "description": "Display name, never authentication evidence."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           },
           "userId": {
             "type": ["string", "null"],
@@ -44753,6 +44797,11 @@
             "format": "uuid",
             "description": "External person identity."
           },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          },
           "userId": {
             "type": ["string", "null"],
             "description": "Verified Macro user association, if present."
@@ -44815,6 +44864,11 @@
           "name": {
             "type": "string",
             "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
           },
           "provider": {
             "$ref": "#/components/schemas/ExternalChatProvider",
@@ -45135,6 +45189,10 @@
         "description": "The sum of a number field over the matched entries.",
         "required": ["field", "sum"],
         "properties": {
+          "currency": {
+            "type": ["string", "null"],
+            "description": "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+          },
           "field": {
             "type": "string",
             "description": "The field."
@@ -48199,7 +48257,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "property"
+          "property",
+          "name"
         ]
       },
       "GuestChatMessage": {
@@ -48445,6 +48504,17 @@
               "format": "uuid"
             },
             "description": "Teams it is a team machine for: their every member is a user of it."
+          },
+          "team_agent_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The agent teammate whose computer this is, when it is one. People\nreach the agent by message; nothing else may run on its computer.\nSet on the caller-facing listings and on a patch's answer."
+              }
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -51478,6 +51548,23 @@
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
+      "MoneyColumn": {
+        "type": "object",
+        "description": "Stable association between a numeric amount and its per-row denomination.",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The numeric column; renaming it preserves this association."
+          },
+          "currency": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The select column containing the currency code."
+          }
+        }
+      },
       "MyResponse": {
         "oneOf": [
           {
@@ -52524,7 +52611,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
           },
@@ -53865,11 +53952,16 @@
           "databaseId",
           "tableId",
           "primaryColumnId",
+          "commercialFields",
           "sharing",
           "createdAt",
           "trashedAt"
         ],
         "properties": {
+          "commercialFields": {
+            "$ref": "#/components/schemas/CommercialFields",
+            "description": "Stable identities for Outcome and amount/currency fields."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -54042,6 +54134,10 @@
           "readOnly"
         ],
         "properties": {
+          "currencyField": {
+            "type": ["string", "null"],
+            "description": "For a monetary amount, the field holding each entry's currency code."
+          },
           "multiple": {
             "type": "boolean",
             "description": "Whether it holds several values."
@@ -57866,7 +57962,8 @@
           "frecency",
           "touched_by_me",
           "notified_at",
-          "property"
+          "property",
+          "name"
         ]
       },
       "SoupApiSortDirection": {

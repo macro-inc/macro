@@ -361,6 +361,7 @@ async fn an_op_on_another_databases_table_refuses_the_batch_before_anything_is_w
             name: "Elsewhere".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

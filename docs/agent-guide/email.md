@@ -70,7 +70,7 @@ focus) hides it on that device for good (`localStorage`
 keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface: both focus the list header's search field. When a thread or a new email has replaced the list, `/` returns to the list, as Back does, and focuses that field, and `Ctrl+F` is left to the browser's find. The Email sidebar has no search field.
 
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
@@ -307,7 +307,14 @@ mail arrive (locally: insert a thread and publish `email.message_received` on
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading
-while selected tag sets are pending. Background refreshes retain the current list. To check this,
+while selected tag sets are pending. Background refreshes retain the current list.
+
+While the search field has text the list shows only search states: no Watch
+tutorial row, a spinner while the search runs (from the first character), and
+`No results` when nothing matches. `Load More` appears only under
+result rows: a page whose hits the tab or a client-side filter drops (Archived
+keeps only archived hits) pages on by itself until a row shows or results run
+out. To check the tab switch,
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 

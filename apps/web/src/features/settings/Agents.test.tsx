@@ -4,7 +4,7 @@
 
 import { Model } from '@core/component/AI/constant/model';
 import { useAgentModelsQueries } from '@queries/agents/models';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import type { Harness } from '@service-storage/client';
 import {
@@ -215,7 +215,7 @@ const harnessMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessesQuery: vi.fn(() => harnessMocks.query),
+  useRunnableHarnessesQuery: vi.fn(() => harnessMocks.query),
 }));
 
 vi.mock('@queries/agents/agents', () => ({
@@ -1545,7 +1545,7 @@ describe('Agents', () => {
     const fetchHarnesses = vi.fn(
       async (): Promise<Harness[]> => [{ ...MACROD_HARNESS }]
     );
-    vi.mocked(useHarnessesQuery).mockImplementationOnce(() =>
+    vi.mocked(useRunnableHarnessesQuery).mockImplementationOnce(() =>
       useQuery(() => ({
         queryKey,
         queryFn: fetchHarnesses,

@@ -69,6 +69,7 @@ axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound"] }
 channels = { path = "../../crates/channels", default-features = false, features = [
   "outbound",
 ] }
@@ -85,6 +86,7 @@ models_sfs = { path = "../../crates/models_sfs" }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
 team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
+agent_credentials = { path = "../../crates/agent_credentials", features = ["postgres"] }
 agent_git = { path = "../../crates/agent_git", default-features = false, features = ["client"] }
 email = { path = "../../crates/email", features = ["http_client", "outbound"] }
 email_db_client = { path = "../../crates/email_db_client" }

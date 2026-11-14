@@ -2,6 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -60,7 +61,12 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
-import { createDatabaseViewSelection } from '../primitives/view-selection';
+import { databaseDetailSearch } from '../database-route';
+import {
+  createDatabaseViewSelection,
+  followRouteLocation,
+  selectLocation,
+} from '../primitives/view-selection';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';
 import { trashDatabase } from '../queries/trash-database';
@@ -131,14 +137,23 @@ const Block: Component = () => {
     // Another table's grid takes the request when it mounts.
     openRequestedRecord();
   }
+  const [routeSearch, setRouteSearch] =
+    createSearchParams(databaseDetailSearch);
+  followRouteLocation(
+    {
+      tableId: () => routeSearch.tableId,
+      viewId: () => routeSearch.viewId,
+    },
+    userId,
+    setSelection,
+    () => setRouteSearch({}, { mode: 'replace', history: 'replace' })
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
-      if (params.tableId && params.viewId)
-        setSelection((current) => ({
-          ...current,
-          tableId: params.tableId,
-          views: { ...current.views, [params.tableId]: params.viewId },
-        }));
+      // A link opened in the app (`webUrl()` on a table or view) names a
+      // table and maybe a view; a related record names its row instead.
+      if (params.tableId && !params.rowId)
+        selectLocation(setSelection, params.tableId, params.viewId);
       if (params.tableId && params.rowId)
         fireAndForget(
           openRelated({

@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -7,6 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
 use super::*;
+use crate::domain::models::SharedAccess;
 use crate::domain::ports::{SoupRealtimeConsumer, SoupRealtimePublisher, UserAccessExpander};
 
 const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
@@ -22,18 +23,45 @@ struct FakeAccessExpander {
 impl UserAccessExpander for FakeAccessExpander {
     async fn expand_user_access(
         &self,
-        entity: &Entity<'static>,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        entities: &[Entity<'static>],
+    ) -> Result<Vec<SharedAccess>, Report> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.entities
             .lock()
             .expect("access entities lock")
-            .push(entity.clone());
+            .extend_from_slice(entities);
         if self.fail {
             Err(rootcause::report!("access unavailable"))
         } else {
-            Ok(self.users.clone())
+            Ok(vec![SharedAccess {
+                entities: entities.to_vec(),
+                users: self.users.clone(),
+            }])
         }
+    }
+}
+
+/// Resolves each entity to its own users, as entities with mixed access do.
+struct PerEntityAccessExpander {
+    users_by_entity: HashMap<Entity<'static>, Vec<MacroUserIdStr<'static>>>,
+    calls: Arc<AtomicUsize>,
+}
+
+impl UserAccessExpander for PerEntityAccessExpander {
+    async fn expand_user_access(
+        &self,
+        entities: &[Entity<'static>],
+    ) -> Result<Vec<SharedAccess>, Report> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(entities
+            .iter()
+            .filter_map(|entity| {
+                self.users_by_entity.get(entity).map(|users| SharedAccess {
+                    entities: vec![entity.clone()],
+                    users: users.clone(),
+                })
+            })
+            .collect())
     }
 }
 
@@ -128,7 +156,7 @@ async fn full_queue_waits_for_capacity_and_acknowledges_only_completed_publicati
         let service = Arc::clone(&service);
         tasks.spawn(async move {
             service
-                .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+                .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
                 .await
         });
     }
@@ -165,7 +193,7 @@ async fn worker_stopping_during_publication_returns_an_error() {
         let service = Arc::clone(&service);
         async move {
             service
-                .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+                .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
                 .await
         }
     });
@@ -191,7 +219,7 @@ async fn closed_worker_queue_returns_an_error() {
 
     let error = harness
         .service
-        .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+        .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
         .await
         .expect_err("worker unavailable");
     assert!(error.to_string().contains("worker unavailable"));
@@ -317,7 +345,7 @@ async fn zero_users_skips_publication() {
 
     harness
         .service
-        .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+        .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
         .await
         .expect("patch is processed");
 
@@ -333,7 +361,10 @@ async fn recipient_expansion_can_use_a_different_entity_from_the_patch() {
 
     harness
         .service
-        .notify_users(SoupRealtimePatch::new(updated_document(), channel.clone()))
+        .notify_users(vec![SoupRealtimePatch::new(
+            updated_document(),
+            channel.clone(),
+        )])
         .await
         .expect("patch is published");
 
@@ -358,7 +389,7 @@ async fn updated_and_deleted_patches_are_published_unchanged() {
 
         harness
             .service
-            .notify_users(SoupRealtimePatch::for_entity(patch.clone()))
+            .notify_users(vec![SoupRealtimePatch::for_entity(patch.clone())])
             .await
             .expect("patch is published");
         let messages = harness.messages.lock().expect("messages lock");
@@ -377,7 +408,7 @@ async fn duplicate_accessors_are_deduplicated() {
 
     harness
         .service
-        .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+        .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
         .await
         .expect("patch is published");
 
@@ -390,7 +421,7 @@ async fn access_failure_is_returned_and_prevents_publication() {
 
     let error = harness
         .service
-        .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+        .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
         .await
         .expect_err("access failure reaches the caller");
 
@@ -414,7 +445,7 @@ async fn publisher_failure_is_returned_after_attempting_all_recipients() {
 
     let error = harness
         .service
-        .notify_users(SoupRealtimePatch::for_entity(updated_document()))
+        .notify_users(vec![SoupRealtimePatch::for_entity(updated_document())])
         .await
         .expect_err("publication failure reaches the caller");
 
@@ -424,4 +455,66 @@ async fn publisher_failure_is_returned_after_attempting_all_recipients() {
             .contains("1 realtime Soup publication(s) failed")
     );
     assert_eq!(harness.messages.lock().expect("messages lock").len(), 3);
+}
+
+#[tokio::test]
+async fn a_batch_resolves_recipients_once_and_reaches_each_entitys_own_users() {
+    let owner = user("owner");
+    let guest = user("guest");
+    let folder_document = document(DOCUMENT_ID);
+    let shared_document = document(OTHER_DOCUMENT_ID);
+    let unreachable_document = document("00000000-0000-0000-0000-000000000003");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let messages = Arc::new(Mutex::new(Vec::new()));
+    let service = SoupRealtimeServiceImpl::new(
+        PerEntityAccessExpander {
+            users_by_entity: HashMap::from([
+                (folder_document.clone(), vec![owner.clone()]),
+                (
+                    shared_document.clone(),
+                    vec![owner.clone(), guest.clone(), owner.clone()],
+                ),
+            ]),
+            calls: calls.clone(),
+        },
+        FakePublisher {
+            messages: messages.clone(),
+            fail_users: HashSet::new(),
+        },
+    );
+
+    let delivery = service
+        .notify_users(vec![
+            SoupRealtimePatch::for_entity(Patch::Deleted(folder_document.clone())),
+            SoupRealtimePatch::for_entity(Patch::Deleted(shared_document.clone())),
+            SoupRealtimePatch::for_entity(Patch::Deleted(unreachable_document)),
+        ])
+        .await
+        .expect("batch is published");
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(delivery.publish_count, 3);
+    assert_eq!(
+        delivery.recipient_sets,
+        HashSet::from([vec![owner.clone()], vec![guest.clone(), owner.clone()]])
+    );
+    let messages = messages.lock().expect("messages lock");
+    let owner_patches = messages
+        .iter()
+        .filter(|message| message.user_id == owner)
+        .map(|message| message.patch.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        owner_patches,
+        vec![
+            Patch::Deleted(folder_document),
+            Patch::Deleted(shared_document.clone())
+        ]
+    );
+    let guest_patches = messages
+        .iter()
+        .filter(|message| message.user_id == guest)
+        .map(|message| message.patch.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(guest_patches, vec![Patch::Deleted(shared_document)]);
 }

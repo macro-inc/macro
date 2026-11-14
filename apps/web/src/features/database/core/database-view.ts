@@ -20,6 +20,12 @@ export type DatabaseViewColumn = {
   isMultiSelect: boolean;
   options: DatabaseOption[];
   writable: boolean;
+  /** A monetary value takes its denomination from this row column. */
+  currencyColumnId?: string;
+  /** Host-owned options cannot be added, renamed or deleted. */
+  fixedOptions?: boolean;
+  /** Value a new row starts with, also enforced by its host. */
+  defaultValue?: DatabaseCellValue;
   /** The preferred field for record titles and initial focus. */
   primary?: boolean;
   specificEntityType?: DatabaseEntityType | null;

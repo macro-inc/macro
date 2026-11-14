@@ -12,6 +12,10 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 /// runtime: on the session API's 403 and on its `command_rejected` event.
 pub const NO_RUNTIME_ACCESS_CODE: &str = "no_runtime_access";
 
+/// Why no session opens on an agent teammate's computer, as callers show it.
+pub const TEAM_AGENT_COMPUTER_MESSAGE: &str =
+    "This computer belongs to an agent teammate. Message them instead.";
+
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
     /// Invalid session activity paging input.
@@ -58,6 +62,10 @@ pub enum AgentSessionError {
     /// is not in a state to serve it. Says what the operator has to fix.
     #[error("{0}")]
     RuntimeUnavailable(&'static str),
+    /// The bot's harness is an agent teammate's computer: people message the
+    /// agent, and no session is started there.
+    #[error("{}", TEAM_AGENT_COMPUTER_MESSAGE)]
+    TeamAgentComputer,
     #[error("this bot already has a session for this thread")]
     ThreadSessionExists,
     /// A create named an id a session already holds. Ids are minted by the

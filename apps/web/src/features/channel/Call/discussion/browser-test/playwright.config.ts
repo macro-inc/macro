@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: fileURLToPath(new URL('.', import.meta.url)),
   testMatch: '*.browser.e2e.ts',
   grep: fullHost
-    ? /composer stays|call discussion keeps|registered work gating|20px icon|toggle icon|explicit reply|reply quotes in place|sending from the panel|rebuilt call|call duration pill|docked width threshold/
+    ? /mini-player|composer stays|call discussion keeps|registered work gating|20px icon|toggle icon|explicit reply|reply quotes in place|sending from the panel|rebuilt call|call duration pill|docked width threshold/
     : undefined,
   workers: 1,
   timeout: 120_000,

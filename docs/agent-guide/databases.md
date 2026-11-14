@@ -17,6 +17,9 @@ the background; a slow discovery refresh must not delay the new database card.
 Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
+`?tableId=<uuid>&viewId=<uuid>` (what the SDK's table and view `webUrl()` hand out)
+opens that table and view over the viewer's remembered tab; without `viewId` the
+table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions

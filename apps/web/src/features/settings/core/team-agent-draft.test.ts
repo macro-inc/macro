@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  inviteBlocker,
   type TeamAgentDraft,
   teamAgentDraftProblems,
   teamAgentRequest,
@@ -84,5 +85,22 @@ describe('team agent draft', () => {
       teamAgentDraftProblems({ ...draft, name: `${sixtyFourEmoji}!` }).name
     ).toBe('too_long');
     expect(teamAgentRequest(draft)).toBeUndefined();
+  });
+});
+
+describe('inviteBlocker', () => {
+  it('names the first thing to fix: missing fields, then long ones, then the size', () => {
+    expect(
+      inviteBlocker({
+        name: 'required',
+        personality: 'too_long',
+        size: 'required',
+      })
+    ).toBe('fields');
+    expect(inviteBlocker({ personality: 'too_long', size: 'required' })).toBe(
+      'too_long'
+    );
+    expect(inviteBlocker({ size: 'required' })).toBe('size');
+    expect(inviteBlocker({})).toBeUndefined();
   });
 });

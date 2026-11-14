@@ -3535,6 +3535,11 @@ export type ChannelAccessRequestedMetadata = {
      * Person asking to join.
      */
     requester_id: MacroUserIdStr;
+    /**
+     * The requester's profile name when they asked, if they had one. Absent
+     * on events from before it was added.
+     */
+    requester_name?: string | null;
 };
 
 /**
@@ -4647,6 +4652,20 @@ export type CommentOnTextResponse = {
 };
 
 /**
+ * CRM-owned roles for columns in the reusable table.
+ */
+export type CommercialFields = {
+    /**
+     * Monetary fields, each with an independent per-row currency.
+     */
+    money?: Array<MoneyColumn>;
+    /**
+     * Outcome column, absent only for a pipeline from a pre-migration writer.
+     */
+    outcome?: string | null;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -5247,6 +5266,12 @@ export type CreateCrmTeamContactRequest = {
  * Request body for creating a database.
  */
 export type CreateDatabaseRequest = {
+    /**
+     * The first table's display name; "Table 1" when omitted. Name it when
+     * you are about to fill a table, and build into it rather than adding a
+     * second table beside an empty "Table 1".
+     */
+    firstTable?: string | null;
     /**
      * Display name.
      */
@@ -9524,7 +9549,15 @@ export type EntryChanges = {
  */
 export type EntryFieldChange = {
     after?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount now.
+     */
+    afterCurrency?: string | null;
     before?: null | EntryFieldValue;
+    /**
+     * For a monetary field, the currency code of the amount before.
+     */
+    beforeCurrency?: string | null;
     /**
      * The field.
      */
@@ -10194,6 +10227,11 @@ export type ExternalChatParticipant = {
      * else a generic name.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
 };
 
 /**
@@ -10205,6 +10243,11 @@ export type ExternalChatPersonRef = {
      * Display name, never authentication evidence.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * Verified Macro user, if any.
      */
@@ -10422,6 +10465,11 @@ export type ExternalChatSender = {
      */
     personId: string;
     /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
+    /**
      * Verified Macro user association, if present.
      */
     userId?: string | null;
@@ -10453,6 +10501,12 @@ export type ExternalChatSummary = {
      * Display name: the group's, or a direct chat's other person.
      */
     name: string;
+    /**
+     * The group's picture, or a direct chat's person's, as the owner's
+     * account sees it: a static file id; `null` when hidden, unset or not
+     * fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * The service the chat lives in.
      */
@@ -10641,6 +10695,11 @@ export type FieldRename = {
  * The sum of a number field over the matched entries.
  */
 export type FieldTotal = {
+    /**
+     * The currency code of a monetary field's amounts; such a field has one
+     * total per currency, never converted or combined. Absent for other numbers.
+     */
+    currency?: string | null;
     /**
      * The field.
      */
@@ -12364,7 +12423,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property' | 'name';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -12570,6 +12629,7 @@ export type Harness = {
      * Teams it is a team machine for: their every member is a user of it.
      */
     shared_team_ids?: Array<string>;
+    team_agent_user_id?: null | MacroUserIdStr;
     /**
      * Update timestamp.
      */
@@ -14538,6 +14598,20 @@ export type MessageTopicEvent = {
 };
 
 /**
+ * Stable association between a numeric amount and its per-row denomination.
+ */
+export type MoneyColumn = {
+    /**
+     * The numeric column; renaming it preserves this association.
+     */
+    amount: string;
+    /**
+     * The select column containing the currency code.
+     */
+    currency: string;
+};
+
+/**
  * A signed-in respondent's own response.
  */
 export type MyResponse = {
@@ -16005,6 +16079,10 @@ export type PinnedItem = {
  */
 export type Pipeline = {
     /**
+     * Stable identities for Outcome and amount/currency fields.
+     */
+    commercialFields: CommercialFields;
+    /**
      * Creation time.
      */
     createdAt: string;
@@ -16128,6 +16206,10 @@ export type PipelineExportResponse = {
  * One field of a pipeline, named as people see it.
  */
 export type PipelineFieldSummary = {
+    /**
+     * For a monetary amount, the field holding each entry's currency code.
+     */
+    currencyField?: string | null;
     /**
      * Whether it holds several values.
      */
@@ -18519,7 +18601,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property' | 'name';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -33090,7 +33172,8 @@ export type GetItemsSoupData = {
         /**
          * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
          * Missing definitions, unsupported types, and mismatched values sort as missing.
-         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
+         * Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
          * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;

@@ -101,6 +101,7 @@ async fn a_teammate_reads_and_writes_a_team_shared_database_until_it_is_unshared
             name: "Roadmap".to_string(),
             owner_id: owner.user_id.clone(),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

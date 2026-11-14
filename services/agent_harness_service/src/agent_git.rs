@@ -76,8 +76,9 @@ where
             admins: TeamRepositoryAdmins::new(teams::outbound::team_repo::TeamRepositoryImpl::new(
                 pool.clone(),
             )),
-            limiter: PgPushRateLimiter::new(pool, settings.pushes_per_minute),
+            limiter: PgPushRateLimiter::new(pool.clone(), settings.pushes_per_minute),
             backend: GitHttpBackend::new(directories, git_tasks),
+            creators: agent_credentials::rollout::PgAgentCreators::new(pool),
             flags: feature_flags,
         },
         RepoLimits {

@@ -41,6 +41,7 @@ fn harness(owner: HarnessOwner) -> Harness {
         connected: false,
         last_connected_at: None,
         computer_id: None,
+        team_agent_user_id: None,
         claude_mode: ClaudeMode::MacroCredits,
     }
 }
@@ -358,8 +359,96 @@ impl HarnessRepo for FakeRepo {
     }
 }
 
-fn service(repo: FakeRepo) -> HarnessServiceImpl<FakeRepo> {
-    HarnessServiceImpl::new(repo)
+/// The one agent teammate's computer in these tests, and its agent.
+const AGENT_COMPUTER_ID: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(0xa6e7));
+const TEAM_AGENT_ID: &str = "macro|agent@example.com";
+
+#[derive(Clone, Default)]
+struct FakeTeamAgents;
+
+impl ComputerTeamAgents for FakeTeamAgents {
+    type Err = anyhow::Error;
+
+    async fn team_agents_of(
+        &self,
+        computers: &[ComputerId],
+    ) -> Result<std::collections::HashMap<ComputerId, MacroUserIdStr<'static>>, Self::Err> {
+        Ok(computers
+            .iter()
+            .filter(|computer| **computer == AGENT_COMPUTER_ID)
+            .map(|computer| (*computer, caller(TEAM_AGENT_ID)))
+            .collect())
+    }
+}
+
+fn service(repo: FakeRepo) -> HarnessServiceImpl<FakeRepo, FakeTeamAgents> {
+    HarnessServiceImpl::new(repo, FakeTeamAgents)
+}
+
+#[tokio::test]
+async fn listings_mark_an_agent_teammates_computer_with_its_agent() {
+    let agent_computer = FakeRepo {
+        harness: Some(Harness {
+            computer_id: Some(AGENT_COMPUTER_ID),
+            ..harness(user_owner(OWNER_ID))
+        }),
+        ..FakeRepo::default()
+    };
+    let usable = service(agent_computer.clone())
+        .list_harnesses(caller(OWNER_ID))
+        .await
+        .unwrap();
+    let directory = service(agent_computer)
+        .list_directory(caller(OWNER_ID))
+        .await
+        .unwrap();
+    assert_eq!(usable[0].team_agent_user_id, Some(caller(TEAM_AGENT_ID)));
+    assert_eq!(directory[0].team_agent_user_id, Some(caller(TEAM_AGENT_ID)));
+
+    let people_computer = FakeRepo {
+        harness: Some(Harness {
+            computer_id: Some(COMPUTER_ID),
+            ..harness(user_owner(OWNER_ID))
+        }),
+        ..FakeRepo::default()
+    };
+    let usable = service(people_computer)
+        .list_harnesses(caller(OWNER_ID))
+        .await
+        .unwrap();
+    assert_eq!(usable[0].team_agent_user_id, None);
+}
+
+#[tokio::test]
+async fn only_an_agent_computers_harness_has_a_team_agent() {
+    let on = |computer_id| FakeRepo {
+        harness: Some(Harness {
+            computer_id,
+            ..harness(user_owner(OWNER_ID))
+        }),
+        ..FakeRepo::default()
+    };
+    assert_eq!(
+        service(on(Some(AGENT_COMPUTER_ID)))
+            .harness_team_agent(HarnessId::TEST_A)
+            .await
+            .unwrap(),
+        Some(caller(TEAM_AGENT_ID))
+    );
+    assert_eq!(
+        service(on(Some(COMPUTER_ID)))
+            .harness_team_agent(HarnessId::TEST_A)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        service(on(None))
+            .harness_team_agent(HarnessId::TEST_A)
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[tokio::test]

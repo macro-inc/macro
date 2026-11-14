@@ -139,6 +139,7 @@ import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupP
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { HarnessComputerId } from './generated/schemas/harnessComputerId';
+import type { HarnessTeamAgentUserId } from './generated/schemas/harnessTeamAgentUserId';
 import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
@@ -377,6 +378,8 @@ export type Harness = {
   last_connected_at: string | null;
   /** Set when this is a team's Macro computer. */
   computer_id?: HarnessComputerId;
+  /** Set when that computer is an agent teammate's, which runs only its agent. */
+  team_agent_user_id?: HarnessTeamAgentUserId;
   /** How Claude Code on a Macro computer is paid for. */
   claude_mode?: ClaudeMode;
 };

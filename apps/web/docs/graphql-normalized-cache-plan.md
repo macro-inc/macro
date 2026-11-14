@@ -285,6 +285,19 @@ list rereads and past generation checks and operation teardowns. It registers
 nothing and writes nothing, so those fences do not order it; it never passes
 `init` or `clear`. It can run before a write queued ahead of it, returning rows
 that are only older; that write's cache change then refreshes the list.
+The record reads that load the rows a typed search named (`read-records-by-keys`
+with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
+rank with it: they run ahead of list rereads and past the same fences, since the
+search is not answered for the user until its rows list. Like the search they
+can run before a network result queued ahead of them, whose cache change then
+refreshes the list. The list keeps those rows until that refresh, so a row read
+that arrives while a change made on this device is queued (an optimistic
+mutation or its settlement) orders like any other record read instead.
+The desktop host ignores the field.
+Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
+query that feeds app state rather than a view sets `backgroundReader` in its
+operation context and is reread at ordinary rank, behind the views on screen;
+the notification feed (500 entities with their notifications) does.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would
@@ -969,6 +982,19 @@ so equal IDs in different entity types remain independent. Channel lookups use
 refreshes. Soup exposes generic revalidation descriptors rather than registering
 channel notification readers. Consumers receive rows and unresolved IDs without
 coordinating query lifetimes.
+
+A predicate that still trails the observed cache revision after three consecutive
+reads reports a cache error instead of holding initial hydration indefinitely.
+The existing missing-record hydration path can then fetch unresolved identities.
+Already-resolved rows remain visible without a forced full-identity refresh;
+a later cache change retries the predicate and replaces its membership on success.
+Explicit refreshes still use the existing query refresh path. Recovery does not
+depend on the selected projection or add a second row/removal store.
+A change received during the final stale read is deferred to a new task rather
+than lost or retried indefinitely in the same microtask chain. Revision and
+generation checks continue to govern which local or network snapshot is shown;
+there is no separate recovery authority.
+
 Deletion markers use the same `typename:id` identity through pending mutations,
 retention, display filtering, and restore confirmation. Deleting or restoring a
 document must not hide or restore an unrelated channel with the same ID. The

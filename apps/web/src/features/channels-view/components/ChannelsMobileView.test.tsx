@@ -1,5 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import {
   cleanup,
   fireEvent,
@@ -8,8 +9,10 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { For, type JSX } from 'solid-js';
+import { createMemo, createRoot, createSignal, For, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolveChannelLabelMemberships } from '../core/smart-tags';
 import type { ChannelsDataSource } from '../queries';
 
 const mocks = vi.hoisted(() => ({
@@ -226,6 +229,32 @@ describe('mobile channel activation', () => {
   });
 });
 
+describe('mobile section hydration', () => {
+  it('keeps resolved conversations usable while remaining members load', async () => {
+    const [loading, setLoading] = createSignal(true);
+    const sectionSource: ChannelsDataSource = {
+      ...source,
+      isLoading: loading,
+      isFetching: loading,
+    };
+    render(() => (
+      <ChannelsMobileView
+        source={sectionSource}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+      />
+    ));
+
+    const row = screen.getByRole('button', { name: 'One' });
+    fireEvent.click(row);
+    await waitFor(() => expect(mocks.openSplit).toHaveBeenCalledOnce());
+    setLoading(false);
+    setLoading(true);
+    expect(screen.getByRole('button', { name: 'One' })).toBe(row);
+  });
+});
+
 describe('mobile channel press feedback', () => {
   it('highlights a held row and cancels when the finger scrolls or the touch is cancelled', () => {
     vi.useFakeTimers();
@@ -276,6 +305,76 @@ describe('mobile channel press feedback', () => {
     await opened.promise;
     await vi.runAllTimersAsync();
     expect(row.classList.contains('touch-highlight')).toBe(false);
+  });
+});
+
+describe('mobile section membership', () => {
+  it('indexes 10,000 name matches among 20,000 channels once per membership change', () => {
+    const channels = Array.from({ length: 20_000 }, (_, index) => ({
+      ...channel,
+      id: `channel-${index}`,
+      name: `${index < 10_000 ? 'Matching' : 'Different'} ${index}`,
+    }));
+    const [matchedSection] = resolveChannelLabelMemberships(
+      [
+        {
+          id: 'large-rule',
+          name: 'Large rule',
+          rule: { attribute: 'name', contains: 'matching' },
+          channelIds: [],
+          explicitChannelIds: [],
+          channelCount: 0,
+          sortOrder: 0,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+      channels
+    );
+    expect(matchedSection.channelIds).toHaveLength(10_000);
+    const [memberIds, setMemberIds] = createStore(matchedSection.channelIds);
+    let memberReads = 0;
+    const trackedIds = new Proxy(memberIds, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          memberReads += 1;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const label: ChannelLabel = {
+      ...matchedSection,
+      channelIds: trackedIds,
+    };
+    createRoot((dispose) => {
+      try {
+        const matches = createMemo(() =>
+          channelsForMobileSection({
+            tab: 'label:large-rule',
+            channels,
+            labels: [label],
+          })
+        );
+        expect(matches()).toEqual(channels.slice(0, 10_000));
+        expect(memberReads).toBeLessThanOrEqual(memberIds.length);
+
+        channels[19_999].name = 'Matching renamed';
+        const [renamedSection] = resolveChannelLabelMemberships(
+          [matchedSection],
+          channels
+        );
+        expect(renamedSection.channelIds).toHaveLength(10_001);
+        memberReads = 0;
+        setMemberIds(renamedSection.channelIds);
+        expect(matches()).toEqual([
+          ...channels.slice(0, 10_000),
+          channels[19_999],
+        ]);
+        expect(memberReads).toBeLessThanOrEqual(memberIds.length);
+      } finally {
+        dispose();
+      }
+    });
   });
 });
 

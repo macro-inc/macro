@@ -43,6 +43,9 @@ depended-on crates in the backend.
 
 - Add an entity kind's access check: `src/domain/ports.rs`
   (`AccessRepository` method) → `src/domain/service.rs` → `src/outbound/pg_access_repo.rs`.
+  If its users are exactly its `entity_access` grants, also list it in
+  `GRANT_AUDIENCE_KINDS` (`src/domain/service.rs`) so bulk lookups group it; otherwise
+  it falls back to one lookup per entity.
 - Debug a specific grant: `cargo run -p entity_access --bin explain_access
   --features explain_binary`.
 
@@ -68,6 +71,12 @@ the entity-access domain service.
   `test/documents_access.rs` and its fixture, which compare the two.
 - Spans here never record a user id (a `MacroUserId` is an email, and a
   `Viewer` carries one): skip it.
+- `EntityAudienceLookup::get_entity_audiences` resolves many entities' users at
+  once: kinds whose users are exactly their `entity_access` grants go through
+  one grouped lookup (`queries/entity_audiences.rs`: grants, then team and
+  channel members once per distinct source); other kinds and a single id use the
+  cached per-entity `get_users_by_entity`. Keep it in step with
+  `get_entity_users`.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 - Access statements pass the viewer (`queries::Viewer`) and check a grant's
   source with `entity_access_source_matches(source, viewer, scope_team)`, or
