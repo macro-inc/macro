@@ -328,3 +328,7 @@ F-173	outlook	maintenance outlook_bounced_and_reported_addresses_are_suppressed	
 F-194	gmail	calendar_shares gmail_a_forwarded_event_arrives_with_its_file	crates/email/src/domain/event_forward.rs: a forwarded event goes out without its invitation file
 F-194	outlook	calendar_shares outlook_a_forwarded_event_arrives_with_its_file	crates/email/src/domain/event_forward.rs: a forwarded event goes out without its invitation file
 F-195	gmail	sync_backfill gmail_a_cancelled_import_stops_reading_the_mailbox	crates/email/src/domain/backfill_jobs.rs: cancelling an import answers success and leaves the job running
+F-027	gmail	focus gmail_mail_the_model_wants_is_in_focus_and_other_mail_is_not	crates/email/src/domain/focus/service.rs: whatever the model answers, the thread is stored as not in Focus
+F-027	gmail	focus gmail_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal	crates/email/src/domain/focus/service.rs: whatever the model answers, the thread is stored as not in Focus
+F-027	outlook	focus outlook_mail_the_model_wants_is_in_focus_and_other_mail_is_not	crates/email/src/domain/focus/service.rs: whatever the model answers, the thread is stored as not in Focus
+F-027	outlook	focus outlook_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal	crates/email/src/domain/focus/service.rs: whatever the model answers, the thread is stored as not in Focus

@@ -532,6 +532,8 @@ jobs:
             - 'services/user_link_cleanup_handler/**'
             - 'services/email_sfs_delete_handler/**'
             - 'services/email_suppression_handler/**'
+            - 'services/email_focus_worker/**'
+            - 'crates/jev/**'
             - 'crates/email/**'
             - 'crates/email_*/**'
             - 'crates/graphql_email/**'

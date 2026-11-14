@@ -7,6 +7,7 @@ mod calendar_environment;
 mod calendar_reads;
 mod document_storage_environment;
 mod environment;
+mod focus_environment;
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -24,6 +25,7 @@ use self::calendar_reads::CalendarReads;
 pub use self::calendar_reads::CalendarSignal;
 use crate::aws::{Aws, StoredObject};
 use crate::evidence::{Collected, Recorder, counted, path_shape, shape};
+use crate::focus::{FocusClassifier, FocusStandIns};
 use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
 use crate::infra::redis::RedisDatabase;
@@ -45,6 +47,12 @@ const DOCUMENT_STORAGE: &str = "document_storage_service";
 const SEARCH_INDEXER: &str = "search_processing_service";
 /// The consumer group the search indexer reads the event topics in.
 const SEARCH_INDEXER_GROUP: &str = "search-processing-service";
+/// The worker that classifies mail for Focus.
+const FOCUS_WORKER: &str = "email_focus_worker";
+/// The consumer group that worker reads the mail events in.
+const FOCUS_WORKER_GROUP: &str = "email-focus";
+/// What that worker logs once it has subscribed to the mail events.
+const FOCUS_WORKER_MARKER: &str = "email focus consumer listening";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
@@ -109,6 +117,14 @@ pub struct StackOptions {
     /// can be linked with their calendars ([`User::link_gmail_with_calendar`],
     /// [`User::link_outlook_with_calendar`]). `env` reaches that service too.
     pub calendar: bool,
+    /// Also start `email_focus_worker`, which classifies the mail of the
+    /// scenario's inboxes for Focus, with stand-ins for the model and the
+    /// due date reader it asks ([`Stack::focus_classifier`]). Set
+    /// `document_storage` as well to read Focus the way the web app does.
+    /// The worker's consumer group is one for every scenario, so these
+    /// scenarios run one at a time (the `email-e2e-focus` test group):
+    /// keep them in `tests/focus.rs`.
+    pub focus: bool,
 }
 
 /// What a stack with calendar runs on top of the email services.
@@ -142,6 +158,9 @@ pub struct Stack {
     workers: Option<ServiceProcess>,
     document_storage: Option<ServiceProcess>,
     search_indexer: Option<ServiceProcess>,
+    focus_worker: Option<ServiceProcess>,
+    /// The model and the due date reader the Focus worker asks.
+    focus_stand_ins: Option<FocusStandIns>,
     /// The search cluster, on a stack that searches.
     opensearch_url: Option<String>,
     graphql_url: Option<String>,
@@ -263,6 +282,8 @@ impl Stack {
             workers: Some(workers),
             document_storage: None,
             search_indexer: None,
+            focus_worker: None,
+            focus_stand_ins: None,
             opensearch_url: None,
             graphql_url: None,
             calendar: None,
@@ -283,6 +304,9 @@ impl Stack {
         }
         if options.search {
             stack.start_search_indexer(&options).await?;
+        }
+        if options.focus {
+            stack.start_focus_worker(&options).await?;
         }
         if options.calendar {
             let calendar = start_calendar(
@@ -417,6 +441,60 @@ impl Stack {
                 }
             }
         }
+    }
+
+    /// Starts `email_focus_worker` on the scenario's database, with the
+    /// stand-ins for the model and the due date reader it asks.
+    async fn start_focus_worker(&mut self, options: &StackOptions) -> Result<(), Report> {
+        crate::process::ensure_built(&[FOCUS_WORKER])?;
+        if let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) {
+            crate::infra::kafka::ensure_topics(brokers).await?;
+            // The group starts at the end of the topic. With an offset in
+            // place before the worker joins, mail that arrives while it
+            // joins is still read.
+            crate::infra::kafka::start_group_at_end(brokers, FOCUS_WORKER_GROUP).await?;
+        }
+        let stand_ins = FocusStandIns::start().await?;
+        let env = focus_environment::focus_env(
+            &self.worker_env,
+            &stand_ins.model_url(),
+            &stand_ins.harness_url(),
+            &options.env,
+        );
+        self.focus_stand_ins = Some(stand_ins);
+        // Kept from here on, so that a worker that fails to start is
+        // stopped with the stack and its log shown.
+        let worker =
+            self.focus_worker
+                .insert(ServiceProcess::spawn(FOCUS_WORKER, &env, &self.log_dir)?);
+        // The worker serves no port: its log says when it is reading.
+        eventually(
+            "the Focus worker to start reading mail events",
+            STARTUP_TIMEOUT,
+            async || {
+                worker.ensure_running()?;
+                Ok(worker.log().contains(FOCUS_WORKER_MARKER).then_some(()))
+            },
+        )
+        .await
+    }
+
+    /// The model and the due date reader the Focus worker asks: a scenario
+    /// says here which mail the model finds worth Focus. Needs a stack
+    /// started with `focus: true`.
+    pub fn focus_classifier(&self) -> Result<&FocusClassifier, Report> {
+        match &self.focus_stand_ins {
+            Some(stand_ins) => Ok(stand_ins.classifier()),
+            None => bail!("the stack was started without `focus: true`"),
+        }
+    }
+
+    /// Everything `email_focus_worker` has logged; empty without Focus.
+    pub fn focus_worker_log(&self) -> String {
+        self.focus_worker
+            .as_ref()
+            .map(ServiceProcess::log)
+            .unwrap_or_default()
     }
 
     /// Where the GraphQL API answers, when the stack serves it.
@@ -1005,14 +1083,33 @@ impl Stack {
             });
         let provider = counted(gmail.chain(gmail_tokens).chain(outlook));
 
-        let services = counted(self.service_requests().iter().map(|request| {
-            serde_json::json!({
-                "service": request.service,
-                "method": request.method,
-                "path": path_shape(&request.path),
-                "body": request.body.as_ref().map(shape),
-            })
-        }));
+        // What the Focus worker asked the model and the due date reader:
+        // that it asked, never what it showed them, which is mail.
+        let focus_calls = self
+            .focus_stand_ins
+            .iter()
+            .flat_map(|stand_ins| stand_ins.classifier().calls())
+            .map(|(service, route)| {
+                serde_json::json!({
+                    "service": service,
+                    "method": "POST",
+                    "path": route,
+                    "body": null,
+                })
+            });
+        let services = counted(
+            self.service_requests()
+                .iter()
+                .map(|request| {
+                    serde_json::json!({
+                        "service": request.service,
+                        "method": request.method,
+                        "path": path_shape(&request.path),
+                        "body": request.body.as_ref().map(shape),
+                    })
+                })
+                .chain(focus_calls),
+        );
 
         let brokers = self
             .worker_env
@@ -1082,6 +1179,9 @@ impl Stack {
         if let Some(search_indexer) = &mut self.search_indexer {
             search_indexer.ensure_running()?;
         }
+        if let Some(focus_worker) = &mut self.focus_worker {
+            focus_worker.ensure_running()?;
+        }
         if let Some(calendar) = &mut self.calendar {
             calendar.service.ensure_running()?;
         }
@@ -1106,6 +1206,7 @@ impl Stack {
             (DOCUMENT_STORAGE, document_storage),
             (SEARCH_INDEXER, search_indexer),
             (CALENDAR, self.calendar_log()),
+            (FOCUS_WORKER, self.focus_worker_log()),
         ] {
             if let Some(line) = log.lines().find(|line| line.contains(PANIC_MARKER)) {
                 bail!(
@@ -1141,6 +1242,13 @@ impl Stack {
         // session to expire.
         if let Some(mut search_indexer) = self.search_indexer.take() {
             search_indexer.stop_gracefully().await;
+        }
+        // Told to stop as well: the next scenario's worker joins the same group.
+        if let Some(mut focus_worker) = self.focus_worker.take() {
+            focus_worker.stop_gracefully().await;
+        }
+        if let Some(stand_ins) = self.focus_stand_ins.take() {
+            stand_ins.stop().await;
         }
         if let Some(mut document_storage) = self.document_storage.take() {
             document_storage.stop().await;
@@ -1191,6 +1299,7 @@ impl Stack {
             .iter()
             .chain(&self.document_storage)
             .chain(&self.search_indexer)
+            .chain(&self.focus_worker)
             .chain(self.calendar.as_ref().map(|calendar| &calendar.service));
         for process in std::iter::once(&self.api).chain(others) {
             report.push_str(&format!(

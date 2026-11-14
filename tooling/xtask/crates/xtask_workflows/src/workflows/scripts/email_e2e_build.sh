@@ -20,6 +20,8 @@ cargo build "${flags[@]}" -p calendar_service --bin calendar_service
 # The service behind the GraphQL API, for the scenarios that send the way
 # the web composer does.
 cargo test --no-run "${flags[@]}" -p document_storage_service --test service_binary_builds
+# The worker that classifies mail for Focus, which the Focus scenarios start.
+cargo build "${flags[@]}" -p email_focus_worker --bin email_focus_worker
 if [ "${EMAIL_E2E_BUILD_INDEXER:-}" = true ]; then
   # The search indexer, without the PDF text extraction the scenarios do not use.
   cargo build "${flags[@]}" -p search_processing_service --bin search_processing_service --features no_pdf

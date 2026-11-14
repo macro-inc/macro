@@ -35,6 +35,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("services/user_link_cleanup_handler/**"),
     xtask_paths::repo_glob!("services/email_sfs_delete_handler/**"),
     xtask_paths::repo_glob!("services/email_suppression_handler/**"),
+    xtask_paths::repo_glob!("services/email_focus_worker/**"),
+    xtask_paths::repo_glob!("crates/jev/**"),
     xtask_paths::repo_glob!("crates/email/**"),
     xtask_paths::repo_glob!("crates/email_*/**"),
     xtask_paths::repo_glob!("crates/graphql_email/**"),

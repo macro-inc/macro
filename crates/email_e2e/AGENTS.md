@@ -32,13 +32,20 @@ scenarios.
   indexer misses nothing published while it joins, and each indexer goes on
   from where the last one stopped. Events of other scenarios in between
   name mail that is not in this scenario's database and are passed over.
+- `StackOptions { focus: true, .. }` adds the real `email_focus_worker`,
+  which classifies arriving mail for Focus from the mail's Kafka events, and
+  stand-ins for the two things it asks outside the database
+  (`src/focus.rs`): the model that answers the Focus questions, reached
+  through `OVERRIDE_TYPESAFE_API_URL`, and the agent harness route that reads
+  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`. Its
+  pushes go to the connection gateway stand-in like every other service's.
 - Scenarios run in parallel and share nothing but the servers (Postgres,
   Redis, SQS, Kafka, and OpenSearch for search).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
   and nothing else. Build them before running; `just email-e2e` does.
 - Each scenario's service logs are in
-  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,calendar_service,document_storage_service,search_processing_service}.log`,
+  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,calendar_service,document_storage_service,search_processing_service,email_focus_worker}.log`,
   with `<handler>.log` for each Lambda the scenario ran.
   A failing scenario prints the directory and the end of the logs.
 
@@ -129,6 +136,17 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   group are shared, so give each user an address of its own with
   `stack.unique_user(name)`, and keep search scenarios in `tests/search.rs`,
   whose tests nextest runs one at a time.
+- Focus (a stack with `focus`, and `document_storage` to read it as the web
+  app does: `user { emailFocus }` and a thread's `focus`): the model finds
+  no mail worth Focus until the scenario names text such mail holds,
+  `stack.focus_classifier()?.put_in_focus_when_mail_contains("Contract
+  renewal")`; `due_on_when_mail_contains` sets the day the harness reads
+  as due, and `times_asked_about(text)` tells whether mail reached the
+  model at all. The questions and their order are the product's: the
+  stand-in answers yes only to the first, "would the owner want this in
+  Focus". Only inboxes at `example.com` are classified. Classifying follows
+  the sync, so wait for the list or the thread's `focus`. Keep these
+  scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
 - The labels the owner made at the provider (Gmail labels, Outlook
   categories): `stack.provider_labels(&inbox)` reads them and
@@ -298,7 +316,7 @@ shared with the web app's suite) and backend entry points second.
   `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=$EMAIL_E2E_OPENSEARCH_URL
   OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin bun run
   scripts/create_indices.ts`.
-- `just email-e2e` also builds `search_processing_service` and
+- `just email-e2e` also builds `email_focus_worker`, `search_processing_service` and
   `document_storage_service`, whose build
   needs the repository's `bun install` or `CODE_MODE_ASSETS_DIR` pointing
   at `nix build .#code-mode-assets`.
@@ -339,6 +357,13 @@ shared with the web app's suite) and backend entry points second.
   them and each misses the other's share. The `email-e2e-search` test
   group in `.config/nextest.toml` runs `tests/search.rs` serially; a bare
   `cargo test` runs its tests in parallel and they fail.
+- One Focus worker at a time: every worker is in the consumer group
+  `email-focus`, so two of them split the mail events between them. The
+  `email-e2e-focus` test group runs `tests/focus.rs` serially. The harness
+  gives the group an offset before its first worker starts, so mail that
+  arrives while a worker joins is still read; the worker's later sweeps are
+  an hour apart and no scenario sees one. Events of other scenarios name
+  threads that are not in this scenario's database and are passed over.
 - A session connected to a template database blocks every clone of it;
   the harness waits up to a minute for it and closes templates to
   connections.
