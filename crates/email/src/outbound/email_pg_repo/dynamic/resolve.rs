@@ -12,6 +12,8 @@ pub(super) struct ResolvedFilters {
     /// resolved scope (one link, or all team links). Empty Vec means the
     /// address has no matching contact anywhere in scope.
     contact_ids: HashMap<String, Vec<Uuid>>,
+    /// Each resolved contact's inbox (`email_contacts.link_id`).
+    contact_links: HashMap<Uuid, Uuid>,
     /// Every primary `email_links.id` owned by a member of the query's team.
     /// `Some` only for team-scoped queries. Doubles as the candidate-stage
     /// `t.link_id = ANY(…)` set and (for non-shared, non-project queries)
@@ -51,6 +53,37 @@ impl ResolvedFilters {
         self.contributing_link_ids.as_deref()
     }
 
+    /// This resolution with only the contacts of `links`' inboxes. A message
+    /// lists only its own inbox's contacts, so the others can't match there.
+    pub(super) fn within_links(&self, links: &[Uuid]) -> Self {
+        let in_links = |id: &Uuid| {
+            self.contact_links
+                .get(id)
+                .is_some_and(|link| links.contains(link))
+        };
+        Self {
+            include_trash: self.include_trash,
+            contact_ids: self
+                .contact_ids
+                .iter()
+                .map(|(email, ids)| {
+                    (
+                        email.clone(),
+                        ids.iter().copied().filter(in_links).collect(),
+                    )
+                })
+                .collect(),
+            contact_links: self
+                .contact_links
+                .iter()
+                .filter(|(id, _)| in_links(id))
+                .map(|(id, link)| (*id, *link))
+                .collect(),
+            team_link_ids: self.team_link_ids.clone(),
+            contributing_link_ids: self.contributing_link_ids.clone(),
+        }
+    }
+
     /// True iff at least one Complete email address in the AST has any
     /// matching contact in the resolved scope. Used by `fold_unresolved`.
     fn has_contact_for(&self, lowered_email: &str) -> bool {
@@ -65,6 +98,7 @@ impl ResolvedFilters {
         Self {
             include_trash: false,
             contact_ids: HashMap::new(),
+            contact_links: HashMap::new(),
             team_link_ids: None,
             contributing_link_ids: None,
         }
@@ -83,11 +117,17 @@ impl ResolvedFilters {
     }
 
     #[cfg(test)]
-    pub(super) fn with_contact(mut self, lowered_email: impl Into<String>, id: Uuid) -> Self {
+    pub(super) fn with_contact(
+        mut self,
+        lowered_email: impl Into<String>,
+        id: Uuid,
+        link: Uuid,
+    ) -> Self {
         self.contact_ids
             .entry(lowered_email.into())
             .or_default()
             .push(id);
+        self.contact_links.insert(id, link);
         self
     }
 }
@@ -223,10 +263,11 @@ pub(super) async fn resolve_filters(
 
     let emails = collect_complete_emails(ast);
     let mut contact_ids: HashMap<String, Vec<Uuid>> = HashMap::new();
+    let mut contact_links: HashMap<Uuid, Uuid> = HashMap::new();
     if !emails.is_empty() {
         let rows = sqlx::query!(
             r#"
-                SELECT id, LOWER(email_address) AS "email_lower!"
+                SELECT id, link_id, LOWER(email_address) AS "email_lower!"
                 FROM email_contacts
                 WHERE link_id = ANY($1) AND LOWER(email_address) = ANY($2)
                 "#,
@@ -238,12 +279,14 @@ pub(super) async fn resolve_filters(
 
         for row in rows {
             contact_ids.entry(row.email_lower).or_default().push(row.id);
+            contact_links.insert(row.id, row.link_id);
         }
     }
 
     Ok(ResolvedFilters {
         include_trash: false,
         contact_ids,
+        contact_links,
         team_link_ids,
         contributing_link_ids,
     })

@@ -283,6 +283,70 @@ async fn signal_and_me_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Every inbox knows the fixture's addresses, and the read keeps only the
+/// contacts of the inboxes it reads: one inbox under Me, none when the
+/// address lives only in an inbox that doesn't contribute.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_crm_team_read"))
+)]
+async fn contacts_outside_the_inboxes_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let busy = contact(&["p1@dense.test"]);
+    for owner in [link(0), link(1), link(3)] {
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(0)],
+            &user(0),
+            &me(busy.clone(), owner),
+            20,
+        )
+        .await?;
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(0)],
+            &user(0),
+            &signal(me(busy.clone(), owner)),
+            20,
+        )
+        .await?;
+    }
+
+    // An address only u3's inbox, which doesn't contribute, knows.
+    let only_u3 = Uuid::from_u128(0xc3);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
+        VALUES ($1, $2, 'only@u3.test', NULL, NOW(), NOW())
+        "#,
+        only_u3,
+        link(3),
+    )
+    .execute(&pool)
+    .await?;
+    let moved = sqlx::query!(
+        "UPDATE email_messages SET from_contact_id = $1 WHERE link_id = $2 AND NOT is_draft",
+        only_u3,
+        link(3),
+    )
+    .execute(&pool)
+    .await?
+    .rows_affected();
+    assert!(moved > 0, "u3's inbox holds mail");
+    let rows = assert_parity(
+        &pool,
+        TEAM_GAMMA_ID,
+        &[link(0)],
+        &user(0),
+        &contact(&["only@u3.test"]),
+        20,
+    )
+    .await?;
+    assert_eq!(rows, 0);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_crm_team_read"))

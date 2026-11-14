@@ -9,6 +9,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use uuid::Uuid;
 
+/// The inbox the single-inbox tests' contacts belong to.
+const CONTACT_LINK: Uuid = Uuid::from_u128(1);
+
 fn complete(s: &str) -> Email {
     Email::Complete(EmailStr::parse_from_str(s).unwrap().into_owned())
 }
@@ -19,7 +22,7 @@ fn complete(s: &str) -> Email {
 fn resolved_with(emails: &[(&str, Uuid)]) -> ResolvedFilters {
     let mut r = ResolvedFilters::empty();
     for (e, id) in emails {
-        r = r.with_contact(e.to_lowercase(), *id);
+        r = r.with_contact(e.to_lowercase(), *id, CONTACT_LINK);
     }
     r
 }
@@ -30,7 +33,7 @@ fn resolved_with(emails: &[(&str, Uuid)]) -> ResolvedFilters {
 fn resolved_with_random_ids(emails: &[&str]) -> ResolvedFilters {
     let mut r = ResolvedFilters::empty();
     for e in emails {
-        r = r.with_contact(e.to_lowercase(), Uuid::new_v4());
+        r = r.with_contact(e.to_lowercase(), Uuid::new_v4(), CONTACT_LINK);
     }
     r
 }
@@ -1472,8 +1475,8 @@ fn test_matching_threads_cte_body_and_of_conjuncts_uses_combined_predicate_form(
 fn test_matching_threads_cte_body_uses_normalized_visibility() {
     // Provider-neutral visibility applies to each address branch.
     let contact_id = Uuid::new_v4();
-    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
-    let resolved = ResolvedFilters::empty().with_contact("a@b.com", contact_id);
+    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.test")));
+    let resolved = ResolvedFilters::empty().with_contact("a@b.test", contact_id, CONTACT_LINK);
     let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
@@ -1498,8 +1501,8 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
     // WHERE no longer contains an inline matching subquery.
     let contact_id = Uuid::new_v4();
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
-    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
-    let resolved = ResolvedFilters::empty().with_contact("a@b.com", contact_id);
+    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.test")));
+    let resolved = ResolvedFilters::empty().with_contact("a@b.test", contact_id, CONTACT_LINK);
     let sql = super::query::debug_build_query_sql_with_resolved(&view, &expr, resolved);
 
     assert!(

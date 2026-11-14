@@ -2,6 +2,8 @@ use super::*;
 use crate::outbound::email_pg_repo::dynamic::resolve::ResolvedFilters;
 use chrono::{TimeZone, Utc};
 use item_filters::ast::email::Email;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::email::EmailStr;
 use models_pagination::SimpleSortMethod;
 use sqlx::Execute;
 
@@ -175,6 +177,76 @@ fn probe_counts_the_superset_up_to_its_limit() {
     assert!(probe.ends_with(") AS capped"));
     // The superset skips the mailbox facts the page's checks apply.
     assert!(!probe.contains("email_message_mailbox_facts"));
+}
+
+/// A contact page's filter: its address in any direction.
+fn contact(address: &str) -> Expr<EmailLiteral> {
+    let email = || Email::Complete(EmailStr::parse_from_str(address).unwrap().into_owned());
+    let literal = |make: fn(Email) -> EmailLiteral| Expr::Literal(make(email()));
+    Expr::Or(
+        Box::new(Expr::Or(
+            Box::new(literal(EmailLiteral::Sender)),
+            Box::new(literal(EmailLiteral::Cc)),
+        )),
+        Box::new(Expr::Or(
+            Box::new(literal(EmailLiteral::Bcc)),
+            Box::new(literal(EmailLiteral::Recipient)),
+        )),
+    )
+}
+
+fn superset_binds(read: &TeamRead<'_>, id: &Uuid) -> bool {
+    read.superset
+        .branches
+        .iter()
+        .any(|branch| branch.has_bind_uuid(id))
+}
+
+#[test]
+fn superset_lists_only_the_inboxes_contacts() {
+    let view = all_mail();
+    let address = "p@example.test";
+    let own = Uuid::from_u128(0xc1);
+    let teammate = Uuid::from_u128(0xc2);
+    let not_contributing = Uuid::from_u128(0xc3);
+    let mut every = params(SimpleSortMethod::UpdatedAt);
+    every.resolved = every
+        .resolved
+        .with_contact(address, own, OWN)
+        .with_contact(address, teammate, TEAMMATE)
+        .with_contact(address, not_contributing, NOT_CONTRIBUTING);
+    let filter = contact(address);
+    let read = team_read(&view, &filter, every).unwrap();
+    assert!(superset_binds(&read, &own));
+    assert!(superset_binds(&read, &teammate));
+    assert!(!superset_binds(&read, &not_contributing));
+
+    let mut two = params(SimpleSortMethod::UpdatedAt);
+    two.resolved = two
+        .resolved
+        .with_contact(address, own, OWN)
+        .with_contact(address, teammate, TEAMMATE);
+    let me = Expr::And(
+        Box::new(contact(address)),
+        Box::new(Expr::Literal(EmailLiteral::Owner(OWN))),
+    );
+    let read = team_read(&view, &me, two).unwrap();
+    assert!(superset_binds(&read, &own));
+    assert!(!superset_binds(&read, &teammate));
+}
+
+#[test]
+fn record_without_contacts_in_the_inboxes_has_no_superset() {
+    let view = all_mail();
+    let address = "p@example.test";
+    let mut params = params(SimpleSortMethod::UpdatedAt);
+    params.resolved =
+        params
+            .resolved
+            .with_contact(address, Uuid::from_u128(0xc3), NOT_CONTRIBUTING);
+    let filter = contact(address);
+    let read = team_read(&view, &filter, params).unwrap();
+    assert!(read.superset.branches.is_empty());
 }
 
 /// The inline privacy rule agrees with `crm_email_thread_allowed` on every

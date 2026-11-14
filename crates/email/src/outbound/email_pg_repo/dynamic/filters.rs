@@ -981,8 +981,9 @@ pub(super) struct AddressSuperset {
 
 /// [`AddressSuperset`] for a tree whose only pure-address top-level conjunct
 /// is a flat OR-tree of positive address literals (a CRM record's addresses
-/// and domains), scoped to `links`. `None` for any other tree, and when no
-/// literal resolved to a branch.
+/// and domains), scoped to `links`, and `None` for any other tree. A complete
+/// address keeps only the contacts of `links`' inboxes, so a record whose
+/// addresses have no contact there gets no branches: nothing can match.
 pub(super) fn build_address_superset(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
@@ -993,9 +994,13 @@ pub(super) fn build_address_superset(
         return None;
     };
     let literals = flatten_or_tree_of_address_literals(conjunct)?;
-    let (contact_ctes, branches) =
-        address_groups::build(literals, resolved, BranchFacts::Skipped, Some(links));
-    (!branches.is_empty()).then_some(AddressSuperset {
+    let (contact_ctes, branches) = address_groups::build(
+        literals,
+        &resolved.within_links(links),
+        BranchFacts::Skipped,
+        Some(links),
+    );
+    Some(AddressSuperset {
         contact_ctes,
         branches,
     })

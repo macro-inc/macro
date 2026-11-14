@@ -208,7 +208,7 @@ impl<'a> TeamRead<'a> {
         deadline: Instant,
     ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
         let span = tracing::Span::current();
-        let (stream, rows) = if self.inboxes.is_empty() {
+        let (stream, rows) = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
             ("none", Vec::new())
         } else {
             limit_statement_time(connection, deadline).await?;
