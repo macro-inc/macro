@@ -33,7 +33,9 @@ function recipientRow(page: Page, row: 'To' | 'Cc' | 'Bcc') {
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
 for (const provider of PROVIDERS) {
-  test.describe(`a new message from ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+  test.describe(`a new message from ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, {
+    tag: '@any-stack',
+  }, () => {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -43,12 +45,9 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      const grace = 'grace@example.com';
-      const zed = 'zed@example.com';
-      const ida = 'ida@example.com';
-      for (const address of [grace, zed, ida]) {
-        await addMailbox(mailbox, address);
-      }
+      const grace = await addMailbox(mailbox, 'grace@example.com');
+      const zed = await addMailbox(mailbox, 'zed@example.com');
+      const ida = await addMailbox(mailbox, 'ida@example.com');
       // Grace is someone Ada has written with: a contact the To field suggests.
       await mailbox.stack.sql(
         `INSERT INTO contacts_connections (user1, user2)

@@ -21,7 +21,9 @@ import { confirmed, did, saw } from './ledger/record';
 const PROVIDERS: Provider[] = ['OUTLOOK', 'GMAIL'];
 
 for (const provider of PROVIDERS) {
-  test.describe(`a day of mail in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+  test.describe(`a day of mail in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, {
+    tag: '@any-stack',
+  }, () => {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -32,10 +34,8 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      const grace = 'grace@example.com';
-      const zed = 'zed@example.com';
-      await addMailbox(mailbox, grace);
-      await addMailbox(mailbox, zed);
+      const grace = await addMailbox(mailbox, 'grace@example.com');
+      const zed = await addMailbox(mailbox, 'zed@example.com');
       await mailbox.deliver({
         from: `Grace <${grace}>`,
         subject: 'Lunch?',

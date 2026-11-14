@@ -17,11 +17,19 @@ import type { AddressInfo } from 'node:net';
 import { connect } from 'node:net';
 import { extname, join } from 'node:path';
 import type { Duplex } from 'node:stream';
+import { connect as connectSecurely } from 'node:tls';
+import { developmentAuthority, STACK_ADDRESS_FAMILY, send } from './http';
 
 export type SignedInUser = {
   email: string;
   macroUserId: string;
   fusionUserId: string;
+  /**
+   * The session cookies of a user signed in at the local stack's
+   * authentication service. Absent on a stack of the test's own, where the
+   * front vouches for the user as a gateway would.
+   */
+  cookie?: string;
 };
 
 export type FrontOptions = {
@@ -33,6 +41,12 @@ export type FrontOptions = {
   documentStorageUrl: string;
   internalApiKey: string;
   user: SignedInUser;
+  /**
+   * The local stack's proxy. With it, every request that is not for one of
+   * the bundle's files goes to the proxy, as the signed-in user's session,
+   * and nothing is answered here.
+   */
+  proxyUrl?: string;
 };
 
 /** A request the front answered itself or could not answer. */
@@ -44,7 +58,8 @@ export type FrontRequest = { method: string; path: string; status: number };
  * service for a service's request and the whole path otherwise.
  */
 export type RecordedRequest = {
-  answeredBy: 'email' | 'dss' | 'stub' | 'nothing';
+  /** `stack`: a service of the local stack other than these two. */
+  answeredBy: 'email' | 'dss' | 'stack' | 'stub' | 'nothing';
   /** The test asked, not the app: it carried `FROM_TEST`. */
   fromTest: boolean;
   /** `WS` for a message sent over a service's websocket. */
@@ -288,10 +303,65 @@ function builtInStubs(options: FrontOptions): Stub {
   };
 }
 
+/**
+ * The cookies a request to the stack carries: the browser's own, and the
+ * signed-in user's session while the browser holds none.
+ */
+function sessionCookies(
+  options: FrontOptions,
+  request: IncomingMessage
+): string | undefined {
+  const own = request.headers.cookie;
+  if (own?.includes('access-token=')) return own;
+  const session = options.user.cookie;
+  if (!session) return own;
+  return own ? `${own}; ${session}` : session;
+}
+
+/** Passes a request on to the local stack's proxy and answers what it did. */
+async function throughProxy(
+  options: FrontOptions,
+  request: IncomingMessage,
+  url: URL,
+  body: Buffer
+): Promise<{
+  status: number;
+  headers: Record<string, string | string[]>;
+  body: Buffer;
+}> {
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (HOP_BY_HOP.has(name) || name === FROM_TEST) continue;
+    // Uncompressed, so a GraphQL answer can be read for its errors.
+    if (name === 'accept-encoding' || name === 'cookie') continue;
+    if (typeof value === 'string') headers[name] = value;
+  }
+  const cookie = sessionCookies(options, request);
+  if (cookie) headers.cookie = cookie;
+  const method = request.method ?? 'GET';
+  const answer = await send(`${options.proxyUrl}${url.pathname}${url.search}`, {
+    method,
+    headers,
+    body: method === 'GET' || method === 'HEAD' ? undefined : body,
+  });
+  const answered: Record<string, string | string[]> = { ...ISOLATION };
+  for (const [name, value] of Object.entries(answer.headers)) {
+    if (HOP_BY_HOP.has(name) || value === undefined) continue;
+    answered[name] = value;
+  }
+  // A redirect to the app is a redirect to this front, where the app is.
+  const to = answered.location;
+  if (typeof to === 'string' && to.startsWith(`${options.proxyUrl}/app`)) {
+    answered.location = `http://${request.headers.host}${to.slice(options.proxyUrl?.length)}`;
+  }
+  return { status: answer.status, headers: answered, body: answer.body };
+}
+
 export async function startFront(options: FrontOptions): Promise<Front> {
   const unanswered: FrontRequest[] = [];
   const requests: RecordedRequest[] = [];
-  const stubs: Stub[] = [builtInStubs(options)];
+  // The stack's own services answer what the built-in stubs stand in for.
+  const stubs: Stub[] = options.proxyUrl ? [] : [builtInStubs(options)];
 
   const handle = async (request: IncomingMessage, response: ServerResponse) => {
     const url = new URL(request.url ?? '/', 'http://front');
@@ -345,6 +415,25 @@ export async function startFront(options: FrontOptions): Promise<Front> {
         response.end(JSON.stringify(answer.json));
         return;
       }
+    }
+
+    if (options.proxyUrl) {
+      const answered = await throughProxy(options, request, url, body);
+      const operations = graphqlOperations(body.toString('utf8'));
+      const failed =
+        operations.length > 0 && graphqlFailed(answered.body.toString('utf8'));
+      const service = upstream(options, path);
+      requests.push({
+        answeredBy: service?.service ?? 'stack',
+        fromTest,
+        method,
+        path: service?.path ?? path,
+        status: failed ? 500 : answered.status,
+        operations,
+      });
+      response.writeHead(answered.status, answered.headers);
+      response.end(answered.body);
+      return;
     }
 
     const target = upstream(options, path);
@@ -413,17 +502,26 @@ export async function startFront(options: FrontOptions): Promise<Front> {
     }
   });
 
-  // A websocket to a service is piped through with the same headers; the
-  // others are answered in the browser (see `stubSockets`).
+  // A websocket to a service is piped through with the same headers; on a
+  // stack of the test's own the others are answered in the browser (see
+  // `relayGateway`), and on the local stack every one goes to its proxy.
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head) => {
     const url = new URL(request.url ?? '/', 'http://front');
-    const target = upstream(options, url.pathname);
+    const known = upstream(options, url.pathname);
+    const target = options.proxyUrl
+      ? {
+          service: known?.service ?? ('stack' as const),
+          base: options.proxyUrl,
+          path: url.pathname,
+          recorded: known?.path ?? url.pathname,
+        }
+      : known && { ...known, recorded: known.path };
     if (!target) {
       socket.destroy();
       return;
     }
     const base = new URL(target.base);
-    const service = connect(Number(base.port), base.hostname, () => {
+    const piped = () => {
       const lines = [
         `GET ${target.path}${url.search} HTTP/1.1`,
         `host: ${base.host}`,
@@ -432,10 +530,16 @@ export async function startFront(options: FrontOptions): Promise<Front> {
         if (name === 'host' || name.startsWith('x-internal-')) continue;
         // Uncompressed, so the operations the browser sends can be read.
         if (name === 'sec-websocket-extensions') continue;
+        if (options.proxyUrl && name === 'cookie') continue;
         if (typeof value === 'string') lines.push(`${name}: ${value}`);
       }
-      for (const [name, value] of Object.entries(internalHeaders(options))) {
-        lines.push(`${name}: ${value}`);
+      if (options.proxyUrl) {
+        const cookie = sessionCookies(options, request);
+        if (cookie) lines.push(`cookie: ${cookie}`);
+      } else {
+        for (const [name, value] of Object.entries(internalHeaders(options))) {
+          lines.push(`${name}: ${value}`);
+        }
       }
       service.write(`${lines.join('\r\n')}\r\n\r\n`);
       if (head.length > 0) service.write(head);
@@ -448,14 +552,36 @@ export async function startFront(options: FrontOptions): Promise<Front> {
           answeredBy: target.service,
           fromTest: false,
           method: 'WS',
-          path: target.path,
+          path: target.recorded,
           status: 101,
           operations,
         });
       });
       if (head.length > 0) read(head);
       socket.on('data', read);
-    });
+    };
+    const service: Duplex =
+      base.protocol === 'https:'
+        ? connectSecurely(
+            {
+              host: base.hostname,
+              port: Number(base.port),
+              family: STACK_ADDRESS_FAMILY,
+              servername: base.hostname,
+              ca: developmentAuthority(),
+              // A websocket is an HTTP/1.1 upgrade.
+              ALPNProtocols: ['http/1.1'],
+            },
+            piped
+          )
+        : connect(
+            {
+              host: base.hostname,
+              port: Number(base.port),
+              family: STACK_ADDRESS_FAMILY,
+            },
+            piped
+          );
     service.on('error', () => socket.destroy());
     socket.on('error', () => service.destroy());
   });

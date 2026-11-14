@@ -1,11 +1,14 @@
 // Starts `email_e2e_stacks`, which starts a stack per test, unless
-// EMAIL_E2E_STACKS_URL already names a running one.
+// EMAIL_E2E_STACKS_URL already names a running one or the tests run on the
+// local stack.
 
 import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { LocalStack, localStackAddresses } from './harness/local-stack';
+import { checkSignUpCounter } from './harness/sign-up-limit';
 import { currentRun, runPaths } from './ledger/paths';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -17,6 +20,16 @@ export default async function globalSetup(): Promise<
   const recorded = runPaths(currentRun());
   rmSync(recorded.evidence, { recursive: true, force: true });
 
+  // The local stack is already running, and so is a named stack server.
+  const local = localStackAddresses();
+  if (local) {
+    // Its tests each sign up a user, more of them than one address may:
+    // prove the counter is where the harness clears it before they start.
+    const stack = new LocalStack(local);
+    await stack.user(stack.address('probe@example.com'));
+    await checkSignUpCounter(local.redisUrl);
+    return undefined;
+  }
   if (process.env.EMAIL_E2E_STACKS_URL) return undefined;
 
   const binary =

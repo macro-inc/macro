@@ -60,6 +60,16 @@ email-e2e-browser *args:
     just apps/web/build-email-e2e
     just apps/web/test-email-e2e-browser {{ args }}
 
+# The same suite's full-stack tier: the tests tagged `@any-stack` or
+# `@full-stack` against one instance of the local stack (`just run_local`),
+# through its real gateway, sign-in and proxy. Run it inside `nix develop`;
+# the instance stays up afterwards (`just stop_local --instance email-e2e`).
+# Arguments go to Playwright.
+email-e2e-full-stack *args:
+    just run_local --no-doppler --instance email-e2e --no-frontend --traces off --no-computers
+    just apps/web/build-email-e2e
+    just apps/web/test-email-e2e-full-stack email-e2e {{ args }}
+
 # Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:
   docker build -f docker/Dockerfile.dev --target services_bundle -t macro-local-rust-services:dev .

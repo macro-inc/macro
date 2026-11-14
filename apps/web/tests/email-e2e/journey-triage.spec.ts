@@ -26,7 +26,9 @@ function row(page: Page, threadId: string) {
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
 for (const provider of PROVIDERS) {
-  test.describe(`triage in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+  test.describe(`triage in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, {
+    tag: '@any-stack',
+  }, () => {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -144,16 +146,16 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => rowIds(page)).toEqual([ids.Question]);
       saw('STL-972');
       saw('STL-923');
-      // The star is a Macro favorite: the storage service holds it.
+      // The star is a Macro favorite: the storage service holds it. A new
+      // account on the whole stack starts with favorites of other kinds.
       const favorites = await mailbox.api('/dss/favorites');
       const starred = (await favorites.json()) as {
         favorites: { entityType: string; entityId: string }[];
       };
       expect(
-        starred.favorites.map(({ entityType, entityId }) => ({
-          entityType,
-          entityId,
-        }))
+        starred.favorites
+          .filter(({ entityType }) => entityType === 'email_thread')
+          .map(({ entityType, entityId }) => ({ entityType, entityId }))
       ).toEqual([{ entityType: 'email_thread', entityId: ids.Question }]);
       confirmed('F-073');
 

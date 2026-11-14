@@ -56,7 +56,9 @@ async function swipeLeft(
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
 for (const provider of PROVIDERS) {
-  test.describe(`mail on a phone, ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+  test.describe(`mail on a phone, ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, {
+    tag: '@any-stack',
+  }, () => {
     test.use({ ...phone, provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -66,8 +68,7 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      const grace = 'grace@example.com';
-      await addMailbox(mailbox, grace);
+      const grace = await addMailbox(mailbox, 'grace@example.com');
       await mailbox.deliver({
         from: `Grace <${grace}>`,
         subject: 'Lunch?',

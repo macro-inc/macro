@@ -2,6 +2,7 @@
 
 import type { Locator, Page } from '@playwright/test';
 import { expect, type Mailbox, type ThreadPreview } from './fixtures';
+import { send } from './http';
 import type { Mail } from './stack';
 
 /** A message of a thread as the email service answers it. */
@@ -100,7 +101,9 @@ export async function storedAttachment(
     attachment: { data_url?: string };
   };
   if (!attachment.data_url) return undefined;
-  const file = await fetch(attachment.data_url);
-  if (!file.ok) return undefined;
-  return Buffer.from(await file.arrayBuffer());
+  // The local stack's storage is behind its proxy, signed by the development
+  // authority that `send` trusts.
+  const file = await send(attachment.data_url);
+  if (file.status !== 200) return undefined;
+  return file.body;
 }

@@ -33,7 +33,9 @@ async function setSwitch(page: Page, name: string, on: boolean) {
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
 for (const provider of PROVIDERS) {
-  test.describe(`email settings of ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+  test.describe(`email settings of ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, {
+    tag: '@any-stack',
+  }, () => {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -43,10 +45,13 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      const grace = 'grace@example.com';
-      const work = 'work@example.com';
-      await addMailbox(mailbox, grace);
-      const workInbox = await mailbox.stack.link(mailbox.user, provider, work);
+      const grace = await addMailbox(mailbox, 'grace@example.com');
+      const workInbox = await mailbox.stack.link(
+        mailbox.user,
+        provider,
+        'work@example.com'
+      );
+      const work = workInbox.email;
       await mailbox.stack.deliver(workInbox.email, {
         from: 'Linus <linus@example.com>',
         subject: 'Budget',

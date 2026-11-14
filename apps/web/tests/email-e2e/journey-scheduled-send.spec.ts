@@ -37,8 +37,7 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      const grace = 'grace@example.com';
-      await addMailbox(mailbox, grace);
+      const grace = await addMailbox(mailbox, 'grace@example.com');
       const scheduled = async () => {
         const response = await mailbox.api(
           '/email/email/drafts/scheduled?offset=0&limit=100'

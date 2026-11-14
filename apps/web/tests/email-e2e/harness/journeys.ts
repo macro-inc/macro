@@ -15,12 +15,16 @@ export function emulatorUrl(mailbox: Mailbox, provider: Provider): string {
     : mailbox.stack.info.outlookUrl;
 }
 
-/** Opens a mailbox at the provider for someone mail is sent to. */
+/**
+ * Opens a mailbox at the provider for someone mail is sent to, and answers
+ * its address: the one named, or this test's own on a stack tests share.
+ */
 export async function addMailbox(
   mailbox: Mailbox,
-  email: string,
+  named: string,
   provider: Provider = mailbox.inbox.provider
-): Promise<void> {
+): Promise<string> {
+  const email = mailbox.stack.address(named);
   const response = await fetch(
     `${emulatorUrl(mailbox, provider)}/_emulator/mailboxes`,
     {
@@ -34,6 +38,7 @@ export async function addMailbox(
       `no mailbox ${email}: ${response.status} ${await response.text()}`
     );
   }
+  return email;
 }
 
 async function token(

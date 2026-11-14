@@ -19,7 +19,9 @@ const REPORT = Buffer.concat([
 ]);
 
 for (const provider of PROVIDERS) {
-  test.describe(`a received attachment in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+  test.describe(`a received attachment in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, {
+    tag: '@any-stack',
+  }, () => {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 

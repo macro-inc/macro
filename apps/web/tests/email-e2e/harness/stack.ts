@@ -78,6 +78,12 @@ async function call<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/**
+ * What a test asks of the stack it runs on: a stack of its own
+ * (`Stack`) or the local stack every test shares (`LocalStack`).
+ */
+export type EmailStack = { [Member in keyof Stack]: Stack[Member] };
+
 export class Stack {
   private constructor(readonly info: StackInfo) {}
 
@@ -88,6 +94,14 @@ export class Stack {
 
   private path(rest: string): string {
     return `/stacks/${this.info.id}${rest}`;
+  }
+
+  /**
+   * The address a test uses for a person: the one it names, since the
+   * emulators of a stack of its own hold no one else's mailboxes.
+   */
+  address(address: string): string {
+    return address;
   }
 
   user(email: string): Promise<SignedInUser> {

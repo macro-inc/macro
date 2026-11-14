@@ -262,6 +262,28 @@ build-email-e2e: build-wasm
 test-email-e2e-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
 
+# The same suite on a running local stack instance (tests/email-e2e/README.md,
+# "The full-stack tier"); the root `just email-e2e-full-stack` starts the
+# instance and builds the bundle. The addresses are read from the instance.
+test-email-e2e-full-stack instance *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=$(cd ../.. && just run_local status --json --instance "{{instance}}")
+    # Assigned before they are exported: `export X=$(...)` hides a failure.
+    project=$(jq -er .project <<<"$status")
+    port() { docker compose -p "$project" port "$1" "$2" | sed 's/.*://'; }
+    proxy=$(jq -er .proxy_url <<<"$status")
+    database=$(jq -er .postgres_url <<<"$status")
+    redis=$(port redis 6379)
+    gmail=$(port gmail_emulator 8080)
+    outlook=$(port outlook_emulator 8080)
+    export EMAIL_E2E_STACK_PROXY_URL="$proxy"
+    export EMAIL_E2E_STACK_DATABASE_URL="$database"
+    export EMAIL_E2E_STACK_REDIS_URL="redis://localhost:$redis"
+    export EMAIL_E2E_STACK_GMAIL_URL="http://localhost:$gmail"
+    export EMAIL_E2E_STACK_OUTLOOK_URL="http://localhost:$outlook"
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
 # The coverage ledger of the email UI, from the last run of the browser suite
 # (tests/email-e2e/ledger/README.md). Reports only; `--enforce` fails on a row
 # that is not covered.

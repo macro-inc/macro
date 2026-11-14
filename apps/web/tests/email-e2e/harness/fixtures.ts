@@ -10,7 +10,9 @@ import {
 } from '@playwright/test';
 import { record } from '../ledger/record';
 import { FROM_TEST, type Front, type SignedInUser, startFront } from './front';
+import { LocalStack, localStackAddresses } from './local-stack';
 import {
+  type EmailStack,
   type LinkedInbox,
   type Mail,
   type Provider,
@@ -30,7 +32,7 @@ export type ThreadPreview = {
 };
 
 export type Mailbox = {
-  stack: Stack;
+  stack: EmailStack;
   user: SignedInUser;
   inbox: LinkedInbox;
   front: Front;
@@ -65,7 +67,7 @@ type Options = {
  */
 async function relayGateway(
   page: Page,
-  stack: Stack,
+  stack: EmailStack,
   user: SignedInUser
 ): Promise<() => Promise<void>> {
   const sockets = new Set<WebSocketRoute>();
@@ -135,7 +137,17 @@ export const test = base.extend<
     use,
     testInfo
   ) => {
-    const stack = await Stack.start(stackEnv);
+    // The local stack when one is named (`harness/local-stack.ts`), a stack
+    // of the test's own otherwise.
+    const local = localStackAddresses();
+    if (local && Object.keys(stackEnv).length > 0) {
+      throw new Error(
+        "a test that changes the services' environment needs its own stack"
+      );
+    }
+    const stack: EmailStack = local
+      ? new LocalStack(local)
+      : await Stack.start(stackEnv);
     let failed = true;
     try {
       await serve(stack);
@@ -146,8 +158,8 @@ export const test = base.extend<
       await stack.finish();
     }
 
-    async function serve(stack: Stack): Promise<void> {
-      const user = await stack.user(address);
+    async function serve(stack: EmailStack): Promise<void> {
+      const user = await stack.user(stack.address(address));
       const inbox = await stack.link(user, provider);
       const front = await startFront({
         dist: DIST,
@@ -155,6 +167,7 @@ export const test = base.extend<
         documentStorageUrl: stack.info.documentStorageUrl,
         internalApiKey: stack.info.internalApiKey,
         user,
+        proxyUrl: local?.proxyUrl,
       });
       evidence.requests(front.requests);
 
@@ -187,7 +200,10 @@ export const test = base.extend<
             }
           }
         );
-        const stopRelay = await relayGateway(page, stack, user);
+        // The local stack runs the gateway; the front pipes its socket.
+        const stopRelay = local
+          ? async () => undefined
+          : await relayGateway(page, stack, user);
 
         const api = (path: string, init?: RequestInit) =>
           fetch(`${front.origin}${path}`, {
