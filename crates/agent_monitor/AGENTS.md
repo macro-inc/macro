@@ -23,6 +23,11 @@ subscriber gets a fresh snapshot.
 - `src/domain/store.rs`: the single writer, subscribe rules, tape and totals.
 - `proto/agent_monitor.proto`: the wire contract; `src/proto.rs` converts it.
 - `src/inbound/grpc.rs` and `src/client.rs`: socket rules, server, client.
+- `src/domain/join.rs`: the join table in code, status rules, cost estimates
+  and per-minute spend; `src/domain/pricing.rs`: list prices and their sources.
+- `src/outbound/local.rs`: every real-machine source from a few roots. File
+  sources share `outbound/transcripts.rs` (tailed JSON lines) or
+  `outbound/records.rs` (small whole-file records).
 
 ## Recipes
 
@@ -31,6 +36,13 @@ subscriber gets a fresh snapshot.
 - Add a source: an adapter in `src/outbound/` implementing `AgentSource` with
   its own `SourceKind`; decode its facts into `Fact`s, never `Agent`s.
 - A fixed state for snapshot tests: `outbound::demo::snapshot(seed, start, step, steps)`.
+- Check the real sources and the join on this machine: `cargo run --release -p
+  agent_monitor --example sources_dump -- --home ~ [--run-dir <dir>]... [--idle 60]`;
+  live terminals in its output should match `hc ls --json`.
+- A new transcript format: a `TranscriptFormat` (file → key) and `LineParser`
+  (substring prefilter, then parse); the engine does watching, indexing and tailing.
+- A new model: add its row to `domain::pricing` from the provider's published
+  page; an unknown model stays `Cost::Unpriced`.
 
 ## Scope
 
@@ -58,6 +70,16 @@ subscriber gets a fresh snapshot.
   and tick then advance without sleeping.
 - Sources never build `Agent`s and never decode another source's facts; label
   and file-format meanings are decoded in the adapter.
+- Sources are push-driven: `hc events` stdout and `notify` watches. The only
+  timers are hc's 45 s silence watchdog and the 30 s reconcile `stat` sweep.
+  `notify`'s inotify mask includes `IN_OPEN`, so busy transcript directories
+  wake the watcher often; those are real writes, not polling.
+- Startup indexes only transcripts modified within the history window, newest
+  first on four blocking workers; never read the whole projects tree.
+- The Claude Code registry directory holds key files beside `<pid>.json`;
+  only `<pid>.json` is ever opened.
+- A Claude Code `cost-state` total covers the session's subagents; the join
+  keeps rows additive by taking subagent estimates out of the main row.
 - Never put transcript text, prompts or tool arguments on spans, logs, rows or
   tape lines; only `FollowTranscript` carries text (`.agents/rules/observability.md`).
 

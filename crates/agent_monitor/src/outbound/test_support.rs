@@ -60,7 +60,8 @@ impl Running {
         }
     }
 
-    async fn next(&mut self) -> Change {
+    /// The next change of any kind, within [`PUSH_DEADLINE`].
+    pub async fn next(&mut self) -> Change {
         tokio::time::timeout(PUSH_DEADLINE, self.observations.recv())
             .await
             .expect("the source reported within the deadline")

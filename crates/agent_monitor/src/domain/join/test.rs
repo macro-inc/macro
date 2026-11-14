@@ -280,7 +280,10 @@ fn codex_rollout(session: &str, cwd: &str, events: Vec<TranscriptEvent>) -> Fact
 
 fn assert_usd(cost: Cost, expected: f64) {
     let usd = cost.usd().expect("a dollar amount");
-    assert!((usd - expected).abs() < 1e-9, "expected {expected}, got {cost:?}");
+    assert!(
+        (usd - expected).abs() < 1e-9,
+        "expected {expected}, got {cost:?}"
+    );
 }
 
 #[test]
@@ -382,7 +385,10 @@ fn a_subagent_is_working_while_its_transcript_is_written_then_done() {
     let fresh = build_agents(&facts, at(5, 0));
     assert_eq!(fresh.agents[&id].status, Status::Working);
     assert_eq!(fresh.agents[&id].kind, AgentKind::Subagent);
-    assert_eq!(fresh.agents[&id].parent, Some(AgentId::claude_session("s-5")));
+    assert_eq!(
+        fresh.agents[&id].parent,
+        Some(AgentId::claude_session("s-5"))
+    );
 
     let stale = build_agents(&facts, at(20, 0));
     assert_eq!(stale.agents[&id].status, Status::Done);
@@ -518,7 +524,11 @@ fn a_macrod_session_marks_the_agent_holding_its_native_session_or_transcript() {
     assert_eq!(by_transcript.kind, AgentKind::MacrodSession);
     // A session record alone is history, not an agent.
     assert_eq!(built.agents.len(), 2, "{:?}", built.agents.keys());
-    assert!(!built.owners.contains_key(&FactKey::MacrodSession("m-3".to_owned())));
+    assert!(
+        !built
+            .owners
+            .contains_key(&FactKey::MacrodSession("m-3".to_owned()))
+    );
 }
 
 #[test]
@@ -571,7 +581,10 @@ fn a_run_record_joins_its_terminal_by_name_or_label_and_otherwise_stands_alone()
     assert_eq!(by_name.kind, AgentKind::WorkRun);
     assert_eq!(by_name.task.as_deref(), Some("Tidy the docs"));
     assert_eq!(by_name.cost, Cost::Known(2.5));
-    assert_eq!(built.agents[&AgentId::terminal("t2")].kind, AgentKind::WorkRun);
+    assert_eq!(
+        built.agents[&AgentId::terminal("t2")].kind,
+        AgentKind::WorkRun
+    );
 
     let alone = &built.agents[&AgentId::run("r-3")];
     assert_eq!(alone.kind, AgentKind::WorkRun);
@@ -790,7 +803,11 @@ fn a_claude_transcript_without_a_registry_entry_joins_the_claude_terminal_in_its
         &mut facts,
         SourceKind::ClaudeTranscripts,
         Change::Reset(vec![
-            in_work(transcript("s-registered", None, vec![usage(at(1, 0), 1, 1)])),
+            in_work(transcript(
+                "s-registered",
+                None,
+                vec![usage(at(1, 0), 1, 1)],
+            )),
             in_work(transcript("s-older", None, vec![usage(at(1, 0), 1, 1)])),
             in_work(transcript("s-newer", None, vec![usage(at(3, 0), 1, 1)])),
         ]),
@@ -802,10 +819,16 @@ fn a_claude_transcript_without_a_registry_entry_joins_the_claude_terminal_in_its
     let wrapped = &built.agents[&AgentId::terminal("t-wrapped")];
     assert_eq!(wrapped.session.as_deref(), Some("s-newer"));
     assert_eq!(
-        built.agents[&AgentId::terminal("t-registered")].session.as_deref(),
+        built.agents[&AgentId::terminal("t-registered")]
+            .session
+            .as_deref(),
         Some("s-registered")
     );
-    assert!(built.agents.contains_key(&AgentId::claude_session("s-older")));
+    assert!(
+        built
+            .agents
+            .contains_key(&AgentId::claude_session("s-older"))
+    );
     assert_eq!(built.agents.len(), 3);
 }
 

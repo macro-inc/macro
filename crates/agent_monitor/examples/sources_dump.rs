@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use agent_monitor::domain::join::{Facts, build_agents};
-use agent_monitor::domain::model::{SourceKind, SourceState, Status};
+use agent_monitor::domain::model::{Cost, SourceKind, SourceState, Status};
 use agent_monitor::domain::observation::Change;
 use agent_monitor::outbound::local::LocalSources;
 use chrono::Utc;
@@ -49,7 +49,10 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let macrod = args.macrod.clone().unwrap_or_else(|| args.home.join(".macrod"));
+    let macrod = args
+        .macrod
+        .clone()
+        .unwrap_or_else(|| args.home.join(".macrod"));
     let mut local = LocalSources::in_home(
         args.home.clone(),
         macrod,
@@ -145,16 +148,17 @@ fn print_agents(facts: &Facts, rows: usize) {
         *by_status.entry(format!("{:?}", agent.status)).or_default() += 1;
         *by_kind.entry(agent.kind.label()).or_default() += 1;
     }
-    let live = agents.iter().filter(|agent| !agent.status.is_final()).count();
+    let live = agents
+        .iter()
+        .filter(|agent| !agent.status.is_final())
+        .count();
     let live_terminals = agents
         .iter()
         .filter(|agent| agent.terminal.is_some() && !agent.status.is_final())
         .count();
     let live_without_terminal = agents
         .iter()
-        .filter(|agent| {
-            agent.terminal.is_none() && agent.pid.is_some() && !agent.status.is_final()
-        })
+        .filter(|agent| agent.terminal.is_none() && agent.pid.is_some() && !agent.status.is_final())
         .count();
     let priced: f64 = agents.iter().filter_map(|agent| agent.cost.usd()).sum();
     let unpriced = agents
@@ -176,14 +180,14 @@ fn print_agents(facts: &Facts, rows: usize) {
         .collect();
     shown.sort_by_key(|agent| (agent.status, std::cmp::Reverse(agent.last_activity)));
     println!(
-        "{:<10} {:<8} {:<9} {:<26} {:>5} {:>6} {:>4} {:>10}  {}",
-        "KIND", "STATUS", "TERM", "NAME", "TURNS", "TOOLS", "ERR", "COST", "DOING"
+        "{:<10} {:<8} {:<9} {:<26} {:>5} {:>6} {:>4} {:>10}  DOING",
+        "KIND", "STATUS", "TERM", "NAME", "TURNS", "TOOLS", "ERR", "COST"
     );
     for agent in shown.into_iter().take(rows) {
         let cost = match agent.cost {
-            agent_monitor::domain::model::Cost::Known(usd) => format!("${usd:.2}"),
-            agent_monitor::domain::model::Cost::Estimated(usd) => format!("~${usd:.2}"),
-            agent_monitor::domain::model::Cost::Unpriced => "—".to_owned(),
+            Cost::Known(usd) => format!("${usd:.2}"),
+            Cost::Estimated(usd) => format!("~${usd:.2}"),
+            Cost::Unpriced => "—".to_owned(),
         };
         let name: String = agent.name.chars().take(26).collect();
         let status = match agent.status {

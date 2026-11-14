@@ -263,7 +263,9 @@ fn read_file<F: TranscriptFormat>(
 enum Slot<P> {
     Idle(FileState<P>),
     /// Out on a worker; `again` when it changed meanwhile.
-    Busy { again: bool },
+    Busy {
+        again: bool,
+    },
 }
 
 struct JobDone<P> {
@@ -281,13 +283,21 @@ pub(crate) async fn run<F: TranscriptFormat>(
     cancel: CancellationToken,
 ) -> Result<(), SourceError> {
     let format = Arc::new(format);
-    let sender = Sender { out, source: F::SOURCE };
+    let sender = Sender {
+        out,
+        source: F::SOURCE,
+    };
 
     // Forget what an earlier run reported before anything else.
     sender.send(Change::Reset(Vec::new())).await?;
     if !config.root.is_dir() {
         sender
-            .health(SourceState::Absent, 0, None, Some("no transcript directory"))
+            .health(
+                SourceState::Absent,
+                0,
+                None,
+                Some("no transcript directory"),
+            )
             .await?;
         cancel.cancelled().await;
         return Ok(());
@@ -442,15 +452,13 @@ impl<F: TranscriptFormat> Engine<F> {
             };
 
             let format = Arc::clone(&self.format);
-            self.jobs.spawn_blocking(move || read_job(&*format, path, key, state));
+            self.jobs
+                .spawn_blocking(move || read_job(&*format, path, key, state));
         }
     }
 
     async fn finished(&mut self, done: JobDone<F::Parser>) -> Result<(), SourceError> {
-        let again = matches!(
-            self.files.get(&done.path),
-            Some(Slot::Busy { again: true })
-        );
+        let again = matches!(self.files.get(&done.path), Some(Slot::Busy { again: true }));
         match done.state {
             Some(state) => {
                 self.files.insert(done.path.clone(), Slot::Idle(state));
@@ -494,8 +502,10 @@ impl<F: TranscriptFormat> Engine<F> {
         });
         if indexing.is_none() {
             let elapsed = self.index_started.elapsed();
-            self.index_span
-                .record("duration_ms", u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX));
+            self.index_span.record(
+                "duration_ms",
+                u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+            );
             self.index_span.record("bytes", self.index_bytes);
             self.index_span = tracing::Span::none();
         }
@@ -504,11 +514,7 @@ impl<F: TranscriptFormat> Engine<F> {
             .await
     }
 
-    async fn changed(
-        &mut self,
-        paths: BTreeSet<PathBuf>,
-        rescan: bool,
-    ) -> Result<(), SourceError> {
+    async fn changed(&mut self, paths: BTreeSet<PathBuf>, rescan: bool) -> Result<(), SourceError> {
         let mut new_directories = Vec::new();
         for path in paths {
             if self.format.key(&self.root, &path).is_some() {

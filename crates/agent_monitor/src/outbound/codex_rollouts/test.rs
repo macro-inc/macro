@@ -135,6 +135,9 @@ fn only_rollout_files_with_a_session_id_are_read() {
             .map(|key| key.session),
         Some(SESSION.to_owned())
     );
-    assert_eq!(format.key(root, Path::new("/s/2030/01/01/notes.jsonl")), None);
+    assert_eq!(
+        format.key(root, Path::new("/s/2030/01/01/notes.jsonl")),
+        None
+    );
     assert_eq!(format.key(root, Path::new("/s/rollout-short.jsonl")), None);
 }

@@ -139,7 +139,8 @@ fn subagent_description(path: &Path) -> Option<String> {
     let meta = path.with_extension("meta.json");
     let text = std::fs::read(meta).ok()?;
     let meta: SubagentMeta = serde_json::from_slice(&text).ok()?;
-    meta.description.filter(|description| !description.is_empty())
+    meta.description
+        .filter(|description| !description.is_empty())
 }
 
 /// Parses one Claude Code transcript.
