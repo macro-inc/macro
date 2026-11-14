@@ -46,9 +46,9 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
 
     /// The items of `entity_types` whose Companies or Contacts property names
     /// a record of the viewer's activity scope (see [`Self::resolve_association`]
-    /// for [`super::association::CrmAssociation::Activity`]), without
-    /// enumerating the scope's records. Not authorized: each item reaches the
-    /// caller only through its own source query.
+    /// for [`super::association::CrmAssociation::Activity`]), in one statement
+    /// that reads only the scope's record ids. Not authorized: each item
+    /// reaches the caller only through its own source query.
     fn activity_property_edges(
         &self,
         user_id: &str,

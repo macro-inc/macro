@@ -167,8 +167,8 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
-        // Bounded like the scope read it stands beside, in case the planner
-        // ever leaves the property index.
+        // Bounded like the scope read it stands beside: both grow with the
+        // scope's records.
         let mut transaction = self.bounded_read().await?;
         let rows = sqlx::query_file!(
             "src/outbound/companies_repo/activity_property_edges.sql",
