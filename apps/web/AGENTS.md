@@ -1625,7 +1625,8 @@ Keep entity-picker navigation on its search input, before the enclosing menu han
 ### Tag picker selection and creation
 
 Keep tag checkbox toggles open for pointer and keyboard input; desktop row picks
-save the staged selection and close, while touch sheets retain explicit Done.
+save the staged selection and close only the picker, while touch sheets retain
+explicit Done. Keep the parent More menu open after a tag pick or Escape.
 Return from sharing to color to name with Back or Escape, preserving the draft
 and chosen color; native Back-button activation must not advance the flow.
 Keep tag-creation headers compact beside Back and show the current draft color

@@ -3137,6 +3137,8 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   Enter/Space while it is focused toggles that tag and keeps the picker open;
   clicking its label toggles and saves all staged selections, then closes.
   Shift-click and Shift+Enter also keep it open. Mobile retains Done.
+  In a More-menu submenu, a row pick or Escape closes only the tag picker and
+  leaves the parent menu available for another action.
   During tag creation, the compact Back/title row shows the draft color beside
   the heading. Back and Escape return from sharing to color, then to the name
   search, preserving the name and chosen color.

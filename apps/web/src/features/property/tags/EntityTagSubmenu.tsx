@@ -24,6 +24,7 @@ export function EntityTagSubmenu(props: {
   const [open, setOpen] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   let saveAndClose: (() => Promise<void>) | undefined;
+  let trigger: HTMLDivElement | undefined;
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -41,6 +42,7 @@ export function EntityTagSubmenu(props: {
         text={t('entityActions.addTag')}
         icon={TagIcon}
         disabled={!tagEntityType(props.entity)}
+        ref={(element) => (trigger = element)}
       />
       <Show when={open() || saving()}>
         <EntityTagSubmenuOwner
@@ -49,6 +51,7 @@ export function EntityTagSubmenu(props: {
           setSaving={setSaving}
           registerSave={(handler) => (saveAndClose = handler)}
           onClose={() => setOpen(false)}
+          focusTrigger={() => trigger?.focus()}
           onActionComplete={props.onActionComplete}
         />
       </Show>
@@ -62,13 +65,14 @@ function EntityTagSubmenuOwner(props: {
   setSaving: (saving: boolean) => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
   onClose: () => void;
+  focusTrigger: () => void;
   onActionComplete?: () => void;
 }) {
   const entityType = tagEntityType(props.entity);
   if (!entityType) return null;
 
   const docTags = useDocTags(props.entity.id, entityType);
-  let pendingSave: Promise<void> | undefined;
+  let content: HTMLDivElement | undefined;
 
   // A picker closes synchronously after starting its save. Keep the mutation
   // owner mounted until that write settles, including a failed write.
@@ -77,30 +81,23 @@ function EntityTagSubmenuOwner(props: {
     setTagSelection: async (selection) => {
       props.setSaving(true);
       try {
-        pendingSave = docTags.setTagSelection(selection);
-        await pendingSave;
+        await docTags.setTagSelection(selection);
       } finally {
         props.setSaving(false);
       }
     },
   };
 
-  const finish = async () => {
-    props.onClose();
-    try {
-      await pendingSave;
-    } catch {
-      // The picker logs failures and allows a fresh session on reopening.
-      return;
-    }
-    props.onActionComplete?.();
-  };
-
   const session = createTagPickerSession({
     docTags: trackedDocTags,
-    onClose: () => fireAndForget(finish(), 'tag-picker'),
+    onClose: () => {
+      const restoreFocus = content?.contains(document.activeElement);
+      props.onClose();
+      if (restoreFocus) props.focusTrigger();
+    },
     onOpenEditEditor: (mode) => {
       props.onClose();
+      // Only a separate editor dialog needs the parent menu dismissed.
       props.onActionComplete?.();
       openDialog(ManagedTagEditorDialog, { mode });
     },
@@ -121,7 +118,14 @@ function EntityTagSubmenuOwner(props: {
     >
       <Show when={props.open()}>
         <div
+          ref={content}
           class="w-full"
+          // Intercept Escape before Kobalte's document listener closes the root menu.
+          on:keydown={(event) => {
+            if (event.key !== 'Escape') return;
+            session.handleKeyDown(event);
+            event.stopPropagation();
+          }}
           onKeyDown={(event) => {
             session.handleKeyDown(event);
             event.stopPropagation();

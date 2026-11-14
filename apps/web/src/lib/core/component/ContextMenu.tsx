@@ -266,6 +266,7 @@ export function SubTrigger(props: {
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | JSX.Element;
   iconClass?: string;
   disabled?: boolean;
+  ref?: (element: HTMLDivElement) => void;
 }) {
   return (
     <ContextMenu.SubTrigger
@@ -274,6 +275,7 @@ export function SubTrigger(props: {
         props.disabled && 'opacity-50 cursor-not-allowed'
       )}
       disabled={props.disabled}
+      ref={props.ref}
     >
       <Show when={props.icon}>
         <Show when={typeof props.icon === 'function'}>

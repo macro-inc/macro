@@ -139,6 +139,7 @@ afterEach(() => {
 function setup() {
   const [visible, setVisible] = createSignal(true);
   const complete = vi.fn(() => setVisible(false));
+  const otherAction = vi.fn();
   render(() => (
     <>
       <Show when={visible()}>
@@ -155,13 +156,14 @@ function setup() {
               }}
               onActionComplete={complete}
             />
+            <Dropdown.Item onSelect={otherAction}>Another action</Dropdown.Item>
           </Dropdown.Content>
         </Dropdown>
       </Show>
       <ImperativeDialogHost />
     </>
   ));
-  return { closeParent: () => setVisible(false), complete };
+  return { closeParent: () => setVisible(false), complete, otherAction };
 }
 
 async function openTags() {
@@ -191,7 +193,10 @@ it('handles selection keys in the submenu and saves staged tags when its parent 
 });
 
 it('keeps checkbox selections open and saves them together with a row pick', async () => {
-  const { complete } = setup();
+  let finishSave: (() => void) | undefined;
+  const save = new Promise<void>((resolve) => (finishSave = resolve));
+  mocks.save.mockReturnValueOnce(save);
+  const { complete, otherAction } = setup();
   const search = await openTags();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Urgent' }));
   expect(screen.getByRole('checkbox', { name: 'Urgent' })).toHaveProperty(
@@ -211,12 +216,39 @@ it('keeps checkbox selections open and saves them together with a row pick', asy
     screen.getByText('Follow up', { exact: true, selector: 'span' })
   );
 
-  await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+  expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
+  expect(screen.getByRole('menuitem', { name: 'Add tag' })).toBeTruthy();
+  finishSave?.();
+  await save;
+  expect(complete).not.toHaveBeenCalled();
   expect(mocks.save).toHaveBeenCalledOnce();
   expect(mocks.save).toHaveBeenCalledWith(new Set(['urgent', 'follow-up']));
   expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull();
+  const action = screen.getByRole('menuitem', { name: 'Another action' });
+  action.focus();
+  fireEvent.keyDown(action, { key: 'Enter' });
+  expect(otherAction).toHaveBeenCalledOnce();
 });
 
+it('closes only the tag submenu on Escape and saves staged checkbox selections', async () => {
+  const { complete, otherAction } = setup();
+  const search = await openTags();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Urgent' }));
+  fireEvent.keyDown(search, { key: 'Escape' });
+
+  await waitFor(() =>
+    expect(screen.queryByPlaceholderText('Change or add tags')).toBeNull()
+  );
+  expect(mocks.save).toHaveBeenCalledWith(new Set(['urgent']));
+  expect(complete).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(
+    screen.getByRole('menuitem', { name: 'Add tag' })
+  );
+  const action = screen.getByRole('menuitem', { name: 'Another action' });
+  action.focus();
+  fireEvent.keyDown(action, { key: 'Enter' });
+  expect(otherAction).toHaveBeenCalledOnce();
+});
 it('toggles the focused checkbox with Enter without picking the highlighted row', async () => {
   setup();
   const search = await openTags();
