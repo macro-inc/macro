@@ -3,17 +3,16 @@ use nix::{
     unistd::{ForkResult, fork},
 };
 use rs_libreoffice_bindings::Office;
-use std::{borrow::Cow, fs::File, io::Write, path::Path, thread, time::Duration};
+use std::{borrow::Cow, path::Path, thread, time::Duration};
 
 use anyhow::Context;
-use model::convert::ConvertQueueMessage;
+use model::{convert::ConvertQueueMessage, document::FileType};
 
 use crate::{
     config::{LOK_PATH, WEB_SOCKET_RESPONSE_LAMBDA},
+    job_folder::{JOBS_ROOT, JobFolder},
     model::{BomPart, DocxUploadJobData, DocxUploadJobResult, DocxUploadJobSuccessDataInner},
-    utils::{
-        cleanup_folder, conversion_timeout, get_lok_filter_from_file_types, resolve_file_type,
-    },
+    utils::{conversion_timeout, get_lok_filter_from_file_types, resolve_file_type},
 };
 
 pub(super) fn is_docx_key(key: &str) -> bool {
@@ -23,10 +22,9 @@ pub(super) fn is_docx_key(key: &str) -> bool {
 /// Processes a message from the convert queue
 /// Returns the job id and the convert queue message
 ///
-/// The span is errored by the returned error. Cleaning up a folder that was
-/// never created does not error it, so a job that failed before creating its
-/// folder still shows that failure; any other cleanup failure logs an error
-/// and errors the span.
+/// The span is errored by the returned error. A job that fails before
+/// creating its folder has nothing to clean up, so the span shows only that
+/// failure; a folder that cannot be removed logs an error and errors the span.
 #[tracing::instrument(err(Debug), skip(worker, s3_client, lambda_client, message), fields(message_id = message.message_id))]
 pub async fn process_message(
     worker: &sqs_worker::SQSWorker,
@@ -71,10 +69,6 @@ pub async fn process_message(
     tracing::info!(job_id=%job_id, message_body=?req, "message body");
 
     let result = convert(&job_id, &req, s3_client).await;
-
-    if let Err(e) = cleanup_folder(&job_id) {
-        tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
-    }
 
     if let Some(update) = job_update(&job_id, &req, result.is_ok()) {
         tracing::trace!(status=%update.status, "sending job update to lambda");
@@ -150,43 +144,71 @@ pub async fn convert(
     let filter = get_lok_filter_from_file_types(&from_file_type, &to_file_type)
         .context("unable to get lok filter")?;
 
-    let directory = format!("./{}", job_id);
-    let in_file_path = format!("{directory}/IN.{}", from_file_type.as_str());
-    let out_file_path = format!("{directory}/OUT.{}", to_file_type.as_str());
-
-    // Make directory of job_id
-    let file_content = s3_client
+    let input = s3_client
         .get(&req.from_bucket, &req.from_key)
         .await
         .context("unable to get object from S3")?;
 
-    std::fs::create_dir(&directory)
-        .map_err(|e| anyhow::anyhow!("unable to create directory {}: {}", directory, e))?;
-
-    let mut file = File::create(&in_file_path).context("unable to create input file")?;
-
-    file.write_all(&file_content)
-        .context("unable to write to input file")?;
-
-    let max_wait = conversion_timeout(&from_file_type, &to_file_type);
-    run_lok_conversion(
-        job_id,
-        &LOK_PATH,
-        &in_file_path,
-        &out_file_path,
-        to_file_type.as_str(),
-        &filter,
-        max_wait,
-    )?;
-
-    let file_content = std::fs::read(out_file_path).context("unable to read result file")?;
+    let job_id_owned = job_id.to_string();
+    let span = tracing::Span::current();
+    let output = tokio::task::spawn_blocking(move || {
+        span.in_scope(|| {
+            convert_file(
+                &JOBS_ROOT,
+                &job_id_owned,
+                &LOK_PATH,
+                &input,
+                &from_file_type,
+                &to_file_type,
+                &filter,
+            )
+        })
+    })
+    .await
+    .context("conversion task failed")??;
 
     s3_client
-        .put(&req.to_bucket, &req.to_key, &file_content)
+        .put(&req.to_bucket, &req.to_key, &output)
         .await
         .context("unable to upload file")?;
 
     Ok(())
+}
+
+/// Converts `input` in a new job folder under `jobs_root` and returns the
+/// result.
+///
+/// The folder, with every scratch file LibreOffice wrote into it, is removed
+/// before this returns, whether the conversion succeeded or not. Blocks until
+/// the conversion child exits, so call it off the async runtime.
+pub(crate) fn convert_file(
+    jobs_root: &Path,
+    job_id: &str,
+    office_path: &str,
+    input: &[u8],
+    from_file_type: &FileType,
+    to_file_type: &FileType,
+    filter: &str,
+) -> anyhow::Result<Vec<u8>> {
+    let folder = JobFolder::create(jobs_root, job_id)?;
+    let in_file_path = folder
+        .path()
+        .join(format!("IN.{}", from_file_type.as_str()));
+    let out_file_path = folder.path().join(format!("OUT.{}", to_file_type.as_str()));
+
+    std::fs::write(&in_file_path, input).context("unable to write input file")?;
+
+    run_lok_conversion(
+        job_id,
+        office_path,
+        &in_file_path,
+        &out_file_path,
+        to_file_type.as_str(),
+        filter,
+        conversion_timeout(from_file_type, to_file_type),
+    )?;
+
+    std::fs::read(&out_file_path).context("unable to read result file")
 }
 
 /// Converts `in_file_path` to `out_file_path` with LibreOfficeKit in a forked
@@ -198,13 +220,13 @@ pub async fn convert(
 pub(crate) fn run_lok_conversion(
     job_id: &str,
     office_path: &str,
-    in_file_path: &str,
-    out_file_path: &str,
+    in_file_path: &Path,
+    out_file_path: &Path,
     to_format: &str,
     filter: &str,
     max_wait: Duration,
 ) -> anyhow::Result<()> {
-    let job_folder = Path::new(in_file_path)
+    let job_folder = in_file_path
         .parent()
         .map(std::path::absolute)
         .context("input file should be inside a job folder")?

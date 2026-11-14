@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 mod api;
 mod config;
+mod job_folder;
 mod model;
 mod process;
 mod utils;
@@ -67,6 +68,8 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
 
     smoke_test_lok(&config.lok_path)?;
+
+    job_folder::reset_jobs_root(&job_folder::JOBS_ROOT).context("unable to reset the jobs root")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
