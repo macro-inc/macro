@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO import_entity (user_id, source, kind, foreign_id, status, initiator,\n                                       metadata, entity_id, entity_type, team_id)\n            VALUES ($1, $2, $9, $3, 'imported', $4, $5, $6, $7, $8)\n            ON CONFLICT (user_id, source, foreign_id) DO UPDATE\n            SET status = 'imported', metadata = EXCLUDED.metadata,\n                entity_id = EXCLUDED.entity_id, entity_type = EXCLUDED.entity_type,\n                team_id = EXCLUDED.team_id, last_error = NULL, updated_at = NOW()\n            WHERE import_entity.status <> 'imported'\n            RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,\n                      initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,\n                      updated_at\n            ",
+  "query": "\n            INSERT INTO import_entity (user_id, source, kind, foreign_id, status, initiator,\n                                       metadata, entity_id, entity_type, team_id)\n            VALUES ($1, $2, $9, $3, 'imported', $4, $5, $6, $7, $8)\n            ON CONFLICT (user_id, source, foreign_id) DO UPDATE\n            SET status = 'imported', metadata = EXCLUDED.metadata,\n                entity_id = EXCLUDED.entity_id, entity_type = EXCLUDED.entity_type,\n                team_id = EXCLUDED.team_id, last_error = NULL, updated_at = NOW()\n            WHERE import_entity.status NOT IN ('imported', 'importing')\n            RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,\n                      initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,\n                      updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -122,5 +122,5 @@
       false
     ]
   },
-  "hash": "ffa2ceefdeb2a64a1578356fba177a37e07a364381274987e848f565a5af736d"
+  "hash": "0c125a3561d0ff2a87eaebd144cf7c8a7fceba9451ce80979817f5d6da327d13"
 }

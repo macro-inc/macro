@@ -1961,7 +1961,57 @@ impl ToolEntityCreator {
     }
 }
 
+/// The entity-access type an import from `source` is recorded as. Linear
+/// and Jira issues become tasks, which are documents.
+fn imported_entity_type(source: import::domain::models::ImportSource) -> model_entity::EntityType {
+    use import::domain::models::ImportSource;
+    match source {
+        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => {
+            model_entity::EntityType::Document
+        }
+        ImportSource::Slack => model_entity::EntityType::Channel,
+    }
+}
+
+/// Whether an access-check failure means the caller cannot see the entity,
+/// as opposed to the check itself failing. A malformed id names nothing the
+/// caller can see, so it is refused too.
+fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
+    use entity_access::domain::models::AccessError;
+    matches!(
+        error,
+        AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_)
+            | AccessError::BadRequest(_)
+    )
+}
+
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
+        entity_id: &str,
+    ) -> anyhow::Result<bool> {
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                user,
+                None,
+                entity_id,
+                imported_entity_type(source),
+            )
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) if refuses_view(&error) => Ok(false),
+            Err(error) => Err(anyhow::Error::new(error).context(format!(
+                "could not check access to imported entity {entity_id}"
+            ))),
+        }
+    }
+
     async fn create_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -2360,3 +2410,6 @@ fn self_chat_id(ctx: &ToolServiceContext) -> Option<uuid::Uuid> {
         .then_some(ctx.usage_context.entity)
         .flatten()
 }
+
+#[cfg(test)]
+mod test;

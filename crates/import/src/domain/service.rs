@@ -1095,6 +1095,14 @@ where
             .normalize_foreign_id(foreign_id)
             .ok_or_else(|| ImportError::Other(anyhow::anyhow!("foreign_id must not be empty")))?;
         let metadata = validate_metadata(source, metadata)?;
+        let visible = self
+            .creator
+            .can_view(user, source, entity_id)
+            .await
+            .map_err(ImportError::AccessCheck)?;
+        if !visible {
+            return Err(ImportError::EntityNotAccessible(entity_id.to_owned()));
+        }
 
         // Channels always associate with the user's team when they have one.
         let team_id = match source {

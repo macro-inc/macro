@@ -64,6 +64,14 @@ struct ReservedCreator {
 }
 
 impl EntityCreator for ReservedCreator {
+    async fn can_view(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: import::domain::models::ImportSource,
+        _: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
     async fn create_task(
         &self,
         _: &MacroUserIdStr<'static>,
