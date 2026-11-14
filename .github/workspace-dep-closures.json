@@ -4271,6 +4271,8 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_correlation",
+      "crates/agent_monitor",
+      "crates/agent_monitor_tui",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
