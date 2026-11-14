@@ -59,6 +59,16 @@ have the same build requirements.
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
 
+## Time zone data
+
+Rust code resolves IANA zones with `chrono-tz`, which the workspace patches to
+[`vendor/chrono-tz`](../../vendor/chrono-tz/README-MACRO.md) so it bundles a
+recent IANA tzdata release. When IANA changes the rules for zones Macro's users
+are in, move to the new release with `vendor/chrono-tz/update-tzdata.sh`.
+SQL `AT TIME ZONE` uses the database server's own tz data instead: on RDS it
+changes only with a Postgres minor version upgrade, and in local and CI
+containers with the image's `tzdata` package.
+
 ## Test the affected packages
 
 Use the package name from the affected `Cargo.toml`, not a guessed spelling of

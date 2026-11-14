@@ -207,6 +207,13 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
           "When an agent sign-in on your team's computer is about to expire",
         macroComputers: true,
       },
+      {
+        type: 'computer_setup',
+        label: 'Computer setup',
+        description:
+          'When a computer you bought is ready, or could not be set up',
+        macroComputers: true,
+      },
     ],
   },
   {

@@ -12,6 +12,7 @@ use crate::generated::{self, types};
 use crate::model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageReference, IncusEndpoint,
     InstanceInfo, InstanceKind, InstanceStatus, InstanceUsage, ServerAuth, ServerInfo,
+    VolumeCreation,
 };
 use crate::{
     ImageAlias, IncusError, IncusTimeouts, InstanceName, StoragePoolName, StorageVolumeName, tls,
@@ -79,6 +80,13 @@ impl IncusClient {
             websocket_tls: Some(websocket_tls),
             ..Self::with_http_client(&endpoint.url, http, endpoint.timeouts)
         })
+    }
+
+    /// A client that sends requests over plain HTTP without mTLS, for tests
+    /// against a fake Incus.
+    #[cfg(feature = "test-support")]
+    pub fn over_plain_http(url: &str, timeouts: IncusTimeouts) -> Self {
+        Self::with_http_client(url, reqwest::Client::new(), timeouts)
     }
 
     pub(crate) fn with_http_client(
@@ -372,14 +380,16 @@ impl IncusClient {
     }
 
     /// Creates an empty custom block volume of `size` (e.g. `20GiB`), for a
-    /// disk that outlives the instance's root disk.
+    /// disk that outlives the instance's root disk. An existing volume by that
+    /// name is left as it is and reported, not an error, so an expected retry
+    /// logs no failure.
     #[tracing::instrument(name = "incus.create_block_volume", skip(self), err)]
     pub async fn create_block_volume(
         &self,
         pool: &StoragePoolName,
         volume: &StorageVolumeName,
         size: &str,
-    ) -> Result<(), IncusError> {
+    ) -> Result<VolumeCreation, IncusError> {
         let body = types::StorageVolumesPost {
             name: Some(volume.as_str().to_owned()),
             type_: Some(CUSTOM_VOLUME.to_owned()),
@@ -391,10 +401,18 @@ impl IncusClient {
             ..Default::default()
         };
 
-        self.api
+        let created = self
+            .api
             .storage_pool_volumes_type_post(pool.as_str(), CUSTOM_VOLUME, None, None, &body)
-            .await?;
-        Ok(())
+            .await
+            .map_err(IncusError::from);
+
+        // incusd's storagePoolVolumesPost answers 409 only for a taken name.
+        match created {
+            Ok(_) => Ok(VolumeCreation::Created),
+            Err(IncusError::Rejected { status: 409, .. }) => Ok(VolumeCreation::AlreadyExists),
+            Err(error) => Err(error),
+        }
     }
 
     /// Deletes a custom volume. It must not be attached; deleting the

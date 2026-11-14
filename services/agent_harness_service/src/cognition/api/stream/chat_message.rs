@@ -3,7 +3,9 @@ use super::util::chat_message::ai_request::build_chat_messages;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
 use crate::cognition::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
-use crate::cognition::api::tool_selection::choose_tools_prompt;
+use crate::cognition::api::tool_selection::{
+    choose_tools_prompt, tools_refused_to_current_session,
+};
 use crate::cognition::api::utils::log;
 use crate::cognition::core::constants::DEFAULT_CHAT_NAME;
 use crate::cognition::model::stream::{
@@ -201,6 +203,15 @@ async fn send_chat_message_inner(
         });
     }
     let model = request.model.clone();
+
+    if tools_refused_to_current_session(&request.toolset) {
+        return Err(ChatMessageError {
+            error: "this session's chats take no tools".to_owned(),
+            stream_id: Some(stream_id),
+            status: Some(StatusCode::FORBIDDEN),
+            code: None,
+        });
+    }
 
     // Resolve existing-chat permissions before admission, without creating anything.
     let existing_chat = if requested_chat_id.is_empty() {

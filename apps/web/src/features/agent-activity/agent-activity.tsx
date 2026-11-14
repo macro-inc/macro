@@ -1,3 +1,4 @@
+import { ActivityLine } from '@app/features/block-agent/ui';
 import { useSessionActivity } from '@core/agent-session/session-activity';
 import {
   type AgentActivityData,
@@ -5,7 +6,6 @@ import {
 } from '@macro-inc/lexical-core';
 import { Key } from '@solid-primitives/keyed';
 import { Show } from 'solid-js';
-import { ActivityLine } from './components/activity-line';
 import type { ActivityRowView } from './components/activity-rows';
 import { ActivitySummary } from './components/activity-summary';
 import { PresentedView } from './components/presented-view';
@@ -72,7 +72,7 @@ function Run(props: {
       <Show when={steps().length > 0}>
         <Show
           when={props.sealed}
-          fallback={<ActivityLine rows={steps()} summary={props.summary} />}
+          fallback={<ActivityLine steps={steps()} summary={props.summary} />}
         >
           <ActivitySummary rows={steps()} />
         </Show>
@@ -95,5 +95,5 @@ const THINKING: ActivityRowView = {
  * uses, so the reply never reads as finished while the agent works.
  */
 export function AgentThinking() {
-  return <ActivityLine rows={[THINKING]} />;
+  return <ActivityLine steps={[THINKING]} />;
 }

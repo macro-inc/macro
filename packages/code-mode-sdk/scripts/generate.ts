@@ -173,6 +173,12 @@ for (const key of postReads)
   if (!operations[key]) throw new Error(`unknown read operation ${key}`);
 await artifact('operations.json', `${JSON.stringify(operations, null, 2)}\n`);
 
+// Every service the SDK can reach, with its host in each environment. The SDK
+// falls back to these for any host code mode doesn't pass, so the harness
+// checks that each one holds a scoped session's credential to its scope.
+const { HOSTS } = await import(`${root}packages/sdk/src/config.ts`);
+await artifact('hosts.json', `${JSON.stringify(HOSTS, null, 2)}\n`);
+
 // Declarations that stored routine code is type-checked against, and the
 // fingerprint a routine records: the SDK version plus a hash of these types,
 // so any change to the API's shape is a new fingerprint.

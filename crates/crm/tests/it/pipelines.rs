@@ -1,6 +1,9 @@
 //! Pipeline policy and access boundaries, exercised through real domain services.
 #![cfg(feature = "outbound")]
 
+#[path = "pipelines/commercial.rs"]
+mod commercial;
+
 use crm::domain::{auth::CrmTeamReceipt, model::CrmError, pipelines::*, stages::*};
 use crm::outbound::pipelines::PgPipelineRepo;
 use databases::domain::models::DatabaseError;
@@ -231,14 +234,21 @@ async fn private_defaults_team_sharing_and_revocation_cover_database_and_rows(po
         .table(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
         .await
         .unwrap();
-    assert_eq!(detail.columns.len(), 4);
+    assert_eq!(detail.columns.len(), 6);
     let columns = &detail.columns;
     assert_eq!(
         columns
             .iter()
             .map(|c| c.definition.definition.display_name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Company", "Stage", "Owner", "Revenue"]
+        vec![
+            "Company",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency"
+        ]
     );
     let stage = &columns[1].definition;
     assert_eq!(
@@ -1191,7 +1201,7 @@ async fn entries_list_referencing_rows_from_visible_live_pipelines(pool: PgPool)
     );
     assert!(private_entries.iter().all(|e| e.record_id == company
         && e.pipeline.grant == AccessLevel::Owner
-        && e.columns.len() == 4
+        && e.columns.len() == 6
         && e.cells.contains_key(&private.primary_column_id)));
     match &private_rows[0] {
         OpResult::Rows {

@@ -260,6 +260,18 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .map_err(sub_routines::key_taken)?;
 
         let created = ScheduledAction::try_from(row)?;
+        // Saving a routine from the owner's suggestion moves it, and its
+        // card, to saved.
+        if let Some(suggestion) = action.suggestion_id {
+            super::pg_suggestion_repo::save(
+                &mut tx,
+                owner.as_ref(),
+                suggestion,
+                id,
+                chrono::Utc::now(),
+            )
+            .await?;
+        }
         match self
             .registrar
             .register_owned_entity(

@@ -362,6 +362,7 @@ export function AgentInput(props: AgentInputProps) {
               >
                 <div
                   id={AGENT_INPUT_TEXT_AREA_ID}
+                  data-composer-scroll
                   class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
                   classList={{
                     // While empty only the placeholder renders; keep it to one clipped
