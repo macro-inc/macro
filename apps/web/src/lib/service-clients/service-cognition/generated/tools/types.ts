@@ -4921,6 +4921,14 @@ export type ExecutionStatus =
  * A dispatch result; unfinished work is never reported as success.
  */
 export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+/**
+ * The kind of model media; only images.
+ */
+export type ModelMediaType = 'image';
+/**
+ * The media type of a model image; only PNG.
+ */
+export type ModelImageMediaType = 'image/png';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -16645,7 +16653,7 @@ export interface CodeGuide {
   markdown: string;
 }
 /**
- * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
+ * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. Optional images: up to 2 PNGs from the SDK, e.g. images: [await canvas.render()]; you see their pixels with the result, so return a render to look at a canvas. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
@@ -16703,6 +16711,10 @@ export interface ExecutionReceipt {
    * Safe failure text, when execution did not succeed.
    */
   error?: string | null;
+  /**
+   * Pixels of the images `main` returned in `images`, for the model.
+   */
+  modelMedia?: ModelImage[];
 }
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -16717,6 +16729,17 @@ export interface ExecutionActivity {
    */
   label: string;
   status: RecordedCallStatus;
+}
+/**
+ * Base64 PNG pixels the model sees as an image block, never a URL.
+ */
+export interface ModelImage {
+  type: ModelMediaType;
+  mediaType: ModelImageMediaType;
+  /**
+   * Base64 PNG bytes.
+   */
+  data: string;
 }
 /**
  * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way.

@@ -22,6 +22,7 @@ email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
 futures = { workspace = true }
 import = { path = "../import" }
+lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }

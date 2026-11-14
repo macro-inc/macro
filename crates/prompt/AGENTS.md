@@ -45,8 +45,8 @@ AI system prompts: one module per prompt section, each exporting a
 - Direct session-aware search/listing stays available in code mode; do not route conversation work to legacy chat tools or SDK namespaces.
 
 - Code mode reads and edits canvases through the SDK's `document.canvas()` handle, never
-  `content()`, which does not represent the shared scene; only `RenderCanvas` stays direct, because
-  an ExecuteCode result cannot carry an image to the model.
+  `content()`, which does not represent the shared scene, and sees one by returning
+  `images: [await canvas.render()]`, which reach the model as image blocks.
 The agent-session prompt distinguishes typed `<m-notifications>` system facts
 from user requests and defines the notification-only `<noop/>` contract.
 In-app replies use `m-document-mention` with `blockName: "routine"` for routines;
