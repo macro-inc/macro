@@ -427,8 +427,12 @@ test('focus does not revive a range cleared by its actual focus listener', () =>
     });
   }));
 
-for (const primary of [undefined, null, { marker: 'focus-setup' }]) {
-  test(`setup ${typeof primary} failure retains its identity while all cleanup runs`, async () => {
+for (const { label, primary } of [
+  { label: 'undefined', primary: undefined },
+  { label: 'null', primary: null },
+  { label: 'object', primary: { marker: 'focus-setup' } },
+]) {
+  test(`setup ${label} failure retains its identity while all cleanup runs`, async () => {
     const released: number[] = [];
     await expect(
       withFixtures((own) => {
