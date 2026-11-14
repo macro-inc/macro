@@ -282,7 +282,7 @@ let
   tracePanel = id: gridPos: start: title: {
     inherit id gridPos;
     title = "${title}: \$${start}_run";
-    description = "A ${start} bring-up's steps as a trace: lanes, nested steps, the crates its service build compiled and the services it waited on. Pick another run with the ${title} variable, or from Recent bring-ups. Traces are kept 7 days; runs recorded before traces were keyed by run do not show here.";
+    description = "A ${start} bring-up's steps as a trace: lanes, nested steps, the crates its service build compiled and the services it waited on. Pick another run with the ${title} variable, or from Recent bring-ups. Traces are kept 7 days; runs recorded before traces were keyed by run do not show here, and with no such run in 7 days the panel reports no data.";
     type = "traces";
     datasource = tempo;
     targets = [
@@ -327,7 +327,7 @@ let
     id = 13;
     type = "table";
     title = "Recent bring-ups";
-    description = "The latest bring-ups on the chosen machines. A trace id opens that run's trace here, as the fresh or resume run, or in Explore.";
+    description = "The latest bring-ups on the chosen machines. A trace id opens that run's trace in Explore, or here as the fresh or resume run.";
     datasource = loki;
     gridPos = grid 0 49 24 9;
     targets = [
@@ -412,10 +412,6 @@ let
             id = "links";
             value = [
               {
-                title = "Show this run's trace here";
-                url = "/d/macro-run-local?\${__url_time_range}&\${machine:queryparam}&var-\${__data.fields.start}_run=\${__value.raw}";
-              }
-              {
                 title = "Open in Explore";
                 url = "";
                 internal = {
@@ -426,6 +422,10 @@ let
                     query = "\${__value.raw}";
                   };
                 };
+              }
+              {
+                title = "Show this run's trace here";
+                url = "/d/macro-run-local?\${__url_time_range}&\${machine:queryparam}&var-\${__data.fields.start}_run=\${__value.raw}";
               }
             ];
           }
@@ -490,8 +490,8 @@ let
             value.type = "auto";
           }
           {
-            id = "custom.minWidth";
-            value = 320;
+            id = "custom.width";
+            value = 300;
           }
         ])
       ];
@@ -669,7 +669,7 @@ let
       {
         name = "machine";
         label = "Machine";
-        description = "Machines with run_local traces in the range: their `machine` setting, or a hash of the hostname. Runs recorded before traces carried the machine are in the panels under All.";
+        description = "Machines with run_local traces in the last 7 days: their `machine` setting, or a hash of the hostname. Runs recorded before traces carried the machine are in the panels under All.";
         type = "query";
         datasource = tempo;
         query = {
