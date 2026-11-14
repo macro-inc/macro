@@ -352,9 +352,15 @@ async fn read_receipt_records_an_open(provider: Provider) -> Result<(), Report> 
     let theirs = recipient
         .get(&format!("/email/threads/{sent_thread}/read-receipts"))
         .await?;
+    let refused = matches!(theirs.status, 401 | 403 | 404);
+    let empty = theirs.status == 200
+        && theirs.json["receipts"]
+            .as_array()
+            .is_some_and(Vec::is_empty);
     assert!(
-        theirs.status != 200 || !theirs.text.contains("open_count\":1"),
-        "the recipient sees the sender's receipts: {}",
+        refused || empty,
+        "the recipient sees the sender's receipts: {} {}",
+        theirs.status,
         theirs.text
     );
 

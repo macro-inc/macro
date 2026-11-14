@@ -142,6 +142,15 @@ async fn agent_drafts_then_sends_a_signed_reply(provider: Provider) -> Result<()
         sent.is_some_and(|message| message["is_sent"] == true),
         "Ada's thread does not hold the reply she sent: {ours}"
     );
+    // A later mail to Grace is the barrier for a second copy of the reply.
+    inbox
+        .send(&json!({
+            "subject": "Barrier",
+            "to": [{ "email": grace.email() }],
+            "body_text": "Later.",
+        }))
+        .await?;
+    correspondent.wait_for_preview("inbox", "Barrier").await?;
     let copies = correspondent
         .provider_messages()?
         .iter()

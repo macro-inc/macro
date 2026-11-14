@@ -478,8 +478,23 @@ async fn new_message_to_several_people_carries_the_signature(
         "the blind copy leaked: {visible}"
     );
 
-    // One copy each, and the sender's own copy is in Sent.
+    // One copy each, and the sender's own copy is in Sent. A later mail
+    // to the same people is the barrier.
     inbox.wait_for_preview("sent", "Quarter plan").await?;
+    inbox
+        .send(&json!({
+            "subject": "Barrier",
+            "to": [
+                { "email": grace.email() },
+                { "email": alan.email() },
+                { "email": joan.email() },
+            ],
+            "body_text": "Later.",
+        }))
+        .await?;
+    for recipient in [&to, &cc, &bcc] {
+        recipient.wait_for_preview("inbox", "Barrier").await?;
+    }
     for recipient in [&to, &cc, &bcc] {
         assert_eq!(
             copies(recipient, "Quarter plan")?,
