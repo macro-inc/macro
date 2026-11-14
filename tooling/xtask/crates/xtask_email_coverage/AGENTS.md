@@ -54,8 +54,18 @@
 - Never skip what cannot be resolved: return an error naming `file:line`. A
   silently missing row makes coverage look better than it is.
 - The walker evaluates router functions made of `let` bindings and one final
-  expression. Routes added in an `if` or by reassignment are an error by
+  expression. Routes added in an `if`, by reassignment anywhere in a
+  statement, or through a `&mut` borrow of the router are an error by
   design; restructure the router or teach the walker.
+- A hand-listed route (`[[elsewhere]]`) must be registered in its file under
+  its method: `.route("<end of the path>", <method>(..))`. A path in a
+  comment or an attribute does not count. Under a `.nest(` the path alone
+  counts, since the nested router is in another crate.
+- A resolver's SDL type comes from the code (its own name, a rename, the
+  types it is merged into) or a `[[graphql_type]]` mapping, never from a
+  field of the same name on some other type.
+- The queue check reads variables by name across the worker file: a name
+  bound to a queue and to anything else is an error.
 - `source` lines need proc-macro2's `span-locations` feature.
 - `list --check` compares everything but the line numbers in `source`: a
   line moves whenever its file changes above it. `list` refreshes them.
@@ -97,5 +107,9 @@
 - `bug = "<id>"` in a function's mapping keeps it open (on one provider with
   `bug_on = "gmail"` or `"outlook"`): its scenarios,
   checks and proofs are not looked at.
-- A record counts only when its scenario passed. A scenario that linked no
+- A record counts only when its scenario passed in the run that wrote it:
+  the harness writes nextest's run id (`NEXTEST_RUN_ID`) into the record and
+  the report matches it with the `uuid` of the `junit.xml` the scenario
+  passed in. A log directory that keeps records of earlier runs therefore
+  adds nothing, and a `junit.xml` without a run id is refused. A scenario that linked no
   inbox counts for both providers, and so does one that linked both.

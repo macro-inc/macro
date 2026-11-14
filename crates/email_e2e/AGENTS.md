@@ -220,7 +220,8 @@ shared with the web app's suite) and backend entry points second.
   the routes the API served with the shape of each request, the GraphQL
   queries document storage answered, the queue messages workers handled,
   the lambda and agent tool runs, the provider methods called, the events
-  published and what was sent to other services. It records what happened
+  published and what was sent to other services, with the id of the
+  nextest run it is of (the report counts a record only for that run). It records what happened
   until the scenario ended, after the Outlook work that was due.
   Gmail token requests are those the authentication stand-in passed on
   (`provider gmail:oauth.token`); the Gmail emulator's request log has none.
@@ -364,6 +365,10 @@ shared with the web app's suite) and backend entry points second.
   arrives while a worker joins is still read; the worker's later sweeps are
   an hour apart and no scenario sees one. Events of other scenarios name
   threads that are not in this scenario's database and are passed over.
+- A Redis database whose lease ran out is not handed out while any client
+  is still connected to it: the services of a scenario that stalled would
+  write into the next one's state. A former writer that is not connected at
+  that moment is not seen.
 - A session connected to a template database blocks every clone of it;
   the harness waits up to a minute for it and closes templates to
   connections.
