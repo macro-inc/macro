@@ -142,7 +142,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   `stack.focus_classifier()?.put_in_focus_when_mail_contains("Contract
   renewal")`; `due_on_when_mail_contains` sets the day the harness reads
   as due, and `times_asked_about(text)` tells whether mail reached the
-  model at all. The questions and their order are the product's: the
+  model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
   Focus". Only inboxes at `example.com` are classified. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these

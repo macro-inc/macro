@@ -144,12 +144,17 @@ async fn mail_the_model_wants_is_in_focus_and_other_mail_is_not(
     assert_eq!(classifier.times_asked_about("Contract renewal"), 1);
     assert_eq!(classifier.times_asked_about("Weekly digest"), 1);
 
-    let pushes = focus_pushes(&stack, &inbox);
-    assert!(!pushes.is_empty(), "no push told the app Focus changed");
+    // The push is sent after the verdict is stored, so it may come after
+    // Home shows the thread.
+    let push = eventually(
+        "a push telling the app Focus changed",
+        DEFAULT_TIMEOUT,
+        async || Ok(focus_pushes(&stack, &inbox).into_iter().next()),
+    )
+    .await?;
     assert!(
-        pushes[0]["entities"].to_string().contains(ada.macro_id()),
-        "the push is not for the inbox's owner: {}",
-        pushes[0]
+        push["entities"].to_string().contains(ada.macro_id()),
+        "the push is not for the inbox's owner: {push}"
     );
 
     // Classifying is Macro's own: the mailbox is as it was delivered.

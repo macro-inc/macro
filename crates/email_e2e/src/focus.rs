@@ -14,6 +14,8 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use axum::extract::State;
+use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use chrono::NaiveDate;
@@ -36,6 +38,12 @@ const DUE_DATE_ROUTE: &str = "/universal_input/thread-due-date";
 /// The question the worker asks first: would the owner want this thread
 /// in Focus (`FocusQuestion::ALL` in `crates/email`).
 const FOCUS_QUESTION: &str = "q0";
+/// The key the worker is given for the model API, which the stand-in asks
+/// for as the API does.
+pub(crate) const MODEL_API_KEY: &str = "email-e2e";
+/// The headers a service names itself and the user with to the harness.
+const INTERNAL_KEY_HEADER: &str = "x-internal-auth-key";
+const INTERNAL_USER_HEADER: &str = "x-internal-macro-user-id";
 /// The model's "yes" and "no", as probabilities.
 const YES: f64 = 0.9;
 const NO: f64 = 0.0;
@@ -166,8 +174,13 @@ impl FocusStandIns {
 /// `jev::outbound::SystemOneJev` speaks with TypeSafe.
 async fn evaluate(
     State(classifier): State<FocusClassifier>,
+    headers: HeaderMap,
     Json(request): Json<Value>,
-) -> Json<Value> {
+) -> Response {
+    let bearer = format!("Bearer {MODEL_API_KEY}");
+    if header(&headers, AUTHORIZATION.as_str()) != bearer {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
     let input = request["state"].to_string();
     let mut answers = classifier.answers();
     let in_focus = answers.focus.iter().any(|text| input.contains(text));
@@ -190,14 +203,22 @@ async fn evaluate(
         "answers": answered,
         "usage": { "input_tokens": 1, "output_tokens": 1 },
     }))
+    .into_response()
 }
 
 /// The agent harness's due date route: the day the scenario set for mail
 /// the thread holds, or none.
 async fn due_date(
     State(classifier): State<FocusClassifier>,
+    headers: HeaderMap,
     Json(request): Json<Value>,
-) -> Json<Value> {
+) -> Response {
+    // The harness serves only a service that names itself and the user.
+    if header(&headers, INTERNAL_KEY_HEADER).is_empty()
+        || header(&headers, INTERNAL_USER_HEADER).is_empty()
+    {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
     let thread = json!([request["subject"], request["messages"]]).to_string();
     let mut answers = classifier.answers();
     answers.calls.push((AGENT_HARNESS, DUE_DATE_ROUTE));
@@ -206,5 +227,13 @@ async fn due_date(
         .iter()
         .find(|(text, _)| thread.contains(text))
         .map(|(_, day)| day.format("%Y-%m-%d").to_string());
-    Json(json!({ "due_on": due_on }))
+    Json(json!({ "due_on": due_on })).into_response()
+}
+
+/// A header's value, empty when it is missing or not text.
+fn header<'a>(headers: &'a HeaderMap, name: &str) -> &'a str {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
 }

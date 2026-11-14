@@ -119,7 +119,8 @@ pub struct StackOptions {
     pub calendar: bool,
     /// Also start `email_focus_worker`, which classifies the mail of the
     /// scenario's inboxes for Focus, with stand-ins for the model and the
-    /// due date reader it asks ([`Stack::focus_classifier`]). Set
+    /// due date reader it asks ([`Stack::focus_classifier`]). `env` reaches
+    /// the worker too. Set
     /// `document_storage` as well to read Focus the way the web app does.
     /// The worker's consumer group is one for every scenario, so these
     /// scenarios run one at a time (the `email-e2e-focus` test group):

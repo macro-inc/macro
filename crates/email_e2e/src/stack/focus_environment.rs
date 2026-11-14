@@ -41,8 +41,8 @@ pub(crate) fn focus_env(
         .collect();
 
     let own = [
-        // The stand-in checks no key; the worker stays off without one.
-        ("TYPESAFE_API_KEY", "email-e2e".to_owned()),
+        // The key the stand-in asks for; the worker stays off without one.
+        ("TYPESAFE_API_KEY", crate::focus::MODEL_API_KEY.to_owned()),
         ("FOCUS_ENABLED_EMAIL_DOMAINS", INBOX_DOMAIN.to_owned()),
         // Production's hour: the sweep at startup is the only one a
         // scenario sees, so mail is classified from its events.

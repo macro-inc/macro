@@ -61,7 +61,7 @@
   line moves whenever its file changes above it. `list` refreshes them.
 - The report fails without a `junit.xml`: nothing else says which records
   are of scenarios that passed. It also fails on one that is cut short or
-  holds fewer tests than it says. Of two results for one scenario the worse
+  holds a different number of tests than it says. Of two results for one scenario the worse
   counts.
 - A scenario that passed only on a retry counts as passed and is listed
   under "Flaky".
