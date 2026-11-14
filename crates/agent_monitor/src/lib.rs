@@ -5,8 +5,10 @@
 //! - [`domain::model`]: the agent model and the updates viewers receive.
 //! - [`domain::observation`]: what sources send, and the reducer's join keys.
 //! - [`domain::source`]: the source and transcript ports.
+//! - [`outbound`]: the source adapters.
 //! - [`proto`]: the generated wire types and their conversions.
 #![deny(missing_docs)]
 
 pub mod domain;
+pub mod outbound;
 pub mod proto;
