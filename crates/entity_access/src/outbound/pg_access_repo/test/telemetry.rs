@@ -122,7 +122,7 @@ async fn pipelines_check_records_counts_and_no_ids(pool: PgPool) -> anyhow::Resu
 
     let values = values.0.lock().unwrap().clone();
     assert!(
-        values.contains(&"get_pipelines_access.pipelines=i64:3".to_owned()),
+        values.contains(&"get_pipelines_access.pipeline_count=i64:3".to_owned()),
         "{values:?}"
     );
     assert!(
