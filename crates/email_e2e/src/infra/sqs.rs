@@ -133,6 +133,16 @@ const DOCUMENT_STORAGE_QUEUES: &[QueueSpec] = &[
 /// What the name of a first-in-first-out queue ends with.
 const FIFO_SUFFIX: &str = ".fifo";
 
+/// The queue `calendar_service` takes its backfill jobs from, with the
+/// attributes of `infra/stacks/calendar-service`. Only a stack that runs
+/// calendar has it.
+const CALENDAR_BACKFILL: QueueSpec = QueueSpec {
+    override_env: "OVERRIDE_CALENDAR_SERVICE_BACKFILL_QUEUE",
+    name: "calendar-backfill",
+    visibility_timeout_seconds: 60,
+    max_receive_count: 20,
+};
+
 /// One of the scenario's queues.
 #[derive(Clone, Debug)]
 pub(crate) struct Queue {
@@ -191,6 +201,30 @@ impl Queues {
     /// The client the queues were made with.
     pub(crate) fn client(&self) -> &aws_sdk_sqs::Client {
         &self.client
+    }
+
+    /// Adds the calendar backfill queue, named like the others.
+    pub(crate) async fn add_calendar_backfill(&mut self, prefix: &str) -> Result<(), Report> {
+        match create_queue(&self.client, prefix, &CALENDAR_BACKFILL).await {
+            Ok(queue) => {
+                self.queues.push(queue);
+                Ok(())
+            }
+            Err(error) => {
+                // The queue that failed may have left its dead-letter queue,
+                // which `delete` does not know of.
+                let leftovers = self
+                    .client
+                    .list_queues()
+                    .queue_name_prefix(format!("{prefix}-{}", CALENDAR_BACKFILL.name))
+                    .send()
+                    .await;
+                for url in leftovers.iter().flat_map(|listed| listed.queue_urls()) {
+                    self.client.delete_queue().queue_url(url).send().await.ok();
+                }
+                Err(error)
+            }
+        }
     }
 
     /// Every queue of the scenario.

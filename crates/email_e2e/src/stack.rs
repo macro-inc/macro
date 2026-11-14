@@ -4,6 +4,8 @@
 //! `document_storage_service` beside them when the scenario asks.
 
 mod document_storage_environment;
+mod calendar_environment;
+mod calendar_reads;
 mod environment;
 
 use std::collections::BTreeMap;
@@ -18,6 +20,8 @@ use sqlx::PgPool;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
+use self::calendar_reads::CalendarReads;
+pub use self::calendar_reads::CalendarSignal;
 use crate::aws::{Aws, StoredObject};
 use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
@@ -43,6 +47,11 @@ const SEARCH_INDEXER_GROUP: &str = "search-processing-service";
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
 pub(crate) const GRAPHQL_PATH: &str = "/items/soup/graphql";
+/// The calendar service's binary.
+const CALENDAR: &str = "calendar_service";
+/// The stand-in for the app service, which calendar scheduling names in
+/// meeting links.
+const APP: &str = "app";
 /// The Lambda binary of the scheduled-send sweep.
 const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
 /// How long a service gets to answer its health check.
@@ -73,6 +82,18 @@ pub struct StackOptions {
     /// these scenarios run one at a time (the `email-e2e-search` test
     /// group) and each uses addresses no other scenario does.
     pub search: bool,
+    /// Also runs `calendar_service` and the calendar read routes, so inboxes
+    /// can be linked with their calendars ([`User::link_gmail_with_calendar`],
+    /// [`User::link_outlook_with_calendar`]). `env` reaches that service too.
+    pub calendar: bool,
+}
+
+/// What a stack with calendar runs on top of the email services.
+struct CalendarPart {
+    service: ServiceProcess,
+    /// The service as the gateway exposes it, under `/calendar`.
+    url: String,
+    reads: CalendarReads,
 }
 
 /// A running stack. Start one per scenario and end the scenario with
@@ -93,6 +114,7 @@ pub struct Stack {
     /// The search cluster, on a stack that searches.
     opensearch_url: Option<String>,
     graphql_url: Option<String>,
+    calendar: Option<CalendarPart>,
     worker_env: BTreeMap<String, String>,
     api_url: String,
     internal_api_key: String,
@@ -113,6 +135,9 @@ impl Stack {
         let id = Uuid::now_v7().simple().to_string();
         let log_dir = log_dir(&id)?;
         crate::process::ensure_built(&[API, WORKERS])?;
+        if options.calendar {
+            crate::process::ensure_built(&[CALENDAR])?;
+        }
 
         let gmail = GmailEmulator::start(gmail_emulator::Seed::default())
             .await
@@ -138,13 +163,20 @@ impl Stack {
                 return Err(error);
             }
         };
-        let queues = match Queues::create(&servers.sqs, &format!("e2e-{id}")).await {
+        let queue_prefix = format!("e2e-{id}");
+        let mut queues = match Queues::create(&servers.sqs, &queue_prefix).await {
             Ok(queues) => queues,
             Err(error) => {
                 discard(database, Some(redis), None).await;
                 return Err(error);
             }
         };
+        if options.calendar
+            && let Err(error) = queues.add_calendar_backfill(&queue_prefix).await
+        {
+            discard(database, Some(redis), Some(queues)).await;
+            return Err(error);
+        }
         let booted = Self::boot(
             &options, &servers, &gmail, &outlook, &database, &redis, &queues, &log_dir,
         )
@@ -175,6 +207,7 @@ impl Stack {
             .cloned()
             .unwrap_or_else(|| environment::INTERNAL_API_KEY.to_owned());
 
+        let app_url = macro_services.url(APP);
         let mut stack = Self {
             gmail,
             outlook,
@@ -190,6 +223,7 @@ impl Stack {
             search_indexer: None,
             opensearch_url: None,
             graphql_url: None,
+            calendar: None,
             worker_env: env,
             api_url,
             internal_api_key,
@@ -207,6 +241,18 @@ impl Stack {
         }
         if options.search {
             stack.start_search_indexer(&options).await?;
+        }
+        if options.calendar {
+            let calendar = start_calendar(
+                &stack.http,
+                &stack.worker_env,
+                &app_url,
+                &options.env,
+                stack.db(),
+                &stack.log_dir,
+            )
+            .await?;
+            stack.calendar = Some(calendar);
         }
         Ok(stack)
     }
@@ -659,6 +705,61 @@ impl Stack {
             .unwrap_or_default()
     }
 
+    /// Everything `calendar_service` has logged; empty without calendar.
+    pub fn calendar_log(&self) -> String {
+        self.calendar
+            .as_ref()
+            .map(|calendar| calendar.service.log())
+            .unwrap_or_default()
+    }
+
+    /// How many calendar push notifications Google has finished delivering
+    /// for the mailbox `address`.
+    pub fn google_calendar_pushes(&self, address: &str) -> usize {
+        self.gmail
+            .channel_deliveries()
+            .iter()
+            .filter(|delivery| delivery.mailbox.eq_ignore_ascii_case(address))
+            .count()
+    }
+
+    /// Waits until Google has delivered a calendar push for the mailbox
+    /// `address` beyond the first `seen`. A change made through
+    /// `calendar_service` comes back as a push that starts a sync round:
+    /// wait for it, then for the round
+    /// ([`Calendar::wait_until_synced`](crate::Calendar::wait_until_synced)),
+    /// before changing the calendar at Google.
+    pub async fn wait_for_google_calendar_push(
+        &self,
+        address: &str,
+        seen: usize,
+    ) -> Result<(), Report> {
+        eventually(
+            &format!("Google to push a calendar change of {address}"),
+            crate::wait::DEFAULT_TIMEOUT,
+            async || Ok((self.google_calendar_pushes(address) > seen).then_some(())),
+        )
+        .await
+    }
+
+    /// What the calendar read routes told the notification service and the
+    /// connection gateway, oldest first. What `calendar_service` itself told
+    /// the gateway is in [`Stack::service_requests`].
+    pub fn calendar_signals(&self) -> Vec<CalendarSignal> {
+        self.calendar
+            .as_ref()
+            .map(|calendar| calendar.reads.signals())
+            .unwrap_or_default()
+    }
+
+    /// Where `calendar_service` and the calendar read routes answer, when the
+    /// stack runs calendar.
+    pub(crate) fn calendar_urls(&self) -> Option<(String, String)> {
+        self.calendar
+            .as_ref()
+            .map(|calendar| (calendar.url.clone(), calendar.reads.url()))
+    }
+
     /// Stops `pubsub_workers`: nothing syncs, sends or retries until
     /// [`Stack::start_workers`]. The API keeps answering.
     pub async fn stop_workers(&mut self) {
@@ -711,6 +812,9 @@ impl Stack {
         if let Some(search_indexer) = &mut self.search_indexer {
             search_indexer.ensure_running()?;
         }
+        if let Some(calendar) = &mut self.calendar {
+            calendar.service.ensure_running()?;
+        }
         Ok(())
     }
 
@@ -731,6 +835,7 @@ impl Stack {
             (WORKERS, self.workers_log()),
             (DOCUMENT_STORAGE, document_storage),
             (SEARCH_INDEXER, search_indexer),
+            (CALENDAR, self.calendar_log()),
         ] {
             if let Some(line) = log.lines().find(|line| line.contains(PANIC_MARKER)) {
                 bail!(
@@ -773,6 +878,10 @@ impl Stack {
         if let Some(mut workers) = self.workers.take() {
             workers.stop().await;
         }
+        if let Some(mut calendar) = self.calendar.take() {
+            calendar.service.stop().await;
+            calendar.reads.stop().await;
+        }
         if let Some(tls) = self.tls.take() {
             tls.stop().await;
         }
@@ -805,7 +914,8 @@ impl Stack {
             .workers
             .iter()
             .chain(&self.document_storage)
-            .chain(&self.search_indexer);
+            .chain(&self.search_indexer)
+            .chain(self.calendar.as_ref().map(|calendar| &calendar.service));
         for process in std::iter::once(&self.api).chain(others) {
             report.push_str(&format!(
                 "--- the end of {} ---\n{}\n",
@@ -856,6 +966,44 @@ impl Drop for Stack {
             });
         });
     }
+}
+
+/// Starts `calendar_service` and the calendar read routes next to the email
+/// services.
+async fn start_calendar(
+    http: &reqwest::Client,
+    email_env: &BTreeMap<String, String>,
+    app_url: &str,
+    overrides: &[(String, String)],
+    db: &PgPool,
+    log_dir: &std::path::Path,
+) -> Result<CalendarPart, Report> {
+    let mut attempt = 0;
+    let (service, port, env) = loop {
+        attempt += 1;
+        let port = free_port().await?;
+        let env = calendar_environment::calendar_env(email_env, port, app_url, overrides);
+        let mut service = ServiceProcess::spawn(CALENDAR, &env, log_dir)?;
+        match wait_for_health(http, &format!("http://127.0.0.1:{port}"), &mut service).await {
+            Ok(()) => break (service, port, env),
+            Err(error) if attempt < PORT_ATTEMPTS && service.log().contains("AddrInUse") => {
+                tracing::warn!(error = ?error, port, "the calendar service's port was taken; trying another");
+                service.stop().await;
+            }
+            Err(error) => return Err(error),
+        }
+    };
+
+    let team_sharing = env
+        .get(calendar_environment::TEAM_SHARING)
+        .is_some_and(|value| value == "true");
+    let reads =
+        CalendarReads::start(db.clone(), environment::INTERNAL_API_KEY, team_sharing).await?;
+    Ok(CalendarPart {
+        service,
+        url: calendar_environment::gateway_url(port),
+        reads,
+    })
 }
 
 /// What [`Stack::boot`] started.

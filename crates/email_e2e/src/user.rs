@@ -12,11 +12,17 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::api::{ApiClient, ApiResponse};
+use crate::calendar::Calendar;
 use crate::inbox::{Inbox, Provider, ProviderHandle};
 use crate::stack::Stack;
 
 /// The scope a Gmail inbox is linked with.
 const GMAIL_SCOPE: &str = "https://www.googleapis.com/auth/gmail.modify";
+/// The scopes the calendar consent adds to a Gmail inbox's.
+const GOOGLE_CALENDAR_SCOPES: [&str; 2] = [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+];
 
 /// A Macro user of a [`Stack`].
 #[derive(Clone)]
@@ -26,6 +32,9 @@ pub struct User {
     db: PgPool,
     gmail: gmail_emulator::GmailEmulator,
     outlook: outlook_emulator::OutlookEmulator,
+    /// Where `calendar_service` and the calendar read routes answer, when
+    /// the stack runs calendar.
+    calendar_urls: Option<(String, String)>,
 }
 
 impl User {
@@ -64,6 +73,7 @@ impl User {
             db,
             gmail: stack.gmail().clone(),
             outlook: stack.outlook().clone(),
+            calendar_urls: stack.calendar_urls(),
         })
     }
 
@@ -103,6 +113,58 @@ impl User {
         self.link(Provider::Outlook, &self.email).await
     }
 
+    /// Links the Gmail mailbox with the user's own address, consenting to
+    /// calendar as well, and waits for the first mail backfill and the first
+    /// calendar import. Needs a stack started with `StackOptions::calendar`.
+    pub async fn link_gmail_with_calendar(&self) -> Result<Inbox, Report> {
+        self.link_with_calendar(Provider::Gmail, &self.email).await
+    }
+
+    /// Links the Outlook mailbox with the user's own address and waits for
+    /// the first mail import and the first calendar import. An Outlook grant
+    /// always carries calendar access, so this differs from
+    /// [`User::link_outlook`] only in what it waits for. Needs a stack
+    /// started with `StackOptions::calendar`.
+    pub async fn link_outlook_with_calendar(&self) -> Result<Inbox, Report> {
+        self.link_with_calendar(Provider::Outlook, &self.email)
+            .await
+    }
+
+    /// Links the mailbox `address` at `provider` with its calendar and waits
+    /// for the first sync of both.
+    pub async fn link_with_calendar(
+        &self,
+        provider: Provider,
+        address: &str,
+    ) -> Result<Inbox, Report> {
+        let calendar = self.calendar()?;
+        let mut scopes = vec![GMAIL_SCOPE];
+        scopes.extend(GOOGLE_CALENDAR_SCOPES);
+        let inbox = self
+            .start_link_with_scopes(provider, address, &scopes)
+            .await?;
+        inbox.wait_until_synced().await?;
+        calendar.wait_until_synced(address).await?;
+        Ok(inbox)
+    }
+
+    /// The user's calendar. Fails on a stack started without
+    /// `StackOptions::calendar`.
+    pub fn calendar(&self) -> Result<Calendar, Report> {
+        let Some((service_url, reads_url)) = &self.calendar_urls else {
+            bail!("the stack runs no calendar: start it with `StackOptions::calendar` set");
+        };
+        let at = |url: &str| ApiClient {
+            api_url: url.to_owned(),
+            ..self.api.clone()
+        };
+        Ok(Calendar::new(
+            at(service_url),
+            at(reads_url),
+            self.db.clone(),
+        ))
+    }
+
     /// Links the mailbox `address` at `provider` and waits for its first
     /// sync to complete.
     pub async fn link(&self, provider: Provider, address: &str) -> Result<Inbox, Report> {
@@ -118,6 +180,18 @@ impl User {
     /// provider, the authentication service holds their grant (here: the
     /// emulator's stand-in does), and the client calls `POST /email/init`.
     pub async fn start_link(&self, provider: Provider, address: &str) -> Result<Inbox, Report> {
+        self.start_link_with_scopes(provider, address, &[GMAIL_SCOPE])
+            .await
+    }
+
+    /// [`User::start_link`], with the Google scopes the sign-in asked for and
+    /// was granted. Outlook grants carry no Google scopes.
+    async fn start_link_with_scopes(
+        &self,
+        provider: Provider,
+        address: &str,
+        google_scopes: &[&str],
+    ) -> Result<Inbox, Report> {
         let attempt = Uuid::now_v7();
         match provider {
             Provider::Gmail => {
@@ -152,7 +226,7 @@ impl User {
         .bind(address)
         .bind(provider.as_str())
         .bind(match provider {
-            Provider::Gmail => vec![GMAIL_SCOPE.to_owned()],
+            Provider::Gmail => google_scopes.iter().map(|scope| (*scope).to_owned()).collect(),
             Provider::Outlook => Vec::new(),
         })
         .execute(&self.db)

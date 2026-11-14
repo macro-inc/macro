@@ -15,9 +15,13 @@ email = { path = "../email", features = ["ai_tools", "inbound", "outbound", "sqs
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
+calendar_events = { path = "../calendar_events", features = ["inbound", "postgres"] }
+chrono = { workspace = true }
 hex = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 gmail_emulator = { path = "../gmail_emulator" }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_authorization = { path = "../macro_authorization" }
 macro_aws_config = { path = "../macro_aws_config", features = ["sqs"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_event_topics = { path = "../macro_event_topics" }

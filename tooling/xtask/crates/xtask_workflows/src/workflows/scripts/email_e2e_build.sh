@@ -11,6 +11,9 @@ flags=(--locked --config 'profile.dev.package."*".debug=false')
 cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
 # The scheduled-send sweep, which scenarios run as the cron does.
 cargo build "${flags[@]}" -p email_scheduled_handler
+# calendar_service, which the calendar scenarios start, has no such test
+# target: its binary is built directly.
+cargo build "${flags[@]}" -p calendar_service --bin calendar_service
 # The service behind the GraphQL API, for the scenarios that send the way
 # the web composer does.
 cargo test --no-run "${flags[@]}" -p document_storage_service --test service_binary_builds
