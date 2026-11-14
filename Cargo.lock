@@ -699,6 +699,7 @@ dependencies = [
  "document_storage_service_client",
  "documents",
  "doppler-config",
+ "dynamic_ui",
  "email",
  "email_service_client",
  "entity_access",

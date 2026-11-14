@@ -41,7 +41,9 @@ stacks. Process isolation belongs to
   review's authorization, decodes the view with `dynamic_ui::decode_view`,
   and streams it as a completed `PresentView` call (`view_<id>`) through
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
-  description carries the view schema and when to present one.
+  description carries the view schema and when to present one. Its schema
+  offers today's widgets; `execute_code_description(Offer::Dashboards)` is the
+  description a host serves a person with agent dashboards (`DashboardsRollout`).
 - `src/domain/connected_apps.rs`: a running execution's connected apps
   (`macro.connectedApps`). `GET|POST /agent-sessions/{id}/code-executions/{execution}/connected-apps…`
   admits only a running execution of the session's current turn, called by

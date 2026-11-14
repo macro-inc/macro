@@ -1,6 +1,8 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import { ErrorBoundary, For, Suspense } from 'solid-js';
+import { Input } from '@ui';
+import { ErrorBoundary, For, Show, Suspense } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import type { View, Widget } from './view';
 import { Widget as WidgetNS } from './widget';
 
@@ -330,6 +332,129 @@ const COMPOSED: View[] = [
   },
 ];
 
+// --- dashboard panes ------------------------------------------------------
+// Saved questions, databases and saved views belong to whoever is signed in,
+// so the gallery takes their ids in the fields above the dashboard; an empty
+// field reads an id nobody can read, which shows that pane's "No access".
+const NOBODY = '00000000-0000-7000-8000-000000000000';
+const DASHBOARD_IDS = [
+  'scalarQuery',
+  'seriesQuery',
+  'rowsQuery',
+  'databaseId',
+  'databaseView',
+  'savedView',
+] as const;
+type DashboardIds = Record<(typeof DASHBOARD_IDS)[number], string>;
+
+function dashboardView(ids: DashboardIds): View {
+  const galleryId = (name: keyof DashboardIds) => ids[name].trim() || NOBODY;
+  const seriesQuery = galleryId('seriesQuery');
+  return {
+    title: 'Operations dashboard',
+    widgets: [
+      {
+        type: 'tabs',
+        tabs: [
+          {
+            label: 'Monitor',
+            children: [
+              {
+                type: 'grid',
+                columns: 12,
+                spans: [3, 3, 3, 3, 6, 6, 12],
+                children: [
+                  {
+                    type: 'stat',
+                    label: 'Invites sent',
+                    source: {
+                      kind: 'query',
+                      queryId: galleryId('scalarQuery'),
+                    },
+                  },
+                  {
+                    type: 'stat',
+                    label: 'Invites per day',
+                    source: { kind: 'query', queryId: seriesQuery },
+                    delta: true,
+                    sparkline: true,
+                  },
+                  {
+                    type: 'stat',
+                    label: 'Open tasks',
+                    source: {
+                      kind: 'count',
+                      query: {
+                        documentWhere: [
+                          {
+                            op: 'not',
+                            clause: { include: { documentDone: true } },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  {
+                    type: 'stat',
+                    label: 'Unreadable',
+                    source: { kind: 'query', queryId: NOBODY },
+                  },
+                  {
+                    type: 'chart',
+                    queryId: seriesQuery,
+                    mode: 'bar',
+                    chart: {
+                      x: 'day',
+                      y: ['invites'],
+                      title: 'Invites by day',
+                    },
+                  },
+                  {
+                    type: 'chart',
+                    queryId: seriesQuery,
+                    mode: 'line',
+                    chart: { x: 'day', y: ['invites'], title: 'Trend' },
+                  },
+                  {
+                    type: 'table',
+                    title: 'Latest rows',
+                    source: { kind: 'query', queryId: galleryId('rowsQuery') },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            label: 'Work',
+            children: [
+              {
+                type: 'grid',
+                columns: 2,
+                dense: true,
+                children: [
+                  {
+                    type: 'savedView',
+                    viewId: galleryId('savedView'),
+                  },
+                  {
+                    type: 'table',
+                    title: 'Database view',
+                    source: {
+                      kind: 'view',
+                      databaseId: galleryId('databaseId'),
+                      viewId: galleryId('databaseView'),
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function DemoCell(props: { label: string; children: any }) {
   return (
     <div class="flex flex-col gap-2 rounded-lg border border-edge-muted p-3">
@@ -378,6 +503,14 @@ export default function Gallery() {
 }
 
 function GalleryBody() {
+  const [ids, setIds] = createStore<DashboardIds>({
+    scalarQuery: '',
+    seriesQuery: '',
+    rowsQuery: '',
+    databaseId: '',
+    databaseView: '',
+    savedView: '',
+  });
   return (
     <StaticMarkdownContext theme={aiChatTheme}>
       <div class="size-full overflow-auto bg-surface">
@@ -402,6 +535,30 @@ function GalleryBody() {
                   </DemoCell>
                 )}
               </For>
+            </div>
+          </section>
+
+          <section class="flex flex-col gap-3">
+            <h2 class="text-ink text-base font-semibold">Dashboard panes</h2>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <For each={DASHBOARD_IDS}>
+                {(name) => (
+                  <Input
+                    size="sm"
+                    aria-label={name}
+                    placeholder={name}
+                    value={ids[name]}
+                    onChange={(event) =>
+                      setIds(name, event.currentTarget.value)
+                    }
+                  />
+                )}
+              </For>
+            </div>
+            <div class="rounded-lg border border-edge-muted p-4">
+              <Show when={JSON.stringify(ids)} keyed>
+                <WidgetNS.Compose view={dashboardView(ids)} />
+              </Show>
             </div>
           </section>
 

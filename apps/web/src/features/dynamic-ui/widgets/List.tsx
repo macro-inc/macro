@@ -124,7 +124,7 @@ function refsToQuery(refs: EntityRef[]): Query {
 }
 
 /** Compile a widget `Query` into the soup AST body the items query expects. */
-function compileQuery(query: Query): SoupAstItemsQueryArgs['body'] {
+export function compileQuery(query: Query): SoupAstItemsQueryArgs['body'] {
   // `defineQueryFilters` NIL-fills the entity targets the query doesn't
   // reference, so soup doesn't fan out and fetch every document/channel/etc.
   return compileToAst(queryStateFrom(defineQueryFilters(query)));

@@ -1,4 +1,4 @@
-use crate::{View, Widget, decode_view, present_view_schema};
+use crate::{Offer, View, Widget, decode_view, present_view_schema};
 use serde_json::json;
 
 /// One of every widget, with every field the types name.
@@ -238,8 +238,158 @@ fn a_problem_never_repeats_what_the_view_holds() {
 #[test]
 fn the_present_view_schema_is_pinned() {
     let schema: serde_json::Value =
-        serde_json::from_str(&present_view_schema()).expect("the schema is JSON");
+        serde_json::from_str(&present_view_schema(Offer::Views)).expect("the schema is JSON");
     insta::with_settings!({ sort_maps => true }, {
         insta::assert_json_snapshot!(schema);
     });
+}
+
+#[test]
+fn the_dashboard_schema_is_pinned() {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema(Offer::Dashboards)).expect("the schema is JSON");
+    insta::with_settings!({ sort_maps => true }, {
+        insta::assert_json_snapshot!(schema);
+    });
+}
+
+/// The widget types a schema offers the model.
+fn offered_types(offer: Offer) -> Vec<String> {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema(offer)).expect("the schema is JSON");
+    schema["$defs"]["Widget"]["oneOf"]
+        .as_array()
+        .expect("widget variants")
+        .iter()
+        .map(|variant| {
+            variant["properties"]["type"]["const"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect()
+}
+
+/// Without agent dashboards the model never reads the dashboard widgets,
+/// though a view holding them still decodes.
+#[test]
+fn only_dashboards_offer_layouts_and_panes() {
+    let views = [
+        "md",
+        "timeline",
+        "list",
+        "channelMessage",
+        "events",
+        "cards",
+        "tags",
+        "agentUpdates",
+        "container",
+    ];
+    assert_eq!(offered_types(Offer::Views), views);
+    let mut dashboards = views.to_vec();
+    dashboards.extend(["grid", "tabs", "stat", "chart", "table", "savedView"]);
+    assert_eq!(offered_types(Offer::Dashboards), dashboards);
+
+    let views_schema = present_view_schema(Offer::Views);
+    for name in ["Grid", "Stat", "dense", "queryId"] {
+        assert!(!views_schema.contains(&format!("\"{name}\"")), "{name}");
+    }
+}
+
+/// Every dashboard layout and pane, with every field the types name.
+#[test]
+fn a_dashboard_of_every_pane_decodes() {
+    let view = json!({
+        "title": "Operations",
+        "widgets": [{
+            "type": "tabs",
+            "tabs": [
+                {
+                    "label": "Monitor",
+                    "children": [{
+                        "type": "grid",
+                        "title": "Today",
+                        "columns": 12,
+                        "spans": [3, 3, 6, 12],
+                        "rowHeight": 240,
+                        "dense": true,
+                        "children": [
+                            {
+                                "type": "stat",
+                                "label": "Open invoices",
+                                "source": { "kind": "query", "queryId": "query-1" },
+                                "delta": true,
+                                "sparkline": true,
+                                "dense": true
+                            },
+                            {
+                                "type": "stat",
+                                "label": "Open tasks",
+                                "source": { "kind": "count", "query": { "include": { "documentDone": false } } }
+                            },
+                            {
+                                "type": "chart",
+                                "queryId": "query-2",
+                                "mode": "bar",
+                                "chart": { "x": "week", "y": ["invoices"], "title": "Invoices", "color": "status", "stack": true },
+                                "dense": false
+                            },
+                            {
+                                "type": "table",
+                                "title": "Customers",
+                                "source": { "kind": "view", "databaseId": "database-1", "viewId": "view-1" },
+                                "dense": true
+                            }
+                        ]
+                    }]
+                },
+                {
+                    "label": "Work",
+                    "children": [
+                        { "type": "table", "source": { "kind": "query", "queryId": "query-3" } },
+                        { "type": "savedView", "viewId": "saved-1", "title": "My tasks", "dense": true }
+                    ]
+                }
+            ]
+        }]
+    });
+    let decoded = decode_view(&view).expect("every pane decodes");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
+}
+
+#[test]
+fn a_dashboard_out_of_bounds_is_named_by_its_place() {
+    let cases = [
+        (
+            json!({ "widgets": [{ "type": "grid", "columns": 13, "children": [] }] }),
+            "view.widgets[0] should be less or equal to 12",
+        ),
+        (
+            json!({ "widgets": [{ "type": "grid", "columns": 0, "children": [] }] }),
+            "view.widgets[0] should be greater or equal to 1",
+        ),
+        (
+            json!({ "widgets": [{ "type": "grid", "columns": 2, "spans": [1, 13], "children": [] }] }),
+            "view.widgets[0] should be less or equal to 12",
+        ),
+        (
+            json!({ "widgets": [{ "type": "grid", "columns": 2, "rowHeight": 20, "children": [] }] }),
+            "view.widgets[0] should be greater or equal to 64",
+        ),
+        (
+            json!({ "widgets": [{ "type": "chart", "queryId": "q", "mode": "donut", "chart": { "x": "a", "y": ["b"] } }] }),
+            "view.widgets[0] should be one of `bar`, `line`, `area`, `scatter`, `pie`",
+        ),
+        (
+            json!({ "widgets": [{ "type": "stat", "label": "Open", "source": { "kind": "sql" } }] }),
+            "view.widgets[0] should be `query` or `count`",
+        ),
+        (
+            json!({ "widgets": [{ "type": "table", "source": { "kind": "view", "viewId": "v" } }] }),
+            r#"view.widgets[0] is missing "databaseId""#,
+        ),
+    ];
+    for (view, problem) in cases {
+        assert_eq!(decode_view(&view), Err(problem.to_owned()), "{view}");
+    }
 }

@@ -32,19 +32,130 @@ const PRESENT_VIEW_DESCRIPTION: &str = concat!(
     "The view is checked against this schema before it is presented: a view that does not match throws with what to fix. Present it again rather than running the program again.",
 );
 
+/// What a dashboard view adds, for the model: only people with agent
+/// dashboards read it.
+const DASHBOARD_DESCRIPTION: &str = concat!(
+    " A dashboard is a view built from panes that read live data as whoever opens it, so it stays current: never copy numbers into it. ",
+    "Lay panes out with a grid (columns, and how many each pane spans) and split sections into tabs. ",
+    "A stat shows one number from a saved query or how many items a filter matches; a chart and a table show a saved query's answer (save it first with database.saveQuery and pass the id it returns); a table can also show a database view; a savedView lists what a saved view matches. ",
+    "A pane its viewer cannot read says so, and panes below the fold load when scrolled to, so a dashboard may hold many.",
+);
+
 /// The arguments of `execution.views.present`, as the model reads them.
 #[derive(JsonSchema)]
 #[schemars(title = "PresentView", description = PRESENT_VIEW_DESCRIPTION)]
 #[expect(dead_code, reason = "only describes the arguments to the model")]
 struct PresentViewArguments {
+    #[schemars(with = "ViewWithoutDashboards")]
     view: View,
+}
+
+/// [`PresentViewArguments`] for people with agent dashboards.
+#[derive(JsonSchema)]
+#[schemars(
+    title = "PresentView",
+    description = format!("{PRESENT_VIEW_DESCRIPTION}{DASHBOARD_DESCRIPTION}")
+)]
+#[expect(dead_code, reason = "only describes the arguments to the model")]
+struct PresentDashboardArguments {
+    view: View,
+}
+
+/// The `enable-agent-dashboards` feature flag, identical on web and
+/// backend. Hosts read it per person to choose an [`Offer`].
+pub const AGENT_DASHBOARDS_FLAG: &str = "enable-agent-dashboards";
+
+/// Which widgets the model is told about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Offer {
+    /// The widgets every view may hold.
+    Views,
+    /// Those and the dashboard layouts and panes, for people with agent
+    /// dashboards.
+    Dashboards,
 }
 
 /// The `PresentView` schema, as compact JSON since ExecuteCode's description
 /// includes it on every turn: a view, and when to present one.
-pub fn present_view_schema() -> String {
-    serde_json::to_string(&schemars::schema_for!(PresentViewArguments))
-        .expect("a generated schema serializes")
+pub fn present_view_schema(offer: Offer) -> String {
+    let schema = match offer {
+        Offer::Views => schemars::schema_for!(PresentViewArguments),
+        Offer::Dashboards => schemars::schema_for!(PresentDashboardArguments),
+    };
+    serde_json::to_string(&schema).expect("a generated schema serializes")
+}
+
+/// The widget types only dashboards are offered.
+pub(crate) const DASHBOARD_WIDGETS: [&str; 6] =
+    ["grid", "tabs", "stat", "chart", "table", "savedView"];
+
+/// The definitions only dashboard widgets use.
+/// Their schema names carry `Dashboard` so no other type's definition shares
+/// one in a generator that holds many tools.
+const DASHBOARD_DEFINITIONS: [&str; 5] = [
+    "DashboardTab",
+    "DashboardStatSource",
+    "DashboardChartMode",
+    "DashboardChartColumns",
+    "DashboardTableSource",
+];
+
+/// A [`View`]'s schema without the dashboard layouts and panes: what a model
+/// reads when its person does not have agent dashboards. Use it for a view
+/// field with `#[schemars(with = "dynamic_ui::ViewWithoutDashboards")]`.
+pub struct ViewWithoutDashboards;
+
+impl JsonSchema for ViewWithoutDashboards {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        View::schema_name()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        "dynamic_ui::ViewWithoutDashboards".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        // A generator that inlines subschemas puts the widget variants in the
+        // view's own schema, one that does not in its definitions: prune both.
+        let mut schema = View::json_schema(generator).to_value();
+        without_dashboard_variants(&mut schema);
+        let definitions = generator.definitions_mut();
+        for name in DASHBOARD_DEFINITIONS {
+            definitions.remove(name);
+        }
+        if let Some(widget) = definitions.get_mut("Widget") {
+            without_dashboard_variants(widget);
+        }
+        schemars::Schema::try_from(schema).expect("a pruned schema is still a schema")
+    }
+}
+
+/// Drop every `oneOf`/`anyOf` alternative tagged as a dashboard widget,
+/// wherever the schema holds one.
+fn without_dashboard_variants(schema: &mut serde_json::Value) {
+    use serde_json::Value;
+
+    match schema {
+        Value::Object(fields) => {
+            for key in ["oneOf", "anyOf"] {
+                if let Some(Value::Array(variants)) = fields.get_mut(key) {
+                    variants.retain(|variant| {
+                        let tag = variant["properties"]["type"]["const"].as_str();
+                        !tag.is_some_and(|tag| DASHBOARD_WIDGETS.contains(&tag))
+                    });
+                }
+            }
+            for value in fields.values_mut() {
+                without_dashboard_variants(value);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                without_dashboard_variants(item);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]

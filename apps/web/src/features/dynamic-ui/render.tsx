@@ -12,9 +12,15 @@ import type {
 import { AgentUpdates } from './widgets/AgentUpdates';
 import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
+import { Chart } from './widgets/Chart';
 import { Events } from './widgets/Events';
+import { Grid } from './widgets/Grid';
 import { List } from './widgets/List';
 import { Md } from './widgets/Md';
+import { SavedView } from './widgets/SavedView';
+import { Stat } from './widgets/Stat';
+import { Table } from './widgets/Table';
+import { Tabs } from './widgets/Tabs';
 import { Tags } from './widgets/Tags';
 import { Timeline } from './widgets/Timeline';
 
@@ -36,7 +42,18 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'tags' }, (n) => <Tags {...n} />)
     .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
+    .with({ type: 'grid' }, (n) => <Grid {...n} render={renderChild} />)
+    .with({ type: 'tabs' }, (n) => <Tabs {...n} render={renderChild} />)
+    .with({ type: 'stat' }, (n) => <Stat {...n} />)
+    .with({ type: 'chart' }, (n) => <Chart {...n} />)
+    .with({ type: 'table' }, (n) => <Table {...n} />)
+    .with({ type: 'savedView' }, (n) => <SavedView {...n} />)
     .exhaustive();
+}
+
+/** Layouts draw their children through the same dispatch. */
+function renderChild(child: Widget): JSX.Element {
+  return <Render node={child} />;
 }
 
 /**
@@ -49,6 +66,10 @@ const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
   'events',
   'tags',
   'agentUpdates',
+  'grid',
+  'tabs',
+  'table',
+  'savedView',
 ]);
 
 /**
