@@ -370,6 +370,76 @@ fn version_snapshot_rejects_an_id_that_is_not_in_the_oplog() {
 }
 
 #[test]
+fn version_snapshot_excludes_a_same_second_descendant_of_later_ops() {
+    let state = DocumentState::new();
+    let a = LoroDoc::new();
+    a.set_peer_id(1).unwrap();
+    a.set_record_timestamp(true);
+    a.set_next_commit_timestamp(1_700_000_000);
+    a.get_map("values").insert("a0", 0).unwrap();
+    a.commit();
+    let a0 = a.oplog_frontiers().iter().next().unwrap();
+    a.set_next_commit_timestamp(1_700_000_000);
+    a.get_map("values").insert("a1", 1).unwrap();
+    a.commit();
+
+    let b = LoroDoc::new();
+    b.set_peer_id(2).unwrap();
+    b.set_record_timestamp(true);
+    b.import(&a.export(ExportMode::all_updates()).unwrap())
+        .unwrap();
+    b.set_next_commit_timestamp(1_700_000_000);
+    b.get_map("values").insert("b0", 2).unwrap();
+    b.commit();
+    state
+        .loro_doc
+        .import(&b.export(ExportMode::all_updates()).unwrap())
+        .unwrap();
+
+    let frontiers = state.frontiers_at_change(a0).unwrap();
+    let bytes = state
+        .export_snapshot(Some(ExportMode::StateOnly(Some(Cow::Owned(frontiers)))))
+        .unwrap();
+    let restored = LoroDoc::new();
+    restored.import(&bytes).unwrap();
+    let values = restored.get_map("values");
+    assert!(values.get("a0").is_some());
+    assert!(values.get("a1").is_none());
+    assert!(values.get("b0").is_none());
+}
+
+#[test]
+fn version_snapshot_after_shallow_import_keeps_retained_changes() {
+    let state = DocumentState::new();
+    let text = state.loro_doc.get_text("content");
+    text.insert(0, &"discarded history ".repeat(10_000))
+        .unwrap();
+    state.loro_doc.commit();
+    text.delete(0, text.len_unicode()).unwrap();
+    text.insert(0, "Saved content").unwrap();
+    state.loro_doc.commit();
+    let compact = state.export_shallow_snapshot().unwrap();
+
+    let restored_state = DocumentState::new();
+    restored_state.loro_doc.import(&compact).unwrap();
+    assert!(restored_state.loro_doc.is_shallow());
+    let retained = restored_state
+        .loro_doc
+        .oplog_frontiers()
+        .iter()
+        .next()
+        .unwrap();
+    let frontiers = restored_state.frontiers_at_change(retained).unwrap();
+    assert!(!frontiers.is_empty());
+    let bytes = restored_state
+        .export_snapshot(Some(ExportMode::StateOnly(Some(Cow::Owned(frontiers)))))
+        .unwrap();
+    let preview = LoroDoc::new();
+    preview.import(&bytes).unwrap();
+    assert_eq!(preview.get_text("content").to_string(), "Saved content");
+}
+
+#[test]
 fn shared_history_still_compacts_with_concurrent_heads() {
     for heads in [2, 3, 5] {
         let state = DocumentState::new();
