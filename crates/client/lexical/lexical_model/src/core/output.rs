@@ -61,6 +61,8 @@ pub enum Effect {
         /// Diagnostic message.
         message: Arc<str>,
     },
+    /// Actual input host facts retained independently of document rollback.
+    InputDomDisposition(InputDomDisposition),
 }
 /// An input failed; an earlier set_editor_state commit may already have published.
 #[derive(Debug, thiserror::Error)]
@@ -70,6 +72,8 @@ pub struct ApplyError {
     pub error: Error,
     /// Published early commits the host must still render/project.
     pub committed: Box<SmallVec<[Commit; 1]>>,
+    /// Host facts recorded before failure; never a committed document transition.
+    pub dom_disposition: InputDomDisposition,
 }
 pub(super) fn flatten(commit: &Commit) -> SmallVec<[Commit; 1]> {
     commit

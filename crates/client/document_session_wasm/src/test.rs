@@ -933,3 +933,5 @@ mod table_facts;
 mod keyboard_shortcuts;
 
 mod word_navigation;
+
+mod input_dom_disposition;

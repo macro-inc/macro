@@ -134,9 +134,20 @@ impl EditorCore {
             outcome.reset();
         }
         self.initial = None;
+        // The guard owns no Editor borrow; nested input scopes restore their parent.
+        let dom_scope = self
+            .editor
+            .input_dom_scopes
+            .enter()
+            .map_err(|error| ApplyError {
+                error,
+                committed: Box::default(),
+                dom_disposition: InputDomDisposition::default(),
+            })?;
         let error = |error| ApplyError {
             error,
             committed: Box::default(),
+            dom_disposition: dom_scope.snapshot(),
         };
         if let Input::Batch(inputs) = &input
             && inputs.iter().any(|input| !input.batchable())
@@ -283,6 +294,7 @@ impl EditorCore {
                 return Err(ApplyError {
                     error: failure,
                     committed: Box::new(early),
+                    dom_disposition: dom_scope.snapshot(),
                 });
             }
         };
@@ -354,11 +366,19 @@ impl EditorCore {
         )
         .map(|mut output| {
             output.installed_selection = accepted_selection;
+            let disposition = dom_scope.snapshot();
+            // Default-only success keeps its exact existing PreventDefault effect.
+            if disposition.propagation_stopped {
+                output
+                    .effects
+                    .push(Effect::InputDomDisposition(disposition));
+            }
             output
         })
         .map_err(|error| ApplyError {
             error,
             committed: Box::new(output::flatten(&commit)),
+            dom_disposition: dom_scope.snapshot(),
         })
     }
     fn output(

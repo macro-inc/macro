@@ -444,6 +444,11 @@ fn encode_inner(
                         m.detail = u32::from(h.can_redo);
                     }
                     Effect::PreventDefault => m.code = 2,
+                    Effect::InputDomDisposition(disposition) => {
+                        m.code = 12;
+                        m.flag = disposition.default_prevented;
+                        m.detail = u32::from(disposition.propagation_stopped);
+                    }
                     Effect::SelectionChange => m.code = 3,
                     Effect::ScrollIntoView(key) => {
                         m.code = 4;

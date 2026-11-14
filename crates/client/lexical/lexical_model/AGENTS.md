@@ -96,6 +96,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Keep sibling-position ranks local to an immutable diff state; share next-state ranks across creation and child-list ordering, never across snapshots or commits.
 - Preserve the scoped test-only legacy ordering path and same-commit encoded-buffer property across diff refactors; compare words and UTF-8 bytes without sorting operations.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
+- Record actual input DOM prevention/propagation through the current Editor-owned scope independently of rollback; preserve legacy prevention outside an input, reject unscoped stop, and never clear a poisoned recorder or store it in model, pending, commit or history state.
 - Carry host-captured paste modifiers in ClipboardPayload.intent; default legacy/drop inputs to false, retain MIME precedence, and never infer intent from clipboard MIME entries.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits. Use IsolatedAfterCommit for speculative follow-ups that must discard declined writes without undoing shared plugin commits; include queued updates and early publications in the round limit.
 

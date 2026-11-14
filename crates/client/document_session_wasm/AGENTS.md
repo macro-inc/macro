@@ -320,3 +320,5 @@ After matched ordinary and compatibility bindings are built, run `node crates/cl
 Enable listener-metadata transport only through the explicit qualified owner binding after legacy output drains; raw owner queries and registrations retain default output behavior, and actual view retirement closes the protocol permanently.
 
 Classify each issued view-command scope export in input_commit/test/scope-export-policy.json and verify its cfg-selected source name plus actual ordinary/compatibility JS and DTS exports; scope presence grants no compatibility receipt or ordinary receiver authority.
+
+Carry actual input DOM disposition in kind 6/code 12 with canonical empty fields, flag=prevent and detail=0/1 stop; keep existing code 2 prevention unchanged and never infer either bit from an error or handling result.

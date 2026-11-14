@@ -87,6 +87,9 @@ pub use history::*;
 mod diff;
 pub use diff::*;
 
+mod input_dom_disposition;
+pub use input_dom_disposition::InputDomDisposition;
+
 mod core;
 pub use core::*;
 

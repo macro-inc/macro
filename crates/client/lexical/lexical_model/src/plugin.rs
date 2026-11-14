@@ -349,6 +349,11 @@ impl Transaction<'_> {
     /// Stage a host preventDefault effect.
     pub fn prevent_default(&mut self) {
         self.default_prevented = true;
+        self.editor.input_dom_scopes.prevent_default();
+    }
+    /// Record a DOM-side fact for the current input, not command-listener handling.
+    pub fn stop_dom_propagation(&mut self) -> Result<(), Error> {
+        self.editor.input_dom_scopes.stop_propagation()
     }
 }
 /// A failed post-commit round. Earlier commits remain published.

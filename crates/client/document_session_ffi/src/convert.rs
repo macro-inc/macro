@@ -130,6 +130,13 @@ pub(crate) fn output(
                     Effect::TextContentChanged => FfiViewEffect::TextContentChanged,
                     Effect::SelectionChange => FfiViewEffect::SelectionChange,
                     Effect::PreventDefault => FfiViewEffect::PreventDefault,
+                    Effect::InputDomDisposition(disposition) => FfiViewEffect::PluginEvent {
+                        name: "editor.input-dom-disposition".into(),
+                        payload: Some(serde_json::json!({
+                            "defaultPrevented": disposition.default_prevented,
+                            "propagationStopped": disposition.propagation_stopped,
+                        })),
+                    },
                     Effect::ScheduleRemoveEmptyText { key, delay_ms } => {
                         FfiViewEffect::ScheduleRemoveEmptyText {
                             key: *key,

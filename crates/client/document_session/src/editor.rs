@@ -128,6 +128,17 @@ pub struct EditorSurface {
     pub(crate) fail_load_refresh_after_writes: Option<usize>,
 }
 impl EditorSurface {
+    /// Project only actual input-prefix facts, independently of model publication.
+    fn failed_dom_disposition(error: &ApplyError, view: &mut Vec<ViewEffect>) {
+        let disposition = error.dom_disposition;
+        if !disposition.is_empty() {
+            view.push(ViewEffect::Editor(Effect::InputDomDisposition(disposition)));
+        }
+        // Older hosts retain actual prevention even without the new stop channel.
+        if disposition.default_prevented {
+            view.push(ViewEffect::Editor(Effect::PreventDefault));
+        }
+    }
     pub(crate) fn new(config: EditorConfig, peer: u64, now: Now) -> Result<Self, SessionError> {
         let time = history_time(now)?;
         i64::try_from(config.delay_ms)
@@ -727,6 +738,7 @@ impl EditorSurface {
             apply
         };
         let output = self.core.apply(input, time).map_err(|error| {
+            Self::failed_dom_disposition(&error, view);
             #[cfg(feature = "application")]
             self.checklist.observe(&error.committed);
             SessionError::Model(error.error)
@@ -800,6 +812,7 @@ impl EditorSurface {
                 capture.clear();
             }
             let output = self.core.apply(input, time).map_err(|error| {
+                Self::failed_dom_disposition(&error, view);
                 #[cfg(feature = "application")]
                 self.checklist.observe(&error.committed);
                 SessionError::Model(error.error)
@@ -870,6 +883,7 @@ impl EditorSurface {
                 capture.clear();
             }
             let output = self.core.apply(input, time).map_err(|error| {
+                Self::failed_dom_disposition(&error, view);
                 #[cfg(feature = "application")]
                 self.checklist.observe(&error.committed);
                 SessionError::Model(error.error)
@@ -950,3 +964,6 @@ mod null_fields_test;
 
 #[cfg(all(test, feature = "application"))]
 mod root_id_test;
+
+#[cfg(test)]
+mod input_dom_prefix_test;

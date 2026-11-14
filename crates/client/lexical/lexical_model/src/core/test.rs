@@ -1,6 +1,7 @@
 use super::*;
 mod delta;
 mod events;
+mod input_dom_disposition;
 mod main_commit;
 mod remote;
 mod retained_root;

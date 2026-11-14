@@ -79,6 +79,7 @@ impl EditorSurface {
                     time,
                 )
                 .map_err(|error| {
+                    Self::failed_dom_disposition(&error, view);
                     #[cfg(feature = "application")]
                     self.checklist.observe(&error.committed);
                     SessionError::Model(error.error)

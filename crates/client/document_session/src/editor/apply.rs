@@ -131,6 +131,10 @@ impl EditorSurface {
                 .apply_with_main_commit_observation(input, time, outcome),
             None => self.core.apply(input, time),
         };
+        // Preserve the real error prefix before any subsequent fallible projection.
+        if let Err(error) = &result {
+            Self::failed_dom_disposition(error, view);
+        }
         // Run KeyDown and routed command listeners through the model first. Its
         // snapshot history is disabled here; only an unhandled successful route
         // falls through to collaborative history, after its commits are projected.

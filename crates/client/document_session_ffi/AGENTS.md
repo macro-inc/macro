@@ -61,3 +61,5 @@ Forward the shared group-b.table-facts JSON through application_query; preserve 
 Convert the actual complete output before acknowledging checklist deliveries; retain pending receipts on conversion failure and request remount reset with counted same-facts rebind:true.
 
 ElementProps.indent carries raw padding, not list nesting; renderers that flatten lists derive ancestor-listitem depth from child topology without changing the FFI record shape.
+
+Project input DOM disposition through the existing editor.input-dom-disposition PluginEvent payload with boolean defaultPrevented and propagationStopped; preserve legacy PreventDefault independently and never infer disposition from an error.
