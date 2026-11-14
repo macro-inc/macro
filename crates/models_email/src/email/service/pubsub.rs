@@ -12,21 +12,23 @@ use uuid::Uuid;
 /// `source` field, so migrating is an all-or-nothing cross-crate change —
 /// recorded here as the accepted exception rather than mixing the two
 /// error stacks module by module.
+///
+/// Displays the reason and the source's whole context chain, so a span's
+/// `err` event names the underlying failure rather than its outer context.
 #[derive(Debug, Error)]
-#[error("{reason}: {source}")]
+#[error("{reason}: {source:#}")]
 pub struct DetailedError {
     pub reason: FailureReason,
-    #[source]
     pub source: anyhow::Error,
 }
 
 #[derive(Debug, Error)]
 pub enum ProcessingError {
-    #[error("Retryable error occurred")]
-    Retryable(#[source] DetailedError),
+    #[error("Retryable error occurred: {0}")]
+    Retryable(DetailedError),
 
-    #[error("Non-retryable error occurred")]
-    NonRetryable(#[source] DetailedError),
+    #[error("Non-retryable error occurred: {0}")]
+    NonRetryable(DetailedError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString)]
@@ -49,6 +51,9 @@ pub enum FailureReason {
     NewerLabelWritePending,
     /// Every fleet-wide backfill write slot stayed taken; the operation is deferred.
     BackfillWritesBusy,
+    /// The team's CRM population slots were taken, or a CRM lock was held too
+    /// long; the population is deferred with a longer backoff.
+    CrmPopulationBusy,
     OutdatedHistoryId,
     AttachmentParsingFailed,
     DSSUploadFailed,

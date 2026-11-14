@@ -720,19 +720,17 @@ where
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
-            return Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "email has no '@' separator"
-            )));
+            return Err(CrmError::InvalidRequest(
+                "email has no '@' separator".into(),
+            ));
         };
         if local_part.is_empty() {
-            return Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "email has an empty local part"
-            )));
+            return Err(CrmError::InvalidRequest(
+                "email has an empty local part".into(),
+            ));
         }
         if domain.is_empty() {
-            return Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "email has an empty domain"
-            )));
+            return Err(CrmError::InvalidRequest("email has an empty domain".into()));
         }
 
         // Skip when the contact lives on the user's own domain —

@@ -264,7 +264,7 @@ async fn crm_population_holds_and_releases_the_slot_around_the_service_call() {
     else {
         panic!("deferred")
     };
-    assert_eq!(error.reason, FailureReason::BackfillWritesBusy);
+    assert_eq!(error.reason, FailureReason::CrmPopulationBusy);
     assert_eq!(retry_after, None);
     assert_eq!(
         f.calls(),
@@ -284,7 +284,7 @@ async fn refused_and_failed_crm_admission_never_populate() {
         let BackfillDisposition::Defer { error, .. } = svc.process(&crm_population()).await else {
             panic!("deferred")
         };
-        assert_eq!(error.reason, FailureReason::BackfillWritesBusy);
+        assert_eq!(error.reason, FailureReason::CrmPopulationBusy);
         assert_eq!(f.calls(), ["link", "team", "acquire"]);
     }
 }
@@ -652,11 +652,52 @@ async fn noncontention_crm_population_error_keeps_normal_retry_policy_and_releas
     );
     assert_eq!(
         format!("{:#}", error.source),
-        "Failed to populate CRM contact: provider failure"
+        "Failed to populate CRM contact: Storage layer error provider failure: provider failure"
     );
     assert_eq!(
         f.calls(),
         ["link", "team", "acquire", "hold", "populate", "release"]
+    );
+}
+
+#[tokio::test]
+async fn a_population_the_crm_rejects_is_dropped_instead_of_retried() {
+    let (svc, f) = setup();
+    f.fail("populate");
+    {
+        let mut s = f.0.lock().unwrap();
+        s.crm_contended = false;
+        s.crm_rejected = true;
+    }
+    let error = failure(
+        svc.process(&crm_population()).await,
+        false,
+        FailureReason::InvalidData,
+    );
+    assert_eq!(
+        format!("{:#}", error.source),
+        "Failed to populate CRM contact: email has no '@' separator"
+    );
+    assert_eq!(
+        f.calls(),
+        ["link", "team", "acquire", "hold", "populate", "release"]
+    );
+}
+
+#[tokio::test]
+async fn a_refused_crm_population_names_its_team_in_the_logged_error() {
+    let (svc, f) = setup();
+    f.0.lock().unwrap().slot = false;
+    let BackfillDisposition::Defer { error, retry_after } = svc.process(&crm_population()).await
+    else {
+        panic!("deferred")
+    };
+    assert_eq!(retry_after, None);
+    assert_eq!(
+        ProcessingError::Retryable(error).to_string(),
+        format!(
+            "Retryable error occurred: CrmPopulationBusy: every CRM population slot of team {TEAM} is taken"
+        )
     );
 }
 

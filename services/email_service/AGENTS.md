@@ -212,8 +212,18 @@ the gateway `/email` prefix.
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
 - Each CRM contact population holds one of four per-team Redis slots
   (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
-  database connection per worker. A refused slot, or a population that timed
-  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
+  database connection per worker. A full team is refused at once, never
+  waited on: a waiting worker stalls the rest of its batch, and a team's slow
+  populations would starve the shared queue. A refused slot, or a population
+  that timed out on a CRM lock (`CrmError::Contended`), is deferred as
+  `CrmPopulationBusy`, backing off from 5 s up to SQS's 15-minute delay cap.
+  A population the CRM rejects (`InvalidRequest` and other non-storage errors)
+  is dropped.
+- Any other retryable backfill failure is redelivered after a visibility delay
+  that doubles with the message's `ApproximateReceiveCount` (30 s up to
+  15 minutes, jittered), so a failing message spends its 20 deliveries over
+  hours instead of retrying every minute. `sqs_worker` requests that
+  attribute on every receive.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure
