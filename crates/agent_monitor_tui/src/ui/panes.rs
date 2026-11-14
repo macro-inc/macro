@@ -7,9 +7,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Cell, Paragraph, Row, Table, TableState};
 
-use agent_monitor::domain::model::{
-    Agent, SourceState, TapeEvent, TapeKind, Timestamp,
-};
+use agent_monitor::domain::model::{Agent, AgentKind, SourceState, TapeEvent, TapeKind, Timestamp};
 
 use crate::app::App;
 use crate::format;
@@ -47,6 +45,12 @@ fn age_since(clock: Clock, at: Option<Timestamp>) -> String {
     at.map_or_else(|| String::from("—"), |at| format::age(clock.now - at))
 }
 
+/// The AGENTS NAME column.
+const NAME_WIDTH: u16 = 20;
+
+/// Width of the AGENTS columns that always show, with their spacing.
+const FIXED: u16 = 45 + NAME_WIDTH;
+
 /// The AGENTS table's optional columns at a given inner width.
 struct AgentColumns {
     /// Narrow: no KIND, STAT or ERR columns; the status square stays.
@@ -58,10 +62,10 @@ struct AgentColumns {
 
 impl AgentColumns {
     fn for_width(width: u16) -> Self {
-        // The fixed columns and their spacing take 59, `doing` at least 18;
+        // The fixed columns and their spacing take 65, `doing` at least 18;
         // what is left goes to tokens, then the sparkline, then the task.
-        let compact = width < 59 + 18;
-        let fixed = if compact { 59 - 18 } else { 59 };
+        let compact = width < FIXED + 18;
+        let fixed = if compact { FIXED - 18 } else { FIXED };
         let mut rest = width.saturating_sub(fixed + 18);
         let tokens = rest >= 8;
         if tokens {
@@ -82,7 +86,7 @@ impl AgentColumns {
 }
 
 /// One AGENTS row.
-fn agent_row(agent: &Agent, clock: Clock, columns: &AgentColumns) -> Row<'static> {
+fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) -> Row<'static> {
     let doing = match (&agent.doing, agent.status) {
         (Some(doing), _) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
         (None, status) => match (&agent.status_detail, &agent.task) {
@@ -102,7 +106,7 @@ fn agent_row(agent: &Agent, clock: Clock, columns: &AgentColumns) -> Row<'static
     if !columns.compact {
         cells.push(Cell::from(Span::styled(agent.kind.label(), theme::ink(theme::DIM))));
     }
-    cells.push(Cell::from(Span::styled(agent.name.clone(), theme::bold(theme::AMBER))));
+    cells.push(Cell::from(Span::styled(name, theme::bold(theme::AMBER))));
     if !columns.compact {
         cells.push(Cell::from(Span::styled(
             theme::status_word(agent.status),
@@ -149,6 +153,14 @@ fn agent_row(agent: &Agent, clock: Clock, columns: &AgentColumns) -> Row<'static
     Row::new(cells)
 }
 
+/// A row's name: a subagent shows under its parent as `parent/name`.
+fn row_name(app: &App, agent: &Agent) -> String {
+    match (&agent.parent, agent.kind) {
+        (Some(parent), AgentKind::Subagent) => format!("{}/{}", app.view.name_of(parent), agent.name),
+        _ => agent.name.clone(),
+    }
+}
+
 fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
     let rows: Vec<&Agent> = app.view.sorted_agents(&app.filter);
     let live = rows.iter().filter(|agent| !agent.status.is_final()).count();
@@ -173,7 +185,7 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
         widths.push(Constraint::Length(8));
     }
     header.push("NAME");
-    widths.push(Constraint::Length(14));
+    widths.push(Constraint::Length(NAME_WIDTH));
     if !columns.compact {
         header.push("STAT");
         widths.push(Constraint::Length(4));
@@ -207,7 +219,7 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
 
     let table_rows: Vec<Row<'static>> = rows
         .iter()
-        .map(|agent| agent_row(agent, clock, &columns))
+        .map(|agent| agent_row(agent, row_name(app, agent), clock, &columns))
         .collect();
     let header_row = Row::new(header.into_iter().map(|title| Cell::from(Span::styled(title, theme::bold(theme::FAINT)))));
     let table = Table::new(table_rows, widths)
@@ -364,10 +376,19 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
 
 fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
     let rows = app.view.failures(&app.filter);
-    let color = if rows.is_empty() { theme::GREEN } else { theme::RED };
+    let totals = &app.view.totals;
+    // The board's count, so the two always agree; rows give the detail.
+    let count = totals.errors_24h + totals.failed_24h;
+    let color = if count == 0 && rows.is_empty() { theme::GREEN } else { theme::RED };
     let block = theme::pane(
         "4 FAILURES",
-        vec![Span::styled(format!(" {} 24H ", rows.len()), theme::bold(color))],
+        vec![
+            Span::styled(format!(" {count} 24H "), theme::bold(color)),
+            Span::styled(
+                format!("{} TOOL · {} AGENT ", totals.errors_24h, totals.failed_24h),
+                theme::ink(theme::DIM),
+            ),
+        ],
         focused,
     );
     let inner = block.inner(area);

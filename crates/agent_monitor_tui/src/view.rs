@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use agent_monitor::domain::model::{
     Agent, AgentId, AgentKind, Cost, Severity, Snapshot, SourceHealth, SourceKind, Status,
@@ -261,11 +261,13 @@ impl ViewState {
     }
 
     /// The FAILURES rows, newest first: tool errors, failures and
-    /// error-severity lines from the tape, plus failed agents with no such
-    /// line.
+    /// error-severity lines from the tape; failed agents with no such line;
+    /// and, per agent, one row for tool errors older than the tape holds,
+    /// so the rows add up to the board's error count.
     pub fn failures(&self, filter: &Filter) -> Vec<Failure> {
         let mut rows: Vec<Failure> = Vec::new();
         let mut seen: HashSet<&AgentId> = HashSet::new();
+        let mut tool_lines: HashMap<&AgentId, u32> = HashMap::new();
 
         for event in self.tape.iter().rev() {
             let is_failure = matches!(event.kind, TapeKind::ToolError | TapeKind::Failure)
@@ -274,6 +276,7 @@ impl ViewState {
                 continue;
             }
             let what = if event.kind == TapeKind::ToolError {
+                *tool_lines.entry(&event.agent).or_default() += 1;
                 "tool"
             } else {
                 seen.insert(&event.agent);
@@ -288,15 +291,28 @@ impl ViewState {
         }
 
         for agent in self.agents.values() {
-            if agent.status != Status::Failed || seen.contains(&agent.id) {
-                continue;
-            }
             if !filter.matches_agent(agent) {
                 continue;
             }
             let Some(at) = agent.ended.or(agent.last_activity) else {
                 continue;
             };
+
+            let on_tape = tool_lines.get(&agent.id).copied().unwrap_or(0);
+            let earlier = agent.tool_errors.saturating_sub(on_tape);
+            if earlier > 0 {
+                let noun = if earlier == 1 { "tool error" } else { "tool errors" };
+                rows.push(Failure {
+                    at: agent.started.unwrap_or(at),
+                    agent: agent.id.clone(),
+                    what: "tool",
+                    detail: format!("{earlier} earlier {noun}"),
+                });
+            }
+
+            if agent.status != Status::Failed || seen.contains(&agent.id) {
+                continue;
+            }
             rows.push(Failure {
                 at,
                 agent: agent.id.clone(),
