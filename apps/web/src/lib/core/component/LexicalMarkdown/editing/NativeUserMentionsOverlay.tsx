@@ -30,7 +30,7 @@ export function NativeUserMentionsOverlay(props: {
         disableMentionTracking={props.source.disableMentionTracking}
         useBlockBoundary={true}
         showOpenTabs
-        sources={['users', 'documents', 'channels', 'dates']}
+        sources={['users', 'documents', 'channels', 'agentSessions', 'dates']}
         includeGroups={false}
         includeContacts={false}
         createHost={(blockId) =>
