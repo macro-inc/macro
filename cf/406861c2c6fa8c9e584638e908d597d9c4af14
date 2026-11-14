@@ -1,0 +1,49 @@
+crates/agent_monitor/src/outbound/records.rs
+  s_7a07194ea723e2::t_70f984507bc741 1-19,21-267,269-290
+  s_7a07194ea723e2::t_fde11ab5d30456 20
+  s_7a07194ea723e2::t_2dffb746975f15 268
+crates/agent_monitor/src/outbound.rs
+  s_7a07194ea723e2::t_97ac452bef394c 6,11-14
+crates/agent_monitor/src/outbound/claude_registry/test.rs
+  s_1b36fa5422acb7::t_ee8c9061613e22 1-72
+crates/agent_monitor/src/outbound/macrod_sessions.rs
+  s_1b36fa5422acb7::t_7b433aba4277ff 1-142
+crates/agent_monitor/src/outbound/macrod_sessions/test.rs
+  s_1b36fa5422acb7::t_cd610a510d279a 1-43
+crates/agent_monitor/src/outbound/managers.rs
+  s_1b36fa5422acb7::t_85d023a49e03f1 1-138
+crates/agent_monitor/src/outbound/managers/test.rs
+  s_1b36fa5422acb7::t_e5745f905cb06b 1-45
+crates/agent_monitor/src/outbound/run_records.rs
+  s_7a07194ea723e2::t_3359a07525ca81 1-167
+crates/agent_monitor/src/outbound/run_records/test.rs
+  s_7a07194ea723e2::t_36d4a675aeb738 1-58
+crates/agent_monitor/src/outbound/watch.rs
+  s_7a07194ea723e2::t_0400a2b2e421de 53,56-61,81
+crates/agent_monitor/src/outbound/claude_registry.rs
+  s_7a07194ea723e2::t_9fd2aae660d2cc 1-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cf406861c2c6fa8c9e584638e908d597d9c4af14",
+  "prompts": {},
+  "sessions": {
+    "s_1b36fa5422acb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cb59596-7b07-4ad3-a590-3ccda4aca3de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
