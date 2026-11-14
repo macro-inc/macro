@@ -61,9 +61,10 @@ export function AddProjectTasks(props: { project: ProjectDetail }) {
       <Dropdown.Trigger
         variant="secondary"
         size={isMobile() ? 'icon-md' : 'md'}
+        aria-label={isMobile() ? 'Add existing tasks' : undefined}
       >
-        <ListPlusIcon class="size-4 mobile:size-6" />
-        <span class="mobile:sr-only">Add existing tasks</span>
+        <ListPlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
+        {isMobile() ? null : 'Add existing tasks'}
       </Dropdown.Trigger>
       <Show when={open()}>
         <EditorPopover onClose={close}>

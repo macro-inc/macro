@@ -60,8 +60,8 @@ function ProjectTasksSkeleton() {
       <div class="flex h-8 items-center gap-3 overflow-x-auto scrollbar-hidden">
         <ListSkeleton.Bar class="size-8 shrink-0 rounded-full" />
         <div class="ml-auto flex shrink-0 gap-2">
-          <ListSkeleton.Bar class="h-8 w-32" />
-          <ListSkeleton.Bar class="h-8 w-24" />
+          <ListSkeleton.Bar class="h-8 w-32 mobile:w-8 mobile:rounded-full" />
+          <ListSkeleton.Bar class="h-8 w-24 mobile:w-8 mobile:rounded-full" />
         </div>
       </div>
       <ListSkeleton.Bar class="h-7 w-full rounded-lg" />

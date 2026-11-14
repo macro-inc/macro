@@ -93,10 +93,11 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
             <Button
               variant="secondary"
               size={isMobile() ? 'icon-md' : 'md'}
+              aria-label={isMobile() ? 'New task' : undefined}
               onClick={() => props.onCreateTask?.()}
             >
-              <PlusIcon class="size-4 mobile:size-6" />
-              <span class="mobile:sr-only">New task</span>
+              <PlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
+              {isMobile() ? null : 'New task'}
             </Button>
           </Show>
         </div>
