@@ -845,5 +845,53 @@ export const elsewhere = {
       trigger: 'after the action succeeds',
       source: ['src/features/crm/views/email-privacy.tsx'],
     },
+    {
+      id: 'STX-970',
+      surface: 'SX-26',
+      fn: ['F-165'],
+      state:
+        'Emails section of a contact: the threads exchanged with the contact',
+      trigger: 'a shared mailbox holds mail from or to the contact',
+      source: [
+        'src/features/crm/views/contact-emails-section.tsx',
+        'src/features/crm/views/record-item-list.tsx',
+      ],
+    },
+    {
+      id: 'STX-971',
+      surface: 'SX-23',
+      fn: ['F-164'],
+      state:
+        'An inbox thread the provider did not set aside is a row of Home, named by its subject, with a dot while unread',
+      trigger: 'mail of the last two weeks in a connected inbox, not done',
+      source: [
+        'src/features/home/queries/home-query.ts',
+        'src/features/home/components/HomeListEntity.tsx',
+      ],
+    },
+    {
+      id: 'STX-972',
+      surface: 'SX-23',
+      fn: ['F-164'],
+      state: 'result: Home lists only email',
+      trigger: 'after the action succeeds',
+      source: ['src/features/home/home-facets.ts'],
+    },
+    {
+      id: 'STX-973',
+      surface: 'SX-23',
+      fn: ['F-164'],
+      state: 'result: the thread is open beside the Home list',
+      trigger: 'after the action succeeds',
+      source: ['src/features/home/home-preview-navigation.ts'],
+    },
+    {
+      id: 'STX-974',
+      surface: 'SX-23',
+      fn: ['F-164'],
+      state: 'result: the email is gone from Home',
+      trigger: 'after the action succeeds',
+      source: ['src/features/home/components/HomeList.tsx'],
+    },
   ],
 } as const satisfies Group;
