@@ -78,8 +78,9 @@ enum Stream {
 }
 
 /// `crm_email_thread_allowed` for thread `t`, set-based: the
-/// `contributing` and `blocked_suffixes` CTEs hold its mailbox conditions
-/// and blocklists once per page instead of once per thread. A participant
+/// `contributing`, `team_blocked` and `personal_blocked` CTEs hold its
+/// mailbox conditions and blocklists once per page instead of once per
+/// participant of every thread. A participant
 /// domain is blocked when it, or what follows any of its dots, equals a
 /// blocked domain, which is the function's `right(…) = '.' || domain` test.
 /// `IS TRUE` keeps the membership test a hashed subplan.
@@ -111,8 +112,9 @@ const ALLOWED: &str = r#"
                                 FROM generate_series(1, length(participant.domain)) dot
                                 WHERE substr(participant.domain, dot, 1) = '.'
                             ) suffix
-                            WHERE ((cb.macro_id, suffix.suffix)
-                                   IN (SELECT macro_id, suffix FROM blocked_suffixes)) IS TRUE
+                            WHERE (suffix.suffix IN (SELECT suffix FROM team_blocked)) IS TRUE
+                               OR ((cb.macro_id, suffix.suffix)
+                                   IN (SELECT macro_id, suffix FROM personal_blocked)) IS TRUE
                         )
                   )"#;
 
@@ -407,26 +409,24 @@ impl<'a> TeamRead<'a> {
         builder.push(
             r#") AND l.is_primary AND l.deleting_at IS NULL
         ),
-        blocked_suffixes AS MATERIALIZED (
-            SELECT owner.macro_id, team_blocked.suffix
-            FROM (SELECT DISTINCT macro_id FROM contributing) owner
-            CROSS JOIN (
-                SELECT lower(domain) AS suffix FROM crm_blocked_domains WHERE team_id = "#,
+        team_blocked AS MATERIALIZED (
+            SELECT lower(domain) AS suffix FROM crm_blocked_domains WHERE team_id = "#,
         );
         builder.push_bind(self.team_id);
         builder.push(
             r#"
-                UNION ALL
-                SELECT lower(d.domain) FROM crm_domains d
-                JOIN crm_companies c ON c.id = d.company_id
-                WHERE d.team_id = "#,
+            UNION ALL
+            SELECT lower(d.domain) FROM crm_domains d
+            JOIN crm_companies c ON c.id = d.company_id
+            WHERE d.team_id = "#,
         );
         builder.push_bind(self.team_id);
         builder.push(
             r#" AND NOT c.email_sync
-            ) team_blocked
-            UNION ALL
-            SELECT b.user_id, lower(b.domain) FROM crm_personal_email_blocklist b
+        ),
+        personal_blocked AS MATERIALIZED (
+            SELECT b.user_id AS macro_id, lower(b.domain) AS suffix
+            FROM crm_personal_email_blocklist b
             WHERE b.team_id = "#,
         );
         builder.push_bind(self.team_id);

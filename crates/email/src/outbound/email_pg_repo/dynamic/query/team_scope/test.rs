@@ -135,7 +135,8 @@ fn inbox_stream_walks_each_inbox_in_order() {
     // The privacy rule is set-based, not a per-thread function call.
     assert!(!page.contains("crm_email_thread_allowed"));
     assert!(page.contains("contributing AS MATERIALIZED"));
-    assert!(page.contains("blocked_suffixes AS MATERIALIZED"));
+    assert!(page.contains("team_blocked AS MATERIALIZED"));
+    assert!(page.contains("personal_blocked AS MATERIALIZED"));
     // No cursor on the first page.
     assert!(!page.contains("::timestamptz, "));
 }
