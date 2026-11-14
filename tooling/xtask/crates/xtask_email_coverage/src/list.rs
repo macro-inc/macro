@@ -128,10 +128,13 @@ fn named(prefix: &str, messages: Vec<wire::Message>) -> Vec<Entry> {
 }
 
 /// The routes of another service that `sources.toml` lists by hand. The
-/// file must hold the end of each route's path as a string literal, so
-/// that a route that is renamed or removed does not stay listed. An end made
-/// of parameters alone (`"/{id}"`) says nothing of which route it is, so it
-/// does not count unless it is the whole path.
+/// file must register each: a `.route(` holding the end of the route's path
+/// as a string literal and the route's method, or a `.nest(` holding it (the
+/// router nested there is in another crate, so the method is not looked
+/// for). A route that is renamed, removed or served under another method
+/// then does not stay listed. An end made of parameters alone (`"/{id}"`)
+/// says nothing of which route it is, so it does not count unless it is the
+/// whole path.
 fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<Entry>, Report> {
     let text = std::fs::read_to_string(repo_root.join(&source.file))
         .context(format!("could not read {}", source.file))?;
@@ -139,21 +142,11 @@ fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<En
         .routes
         .iter()
         .map(|route| {
-            let path = route
-                .split_once(' ')
-                .map_or(route.as_str(), |(_, path)| path);
-            let line = path
-                .match_indices('/')
-                .map(|(start, _)| &path[start..])
-                .filter(|end| *end == path || names_a_route(end))
-                .map(|end| format!("\"{end}\""))
-                .find_map(|literal| text.lines().position(|line| line.contains(&literal)))
-                .ok_or_else(|| {
-                    report!(
-                        "{}: no string literal ends the path of `{route}`",
-                        source.file
-                    )
-                })?;
+            let Some((method, path)) = route.split_once(' ') else {
+                bail!("{}: `{route}` is not `<METHOD> <path>`", source.file);
+            };
+            let line = registered_at(&text, method, path)
+                .map_err(|why| report!("{}: {why} `{route}`", source.file))?;
             Ok(Entry {
                 key: format!("{} {route}", source.service),
                 matcher: String::new(),
@@ -164,6 +157,69 @@ fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<En
             })
         })
         .collect()
+}
+
+/// How a router adds a route, and how it mounts another router.
+const ROUTE_CALL: &str = ".route(";
+const NEST_CALL: &str = ".nest(";
+
+/// The index of the line that registers `method path` in a router's source,
+/// or what is missing.
+fn registered_at(text: &str, method: &str, path: &str) -> Result<usize, &'static str> {
+    let lines: Vec<&str> = text.lines().collect();
+    let registers = |line: &str| line.contains(ROUTE_CALL) || line.contains(NEST_CALL);
+    let mut found_path = false;
+    let ends = path
+        .match_indices('/')
+        .map(|(start, _)| &path[start..])
+        .filter(|end| *end == path || names_a_route(end));
+    for end in ends {
+        let literal = format!("\"{end}\"");
+        for (index, line) in lines.iter().enumerate() {
+            if !line.contains(&literal) {
+                continue;
+            }
+            // The call is on the literal's line, or the one before when the
+            // formatter broke it. A comment or an attribute is neither.
+            let call = if registers(line) {
+                index
+            } else if index > 0 && registers(lines[index - 1]) {
+                index - 1
+            } else {
+                continue;
+            };
+            found_path = true;
+            if lines[call].contains(NEST_CALL) {
+                return Ok(index);
+            }
+            let rest = &lines[index + 1..];
+            let end_of_call = rest
+                .iter()
+                .position(|line| registers(line))
+                .unwrap_or(rest.len());
+            let registration =
+                std::iter::once(lines[index]).chain(rest[..end_of_call].iter().copied());
+            if registration.into_iter().any(|line| calls(line, method)) {
+                return Ok(index);
+            }
+        }
+    }
+    if found_path {
+        Err("the route registered there has not the method of")
+    } else {
+        Err("no route registration holds a string literal ending the path of")
+    }
+}
+
+/// Whether a line calls the routing function of a method: `get(` or `.put(`.
+fn calls(line: &str, method: &str) -> bool {
+    let call = format!("{}(", method.to_lowercase());
+    line.match_indices(&call).any(|(start, _)| {
+        !line[..start]
+            .chars()
+            .next_back()
+            .is_some_and(|before| before.is_alphanumeric() || before == '_')
+    })
 }
 
 /// Whether a path has a segment that is not a parameter.

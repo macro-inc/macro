@@ -1,4 +1,4 @@
-use super::{apply_overrides, default_providers, names_a_route, routes_elsewhere};
+use super::{apply_overrides, default_providers, names_a_route, registered_at, routes_elsewhere};
 use crate::row::{Kind, Providers, Row};
 use crate::sources::{ElsewhereSource, ProvidersOverride};
 
@@ -78,11 +78,55 @@ fn a_route_listed_by_hand_must_be_in_its_file() {
     );
 
     let error = routes_elsewhere(&repo_root, &source(&["PUT /reminders/email/gone"])).unwrap_err();
-    assert!(error.to_string().contains("no string literal"), "{error}");
+    assert!(
+        error.to_string().contains("no route registration"),
+        "{error}"
+    );
 
     // The file holds `"/email/{thread_id}"`, which does not make any path
     // that ends in a parameter a route of it.
     assert!(names_a_route("/email/{thread_id}"));
     assert!(!names_a_route("/{thread_id}"));
     assert!(!names_a_route("/{entity_type}/{entity_id}"));
+}
+
+/// A route counts only where the router registers it under its method: a
+/// path in a comment or an attribute, or under another method, is not it.
+#[test]
+fn a_route_listed_by_hand_must_be_registered_under_its_method() {
+    let router = r#"
+// "/gone" was served here once.
+#[utoipa::path(get, path = "/described")]
+fn router() -> Router {
+    Router::new()
+        .route("/one", get(one))
+        .route(
+            "/two/{id}",
+            get(two).put(set_two),
+        )
+        .route("/three", forget(three))
+        .nest(
+            "/nested",
+            other::router(),
+        )
+}
+"#;
+
+    assert_eq!(registered_at(router, "GET", "/prefix/one"), Ok(5));
+    assert_eq!(registered_at(router, "PUT", "/two/{id}"), Ok(7));
+    assert_eq!(registered_at(router, "POST", "/nested"), Ok(12));
+
+    for (method, path) in [
+        ("POST", "/one"),
+        ("DELETE", "/two/{id}"),
+        // `forget(` is not `get(`.
+        ("GET", "/three"),
+    ] {
+        let why = registered_at(router, method, path).unwrap_err();
+        assert!(why.contains("has not the method"), "{method} {path}: {why}");
+    }
+    for path in ["/gone", "/described"] {
+        let why = registered_at(router, "GET", path).unwrap_err();
+        assert!(why.contains("no route registration"), "{path}: {why}");
+    }
 }

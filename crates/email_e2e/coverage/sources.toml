@@ -37,7 +37,9 @@ crates = [
 ]
 
 # Add `[[graphql_type]] rust = "<Rust type>", graphql = "<SDL type>"` when the
-# generator reports that it cannot tell which SDL type a resolver's field is on.
+# generator reports that it cannot tell which SDL type a resolver's field is
+# on: a field of the same name on a type the code does not tie to the
+# resolver's is not taken for it.
 
 # `SoupEmailThreadEdges` is flattened into the Soup email thread through an
 # associated type (`SoupEntityEdges::EmailThreadEdges`) in another crate.
@@ -174,8 +176,9 @@ reason = "It selects Gmail links only, to renew their watches and probe their gr
 
 # kind `elsewhere`: routes of other services that carry a function of email
 # out, where a scenario's stack starts that service and records its
-# requests. Listed by hand: `file` must hold the end of each route's path as
-# a string literal. They need no function; one that has none is not counted
+# requests. Listed by hand: `file` must register each, with a `.route(` that
+# holds the end of the route's path as a string literal and the method, or a
+# `.nest(` that holds it. They need no function; one that has none is not counted
 # against anything.
 [[elsewhere]]
 service = "document_storage_service"

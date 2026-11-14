@@ -316,19 +316,19 @@ fn graphql_type<'a>(
         ),
     }
 
-    // Last, the only SDL type with a field of that name.
+    // A field of that name on a type the code does not tie to this one says
+    // nothing: it may be another resolver's, and this one unreachable.
     let anywhere: Vec<&String> = schema.keys().filter(|name| has_field(name)).collect();
     match anywhere.as_slice() {
-        [only] => Ok(only),
         [] => bail!(
             "{loc}: no SDL object type has a field `{field}` for the resolver on \
              `{rust_type}`: the SDL is stale (export it again) or this is not a resolver"
         ),
-        several => bail!(
-            "{loc}: several SDL types have a field `{field}` ({}) and none is tied to \
-             `{rust_type}` in code; add a [[graphql_type]] rust = \"{rust_type}\" mapping to \
+        found => bail!(
+            "{loc}: the SDL has a field `{field}` on {} and the code ties none of them to \
+             `{rust_type}`; add a [[graphql_type]] rust = \"{rust_type}\" mapping to \
              sources.toml",
-            join(several)
+            join(found)
         ),
     }
 }
