@@ -418,7 +418,7 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id), fields(pipelines = ids.len(), source_id_count = tracing::field::Empty))]
+    #[tracing::instrument(err, skip_all, fields(pipelines = span_count(ids.len()), source_id_count = tracing::field::Empty))]
     async fn get_pipelines_access(
         &self,
         ids: &[Uuid],

@@ -1,4 +1,4 @@
-//! A document check records how many source ids it bound, and no user id.
+//! Access checks record how many source ids they bound, and no user id.
 
 use super::*;
 use crate::outbound::pg_access_repo::queries::get_user_source_ids;
@@ -97,6 +97,50 @@ async fn document_check_records_its_source_id_count_and_no_user_id(
     assert!(
         leaked.is_empty(),
         "spans recorded the viewer's email: {leaked:?}"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_team"))
+)]
+async fn pipelines_check_records_counts_and_no_ids(pool: PgPool) -> anyhow::Result<()> {
+    let viewer = user_id(TEAM_MEMBER);
+    let bound = get_user_source_ids(&pool, Some(&viewer)).await?.0.len();
+    let repo = PgAccessRepository::new(pool);
+    let pipelines = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+
+    let values = SpanValues::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(values.clone()));
+    // Register the callsites, then recompute interest on this thread, as above.
+    repo.get_pipelines_access(&pipelines, &viewer).await?;
+    tracing::callsite::rebuild_interest_cache();
+    values.0.lock().unwrap().clear();
+    repo.get_pipelines_access(&pipelines, &viewer).await?;
+
+    let values = values.0.lock().unwrap().clone();
+    assert!(
+        values.contains(&"get_pipelines_access.pipelines=i64:3".to_owned()),
+        "{values:?}"
+    );
+    assert!(
+        values.contains(&format!("get_pipelines_access.source_id_count=i64:{bound}")),
+        "{values:?}"
+    );
+    let leaked: Vec<_> = values
+        .iter()
+        .filter(|value| {
+            value.contains(viewer.email_str())
+                || pipelines
+                    .iter()
+                    .any(|pipeline| value.contains(&pipeline.to_string()))
+        })
+        .collect();
+    assert!(
+        leaked.is_empty(),
+        "spans recorded the viewer's email or the pipeline ids: {leaked:?}"
     );
     Ok(())
 }
