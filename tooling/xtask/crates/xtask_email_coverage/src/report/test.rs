@@ -788,6 +788,45 @@ F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
     );
 }
 
+/// An entry point is not a gap while a known bug holds every function it
+/// takes part in open on that provider: no scenario that reaches it can pass.
+#[test]
+fn an_entry_point_behind_a_known_bug_is_not_a_gap() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let bug = "bug = \"BUG-7\"\nbug_on = \"outlook\"\n";
+    let gaps_with = |text: &str| {
+        let ledger = Ledger {
+            functions: functions(FUNCTIONS).unwrap(),
+            map: map(text).unwrap(),
+            checks: checks("function\tscenario\n").unwrap(),
+            proofs: proofs("function\tprovider\tscenario\tbreak\n").unwrap(),
+            waivers: Waivers::default(),
+        };
+        build(&reader, &ledger, Vec::new(), &Results::default()).gaps
+    };
+    let update = "entry point `provider outlook:messages.update` is not reached on outlook";
+    let modify = "entry point `provider gmail:messages.modify` is not reached on gmail";
+
+    // F-002 uses it too, and no bug holds F-002 open.
+    let one = gaps_with(&MAP.replace("[F-001]\n", &format!("[F-001]\n{bug}")));
+    assert!(one.iter().any(|gap| gap.contains(update)), "{one:?}");
+
+    let both = gaps_with(
+        &MAP.replace("[F-001]\n", &format!("[F-001]\n{bug}"))
+            .replace("[F-002]\n", &format!("[F-002]\n{bug}")),
+    );
+    assert!(!both.iter().any(|gap| gap.contains(update)), "{both:?}");
+    // The bug is on Outlook only.
+    assert!(both.iter().any(|gap| gap.contains(modify)), "{both:?}");
+}
+
 /// An entry point another product's functions own is in none of email's
 /// counts, reached or not, and is listed with whether a scenario reached it.
 #[test]

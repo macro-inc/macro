@@ -273,6 +273,9 @@ impl Model {
             .iter()
             .map(|scenario| format!("scenario `{scenario}` failed"))
             .collect();
+        // The functions a known bug keeps open, per provider: their scenarios
+        // cannot pass, so the entry points only they reach cannot be reached.
+        let mut held_open: BTreeSet<(&str, &str)> = BTreeSet::new();
         for row in &self.functions {
             for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
                 let Some(cell) = cell else { continue };
@@ -280,6 +283,9 @@ impl Model {
                     .reason
                     .as_deref()
                     .is_some_and(|reason| reason.starts_with(KNOWN_BUG));
+                if cell.status == Status::Open && known_bug {
+                    held_open.insert((row.id.as_str(), provider));
+                }
                 let state = match cell.status {
                     Status::Open if known_bug => continue,
                     Status::Open => "no scenario performs it",
@@ -295,10 +301,15 @@ impl Model {
         }
         for row in &self.entry_rows {
             for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
-                if cell
+                let open = cell
                     .as_ref()
-                    .is_some_and(|cell| cell.status == Status::Open)
-                {
+                    .is_some_and(|cell| cell.status == Status::Open);
+                let behind_a_bug = !row.functions.is_empty()
+                    && row
+                        .functions
+                        .iter()
+                        .all(|function| held_open.contains(&(function.as_str(), provider)));
+                if open && !behind_a_bug {
                     gaps.push(format!(
                         "entry point `{} {}` is not reached on {provider}, and is neither \
                          waived nor deferred",
