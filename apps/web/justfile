@@ -262,6 +262,12 @@ build-email-e2e: build-wasm
 test-email-e2e-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
 
+# The coverage ledger of the email UI, from the last run of the browser suite
+# (tests/email-e2e/ledger/README.md). Reports only; `--enforce` fails on a row
+# that is not covered.
+email-e2e-ledger *ARGS:
+    bun tests/email-e2e/ledger/report.ts {{ARGS}}
+
 # The fixture tests that cover a class of email or calendar bug (real
 # components over scripted data, no backend). Each line is a Playwright
 # config and, where the suite holds more than those tests, the files or the
