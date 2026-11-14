@@ -48,7 +48,10 @@ writes carry `Idempotency-Key = <consumer>:<event_id>:<action>`.
 - Stripe does not deliver in order. An event created before what a cursor
   already applied moves that cursor back to just before it, so it and every
   later event apply again in order. A worker holding the lease cannot
-  advance past the rewind; it releases and the cursor runs again.
+  advance past the rewind; it releases and the cursor runs again. An event
+  created more than 30 days ago (the payload retention, for example a
+  dashboard resend of an old event) is stored for dedupe but never rewinds a
+  cursor.
 - One apply is cut off after 40 s (a retry), well inside the 60 s lease that
   every applied event extends, so no two replicas apply one cursor at once.
 - `stripe_events.id` dedupes redeliveries.
@@ -79,16 +82,29 @@ carry customer, subscription, team and event ids, never emails.
 ## Failure handling
 
 - `Retry` (a dependency failed): backoff from 5 s, doubling to 1 h with
-  jitter; after 15 attempts (about six hours) the cursor is dead.
-- `Reject` (never going to work: an unknown seat price, an unsupported API
-  version, a bad id, a customer that belongs to no account): dead at once.
+  jitter; after 84 attempts (267 915 s, 74.4 h, before jitter: past Stripe's
+  three days of redelivery) the cursor is dead. Its next event re-arms it,
+  from the event it is stuck on.
+- `Reject` (never going to work: a grant on a price that is neither sold nor
+  legacy, an unsupported API version, a bad id, a customer that belongs to
+  no account): dead at once, until replayed.
+- Seat prices: the sold Premium and Max prices, plus
+  `LEGACY_PREMIUM_PRICE_IDS` (`crates/teams` `domain/model.rs`), historical
+  prices that keep Premium entitlements, as the old webhook's fallback gave
+  them. Only a grant needs a tier; revokes (cancel, past due, unpaid, paused,
+  failed payment) remove every tier's role without reading the price. The
+  analytics consumer skips an unknown price.
+- A subscription event of a deleted team is ignored with a warning.
+- A payload cleared by retention is skipped; the cursor moves past it.
 - A dead cursor stops that consumer for that customer and logs
   `stripe inbox cursor dead-lettered`, which pages; every 15 minutes each
   replica logs `stripe inbox dead cursors` while any is dead, so the page
-  holds until it is replayed. New events do not re-arm it. Replay with
+  holds until it is replayed. Replay one with
   `POST /internal/stripe_inbox/replay`
-  (`{"consumer", "orderingKey", "skipDeadEvent"}`); it answers 409 while a
-  worker holds the cursor's lease.
+  (`{"consumer", "orderingKey", "skipDeadEvent"}`; 409 while a worker holds
+  the cursor's lease), or many with `POST /internal/stripe_inbox/replay_dead`
+  (`{"consumer"?, "skipDeadEvent", "limit"?}`). Deploy, rollback and resend
+  steps: [runbook](../runbooks/stripe-event-inbox.md).
 - An event applied more than five minutes after it arrived logs
   `stripe inbox backlog`.
 

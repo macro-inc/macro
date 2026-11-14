@@ -6,9 +6,10 @@
 // strings are their contract (see crates/stripe_inbox/AGENTS.md):
 //
 // - `stripe inbox cursor dead-lettered` (error): a consumer gave up on an
-//   event, at once for one it can never apply (an unknown price, a payload in
-//   an unsupported API version) or after about six hours of retries. That
-//   consumer stops for that customer until replayed. Fields: `consumer`,
+//   event, at once for one it can never apply (a grant on an unknown price, a
+//   payload in an unsupported API version) or after about 74 hours of
+//   retries. That consumer stops for that customer until replayed (or, after
+//   retries, until its next event). Fields: `consumer`,
 //   `customer_id`, `event_id`, `attempts`.
 // - `stripe inbox dead cursors` (error): every replica logs it every 15
 //   minutes while any cursor is dead-lettered, so the alert holds until the
@@ -21,7 +22,7 @@ import * as datadog from '@pulumi/datadog';
 import { goalertWebhooks } from '../goalert';
 import { notify, RENOTIFY_MINUTES } from '../notify';
 
-const REPLAY = `Fix the cause, then replay: POST /internal/stripe_inbox/replay on authentication-service with {"consumer", "orderingKey", "skipDeadEvent"} (skip only an event that must never apply). See docs/architecture/stripe-event-inbox.md.`;
+const REPLAY = `Fix the cause, then replay: POST /internal/stripe_inbox/replay on authentication-service with {"consumer", "orderingKey", "skipDeadEvent"}, or every dead cursor with POST /internal/stripe_inbox/replay_dead (skip only an event that must never apply). A cursor whose retries ran out re-arms on its next event. See docs/runbooks/stripe-event-inbox.md.`;
 
 for (const environment of ['dev', 'prod'] as const) {
   const env = `env:${environment}`;

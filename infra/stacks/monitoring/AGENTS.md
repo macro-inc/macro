@@ -67,7 +67,8 @@ From `infra/`:
   (agent-harness-service) that `crates/hosted_runtimes` writes; its header is
   the message and field contract. Renaming either message silences its monitor.
 - `monitors/stripe-inbox.ts` reads the logs `stripe inbox cursor
-  dead-lettered`, `stripe inbox backlog` and `stripe audit mismatch` that
+  dead-lettered`, `stripe inbox dead cursors`, `stripe inbox backlog` and
+  `stripe audit mismatch` that
   `crates/stripe_inbox` writes from authentication-service; its header is the
   message and field contract.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by

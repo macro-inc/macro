@@ -106,9 +106,13 @@ access, webhook reconciliation and billing workers remain independent of attachm
   `docs/architecture/stripe-event-inbox.md`.
 - A Stripe customer maps to an account by `User.stripeCustomerId`; only an
   unmapped customer is read from Stripe once and matched by email.
-- An unknown seat price on a personal subscription dead-letters the event
-  instead of granting a tier. Replay a cursor with
-  `POST /internal/stripe_inbox/replay`.
+- A personal grant on a price that is neither a sold seat price nor in
+  `teams::domain::model::LEGACY_PREMIUM_PRICE_IDS` (historical prices that
+  keep Premium) dead-letters instead of guessing a tier. Revokes read no
+  price: they remove every tier's role. Replay a cursor with
+  `POST /internal/stripe_inbox/replay`, or every dead one with
+  `POST /internal/stripe_inbox/replay_dead`; see
+  `docs/runbooks/stripe-event-inbox.md`.
 
 ## Subscription billing status
 

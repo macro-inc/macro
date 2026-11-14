@@ -49,11 +49,17 @@ holds. Design: `docs/architecture/stripe-event-inbox.md`.
 - Consumers must be idempotent: a cursor advances after the apply returns,
   so a crash replays the last event. Stripe writes use
   `Idempotency-Key = <consumer>:<event_id>:<action>`.
-- `ApplyError::Reject` dead-letters at once; `Retry` backs off from 5 s,
-  doubling to 1 h, and dead-letters after `MAX_ATTEMPTS` (about six hours).
-  A new event never re-arms a dead cursor; replay does.
+- `ApplyError::Reject` dead-letters at once, until replayed; `Retry` backs
+  off from 5 s, doubling to 1 h, and dead-letters after `MAX_ATTEMPTS`
+  (about 74 hours, past Stripe's three days of redelivery). A new event
+  re-arms a cursor whose retries ran out (`dead_cause`), never a rejected
+  one.
+- A payload cleared by retention is skipped. An event older than
+  `PAYLOAD_RETENTION` never rewinds a cursor.
 - An event arriving behind a cursor rewinds it, so later events apply
   again; that is why consumers must be idempotent beyond crash replays.
+- Deploy only through `deploy_all_services.yml`, which migrates first;
+  rollback and resend steps: `docs/runbooks/stripe-event-inbox.md`.
 - Same-second events order by event id, which is not Stripe's order; the
   projection keeps the later-received snapshot on a tie.
 - Log messages `stripe inbox cursor dead-lettered`, `stripe inbox dead
