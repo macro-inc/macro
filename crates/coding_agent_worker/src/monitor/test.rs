@@ -103,8 +103,13 @@ fn the_monitor_table_rejects_unknown_keys() {
 }
 
 #[test]
-fn the_default_config_hosts_the_monitor() {
-    let config: Config = toml::from_str(include_str!("../../default.macrod.toml")).unwrap();
+fn the_default_config_hosts_the_monitor_without_a_monitor_table() {
+    let raw = include_str!("../../default.macrod.toml");
+    assert!(
+        !raw.contains("[monitor]"),
+        "an older macrod rejects a config with [monitor]"
+    );
+    let config: Config = toml::from_str(raw).unwrap();
     assert!(config.monitor.enabled);
 }
 

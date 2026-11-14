@@ -245,8 +245,11 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor.sock`.
 - A hosting panel or service adds the `daemon` source: its harness id,
   whether the runtime is connected, and its open prompts, as that source's
   health (detail = harness id, items = open prompts); the viewer's header
-  shows it as `HOST <harness> ● ON  PROMPTS n` or `○ OFFLINE`. The Config tab toggles hosting (`Agent monitor`); `history_hours`,
-  `fps` and `run_record_dirs` take effect on the next start.
+  shows it as `HOST <harness> ● ON  PROMPTS n` or `○ OFFLINE`.
+- The Config tab toggles hosting (`Agent monitor`), which writes a
+  `[monitor]` table; new configs leave it out (hosting is on by default),
+  because a macrod older than the monitor rejects a file that has one.
+  `history_hours`, `fps` and `run_record_dirs` take effect on the next start.
 - `macrod monitor serve` and `macrod service` export `macrod.monitor*` spans
   when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Rows, spans and logs carry ids
   and counts, never transcript text.
