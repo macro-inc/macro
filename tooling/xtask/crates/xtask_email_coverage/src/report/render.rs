@@ -58,6 +58,11 @@ fn tally_cells(tally: &Tally) -> String {
     )
 }
 
+/// The title of the list of what `--enforce` fails on.
+const GAPS_TITLE: &str = "Gaps (each fails the job under --enforce)";
+/// The title of the list of scenarios kept for known bugs that passed.
+const KNOWN_BUGS_TITLE: &str = "Scenarios kept for known bugs that passed";
+
 fn status_word(cell: Option<&Cell>) -> &'static str {
     match cell.map(|cell| cell.status) {
         None => "n/a",
@@ -217,6 +222,8 @@ pub(crate) fn markdown(model: &Model) -> String {
         "Checks, proofs, waivers and deferrals the records do not bear out",
         &model.stale,
     );
+    list(&mut out, GAPS_TITLE, &model.gaps);
+    list(&mut out, KNOWN_BUGS_TITLE, &model.suite.known_bugs_passing);
 
     if !model.dead_code.is_empty() {
         let _ = writeln!(out, "### Dead code candidates\n");
@@ -450,6 +457,8 @@ pub(crate) fn html(model: &Model) -> String {
         "Checks, proofs, waivers and deferrals the records do not bear out",
         &model.stale,
     );
+    html_list(&mut out, GAPS_TITLE, &model.gaps);
+    html_list(&mut out, KNOWN_BUGS_TITLE, &model.suite.known_bugs_passing);
 
     if !model.dead_code.is_empty() {
         let _ = write!(

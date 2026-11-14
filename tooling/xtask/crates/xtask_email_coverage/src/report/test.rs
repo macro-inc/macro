@@ -5,7 +5,7 @@ use super::graphql::Schema;
 use super::junit::Results;
 use super::ledger::{Atom, Ledger, Waivers, checks, functions, map, proofs};
 use super::seen::{Hit, Reader, matches};
-use super::{Status, build, render};
+use super::{Status, build, judge_known_bugs, render};
 use crate::{Sources, parse_tsv};
 
 const ROWS: &str = "kind\tkey\tproviders\tmatch\tsource\n\
@@ -413,7 +413,7 @@ F-001\tgmail\tstate gone\tx\n",
 
     assert_eq!(model.functions_gmail.proved, 1);
     assert_eq!(model.functions_gmail.claimed, 0);
-    assert!(model.has_gaps());
+    assert!(!model.gaps.is_empty());
     let broken = model.broken.join("\n");
     assert!(broken.contains("F-009 is not a function"), "{broken}");
     assert!(broken.contains("the provider `yahoo`"), "{broken}");
@@ -621,6 +621,122 @@ F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
         "{summary}"
     );
     assert!(render::html(&model).contains("<small>known bug BUG-7</small>"));
+    // The bug excuses the function, not the rest: F-002 is performed by the
+    // same records and nothing is said to check it.
+    let of = |id: &str| -> Vec<&String> {
+        let function = format!("function {id} ");
+        model
+            .gaps
+            .iter()
+            .filter(|gap| gap.starts_with(&function))
+            .collect()
+    };
+    assert!(of("F-001").is_empty(), "{:?}", model.gaps);
+    assert_eq!(of("F-002").len(), 2, "{:?}", model.gaps);
+}
+
+/// What `--enforce` fails on is said line by line: a scenario that failed, a
+/// function that is not proved, an entry point that is not reached, and a
+/// scenario kept for a known bug that passes when the ledger does not say
+/// its bug shows only now and then.
+#[test]
+fn every_gap_is_named() {
+    use super::junit::Outcome;
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: checks("function\tscenario\nF-001\tstate gmail_stars\n").unwrap(),
+        proofs: proofs(
+            "function\tprovider\tscenario\tbreak\n\
+F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
+        )
+        .unwrap(),
+        waivers: toml::from_str(
+            r#"
+[[intermittent_bug]]
+scenario = "state outlook_races"
+reason = "the race is lost about one run in twenty"
+
+[[intermittent_bug]]
+scenario = "state gone"
+reason = "no longer a scenario"
+"#,
+        )
+        .unwrap(),
+    };
+    let mut results = Results::default();
+    for (scenario, outcome) in [
+        ("state gmail_stars", Outcome::Passed),
+        ("state outlook_stars", Outcome::Failed),
+    ] {
+        results.outcomes.insert(scenario.to_owned(), outcome);
+        results
+            .passed_in
+            .entry(scenario.to_owned())
+            .or_default()
+            .insert("run".to_owned());
+    }
+    let record_of = |test: &str, provider: &str| {
+        let mut record = record(test, provider, true);
+        record.run = Some("run".to_owned());
+        record
+    };
+    let records = vec![
+        record_of("gmail_stars", "gmail"),
+        record_of("outlook_stars", "outlook"),
+    ];
+    let mut model = build(&reader, &ledger, records, &results);
+    let mut known_bugs = Results::default();
+    for (scenario, outcome) in [
+        ("state gmail_fixed", Outcome::Passed),
+        ("state outlook_races", Outcome::Flaky(1)),
+        ("state gmail_still_broken", Outcome::Failed),
+    ] {
+        known_bugs.outcomes.insert(scenario.to_owned(), outcome);
+    }
+    judge_known_bugs(&mut model, &ledger, &known_bugs);
+
+    let has = |text: &str| model.gaps.iter().any(|gap| gap.contains(text));
+    assert!(
+        has("scenario `state outlook_stars` failed"),
+        "{:?}",
+        model.gaps
+    );
+    // Proved on Gmail; on Outlook the only scenario failed.
+    assert!(!has(
+        "function F-001 (Star a thread) is not proved on gmail"
+    ));
+    assert!(has(
+        "function F-001 (Star a thread) is not proved on outlook: no scenario performs it"
+    ));
+    assert!(has(
+        "entry point `provider outlook:messages.update` is not reached on outlook"
+    ));
+    assert!(!has("entry point `provider gmail:messages.modify`"));
+    assert!(has(
+        "scenario `state gmail_fixed`, kept for a known bug, passes"
+    ));
+    assert!(!has("`state outlook_races`, kept for a known bug"));
+    assert!(!has("gmail_still_broken"));
+    assert!(has("[[intermittent_bug]] names `state gone`"));
+    assert_eq!(model.suite.known_bugs_failing, 1);
+    assert_eq!(
+        model.suite.known_bugs_passing,
+        ["state gmail_fixed", "state outlook_races"]
+    );
+    let summary = render::markdown(&model);
+    assert!(
+        summary.contains("Gaps (each fails the job under --enforce)"),
+        "{summary}"
+    );
 }
 
 /// A bug on one provider leaves the function as its scenarios show it on the

@@ -41,10 +41,16 @@ enum Command {
         /// Where to write coverage.json, coverage.md and index.html.
         #[arg(long)]
         out: PathBuf,
-        /// Fail when a function or an entry point is neither covered nor
-        /// waived, or a scenario failed.
+        /// Fail on a gap: a scenario that failed, a function that is not
+        /// proved and not waived, an entry point that is not reached and
+        /// not waived, a ledger line the records do not bear out, or a
+        /// scenario kept for a known bug that passes.
         #[arg(long)]
         enforce: bool,
+        /// A directory holding the `junit.xml` of a run of the scenarios
+        /// kept for known bugs, at any depth. Repeat for several.
+        #[arg(long)]
+        known_bugs: Vec<PathBuf>,
     },
 }
 
@@ -55,12 +61,14 @@ fn main() -> ExitCode {
             results,
             out,
             enforce,
+            known_bugs,
         } => report(
             &xtask_paths::repo_root(),
             &ReportOptions {
                 results,
                 out,
                 enforce,
+                known_bugs,
             },
         )
         .map(|failed| {

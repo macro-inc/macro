@@ -225,6 +225,21 @@ pub(crate) struct Waivers {
     /// neither reached, waived, deferred nor open here.
     #[serde(default)]
     pub(crate) owned: Vec<Owned>,
+    /// Scenarios kept for a known bug that shows only now and then: one of
+    /// them passing does not say the bug is gone.
+    #[serde(default)]
+    pub(crate) intermittent_bug: Vec<IntermittentBug>,
+}
+
+/// A scenario kept for a known bug that often passes with the bug in.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct IntermittentBug {
+    /// `binary test`, as the results name it.
+    pub(crate) scenario: String,
+    /// How often the bug shows, and why.
+    #[expect(dead_code, reason = "read by people: the file must say why")]
+    pub(crate) reason: String,
 }
 
 /// An entry point no scenario is asked to reach, or not yet.

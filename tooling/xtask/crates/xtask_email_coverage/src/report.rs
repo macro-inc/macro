@@ -58,10 +58,16 @@ pub struct Options {
     pub results: Vec<PathBuf>,
     /// Where `coverage.json`, `coverage.md` and `index.html` go.
     pub out: PathBuf,
-    /// Fail when a function is neither proved nor waived, or an entry
-    /// point is neither reached, waived nor deferred.
+    /// Fail on every gap: see [`Model::gaps`].
     pub enforce: bool,
+    /// Directories holding the `junit.xml` of the runs of the scenarios kept
+    /// for known bugs. One of them that passes is a gap, unless the ledger
+    /// says its bug shows only now and then.
+    pub known_bugs: Vec<PathBuf>,
 }
+
+/// How the reason of a function a known bug keeps open starts.
+const KNOWN_BUG: &str = "known bug ";
 
 /// How a function or an entry point stands on one provider.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -215,6 +221,11 @@ pub(crate) struct Suite {
     pub(crate) no_inbox: Vec<String>,
     /// Scenarios with inboxes of both providers: they count for both.
     pub(crate) both_providers: Vec<String>,
+    /// Scenarios kept for known bugs that failed, as they should.
+    pub(crate) known_bugs_failing: usize,
+    /// Scenarios kept for known bugs that passed: the bug is gone, or it
+    /// shows only now and then and the ledger says so.
+    pub(crate) known_bugs_passing: Vec<String>,
 }
 
 /// The whole report.
@@ -245,21 +256,59 @@ pub(crate) struct Model {
     pub(crate) broken: Vec<String>,
     /// Checks, proofs, waivers and deferrals the evidence does not bear out.
     pub(crate) stale: Vec<String>,
+    /// What `--enforce` fails on, one line each.
+    pub(crate) gaps: Vec<String>,
 }
 
 impl Model {
-    /// Whether a function is neither proved nor waived, or an entry point
-    /// neither reached, waived nor deferred.
-    fn has_gaps(&self) -> bool {
-        let gap = |tally: &Tally| tally.open + tally.performed + tally.claimed > 0;
-        gap(&self.functions_gmail)
-            || gap(&self.functions_outlook)
-            || self
-                .entry_points
-                .iter()
-                .any(|kind| gap(&kind.gmail) || gap(&kind.outlook))
-            || !self.stale.is_empty()
-            || !self.suite.failed.is_empty()
+    /// What `--enforce` fails on: a scenario that failed; a function that is
+    /// not proved on a provider and neither waived nor held open by a known
+    /// bug; an entry point that is neither reached, waived nor deferred;
+    /// what the ledger says and the records do not bear out; and a scenario
+    /// kept for a known bug that passes.
+    fn find_gaps(&self) -> Vec<String> {
+        let mut gaps: Vec<String> = self
+            .suite
+            .failed
+            .iter()
+            .map(|scenario| format!("scenario `{scenario}` failed"))
+            .collect();
+        for row in &self.functions {
+            for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
+                let Some(cell) = cell else { continue };
+                let known_bug = cell
+                    .reason
+                    .as_deref()
+                    .is_some_and(|reason| reason.starts_with(KNOWN_BUG));
+                let state = match cell.status {
+                    Status::Open if known_bug => continue,
+                    Status::Open => "no scenario performs it",
+                    Status::Performed => "scenarios perform it and none is said to check it",
+                    Status::Claimed => "no break has proved the scenarios that check it",
+                    _ => continue,
+                };
+                gaps.push(format!(
+                    "function {} ({}) is not proved on {provider}: {state}",
+                    row.id, row.function
+                ));
+            }
+        }
+        for row in &self.entry_rows {
+            for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
+                if cell
+                    .as_ref()
+                    .is_some_and(|cell| cell.status == Status::Open)
+                {
+                    gaps.push(format!(
+                        "entry point `{} {}` is not reached on {provider}, and is neither \
+                         waived nor deferred",
+                        row.kind, row.key
+                    ));
+                }
+            }
+        }
+        gaps.extend(self.stale.iter().cloned());
+        gaps
     }
 }
 
@@ -285,6 +334,16 @@ pub fn run(root: &Path, options: &Options) -> Result<bool, Report> {
             "no {JUNIT_NAME} under --results: nothing says which scenarios passed"
         ));
     }
+    if !options.known_bugs.is_empty() {
+        let known_bugs = junit::load(&evidence::files_named(&options.known_bugs, JUNIT_NAME)?)?;
+        if known_bugs.runs.is_empty() {
+            model.broken.push(format!(
+                "no {JUNIT_NAME} under --known-bugs: nothing says whether the scenarios kept \
+                 for known bugs still fail"
+            ));
+        }
+        judge_known_bugs(&mut model, &ledger, &known_bugs);
+    }
 
     std::fs::create_dir_all(&options.out)
         .context(format!("could not create {}", options.out.display()))?;
@@ -301,10 +360,60 @@ pub fn run(root: &Path, options: &Options) -> Result<bool, Report> {
     for problem in &model.broken {
         eprintln!("error: {problem}");
     }
-    let failed = !model.broken.is_empty() || (options.enforce && model.has_gaps());
+    if options.enforce {
+        for gap in &model.gaps {
+            eprintln!("gap: {gap}");
+        }
+        if !model.gaps.is_empty() {
+            eprintln!(
+                "{} gaps: cover each, or say in {} why it is left",
+                model.gaps.len(),
+                ledger::WAIVERS_PATH
+            );
+        }
+    }
+    let failed = !model.broken.is_empty() || (options.enforce && !model.gaps.is_empty());
     Ok(failed)
 }
 
+/// Adds what the runs of the scenarios kept for known bugs show: one that
+/// passes is a gap (its bug is gone, so the scenario should gate and the
+/// function's `bug` line go) unless the ledger says the bug shows only now
+/// and then.
+pub(crate) fn judge_known_bugs(model: &mut Model, ledger: &Ledger, known_bugs: &junit::Results) {
+    let intermittent: BTreeSet<&str> = ledger
+        .waivers
+        .intermittent_bug
+        .iter()
+        .map(|bug| bug.scenario.as_str())
+        .collect();
+    for (scenario, outcome) in &known_bugs.outcomes {
+        if *outcome == Outcome::Failed {
+            model.suite.known_bugs_failing += 1;
+            continue;
+        }
+        model.suite.known_bugs_passing.push(scenario.clone());
+        if !intermittent.contains(scenario.as_str()) {
+            model.gaps.push(format!(
+                "scenario `{scenario}`, kept for a known bug, passes: remove its `#[ignore]` so \
+                 it gates, and the `bug` line of its function in {}",
+                ledger::MAP_PATH
+            ));
+        }
+    }
+    for bug in &ledger.waivers.intermittent_bug {
+        if !known_bugs.outcomes.contains_key(&bug.scenario) {
+            let problem = format!(
+                "{}: [[intermittent_bug]] names `{}`, which is not among the scenarios kept \
+                 for known bugs",
+                ledger::WAIVERS_PATH,
+                bug.scenario
+            );
+            model.gaps.push(problem.clone());
+            model.stale.push(problem);
+        }
+    }
+}
 /// Joins the records with the ledger.
 pub(crate) fn build(
     reader: &Reader<'_>,
@@ -796,7 +905,7 @@ pub(crate) fn build(
             if let Some(bug) = &mapping.bug
                 && mapping.bug_on.as_deref().is_none_or(|on| on == provider)
             {
-                let reason = format!("known bug {bug}");
+                let reason = format!("{KNOWN_BUG}{bug}");
                 return Some(cell_of(Status::Open, &[], Some(&reason)));
             }
             let performed: Vec<&Scenario> = scenarios
@@ -921,7 +1030,7 @@ pub(crate) fn build(
         }
     }
 
-    Model {
+    let mut model = Model {
         suite,
         functions_listed: ledger.functions.len(),
         functions_ui_only,
@@ -937,7 +1046,10 @@ pub(crate) fn build(
         unlisted: unlisted.into_iter().collect(),
         broken,
         stale,
-    }
+        gaps: Vec::new(),
+    };
+    model.gaps = model.find_gaps();
+    model
 }
 
 /// An entry point as the ledger names it.
