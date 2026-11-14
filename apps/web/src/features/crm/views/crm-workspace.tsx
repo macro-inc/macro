@@ -35,6 +35,7 @@ import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import FileCsvIcon from '@icon/system/regular/file-csv.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, ButtonGroup, Tooltip } from '@ui';
+import { Result } from 'neverthrow';
 import {
   createEffect,
   createSignal,
@@ -84,14 +85,18 @@ const CRM_ASIDE_PREFERENCE = 'crm';
 /** Where CRM saved a collapsed sidebar before it used the shell's preference. */
 const LEGACY_COLLAPSED_PREFERENCE = 'macro:pref:crm:sidebar-collapsed';
 
-/** Moves a choice saved under CRM's old key to the shell's, which wins if set. */
-function adoptLegacyCollapsedPreference() {
+/**
+ * Moves a choice saved under CRM's old key to the shell's, which wins if set.
+ * The old key stays until the copy succeeds; storage that throws leaves the
+ * shell's default in place.
+ */
+const adoptLegacyCollapsedPreference = Result.fromThrowable(() => {
   const legacy = localStorage.getItem(LEGACY_COLLAPSED_PREFERENCE);
   if (legacy === null) return;
-  localStorage.removeItem(LEGACY_COLLAPSED_PREFERENCE);
   const key = asideCollapsedPreferenceKey(CRM_ASIDE_PREFERENCE);
   if (localStorage.getItem(key) === null) localStorage.setItem(key, legacy);
-}
+  localStorage.removeItem(LEGACY_COLLAPSED_PREFERENCE);
+});
 
 /** Split close and Show navigation for CRM headers outside a top bar. */
 function CrmNavigationControls() {

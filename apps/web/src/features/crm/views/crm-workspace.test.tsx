@@ -464,6 +464,20 @@ it('keeps the shell preference over a choice saved under the old CRM key', () =>
   expect(localStorage.getItem('macro:pref:crm:sidebar-collapsed')).toBeNull();
 });
 
+it('keeps the old CRM choice and renders when saving the shell preference fails', () => {
+  const values = new Map([['macro:pref:crm:sidebar-collapsed', 'true']]);
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: () => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    },
+    removeItem: (key: string) => values.delete(key),
+  });
+  setup();
+  expect(fixture.root).toHaveBeenCalledWith('crm', null);
+  expect(values.get('macro:pref:crm:sidebar-collapsed')).toBe('true');
+});
+
 it('opens the company of a pipeline row in its own split on touch', () => {
   setup('pipeline:sales');
   fireEvent.click(screen.getByRole('button', { name: 'Open Acme' }));
