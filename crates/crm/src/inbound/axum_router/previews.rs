@@ -33,8 +33,10 @@ pub struct CrmPreviewsRequest {
     request_body = CrmPreviewsRequest,
     responses(
         (status = 200, body = CrmPreviews),
-        (status = 400, body = ErrorResponse),
+        (status = 400, description = "More than 100 ids of a kind", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, description = "A bot or harness credential"),
+        (status = 422, description = "An id that is not a UUID"),
         (status = 500, body = ErrorResponse),
     ),
 )]

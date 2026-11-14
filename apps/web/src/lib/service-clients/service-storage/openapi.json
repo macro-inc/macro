@@ -11013,7 +11013,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "More than 100 ids of a kind",
             "content": {
               "application/json": {
                 "schema": {
@@ -11031,6 +11031,12 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "A bot or harness credential"
+          },
+          "422": {
+            "description": "An id that is not a UUID"
           },
           "500": {
             "description": "",

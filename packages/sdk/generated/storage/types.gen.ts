@@ -28149,8 +28149,19 @@ export type PreviewCrmRecordsData = {
 };
 
 export type PreviewCrmRecordsErrors = {
+    /**
+     * More than 100 ids of a kind
+     */
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * A bot or harness credential
+     */
+    403: unknown;
+    /**
+     * An id that is not a UUID
+     */
+    422: unknown;
     500: ErrorResponse;
 };
 
