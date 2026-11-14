@@ -801,6 +801,85 @@ async fn outlook_a_forwarded_event_is_added_to_the_calendar_from_its_mail() -> R
     a_forwarded_event_is_added_to_the_calendar_from_its_mail(Provider::Outlook).await
 }
 
+/// A forwarded event is not added to an Outlook calendar: only Google takes
+/// an event under another meeting's UID, so a reader whose calendars are all
+/// Outlook's is refused, and their calendar is left as it was.
+///
+/// When it fails, Add to calendar writes something to an Outlook calendar
+/// that cannot stand in for the meeting, or fails as a server error.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_forwarded_event_is_refused_for_an_outlook_calendar() -> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook_with_calendar().await?;
+    let calendar = ada.calendar()?;
+    let calendars = calendar.get("/calendars").await?.ok()?;
+    let picked = calendars["calendars"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|listed| listed["isPrimary"] == true)
+        .and_then(|listed| listed["id"].as_str())
+        .unwrap_or_else(|| panic!("no primary calendar is listed: {calendars}"))
+        .to_owned();
+    let held_before = stack.outlook().events(ada.email(), "default")?.len();
+
+    let file = shared_event_file(
+        "offsite-7f3a@example.com",
+        "Offsite",
+        events::hour_in_days(3),
+        "olga@example.com",
+    );
+    inbox.deliver(
+        &Mail::new("Olga <olga@example.com>", "Fwd: Offsite", "Come along.").with_attachment(
+            "Offsite.ics",
+            "text/calendar",
+            file.as_bytes(),
+        ),
+    )?;
+    let preview = inbox.wait_for_preview("inbox", "Fwd: Offsite").await?;
+    let thread_id = preview["id"].as_str().unwrap_or_default();
+    let thread = inbox
+        .wait_for_thread(
+            thread_id,
+            "the mail to show the event it carries",
+            |thread| thread["messages"][0]["calendar_invitations"][0]["id"].is_string(),
+        )
+        .await?;
+    let message = &thread["messages"][0];
+
+    let refused = inbox
+        .post(
+            &format!(
+                "/email/threads/{thread_id}/messages/{}/calendar-invitations/{}/copy",
+                message["db_id"].as_str().unwrap_or_default(),
+                message["calendar_invitations"][0]["id"]
+                    .as_str()
+                    .unwrap_or_default(),
+            ),
+            Some(&json!({ "calendarId": picked })),
+        )
+        .await?;
+    assert_eq!(refused.status, 400, "{}", refused.text);
+    assert!(
+        refused.text.contains("Google calendars only"),
+        "{}",
+        refused.text
+    );
+    assert_eq!(
+        stack.outlook().events(ada.email(), "default")?.len(),
+        held_before,
+        "the Outlook calendar changed"
+    );
+    let shown = calendar.occurrences().await?;
+    assert!(
+        !json!(shown).to_string().contains("Offsite"),
+        "Macro's calendar shows the event: {shown:?}"
+    );
+
+    stack.finish().await
+}
+
 /// The names of the files a message at the provider carries.
 async fn provider_file_names(
     stack: &Stack,
