@@ -789,8 +789,10 @@ pub trait EntityAudienceLookup: Clone + Send + Sync + 'static {
     /// entities whose users are the same.
     ///
     /// Each entity's users are those [`EntityAccessService::get_users_by_entity`]
-    /// returns for it. Entities without users may be left out, and each returned
-    /// entity id is spelled as it was passed in.
+    /// returns for it. Entities without users may be left out, and so are ids of
+    /// grant-based kinds that are not UUIDs, which can hold no grant, instead of
+    /// failing the rest. Returned ids are spelled as they were passed in, every
+    /// spelling of one entity included.
     fn get_entity_audiences(
         &self,
         entity_type: EntityType,

@@ -945,9 +945,7 @@ impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
         entity_type: EntityType,
         entity_ids: &[&str],
     ) -> Result<Vec<EntityAudience>, AccessError> {
-        // Other kinds, and a single entity, whose lookup is cached, resolve one
-        // entity at a time.
-        if !GRANT_AUDIENCE_KINDS.contains(&entity_type) || entity_ids.len() < 2 {
+        if !GRANT_AUDIENCE_KINDS.contains(&entity_type) {
             let mut audiences = Vec::with_capacity(entity_ids.len());
             for entity_id in entity_ids {
                 let users = self.get_users_by_entity(entity_id, entity_type).await?;
@@ -959,34 +957,65 @@ impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
             return Ok(audiences);
         }
 
-        // The repository answers with canonical ids; map them back to the
-        // spelling each caller used.
-        let mut spellings: HashMap<String, &str> = HashMap::with_capacity(entity_ids.len());
+        // An id that is not a UUID can hold no `entity_access` grant, so it has
+        // no users: leave it out rather than fail the other ids. The repository
+        // answers with canonical ids, so remember every spelling a caller used.
+        let mut spellings: HashMap<String, Vec<&str>> = HashMap::with_capacity(entity_ids.len());
         let mut ids = Vec::with_capacity(entity_ids.len());
+        let mut invalid_count = 0_usize;
         for entity_id in entity_ids {
-            let id = Uuid::parse_str(entity_id).map_err(|_| {
-                AccessError::BadRequest("invalid entity_id for get_entity_audiences")
-            })?;
-            if let std::collections::hash_map::Entry::Vacant(entry) =
-                spellings.entry(id.to_string())
-            {
-                entry.insert(entity_id);
+            let Ok(id) = Uuid::parse_str(entity_id) else {
+                invalid_count += 1;
+                continue;
+            };
+            let entity_spellings = spellings.entry(id.to_string()).or_insert_with(|| {
                 ids.push(id);
+                Vec::new()
+            });
+            if !entity_spellings.contains(entity_id) {
+                entity_spellings.push(entity_id);
             }
         }
+        if invalid_count > 0 {
+            tracing::warn!(
+                %entity_type,
+                invalid_count,
+                "leaving out entity ids that are not UUIDs"
+            );
+        }
 
-        let mut audiences = self
+        let spelled = |canonical_ids: Vec<String>| -> Vec<String> {
+            canonical_ids
+                .iter()
+                .filter_map(|id| spellings.get(id))
+                .flatten()
+                .map(|spelling| spelling.to_string())
+                .collect()
+        };
+
+        // A single entity keeps its cached per-entity lookup.
+        if let [id] = ids.as_slice() {
+            let canonical_id = id.to_string();
+            let users = self.get_users_by_entity(&canonical_id, entity_type).await?;
+            return Ok(vec![EntityAudience {
+                entity_ids: spelled(vec![canonical_id]),
+                users,
+            }]);
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let audiences = self
             .repo
             .get_entity_grant_audiences(&ids, entity_type)
             .await?;
-        for entity_id in audiences
-            .iter_mut()
-            .flat_map(|audience| &mut audience.entity_ids)
-        {
-            if let Some(spelling) = spellings.get(entity_id.as_str()) {
-                *entity_id = (*spelling).to_string();
-            }
-        }
-        Ok(audiences)
+        Ok(audiences
+            .into_iter()
+            .map(|audience| EntityAudience {
+                entity_ids: spelled(audience.entity_ids),
+                users: audience.users,
+            })
+            .collect())
     }
 }

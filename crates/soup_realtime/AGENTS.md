@@ -54,9 +54,12 @@ tasks itself.
   recipient lookup each, retried as a unit: a retry republishes the batch, and
   the event span records `entity_count`, `recipient_lookup_count`,
   `recipient_set_count` and `publish_count`.
-- Delivery is at least once: offsets commit only after successful fan-out,
-  and exhausted retries stop the consumer for supervisor restart — downstream
-  consumers must tolerate duplicate patches.
+- A source event's offset commits once every batch is published, or once a
+  batch exhausts its five attempts: the rest of that event is then logged and
+  dropped, so one event cannot wedge its partition. Shutdown mid-event leaves
+  it uncommitted for redelivery, so downstream consumers must tolerate
+  duplicate patches. The Soup-topic receiver (`SoupRealtimeConsumerService::run`)
+  instead returns after five failed receives for its supervisor to restart.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
