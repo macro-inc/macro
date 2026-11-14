@@ -127,7 +127,7 @@ fn draw(terminal: &mut DefaultTerminal, demo: &Demo) -> io::Result<()> {
 
         frame.render_widget(Block::new().style(Style::new().bg(BLACK)), frame.area());
 
-        let bpm = 48.0 + 102.0 * demo.load;
+        let bpm = demo.body.heart_rate();
         let heading = Line::from(vec![
             Span::raw(" MESH MAN ").fg(BLACK).bg(ORANGE).bold(),
             Span::raw("  BODY ").fg(AMBER).bold(),

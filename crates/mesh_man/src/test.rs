@@ -57,8 +57,8 @@ fn a_full_turn_is_the_identity() {
 
 #[test]
 fn a_quarter_turn_brings_the_left_side_forward() {
-    // Turning the figure a quarter turn moves its left side (+x) toward the
-    // camera, with no tilt applied.
+    // A quarter turn backwards (the spin itself goes the other way) moves
+    // the figure's left side (+x) toward the camera, with no tilt applied.
     let view = View::new(-FRAC_PI_2, 0.0);
     let turned = view.transform(Vec3::X);
 
@@ -99,7 +99,7 @@ fn every_nerve_starts_at_the_brain_and_has_length() {
 fn an_outward_pulse_advances_and_expires_at_the_far_end() {
     let mut body = Body::new();
     body.fire("left_median", PulseKind::ToolStart);
-    let length = body.model.nerves[body.nerve_for("left_median")].length();
+    let length = body.model.nerves[body.nerve_index("left_median")].length();
 
     assert_eq!(body.pulses.len(), 1);
     assert_eq!(body.pulses[0].position, 0.0);
@@ -116,7 +116,7 @@ fn an_outward_pulse_advances_and_expires_at_the_far_end() {
 fn a_result_pulse_runs_back_to_the_brain() {
     let mut body = Body::new();
     body.fire("right_tibial", PulseKind::ToolResult);
-    let length = body.model.nerves[body.nerve_for("right_tibial")].length();
+    let length = body.model.nerves[body.nerve_index("right_tibial")].length();
 
     assert_eq!(body.pulses[0].position, length);
 
@@ -151,11 +151,31 @@ fn an_error_pulses_back_and_flashes() {
 #[test]
 fn any_key_maps_to_the_same_nerve_every_time() {
     let body = Body::new();
-    let first = body.nerve_for("agent-7f3a");
+    let first = body.nerve_for("agent-7f3a").to_owned();
 
     assert_eq!(body.nerve_for("agent-7f3a"), first);
-    assert!(first < body.model.nerves.len());
-    assert_eq!(body.nerve_for("vagus"), body.model.nerves.len() - 1);
+    assert!(body.nerve_names().any(|name| name == first));
+    assert_eq!(body.nerve_for("vagus"), "vagus");
+}
+
+#[test]
+fn a_burst_of_events_is_capped() {
+    let mut body = Body::new();
+    for _ in 0..1000 {
+        body.fire("left_radial", PulseKind::Error);
+    }
+
+    assert_eq!(body.pulses.len(), 64);
+    assert_eq!(body.flashes.len(), 32);
+}
+
+#[test]
+fn rendering_an_area_outside_the_buffer_does_not_panic() {
+    let body = Body::new();
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 10));
+
+    (&body).render(Rect::new(10, 5, 40, 30), &mut buffer);
+    (&body).render(Rect::new(30, 30, 10, 10), &mut buffer);
 }
 
 #[test]

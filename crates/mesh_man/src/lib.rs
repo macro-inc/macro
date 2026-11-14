@@ -48,6 +48,11 @@ const SCAN_SECONDS: f32 = 9.0;
 /// Seconds for a nerve's glow to fall to about a third after it fires.
 const GLOW_SECONDS: f32 = 1.6;
 
+/// Most pulses and flashes on the body at once; firing more drops the oldest,
+/// so a burst of events can't grow a frame without bound.
+const MAX_PULSES: usize = 64;
+const MAX_FLASHES: usize = 32;
+
 /// Heart rate at no load and at full load, in beats per minute.
 const RESTING_BPM: f32 = 48.0;
 const PEAK_BPM: f32 = 150.0;
@@ -103,19 +108,25 @@ impl Body {
     }
 
     /// Fires a nerve. `key` is either a nerve name from [`Body::nerve_names`]
-    /// or any other stable key (an agent id), which maps to the same nerve
-    /// every time by hash.
+    /// or any other stable key (an agent id), which maps to one nerve by hash
+    /// (see [`Body::nerve_for`]).
     pub fn fire(&mut self, key: &str, kind: PulseKind) {
-        let nerve = self.nerve_for(key);
+        let nerve = self.nerve_index(key);
         let Some(path) = self.model.nerves.get(nerve) else {
             return;
         };
 
         if kind.travels() {
+            if self.pulses.len() >= MAX_PULSES {
+                self.pulses.remove(0);
+            }
             self.pulses.push(Pulse::new(nerve, kind, path.length()));
         }
 
         if kind.flashes() {
+            if self.flashes.len() >= MAX_FLASHES {
+                self.flashes.remove(0);
+            }
             self.flashes.push(Flash {
                 nerve,
                 kind,
@@ -161,12 +172,22 @@ impl Body {
     }
 
     /// Heart rate for the current load, in beats per minute.
-    fn heart_rate(&self) -> f32 {
+    pub fn heart_rate(&self) -> f32 {
         RESTING_BPM + (PEAK_BPM - RESTING_BPM) * self.load
     }
 
-    /// The nerve a key fires: the nerve of that name, or a stable hash.
-    fn nerve_for(&self, key: &str) -> usize {
+    /// The name of the nerve [`Body::fire`] uses for `key`: the nerve of that
+    /// name, or one picked by a stable hash of the key. Several keys can share
+    /// a nerve, and adding a nerve to the figure moves hashed keys.
+    pub fn nerve_for(&self, key: &str) -> &str {
+        self.model
+            .nerves
+            .get(self.nerve_index(key))
+            .map_or("", |nerve| nerve.name.as_str())
+    }
+
+    /// The index of the nerve a key fires.
+    fn nerve_index(&self, key: &str) -> usize {
         if let Some(index) = self.model.nerves.iter().position(|nerve| nerve.name == key) {
             return index;
         }

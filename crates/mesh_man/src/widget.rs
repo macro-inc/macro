@@ -2,8 +2,9 @@
 //!
 //! A braille cell holds one colour, and a later canvas layer replaces an
 //! earlier one's cell outright. Painting far to near is therefore the depth
-//! cue: the far half of the skin, far bones, near skin, near bones, then the
-//! nerves, the heart, and pulses on top.
+//! cue. The order is in the layer constants below: the turntable, far skin,
+//! far bones, near skin, resting nerves, near bones, firing nerves, the scan
+//! slice, the heart, then pulses and flashes on top.
 
 use std::f32::consts::{PI, TAU};
 
@@ -54,6 +55,9 @@ const TURNTABLE_Y: f32 = -1.0;
 /// Distance between a pulse's head and each of its three tail marks.
 const TAIL_STEP: f32 = 0.05;
 
+/// Points around the heart loop.
+const HEART_POINTS: usize = 20;
+
 fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
     let t = t.clamp(0.0, 1.0);
     let channel = |x: u8, y: u8| {
@@ -70,7 +74,8 @@ fn color(rgb: Rgb) -> Color {
 /// The two-beat shape of a heartbeat over one phase: a strong beat, then a
 /// weaker one just after.
 fn beat(phase: f32) -> f32 {
-    let first = (-(phase / 0.07).powi(2)).exp() + (-((phase - 1.0) / 0.07).powi(2)).exp();
+    const WIDTH: f32 = 0.07;
+    let first = (-(phase / WIDTH).powi(2)).exp() + (-((phase - 1.0) / WIDTH).powi(2)).exp();
     let second = 0.6 * (-((phase - 0.2) / 0.06).powi(2)).exp();
     (first + second).min(1.0)
 }
@@ -288,9 +293,9 @@ impl Body {
         let size = 0.0022 * (1.0 + 0.4 * heartbeat);
         let rgb = mix(RED_DARK, RED, 0.35 + 0.65 * heartbeat);
 
-        let points: Vec<Vec3> = (0..20)
+        let points: Vec<Vec3> = (0..HEART_POINTS)
             .map(|k| {
-                let t = k as f32 / 20.0 * TAU;
+                let t = k as f32 / HEART_POINTS as f32 * TAU;
                 let x = 16.0 * t.sin().powi(3);
                 let y = 13.0 * t.cos()
                     - 5.0 * (2.0 * t).cos()
@@ -386,6 +391,8 @@ impl Body {
 /// as tall as it is wide.
 impl Widget for &Body {
     fn render(self, area: Rect, buffer: &mut Buffer) {
+        // The canvas indexes the buffer directly; never let it reach outside.
+        let area = area.intersection(buffer.area);
         if area.width == 0 || area.height == 0 {
             return;
         }
@@ -400,7 +407,8 @@ impl Widget for &Body {
         }
 
         // The canvas paints its whole area with one background; keep the one
-        // the caller already put there.
+        // the caller already put there (taken from the top-left cell, so a
+        // uniform background survives).
         let background = buffer
             .cell((area.x, area.y))
             .map_or(Color::Reset, |cell| cell.bg);

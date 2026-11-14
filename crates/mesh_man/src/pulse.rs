@@ -14,7 +14,7 @@ pub enum PulseKind {
 }
 
 /// Pulse speed along a nerve, in figure units per second (the figure is 2.0
-/// tall, so a hand is about 1.3 s from the brain).
+/// tall, so a hand is about 1.1 s from the brain).
 pub(crate) const PULSE_SPEED: f32 = 1.1;
 
 /// How long an end flash lasts, in seconds.

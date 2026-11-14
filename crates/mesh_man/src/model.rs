@@ -96,6 +96,13 @@ const LIMB_RING: usize = 8;
 const TORSO_RING: usize = 12;
 /// Points per skull and rib curve.
 const CURVE_POINTS: usize = 16;
+/// Points per rib curve and in the pelvic inlet.
+const SHORT_CURVE_POINTS: usize = CURVE_POINTS / 2 + 2;
+/// Half the size of the diamond that marks a joint.
+const JOINT_MARK: f32 = 0.02;
+/// Points per brain fold loop, and segments in the midline fissure.
+const FOLD_POINTS: usize = 28;
+const FISSURE_SEGMENTS: usize = 10;
 
 const BRAIN: Vec3 = Vec3::new(0.0, 0.905, -0.005);
 const HEAD: Vec3 = Vec3::new(0.0, 0.875, 0.01);
@@ -402,7 +409,7 @@ fn skin(out: &mut Vec<Segment>, sides: &[Side; 2]) {
 /// The points of one rib (or the nerve running under it) from the spine
 /// round to `reach` of the way to the sternum. Ribs slope down toward the front.
 fn rib_curve(s: f32, back_y: f32, half_width: f32, reach: f32) -> Vec<Vec3> {
-    let points = CURVE_POINTS / 2 + 2;
+    let points = SHORT_CURVE_POINTS;
 
     (0..points)
         .map(|k| {
@@ -523,7 +530,7 @@ fn skeleton(out: &mut Vec<Segment>, sides: &[Side; 2]) {
             Vec3::Z,
             0.08,
             0.055,
-            CURVE_POINTS / 2 + 2,
+            SHORT_CURVE_POINTS,
         ),
         Tissue::Bone,
     );
@@ -613,10 +620,10 @@ fn skeleton(out: &mut Vec<Segment>, sides: &[Side; 2]) {
             push_loop(
                 out,
                 &[
-                    joint + Vec3::Y * 0.02,
-                    joint + Vec3::X * 0.02,
-                    joint - Vec3::Y * 0.02,
-                    joint - Vec3::X * 0.02,
+                    joint + Vec3::Y * JOINT_MARK,
+                    joint + Vec3::X * JOINT_MARK,
+                    joint - Vec3::Y * JOINT_MARK,
+                    joint - Vec3::X * JOINT_MARK,
                 ],
                 Tissue::Bone,
             );
@@ -750,7 +757,7 @@ fn brain_folds() -> Vec<(Vec3, Vec3)> {
         let count = if closed {
             points.len()
         } else {
-            points.len() - 1
+            points.len().saturating_sub(1)
         };
         for index in 0..count {
             let a = points.get(index).copied().unwrap_or(Vec3::ZERO);
@@ -760,9 +767,9 @@ fn brain_folds() -> Vec<(Vec3, Vec3)> {
     };
 
     for (height, radius) in [(0.885, 0.06), (0.915, 0.055), (0.945, 0.04)] {
-        let points: Vec<Vec3> = (0..28)
+        let points: Vec<Vec3> = (0..FOLD_POINTS)
             .map(|k| {
-                let angle = k as f32 / 28.0 * TAU;
+                let angle = k as f32 / FOLD_POINTS as f32 * TAU;
                 let wobble = 1.0 + 0.14 * (angle * 7.0).sin();
                 Vec3::new(
                     radius * wobble * angle.cos(),
@@ -774,9 +781,9 @@ fn brain_folds() -> Vec<(Vec3, Vec3)> {
         pairs(&points, true);
     }
 
-    let fissure: Vec<Vec3> = (0..=10)
+    let fissure: Vec<Vec3> = (0..=FISSURE_SEGMENTS)
         .map(|k| {
-            let angle = k as f32 / 10.0 * PI;
+            let angle = k as f32 / FISSURE_SEGMENTS as f32 * PI;
             Vec3::new(0.0, 0.88 + 0.08 * angle.sin(), -0.005 - 0.075 * angle.cos())
         })
         .collect();

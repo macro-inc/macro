@@ -16,7 +16,7 @@ the cell, so layer order is the depth cue.
 
 ## Start here
 
-- `src/lib.rs`: the public API (`Body::fire`, `set_load`, `tick`, `nerve_names`).
+- `src/lib.rs`: the public API (`Body::fire`, `set_load`, `tick`, `nerve_names`, `nerve_for`, `heart_rate`).
 - `src/widget.rs`: layers, palette, pulses and flashes on screen.
 - `src/model.rs`: joints, skin rings, bones, nerve paths.
 
@@ -24,7 +24,7 @@ the cell, so layer order is the depth cue.
 
 - Add a nerve: `side_nerves` (or `Model::build`) in `src/model.rs`; it must
   start at `BRAIN` and stay inside the unit cube (tests check both). Update the
-  name list in `Body::nerve_names`' doc.
+  name list in `Body::nerve_names`' doc. A new nerve moves every hashed key (`Body::nerve_for`).
 - Change the look: `src/widget.rs` constants and layer order, then refresh the
   snapshots (`INSTA_UPDATE=always`) and check them in a real terminal.
 
