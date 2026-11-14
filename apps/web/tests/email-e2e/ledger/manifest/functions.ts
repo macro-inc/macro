@@ -53,3 +53,27 @@ export function parseFunctions(table: string): EmailFunction[] {
 export const FUNCTIONS: readonly EmailFunction[] = parseFunctions(
   readFileSync(new URL('../functions.tsv', import.meta.url), 'utf8')
 );
+
+const PROOF_HEAD = 'id\tbreak';
+
+/**
+ * `../proofs.tsv`: the functions whose tests were shown to catch a
+ * regression, each with the break that was put into the product for it.
+ */
+export function parseProofs(table: string): Map<string, string> {
+  const [head, ...lines] = table.split('\n').filter((line) => line !== '');
+  if (head !== PROOF_HEAD)
+    throw new Error(`proofs.tsv: the head is not ${PROOF_HEAD}`);
+  return new Map(
+    lines.map((line) => {
+      const [id, broke, ...more] = line.split('\t');
+      if (!/^F-\d{3}$/.test(id) || !broke || more.length > 0)
+        throw new Error(`proofs.tsv: cannot read "${line}"`);
+      return [id, broke];
+    })
+  );
+}
+
+export const PROOFS: ReadonlyMap<string, string> = parseProofs(
+  readFileSync(new URL('../proofs.tsv', import.meta.url), 'utf8')
+);

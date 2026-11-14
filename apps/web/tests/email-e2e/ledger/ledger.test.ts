@@ -4,8 +4,8 @@ import {
   graphqlOperations,
   socketMessages,
 } from '../harness/front';
-import { functionRows, restMatcher } from './ledger';
-import { parseFunctions } from './manifest/functions';
+import { functionRows, functionTotals, restMatcher } from './ledger';
+import { parseFunctions, parseProofs } from './manifest/functions';
 
 /** A websocket frame as a browser sends it: masked. */
 function frame(payload: Buffer, opcode: number, final = true): Buffer {
@@ -211,6 +211,19 @@ describe('functionRows', () => {
     expect(arrive.missing).toEqual([
       'outlook: result not checked at the provider',
     ]);
+  });
+
+  it('counts a covered function as proved only with a proof', () => {
+    const both = [
+      test('gmail', 'g', 'F-002', { performed: true, seen: true }),
+      test('outlook', 'o', 'F-002', { performed: true, seen: true }),
+    ];
+    const proofs = parseProofs('id\tbreak\nF-002\tthe sort ignores its key\n');
+    expect(functionTotals(functionRows(functions, both, rows)).proved).toBe(0);
+    const proved = functionRows(functions, both, rows, proofs);
+    expect(functionTotals(proved).proved).toBe(1);
+    expect(proved[1].proof).toBe('the sort ignores its key');
+    expect(() => parseProofs('id\tbreak\nF-2\tx\n')).toThrow('F-2');
   });
 
   it('defers a function whose every way needs more, and leaves the backend its own', () => {

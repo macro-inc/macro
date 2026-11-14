@@ -162,6 +162,14 @@ export const test = base.extend<
         await page.addInitScript(() => {
           localStorage.setItem('macro:login', 'true');
         });
+        // Proving a test (`ledger/README.md`): a bundle built with breaks
+        // that each wait for a name, and the one this run switches on.
+        const broken = process.env.EMAIL_E2E_BREAK;
+        if (broken) {
+          await page.addInitScript((name) => {
+            (globalThis as { emailE2eBreak?: string }).emailE2eBreak = name;
+          }, broken);
+        }
         // A change of the machine's network (another container starting)
         // makes Chrome drop the requests in flight and leaves the page
         // without part of the app. The test process fetches the app's own

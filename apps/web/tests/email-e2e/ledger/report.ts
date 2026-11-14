@@ -108,8 +108,9 @@ function operationTotals(operations: OperationRow[]): Totals {
 const FUNCTION_HEAD = [
   '',
   'Functions',
-  'Covered',
+  'Covered and proved',
   '%',
+  'Covered, not proved',
   'Gmail',
   'Outlook',
   'In part',
@@ -126,8 +127,9 @@ function functionTotalsRow(
   return [
     name,
     of.total,
-    of.covered,
-    percent(of.covered, of.total - of.waived),
+    of.proved,
+    percent(of.proved, of.total - of.waived),
+    of.covered - of.proved,
     of.gmail,
     of.outlook,
     of.partial,
@@ -156,6 +158,7 @@ function functionTable(functions: FunctionRow[], rows: Row[]): Table {
       'Function',
       'Checked at',
       'Status',
+      'Proved by',
       'Gmail',
       'Outlook',
       'Ways to do it',
@@ -167,6 +170,7 @@ function functionTable(functions: FunctionRow[], rows: Row[]): Table {
       fn.name,
       fn.checkedAt === 'ui' ? 'UI' : `UI and ${fn.checkedAt}`,
       fn.status,
+      fn.proof ?? 'not proved',
       on(fn, 'gmail'),
       on(fn, 'outlook'),
       `${fn.variants.filter((id) => seen.has(id)).length} of ${fn.variants.length} tested`,
@@ -213,7 +217,7 @@ function render(ledger: Ledger): { summary: string; page: string } {
     ),
   };
   const ft = functionTotals(ledger.functions);
-  const functionsLine = `${ft.total} functions a user can do in the web app: ${ft.covered} covered (${ft.gmail} on Gmail, ${ft.outlook} on Outlook), ${ft.partial} in part, ${ft.open} open, ${ft.deferred} wait for the full-stack tier, ${ft.waived} waived. ${ft.backend} more have no UI and are counted by the backend's coverage.`;
+  const functionsLine = `${ft.total} functions a user can do in the web app: ${ft.proved} covered and proved, ${ft.covered - ft.proved} covered and not proved (${ft.gmail} pass on Gmail, ${ft.outlook} on Outlook), ${ft.partial} in part, ${ft.open} open, ${ft.deferred} wait for the full-stack tier, ${ft.waived} waived. ${ft.backend} more have no UI and are counted by the backend's coverage.`;
 
   const headline: Table = {
     head: TOTALS_HEAD,

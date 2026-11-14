@@ -2023,6 +2023,14 @@ export const list = {
       ],
     },
     {
+      id: 'STL-973',
+      surface: 'SL-24',
+      fn: ['F-017'],
+      state: 'result: mail delivered at the provider is a row in the list',
+      trigger: 'the list is loaded after the service synced the message',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
       id: 'STL-953',
       surface: 'SL-24',
       fn: ['F-071'],

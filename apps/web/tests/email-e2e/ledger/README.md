@@ -38,6 +38,11 @@ Outlook,
 A function the user does nothing for (mail arriving, the unread badge) has
 no action row, and is covered by 2 and 3 alone.
 
+A covered function is **proved** when `proofs.tsv` names the break that was
+put into the product for it and made its tests fail (see Proving a test). The
+headline counts covered and proved functions; a covered function without a
+proof passes, and nothing shows it would catch a regression.
+
 It is **in part** when tests show some of that, **deferred** or **waived**
 when every way to do it is, and **open** otherwise.
 
@@ -102,6 +107,22 @@ confirmed('F-071');                   // the result at the provider
   emulator is not an action; a request the test makes itself
   (`mailbox.api`) is not the app's and is left out of the network evidence.
 - Requests need no marking.
+
+## Proving a test
+
+A test that passes proves little until it has failed for the right reason.
+For each function a test covers, put the bug back: change the product code so
+the function no longer works, guarded by a name so that one bundle can carry
+many breaks and each run switches on one:
+
+```ts
+if ((globalThis as { emailE2eBreak?: string }).emailE2eBreak === 'F-073') return;
+```
+
+Build that bundle outside the tree, then run the function's tests against it
+with `EMAIL_E2E_DIST=<bundle> EMAIL_E2E_BREAK=F-073`: they must fail at the
+function's own assertion, and pass on the clean bundle. Record the function
+and the break, in words, in `proofs.tsv`. The breaks are never committed.
 
 ## Changing the manifest
 

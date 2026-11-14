@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { graphqlOperations, hotkeys, restCalls, toasts } from './derive';
 import type { RunResult, Test } from './evidence';
 import { GROUPS } from './manifest';
-import { type EmailFunction, FUNCTIONS } from './manifest/functions';
+import { type EmailFunction, FUNCTIONS, PROOFS } from './manifest/functions';
 import { GRAPHQL, OPERATIONS, REST } from './manifest/network';
 import {
   type Action,
@@ -72,6 +72,12 @@ export type FunctionRow = EmailFunction & {
   on: Record<Provider, FunctionOn>;
   /** What is still missing, per provider. */
   missing: string[];
+  /**
+   * The break put into the product that made its tests fail
+   * (`proofs.tsv`). Covered without one: the tests pass, and nothing yet
+   * shows they would catch a regression.
+   */
+  proof?: string;
 };
 
 export type FunctionTotals = {
@@ -79,6 +85,8 @@ export type FunctionTotals = {
   total: number;
   /** On every provider it applies to. */
   covered: number;
+  /** Covered, and its tests shown to fail when the function is broken. */
+  proved: number;
   gmail: number;
   outlook: number;
   partial: number;
@@ -95,6 +103,7 @@ export function functionTotals(rows: readonly FunctionRow[]): FunctionTotals {
   return {
     total: rows.length - count('backend'),
     covered: count('covered'),
+    proved: rows.filter((row) => row.status === 'covered' && row.proof).length,
     gmail: rows.filter((row) => row.on.gmail.covered).length,
     outlook: rows.filter((row) => row.on.outlook.covered).length,
     partial: count('partial'),
@@ -112,7 +121,8 @@ export function functionRows(
     RunResult['evidence'][number],
     'provider' | 'file' | 'title' | 'functions'
   >[],
-  rows: readonly Pick<Row, 'id' | 'kind' | 'fn' | 'status' | 'reason'>[]
+  rows: readonly Pick<Row, 'id' | 'kind' | 'fn' | 'status' | 'reason'>[],
+  proofs: ReadonlyMap<string, string> = new Map()
 ): FunctionRow[] {
   return functions.map((fn): FunctionRow => {
     const mine = rows.filter((row) => row.fn.includes(fn.id));
@@ -187,6 +197,7 @@ export function functionRows(
       states: mine.filter((row) => row.kind === 'state').map((row) => row.id),
       on: state,
       missing,
+      proof: proofs.get(fn.id),
     };
   });
 }
@@ -464,6 +475,9 @@ function manifestDrift(): Drift[] {
       items: unseen.map((fn) => `${fn.id} ${fn.name}`),
     });
   }
+  const unknownProofs = [...PROOFS.keys()].filter((id) => !known.has(id));
+  if (unknownProofs.length)
+    drift.push({ check: 'Proofs of unknown functions', items: unknownProofs });
   const twiceFn = FUNCTIONS.map((fn) => fn.id).filter(
     (id, index, ids) => ids.indexOf(id) !== index
   );
@@ -619,7 +633,7 @@ export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
 
   const counted = gating.tests.filter((test) => !test.knownBug);
   return {
-    functions: functionRows(FUNCTIONS, gating.evidence, rows),
+    functions: functionRows(FUNCTIONS, gating.evidence, rows, PROOFS),
     rows,
     operations,
     unlisted: [...unlisted.entries()]
