@@ -1,7 +1,6 @@
 import {
-  fetchCrmCompanyPreviews,
-  fetchCrmContactPreviews,
   fetchCrmPipelinePreviews,
+  fetchCrmRecordPreviews,
 } from '@app/features/crm/preview-adapter';
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
@@ -520,8 +519,10 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
     doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
-    doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
-    doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
+    fetchCrmRecordPreviews(
+      filterMapToId(items, 'crm_company'),
+      filterMapToId(items, 'crm_contact')
+    ),
     doFetch(fetchCrmPipelinePreviews, filterMapToId(items, 'crm_pipeline')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
     doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),

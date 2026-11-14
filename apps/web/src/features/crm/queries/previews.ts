@@ -1,52 +1,74 @@
 import type { PreviewItem } from '@queries/preview/types';
 import type { storageServiceClient } from '@service-storage/client';
+import type { CrmPreviews } from '@service-storage/generated/schemas/crmPreviews';
+import { validate as isUuid } from 'uuid';
 
 /**
- * Fetches CRM company previews via `GET /crm/companies/{id}`. Mirrors the
- * email preview fetcher's shape — N parallel REST calls rather than a
- * batch endpoint, since the CRM REST surface is per-id today and
- * companies are a smaller cardinality than mentions in flight.
- *
- * The backend already gates hidden visibility by role (admin/owner sees
- * hidden, non-admin 404s), so the fetcher doesn't need to repeat that
- * logic.
+ * Titles CRM company and contact chips with one `POST /crm/previews` per
+ * preview batch. The backend answers each record as its own read would, so
+ * one it leaves out is one the viewer can't open: wrong team, hidden from a
+ * member, or gone. That previews as "No Access", as the read's 404 did;
+ * "Deleted" would be misleading since we can't tell which. An id that isn't
+ * a UUID names no record, so it previews the same way without being sent:
+ * the request would refuse it, and every chip in the batch with it. The
+ * response spells ids in lowercase.
  */
-export async function fetchCrmCompanyPreviews(
-  getCompany: typeof storageServiceClient.getCompany,
-  companyIds: string[]
+export async function fetchCrmRecordPreviews(
+  previewRecords: typeof storageServiceClient.previewCrmRecords,
+  companyIds: string[],
+  contactIds: string[]
 ): Promise<PreviewItem[]> {
-  return await Promise.all(
-    companyIds.map(async (id) => {
-      const base = { id, type: 'crm_company' as const };
-      const result = await getCompany({ companyId: id });
+  const request = {
+    companyIds: companyIds.filter((id) => isUuid(id)),
+    contactIds: contactIds.filter((id) => isUuid(id)),
+  };
+  const result =
+    request.companyIds.length + request.contactIds.length > 0
+      ? await previewRecords(request)
+      : undefined;
+  // A failed batch reads as no access, as each failed read did.
+  const previews: CrmPreviews = result?.isOk()
+    ? result.value
+    : { companies: [], contacts: [] };
 
-      if (result.isErr()) {
-        // The backend returns 404 for every unreachable reason (wrong
-        // team, hidden+member, doesn't exist) — deliberate, so existence
-        // can't be probed across teams. Maps to "No Access" for parity
-        // with the email fetcher's per-id convention; "Deleted" would be
-        // misleading since we can't actually tell.
-        return {
-          ...base,
-          access: 'no_access' as const,
-          loading: false as const,
-        };
-      }
-
-      const company = result.value;
-      const displayName =
-        company.name ?? company.domains[0]?.domain ?? 'Unknown Company';
-
-      return {
-        ...base,
-        access: 'access' as const,
-        loading: false as const,
-        rawName: displayName,
-        name: displayName,
-        updatedAt: company.updatedAt,
-      };
-    })
+  const companies = new Map(
+    previews.companies.map((company) => [company.id, company])
   );
+  const contacts = new Map(
+    previews.contacts.map((contact) => [contact.id, contact])
+  );
+
+  const companyPreviews = companyIds.map((id): PreviewItem => {
+    const base = { id, type: 'crm_company', loading: false } as const;
+    const company = companies.get(id.toLowerCase());
+    if (!company) return { ...base, access: 'no_access' };
+
+    const name = company.name ?? company.primaryDomain ?? 'Unknown Company';
+    return {
+      ...base,
+      access: 'access',
+      rawName: name,
+      name,
+      updatedAt: company.updatedAt,
+    };
+  });
+
+  const contactPreviews = contactIds.map((id): PreviewItem => {
+    const base = { id, type: 'crm_contact', loading: false } as const;
+    const contact = contacts.get(id.toLowerCase());
+    if (!contact) return { ...base, access: 'no_access' };
+
+    const name = contact.name?.trim() || contact.email || '';
+    return {
+      ...base,
+      access: 'access',
+      rawName: name,
+      name,
+      updatedAt: contact.updatedAt,
+    };
+  });
+
+  return [...companyPreviews, ...contactPreviews];
 }
 
 /** A pipeline previews from its own read; one gone or trashed reads as deleted. */
@@ -75,33 +97,6 @@ export async function fetchCrmPipelinePreviews(
         rawName: pipeline.name,
         name: pipeline.name,
         owner: pipeline.userId,
-      };
-    })
-  );
-}
-
-/** Contact titles use the same role-aware REST boundary as contact details. */
-export async function fetchCrmContactPreviews(
-  getContact: typeof storageServiceClient.getContact,
-  contactIds: string[]
-): Promise<PreviewItem[]> {
-  return await Promise.all(
-    contactIds.map(async (id) => {
-      const base = {
-        id,
-        type: 'crm_contact' as const,
-        loading: false as const,
-      };
-      const result = await getContact({ contactId: id });
-      if (result.isErr()) return { ...base, access: 'no_access' as const };
-      const contact = result.value;
-      const name = contact.name?.trim() || contact.email || '';
-      return {
-        ...base,
-        access: 'access' as const,
-        name,
-        rawName: name,
-        updatedAt: contact.updatedAt,
       };
     })
   );

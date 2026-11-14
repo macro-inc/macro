@@ -1,56 +1,188 @@
-import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
+import type { CrmPreviews } from '@service-storage/generated/schemas/crmPreviews';
+import type { CrmPreviewsRequest } from '@service-storage/generated/schemas/crmPreviewsRequest';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { fetchCrmContactPreviews } from './previews';
+import { fetchCrmRecordPreviews } from './previews';
 
-type GetContact = Parameters<typeof fetchCrmContactPreviews>[0];
+const COMPANY_NAMED = '019a0000-0000-7000-8000-000000000001';
+const COMPANY_DOMAIN = '019a0000-0000-7000-8000-000000000002';
+const COMPANY_BARE = '019a0000-0000-7000-8000-000000000003';
+const COMPANY_HIDDEN = '019a0000-0000-7000-8000-000000000004';
+const CONTACT_NAMED = '019a0000-0000-7000-8000-000000000011';
+const CONTACT_BLANK = '019a0000-0000-7000-8000-000000000012';
+const CONTACT_OTHER_TEAM = '019a0000-0000-7000-8000-000000000013';
 
-const contact: CrmContactResponse = {
-  id: 'contact-1',
-  companyId: 'company-1',
-  email: 'ada@acme.com',
-  name: 'Ada Lovelace',
-  hidden: false,
-  firstInteraction: '2025-01-01T00:00:00.000Z',
-  lastInteraction: '2025-01-02T00:00:00.000Z',
-  createdAt: '2025-01-01T00:00:00.000Z',
-  updatedAt: '2025-01-02T00:00:00.000Z',
+type PreviewRecords = Parameters<typeof fetchCrmRecordPreviews>[0];
+
+const previews: CrmPreviews = {
+  companies: [
+    {
+      id: COMPANY_NAMED,
+      name: 'Acme',
+      primaryDomain: 'acme.example',
+      updatedAt: '2025-01-02T00:00:00.000Z',
+    },
+    {
+      id: COMPANY_DOMAIN,
+      name: null,
+      primaryDomain: 'globex.example',
+      updatedAt: '2025-01-03T00:00:00.000Z',
+    },
+    {
+      id: COMPANY_BARE,
+      name: null,
+      primaryDomain: null,
+      updatedAt: '2025-01-04T00:00:00.000Z',
+    },
+  ],
+  contacts: [
+    {
+      id: CONTACT_NAMED,
+      name: 'Ada Lovelace',
+      email: 'ada@acme.example',
+      updatedAt: '2025-01-05T00:00:00.000Z',
+    },
+    {
+      id: CONTACT_BLANK,
+      name: '  ',
+      email: 'grace@globex.example',
+      updatedAt: '2025-01-06T00:00:00.000Z',
+    },
+  ],
 };
 
-const getContact: GetContact = async ({ contactId }) => {
-  if (contactId === 'contact-1') return ok(contact);
-  if (contactId === 'contact-2') {
-    return ok({ ...contact, id: 'contact-2', name: null });
-  }
-  return err([{ code: 'NOT_FOUND', message: 'not found' }]);
-};
+function recording(answer: Awaited<ReturnType<PreviewRecords>>) {
+  const requests: CrmPreviewsRequest[] = [];
+  const previewRecords: PreviewRecords = async (body) => {
+    requests.push(body);
+    return answer;
+  };
+  return { requests, previewRecords };
+}
 
-describe('CRM contact previews', () => {
-  it('names contacts, falling back to the email, and maps failures to no access', async () => {
-    const previews = await fetchCrmContactPreviews(getContact, [
-      'contact-1',
-      'contact-2',
-      'missing',
+describe('CRM record previews', () => {
+  it('titles companies and contacts from one request, and leaves out none', async () => {
+    const { requests, previewRecords } = recording(ok(previews));
+
+    const items = await fetchCrmRecordPreviews(
+      previewRecords,
+      [COMPANY_NAMED, COMPANY_DOMAIN, COMPANY_BARE, COMPANY_HIDDEN],
+      [CONTACT_NAMED, CONTACT_BLANK, CONTACT_OTHER_TEAM]
+    );
+
+    expect(requests).toEqual([
+      {
+        companyIds: [
+          COMPANY_NAMED,
+          COMPANY_DOMAIN,
+          COMPANY_BARE,
+          COMPANY_HIDDEN,
+        ],
+        contactIds: [CONTACT_NAMED, CONTACT_BLANK, CONTACT_OTHER_TEAM],
+      },
     ]);
-
-    expect(previews).toEqual([
-      expect.objectContaining({
-        id: 'contact-1',
-        type: 'crm_contact',
+    expect(items).toEqual([
+      {
+        id: COMPANY_NAMED,
+        type: 'crm_company',
+        loading: false,
         access: 'access',
+        rawName: 'Acme',
+        name: 'Acme',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+      },
+      expect.objectContaining({ id: COMPANY_DOMAIN, name: 'globex.example' }),
+      expect.objectContaining({ id: COMPANY_BARE, name: 'Unknown Company' }),
+      {
+        id: COMPANY_HIDDEN,
+        type: 'crm_company',
+        loading: false,
+        access: 'no_access',
+      },
+      {
+        id: CONTACT_NAMED,
+        type: 'crm_contact',
+        loading: false,
+        access: 'access',
+        rawName: 'Ada Lovelace',
         name: 'Ada Lovelace',
-      }),
+        updatedAt: '2025-01-05T00:00:00.000Z',
+      },
       expect.objectContaining({
-        id: 'contact-2',
-        type: 'crm_contact',
-        access: 'access',
-        name: 'ada@acme.com',
+        id: CONTACT_BLANK,
+        name: 'grace@globex.example',
       }),
       {
-        id: 'missing',
+        id: CONTACT_OTHER_TEAM,
         type: 'crm_contact',
-        access: 'no_access',
         loading: false,
+        access: 'no_access',
+      },
+    ]);
+  });
+
+  it('sends nothing for an empty batch', async () => {
+    const { requests, previewRecords } = recording(ok(previews));
+
+    expect(await fetchCrmRecordPreviews(previewRecords, [], [])).toEqual([]);
+    expect(requests).toEqual([]);
+  });
+
+  it('leaves ids that are not UUIDs out of the request, and matches ids in any case', async () => {
+    const { requests, previewRecords } = recording(ok(previews));
+
+    const items = await fetchCrmRecordPreviews(
+      previewRecords,
+      ['not-a-uuid', COMPANY_NAMED.toUpperCase()],
+      ['']
+    );
+
+    expect(requests).toEqual([
+      { companyIds: [COMPANY_NAMED.toUpperCase()], contactIds: [] },
+    ]);
+    expect(items).toEqual([
+      {
+        id: 'not-a-uuid',
+        type: 'crm_company',
+        loading: false,
+        access: 'no_access',
+      },
+      expect.objectContaining({
+        id: COMPANY_NAMED.toUpperCase(),
+        access: 'access',
+        name: 'Acme',
+      }),
+      { id: '', type: 'crm_contact', loading: false, access: 'no_access' },
+    ]);
+
+    const none = recording(ok(previews));
+    await fetchCrmRecordPreviews(none.previewRecords, ['not-a-uuid'], []);
+    expect(none.requests).toEqual([]);
+  });
+
+  it('reads a failed batch as no access to each record', async () => {
+    const { previewRecords } = recording(
+      err([{ code: 'HTTP_ERROR', message: 'unavailable' }])
+    );
+
+    const items = await fetchCrmRecordPreviews(
+      previewRecords,
+      [COMPANY_NAMED],
+      [CONTACT_NAMED]
+    );
+
+    expect(items).toEqual([
+      {
+        id: COMPANY_NAMED,
+        type: 'crm_company',
+        loading: false,
+        access: 'no_access',
+      },
+      {
+        id: CONTACT_NAMED,
+        type: 'crm_contact',
+        loading: false,
+        access: 'no_access',
       },
     ]);
   });
