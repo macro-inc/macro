@@ -19,7 +19,8 @@ request.
  */
 export interface CrmCompanyResponse {
   /** Contacts attached to this company. Hidden contacts are filtered
-out for non-admin viewers. */
+out for non-admin viewers. Empty when the request set
+`includeContacts=false`. */
   contacts: CrmContactResponse[];
   /** Earliest known interaction with this company. */
   createdAt: string;

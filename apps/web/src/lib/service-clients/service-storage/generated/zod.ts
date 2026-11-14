@@ -7547,7 +7547,7 @@ export const createCrmCompanyResponse = zod
           )
       )
       .describe(
-        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
       ),
     createdAt: zod.iso
       .datetime({})
@@ -7766,6 +7766,15 @@ export const getCompanyParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to fetch'),
 });
 
+export const getCompanyQueryParams = zod.object({
+  includeContacts: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to embed every contact of the company (default `true`).\nA caller that pages contacts through\n`GET \/crm\/companies\/{company_id}\/contacts\/page` sets it to `false`.'
+    ),
+});
+
 export const getCompanyResponse = zod
   .object({
     contacts: zod
@@ -7836,7 +7845,7 @@ export const getCompanyResponse = zod
           )
       )
       .describe(
-        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
       ),
     createdAt: zod.iso
       .datetime({})
@@ -8060,6 +8069,125 @@ export const createCrmContactResponse = zod
   .describe(
     'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
   );
+
+/**
+ * @summary List a CRM company's contacts a page at a time, filtered by archive
+state and an optional name or email search. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`] as for
+`GET /crm/companies/{company_id}/contacts`; hidden contacts are
+invisible to plain members.
+ */
+export const listCompanyContactsPageParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company whose contacts to list'),
+});
+
+export const listCompanyContactsPageQueryLimitMax = 200;
+
+export const listCompanyContactsPageQueryParams = zod.object({
+  archived: zod
+    .boolean()
+    .optional()
+    .describe(
+      '`true` for the archived contacts (admins only: plain members get an\nempty list), `false` (default) for the active ones. Every contact of\nan archived company counts as archived.'
+    ),
+  query: zod
+    .string()
+    .optional()
+    .describe(
+      'Keep contacts whose name or primary email contains this text,\nignoring case. Blank matches every contact.'
+    ),
+  cursor: zod
+    .string()
+    .optional()
+    .describe("Opaque cursor from the previous page's `nextCursor`."),
+  limit: zod
+    .number()
+    .min(1)
+    .max(listCompanyContactsPageQueryLimitMax)
+    .optional()
+    .describe(
+      'Contacts per page, from 1 through 200 (default 50). Values outside\nthe range are clamped.'
+    ),
+});
+
+export const listCompanyContactsPageResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
+            companyId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+              ),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        "The page's contacts, alphabetically by name (the email when\nunnamed), in the same order as `GET \/crm\/companies\/{company_id}\/contacts`."
+      ),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page; absent on the last page.'),
+  })
+  .describe("One page of a company's contacts.");
 
 /**
  * @summary Toggle email contribution for a CRM company without archiving its records.

@@ -354,6 +354,9 @@ export const storageExcluded = [
   'requestToJoin',
   // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
   'collaborateForm',
+  // The company Team tab's paging; SDK callers read a company's contacts with
+  // getCompany, which still includes them.
+  'listCompanyContactsPage',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
   'cancelSlackImport',
   'completeSlackImportUploads',
