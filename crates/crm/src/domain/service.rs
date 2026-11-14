@@ -44,6 +44,18 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         record: super::association::CrmAssociation,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
 
+    /// The items of `entity_types` whose Companies or Contacts property names
+    /// a record of the viewer's activity scope (see [`Self::resolve_association`]
+    /// for [`super::association::CrmAssociation::Activity`]), without
+    /// enumerating the scope's records. Not authorized: each item reaches the
+    /// caller only through its own source query.
+    fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[models_properties::EntityType],
+    ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
+
     /// Contribute eligible stored history from an explicitly consented mailbox.
     /// Team and personal exclusions (including mixed-thread participants) apply
     /// before enrichment and again inside the writer transaction. Queued work
@@ -1134,6 +1146,19 @@ where
     }
 
     #[tracing::instrument(skip(self, access, user_id), err)]
+    async fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
+        let scope = viewer_scope(user_id, access)?;
+        self.companies_repository
+            .activity_property_edges(scope, entity_types)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access, user_id), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
@@ -1372,6 +1397,17 @@ impl CrmService for NoOpCrmService {
                 CrmError::InvalidRequest("activity scope unavailable".into())
             }
         })
+    }
+
+    async fn activity_property_edges(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        _entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
+        Err(CrmError::InvalidRequest(
+            "activity scope unavailable".into(),
+        ))
     }
 
     async fn populate_contact(

@@ -1066,6 +1066,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_activity(scope).await
     }
 
+    async fn activity_property_edges(
+        &self,
+        scope: crate::domain::contact_listing::CrmContactListScope<'_>,
+        entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
+        self.query_activity_property_edges(scope, entity_types)
+            .await
+    }
+
     #[tracing::instrument(skip_all, fields(%team_id, %link_id, skipped = tracing::field::Empty), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(

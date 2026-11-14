@@ -4,11 +4,12 @@
 //! Activity excludes hidden records, including for admins. Email consent
 //! and exclusions do not hide CRM records.
 
+use models_properties::EntityType;
 use uuid::Uuid;
 
 use super::CompaniesRepositoryImpl;
 use crate::domain::{
-    association::{CrmAssociation, CrmRecordAssociation},
+    association::{CrmActivityEdge, CrmAssociation, CrmRecordAssociation},
     contact_listing::CrmContactListScope,
     model::CrmError,
 };
@@ -137,6 +138,45 @@ impl CompaniesRepositoryImpl {
             domains: domains.into_iter().collect(),
             addresses: addresses.into_iter().collect(),
         })
+    }
+
+    /// The items of `entity_types` whose Companies or Contacts property names a
+    /// record of the activity scope [`Self::query_activity`] reads.
+    #[tracing::instrument(
+        name = "crm.activity_property_edges",
+        skip_all,
+        fields(entity_types = entity_types.len(), edges = tracing::field::Empty),
+        err
+    )]
+    pub(super) async fn query_activity_property_edges(
+        &self,
+        scope: CrmContactListScope<'_>,
+        entity_types: &[EntityType],
+    ) -> Result<Vec<CrmActivityEdge>, CrmError> {
+        if entity_types.is_empty() {
+            return Ok(Vec::new());
+        }
+        let (viewer, team_id) = match scope {
+            CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
+            CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
+        };
+        let rows = sqlx::query_file!(
+            "src/outbound/companies_repo/activity_property_edges.sql",
+            viewer,
+            team_id,
+            entity_types as &[EntityType],
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        tracing::Span::current().record("edges", rows.len());
+        Ok(rows
+            .into_iter()
+            .map(|row| CrmActivityEdge {
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+            })
+            .collect())
     }
 
     async fn company_contacts(
