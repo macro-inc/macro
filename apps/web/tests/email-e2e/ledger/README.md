@@ -98,9 +98,9 @@ Both CI jobs run the report with `--enforce`. It fails when
   no line in `waivers.tsv`: a covered function that lost its test on Gmail
   or on Outlook, and a new row or function that came without a test;
 - a passing test covers what `waivers.tsv` waives: remove the line;
-- a function with tests on every provider has no line in `proofs.tsv`;
-- a test tagged `@known-bug` passes: remove the tag, and the waiver that
-  stood for the bug. A bug that shows only in some runs is also tagged
+- a function waived on no provider has no line in `proofs.tsv`;
+- the tests tagged `@known-bug` were not run, or one of them passes:
+  remove the tag, and the waiver that stood for the bug. A bug that shows only in some runs is also tagged
   `@sometimes`, and a pass of its test fails nothing: one run cannot tell
   that it is gone;
 - `waivers.tsv` or `full-stack-only.tsv` names what the manifest lacks, or

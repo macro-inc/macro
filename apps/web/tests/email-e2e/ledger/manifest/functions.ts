@@ -139,13 +139,15 @@ export function parseFullStackOnly(table: string): string[] {
     throw new Error(
       `full-stack-only.tsv: the head is not ${FULL_STACK_ONLY_HEAD}`
     );
-  return lines.map((line) => {
+  return lines.map((line, index) => {
     const [id, on, ...more] = line.split('\t');
     const fits = /^F-\d{3}$/.test(id)
       ? on === 'gmail' || on === 'outlook'
       : on === '-';
     if (!id || !fits || more.length > 0)
       throw new Error(`full-stack-only.tsv: cannot read "${line}"`);
+    if (lines.indexOf(line) !== index)
+      throw new Error(`full-stack-only.tsv: "${line}" is there twice`);
     return on === '-' ? id : `${id} ${on}`;
   });
 }
@@ -169,6 +171,7 @@ export function parseLimits(table: string): Map<string, string> {
     const [id, limit, ...more] = line.split('\t');
     if (!/^F-\d{3}$/.test(id) || !limit || more.length > 0)
       throw new Error(`limits.tsv: cannot read "${line}"`);
+    if (limits.has(id)) throw new Error(`limits.tsv: ${id} is there twice`);
     limits.set(id, limit);
   }
   return limits;

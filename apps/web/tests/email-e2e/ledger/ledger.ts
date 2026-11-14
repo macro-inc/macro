@@ -351,9 +351,9 @@ function rowsOf(
         seen.length > 0
           ? undefined
           : waiver
-            ? `: `
+            ? `${waiver.kind}: ${waiver.reason}`
             : needs
-              ? `no waiver; needs `
+              ? `no waiver; needs ${needs}`
               : 'no waiver',
       cells: seen,
       missing: seen.length > 0 ? missing : [],

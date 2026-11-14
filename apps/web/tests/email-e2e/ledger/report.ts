@@ -485,7 +485,7 @@ function render(
     '',
     details('Rows by group', markdown(byGroup)),
     '',
-    `The whole report, with every function's rows and every open row, is in the \`email-e2e-browser-coverage\` artifact (\`index.html\`).`,
+    `The whole report, with every function's rows and every open row, is in the job's coverage artifact (\`index.html\`).`,
     '',
   ].join('\n');
 
@@ -608,6 +608,12 @@ function report(mode: Mode): void {
         .filter((test) => test.status === 'expected' && !test.sometimes)
         .map((test) => `${test.file}:${test.line} ${test.title}`),
     }),
+    // A run that left no result cannot say that no such test passes.
+    ...(knownBugs.found
+      ? []
+      : [
+          'the tests kept for known bugs were not run: run them (EMAIL_E2E_KNOWN_BUGS=1) before the check',
+        ]),
     ...ledger.drift.flatMap((each) =>
       each.items.map((item) => `${each.check}: ${item}`)
     ),

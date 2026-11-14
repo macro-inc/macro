@@ -433,7 +433,8 @@ for (const provider of PROVIDERS) {
       await expect(page).toHaveURL(/\/app\/calendar\/.*calendar\.eventId=/);
       const details = page.getByRole('dialog', { name: TITLE });
       await expect(details.getByText('Bring the agenda.')).toBeVisible();
-      // The day in the zone the browser runs in: the event is at 17:00 UTC.
+      // The day in this machine's zone, which is the browser's too: the
+      // event is at 17:00 UTC.
       const day = new Date('2027-01-14T17:00:00Z').toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
