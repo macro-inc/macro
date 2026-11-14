@@ -1780,5 +1780,38 @@ export const compose = {
       trigger: 'after the action succeeds',
       source: ['src/features/email-compose/views/compose-layout.tsx'],
     },
+    {
+      id: 'STC-971',
+      surface: 'SC-01',
+      fn: ['F-101'],
+      state:
+        'result: the Subject field holds the text typed, and the sent message is listed under it',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/email-compose/components/compose-subject-field.tsx',
+        'src/features/email-compose/views/email-compose.tsx',
+      ],
+    },
+    {
+      id: 'STC-972',
+      surface: 'SC-13',
+      fn: ['F-107'],
+      state: 'result: the signature bar is gone from the composer',
+      trigger: "after Don't include signature",
+      source: [
+        'src/features/email-compose/components/signature-preview.tsx',
+        'src/features/email-compose/views/email-compose.tsx',
+      ],
+      flag: 'enable-email-signatures',
+    },
+    {
+      id: 'STC-973',
+      surface: 'SC-04',
+      fn: ['F-113'],
+      state:
+        'result: the reply composer fills the phone screen with Go Back, the person written to and the subject',
+      trigger: 'after Reply in the touch dock',
+      source: ['src/features/email-compose/views/reply-input.tsx'],
+    },
   ],
 } as const satisfies Group;

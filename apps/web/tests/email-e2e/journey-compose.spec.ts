@@ -18,12 +18,16 @@ import { confirmed, did, saw } from './ledger/record';
  * an input: the row itself, whose ancestors come before it in the document.
  */
 function recipientInput(page: Page, row: 'To' | 'Cc' | 'Bcc') {
+  return recipientRow(page, row).getByRole('combobox');
+}
+
+/** The composer row `To`, `Cc` or `Bcc`: its label, its chips and its input. */
+function recipientRow(page: Page, row: 'To' | 'Cc' | 'Bcc') {
   return page
     .locator('div')
     .filter({ has: page.getByText(row, { exact: true }) })
     .filter({ has: page.getByRole('combobox') })
-    .last()
-    .getByRole('combobox');
+    .last();
 }
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
@@ -81,16 +85,31 @@ for (const provider of PROVIDERS) {
       await recipientInput(page, 'Bcc').fill(ida);
       await page.keyboard.press('Enter');
       did('AC-003');
+      // Each field shows the person added to it, and only that person.
+      await expect(recipientRow(page, 'Cc')).toContainText(zed);
+      await expect(recipientRow(page, 'Cc')).not.toContainText(ida);
+      await expect(recipientRow(page, 'Bcc')).toContainText(ida);
+      await expect(recipientRow(page, 'Bcc')).not.toContainText(zed);
+      saw('STC-933');
 
       await page.getByPlaceholder(/subject/i).fill('Board pack');
       did('AC-018');
       await page.locator('[contenteditable="true"]').last().click();
       await page.keyboard.type('The board pack is attached.');
       did('AC-022');
-      await expect(
-        page.getByRole('button', { name: 'Signature', exact: true })
-      ).toBeVisible();
+      await expect(page.getByPlaceholder(/subject/i)).toHaveValue('Board pack');
+      const signatureBar = page.getByRole('button', {
+        name: 'Signature',
+        exact: true,
+      });
+      await expect(signatureBar).toBeVisible();
       saw('STC-092');
+      await signatureBar.click();
+      did('AC-068');
+      await expect(signatureBar).toHaveAttribute('aria-expanded', 'true');
+      await expect(
+        page.getByRole('region', { name: 'Signature preview' })
+      ).toContainText('Ada Lovelace, Analytical Engines');
       await attach(page, {
         name: 'pack.txt',
         mimeType: 'text/plain',
@@ -154,6 +173,8 @@ for (const provider of PROVIDERS) {
           .getByText('Board pack', { exact: true })
       ).toBeVisible();
       saw('STL-923');
+      // The subject typed is the name the sent message is listed under.
+      saw('STC-971');
       saw('STC-956');
     });
   });

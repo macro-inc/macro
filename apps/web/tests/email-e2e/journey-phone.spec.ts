@@ -102,6 +102,19 @@ for (const provider of PROVIDERS) {
       did('AL-172', 'F-113');
       const composer = page.getByRole('dialog', { name: 'Reply composer' });
       const editor = composer.getByRole('textbox', { name: /reference files/ });
+      // The composer fills the screen: its own Go Back, who it writes to, the
+      // subject, and no Send until there is a reply.
+      await expect(
+        composer.getByRole('button', { name: 'Go Back' })
+      ).toBeVisible();
+      await expect(composer.getByRole('link', { name: /Grace/ })).toBeVisible();
+      await expect(
+        composer.getByRole('textbox', { name: 'Subject:' })
+      ).toHaveValue('Re: Lunch?');
+      await expect(
+        composer.getByRole('button', { name: 'Send email' })
+      ).toBeDisabled();
+      saw('STC-973');
       await editor.tap();
       await editor.pressSequentially('Works for me.');
       await composer.getByRole('button', { name: 'Send email' }).tap();

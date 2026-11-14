@@ -115,7 +115,7 @@ test.describe('forwarding from the thread', () => {
 
     // To a reply and back: each kind brings its own block and takes the other's away.
     await messageAction(page, 'Noon at the usual place?', 'reply');
-    did('AL-113');
+    did('AC-113');
     await expect(
       page.getByRole('textbox', { name: /^Reply — / })
     ).toContainText('FYI');
