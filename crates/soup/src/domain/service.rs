@@ -1705,6 +1705,31 @@ where
         })
     }
 
+    /// Grouped items for the request, without entity properties.
+    async fn grouped_items(
+        &self,
+        mut req: GroupedSortRequest<'_>,
+    ) -> Result<T::GroupedItems, SoupErr> {
+        let user_id = req.user_id.clone();
+        if let Some(entities) = self
+            .favorite_entities(&user_id, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req
+                .cursor
+                .map_filter(|ast| favorites::apply(ast, &entities));
+        }
+        // Grouped queries carry no team receipt, so associations resolve
+        // under the viewer's own CRM teams.
+        if let Some(resolved) = self
+            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
+        }
+        self.handle_grouped_soup_request(req).await
+    }
+
     async fn populate_grouped_items(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -2220,27 +2245,19 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn get_user_soup_grouped(
         &self,
-        mut req: GroupedSortRequest<'_>,
+        req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         let user_id = req.user_id.clone();
-        if let Some(entities) = self
-            .favorite_entities(&user_id, Some(req.cursor.filter()))
-            .await?
-        {
-            req.cursor = req
-                .cursor
-                .map_filter(|ast| favorites::apply(ast, &entities));
-        }
-        // Grouped queries carry no team receipt, so associations resolve
-        // under the viewer's own CRM teams.
-        if let Some(resolved) = self
-            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
-            .await?
-        {
-            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
-        }
-        let items = self.handle_grouped_soup_request(req).await?;
+        let items = self.grouped_items(req).await?;
         self.populate_grouped_items(user_id, items).await
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr> {
+        self.grouped_items(req).await
     }
 
     async fn caller_tag_sets<'a>(
