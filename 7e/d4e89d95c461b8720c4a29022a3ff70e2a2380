@@ -1,0 +1,22 @@
+packages/sdk-ocaml/e2e/run.sh
+  s_e722a0e50d8d61::t_ec202d31a919e4 53-63,70-72
+  s_e722a0e50d8d61::t_f6f38641a91938 35-40
+packages/sdk-ocaml/runner/http/macro_sdk_http.ml
+  s_e722a0e50d8d61::t_ee0799489f464e 63-100,189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ed4e89d95c461b8720c4a29022a3ff70e2a2380",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
