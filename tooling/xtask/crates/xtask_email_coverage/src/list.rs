@@ -166,8 +166,7 @@ const NEST_CALL: &str = ".nest(";
 /// The index of the line that registers `method path` in a router's source,
 /// or what is missing.
 fn registered_at(text: &str, method: &str, path: &str) -> Result<usize, &'static str> {
-    let lines: Vec<&str> = text.lines().collect();
-    let registers = |line: &str| line.contains(ROUTE_CALL) || line.contains(NEST_CALL);
+    let registrations = registrations(text);
     let mut found_path = false;
     let ends = path
         .match_indices('/')
@@ -175,32 +174,15 @@ fn registered_at(text: &str, method: &str, path: &str) -> Result<usize, &'static
         .filter(|end| *end == path || names_a_route(end));
     for end in ends {
         let literal = format!("\"{end}\"");
-        for (index, line) in lines.iter().enumerate() {
-            if !line.contains(&literal) {
+        for registration in &registrations {
+            // The path is the call's first argument.
+            let follows = registration.arguments.strip_prefix(literal.as_str());
+            if !follows.is_some_and(|rest| rest.trim_start().starts_with(',')) {
                 continue;
             }
-            // The call is on the literal's line, or the one before when the
-            // formatter broke it. A comment or an attribute is neither.
-            let call = if registers(line) {
-                index
-            } else if index > 0 && registers(lines[index - 1]) {
-                index - 1
-            } else {
-                continue;
-            };
             found_path = true;
-            if lines[call].contains(NEST_CALL) {
-                return Ok(index);
-            }
-            let rest = &lines[index + 1..];
-            let end_of_call = rest
-                .iter()
-                .position(|line| registers(line))
-                .unwrap_or(rest.len());
-            let registration =
-                std::iter::once(lines[index]).chain(rest[..end_of_call].iter().copied());
-            if registration.into_iter().any(|line| calls(line, method)) {
-                return Ok(index);
+            if registration.nests || calls(registration.arguments, method) {
+                return Ok(registration.line);
             }
         }
     }
@@ -211,7 +193,69 @@ fn registered_at(text: &str, method: &str, path: &str) -> Result<usize, &'static
     }
 }
 
-/// Whether a line calls the routing function of a method: `get(` or `.put(`.
+/// One `.route(..)` or `.nest(..)` call in a router's source.
+struct Registration<'a> {
+    nests: bool,
+    /// What is between the call's parentheses, from its first argument.
+    arguments: &'a str,
+    /// The index of the line the first argument is on.
+    line: usize,
+}
+
+/// The registrations in a router's source, comments left out.
+fn registrations(text: &str) -> Vec<Registration<'_>> {
+    let mut found = Vec::new();
+    for (call, nests) in [(ROUTE_CALL, false), (NEST_CALL, true)] {
+        for (start, _) in text.match_indices(call) {
+            let line_start = text[..start].rfind('\n').map_or(0, |end| end + 1);
+            if text[line_start..start].contains("//") {
+                continue;
+            }
+            let inside = &text[start + call.len()..];
+            let arguments = inside[..end_of_call(inside)].trim_start();
+            let before = text.len() - inside.len() + (inside.len() - inside.trim_start().len());
+            found.push(Registration {
+                nests,
+                arguments,
+                line: text[..before].matches('\n').count(),
+            });
+        }
+    }
+    found
+}
+
+/// Where the call whose arguments `inside` starts with ends: its closing
+/// parenthesis, those inside string literals not counted.
+fn end_of_call(inside: &str) -> usize {
+    let mut depth = 1_usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (index, character) in inside.char_indices() {
+        if in_string {
+            match character {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match character {
+            '"' => in_string = true,
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return index;
+                }
+            }
+            _ => {}
+        }
+    }
+    inside.len()
+}
+
+/// Whether text calls the routing function of a method: `get(` or `.put(`.
 fn calls(line: &str, method: &str) -> bool {
     let call = format!("{}(", method.to_lowercase());
     line.match_indices(&call).any(|(start, _)| {

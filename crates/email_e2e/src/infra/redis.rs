@@ -216,7 +216,7 @@ async fn lease_index(
 
         if tokio::time::Instant::now() >= deadline {
             bail!(
-                "all {} Redis databases stayed leased for {LEASE_WAIT:?}; run fewer scenarios at once",
+                "all {} Redis databases stayed leased, or in use by services an earlier scenario left running, for {LEASE_WAIT:?}; run fewer scenarios at once or stop those services",
                 count.saturating_sub(1)
             );
         }

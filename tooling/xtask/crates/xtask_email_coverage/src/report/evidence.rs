@@ -144,7 +144,11 @@ pub(crate) fn load(dirs: &[PathBuf]) -> Result<Vec<Evidence>, Report> {
             }
         }
     }
-    Ok(latest.into_values().map(|(_, evidence)| evidence).collect())
+    // Oldest first: of a scenario's records in several passing runs the one
+    // written last is the one the report keeps.
+    let mut records: Vec<(SystemTime, Evidence)> = latest.into_values().collect();
+    records.sort_by_key(|(written, _)| *written);
+    Ok(records.into_iter().map(|(_, evidence)| evidence).collect())
 }
 
 fn read(file: &Path) -> Result<Evidence, Report> {

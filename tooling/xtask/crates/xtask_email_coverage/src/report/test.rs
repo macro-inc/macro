@@ -281,6 +281,16 @@ fn results_tell_flaky_from_passed_and_failed() {
     assert_eq!(results.outcomes["state gmail_stars"], Outcome::Passed);
     assert_eq!(results.outcomes["state outlook_stars"], Outcome::Flaky(1));
     assert_eq!(results.outcomes["state a <b>"], Outcome::Failed);
+    // A run is named among those a scenario passed in unless it failed there.
+    let passed_in = |scenario: &str| {
+        results
+            .passed_in
+            .get(scenario)
+            .is_some_and(|runs| runs.contains("run-1"))
+    };
+    assert!(passed_in("state gmail_stars"));
+    assert!(passed_in("state outlook_stars"));
+    assert!(!passed_in("state a <b>"));
     let run = &results.runs[0];
     assert_eq!(
         (run.name.as_str(), run.tests, run.failed, run.flaky),

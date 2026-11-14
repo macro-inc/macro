@@ -177,7 +177,7 @@ impl<'ast> Visit<'ast> for ConsumedQueues {
             {
                 self.ambiguous.get_or_insert((name, variable.ident.span()));
             }
-        } else if let Pat::Ident(variable) = &local.pat {
+        } else if let Pat::Ident(variable) = untyped(&local.pat) {
             self.other_bindings
                 .insert(variable.ident.to_string(), variable.ident.span());
         }
@@ -203,6 +203,14 @@ impl<'ast> Visit<'ast> for ConsumedQueues {
                 .push((variable.unwrap_or_default(), call.span()));
         }
         syn::visit::visit_expr_call(self, call);
+    }
+}
+
+/// A pattern without its type annotation: `x` of `x: T`.
+fn untyped(pattern: &Pat) -> &Pat {
+    match pattern {
+        Pat::Type(typed) => &typed.pat,
+        other => other,
     }
 }
 

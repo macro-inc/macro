@@ -37,7 +37,7 @@ fn a_shadowed_queue_variable_is_ambiguous() {
         r#"
 fn start() {
     let queue = macro_queues::ContactsQueue::new();
-    let queue = other_queue_url;
+    let queue: String = other_queue_url;
     let worker = SQSWorker::new(client, queue.to_string(), 1, 1);
 }
 "#,

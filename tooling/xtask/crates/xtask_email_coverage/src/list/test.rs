@@ -109,6 +109,13 @@ fn router() -> Router {
             "/nested",
             other::router(),
         )
+        // "/after" was nested here once.
+        .route("/last", get(last))
+        .with_state(state)
+}
+
+fn later(map: Map) {
+    map.put("/last", 1);
 }
 "#;
 
@@ -121,11 +128,13 @@ fn router() -> Router {
         ("DELETE", "/two/{id}"),
         // `forget(` is not `get(`.
         ("GET", "/three"),
+        // What follows the call is not part of it.
+        ("PUT", "/last"),
     ] {
         let why = registered_at(router, method, path).unwrap_err();
         assert!(why.contains("has not the method"), "{method} {path}: {why}");
     }
-    for path in ["/gone", "/described"] {
+    for path in ["/gone", "/described", "/after"] {
         let why = registered_at(router, "GET", path).unwrap_err();
         assert!(why.contains("no route registration"), "{path}: {why}");
     }
