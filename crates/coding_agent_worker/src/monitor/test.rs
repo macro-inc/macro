@@ -193,3 +193,40 @@ fn daemon_health_says_whether_the_runtime_is_connected() {
         agent_monitor::domain::model::SourceState::Unhealthy
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn hosting_takes_over_when_the_other_collector_exits() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path().join("home");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let socket = home.join("monitor.sock");
+    let other = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+
+    let cancel = CancellationToken::new();
+    let (claimed, mut claims) = tokio::sync::mpsc::unbounded_channel();
+    let serving = cancel.clone();
+    let task = tokio::spawn(hold_socket(
+        socket.clone(),
+        cancel.clone(),
+        Duration::from_secs(60),
+        move |_bound| {
+            let claimed = claimed.clone();
+            let serving = serving.clone();
+            async move {
+                let _ = claimed.send(());
+                serving.cancelled().await;
+            }
+        },
+    ));
+
+    // The other collector answers: nothing is claimed through a retry.
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    assert!(claims.try_recv().is_err());
+
+    drop(other);
+    claims.recv().await.expect("claimed once the other collector is gone");
+
+    cancel.cancel();
+    task.await.unwrap();
+}

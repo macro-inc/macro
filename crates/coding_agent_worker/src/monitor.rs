@@ -58,6 +58,10 @@ const IDLE_CHECK: Duration = Duration::from_secs(30);
 /// opens anyway (it then shows the reconnecting state until it does).
 const START_WAIT: Duration = Duration::from_secs(5);
 
+/// How often a macrod that should host tries to claim the socket while
+/// another process holds it.
+const CLAIM_RETRY: Duration = Duration::from_secs(60);
+
 /// The step between socket probes while waiting for a started collector.
 const START_PROBE: Duration = Duration::from_millis(50);
 
@@ -243,7 +247,14 @@ impl Collector {
 /// enabled`, and the link its serving core reports through.
 pub struct Host {
     link: DaemonLink,
-    collector: Option<Collector>,
+    hosting: Option<Hosting>,
+}
+
+/// The task that claims the socket (again and again while another process
+/// holds it) and serves the collector once it has it.
+struct Hosting {
+    cancel: CancellationToken,
+    task: JoinHandle<()>,
 }
 
 impl Host {
@@ -251,7 +262,7 @@ impl Host {
     pub fn new() -> Self {
         Self {
             link: DaemonLink::new(),
-            collector: None,
+            hosting: None,
         }
     }
 
@@ -260,46 +271,85 @@ impl Host {
         self.link.clone()
     }
 
-    /// Starts or stops hosting to match `settings.enabled`. Hosting is
-    /// skipped when another process serves the machine, and a failure is
-    /// logged, never fatal: the monitor is an extra.
+    /// Starts or stops hosting to match `settings.enabled`. While another
+    /// process holds the socket, the claim is retried every [`CLAIM_RETRY`],
+    /// so this macrod takes over when that one exits. Failures are logged,
+    /// never fatal: the monitor is an extra.
     pub async fn apply(&mut self, settings: &MonitorSettings) {
         if !settings.enabled {
-            if let Some(collector) = self.collector.take() {
-                collector.stop().await;
-                tracing::info!("stopped hosting the agent monitor");
-            }
+            self.stop().await;
             return;
         }
-        if self.collector.is_some() {
+        if self.hosting.is_some() {
             return;
         }
-        match self.start(settings) {
-            Ok(Some(collector)) => {
-                tracing::info!("hosting the agent monitor");
-                self.collector = Some(collector);
+        let socket = match socket_path(None) {
+            Ok(socket) => socket,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not host the agent monitor");
+                return;
             }
-            Ok(None) => tracing::info!("another process already hosts the agent monitor"),
-            Err(error) => tracing::warn!(error = ?error, "could not host the agent monitor"),
-        }
+        };
+
+        let cancel = CancellationToken::new();
+        let settings = settings.clone();
+        let daemon = self.link.subscribe();
+        let serving = cancel.clone();
+        let task = tokio::spawn(hold_socket(socket, cancel.clone(), CLAIM_RETRY, move |bound| {
+            let settings = settings.clone();
+            let daemon = daemon.clone();
+            let serving = serving.clone();
+            async move {
+                match Collector::start(bound, &settings, Some(daemon)) {
+                    Ok(collector) => {
+                        tracing::info!("hosting the agent monitor");
+                        serving.cancelled().await;
+                        collector.stop().await;
+                        tracing::info!("stopped hosting the agent monitor");
+                    }
+                    Err(error) => tracing::warn!(error = ?error, "could not host the agent monitor"),
+                }
+            }
+        }));
+        self.hosting = Some(Hosting { cancel, task });
     }
 
-    fn start(&self, settings: &MonitorSettings) -> rootcause::Result<Option<Collector>> {
-        let socket = socket_path(None)?;
-        match claim(&socket)? {
-            Claim::Bound(bound) => Ok(Some(Collector::start(
-                bound,
-                settings,
-                Some(self.link.subscribe()),
-            )?)),
-            Claim::Served => Ok(None),
-        }
-    }
-
-    /// Stops hosting.
+    /// Stops hosting, or trying to.
     pub async fn stop(&mut self) {
-        if let Some(collector) = self.collector.take() {
-            collector.stop().await;
+        if let Some(hosting) = self.hosting.take() {
+            hosting.cancel.cancel();
+            let _ = hosting.task.await;
+        }
+    }
+}
+
+/// Claims `socket` and runs `serve` while holding it; while another process
+/// holds it (or claiming fails), tries again every `retry`. Ends when
+/// `cancel` fires, after `serve` returns.
+async fn hold_socket<F, Serve>(socket: PathBuf, cancel: CancellationToken, retry: Duration, mut serve: F)
+where
+    F: FnMut(BoundSocket) -> Serve,
+    Serve: Future<Output = ()>,
+{
+    let mut said_served = false;
+    loop {
+        match claim(&socket) {
+            Ok(Claim::Bound(bound)) => {
+                serve(bound).await;
+                if cancel.is_cancelled() {
+                    return;
+                }
+            }
+            Ok(Claim::Served) if !said_served => {
+                tracing::info!("another process hosts the agent monitor; taking over when it exits");
+                said_served = true;
+            }
+            Ok(Claim::Served) => {}
+            Err(error) => tracing::warn!(error = %error, "could not claim the agent monitor socket"),
+        }
+        tokio::select! {
+            () = cancel.cancelled() => return,
+            () = tokio::time::sleep(retry) => {}
         }
     }
 }

@@ -222,8 +222,9 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
 
 - **One collector per machine.** The first process to claim the socket hosts
   it: the panel or `macrod service` while `[monitor] enabled` (the default),
-  or `macrod monitor serve`. A socket that answers is left alone and the
-  process skips hosting; a socket left by a dead collector is replaced only
+  or `macrod monitor serve`. A socket that answers is left alone; a panel
+  or service then tries the claim again every minute and takes over when
+  that collector exits; a socket left by a dead collector is replaced only
   after a connect fails, under `<socket>.lock`. The socket lives in its own
   directory, `~/.macrod/monitor/`, which the monitor creates 0700 (and
   refuses to use when it is open to other users); the socket is 0600.
