@@ -463,7 +463,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                     &request,
                     &program,
                     &context,
-                    brief,
+                    brief.into(),
                     Drafting {
                         session,
                         progress: &reporter,

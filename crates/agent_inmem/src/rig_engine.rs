@@ -669,19 +669,28 @@ async fn drive_turn(
         };
         // Routed turns leave area guidance out of the prompt; the entities the
         // request needs bring theirs, with their indexes, in the turn's part.
-        // An unseen turn is routed the same way.
+        // An unseen turn is routed the same way, unless its opener wrote the
+        // session's instructions: that opener gives the reference its work
+        // needs, in them and in its prompt.
         let routed = skills.entities;
-        let docs = agent_code_mode::domain::select_documentation(
-            &owner,
-            request,
-            base_context.cognition_tool_context.service.as_ref(),
-            if routed || unseen {
-                agent_code_mode::domain::Guidance::Selected
-            } else {
-                agent_code_mode::domain::Guidance::Inline
-            },
-            &cancel,
-        );
+        let supplied = unseen && instructions.as_deref().is_some_and(|text| !text.trim().is_empty());
+        let docs = async {
+            if supplied {
+                return String::new();
+            }
+            agent_code_mode::domain::select_documentation(
+                &owner,
+                request,
+                base_context.cognition_tool_context.service.as_ref(),
+                if routed || unseen {
+                    agent_code_mode::domain::Guidance::Selected
+                } else {
+                    agent_code_mode::domain::Guidance::Inline
+                },
+                &cancel,
+            )
+            .await
+        };
         let loaded_skills = async {
             if !skills.routes || unseen {
                 return Vec::new();
@@ -1045,30 +1054,33 @@ fn system_prompt(
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
-    // A turn nobody watches has neither a conversation to write for nor the
-    // tools `tools_prompt` describes.
-    let shared = match delivery {
-        ReplyDelivery::Unseen => unseen::PROMPT.to_owned(),
-        ReplyDelivery::Streamed | ReplyDelivery::Whole => {
-            format!("{}{tools_prompt}", prompt::agent_session::PROMPT)
-        }
-    };
-    let mut rest = String::new();
-    if let Some(identity) = identity {
-        rest.push('\n');
-        rest.push_str(&prompt::agent_identity::render(
-            &identity.name,
-            &identity.handle,
-        ));
-    }
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
-    if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        rest.push_str("\n<session_instructions>\n");
-        rest.push_str(instructions);
-        rest.push_str("\n</session_instructions>");
-    }
+    let instructions = instructions
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| format!("\n<session_instructions>\n{text}\n</session_instructions>"))
+        .unwrap_or_default();
+    let identity = identity.map_or_else(String::new, |identity| {
+        format!(
+            "\n{}",
+            prompt::agent_identity::render(&identity.name, &identity.handle)
+        )
+    });
+    // A turn nobody watches has neither a conversation to write for nor the
+    // tools `tools_prompt` describes. Its opener sends every session of its
+    // kind (every routine draft) the same instructions, so they join the
+    // cached shared block and are read back across sessions.
+    let (shared, mut rest) = match delivery {
+        ReplyDelivery::Unseen => (
+            format!("{}{identity}{instructions}", unseen::PROMPT),
+            String::new(),
+        ),
+        ReplyDelivery::Streamed | ReplyDelivery::Whole => (
+            format!("{}{tools_prompt}", prompt::agent_session::PROMPT),
+            format!("{identity}{instructions}"),
+        ),
+    };
     // An unseen turn has no ContentSearch to look back with.
     if delivery != ReplyDelivery::Unseen {
         rest.push_str(&format!(

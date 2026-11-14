@@ -453,7 +453,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
                     &request,
                     &program,
                     &context,
-                    brief,
+                    brief.into(),
                     Drafting::waited(session),
                 )
                 .await?
@@ -578,7 +578,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         request: &DraftRequest,
         program: &[Step],
         context: &DraftContext,
-        brief: String,
+        brief: Brief,
         drafting: Drafting<'_>,
     ) -> Result<Option<Draft>> {
         let span = tracing::Span::current();
@@ -667,12 +667,13 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         &self,
         action: &RoutineSessionAction,
         model: &str,
-        brief: String,
+        brief: Brief,
         progress: &dyn DraftProgress,
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
                 billing: Default::default(),
+                instructions: brief.instructions,
                 selection: ValidateRoutineSession {
                     owner: action.owner.clone(),
                     bot_id: action.bot_id,
@@ -693,7 +694,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         self.sessions
             .prompt(PromptRoutineSession {
                 action: action.clone(),
-                prompt: brief,
+                prompt: brief.prompt,
                 context: None,
             })
             .await?;
@@ -1122,23 +1123,62 @@ fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, 
     })
 }
 
-/// EVAL ONLY: the fast session drafter's first prompt. The items the words
-/// name are looked up and the SDK reference the routine needs is given, so
-/// the session reads nothing and writes one program that ends with the check.
+/// What a draft's hidden session is given: the instructions it keeps, the
+/// same for every draft of its kind so the prompt cache reads them back, and
+/// its one prompt, with what is particular to this request.
+pub(super) struct Brief {
+    pub(super) instructions: Option<String>,
+    pub(super) prompt: String,
+}
+
+impl From<String> for Brief {
+    fn from(prompt: String) -> Self {
+        Self {
+            instructions: None,
+            prompt,
+        }
+    }
+}
+
+/// EVAL ONLY: the fast session drafter's brief. The items the words name are
+/// looked up and the SDK reference the routine needs is given, so the
+/// session reads nothing and writes one program that ends with the check.
+/// The instructions carry what every draft with the same `code` and
+/// conditions setting shares: the rules, the routines and `ai` references and
+/// the worked examples. The prompt carries the request, its items and the
+/// reference of the areas it names.
 pub(super) fn fast_brief(
     task: &str,
     context: &DraftContext,
     code: bool,
     owner: &MacroUserIdStr<'static>,
-    items: &str,
-    reference: &str,
-) -> String {
+    found: &str,
+    shared_reference: &str,
+    areas_reference: &str,
+) -> Brief {
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let timezone = &context.timezone;
+    let prompt = if areas_reference.trim().is_empty() {
+        format!(
+            "{task}\n\nYou are setting up this routine for {owner}, with their access. Now is {now}; their time zone is {timezone}.\n\n## Items the request names\n\n{found}"
+        )
+    } else {
+        format!(
+            "{task}\n\nYou are setting up this routine for {owner}, with their access. Now is {now}; their time zone is {timezone}.\n\n## Items the request names\n\n{found}\n\n## The SDK reference for the areas this routine uses\n\n<sdk>\n{areas_reference}\n</sdk>"
+        )
+    };
+    Brief {
+        instructions: Some(fast_instructions(context, code, shared_reference)),
+        prompt,
+    }
+}
+
+/// EVAL ONLY: the fast session drafter's instructions; see [`fast_brief`].
+fn fast_instructions(context: &DraftContext, code: bool, shared_reference: &str) -> String {
     let model = &context.agent_model;
     let steps = if code {
         format!(
-            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
+            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nA code step runs with its owner's access, and Macro refuses a message from someone to themselves: a code step never messages or emails the routine's owner. When the routine's job is to tell its owner something (a reminder, a digest, news from a channel), write an Ask AI step whose instructions say what to tell them, and Macro's agent messages them.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
             catalog_examples(context.conditions)
         )
     } else {
@@ -1151,25 +1191,30 @@ pub(super) fn fast_brief(
     } else {
         "Never give a trigger a `condition`."
     };
+    let items = direct::ITEMS_BY_NAME
+        .trim()
+        .replace(
+            "in a trigger filter's `ids`",
+            "in a trigger filter's `entities`, as the routines reference says",
+        )
+        .replace("the routines guide below", "the routines guide");
     format!(
-        "{task}
+        "You draft a Macro routine from what its owner asked for, in the prompt. They review the draft before it is saved.
 
-You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}.
-
-Everything you need is here: the items the request names, already looked up, and the SDK reference for the routines area and the areas this routine uses. Don't read documentation and don't search for items. Write ONE ExecuteCode program that builds the whole routine and ends with `return {{ data: await macro.routines.check(routine, {{ created: [] }}) }};`.
+Everything you need is here and in the prompt: the items the request names, already looked up, and the SDK reference for the routines area, the `ai` area and the areas this routine uses. Don't read documentation and don't search for items. Write ONE ExecuteCode program that builds the whole routine and ends with `return {{ data: await macro.routines.check(routine, {{ created }}) }};`, where `created` lists the handles of what the program created for the routine (empty when it created nothing).
 
 ## Items the request names
 
-Before you, the drafter looked up by name each item the request names, as the owner would see it.
+Before you, the drafter looked up by name each item the request names, as the owner would see it. The prompt lists them.
 
 {items}
-- A name listed under \"Left for the owner\" has no item, several items have it, or it couldn't be looked up: don't guess, don't create it and don't search for it. Leave it out (no `entities`, or a knob whose value is `\"\"`) and the owner picks it before saving.
+- A name listed under \"Left for the owner\" has no item, several items have it, or it couldn't be looked up: don't guess, don't create it and don't search for it. Leave it out (no `entities`, or a knob whose value is `\"\"`) and the owner picks it before saving. The one exception is an item the request asks to make new that no item has the name of: the program creates it once, before the check, named as the request names it, uses its id in the routine and lists it in `created`. Create nothing else.
 - Anything else the code needs (the owner, a person by email address, their labels' or properties' ids), it reads from the SDK when it runs.
 
 ## The SDK reference
 
 <sdk>
-{reference}
+{shared_reference}
 </sdk>
 
 ## For this draft
@@ -1178,13 +1223,13 @@ Before you, the drafter looked up by name each item the request names, as the ow
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
-3. Write the routine as `macro.routines.check` takes it, following the routines reference above exactly, since the check type-checks code steps but not your options. Write it as `{{name, trigger, steps: [...]}}` (`StepsRoutineOptions`), never with `task`: an Ask AI step is a step too. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
+3. Write the routine as `macro.routines.check` takes it, following the routines reference exactly, since the check type-checks code steps but not your options. Write it as `{{name, trigger, steps: [...]}}` (`StepsRoutineOptions`), never with `task`: an Ask AI step is a step too. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone}}` with the owner's time zone, or `{{type: 'once', at}}`. {conditions}
 
 Write it to do exactly what was asked, each time it runs, and nothing now: \"every Monday make a task\" makes no task today. Write step code that type-checks the first time: call only the methods the SDK reference shows, with the arguments it shows, and leave out an option you aren't sure of. Keep it short: no comments, no logging, no checks the types don't need.
 
 {steps}
 
-4. Hand it back by checking it, at the end of the same program. The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back. If it reports problems, fix exactly those and check the whole routine again. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+4. Hand it back by checking it, at the end of the same program. The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back. If it reports problems, fix exactly those and check the whole routine again, reusing by id what the first program created instead of creating it again. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. Once a check passes you are done: the drafter takes it from there, and nothing you write after it is read."
     )
 }
 

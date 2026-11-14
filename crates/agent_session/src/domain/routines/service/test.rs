@@ -274,6 +274,7 @@ impl Fixture {
     fn prepare(&self) -> PrepareRoutineSession {
         PrepareRoutineSession {
             billing: Default::default(),
+            instructions: None,
             origin: trigger_context::TriggerOrigin::Unknown,
             selection: self.selection(),
             session_id: self.session.id,

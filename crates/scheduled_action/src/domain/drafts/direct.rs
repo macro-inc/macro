@@ -45,7 +45,7 @@ const WRITE: &str = include_str!("direct/write.md");
 /// What the writer is told about `setup`, when the draft may write code.
 const SETUP: &str = include_str!("direct/setup.md");
 /// What the writer is told to do with a found item, for each [`ItemKnobs`].
-const ITEMS_BY_NAME: &str = include_str!("direct/items_by_name.md");
+pub(super) const ITEMS_BY_NAME: &str = include_str!("direct/items_by_name.md");
 const ITEMS_BY_ID: &str = include_str!("direct/items_by_id.md");
 /// The most names one lookup takes.
 const MAX_NAMES: usize = 10;
@@ -1258,7 +1258,7 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         request: &DraftRequest,
         program: &[Step],
         context: &DraftContext,
-    ) -> std::result::Result<String, &'static str> {
+    ) -> std::result::Result<super::Brief, &'static str> {
         let span = tracing::Span::current();
         span.record("routine.draft.drafter", "session_fast");
         let code = self.code_available(request, context);
@@ -1287,31 +1287,30 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         }
         // One call per group, so each keeps its own budget for the types it
         // imports: in one call the routines area's imports crowd out
-        // `ai`'s (`StructuredCompletionRequest`).
-        let mut groups = vec![vec!["routines".to_owned()]];
+        // `ai`'s (`StructuredCompletionRequest`). The routines and `ai`
+        // references are the same for every draft and go in the cached
+        // instructions; the named areas' go in the prompt.
+        let reference = |groups: &[Vec<String>]| {
+            groups
+                .iter()
+                .map(|group| self.code.area_reference(group))
+                .filter(|reference| !reference.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        };
+        let mut shared = vec![vec!["routines".to_owned()]];
         if code {
-            groups.push(vec![AI_AREA.to_owned()]);
-            groups.push(areas);
+            shared.push(vec![AI_AREA.to_owned()]);
         }
-        let reference = groups
-            .iter()
-            .map(|group| self.code.area_reference(group))
-            .filter(|reference| !reference.trim().is_empty())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let items = format!(
-            "{}\n{}",
-            lookup.for_writer(),
-            ITEMS_BY_NAME
-                .trim()
-                .replace(
-                    "in a trigger filter's `ids`",
-                    "in a trigger filter's `entities`, as the routines reference says"
-                )
-                .replace("the routines guide below", "the routines guide"),
-        );
+        let areas = if code { reference(&[areas]) } else { String::new() };
         Ok(super::fast_brief(
-            &task, context, code, owner, &items, &reference,
+            &task,
+            context,
+            code,
+            owner,
+            &lookup.for_writer(),
+            &reference(&shared),
+            &areas,
         ))
     }
 
