@@ -56,6 +56,8 @@ use super::{
 #[cfg(feature = "ai_tools")]
 mod design_files;
 #[cfg(feature = "ai_tools")]
+mod markdown_body;
+#[cfg(feature = "ai_tools")]
 mod presentation;
 mod sync_content;
 mod upload_file;

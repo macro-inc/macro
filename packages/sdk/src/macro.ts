@@ -487,6 +487,7 @@ export {
   DocumentChangedError,
   type DocumentMarkdown,
   type DocumentMarkdownWritten,
+  DocumentTooLargeError,
   type SetContentOptions,
 } from './entities/documents/markdown';
 export type { FileContent } from './entities/documents/namespace';
