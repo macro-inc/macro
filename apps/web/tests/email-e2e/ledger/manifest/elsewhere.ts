@@ -534,6 +534,14 @@ export const elsewhere = {
         'src/features/email-view/tour.ts',
       ],
     },
+    {
+      id: 'AX-326',
+      surface: 'SX-120',
+      fn: ['F-190'],
+      action: 'Open the steps of what the assistant did in a turn',
+      trigger: 'toggle "Used N tools"',
+      source: ['src/features/block-agent/ui/ToolGroup.tsx'],
+    },
   ],
   states: [
     {
@@ -892,6 +900,26 @@ export const elsewhere = {
       state: 'result: the email is gone from Home',
       trigger: 'after the action succeeds',
       source: ['src/features/home/components/HomeList.tsx'],
+    },
+    {
+      id: 'STX-975',
+      surface: 'SX-120',
+      fn: ['F-190'],
+      state:
+        'Step rows named after the mail operations a program of the assistant ran: "List Links", "List Labels", "Get Thread Messages", "Archive Thread"',
+      trigger: 'the assistant read, listed or changed mail in code',
+      source: [
+        'src/features/block-agent/component/parts/CodeExecutionToolCall.tsx',
+      ],
+    },
+    {
+      id: 'STX-976',
+      surface: 'SX-21',
+      fn: ['F-168'],
+      state:
+        'Review card of a drafted email after it is sent: status "Sent", its fields and "Send email" disabled',
+      trigger: 'the user sent the draft from the card',
+      source: ['src/features/agent-reviews/views/review-stack.tsx'],
     },
   ],
 } as const satisfies Group;

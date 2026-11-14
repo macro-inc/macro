@@ -278,12 +278,14 @@ test-email-e2e-full-stack instance *ARGS:
     gmail=$(port gmail_emulator 8080)
     outlook=$(port outlook_emulator 8080)
     queues=$(jq -er .localstack_url <<<"$status")
+    model=$(port model_emulator 8080)
     export EMAIL_E2E_STACK_PROXY_URL="$proxy"
     export EMAIL_E2E_STACK_DATABASE_URL="$database"
     export EMAIL_E2E_STACK_REDIS_URL="redis://localhost:$redis"
     export EMAIL_E2E_STACK_GMAIL_URL="http://localhost:$gmail"
     export EMAIL_E2E_STACK_OUTLOOK_URL="http://localhost:$outlook"
     export EMAIL_E2E_STACK_SQS_URL="$queues"
+    export EMAIL_E2E_STACK_MODEL_URL="http://localhost:$model"
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
 
 # The coverage ledger of the email UI, from the last run of the browser suite

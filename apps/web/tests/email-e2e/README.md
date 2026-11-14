@@ -136,6 +136,15 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   brings in new mail. A test of the live update waits until that paging
   is finished (`backfilled` in `full-stack-notifications.spec.ts`).
   `askAs(user, path)` asks a service as another signed-in user.
+- The assistant never calls a model there. The stack runs a stand-in for
+  the model (`crates/model_emulator`) that answers from scripts:
+  `harness/model.ts` adds one (`scriptModel`: the model's turns, each text
+  or tool calls), and the conversation whose message carries
+  `scriptMarker(name)` is answered from it. The stand-in is shared, so a
+  test names its script with `scriptName`. `modelRequests(name)` answers
+  what the assistant sent, tool declarations included.
+  `full-stack-assistant.spec.ts` drafts an email for review and reads mail
+  through scripted tool calls this way.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
   report counts it together with the per-test run's.
 

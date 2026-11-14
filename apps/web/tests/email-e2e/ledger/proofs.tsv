@@ -149,6 +149,8 @@ F-162	the New email switch saves nothing
 F-163	a notification row opens nothing
 F-164	Mark done on Home does nothing
 F-165	New email on a contact's record does nothing
+F-167	Create task on a thread opens no task composer, and Ask Macro opens a conversation without the thread attached
+F-168	the card of an email the assistant drafted sends the assistant's subject, not the one the user typed
 F-174	the refusal of a third inbox is not told
 F-177	Escape does not go back to the list
 F-178	Copy subject copies nothing
@@ -163,6 +165,7 @@ F-186	the watermark opens no upgrade prompt
 F-187	Copy ID copies nothing
 F-188	the thread offers no details panel
 F-189	Try again in the accounts settings does nothing
+F-190	the steps a program of the assistant took are not listed in the conversation
 F-191	a pasted thread link stays a plain link
 F-192	adding a domain to a CRM blacklist in Settings does nothing
 F-196	unblocking a sender does nothing
