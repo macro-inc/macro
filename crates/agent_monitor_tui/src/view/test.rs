@@ -435,6 +435,7 @@ fn commits_are_fresh_only_when_a_delta_brings_them() {
         40,
     );
     let mut graph = snapshot.repos[0].clone();
+    let graph_id = graph.id.clone();
     let mut view = ViewState::new(Box::new(Vitals::default()));
     view.apply(Update {
         seq: 1,
@@ -451,6 +452,21 @@ fn commits_are_fresh_only_when_a_delta_brings_them() {
     });
     assert_eq!(view.fresh.len(), 1);
     assert!(view.fresh.contains_key(&landed.oid));
+
+    // A lane new to the graph brings its old commits without a glitch.
+    let mut graph = view.repos[&graph_id].clone();
+    let mut entered = graph.lanes[0].clone();
+    entered.branch = String::from("feat/old-branch");
+    for (index, commit) in entered.commits.iter_mut().enumerate() {
+        commit.oid = agent_monitor::domain::model::Oid::parse(&format!("{:040x}", 0xe000 + index))
+            .expect("an oid");
+    }
+    graph.lanes.push(entered);
+    view.apply(Update {
+        seq: 3,
+        kind: UpdateKind::RepoUpsert(graph),
+    });
+    assert_eq!(view.fresh.len(), 1, "only the commit that landed glitches");
 
     // The clock retires it, with no further update.
     let arrived = view.fresh[&landed.oid];
