@@ -224,6 +224,7 @@ deny = [
     "agent",                     # GenAI span tests
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
+    "agent_monitor",             # Trace propagation span tests only (dev-dependency)
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
