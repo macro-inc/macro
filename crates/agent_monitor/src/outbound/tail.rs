@@ -43,6 +43,21 @@ impl Batch {
     }
 }
 
+/// A tail's offset and file identity.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TailPosition {
+    offset: u64,
+    identity: Option<FileIdentity>,
+}
+
+impl TailPosition {
+    /// Whether the file at this length and identity has bytes the tail has
+    /// not read, or was truncated or replaced. A cheap check from `stat` alone.
+    pub fn is_stale(&self, metadata: &std::fs::Metadata) -> bool {
+        metadata.len() != self.offset || self.identity != identity(metadata)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FileIdentity {
     device: u64,
@@ -51,14 +66,17 @@ struct FileIdentity {
 
 impl Tail {
     /// The byte offset read up to.
+    #[cfg(test)]
     pub fn offset(&self) -> u64 {
         self.offset
     }
 
-    /// Whether the file at this length and identity has bytes this tail has
-    /// not read, or was truncated or replaced. A cheap check from `stat` alone.
-    pub fn is_stale(&self, metadata: &std::fs::Metadata) -> bool {
-        metadata.len() != self.offset || self.identity != identity(metadata)
+    /// Where this tail stands, for a check away from the tail itself.
+    pub fn position(&self) -> TailPosition {
+        TailPosition {
+            offset: self.offset,
+            identity: self.identity,
+        }
     }
 
     /// Reads the complete lines after the offset, at most [`MAX_BATCH`] bytes.
