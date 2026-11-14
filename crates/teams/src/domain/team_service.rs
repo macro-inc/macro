@@ -50,10 +50,10 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
-        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
-        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
-        team_slug_from_name,
+        RemovedTeamMember, RestorePermissionsForTeamMembersError,
+        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
+        TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{
@@ -804,7 +804,7 @@ where
 
     async fn restore_after_channels_left(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
         seat_included: bool,
         subscription_id: Option<&stripe::SubscriptionId>,
         user_id: &MacroUserIdStr<'_>,
@@ -824,7 +824,7 @@ where
             .ok();
         if let Some(subscription_id) = subscription_id {
             self.customer_repository
-                .increment_seat_count(subscription_id, removed_member.plan, 1)
+                .increment_seat_count(subscription_id, removed_member.member.plan, 1)
                 .await
                 .inspect_err(|rollback_err| {
                     tracing::error!(
@@ -1037,7 +1037,7 @@ where
                     .schedule_seat_plan(subscription_id, user_id, None)
                     .await?;
                 self.customer_repository
-                    .decrement_seat_count(subscription_id, removed_member.plan, 1)
+                    .decrement_seat_count(subscription_id, removed_member.member.plan, 1)
                     .await
             }
             .await
@@ -1066,7 +1066,7 @@ where
             Err(error) => {
                 if let Some(subscription_id) = subscription_id.as_ref() {
                     self.customer_repository
-                        .increment_seat_count(subscription_id, removed_member.plan, 1)
+                        .increment_seat_count(subscription_id, removed_member.member.plan, 1)
                         .await
                         .inspect_err(|rollback_err| {
                             tracing::error!(
@@ -1165,16 +1165,16 @@ where
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
-            member_id: removed_member.user_id.clone().into_owned(),
+            member_id: removed_member.member.user_id.clone().into_owned(),
             removed_by_id: removed_by_id.clone(),
-            role: removed_member.role,
+            role: removed_member.member.role,
         })
         .await;
         self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
             team_id,
-            member_id: removed_member.user_id.into_owned(),
+            member_id: removed_member.member.user_id.into_owned(),
             removed_by: removed_by_id,
-            role: removed_member.role,
+            role: removed_member.member.role,
         }));
 
         Ok(())

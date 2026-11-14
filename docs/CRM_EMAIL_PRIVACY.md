@@ -27,7 +27,9 @@ pipeline cell remains pipeline content and may itself identify a record.
 
 `GET /crm/member-access` and the storage response header
 `x-macro-crm-access` expose current authority to clients. The server rechecks
-membership on each request. Settings controls and retirement of already-cached
+membership on each request. An optional header lookup failure omits the proof and
+leaves unrelated handlers available; protected operations still fail closed.
+Settings controls and retirement of already-cached
 client content are a separate client change; this server API alone does not
 remove previously downloaded content from an older client.
 

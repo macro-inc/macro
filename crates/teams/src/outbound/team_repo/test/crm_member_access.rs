@@ -64,3 +64,52 @@ async fn crm_access_is_admin_managed_and_cannot_lock_out_admins(
     assert!(repo.get_team_by_id(&team).await?.crm_member_access[member.as_ref()]);
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("teams"))
+)]
+async fn removal_compensation_preserves_the_stored_crm_preference(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team = uuid::Uuid::from_u128(0x11111111111111111111111111111111);
+    let repo = TeamRepositoryImpl::new(pool);
+    let roster = repo.get_team_by_id(&team).await?;
+    let member = roster
+        .members
+        .iter()
+        .find(|member| member.role == TeamRole::Member)
+        .unwrap()
+        .user_id
+        .clone();
+    let owner = roster
+        .members
+        .iter()
+        .find(|member| member.role == TeamRole::Owner)
+        .unwrap()
+        .user_id
+        .clone();
+    for enabled in [false, true] {
+        repo.set_member_crm_access(team, &owner, &member, enabled)
+            .await?;
+        for role in [TeamRole::Member, TeamRole::Admin] {
+            repo.patch_team_user_role(&team, &member, role).await?;
+            let removed = repo.remove_user_from_team(&team, &member).await?;
+            assert_eq!(removed.crm_access, enabled);
+            repo.rollback_remove_user_from_team(&removed, false).await?;
+            // A repeated or delayed rollback must not replace a newer row.
+            repo.rollback_remove_user_from_team(&removed, false).await?;
+            let mut conflicting = removed.clone();
+            conflicting.crm_access = !enabled;
+            repo.rollback_remove_user_from_team(&conflicting, false)
+                .await?;
+            repo.patch_team_user_role(&team, &member, TeamRole::Member)
+                .await?;
+            assert_eq!(
+                repo.get_team_by_id(&team).await?.crm_member_access[member.as_ref()],
+                enabled
+            );
+        }
+    }
+    Ok(())
+}

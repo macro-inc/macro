@@ -1242,7 +1242,7 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
         .await?;
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &user_id).await?;
-    assert_eq!(removed_member.role, TeamRole::Admin);
+    assert_eq!(removed_member.member.role, TeamRole::Admin);
 
     team_repo
         .rollback_remove_user_from_team(&removed_member, false)
@@ -1948,7 +1948,7 @@ async fn test_included_seat_survives_remove_and_rollback(
     );
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &agent_id).await?;
-    assert_eq!(removed_member.user_id.as_ref(), agent_id.as_ref());
+    assert_eq!(removed_member.member.user_id.as_ref(), agent_id.as_ref());
     assert!(!team_repo.is_seat_included(&team_id, &agent_id).await?);
 
     team_repo

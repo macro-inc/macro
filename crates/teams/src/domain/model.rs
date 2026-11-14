@@ -795,6 +795,15 @@ pub struct TeamInviteSnapshot<'a> {
     pub is_agent: bool,
 }
 
+/// Deleted membership state retained for compensation after a failed removal.
+#[derive(Debug, Clone)]
+pub struct RemovedTeamMember<'a> {
+    /// Membership identity, role and billing plan at deletion.
+    pub member: TeamMember<'a>,
+    /// Stored preference, including a denial masked by an administrative role.
+    pub crm_access: bool,
+}
+
 /// Result of accepting a team invite, including the data needed to roll it back.
 #[derive(Debug, Clone)]
 pub struct AcceptedTeamInvite<'a> {

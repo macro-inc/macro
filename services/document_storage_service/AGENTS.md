@@ -12,7 +12,7 @@ threads, pins, recents, notifications, folders, activity.
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
-- `src/api/middleware/crm_access.rs` reads current CRM membership on the primary and adds `x-macro-crm-access` to authenticated storage responses; record authorization remains in domain receipts. `GET /crm/member-access` supplies the same authority on session startup and cache recovery.
+- `src/api/middleware/crm_access.rs` reads current CRM membership on the primary and adds `x-macro-crm-access` to authenticated storage responses; record authorization remains in domain receipts. A failed optional header lookup is logged and omits the header without failing unrelated handlers; clients treat the missing proof as unknown, never as allowed. `GET /crm/member-access` supplies the same authority on session startup and cache recovery.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.

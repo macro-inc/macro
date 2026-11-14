@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO team_user (team_id, user_id, team_role, plan, seat_included)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT DO NOTHING\n            ",
+  "query": "\n            INSERT INTO team_user (team_id, user_id, team_role, plan, seat_included, crm_access)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT DO NOTHING\n            ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -30,10 +30,11 @@
             }
           }
         },
+        "Bool",
         "Bool"
       ]
     },
     "nullable": []
   },
-  "hash": "8e67d0c6153af7336398c621792b073ca2f05709068028624ca0c07b5a48b423"
+  "hash": "9d54d0baef817f65cf7e79257e0f46455da4f176131f8bb3c038b3c3e176369e"
 }
