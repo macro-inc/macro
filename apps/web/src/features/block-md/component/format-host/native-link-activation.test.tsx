@@ -3,7 +3,14 @@
 import { Telemetry } from '@macro-inc/observability';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  expect,
+  onTestFinished,
+  test,
+  vi,
+} from 'vitest';
 import { createNativeActionMenuHost } from '../../../../lib/core/component/LexicalMarkdown/editing/overlay-hosts/native-actions';
 import { ACTIONS } from '../../../../lib/core/component/LexicalMarkdown/plugins/actions/actions';
 import { dispatchApplicationCommandSettled } from '../../../../lib/core/component/LexicalMarkdown/plugins/group-b/command';
@@ -43,6 +50,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// Each acquisition registers its release at once: Vitest runs onTestFinished hooks in
+// reverse, independently, and records every failure next to the test's own.
 function setup() {
   const [canEdit, setCanEdit] = createSignal(true);
   const optionalErrors = vi.spyOn(Telemetry, 'error');
@@ -50,13 +59,17 @@ function setup() {
     canEdit,
     alive: () => true,
   });
+  onTestFinished(() => formatting.dispose());
   const runtime = mount([formatting.observer]);
+  onTestFinished(() => runtime.root.remove());
+  onTestFinished(() => runtime.close());
   // jsdom does not make contenteditable elements focusable like a browser.
   runtime.root.tabIndex = 0;
   // Source MarkdownPopup positions inside the document's local portal scope.
   const portalScope = document.createElement('div');
   portalScope.className = 'portal-scope';
   document.body.append(portalScope);
+  onTestFinished(() => portalScope.remove());
   portalScope.append(runtime.root);
   const documentState = createMarkdownDocumentState();
   const rendered = render(
@@ -82,6 +95,7 @@ function setup() {
     ),
     { container: portalScope }
   );
+  onTestFinished(() => rendered.unmount());
   runtime.port.setState(
     JSON.stringify({
       root: {
@@ -122,51 +136,35 @@ function setup() {
     link.dispatchEvent(
       new MouseEvent('click', { bubbles: true, cancelable: true })
     );
-  const dispose = async () => {
-    formatting.dispose();
-    rendered.unmount();
-    await runtime.close();
-    runtime.root.remove();
-    portalScope.remove();
-  };
   return {
     runtime,
     formatting,
     rendered,
     optionalErrors,
     click,
-    dispose,
     setCanEdit,
   };
 }
 
 test('an existing native link opens the shared URL editor', async () => {
   const fixture = setup();
-  try {
-    fixture.click();
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-    expect(screen.queryByPlaceholderText('https://example.com')).not.toBeNull();
-    expect(
-      screen.getByPlaceholderText<HTMLInputElement>('https://example.com').value
-    ).toBe('https://example.com');
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.click();
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
+  expect(screen.queryByPlaceholderText('https://example.com')).not.toBeNull();
+  expect(
+    screen.getByPlaceholderText<HTMLInputElement>('https://example.com').value
+  ).toBe('https://example.com');
 });
 
 test('a read-only view opens the link destination without an edit menu', async () => {
   const open = vi.spyOn(url, 'openExternalUrl').mockImplementation(() => {});
   const fixture = setup();
-  try {
-    fixture.runtime.view.setEditable(false);
-    expect(fixture.formatting.host()?.editable()).toBe(false);
-    fixture.click();
-    expect(open).toHaveBeenCalledExactlyOnceWith('https://example.com');
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.runtime.view.setEditable(false);
+  expect(fixture.formatting.host()?.editable()).toBe(false);
+  fixture.click();
+  expect(open).toHaveBeenCalledExactlyOnceWith('https://example.com');
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
 
 test('expanded global Prepare opens the URL editor and Escape retains the Source empty link', async () => {
@@ -207,7 +205,6 @@ test('expanded global Prepare opens the URL editor and Escape retains the Source
     expect(fixture.optionalErrors).not.toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
-    await fixture.dispose();
   }
 });
 
@@ -243,96 +240,75 @@ test('revocation after real Prepare prevents the deferred URL editor from openin
     expect(fixture.optionalErrors).not.toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
-    await fixture.dispose();
   }
 });
 
 test('the shared URL editor commits an existing-link URL through Enter', async () => {
   const fixture = setup();
-  try {
-    fixture.click();
-    const selection = fixture.runtime.view.selection().selection;
-    fireEvent.input(screen.getByPlaceholderText('https://example.com'), {
-      target: { value: 'https://updated.example/path' },
-    });
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'Enter',
-        bubbles: true,
-        cancelable: true,
-      })
-    );
-    expect(fixture.runtime.root.querySelector('a')?.getAttribute('href')).toBe(
-      'https://updated.example/path'
-    );
-    expect(fixture.runtime.view.selection().selection).toEqual(selection);
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(document.activeElement).toBe(fixture.runtime.root);
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.click();
+  const selection = fixture.runtime.view.selection().selection;
+  fireEvent.input(screen.getByPlaceholderText('https://example.com'), {
+    target: { value: 'https://updated.example/path' },
+  });
+  window.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    })
+  );
+  expect(fixture.runtime.root.querySelector('a')?.getAttribute('href')).toBe(
+    'https://updated.example/path'
+  );
+  expect(fixture.runtime.view.selection().selection).toEqual(selection);
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(document.activeElement).toBe(fixture.runtime.root);
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
 
 test('revoking interaction closes an already-open link editor', async () => {
   const fixture = setup();
-  try {
-    fixture.click();
-    expect(screen.queryByPlaceholderText('https://example.com')).not.toBeNull();
-    fixture.setCanEdit(false);
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.click();
+  expect(screen.queryByPlaceholderText('https://example.com')).not.toBeNull();
+  fixture.setCanEdit(false);
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
 
 test('a locked document cannot open the existing-link editor', async () => {
   const fixture = setup();
-  try {
-    fixture.setCanEdit(false);
-    fixture.click();
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.setCanEdit(false);
+  fixture.click();
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
 
 test('ordered Escape closes the existing-link editor and refocuses the view', async () => {
   const fixture = setup();
-  try {
-    fixture.click();
-    const input = screen.getByPlaceholderText('https://example.com');
-    input.focus();
-    expect(document.activeElement).toBe(input);
-    expect(fixture.runtime.port.nativeEscape?.dispatch()).toBe(true);
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(document.activeElement).toBe(fixture.runtime.root);
-    expect(fixture.runtime.root.querySelector('a')?.getAttribute('href')).toBe(
-      'https://example.com'
-    );
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.click();
+  const input = screen.getByPlaceholderText('https://example.com');
+  input.focus();
+  expect(document.activeElement).toBe(input);
+  expect(fixture.runtime.port.nativeEscape?.dispatch()).toBe(true);
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(document.activeElement).toBe(fixture.runtime.root);
+  expect(fixture.runtime.root.querySelector('a')?.getAttribute('href')).toBe(
+    'https://example.com'
+  );
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
 
 test('disposing the overlay removes the URL editor and its ordered key handlers', async () => {
   const fixture = setup();
-  try {
-    fixture.click();
-    expect(screen.queryByPlaceholderText('https://example.com')).not.toBeNull();
-    fixture.formatting.dispose();
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(fixture.runtime.port.nativeEscape?.hasListeners()).toBe(false);
-    expect(fixture.runtime.port.nativeEnter?.hasListeners()).toBe(false);
-    fixture.click();
-    expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    await fixture.dispose();
-  }
+  fixture.click();
+  expect(screen.queryByPlaceholderText('https://example.com')).not.toBeNull();
+  fixture.formatting.dispose();
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(fixture.runtime.port.nativeEscape?.hasListeners()).toBe(false);
+  expect(fixture.runtime.port.nativeEnter?.hasListeners()).toBe(false);
+  fixture.click();
+  expect(screen.queryByPlaceholderText('https://example.com')).toBeNull();
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });
 
 test('the slash Link row opens the Source create-link editor after actual search removal', async () => {
@@ -345,51 +321,150 @@ test('the slash Link row opens the Source create-link editor after actual search
     },
     () => true
   );
-  try {
-    fixture.runtime.port.setState(state(' body'));
-    const text = [...fixture.runtime.view.mirror.values()].find(
-      (node) => node.kind === 'text' && node.text === ' body'
-    );
-    if (!text) throw new Error('Missing actual native text');
-    fixture.runtime.port.selectionFromView({
-      kind: 'range',
-      anchor: { key: text.key, offset: 0, type: 'text' },
-      focus: { key: text.key, offset: 0, type: 'text' },
-    });
-    const trigger = await dispatchApplicationCommandSettled(
-      fixture.runtime.view,
-      'group-a.search-trigger',
-      { kind: 'actions' }
-    );
-    expect(trigger).toMatchObject({ status: 'success', handled: true });
-    const link = ACTIONS.find((item) => item.id === 'link');
-    if (!link) throw new Error('Missing actual Link catalog item');
-    expect(actions.supports(link)).toBe(true);
-    actions.select(link, 'keyboard');
-    const label =
-      await screen.findByPlaceholderText<HTMLInputElement>('Link text');
-    expect(fixture.runtime.root.querySelector('a')).toBeNull();
-    expect(fixture.runtime.root.textContent).toBe(' body');
-    fireEvent.input(screen.getByPlaceholderText('https://example.com'), {
-      target: { value: 'example.org' },
-    });
-    fireEvent.input(label, { target: { value: 'site' } });
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'Enter',
-        bubbles: true,
-        cancelable: true,
-      })
-    );
-    await vi.waitFor(() =>
-      expect(
-        fixture.runtime.root.querySelector('a')?.getAttribute('href')
-      ).toBe('https://example.org')
-    );
-    expect(fixture.runtime.root.textContent).toBe('site body');
-    expect(fixture.optionalErrors).not.toHaveBeenCalled();
-  } finally {
-    actions.dispose();
-    await fixture.dispose();
-  }
+  onTestFinished(() => actions.dispose());
+  fixture.runtime.port.setState(state(' body'));
+  const text = [...fixture.runtime.view.mirror.values()].find(
+    (node) => node.kind === 'text' && node.text === ' body'
+  );
+  if (!text) throw new Error('Missing actual native text');
+  fixture.runtime.port.selectionFromView({
+    kind: 'range',
+    anchor: { key: text.key, offset: 0, type: 'text' },
+    focus: { key: text.key, offset: 0, type: 'text' },
+  });
+  const trigger = await dispatchApplicationCommandSettled(
+    fixture.runtime.view,
+    'group-a.search-trigger',
+    { kind: 'actions' }
+  );
+  expect(trigger).toMatchObject({ status: 'success', handled: true });
+  const link = ACTIONS.find((item) => item.id === 'link');
+  if (!link) throw new Error('Missing actual Link catalog item');
+  expect(actions.supports(link)).toBe(true);
+  actions.select(link, 'keyboard');
+  const label =
+    await screen.findByPlaceholderText<HTMLInputElement>('Link text');
+  expect(fixture.runtime.root.querySelector('a')).toBeNull();
+  expect(fixture.runtime.root.textContent).toBe(' body');
+  fireEvent.input(screen.getByPlaceholderText('https://example.com'), {
+    target: { value: 'example.org' },
+  });
+  fireEvent.input(label, { target: { value: 'site' } });
+  window.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    })
+  );
+  await vi.waitFor(() =>
+    expect(fixture.runtime.root.querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.org'
+    )
+  );
+  expect(fixture.runtime.root.textContent).toBe('site body');
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
+});
+
+test('the existing-link menu Remove link unlinks like Source', async () => {
+  const fixture = setup();
+  fixture.click();
+  const menu = screen
+    .getByPlaceholderText('https://example.com')
+    .closest('.menu-surface');
+  if (!menu) throw new Error('Missing actual link menu surface');
+  const buttons = [...menu.querySelectorAll('button')];
+  // FloatingLinkMenu :438-466: Open in new tab, Edit link, Copy link, Remove link.
+  const remove = buttons[3];
+  if (!remove) throw new Error('Missing Remove link button');
+  fireEvent.click(remove);
+  await vi.waitFor(() =>
+    expect(fixture.runtime.root.querySelector('a')).toBeNull()
+  );
+  const paragraph = [...fixture.runtime.view.mirror.values()].find(
+    (node) => node.type === 'paragraph'
+  );
+  expect(
+    paragraph?.children.map((key) => {
+      const node = fixture.runtime.view.mirror.node(key);
+      return [node?.type, node?.text];
+    })
+  ).toEqual([['unlinked-text', 'linked']]);
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
+});
+
+// A real click's selectionchange can arrive after the click event that opens the menu.
+test('Remove link uses the caret admitted after the opening click', async () => {
+  const fixture = setup();
+  fixture.runtime.port.setState(
+    JSON.stringify({
+      root: {
+        type: 'root',
+        version: 1,
+        children: [
+          {
+            type: 'paragraph',
+            version: 1,
+            children: [
+              { type: 'text', version: 1, text: 'Hello ' },
+              {
+                type: 'link',
+                version: 1,
+                url: 'https://example.com',
+                children: [{ type: 'text', version: 1, text: 'linked' }],
+              },
+            ],
+          },
+        ],
+      },
+    })
+  );
+  const nodes = [...fixture.runtime.view.mirror.values()];
+  const hello = nodes.find((node) => node.text === 'Hello ');
+  const linked = nodes.find((node) => node.text === 'linked');
+  if (!hello || !linked) throw new Error('Missing actual native text');
+  const helloDOM = fixture.runtime.view.getElementByKey(hello.key)?.firstChild;
+  const linkedDOM = fixture.runtime.view.getElementByKey(
+    linked.key
+  )?.firstChild;
+  const anchor = fixture.runtime.root.querySelector('a');
+  const dom = document.getSelection();
+  if (!helloDOM || !linkedDOM || !anchor || !dom)
+    throw new Error('Missing actual native DOM');
+  fixture.runtime.root.focus();
+  // jsdom does not emit the selectionchange for setState's own DOM selection write.
+  document.dispatchEvent(new Event('selectionchange'));
+  dom.setBaseAndExtent(helloDOM, 2, helloDOM, 2);
+  document.dispatchEvent(new Event('selectionchange'));
+  expect(fixture.runtime.view.selection().selection).toMatchObject({
+    kind: 'range',
+    anchor: { key: hello.key, offset: 2, type: 'text' },
+    focus: { key: hello.key, offset: 2, type: 'text' },
+  });
+  // The press moved the browser caret into the link; its selectionchange is still queued.
+  dom.setBaseAndExtent(linkedDOM, 2, linkedDOM, 2);
+  anchor.dispatchEvent(
+    new MouseEvent('click', { bubbles: true, cancelable: true })
+  );
+  expect(fixture.runtime.view.selection().selection).toMatchObject({
+    kind: 'range',
+    anchor: { key: hello.key, offset: 2, type: 'text' },
+    focus: { key: hello.key, offset: 2, type: 'text' },
+  });
+  document.dispatchEvent(new Event('selectionchange'));
+  expect(fixture.runtime.view.selection().selection).toMatchObject({
+    kind: 'range',
+    anchor: { key: linked.key, offset: 2, type: 'text' },
+    focus: { key: linked.key, offset: 2, type: 'text' },
+  });
+  const menu = screen
+    .getByPlaceholderText('https://example.com')
+    .closest('.menu-surface');
+  const remove = menu ? [...menu.querySelectorAll('button')][3] : undefined;
+  if (!remove) throw new Error('Missing Remove link button');
+  fireEvent.click(remove);
+  await vi.waitFor(() =>
+    expect(fixture.runtime.root.querySelector('a')).toBeNull()
+  );
+  expect(fixture.optionalErrors).not.toHaveBeenCalled();
 });

@@ -46,7 +46,6 @@ export function createNativeDocumentLinkMenuHost(
     options.alive
   );
   let callbacks: LinkMenuCallbacks | undefined;
-  let target: ReturnType<typeof actions.captureLinkTarget> | undefined;
   let disposed = false;
   let terminal = false;
   let opening = false;
@@ -75,11 +74,17 @@ export function createNativeDocumentLinkMenuHost(
     const result = await pending;
     if (result.status === 'error') throw result.error;
   };
-  const currentTarget = () => {
-    if (!active() || !target)
-      throw new Error('Native link target is unavailable');
-    return target;
-  };
+  // Source dispatches INSERT/UPDATE_LINK*/UNLINK against the selection current at
+  // dispatch (lexical-link.ts insert/update/updateUrl/unlink); so do these.
+  const dispatch = (run: () => Promise<InputSettlement>) =>
+    fireAndForget(
+      complete(
+        active()
+          ? run()
+          : Promise.reject(new Error('Native link menu is closed'))
+      ),
+      'markdown-link-menu'
+    );
 
   async function open(): Promise<void> {
     if (!active() || !options.canEdit() || !callbacks || opening) return;
@@ -97,7 +102,6 @@ export function createNativeDocumentLinkMenuHost(
       selection.anchor.offset === selection.focus.offset &&
       selection.anchor.type === selection.focus.type
     ) {
-      target = actions.captureLinkTarget();
       callbacks.create({
         editAccess: true,
         selection: view.root.ownerDocument.getSelection(),
@@ -112,7 +116,6 @@ export function createNativeDocumentLinkMenuHost(
       | {
           selection: typeof selection;
           generation: number;
-          target: ReturnType<typeof actions.captureLinkTarget>;
         }
       | undefined;
     try {
@@ -122,11 +125,7 @@ export function createNativeDocumentLinkMenuHost(
         const generation = view.mirror.keyGeneration;
         if (selection.kind !== 'range' || generation === null)
           throw new Error('Native prepared link has no acknowledged range');
-        prepared = {
-          selection,
-          generation,
-          target: actions.captureLinkTarget(),
-        };
+        prepared = { selection, generation };
       });
       if (result.status === 'error') throw result.error;
       if (result.status !== 'success' || !result.handled || !prepared) return;
@@ -143,7 +142,6 @@ export function createNativeDocumentLinkMenuHost(
           return;
         const linkRef = view.getElementByKey(accepted.selection.focus.key);
         if (!linkRef) return;
-        target = accepted.target;
         callbacks?.click({
           editAccess: true,
           linkRef,
@@ -179,7 +177,6 @@ export function createNativeDocumentLinkMenuHost(
           },
           onClickLink: (info) => {
             if (!active() || !options.canEdit()) return;
-            target = actions.captureLinkTarget();
             callbacks?.click(info);
           },
         })
@@ -209,23 +206,10 @@ export function createNativeDocumentLinkMenuHost(
       }
       return () => releases.dispose();
     },
-    insert: (url, label) =>
-      fireAndForget(
-        complete(currentTarget().insert(url, label)),
-        'markdown-link-menu'
-      ),
-    update: (url, label) =>
-      fireAndForget(
-        complete(currentTarget().update(url, label)),
-        'markdown-link-menu'
-      ),
-    updateUrl: (url) =>
-      fireAndForget(
-        complete(currentTarget().updateUrl(url)),
-        'markdown-link-menu'
-      ),
-    unlink: () =>
-      fireAndForget(complete(currentTarget().unlink()), 'markdown-link-menu'),
+    insert: (url, label) => dispatch(() => actions.insertLink(url, label)),
+    update: (url, label) => dispatch(() => actions.updateLink(url, label)),
+    updateUrl: (url) => dispatch(() => actions.updateLinkUrl(url)),
+    unlink: () => dispatch(() => actions.unlink()),
     retire() {
       terminal = true;
       this.dispose();
@@ -236,7 +220,6 @@ export function createNativeDocumentLinkMenuHost(
       openingEpoch++;
       const current = callbacks;
       callbacks = undefined;
-      target = undefined;
       const scope = createNativeListenerScope();
       for (const cleanup of cleanups) scope.add(cleanup);
       scope.add(() => current?.create());
