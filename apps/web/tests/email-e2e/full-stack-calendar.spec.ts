@@ -433,7 +433,12 @@ for (const provider of PROVIDERS) {
       await expect(page).toHaveURL(/\/app\/calendar\/.*calendar\.eventId=/);
       const details = page.getByRole('dialog', { name: TITLE });
       await expect(details.getByText('Bring the agenda.')).toBeVisible();
-      await expect(details.getByText('January 14')).toBeVisible();
+      // The day in the zone the browser runs in: the event is at 17:00 UTC.
+      const day = new Date('2027-01-14T17:00:00Z').toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+      });
+      await expect(details.getByText(day)).toBeVisible();
       saw('STL-941');
     });
 
