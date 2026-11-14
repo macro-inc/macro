@@ -1,0 +1,55 @@
+; The fixture spec exercises every shape the generator emits; its client is
+; generated at build time for the unit and transport tests.
+
+(rule
+ (targets kinds.ml kinds.mli)
+ (deps
+  (glob_files fixtures/*.json)
+  ../.ocamlformat)
+ (action
+  (with-stdout-to
+   %{null}
+   (run %{exe:../gen/main.exe} sdk --specs fixtures --out . --format-as .))))
+
+(library
+ (name kinds_sdk)
+ (modules kinds)
+ (wrapped false)
+ (libraries macro_sdk.runtime yojson)
+ (flags
+  (:standard -w -30)))
+
+(test
+ (name test_kinds)
+ (modules test_kinds)
+ (libraries kinds_sdk macro_sdk.runtime yojson))
+
+(test
+ (name test_config)
+ (modules test_config)
+ (deps (universe))
+ (libraries macro_sdk.runtime unix))
+
+(test
+ (name test_transport)
+ (modules test_transport)
+ (libraries
+  kinds_sdk
+  macro_sdk.runtime
+  macro_sdk_eio
+  eio
+  eio_main
+  cohttp-eio
+  http
+  yojson
+  uri))
+
+; Regenerates the SDK into a temporary directory and fails if it differs
+; from the committed ./generated.
+
+(test
+ (name drift)
+ (modules drift)
+ (deps %{exe:../gen/main.exe} (universe))
+ (action
+  (run %{test} %{exe:../gen/main.exe})))
