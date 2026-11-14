@@ -5,7 +5,8 @@ use ratatui::style::Color;
 
 use super::Theme;
 
-/// A theme by name, as `[monitor] theme`, `--theme` and the header spell it.
+/// A theme by name, as `[monitor] theme`, `--theme` and the header spell it;
+/// parsing ignores case.
 #[derive(
     Clone,
     Copy,
@@ -14,14 +15,12 @@ use super::Theme;
     PartialEq,
     Eq,
     Hash,
-    serde::Deserialize,
     strum::Display,
     strum::EnumString,
     strum::EnumIter,
     strum::IntoStaticStr,
 )]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum ThemeName {
     /// The original look: green ok, cyan tools, yellow highlights, red errors.
     #[default]

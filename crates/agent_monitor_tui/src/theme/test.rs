@@ -12,6 +12,12 @@ fn theme_names_round_trip_through_config_spelling() {
 }
 
 #[test]
+fn theme_names_parse_in_any_case() {
+    assert_eq!("Ember".parse::<ThemeName>(), Ok(ThemeName::Ember));
+    assert_eq!("DUSK".parse::<ThemeName>(), Ok(ThemeName::Dusk));
+}
+
+#[test]
 fn every_theme_keeps_the_amber_ink_and_orange_chips() {
     for name in ThemeName::iter() {
         let theme = name.theme();

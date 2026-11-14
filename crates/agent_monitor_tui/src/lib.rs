@@ -58,6 +58,9 @@ mod unix {
         pub fps: u8,
         /// The colour theme it starts in.
         pub theme: ThemeName,
+        /// A note for the command line until the first key, such as a
+        /// configured theme that does not exist.
+        pub notice: Option<String>,
     }
 
     /// Why the viewer stopped with an error.
@@ -87,19 +90,22 @@ mod unix {
             FeedChoice::Socket(socket) => (feed::socket(socket), None),
             FeedChoice::Demo { seed } => (feed::demo(seed), Some(String::from("DEMO"))),
         };
-        run_feed(feed, label, options.fps, options.theme).await
+        run_feed(feed, label, options.fps, options.theme, options.notice).await
     }
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
-    /// over a store it hosts; `label` is shown in the header.
+    /// over a store it hosts; `label` is shown in the header and `notice` on
+    /// the command line until the first key.
     pub async fn run_feed(
         feed: Feed,
         label: Option<String>,
         fps: u8,
         theme: ThemeName,
+        notice: Option<String>,
     ) -> Result<(), ViewerError> {
         let mut app = App::new(ViewState::new(body()), label);
         app.set_theme(theme);
+        app.message = notice;
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
         let result = runner::run_loop(
