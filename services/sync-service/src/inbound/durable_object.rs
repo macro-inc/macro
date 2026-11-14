@@ -492,6 +492,7 @@ impl SyncSession {
             Some(serde_json::from_slice(&bytes)?)
         };
 
+        let state = maybe_404!(self.document_state().await)?;
         let frontiers = match body.and_then(|request| request.version_id) {
             Some(version) => {
                 let Ok(peer) = version.peer.parse::<u64>() else {
@@ -500,14 +501,17 @@ impl SyncSession {
                 if version.counter < 0 {
                     return Ok(response(400));
                 }
-                Some(ExportMode::StateOnly(Some(Cow::Owned(
-                    loro::Frontiers::ID(loro::ID::new(peer, version.counter)),
-                ))))
+                let Some(frontiers) =
+                    state.frontiers_at_change(loro::ID::new(peer, version.counter))
+                else {
+                    return Ok(response(400));
+                };
+                Some(ExportMode::StateOnly(Some(Cow::Owned(frontiers))))
             }
             None => None,
         };
 
-        let out = maybe_404!(self.document_state().await)?
+        let out = state
             .export_snapshot(frontiers)
             .context("Couldn't export snapshot")?;
         Ok(ResponseBuilder::new().body(ResponseBody::Body(out)))

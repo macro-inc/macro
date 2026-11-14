@@ -314,6 +314,62 @@ fn concurrent_branches_survive_session_snapshot_roundtrip() {
 }
 
 #[test]
+fn version_snapshot_keeps_concurrent_heads_from_the_same_time() {
+    let state = DocumentState::new();
+    let a = LoroDoc::new();
+    a.set_peer_id(1).unwrap();
+    a.get_map("values").insert("a", 1).unwrap();
+    let b = LoroDoc::new();
+    b.set_peer_id(2).unwrap();
+    b.get_map("values").insert("b", 2).unwrap();
+    state
+        .loro_doc
+        .import(&a.export(ExportMode::all_updates()).unwrap())
+        .unwrap();
+    state
+        .loro_doc
+        .import(&b.export(ExportMode::all_updates()).unwrap())
+        .unwrap();
+    assert_eq!(state.loro_doc.oplog_frontiers().len(), 2);
+
+    let later = b.oplog_frontiers().iter().next().unwrap();
+    let frontiers = state.frontiers_at_change(later).unwrap();
+    assert_eq!(frontiers.len(), 2);
+
+    let bytes = state
+        .export_snapshot(Some(ExportMode::StateOnly(Some(Cow::Owned(frontiers)))))
+        .unwrap();
+    let restored = LoroDoc::new();
+    restored.import(&bytes).unwrap();
+    assert_eq!(restored.get_deep_value(), state.loro_doc.get_deep_value());
+}
+
+#[test]
+fn version_snapshot_at_an_earlier_change_excludes_later_ops() {
+    let state = DocumentState::new();
+    state.loro_doc.set_record_timestamp(true);
+    let text = state.loro_doc.get_text("content");
+    text.insert(0, "Version 1").unwrap();
+    state.loro_doc.commit();
+    let v1 = state.loro_doc.oplog_frontiers().iter().next().unwrap();
+    text.insert(9, " -> Version 2").unwrap();
+    state.loro_doc.commit();
+    let frontiers = state.frontiers_at_change(v1).unwrap();
+    let bytes = state
+        .export_snapshot(Some(ExportMode::StateOnly(Some(Cow::Owned(frontiers)))))
+        .unwrap();
+    let restored = LoroDoc::new();
+    restored.import(&bytes).unwrap();
+    assert_eq!(restored.get_text("content").to_string(), "Version 1");
+}
+
+#[test]
+fn version_snapshot_rejects_an_id_that_is_not_in_the_oplog() {
+    let state = DocumentState::new();
+    assert!(state.frontiers_at_change(ID::new(9, 0)).is_none());
+}
+
+#[test]
 fn shared_history_still_compacts_with_concurrent_heads() {
     for heads in [2, 3, 5] {
         let state = DocumentState::new();

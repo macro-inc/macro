@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::HashSet, sync::Mutex};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashSet},
+    sync::Mutex,
+};
 
 use loro::{
     Container, ContainerID, ExportMode, Frontiers, ID, IdSpan, JsonMapOp, JsonMovableListOp,
@@ -272,6 +276,59 @@ impl DocumentState {
             return Some(id.to_string());
         }
         None
+    }
+
+    /// Frontier at `id` plus concurrent heads whose timestamp is not later.
+    ///
+    /// History fork/copy sends a single peer id. `StateOnly` on that id alone is
+    /// the causal past of one head, so concurrent spreadsheet (and any
+    /// multi-peer) edits from the same moment are dropped. The requested peer
+    /// stays capped at `id` so sequential copy-at-version is unchanged. None if
+    /// `id` is not in the oplog.
+    pub fn frontiers_at_change(&self, id: ID) -> Option<Frontiers> {
+        let target = self.loro_doc.get_change(id)?;
+        let mut frontier: BTreeMap<u64, i32> = BTreeMap::new();
+        for (peer, &end) in self.loro_doc.oplog_vv().iter() {
+            let mut counter = 0;
+            while counter < end {
+                let Some(change) = self.loro_doc.get_change(ID::new(*peer, counter)) else {
+                    break;
+                };
+                let next = change.id.counter + change.len as i32;
+                // The requested peer stays causal (`id` itself), matching
+                // `Frontiers::ID`. Other peers include heads whose timestamp is
+                // not after this change, which is what a single-id history fork
+                // would otherwise drop.
+                let include = if change.id.peer == id.peer {
+                    change.id.counter <= id.counter
+                } else {
+                    change.timestamp <= target.timestamp
+                };
+                if include {
+                    for dep in change.deps.iter() {
+                        if frontier
+                            .get(&dep.peer)
+                            .is_some_and(|cur| *cur <= dep.counter)
+                        {
+                            frontier.remove(&dep.peer);
+                        }
+                    }
+                    let mut end_counter = next - 1;
+                    if change.id.peer == id.peer {
+                        end_counter = end_counter.min(id.counter);
+                    }
+                    if end_counter > frontier.get(&change.id.peer).copied().unwrap_or(-1) {
+                        frontier.insert(change.id.peer, end_counter);
+                    }
+                }
+                counter = next;
+            }
+        }
+        let mut frontiers = Frontiers::default();
+        for (peer, counter) in frontier {
+            frontiers.push(ID::new(peer, counter));
+        }
+        Some(frontiers)
     }
 
     /// Export the document state as a snapshot
