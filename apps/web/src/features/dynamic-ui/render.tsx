@@ -10,6 +10,7 @@ import type {
   WidgetType,
 } from './view';
 import { AgentUpdates } from './widgets/AgentUpdates';
+import { BotCredential } from './widgets/BotCredential';
 import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
 import { Events } from './widgets/Events';
@@ -35,6 +36,7 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'cards' }, (n) => <Cards {...n} />)
     .with({ type: 'tags' }, (n) => <Tags {...n} />)
     .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
+    .with({ type: 'botCredential' }, (n) => <BotCredential {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
     .exhaustive();
 }
