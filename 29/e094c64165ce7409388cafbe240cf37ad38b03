@@ -1,0 +1,26 @@
+crates/agent_monitor/src/domain/join.rs
+  h_659b58cf3b37bf 365-368
+crates/agent_monitor/src/domain/join/test.rs
+  h_659b58cf3b37bf 1055-1058
+crates/agent_monitor_tui/src/body.rs
+  h_659b58cf3b37bf 223-226
+crates/coding_agent_worker/src/monitor.rs
+  h_659b58cf3b37bf 348-366,369-370,386-391,405-407,411-413,554-558
+crates/coding_agent_worker/src/monitor/test.rs
+  h_659b58cf3b37bf 125-128,276-279
+crates/mesh_man/src/test.rs
+  h_659b58cf3b37bf 221-232,262-267
+crates/mesh_man/src/widget.rs
+  h_659b58cf3b37bf 22,92-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "29e094c64165ce7409388cafbe240cf37ad38b03",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
