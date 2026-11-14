@@ -367,19 +367,39 @@ fn child_modules(
     }
 }
 
-/// Whether the attributes hold a `#[cfg(test)]`, alone or inside `all(...)`.
+/// Whether a `#[cfg(...)]` among the attributes can only hold in a test
+/// build.
 pub(crate) fn is_test_only(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| {
-        if !attr.path().is_ident("cfg") {
-            return false;
-        }
-        let Ok(condition) = attr.parse_args::<proc_macro2::TokenStream>() else {
-            return false;
-        };
-        let condition = condition.to_string();
-        let names: Vec<&str> = condition
-            .split(|c: char| !c.is_alphanumeric() && c != '_')
-            .collect();
-        names.contains(&"test") && !names.contains(&"not")
+        attr.path().is_ident("cfg")
+            && attr
+                .parse_args::<syn::Meta>()
+                .is_ok_and(|condition| !holds_outside_tests(&condition))
     })
 }
+
+/// Whether a `cfg` condition can hold when `test` does not. What is not
+/// `test`, `all` or `any` (a feature, a target, a `not`) is taken to hold:
+/// a module wrongly listed is seen, one wrongly left out is not.
+fn holds_outside_tests(condition: &syn::Meta) -> bool {
+    let syn::Meta::List(list) = condition else {
+        return !condition.path().is_ident("test");
+    };
+    let all = list.path.is_ident("all");
+    if !all && !list.path.is_ident("any") {
+        return true;
+    }
+    let Ok(parts) = list.parse_args_with(
+        syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+    ) else {
+        return true;
+    };
+    if all {
+        parts.iter().all(holds_outside_tests)
+    } else {
+        parts.iter().any(holds_outside_tests)
+    }
+}
+
+#[cfg(test)]
+mod test;

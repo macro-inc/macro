@@ -181,9 +181,15 @@ impl Walker<'_> {
                 continue;
             }
 
+            // An assignment may add routes inside a function it calls
+            // (`router = add_routes(router)`), which no method name shows.
+            let assigned = match statement {
+                Stmt::Expr(Expr::Assign(assign), _) => Some(assign.span()),
+                _ => None,
+            };
             let mut routing = RoutingCalls::default();
             routing.visit_stmt(statement);
-            if let Some(span) = routing.first {
+            if let Some(span) = routing.first.or(assigned) {
                 bail!(
                     "{}: `{name}` adds routes in a statement the walker cannot follow; \
                      build the router in `let` bindings and one final expression",

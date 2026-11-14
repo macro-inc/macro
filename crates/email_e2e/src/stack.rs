@@ -833,16 +833,23 @@ impl Stack {
     /// Ends the scenario: fails when a service died or panicked, then removes
     /// everything the stack created.
     pub async fn finish(mut self) -> Result<(), Report> {
-        let health = self.check_services();
-        self.finished = health.is_ok();
+        let mut health = self.check_services();
         // Only a scenario that ended well is evidence of anything. A record
         // that cannot be written does not fail it: the coverage report
         // lists scenarios that passed and left none.
-        if health.is_ok()
-            && let Err(error) = self.write_evidence().await
-        {
-            eprintln!("email_e2e: could not write the scenario's evidence: {error}");
+        if health.is_ok() {
+            if let Err(error) = self.write_evidence().await {
+                eprintln!("email_e2e: could not write the scenario's evidence: {error}");
+            }
+            // Writing the record waits for work to settle: a service that
+            // died or panicked meanwhile fails the scenario too, and its
+            // record is not kept.
+            health = self.check_services();
+            if health.is_err() {
+                let _missing = std::fs::remove_file(self.evidence_path());
+            }
         }
+        self.finished = health.is_ok();
         self.tear_down().await;
         health
     }

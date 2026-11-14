@@ -58,6 +58,12 @@ fn check_consumed_queues(
     let file = repo.parse(&workers.file)?;
     let mut consumed = ConsumedQueues::default();
     consumed.visit_file(&file);
+    if let Some((variable, span)) = &consumed.ambiguous {
+        bail!(
+            "{}: `{variable}` names two different queues in this file; give each its own name",
+            Loc::new(&workers.file, *span)
+        );
+    }
 
     let configured: BTreeSet<&str> = queues
         .iter()
@@ -106,6 +112,8 @@ struct ConsumedQueues {
     /// The variable each `SQSWorker::new(client, x.to_string(), ..)` reads
     /// its queue from.
     worker_queues: Vec<(String, proc_macro2::Span)>,
+    /// The first variable name bound to two different queue types.
+    ambiguous: Option<(String, proc_macro2::Span)>,
 }
 
 impl<'ast> Visit<'ast> for ConsumedQueues {
@@ -117,8 +125,14 @@ impl<'ast> Visit<'ast> for ConsumedQueues {
             && crate_name == QUEUE_TYPES_CRATE
             && constructor == "new"
         {
-            self.queue_types
-                .insert(variable.ident.to_string(), queue_type.clone());
+            let name = variable.ident.to_string();
+            // Variables are looked up by name across the file: one name
+            // for two queues would give both workers the second.
+            if let Some(earlier) = self.queue_types.insert(name.clone(), queue_type.clone())
+                && earlier != *queue_type
+            {
+                self.ambiguous.get_or_insert((name, variable.ident.span()));
+            }
         }
         syn::visit::visit_local(self, local);
     }

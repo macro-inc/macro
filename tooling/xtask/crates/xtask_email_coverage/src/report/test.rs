@@ -285,3 +285,16 @@ fn results_tell_flaky_from_passed_and_failed() {
     );
     assert!((run.seconds - 12.5).abs() < f64::EPSILON);
 }
+
+/// A results file with no test in it is not a run in which nothing failed.
+#[test]
+fn a_results_file_without_tests_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("junit.xml");
+    std::fs::write(&file, "<testsuites name=\"nextest-run\" tests=\"3\"").unwrap();
+    let error = super::junit::load(&[file]).unwrap_err();
+    assert!(
+        error.to_string().contains("holds no test results"),
+        "{error}"
+    );
+}

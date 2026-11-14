@@ -48,7 +48,13 @@ pub(crate) fn load(files: &[PathBuf]) -> Result<Results, Report> {
     for file in files {
         let text =
             std::fs::read_to_string(file).context(format!("could not read {}", file.display()))?;
-        results.runs.push(read(file, &text, &mut results.outcomes));
+        let run = read(file, &text, &mut results.outcomes);
+        // A file cut short or empty would otherwise pass for a run in
+        // which nothing failed.
+        if run.tests == 0 {
+            bail!("{} holds no test results", file.display());
+        }
+        results.runs.push(run);
     }
     Ok(results)
 }
