@@ -212,3 +212,38 @@ durable answer is retained. Successful pending announcements are not posted agai
 Deploy the backend migration/service and update macrod to enable this path.
 Previously released daemons generate unrelated action IDs; this change does
 not repair old pending replies produced by those versions.
+
+## Monitor
+
+`macrod monitor` (Linux and macOS) is a live board of every agent on the
+machine: hc terminals, Claude Code and Codex sessions, macrod's own sessions,
+managers and work runs. The viewer (`crates/agent_monitor_tui`) reads one
+collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor.sock`.
+
+- **One collector per machine.** The first process to claim the socket hosts
+  it: the panel or `macrod service` while `[monitor] enabled` (the default),
+  or `macrod monitor serve`. A socket that answers is left alone and the
+  process skips hosting; a socket left by a dead collector is replaced only
+  after a connect fails, under `<socket>.lock`. The directory is 0700 and the
+  socket 0600.
+- **`macrod monitor`** opens the viewer. When nothing answers it starts
+  `macrod monitor serve --exit-when-idle` detached (its own process group,
+  logging to `~/.macrod/logs/monitor.log`), which exits after ten minutes
+  without a viewer. The viewer reconnects by itself when its collector goes
+  away, and a collector started by a later `macrod monitor` takes over.
+- **`macrod monitor serve`** runs the collector alone: no pairing, no config
+  lock, no harness. It reads only `[monitor]` from `~/.macrod/macrod.toml`
+  and refuses to start while another collector answers.
+- **`macrod monitor dump`** prints `{"connected": ...}`, then one
+  `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
+  stops after N updates.
+- **`macrod monitor --demo`** shows the scripted demo fleet from the viewer's
+  own process, with no collector. Recordings shared outside the machine use it.
+- `--socket <path>` points any of them at another socket (tests).
+- A hosting panel or service adds the `daemon` source: its harness id,
+  whether the runtime is connected, and its open prompts, as that source's
+  health. The Config tab toggles hosting (`Agent monitor`); `history_hours`,
+  `fps` and `run_record_dirs` take effect on the next start.
+- `macrod monitor serve` and `macrod service` export `macrod.monitor*` spans
+  when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Rows, spans and logs carry ids
+  and counts, never transcript text.

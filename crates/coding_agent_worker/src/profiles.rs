@@ -114,7 +114,10 @@ impl MacrodHome {
     }
 
     /// `~/.macrod` itself.
-    #[cfg_attr(not(unix), expect(dead_code, reason = "only the Unix agent monitor reads it"))]
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only the Unix agent monitor reads it")
+    )]
     pub fn directory(&self) -> &Path {
         &self.directory
     }

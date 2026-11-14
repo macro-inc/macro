@@ -186,7 +186,10 @@ impl Collector {
         if let Some(daemon) = daemon {
             spawn_source(
                 &store,
-                move || Box::new(daemon_source::DaemonSource::new(daemon.clone())) as Box<dyn AgentSource>,
+                move || {
+                    Box::new(daemon_source::DaemonSource::new(daemon.clone()))
+                        as Box<dyn AgentSource>
+                },
                 &tracker,
                 cancel.clone(),
             );

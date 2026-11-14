@@ -106,8 +106,7 @@ impl AgentSource for DaemonSource {
             let current = state.borrow_and_update().clone();
             let span = tracing::info_span!(
                 "macrod.monitor.source.batch",
-                source = SourceKind::Daemon.name(),
-                observations = 1_u32,
+                source = SourceKind::Daemon.name()
             );
             send(&out, Change::Health(health(&current, Utc::now())))
                 .instrument(span)

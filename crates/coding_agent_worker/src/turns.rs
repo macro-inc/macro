@@ -106,7 +106,10 @@ impl ActiveTurns {
     }
 
     /// How many turns are running, as it changes.
-    #[cfg_attr(not(unix), expect(dead_code, reason = "the agent monitor is Unix only"))]
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "the agent monitor is Unix only")
+    )]
     pub fn open_count(&self) -> watch::Receiver<usize> {
         self.open.subscribe()
     }

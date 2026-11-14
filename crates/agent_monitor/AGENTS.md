@@ -48,7 +48,9 @@ subscriber gets a fresh snapshot.
 - `build.rs` compiles the proto with `protox`; no `protoc` is needed. Bump
   `proto::PROTOCOL` on any incompatible proto change.
 - `Change::Reset` replaces every fact filed under its `SourceKind`, so each
-  adapter needs its own kind.
+  adapter needs its own kind. `SourceKind::Daemon` belongs to the hosting
+  macrod (`coding_agent_worker/src/monitor/daemon_source.rs`) and only reports
+  health.
 - Socket paths must fit `SUN_LEN` (about 100 bytes); deep temp dirs fail to bind.
 - One collector per socket is enforced by a lock on `<socket>.lock` held for the
   server's life (`inbound::grpc::BoundSocket`), not by probing the socket.

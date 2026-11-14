@@ -126,7 +126,11 @@ async fn a_serving_core_reports_until_it_stops() {
     assert_eq!(reported.harness, Some(HarnessId::TEST_A));
 
     drop(report);
-    let stopped = state.wait_for(|state| state.harness.is_none()).await.unwrap().clone();
+    let stopped = state
+        .wait_for(|state| state.harness.is_none())
+        .await
+        .unwrap()
+        .clone();
     assert_eq!(stopped, DaemonState::default());
 }
 
@@ -134,7 +138,10 @@ async fn a_serving_core_reports_until_it_stops() {
 fn daemon_health_says_whether_the_runtime_is_connected() {
     let now = chrono::Utc::now();
     let idle = daemon_source::health(&DaemonState::default(), now);
-    assert_eq!(idle.state, agent_monitor::domain::model::SourceState::Absent);
+    assert_eq!(
+        idle.state,
+        agent_monitor::domain::model::SourceState::Absent
+    );
 
     let serving = DaemonState {
         harness: Some(HarnessId::TEST_A),
@@ -142,7 +149,10 @@ fn daemon_health_says_whether_the_runtime_is_connected() {
         open_prompts: 3,
     };
     let healthy = daemon_source::health(&serving, now);
-    assert_eq!(healthy.state, agent_monitor::domain::model::SourceState::Healthy);
+    assert_eq!(
+        healthy.state,
+        agent_monitor::domain::model::SourceState::Healthy
+    );
     assert_eq!(healthy.items, 3);
 
     let offline = daemon_source::health(
@@ -152,5 +162,8 @@ fn daemon_health_says_whether_the_runtime_is_connected() {
         },
         now,
     );
-    assert_eq!(offline.state, agent_monitor::domain::model::SourceState::Unhealthy);
+    assert_eq!(
+        offline.state,
+        agent_monitor::domain::model::SourceState::Unhealthy
+    );
 }
