@@ -37,7 +37,7 @@ function modelUrl(): string {
   const url = process.env.EMAIL_E2E_STACK_MODEL_URL;
   if (!url) {
     throw new Error(
-      "EMAIL_E2E_STACK_MODEL_URL is not set: the address of the stack's model stand-in"
+      'EMAIL_E2E_STACK_MODEL_URL is not set: the stack runs its model stand-in only when it has no real Gemini key (also none in the environment it was started from)'
     );
   }
   return url.replace(/\/$/, '');
