@@ -103,7 +103,8 @@ pub trait DatabaseStorageService: Send + Sync + 'static {
     /// For each read, its table's columns and the cells of those of its rows
     /// that belong to the table, with the same few statements however many
     /// tables are read. A read whose table is not in its resource is left out.
-    /// Only the named rows are read, and no views.
+    /// Two reads of one table each get only their own rows. Only the named
+    /// rows are read, and no views.
     fn storage_tables_rows(
         &self,
         reads: &[StorageRowsRead],

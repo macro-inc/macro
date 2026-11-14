@@ -1,5 +1,6 @@
 //! Storage reads of named rows across several tables: only the rows each read
-//! names that belong to its table, with its table's columns.
+//! names that belong to its table, with its table's columns, even when two
+//! reads name one table.
 
 use models_databases::{CellValue, CellWrite, DatabaseOp, RowsChange};
 use models_properties::service::property_value::PropertyValue;
@@ -111,11 +112,16 @@ async fn named_rows_are_read_only_from_the_table_each_read_names(pool: PgPool) {
                 table: elsewhere_table,
                 rows: vec![robin, alex],
             },
+            StorageRowsRead {
+                database: guests.database_id,
+                table: guests.table_id,
+                rows: vec![alex],
+            },
         ])
         .await
         .unwrap();
 
-    assert_eq!(read.len(), 2, "a table outside its resource is left out");
+    assert_eq!(read.len(), 3, "a table outside its resource is left out");
     assert_eq!(read[0].table, guests.table_id);
     assert_eq!(
         read[0]
@@ -144,5 +150,15 @@ async fn named_rows_are_read_only_from_the_table_each_read_names(pool: PgPool) {
             .map(|row| (row.row_id, row.cells.get(&elsewhere_name).cloned()))
             .collect::<Vec<_>>(),
         vec![(robin, Some(PropertyValue::Str("Robin".into())))]
+    );
+    assert_eq!(read[2].table, guests.table_id);
+    assert_eq!(
+        read[2]
+            .rows
+            .iter()
+            .map(|row| row.row_id)
+            .collect::<Vec<_>>(),
+        vec![alex],
+        "a second read of the same table gets only its own rows"
     );
 }

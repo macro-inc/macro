@@ -340,9 +340,12 @@ where
                     .filter(|column| column.column.table_id == read.table)
                     .cloned()
                     .collect();
+                // Only this read's rows, even when another read names the
+                // same table.
+                let named: HashSet<_> = read.rows.iter().collect();
                 let rows = wanted
                     .iter()
-                    .filter(|(table, _)| *table == read.table)
+                    .filter(|(table, row)| *table == read.table && named.contains(row))
                     .map(|(_, row)| storage_row(*row, cells.get(row).unwrap_or(&empty), &columns))
                     .collect();
                 StorageTableRows {
