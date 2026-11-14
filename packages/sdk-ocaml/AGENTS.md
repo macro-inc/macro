@@ -3,8 +3,10 @@
 ## What it is
 
 A prototype of permissioned SDK code: programs written in OCaml against
-`macro_sdk`, a typed client generated from the OpenAPI specs,  run through a proxy
-that checks every call. Usage and the OCaml surface are in `README.md`.
+`macro_sdk`, a typed client generated from the OpenAPI specs, whose callable
+operations are known from the typed tree before they run, run through a proxy
+that checks every call. Usage, the OCaml surface and what the analyzer refuses
+are in `README.md`.
 
 ## Start here
 
@@ -13,6 +15,9 @@ that checks every call. Usage and the OCaml surface are in `README.md`.
 - `generator/emit.ts`: OpenAPI schemas and operations to OCaml types, codecs
   and functions, one service at a time.
 - `lib/macro_runtime.ml`: the client's HTTP transport and codec helpers.
+- `analyzer/lib/analyze.ml`: the typed-tree walk; every escape is handled here.
+- `analyzer/lib/policy.ml`: the Stdlib allow-list and allowed attributes.
+- `runner/main.ml`: analyze, decide, compile, run.
 - `proxy/`: the HTTP proxy, mock permission endpoint and fake upstream (own
   `AGENTS.md`).
 
@@ -40,7 +45,8 @@ From the repository root (deps: `bun install --frozen-lockfile` at the root):
 - `nix-shell packages/sdk-ocaml/shell.nix --run 'cd packages/sdk-ocaml && bun generator/generate.ts && dune build @install && dune test && bun test generator spec'`
 - `nix shell nixpkgs#bun -c sh -c 'cd packages/sdk-ocaml && bun spec/build.ts && bun test spec'`
   after a spec sync or a change under `spec/`.
-- `bun run test` and `bun run type-check` in `proxy/` after a change there.
+- `packages/sdk-ocaml/e2e/run.sh` after any change to the client, analyzer,
+  runner or proxy.
 - Generator TypeScript: `bun ../../node_modules/typescript/bin/tsc --noEmit -p generator/tsconfig.json`;
   the same with `spec/tsconfig.json` for `spec/`.
 
@@ -56,8 +62,8 @@ From the repository root (deps: `bun install --frozen-lockfile` at the root):
   (`check_interface` fails otherwise); no pure value may make a call or
   return a closure or object that makes calls.
 - `macro.mli` copies each service with `module X : module type of Macro_x`,
-  which `check_interface` sees as a literal signature; a module alias there
-  would hide the service's values from it.
+  which `check_interface` and the analyzer see as a literal signature; a
+  module alias there would hide the service's values from both.
 - The proxy refuses encoded `/`, `\`, `%`, control and unreserved
   characters, dot segments and a body on GET; the runtime percent-encodes
   only non-unreserved bytes and rejects path values it can't send. Of the
@@ -69,3 +75,13 @@ From the repository root (deps: `bun install --frozen-lockfile` at the root):
 - Records in one recursive type group can't share a label (warning 30 is an
   error), so the generator suffixes a later one (`clauses_2`). Never disable
   warnings to get generated code through.
+- Soundness rests on the analyzer, so a change there needs a test case in
+  `analyzer/test/test_analyzer.ml` for each new way in or out.
+- Never add a Stdlib module to the allow-list without reading its whole
+  interface: one I/O function or `unsafe_*` in a module allowed whole is an
+  escape (modules passed to functors are checked value by value, but only
+  against the list).
+- Programs and the analyzer must see the same search path; the runner compiles
+  with the analyzer's `-I`/`-H` directories. Keep them in step.
+- The compiler auto-includes `+unix`, `+threads` and `+dynlink` unless told not
+  to (`Load_path.no_auto_include` in `analyze.ml`).

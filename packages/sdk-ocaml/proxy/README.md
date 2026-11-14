@@ -86,7 +86,7 @@ bun run packages/sdk-ocaml/proxy/src/proxy.ts \
 | `--upstream <service>=<base url>` | | a service's base URL; repeatable |
 | `--upstreams <file>` | | the same as JSON, `{"<service>": "<base url>"}`; combines with the flags |
 | `--permissions-url` | `MACRO_SDK_PERMISSIONS_URL` | base URL of the permission endpoint |
-| `--token` | `MACRO_SDK_EXECUTION_TOKEN` | the execution token, for registering runs; prefer the env var (argv shows in `ps`) |
+| `--token` | `MACRO_SDK_EXECUTION_TOKEN` | the runner's execution token, for registering runs; prefer the env var (argv shows in `ps`) |
 | `--upstream-timeout-ms` | | how long to wait for a service (default 60000) |
 | `--port` | | port to listen on (default 8787); `0` picks a free one, and the `proxy.listening` log line carries the bound `url` |
 | | `MACRO_API_KEY` | the Macro credential added to every forwarded request; required |
@@ -132,13 +132,13 @@ a file per environment rather than in code:
 
 ### Runs: `POST /v1/executions`
 
-Whoever starts a program registers the operations it may call,
-authenticated with the execution token, and gets a fresh random run token (stored only as a hash).
+The runner registers each run's analyzed operations, authenticated with the
+execution token, and gets a fresh random run token (stored only as a hash).
 The program gets only the run token (`MACRO_SDK_RUN_TOKEN`). `/api` accepts
 only run tokens: the execution token answers 401, so a program cannot skip
 registration, and a run token cannot register another run. A name the table
-doesn't have is refused (400): the registering side and the proxy must read
-the same table. Runs live in memory until the proxy stops.
+doesn't have is refused (400): the analyzer and the proxy must read the same
+table. Runs live in memory until the proxy stops.
 
 ```sh
 curl -s http://127.0.0.1:8787/v1/executions \
@@ -259,7 +259,7 @@ bun run packages/sdk-ocaml/proxy/src/fake-upstream.ts --responses responses.json
 
 All three servers take `--port 0` to listen on a free port, and log a
 `{"event": "<name>.listening", "url": ...}` line with the URL they bound;
-a script can read the ports from those lines.
+`e2e/run.sh` reads its ports from those lines.
 
 `responses.json` maps `"<METHOD> <raw target>"` (base path and query
 included) to `{"status", "contentType"?, "body"}`; anything else answers 404.

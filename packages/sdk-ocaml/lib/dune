@@ -6,7 +6,7 @@
  (wrapped false)
  (libraries unix yojson))
 
-; operations.json is installed beside the package's .cmi files.
+; The analyzer and runner read operations.json from the package directory.
 (install
  (section lib)
  (package macro_sdk)

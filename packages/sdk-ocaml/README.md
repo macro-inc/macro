@@ -142,13 +142,13 @@ let main () : Macro.Json.t =
   service's `message` or text. `unreachable` when the proxy can't be reached.
 - **Attributes.** Each operation function carries
   `[@@macro.op "<service>.<operationId>"]`, and every other exported value
-  `[@@macro.pure]` (codecs and constructors are pure), so a program's possible
-  operations can be read off its compiled code. `Macro_runtime` (the
-  transport) carries neither, so programs can't use it, and nothing exported sends an arbitrary request.
+  `[@@macro.pure]` (codecs and constructors are pure); the analyzer reads
+  these. `Macro_runtime` (the transport) carries neither, so programs can't
+  use it, and nothing exported sends an arbitrary request.
 - **Transport.** A blocking HTTP/1.1 request (Unix sockets and yojson only)
   to `$MACRO_SDK_PROXY_URL/api/<service><path>?<query>` with
-  `authorization: Bearer $MACRO_SDK_RUN_TOKEN` (the run token registered
-  for this run, never the execution token). The reply is read to its
+  `authorization: Bearer $MACRO_SDK_RUN_TOKEN` (the run token the runner
+  registered, never the execution token). The reply is read to its
   Content-Length or last chunk, never to end of file: the proxy keeps
   connections open.
 - **Layout.** `lib/macro_<service>.ml(i)` per service and `lib/macro.mli`,
@@ -180,7 +180,7 @@ how much fell back to `Macro.Json.t` or `string` and why. It takes about
 (November 2026). `ocaml_openapi_generator` 0.17.0 (in nixpkgs) rejects the
 specs outright: it reads OpenAPI 3.0.3 and fails on the first 3.1 type array
 (`"type": ["string", "null"]`), and its output is Jane Street Async/httpaf
-code with its own transport, which the attributes could not bound. OooapI
+code with its own transport, which the analyzer could not bound. OooapI
 (GitHub `XFFS/OooapI`, last change February 2024) is not in nixpkgs or
 opam-free, targets OpenAPI 3.0, degrades `oneOf`/`allOf` and recursive
 schemas to untyped JSON by its own account, and is hard-wired to Cohttp and
@@ -199,12 +199,12 @@ named `<service>.<operationId>` from `spec/operations.json`. See
 requests are matched to operations, upstreams per environment and curl
 examples.
 
-Binding each run to the operations it may call:
+Binding each run to its analysis:
 
 - `POST /v1/executions`, `authorization: Bearer <execution token>`, body
   `{"operations": ["storage.edit_document", ...]}` → `200 {"token": "<run token>"}`,
-  a fresh random token per run. Whoever starts a program registers the
-  operations it may call, and gives the program only the run token, as
+  a fresh random token per run. The runner calls it with the analyzed list
+  after the permission check, and gives the program only the run token, as
   `MACRO_SDK_RUN_TOKEN`.
 - `/api/...` accepts only a run token. The execution token, or any unknown
   token, answers `401 unauthorized`, so a program cannot skip registration.
@@ -244,8 +244,167 @@ The client's checks:
   schema.
 
 `dune build @install` installs `macro_sdk` as a findlib package with
-`operations.json` beside its `.cmi` files.
+`operations.json` beside its `.cmi` files, which the analyzer and runner read.
 
+### The OCaml tools
 
-A static analyzer that reads a program's operations off its typed tree, and
-a runner that checks them before running it, come next.
+Everything OCaml builds with dune from this directory, inside the Nix shell
+(nothing is on PATH on NixOS otherwise):
+
+```sh
+nix-shell shell.nix --run 'dune build @install && dune test'
+```
+
+`dune build @install` puts `macro-sdk-analyze` and `macro-sdk-run` in
+`_build/install/default/bin` and every library, with its findlib `META`, in
+`_build/install/default/lib`. Both tools find the SDK with
+`ocamlfind query`, so put that tree on `OCAMLPATH`:
+
+```sh
+export OCAMLPATH=$PWD/_build/install/default/lib:$OCAMLPATH
+export PATH=$PWD/_build/install/default/bin:$PATH
+```
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MACRO_SDK_PACKAGE` | `macro_sdk` | findlib package programs compile against (`macro_sdk_mini` is the test SDK) |
+| `MACRO_SDK_OPERATIONS` | `operations.json` in the package directory | operation names, groups and actions (contract D1) |
+
+## Analyzer: `macro-sdk-analyze`
+
+```sh
+macro-sdk-analyze prog.ml
+# {"ok":true,"operations":[{"name":"storage.create_task_handler","group":"tasks","action":"create"}, ...]}
+# {"ok":false,"errors":[{"message":"`Obj.magic` belongs to Obj, which programs may not use","line":4}]}
+```
+
+Exit 0 when accepted, 1 when refused, 2 when the SDK can't be found.
+
+It type-checks the program in-process with compiler-libs, with only the SDK
+directory visible and the SDK's dependencies (yojson, unix, the transport's
+HTTP client) hidden with `-H`, so the type checker can read them but the
+program cannot name them. It then walks the typed tree and records every
+value whose declaration carries `[@@macro.op "<operation>"]`. Every operation
+named anywhere in the file counts, reachable from `main` or not: the list is
+what the program *may* call, not what one run *will* call.
+
+**Soundness claim.** A program the analyzer accepts can only cause SDK calls
+that are in its list. The argument: the only code that can talk to the proxy
+is the SDK's transport; a program can reach it only by naming an SDK value,
+by naming a module that contains one, or by escaping the language. The
+analyzer judges every named value and every module used as a value, and
+refuses the escapes below.
+
+What it refuses, and why:
+
+| Refused | Why |
+| --- | --- |
+| `external` declarations, in structures or signatures | they bind any C or compiler primitive, `%identity` included |
+| Any value of the SDK library with neither `[@@macro.op]` nor `[@@macro.pure]` | that is the transport and other internals |
+| An SDK module used as a value (functor argument, `include`, first-class module, signature constraint, `module rec`, alias nested in a structure) when its contents include an unmarked value | the module would carry the transport in without naming it |
+| Anything in the standard library outside the allow-list in `analyzer/lib/policy.ml`: `Obj`, `Marshal`, `Sys`, `In_channel`, `Out_channel`, `Effect`, `Domain`, `Mutex`, `Callback`, `Gc`, `Random`, `Filename`, `Scanf`, `Lexing`, `Bigarray`, `Weak`, `Camlinternal*`, `Std_exit`, ... | type-unsafe casts, I/O, processes, concurrency; a new Stdlib module is refused until reviewed |
+| Stdlib channels and I/O functions (`print_*`, `read_*`, `open_*`, `stdout`, `exit`, `at_exit`, `Printf.printf`, `Format.std_formatter`, ...) | I/O; formatting is allowed only into strings and buffers |
+| Every `unsafe_*` function (`Array.unsafe_get`, `Bytes.unsafe_set`, `Float.Array.unsafe_get`, ...) | out-of-bounds memory access could forge a call |
+| A Stdlib module used as a value whose contents include a refused function (`include String`, `F (Printf)` where `F` asks for `printf`) | same as the SDK case: the functor would reach it unnamed |
+| `Unix`, `Thread`, `Dynlink`, `Yojson`, the HTTP client | not on the search path (the compiler's automatic `+unix`/`+threads`/`+dynlink` include is switched off), so "Unbound module" |
+| Classes from outside the program | none are allowed; local classes and objects are fine |
+| Attributes other than `warning`, `warnerror`, `doc`, `text`, `alert`, `deprecated`, `deprecated_mutable`, `inline`, `inlined`, `tailcall`, `unrolled`, `specialise`, `specialised`, `immediate`, `unboxed`, `boxed`, `warn_on_literal_pattern` (with or without `ocaml.`) | others are ppx input or change compilation; `[@@macro.op]` written by a program is refused too |
+| Extension nodes (`[%foo]`) | ppx input |
+| A file without `let main () : Macro.Json.t` | the runner calls it |
+| A type named `__macro_sdk_main_result` | it names main's expected type; redefining it would let a wrong `main` through |
+
+What is fine: `open Macro`, local opens, `let open`, toplevel and `let module`
+aliases (each use is checked through the alias), passing an operation as a
+function value, partial application, shadowing `Macro` with a local module
+(its functions are the program's own), local modules named like SDK modules,
+functors, first-class modules and objects (an SDK module given to a functor is
+checked through the functor's parameter, so `F (Macro.Document)` counts only
+what `F` asks for), `let rec`, binding operators, toplevel effects outside
+`main` (their operations count), `Map.Make (String)` and the other pure
+Stdlib functors.
+
+Assumptions the SDK must keep: every operation is a value marked
+`[@@macro.op]`; nothing marked `[@@macro.pure]` makes a call; no SDK value
+returns a closure or object that makes calls (handles are data). Known limit:
+a bug in the OCaml type checker itself would break the argument.
+
+The analyzer never searches the directory it is started from
+(`Clflags.no_cwd`), so a stray `.cmi` there cannot stand in for the SDK or
+the standard library.
+
+`analyzer/test/` runs 81 programs, plus a check that the current directory is not searched, against the test SDK
+(`analyzer/test/mini_sdk`: `Macro.Tasks.find_similar`, `Macro.Tasks.create`,
+`Macro.Document.content` and `Macro.Document.delete`, marked as the storage
+operations `task_similarity_search_handler`, `create_task_handler`,
+`get_document` and `delete_document`; `Macro.Json` helpers; and an unmarked
+`Mini_transport` that sends D3 requests): `dune test`.
+
+## Runner: `macro-sdk-run`
+
+```sh
+MACRO_SDK_PROXY_URL=http://127.0.0.1:8787 \
+MACRO_SDK_PERMISSIONS_URL=http://127.0.0.1:8788 \
+MACRO_SDK_EXECUTION_TOKEN=<execution token> \
+  macro-sdk-run prog.ml
+# stderr: macro-sdk-run: operations: storage.create_task_handler, storage.task_similarity_search_handler
+# stdout: {"result": ...}
+```
+
+1. Analyze the file (read once; the same bytes are compiled).
+2. `POST $MACRO_SDK_PERMISSIONS_URL/v1/decide` with the operation names. Any
+   answer but `allow` counts as blocked.
+3. If anything is blocked, print
+   `{"error":{"code":"blocked","message":...,"methods":[...]}}` and exit 3
+   without compiling or running.
+4. Compile the program as `user_program.ml` with the analyzer's exact search
+   path (`OCAMLPARAM` is dropped) and link it with a generated entry point that
+   calls `main ()`.
+5. Register the run: `POST $MACRO_SDK_PROXY_URL/v1/executions` with the
+   execution token and the analyzed operations; the proxy answers with a run
+   token that can call only those operations.
+6. Run the program in a temporary directory with only `MACRO_SDK_PROXY_URL`
+   and `MACRO_SDK_RUN_TOKEN` in its environment; it never sees the execution
+   token.
+   The entry point prints `{"result": <main's value>}`, or
+   `{"error":{"code","message"}}` when `main` raises.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | ran; stdout is `{"result": ...}` |
+| 1 | the analyzer refused the program; stdout is its JSON |
+| 2 | setup failure: environment, permission endpoint, compiler, run registration |
+| 3 | an operation is blocked; nothing was compiled or run |
+| 4 | the program raised (`Macro.Error` keeps its code, e.g. `blocked` from the proxy) |
+
+There is no time limit on the program yet.
+
+## End-to-end check: `e2e/run.sh`
+
+```sh
+packages/sdk-ocaml/e2e/run.sh   # against the generated macro_sdk
+```
+
+It enters the Nix shell if needed, installs the workspace packages when
+missing, regenerates the client every time, builds, and starts two permission endpoints (`e2e/rules-strict.json` allows reads and
+task creation and blocks `@destroy`, `e2e/rules-permissive.json` allows
+everything), a fake storage service (`proxy/src/fake-upstream.ts` with
+`e2e/upstream.json`) and the proxy, all on the installed `operations.json`;
+the proxy checks the strict endpoint and gets the execution token and a
+placeholder credential through its environment. Then it asserts:
+
+1. `test/duplicate_check.ml` (search similar tasks, create only when none is
+   similar) is allowed, runs through the proxy, and returns the created task;
+   the fake service saw the search and the create.
+2. `e2e/programs/delete_document.ml` (`storage.delete_document`, action
+   `destroy`) is refused before it runs (exit 3, the proxy logs no call).
+3. The same program, allowed by the runner's permissive endpoint, fails at
+   call time: the proxy asks the strict endpoint and answers 403 `blocked`,
+   which `main` raises as `Macro.Error`, and nothing reaches the service; a
+   direct `curl` with a run token that lists `storage.delete_document` gets
+   the same 403 with `x-macro-proxy: refused`. This is the policy checked on
+   every call.
+4. A call the analysis did not approve: a run registered for
+   `storage.task_similarity_search_handler` only, used directly with `curl`
+   for task creation (which the strict policy allows), gets 403
+   `not_analyzed`; the same token still searches; the execution token gets
+   401.

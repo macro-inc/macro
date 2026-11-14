@@ -7,7 +7,7 @@ matches each request a program makes to one OpenAPI operation, asks a
 permission endpoint, and forwards it to the service with the Macro
 credential; a mock of that endpoint; a fake upstream for tests. Usage, CLI
 flags, upstreams per environment and the wire shapes are in `README.md`; the
-contract with its clients is the plan's D1, D3 and D4.
+contract with the OCaml runtime and runner is the plan's D1, D3 and D4.
 
 ## Start here
 
