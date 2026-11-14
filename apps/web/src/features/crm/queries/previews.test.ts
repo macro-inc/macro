@@ -160,6 +160,39 @@ describe('CRM record previews', () => {
     expect(none.requests).toEqual([]);
   });
 
+  it('sends ids without an RFC version or variant, as stored ids can be', async () => {
+    // Version nibble 0, variant nibble 6: Postgres stores it, `uuid`'s validate refuses it.
+    const unversioned = '0065efd2-deae-0a7b-619f-ecc19ab60ec5';
+    const { requests, previewRecords } = recording(
+      ok({
+        companies: [],
+        contacts: [
+          {
+            id: unversioned,
+            name: 'Ada Lovelace',
+            email: 'ada@acme.example',
+            updatedAt: '2025-01-05T00:00:00.000Z',
+          },
+        ],
+      })
+    );
+
+    const items = await fetchCrmRecordPreviews(
+      previewRecords,
+      [],
+      [unversioned]
+    );
+
+    expect(requests).toEqual([{ companyIds: [], contactIds: [unversioned] }]);
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: unversioned,
+        access: 'access',
+        name: 'Ada Lovelace',
+      }),
+    ]);
+  });
+
   it('reads a failed batch as no access to each record', async () => {
     const { previewRecords } = recording(
       err([{ code: 'HTTP_ERROR', message: 'unavailable' }])

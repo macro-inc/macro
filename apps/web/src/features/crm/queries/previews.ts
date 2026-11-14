@@ -1,15 +1,22 @@
 import type { PreviewItem } from '@queries/preview/types';
 import type { storageServiceClient } from '@service-storage/client';
 import type { CrmPreviews } from '@service-storage/generated/schemas/crmPreviews';
-import { validate as isUuid } from 'uuid';
+
+/**
+ * The hyphenated form the server reads a record id in. Any 128 bits will do,
+ * as for Postgres's `uuid`: a stored id need not carry an RFC 9562 version
+ * or variant, so `uuid`'s `validate` would refuse ids that name records.
+ */
+const RECORD_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Titles CRM company and contact chips with one `POST /crm/previews` per
  * preview batch. The backend answers each record as its own read would, so
  * one it leaves out is one the viewer can't open: wrong team, hidden from a
- * member, or gone. That previews as "No Access", as the read's 404 did;
- * "Deleted" would be misleading since we can't tell which. An id that isn't
- * a UUID names no record, so it previews the same way without being sent:
+ * member, or gone. That previews as "No Access", as the failed read did;
+ * "Deleted" would be misleading since we can't tell which. An id not in
+ * that form names no record, so it previews the same way without being sent:
  * the request would refuse it, and every chip in the batch with it. The
  * response spells ids in lowercase.
  */
@@ -19,8 +26,8 @@ export async function fetchCrmRecordPreviews(
   contactIds: string[]
 ): Promise<PreviewItem[]> {
   const request = {
-    companyIds: companyIds.filter((id) => isUuid(id)),
-    contactIds: contactIds.filter((id) => isUuid(id)),
+    companyIds: companyIds.filter((id) => RECORD_ID.test(id)),
+    contactIds: contactIds.filter((id) => RECORD_ID.test(id)),
   };
   const result =
     request.companyIds.length + request.contactIds.length > 0
