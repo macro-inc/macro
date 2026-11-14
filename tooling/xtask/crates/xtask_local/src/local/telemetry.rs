@@ -73,6 +73,7 @@ const STEP_NAMES: &[(&str, &str)] = &[
     ("Building sandbox image ", "Building sandbox image"),
     ("Restoring init snapshot ", "Restoring init snapshot"),
     ("Saving init snapshot ", "Saving init snapshot"),
+    ("Building runtime image ", "Building runtime image"),
 ];
 
 /// What a run is, for the `kind` field.

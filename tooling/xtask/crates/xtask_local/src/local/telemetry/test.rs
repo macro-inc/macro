@@ -158,6 +158,10 @@ fn labels_with_names_become_one_step() {
         step_name("Restoring init snapshot (9b59c964b276)"),
         "Restoring init snapshot"
     );
+    assert_eq!(
+        step_name("Building runtime image macro-local-runtime:7a3bece74a68"),
+        "Building runtime image"
+    );
     assert_eq!(step_name("Running migrations"), "Running migrations");
 }
 
