@@ -3111,7 +3111,9 @@ preview on the left and a timeline graph plus sessions on the right. History is
 no longer a side-panel section and its file-menu item is hidden on mobile.
 Scrub the graph to preview a point in time, or select a session to see its changes.
 **Current version** returns the preview to the live version; **Fork** copies the
-selected version into a separate document. **Close history** or Escape returns
+selected version into a separate document, including concurrent edits from that
+moment. History preview never checks the live collab document out to an old
+frontier. **Close history** or Escape returns
 to the mounted editor without losing its scroll position. The two columns scroll
 independently, and other app splits remain available.
 
