@@ -2,6 +2,7 @@
 // the services, for tests of list and thread state.
 
 import { expect, type Page } from '@playwright/test';
+import { did, saw } from '../ledger/record';
 import type { Mailbox } from './fixtures';
 import type { Mail } from './stack';
 
@@ -204,6 +205,8 @@ export async function focusRow(page: Page, threadId: string): Promise<void> {
   const to = rows.indexOf(threadId);
   for (let step = 0; step < Math.abs(to - from); step++) {
     await page.keyboard.press(to > from ? 'j' : 'k');
+    did('AL-048');
   }
   await expect.poll(() => focusedRowId(page)).toBe(threadId);
+  saw('STL-403', 'F-038');
 }

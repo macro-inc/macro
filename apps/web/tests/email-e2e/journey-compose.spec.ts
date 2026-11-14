@@ -10,6 +10,7 @@ import { expect, test } from './harness/fixtures';
 import { addMailbox, readMailbox, sentFolder } from './harness/journeys';
 import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
+import { confirmed, did, saw } from './ledger/record';
 
 /**
  * The recipient input of a composer row: `To`, `Cc` or `Bcc`. The inputs have
@@ -62,32 +63,45 @@ for (const provider of PROVIDERS) {
       await relayUploads(page);
 
       await mailbox.open('/app/mail/new');
+      did('AC-910');
       const to = recipientInput(page, 'To');
       await to.fill('grac');
+      did('AC-001');
       await page.getByRole('option').filter({ hasText: grace }).click();
+      did('AC-005');
       await expect(to).toHaveValue('');
 
       await page.getByRole('button', { name: 'Cc', exact: true }).click();
+      did('AC-011');
       await recipientInput(page, 'Cc').fill(zed);
       await page.keyboard.press('Enter');
+      did('AC-003');
       await page.getByRole('button', { name: 'Bcc', exact: true }).click();
+      did('AC-012');
       await recipientInput(page, 'Bcc').fill(ida);
       await page.keyboard.press('Enter');
+      did('AC-003');
 
       await page.getByPlaceholder(/subject/i).fill('Board pack');
+      did('AC-018');
       await page.locator('[contenteditable="true"]').last().click();
       await page.keyboard.type('The board pack is attached.');
+      did('AC-022');
       await expect(
         page.getByRole('button', { name: 'Signature', exact: true })
       ).toBeVisible();
+      saw('STC-092');
       await attach(page, {
         name: 'pack.txt',
         mimeType: 'text/plain',
         buffer: Buffer.from('Agenda and minutes.'),
       });
       await expect(page.getByText('pack.txt')).toBeVisible();
+      saw('STC-959');
       await page.getByRole('button', { name: 'Send email' }).click();
+      did('AC-057');
       await expect(notice(page, 'Email sent')).toBeVisible();
+      saw('STC-025');
 
       // Every recipient gets one copy, with the file and the signature.
       for (const address of [grace, zed, ida]) {
@@ -101,13 +115,19 @@ for (const provider of PROVIDERS) {
             { message: `${address} never got the message` }
           )
           .toEqual([{ subject: 'Board pack', attachments: ['pack.txt'] }]);
+        confirmed('F-131');
+        confirmed('F-101');
+        confirmed('F-122');
         const [copy] = await readMailbox(mailbox, address);
         expect(copy.to).toEqual([grace]);
+        confirmed('F-097');
         expect(copy.cc).toEqual([zed]);
         // Nobody's copy names the Bcc recipient.
         expect(copy.bcc).toEqual([]);
         expect(copy.html).toContain('The board pack is attached.');
+        confirmed('F-102');
         expect(copy.html).toContain('Ada Lovelace, Analytical Engines');
+        confirmed('F-107');
       }
 
       // The sender's copy, in Sent, keeps the Bcc.
@@ -116,6 +136,7 @@ for (const provider of PROVIDERS) {
       );
       expect(sent).toHaveLength(1);
       expect(sent[0].bcc).toEqual([ida]);
+      confirmed('F-099');
       expect(
         (await mailbox.providerMessages()).find(
           (message) => message.subject === 'Board pack'
@@ -126,11 +147,14 @@ for (const provider of PROVIDERS) {
         .getByRole('navigation', { name: 'Email tabs' })
         .getByRole('button', { name: 'Sent' })
         .click();
+      did('AL-002', 'F-030');
       await expect(
         page
           .getByRole('grid', { name: 'Email' })
           .getByText('Board pack', { exact: true })
       ).toBeVisible();
+      saw('STL-923');
+      saw('STC-956');
     });
   });
 }

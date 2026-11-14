@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
+import { confirmed, did, saw } from './ledger/record';
 
 /** The addresses of the inboxes the signed-in user has connected. */
 async function connectedInboxes(mailbox: Mailbox): Promise<string[]> {
@@ -45,15 +46,20 @@ test.describe('connecting another account', () => {
     });
     const thread = await mailbox.synced('Lunch?');
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await expect(
       page.getByText('Noon at the usual place?').first()
     ).toBeVisible();
+    saw('STL-951');
 
     await page.getByRole('button', { name: 'Connect another account' }).click();
+    did('AL-044');
     expect(await scopesOnConsentPage(page)).toEqual([MAIL_SCOPE]);
     await page.getByRole('button', { name: 'Cancel' }).click();
+    did('AX-032');
 
     await expect(page.getByText('Account not connected')).toBeVisible();
+    saw('STX-022');
     await expect(page).toHaveURL(new RegExp(`/app/mail/${thread.id}$`));
     await expect(
       page.getByText('Noon at the usual place?').first()
@@ -61,10 +67,13 @@ test.describe('connecting another account', () => {
     expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
 
     await page.getByRole('button', { name: 'Connect another account' }).click();
+    did('AL-044');
     expect(await scopesOnConsentPage(page)).toEqual([MAIL_SCOPE]);
     await page.getByRole('button', { name: /work@example\.com/ }).click();
+    did('AX-031', 'F-001');
 
     await expect(page.getByText('Account connected')).toBeVisible();
+    saw('STX-020', 'F-001');
     await expect(page).toHaveURL(new RegExp(`/app/mail/${thread.id}$`));
     await expect(
       page.getByText('Noon at the usual place?').first()
@@ -72,6 +81,7 @@ test.describe('connecting another account', () => {
     await expect
       .poll(() => connectedInboxes(mailbox))
       .toEqual([mailbox.inbox.email, 'work@example.com'].sort());
+    confirmed('F-004');
     await page.getByRole('button', { name: /^Select inbox/ }).click();
     await expect(
       page.getByRole('menu').getByText('work@example.com')
@@ -94,6 +104,7 @@ test.describe('connecting another account', () => {
   }) => {
     await mailbox.open('/app/mail');
     await page.getByRole('button', { name: 'Connect another account' }).click();
+    did('AL-044');
     await page.waitForURL(/\/o\/oauth2\/v2\/auth/);
     await page
       .getByRole('button', { name: new RegExp(mailbox.inbox.email) })
@@ -102,6 +113,7 @@ test.describe('connecting another account', () => {
     await expect(
       page.getByText(`${mailbox.inbox.email} is already connected`)
     ).toBeVisible();
+    saw('STX-021');
     await expect(page).toHaveURL(/\/app\/mail$/);
     expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
     expect(auth.starts).toHaveLength(1);
@@ -135,16 +147,21 @@ test.describe('connecting when Outlook is offered', () => {
       .filter({ hasText: 'Connect email' });
 
     await connect.click();
+    did('AL-044');
     await expect(
       chooser.getByRole('button', { name: /Outlook/ })
     ).toBeVisible();
+    saw('STX-209', 'F-001');
     await chooser.getByRole('button', { name: 'Cancel' }).click();
+    did('AX-030');
     await expect(chooser).toBeHidden();
     await expect(page.getByText('Lunch?').first()).toBeVisible();
     await expect(page).toHaveURL(/\/app\/mail$/);
 
     await connect.click();
+    did('AL-044');
     await chooser.getByRole('button', { name: 'Gmail' }).click();
+    did('AX-028');
     expect(await scopesOnConsentPage(page)).toEqual([MAIL_SCOPE]);
     expect(auth.starts.map((start) => start.provider)).toEqual(['GMAIL']);
   });
@@ -164,11 +181,14 @@ test.describe('connecting from Settings', () => {
       name: 'Connect a Google Workspace account',
     });
     await connect.click();
+    did('AX-001', 'F-004');
     expect(await scopesOnConsentPage(page)).toEqual([MAIL_SCOPE]);
     expect(auth.starts.map((start) => start.scopes)).toEqual(['gmail']);
     await page.getByRole('button', { name: 'Cancel' }).click();
+    did('AX-032');
 
     await expect(page.getByText('Account not connected')).toBeVisible();
+    saw('STX-022');
     await expect(page).toHaveURL(/\/app\/mail\/~\/settings\/email$/);
     await expect(connect).toBeVisible();
     expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
@@ -191,6 +211,7 @@ test.describe('calendar access for a connected inbox', () => {
         name: `Enable calendar for ${mailbox.inbox.email}`,
       })
       .click();
+    did('AX-005');
 
     expect(await scopesOnConsentPage(page)).toEqual([CALENDAR_SCOPE]);
     expect(new URL(page.url()).searchParams.get('login_hint')).toBe(

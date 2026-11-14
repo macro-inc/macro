@@ -9,6 +9,7 @@ import {
 import { expect, test } from './harness/fixtures';
 import { header } from './harness/provider';
 import { onlySentRaw, sentMessages } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -36,6 +37,7 @@ test.describe('changing From on a draft', () => {
 
     await page.getByText('ada@example.com').last().click();
     await page.getByText('ada.work@example.com <ada.work@example.com>').click();
+    did('AC-020');
     // The move gives the draft a new id in the other inbox; the route follows.
     await expect
       .poll(() =>
@@ -46,6 +48,8 @@ test.describe('changing From on a draft', () => {
     await body(page).click();
     await page.keyboard.press('End');
     await page.keyboard.type(' Sent from work.');
+    did('AC-022');
+    did('AC-911');
     await expect
       .poll(() =>
         saves.some(
@@ -62,12 +66,19 @@ test.describe('changing From on a draft', () => {
 
     await page.reload();
     await expect(body(page)).toContainText('Numbers are in. Sent from work.');
+    saw('STC-961');
+    saw('STC-970');
     await expect(page.getByText('ada.work@example.com').last()).toBeVisible();
+    saw('STC-960');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-057');
 
     const raw = await onlySentRaw(mailbox, work);
     expect(header(raw, 'From')).toContain('ada.work@example.com');
+    confirmed('F-100');
     expect(raw).toContain('Sent from work.');
+    confirmed('F-102');
+    confirmed('F-131');
     await expect.poll(() => draftThreads(mailbox)).toEqual([]);
     expect(await sentMessages(mailbox)).toEqual([]);
   });

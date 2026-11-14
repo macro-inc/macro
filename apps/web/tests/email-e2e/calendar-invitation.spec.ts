@@ -1,5 +1,7 @@
 import { expect, test } from './harness/fixtures';
 
+import { did, saw } from './ledger/record';
+
 /** A Google-style invitation whose description is HTML, as an `.ics` file. */
 function invitation(description: string): string {
   return [
@@ -54,11 +56,13 @@ test.describe('an invitation in the thread', () => {
     const thread = await mailbox.synced('Invitation: Planning review');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
 
     const card = page.getByRole('region', {
       name: 'Calendar invitation: Planning review',
     });
     await expect(card).toBeVisible();
+    saw('STL-514');
     await expect(card.locator('b', { hasText: 'agenda' })).toBeVisible();
     await expect(card.getByRole('link', { name: 'the notes' })).toHaveAttribute(
       'href',

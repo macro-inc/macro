@@ -1,5 +1,6 @@
 import { discardButton, draftThreads, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { did, saw } from './ledger/record';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -12,8 +13,12 @@ test.describe('discarding a reply draft', () => {
     });
     const thread = await mailbox.synced('Lunch?');
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await page.keyboard.type('Works for me.');
+    did('AC-081');
+    did('AC-911');
     await expect.poll(async () => (await draftThreads(mailbox)).length).toBe(1);
   });
 
@@ -26,8 +31,10 @@ test.describe('discarding a reply draft', () => {
   }) => {
     await page.keyboard.type('x');
     await discardButton(page).click();
+    did('AC-093');
 
     await expect(page.getByText('Reply...')).toBeVisible();
+    saw('STL-106');
     await expect.poll(() => draftThreads(mailbox)).toEqual([]);
     // A reload replays whatever the page still had queued.
     await page.reload();
@@ -45,6 +52,7 @@ test.describe('discarding a reply draft', () => {
     await expect.poll(() => draftThreads(mailbox)).toEqual([]);
     await page.reload();
     await expect(page.getByText('Reply...')).toBeVisible();
+    saw('STL-106');
     expect(await draftThreads(mailbox)).toEqual([]);
   });
 });

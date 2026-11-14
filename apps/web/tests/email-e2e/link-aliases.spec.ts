@@ -1,6 +1,8 @@
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
 
+import { did, saw } from './ledger/record';
+
 const WORK = 'work@example.com';
 const ALIAS = 'sales@example.com';
 
@@ -36,10 +38,13 @@ test.describe('an account whose mailbox has a send-as alias', () => {
 
     await mailbox.open('/app/mail');
     await page.getByRole('button', { name: 'Connect email' }).click();
+    did('AL-045', 'F-001');
     await page.waitForURL(/\/o\/oauth2\/v2\/auth/);
     await page.getByRole('button', { name: new RegExp(WORK) }).click();
+    did('AX-031', 'F-001');
 
     await expect(page.getByText('Account connected')).toBeVisible();
+    saw('STX-020', 'F-001');
     await expect(page).toHaveURL(/\/app\/mail$/);
     expect(await connectedInboxes(mailbox)).toEqual([WORK]);
 

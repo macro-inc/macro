@@ -16,6 +16,7 @@ import {
 import { focusRow, rowIds } from './harness/list';
 import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
+import { confirmed, did, saw } from './ledger/record';
 
 /** The row of a thread in the list. */
 function row(page: Page, threadId: string) {
@@ -59,67 +60,101 @@ for (const provider of PROVIDERS) {
         await row(page, ids[subject])
           .getByRole('checkbox', { name: 'Select item' })
           .click();
+        did('AL-052');
       }
       await expect(page.getByText('2 selected')).toBeVisible();
+      saw('STL-112');
       await page.keyboard.press('e');
+      did('AL-064', 'F-082');
       await expect(notice(page, 'Marked 2 items as done')).toBeVisible();
+      saw('STL-039');
       await expect(row(page, ids.Agenda)).toHaveCount(0);
       await expect(row(page, ids.Minutes)).toHaveCount(0);
+      saw('STL-930');
+      saw('STL-953');
       await expect
         .poll(async () => [
           (await held('Agenda'))?.inInbox,
           (await held('Minutes'))?.inInbox,
         ])
         .toEqual([false, false]);
+      confirmed('F-071');
       expect((await held('Question'))?.inInbox).toBe(true);
+      confirmed('F-082');
 
       // One to Trash.
       await focusRow(page, ids['Old invoice']);
       // '#' as a keyboard types it: Shift with the 3 key.
       await page.keyboard.press('Shift+Digit3');
+      did('AL-068');
       await expect(notice(page, 'Moved to Trash')).toBeVisible();
+      saw('STL-045');
       await expect(row(page, ids['Old invoice'])).toHaveCount(0);
       await expect
         .poll(async () => (await held('Old invoice'))?.labels)
         .toContain(trashFolder(provider));
+      confirmed('F-075');
+      confirmed('F-031');
 
       // Read, unread, read again.
       await row(page, ids.Question).click();
+      did('AL-050');
+      did('AL-194');
       await expect(page.getByText('About Question.')).toBeVisible();
+      saw('STL-951');
+      saw('STL-906');
       await expect.poll(async () => (await held('Question'))?.read).toBe(true);
+      confirmed('F-070');
       // Back to the list in the app, as a user does: a reload here can cut
       // off a read still in flight, which holds the mutation queue.
       await page.keyboard.press('Escape');
+      did('AL-123');
       await expect(page).toHaveURL(/\/app\/mail$/);
       await focusRow(page, ids.Question);
       await page.keyboard.press('u');
+      did('AL-066');
       await expect(notice(page, 'Marked as unread')).toBeVisible();
+      saw('STL-043');
       await expect.poll(async () => (await held('Question'))?.read).toBe(false);
+      confirmed('F-069');
       await page.keyboard.press('Shift+U');
+      did('AL-067');
       await expect(notice(page, 'Marked as read')).toBeVisible();
+      saw('STL-044');
       await expect.poll(async () => (await held('Question'))?.read).toBe(true);
+      confirmed('F-068');
 
       // Starred: Favorites lists it.
       await page.keyboard.press('s');
+      did('AL-061', 'F-073');
       await expect(notice(page, 'Added to favorites')).toBeVisible();
+      saw('STL-048', 'F-073');
       await tabs.getByRole('button', { name: 'Favorites' }).click();
+      did('AL-002', 'F-030');
       await expect.poll(() => rowIds(page)).toEqual([ids.Question]);
+      saw('STL-972');
+      saw('STL-923');
 
       // Restored from Trash: back in the inbox at the provider.
       await library.getByRole('button', { name: 'Trash' }).click();
+      did('AL-002', 'F-031');
       await expect(page).toHaveURL(/tab=trash/);
       await expect.poll(() => rowIds(page)).toEqual([ids['Old invoice']]);
+      saw('STL-924');
       await row(page, ids['Old invoice']).hover();
       await row(page, ids['Old invoice'])
         .getByRole('button', { name: 'Restore' })
         .click();
+      did('AL-094');
       await expect(notice(page, 'Restore requested')).toBeVisible();
+      saw('STL-047', 'F-076');
       await expect
         .poll(async () => (await held('Old invoice'))?.inInbox)
         .toBe(true);
       expect((await held('Old invoice'))?.labels).not.toContain(
         trashFolder(provider)
       );
+      confirmed('F-076');
     });
 
     // Class web-gmail-not-spam-stays-archived: when this fails on Gmail, Not
@@ -149,16 +184,22 @@ for (const provider of PROVIDERS) {
 
       await mailbox.open();
       await library.getByRole('button', { name: 'Spam' }).click();
+      did('AL-002', 'F-031');
       await expect(page).toHaveURL(/tab=spam/);
       await expect.poll(() => rowIds(page)).toEqual([photos]);
+      saw('STL-924');
       await row(page, photos).hover();
       await row(page, photos).getByRole('button', { name: 'Not spam' }).click();
+      did('AL-093');
       await expect(notice(page, 'Restore requested')).toBeVisible();
+      saw('STL-047', 'F-078');
       await expect(page.getByText('No spam')).toBeVisible();
+      saw('STL-020');
       await expect
         .poll(async () => (await held())?.labels)
         .not.toContain(spamFolder(provider));
       expect((await held())?.inInbox).toBe(true);
+      confirmed('F-078');
 
       // Back in Macro's inbox too.
       await mailbox.open();

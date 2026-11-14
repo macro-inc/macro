@@ -4,6 +4,7 @@ import {
   loadAppSteadily,
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { confirmed, did } from './ledger/record';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -38,17 +39,23 @@ test.describe('a draft save the server fails', () => {
     });
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await page.keyboard.type('Paid today.');
+    did('AC-081');
+    did('AC-911');
     await expect.poll(() => faults).toBeGreaterThan(0);
     await page.getByText('Due Friday.').click();
     await page.keyboard.press('e');
+    did('AL-137');
 
     await expect
       .poll(async () =>
         (await mailbox.providerMessages()).map((message) => message.inInbox)
       )
       .toEqual([false]);
+    confirmed('F-071');
     // The save went through on its third attempt.
     await expect
       .poll(async () => (await draftThreads(mailbox)).map((draft) => draft.id))

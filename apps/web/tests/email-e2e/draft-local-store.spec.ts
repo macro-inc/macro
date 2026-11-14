@@ -6,6 +6,7 @@ import {
   watchDraftSaves,
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { did, saw } from './ledger/record';
 
 declare global {
   interface Window {
@@ -55,12 +56,16 @@ test.describe('the local draft store', () => {
     await body(page).click();
     await page.keyboard.press('End');
     await page.keyboard.type(' Second line.');
+    did('AC-022');
+    did('AC-911');
     await expect
       .poll(() => saves.at(-1)?.html ?? '')
       .toContain('First line. Second line.');
 
     await page.reload();
     await expect(body(page)).toContainText('First line. Second line.');
+    saw('STC-961');
+    saw('STC-970');
     await expect(page.getByText('Draft could not be synced')).toHaveCount(0);
   });
 });

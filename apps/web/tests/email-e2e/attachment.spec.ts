@@ -9,6 +9,7 @@ import {
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { onlySentRaw } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 const NOTES = {
   name: 'notes.txt',
@@ -70,6 +71,7 @@ test.describe('attachments in the composer', () => {
     await routeDraftId(page);
     await attach(page, NOTES);
     await expect(page.getByText('notes.txt')).toBeVisible();
+    saw('STC-959');
     await expect.poll(() => reservations.length).toBe(1);
 
     // The first upload is still unanswered while a second file is attached
@@ -79,18 +81,25 @@ test.describe('attachments in the composer', () => {
     await body(page).click();
     await page.keyboard.press('End');
     await page.keyboard.type(' See you there.');
+    did('AC-022');
+    did('AC-911');
     await expect(body(page)).toContainText('See you there.');
+    saw('STC-970');
     release();
     await expect
       .poll(() => saves.some((save) => save.html.includes('See you there.')))
       .toBe(true);
 
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-057');
     const raw = await onlySentRaw(mailbox);
+    confirmed('F-131');
     expect(raw.match(/^Content-Disposition:\s*attachment/gim)).toHaveLength(2);
     expect(raw.match(/filename="?notes\.txt/g)).toHaveLength(1);
     expect(raw.match(/filename="?route\.txt/g)).toHaveLength(1);
+    confirmed('F-122');
     expect(raw).toContain('See you there.');
+    confirmed('F-102');
     expect(reservations).toHaveLength(2);
   });
 
@@ -131,6 +140,7 @@ test.describe('attachments in the composer', () => {
     await attach(page, NOTES);
 
     await expect(page.getByText('Failed to save attachments')).toBeVisible();
+    saw('STC-113');
     await expect.poll(() => removals.length).toBe(1);
     const shown = await page.locator('body').innerText();
     expect(shown).not.toContain('SignatureDoesNotMatch');
@@ -168,13 +178,17 @@ test.describe('a calendar file attached to a message', () => {
     });
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('walk.ics').click();
+    did('AL-509');
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('walk.ics');
     await expect(dialog).toContainText('Harbour walk');
+    saw('STL-513');
     await dialog.getByRole('button', { name: 'Close' }).click();
+    did('AL-511');
     await expect(dialog).toBeHidden();
     expect(documentRequests).toEqual([]);
   });

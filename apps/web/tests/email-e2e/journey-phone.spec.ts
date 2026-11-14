@@ -7,6 +7,7 @@ import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { addMailbox, readMailbox } from './harness/journeys';
 import type { Provider } from './harness/stack';
+import { confirmed, did, saw } from './ledger/record';
 
 const { defaultBrowserType: _browser, ...phone } = devices['iPhone 13'];
 
@@ -88,30 +89,41 @@ for (const provider of PROVIDERS) {
       const list = page.getByRole('grid', { name: 'Email' });
       await expect(list.getByText('Weekly report')).toBeVisible();
       await list.getByText('Lunch?').tap();
+      did('AL-050');
       await expect(page.getByText('Noon at the usual place?')).toBeVisible();
+      saw('STL-951');
+      saw('STL-906');
 
       await page
         .locator('[data-mobile-dock-island]')
         .getByRole('button', { name: 'Reply', exact: true })
         .tap();
+      did('AL-172', 'F-108');
+      did('AL-172', 'F-113');
       const composer = page.getByRole('dialog', { name: 'Reply composer' });
       const editor = composer.getByRole('textbox', { name: /reference files/ });
       await editor.tap();
       await editor.pressSequentially('Works for me.');
       await composer.getByRole('button', { name: 'Send email' }).tap();
+      did('AC-091');
       await expect(composer).toHaveCount(0);
       await expect
         .poll(async () =>
           (await readMailbox(mailbox, grace)).map((message) => message.subject)
         )
         .toEqual(['Re: Lunch?']);
+      confirmed('F-108');
       const [reply] = await readMailbox(mailbox, grace);
       expect(reply.html).toContain('Works for me.');
+      confirmed('F-113');
 
       await page.getByRole('button', { name: 'Go Back' }).tap();
       await expect(list.getByText('Weekly report')).toBeVisible();
+      saw('STL-966');
       await swipeLeft(page, report.id, 160);
+      did('AL-096');
       await expect(list.getByText('Weekly report')).toHaveCount(0);
+      saw('STL-953');
       await expect
         .poll(
           async () =>
@@ -120,6 +132,7 @@ for (const provider of PROVIDERS) {
             )?.inInbox
         )
         .toBe(false);
+      confirmed('F-071');
     });
   });
 }

@@ -6,6 +6,7 @@ import {
   syncedIn,
   threadMessages,
 } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 const UNDO_WINDOW_SECS = 8;
 
@@ -34,20 +35,28 @@ test.describe('undoing a send', () => {
     const thread = await syncedIn(mailbox, side, 'Lunch?');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await replyEditor(page).pressSequentially('hello');
+    did('AC-081');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
     const sendPressed = Date.now();
     await notice(page, 'Sending…')
       .getByRole('button', { name: 'Undo' })
       .click();
+    did('AC-059');
     await expect(notice(page, 'Send cancelled')).toBeVisible();
+    saw('STC-028');
 
     // The composer is back with what was typed, and only that.
     await expect(replyEditor(page)).toHaveText('hello');
+    saw('STC-970');
     await expect(
       page.getByRole('button', { name: 'Replying to Grace' })
     ).toBeVisible();
+    saw('STC-094', 'F-109');
 
     // The saved draft is the one draft of the thread, as written, in the second inbox.
     const drafts = async () =>
@@ -77,6 +86,7 @@ test.describe('undoing a send', () => {
     await syncedIn(mailbox, side, 'Later');
     expect(await sentMessages(mailbox, side)).toEqual([]);
     expect(await sentMessages(mailbox)).toEqual([]);
+    confirmed('F-134');
     expect((await drafts()).length).toBe(1);
   });
 });

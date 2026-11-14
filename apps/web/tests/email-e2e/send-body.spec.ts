@@ -9,6 +9,7 @@ import {
   replyEditor,
   threadMessages,
 } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 test.describe('what the recipient gets', () => {
   // Class quoted-thread-appended-twice: a reply started in Gmail carries
@@ -53,15 +54,21 @@ test.describe('what the recipient gets', () => {
         { message: 'Macro never synced the draft', timeout: 60_000 }
       )
       .toBe(true);
+    confirmed('F-021');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await expect(replyEditor(page)).toContainText('Yes, since Monday.');
+    saw('STL-962');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
     await expect(notice(page, 'Sending…')).toBeVisible();
+    saw('STC-024');
 
     const html = htmlBody(await onlySentRaw(mailbox));
     expect(occurrences(html, 'Yes, since Monday.')).toBe(1);
     expect(occurrences(html, 'Is the hall booked?')).toBe(1);
+    confirmed('F-132');
   });
 
   // Class send-html-differs-from-composer: the composer shows a blank line
@@ -76,14 +83,18 @@ test.describe('what the recipient gets', () => {
     const thread = await mailbox.synced('Agenda');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     const editor = replyEditor(page);
     await editor.pressSequentially('First point.');
+    did('AC-081');
     await page.keyboard.press('Enter');
     await editor.pressSequentially('Second point.');
     await page.keyboard.press('Enter');
     await editor.pressSequentially('Third point.');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
 
     const html = htmlBody(await onlySentRaw(mailbox));
     // Everything but the line breaks, which are what a mail client lays out.
@@ -91,6 +102,8 @@ test.describe('what the recipient gets', () => {
     expect(lines).toContain(
       'First point.<br><br>Second point.<br><br>Third point.'
     );
+    confirmed('F-102');
+    confirmed('F-132');
   });
 
   // Class send-html-differs-from-composer: when this fails a booking link
@@ -107,15 +120,22 @@ test.describe('what the recipient gets', () => {
     const thread = await mailbox.synced('Call?');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     const editor = replyEditor(page);
     await editor.pressSequentially('Pick a time: ');
+    did('AC-081');
     await paste(editor, 'https://macro.com/app/book/ada/intro');
+    did('AC-042');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
 
     const html = htmlBody(await onlySentRaw(mailbox));
     expect(html).toMatch(
       /<a\s[^>]*href="https:\/\/macro\.com\/app\/book\/ada\/intro"[^>]*>intro<\/a>/
     );
+    confirmed('F-104');
+    confirmed('F-132');
   });
 });

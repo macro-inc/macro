@@ -1,5 +1,6 @@
 import { expect, test } from './harness/fixtures';
 import { injectFault, notice, replyEditor, sentMessages } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 test.describe('a send the provider refuses', () => {
   // Long enough for the Undo offer to be seen before the server sends.
@@ -21,15 +22,21 @@ test.describe('a send the provider refuses', () => {
     await injectFault(mailbox, { route: 'messages.send', error: 'forbidden' });
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await replyEditor(page).pressSequentially('Works for me.');
+    did('AC-081');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
 
     const sending = notice(page, 'Sending…');
     await expect(sending).toBeVisible();
     await expect(sending.getByRole('button', { name: 'Undo' })).toBeVisible();
+    saw('STC-024');
 
     await expect(page.getByText('Email failed to send')).toBeVisible();
+    saw('STC-026');
     await expect(page.getByText('Email sent', { exact: true })).toHaveCount(0);
     await expect(sending).toHaveCount(0);
     // The reply is still there to recover, and the thread is back in the inbox.
@@ -38,6 +45,7 @@ test.describe('a send the provider refuses', () => {
         'Send failed before delivery. Cancel to recover this draft.'
       )
     ).toBeVisible();
+    saw('STC-105');
     await expect
       .poll(async () =>
         (await mailbox.providerMessages()).map((message) => message.inInbox)
@@ -60,14 +68,18 @@ test.describe('a browser that wrongly reads offline', () => {
     const thread = await mailbox.synced('Lunch?');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await replyEditor(page).pressSequentially('Works for me.');
+    did('AC-081');
     await page.evaluate(() => {
       Object.defineProperty(Navigator.prototype, 'onLine', {
         get: () => false,
       });
     });
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
 
     await expect
       .poll(
@@ -78,5 +90,6 @@ test.describe('a browser that wrongly reads offline', () => {
         }
       )
       .toEqual(['Re: Lunch?']);
+    confirmed('F-132');
   });
 });

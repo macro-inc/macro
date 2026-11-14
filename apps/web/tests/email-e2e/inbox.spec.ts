@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/fixtures';
+import { did, saw } from './ledger/record';
 
 const WORK = 'work@example.com';
 
@@ -31,6 +32,7 @@ async function inboxCheckbox(page: Page, address: string) {
   const checkbox = page.getByRole('menuitemcheckbox', { name: address });
   if (!(await checkbox.isVisible())) {
     await page.getByRole('button', { name: 'Filter email' }).click();
+    did('AL-018');
     await page.getByRole('menuitem', { name: 'Inboxes' }).click();
   }
   await expect(checkbox).toBeVisible();
@@ -52,9 +54,11 @@ test.describe('choosing which inboxes the mail list shows', () => {
 
     const work = await inboxCheckbox(page, WORK);
     await work.click();
+    did('AL-028');
     await expect(work).toBeChecked();
     await expect(row(page, 'Budget')).toBeVisible();
     await expect(row(page, 'Lunch?')).toBeHidden();
+    saw('STL-967');
 
     await (await inboxCheckbox(page, WORK)).click();
     await expect(await inboxCheckbox(page, WORK)).not.toBeChecked();
@@ -79,14 +83,18 @@ test.describe('choosing which inboxes the mail list shows', () => {
       .getByRole('button', { name: 'Select inbox: All inboxes' })
       .click();
     await page.getByRole('menuitemradio', { name: WORK }).click();
+    did('AL-038');
     await expect(
       page.getByRole('button', { name: `Select inbox: ${WORK}` })
     ).toBeVisible();
+    saw('STL-025');
     await expect(row(page, 'Budget')).toBeVisible();
     await expect(row(page, 'Lunch?')).toBeHidden();
+    saw('STL-967');
 
     await page.getByRole('button', { name: `Select inbox: ${WORK}` }).click();
     await page.getByRole('menuitemradio', { name: 'All inboxes' }).click();
+    did('AL-039');
     await expect(row(page, 'Lunch?')).toBeVisible();
     await expect(row(page, 'Budget')).toBeVisible();
   });

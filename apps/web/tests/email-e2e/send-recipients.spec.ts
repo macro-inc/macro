@@ -6,6 +6,7 @@ import {
   sentMessages,
   syncedIn,
 } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 test.describe('replying to all from a second inbox', () => {
   // Class reply-recipients-wrong: "myself" is the inbox that got the mail,
@@ -31,12 +32,17 @@ test.describe('replying to all from a second inbox', () => {
     const thread = await syncedIn(mailbox, side, 'Offsite');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await expect(
       page.getByRole('button', { name: 'Replying to Xavier + 2' })
     ).toBeVisible();
+    saw('STC-094', 'F-109');
     await replyEditor(page).pressSequentially('Any week in May.');
+    did('AC-081');
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
 
     const raw = await onlySentRaw(mailbox, side);
     const addresses = (name: string) =>
@@ -44,6 +50,8 @@ test.describe('replying to all from a second inbox', () => {
     expect(addresses('From')).toEqual([side.email]);
     expect(addresses('To')).toEqual(['xavier@example.com']);
     expect(addresses('Cc')).toEqual([mailbox.inbox.email, 'yara@example.com']);
+    confirmed('F-109');
+    confirmed('F-132');
     // It left from the inbox that was written to, not the signed-in one.
     expect(await sentMessages(mailbox)).toEqual([]);
   });

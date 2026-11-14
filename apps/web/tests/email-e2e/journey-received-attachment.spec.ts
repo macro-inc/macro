@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import type { Provider } from './harness/stack';
+import { did, saw } from './ledger/record';
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
@@ -68,7 +69,10 @@ for (const provider of PROVIDERS) {
       );
 
       await mailbox.open(`/app/mail/${thread.id}`);
+      did('AL-910');
       await expect(page.getByText('The figures are attached.')).toBeVisible();
+      saw('STL-951');
+      saw('STL-906');
       const notes = page.getByRole('button', {
         name: 'notes.txt',
         exact: true,
@@ -79,9 +83,11 @@ for (const provider of PROVIDERS) {
       });
       await expect(notes).toBeVisible();
       await expect(figures).toBeVisible();
+      saw('STL-512');
 
       const downloading = page.waitForEvent('download');
       await page.getByRole('button', { name: 'Download figures.bin' }).click();
+      did('AL-177');
       const download = await downloading;
       expect(download.suggestedFilename()).toBe('figures.bin');
       const saved = await readFile(await download.path());

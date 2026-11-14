@@ -9,6 +9,7 @@ import {
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { htmlBody, onlySentRaw } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 /** A 1x1 PNG. */
 const PIXEL =
@@ -34,15 +35,21 @@ test.describe('content the composer did not write itself', () => {
     const thread = await mailbox.synced('Harbour walk');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await page.keyboard.type('See you there.');
+    did('AC-081');
     await page.keyboard.press('ControlOrMeta+Enter');
+    did('AC-311');
 
     const sent = htmlBody(await onlySentRaw(mailbox));
     expect(sent).toContain('See you there.');
+    confirmed('F-102');
     expect(sent).toContain('Meet at the north gate');
     expect(sent).toContain('and bring boots.');
     expect(sent).toContain('four');
+    confirmed('F-132');
   });
 
   // Class composer-foreign-html-import: when this fails, a saved draft's own
@@ -61,12 +68,16 @@ test.describe('content the composer did not write itself', () => {
     await routeDraftId(page);
     await page.keyboard.press('Enter');
     await page.keyboard.type('Bring boots.');
+    did('AC-022');
+    did('AC-911');
     await expect.poll(() => saves.at(-1)?.html ?? '').toContain('Bring boots.');
     await expect.poll(async () => (await draftThreads(mailbox)).length).toBe(1);
 
     await page.reload();
     await expect(body(page)).toContainText('Meet at the north gate.');
     await expect(body(page)).toContainText('Bring boots.');
+    saw('STC-961');
+    saw('STC-970');
     await body(page).click();
     await page.keyboard.press('ControlOrMeta+End');
     await page.keyboard.type(' Back by four.');
@@ -114,13 +125,18 @@ test.describe('content the composer did not write itself', () => {
       mimeType: 'image/png',
       base64: PIXEL,
     });
+    did('AC-026', 'F-105');
     await expect(body(page).locator('img')).toHaveCount(1);
+    saw('STC-936');
     await expect.poll(() => uploads).toHaveLength(1);
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-057');
 
     const raw = await onlySentRaw(mailbox);
     const html = htmlBody(raw);
     expect(html).toMatch(/<img[^>]+src="(cid:|https?:)/);
     expect(html).not.toContain('blob:');
+    confirmed('F-105');
+    confirmed('F-131');
   });
 });

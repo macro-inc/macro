@@ -2,6 +2,7 @@
 // provider faults, and reading a sent message the way its recipient gets it.
 
 import { expect, type Locator, type Page } from '@playwright/test';
+import { did } from '../ledger/record';
 import type { Mailbox } from './fixtures';
 import { rawMessage } from './provider';
 import type { LinkedInbox, ProviderMessage } from './stack';
@@ -52,6 +53,11 @@ export async function messageAction(
     .locator('main .gap-0\\.5 > button')
     .nth(action === 'reply' ? 0 : 1)
     .click();
+  if (action === 'reply') {
+    did('AL-168');
+  } else {
+    did('AL-170');
+  }
 }
 
 /** The messages the mailbox holds in Sent at the provider. */

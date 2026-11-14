@@ -8,6 +8,7 @@ import { expect, test } from './harness/fixtures';
 import { addMailbox, readMailbox, sentFolder } from './harness/journeys';
 import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
+import { confirmed, did, saw } from './ledger/record';
 
 type Scheduled = { db_id: string; scheduled_send_time: string };
 
@@ -20,6 +21,7 @@ async function pickSendTime(
   await page.getByRole('button', { name: clock }).click();
   await page.getByRole('combobox', { name: /./ }).last().fill(words);
   await page.getByRole('option').first().click();
+  did('AC-046');
 }
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
@@ -61,51 +63,70 @@ for (const provider of PROVIDERS) {
       await page
         .getByRole('button', { name: 'Schedule send', exact: true })
         .click();
+      did('AC-049');
       await expect(scheduledNotice).toBeVisible();
+      saw('STC-059');
 
       // Macro holds it for tomorrow; nothing has reached Grace.
       await expect.poll(async () => (await scheduled()).length).toBe(1);
+      confirmed('F-145');
       const [first] = await scheduled();
       expect(new Date(first.scheduled_send_time).getHours()).toBe(9);
+      confirmed('F-142');
       expect(await readMailbox(mailbox, grace)).toEqual([]);
 
       await tabs.getByRole('button', { name: 'Scheduled' }).click();
+      did('AL-002', 'F-145');
       const list = page.getByRole('main');
       await expect(list.getByText('Quarterly numbers')).toBeVisible();
 
       // Rescheduled from its thread: Macro holds the new time.
       await list.getByText('Quarterly numbers').click();
+      did('AL-050');
       await pickSendTime(page, /^Scheduled for /, 'in 2 weeks');
       await page
         .getByRole('button', { name: 'Update schedule', exact: true })
         .click();
+      did('AC-050');
       await expect(notice(page, 'Email rescheduled')).toBeVisible();
+      saw('STC-404');
       await expect
         .poll(async () => (await scheduled())[0]?.scheduled_send_time)
         .not.toBe(first.scheduled_send_time);
       const moved = new Date((await scheduled())[0].scheduled_send_time);
       expect(moved.getTime() - Date.now()).toBeGreaterThan(13 * 24 * 3600_000);
+      confirmed('F-143');
 
       // Cancelled: back to an editable draft, gone from Scheduled.
       // The Send button's tooltip covers the bar while the pointer rests on it.
       await page.mouse.move(0, 0);
       await page.getByRole('button', { name: 'Cancel scheduled send' }).click();
+      did('AC-052');
       await expect(
         notice(page, 'Schedule cancelled. This email is editable again.')
       ).toBeVisible();
+      saw('STC-070');
       await expect.poll(scheduled).toEqual([]);
+      confirmed('F-144');
       await tabs.getByRole('button', { name: 'Scheduled' }).click();
+      did('AL-002', 'F-145');
       await expect(page.getByText('No scheduled email')).toBeVisible();
+      saw('STL-013', 'F-145');
 
       // Scheduled again from the draft, then its time comes.
       await tabs.getByRole('button', { name: 'Drafts' }).click();
+      did('AL-002', 'F-030');
       await page.getByRole('main').getByText('Quarterly numbers').click();
+      did('AL-050');
       await pickSendTime(page, /^Choose send time/, 'tomorrow 9am');
       await page
         .getByRole('button', { name: 'Schedule send', exact: true })
         .click();
+      did('AC-049');
       await expect(scheduledNotice).toBeVisible();
+      saw('STC-059');
       await expect.poll(async () => (await scheduled()).length).toBe(1);
+      confirmed('F-142');
       expect(await readMailbox(mailbox, grace)).toEqual([]);
       // Nothing went out early in all that time: the provider's Sent is empty.
       expect(
@@ -142,6 +163,7 @@ for (const provider of PROVIDERS) {
           .filter((message) => message.labels.includes(sentFolder(provider)))
           .map((message) => message.subject)
       ).toEqual(['Quarterly numbers']);
+      confirmed('F-146');
       await expect.poll(scheduled).toEqual([]);
     });
   });

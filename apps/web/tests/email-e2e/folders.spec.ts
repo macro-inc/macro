@@ -3,6 +3,7 @@
 
 import { expect, test } from './harness/fixtures';
 import { focusRow, rowIds } from './harness/list';
+import { confirmed, did, saw } from './ledger/record';
 
 test.describe('the Sent view', () => {
   // Class sent-view-only-primary-inbox: when this fails, Sent lists only what
@@ -55,9 +56,13 @@ test.describe('the Sent view', () => {
     ];
     for (const answer of answers) {
       await mailbox.open(`/app/mail/${answer.threadId}`);
+      did('AL-910');
       await page.getByText('Reply...').click();
+      did('AL-171');
       await page.keyboard.type(answer.text);
+      did('AC-081');
       await page.keyboard.press('ControlOrMeta+Enter');
+      did('AC-311');
       await expect
         .poll(async () =>
           (await mailbox.stack.providerMessages(answer.from)).some(
@@ -71,10 +76,12 @@ test.describe('the Sent view', () => {
 
     await mailbox.open('/app/mail');
     await page.getByText('Sent', { exact: true }).click();
+    did('AL-002', 'F-030');
     await expect(page).toHaveURL(/tab=sent/);
     const list = page.getByRole('grid', { name: 'Email' });
     await expect(list.getByText('Main answer')).toBeVisible();
     await expect(list.getByText('Side answer')).toBeVisible();
+    saw('STL-923');
   });
 });
 
@@ -106,6 +113,7 @@ test.describe('moving a thread to a folder', () => {
       .getByRole('combobox', { name: /Search folders/ })
       .fill('Clients 2026');
     await page.keyboard.press('Enter');
+    did('AL-197');
     await page
       .getByRole('status')
       .filter({ hasText: 'Moved to folder' })
@@ -116,12 +124,16 @@ test.describe('moving a thread to a folder', () => {
     await expect(page).not.toHaveURL(/\/app\/mail/);
     await expect(page.getByText('Contract draft')).toBeVisible();
     await expect(page.getByText('Lunch on Friday')).toHaveCount(0);
+    saw('STL-968');
+    saw('STL-947');
     const folder = new URL(page.url());
 
     await mailbox.open('/app/mail');
     await focusRow(page, contract.id);
     await page.keyboard.press('e');
+    did('AL-064', 'F-071');
     await expect.poll(() => rowIds(page)).not.toContain(contract.id);
+    saw('STL-953');
     await expect
       .poll(
         async () =>
@@ -130,6 +142,7 @@ test.describe('moving a thread to a folder', () => {
           )?.inInbox
       )
       .toBe(false);
+    confirmed('F-071');
 
     await mailbox.open(folder.pathname + folder.search);
     await expect(page.getByText('Contract draft')).toBeVisible();

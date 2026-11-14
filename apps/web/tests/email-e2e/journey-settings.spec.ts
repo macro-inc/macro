@@ -10,6 +10,7 @@ import { expect, test } from './harness/fixtures';
 import { addMailbox, readMailbox } from './harness/journeys';
 import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
+import { confirmed, did, saw } from './ledger/record';
 
 const SETTINGS = '/app/mail/~/settings/email';
 
@@ -24,7 +25,9 @@ async function setSwitch(page: Page, name: string, on: boolean) {
   const toggle = page.getByRole('switch', { name });
   await expect(toggle).toBeChecked({ checked: !on });
   await toggle.locator('xpath=following-sibling::div[1]').click();
+  did('AX-014');
   await expect(toggle).toBeChecked({ checked: on });
+  saw('STX-964');
 }
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
@@ -66,7 +69,9 @@ for (const provider of PROVIDERS) {
           body: `About ${subject}.`,
         });
         await page.getByRole('button', { name: 'Send email' }).click();
+        did('AC-057');
         await expect(notice(page, 'Email sent')).toBeVisible();
+        saw('STC-025');
       };
 
       // A signature written in Settings.
@@ -76,10 +81,12 @@ for (const provider of PROVIDERS) {
         .getByRole('tablist', { name: `Signature views for ${own}` })
         .getByRole('tab', { name: 'HTML' })
         .click();
+      did('AX-020');
       const html = page.getByRole('textbox', {
         name: `Signature HTML for ${own}`,
       });
       await html.fill('<p><b>Ada</b> at Analytical Engines</p>');
+      did('AX-021');
       await page
         .locator('div')
         .filter({ has: html })
@@ -87,7 +94,9 @@ for (const provider of PROVIDERS) {
         .last()
         .getByRole('button', { name: 'Save signature' })
         .click();
+      did('AX-024');
       await expect(notice(page, 'Signature saved')).toBeVisible();
+      saw('STX-015', 'F-148');
 
       // Read receipts off: the next message is signed and carries no pixel.
       await setSwitch(page, `Read receipts for ${own}`, false);
@@ -95,8 +104,12 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () => (await received()).map((message) => message.subject))
         .toEqual(['Without receipts']);
+      confirmed('F-131');
       const [untracked] = await received();
       expect(untracked.html).toContain('<b>Ada</b> at Analytical Engines');
+      confirmed('F-148');
+      confirmed('F-149');
+      confirmed('F-107');
       expect(untracked.html).not.toMatch(PIXEL);
 
       // On again: the next message carries it.
@@ -111,6 +124,7 @@ for (const provider of PROVIDERS) {
       );
       expect(tracked?.html).toContain('<b>Ada</b> at Analytical Engines');
       expect(tracked?.html).toMatch(PIXEL);
+      confirmed('F-067');
 
       // The work inbox is removed: gone from the accounts, its mail from the
       // list, and from the inbox picker.
@@ -118,13 +132,16 @@ for (const provider of PROVIDERS) {
       await expect(page.getByText('Budget')).toBeVisible();
       await mailbox.open(SETTINGS);
       await page.getByRole('button', { name: `Remove ${work}` }).click();
+      did('AX-010');
       await page
         .getByRole('dialog', { name: 'Remove inbox' })
         .getByRole('button', { name: 'Remove', exact: true })
         .click();
+      did('AX-011');
       await expect(
         page.getByRole('button', { name: `Remove ${work}` })
       ).toHaveCount(0);
+      saw('STX-963');
       await expect
         .poll(async () => {
           const response = await mailbox.api('/email/email/links');
@@ -134,6 +151,7 @@ for (const provider of PROVIDERS) {
           return links.map((link) => link.email_address);
         })
         .toEqual([own]);
+      confirmed('F-009');
 
       await mailbox.open('/app/mail');
       await expect(page.getByText('Lunch?')).toBeVisible();

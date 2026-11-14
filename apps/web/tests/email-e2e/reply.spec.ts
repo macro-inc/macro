@@ -1,4 +1,5 @@
 import { expect, test } from './harness/fixtures';
+import { confirmed, did } from './ledger/record';
 
 test.describe('replying from the thread', () => {
   test('a reply goes out once, in the thread, with one Re: prefix', async ({
@@ -13,9 +14,13 @@ test.describe('replying from the thread', () => {
     const thread = await mailbox.synced('Lunch?');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await page.keyboard.type('Works for me.');
+    did('AC-081');
     await page.keyboard.press('ControlOrMeta+Enter');
+    did('AC-311');
 
     await expect
       .poll(async () =>
@@ -26,6 +31,7 @@ test.describe('replying from the thread', () => {
       .toEqual(['Re: Lunch?']);
     const [received, sent] = await mailbox.providerMessages();
     expect(sent.threadId).toBe(received.threadId);
+    confirmed('F-132');
   });
 
   // Class reply-subject-prefix: a subject that already carries a reply
@@ -44,9 +50,13 @@ test.describe('replying from the thread', () => {
       const thread = await mailbox.synced(subject);
 
       await mailbox.open(`/app/mail/${thread.id}`);
+      did('AL-910');
       await page.getByText('Reply...').click();
+      did('AL-171');
       await page.keyboard.type('Thanks.');
+      did('AC-081');
       await page.keyboard.press('ControlOrMeta+Enter');
+      did('AC-311');
 
       await expect
         .poll(async () =>
@@ -55,6 +65,7 @@ test.describe('replying from the thread', () => {
             .map((message) => message.subject)
         )
         .toEqual([subject]);
+      confirmed('F-132');
     });
   }
 });

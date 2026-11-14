@@ -10,6 +10,7 @@ import {
   rowIds,
   sentOperations,
 } from './harness/list';
+import { confirmed, did, saw } from './ledger/record';
 
 const from = 'Grace <grace@example.com>';
 
@@ -44,19 +45,28 @@ test.describe('the mail list around Done and Undo', () => {
     const without = rows.filter((id) => id !== rows[2]);
 
     await expect.poll(() => focusedRowId(page)).toBe(rows[0]);
+    saw('STL-403', 'F-038');
     await page.keyboard.press('j');
+    did('AL-048');
     await page.keyboard.press('j');
     await expect.poll(() => focusedRowId(page)).toBe(rows[2]);
+    saw('STL-403', 'F-038');
 
     await page.keyboard.press('e');
+    did('AL-064', 'F-071');
     await expect.poll(() => rowIds(page)).toEqual(without);
+    saw('STL-953');
     await expect.poll(() => focusedRowId(page)).toBe(rows[3]);
     await expect.poll(() => archivedAtProvider(mailbox)).toBe(1);
+    confirmed('F-071');
 
     // Undo puts the row back where it was; the cursor stays where Done left it.
     await page.keyboard.press('z');
+    did('AL-009');
     await expect.poll(() => rowIds(page)).toEqual(rows);
+    saw('STL-955');
     await expect.poll(() => archivedAtProvider(mailbox)).toBe(0);
+    confirmed('F-044');
     await page.keyboard.press('k');
     await expect.poll(() => focusedRowId(page)).toBe(rows[2]);
 
@@ -67,9 +77,12 @@ test.describe('the mail list around Done and Undo', () => {
 
     // The cursor's row opens, and next steps on from it.
     await page.keyboard.press('Enter');
+    did('AL-050');
     await expect.poll(() => openThreadId(page)).toBe(rows[3]);
     await expect(page.getByText(/^Body of \w+\.$/)).toBeVisible();
+    saw('STL-906');
     await page.keyboard.press('j');
+    did('AL-124');
     await expect.poll(() => openThreadId(page)).toBe(rows[4]);
   });
 
@@ -86,12 +99,18 @@ test.describe('the mail list around Done and Undo', () => {
     const rows = await rowIds(page);
     const without = rows.filter((id) => id !== rows[1]);
     await page.keyboard.press('j');
+    did('AL-048');
     await expect.poll(() => focusedRowId(page)).toBe(rows[1]);
+    saw('STL-403', 'F-038');
 
     await page.keyboard.press('e');
+    did('AL-064', 'F-071');
     await expect.poll(() => rowIds(page)).toEqual(without);
+    saw('STL-953');
     await page.keyboard.press('z');
+    did('AL-009');
     await expect.poll(() => rowIds(page)).toEqual(rows);
+    saw('STL-955');
     await page.keyboard.press('k');
     await expect.poll(() => focusedRowId(page)).toBe(rows[1]);
     await page.keyboard.press('e');
@@ -101,6 +120,7 @@ test.describe('the mail list around Done and Undo', () => {
     await expect.poll(() => archiveRequests(sent).length).toBe(3);
     expect(archiveRequests(sent).at(-1)).toBe(`${rows[1]}:true`);
     await expect.poll(() => archivedAtProvider(mailbox)).toBe(1);
+    confirmed('F-071');
   });
 });
 
@@ -135,11 +155,15 @@ test.describe('what a row shows and opens', () => {
     const [sender, subject] = (await row.innerText()).split('\n');
     expect(sender).toBe('Hugo');
     expect(subject).toBe('Quarterly numbers');
+    saw('STL-965');
 
     await row.getByText('Hugo', { exact: true }).click();
+    did('AL-050');
     await expect.poll(() => openThreadId(page)).toBe(numbers.id);
     await expect(page.getByText('Numbers attached.')).toBeVisible();
+    saw('STL-906');
     await expect(page.getByText(subject, { exact: true })).toBeVisible();
+    saw('STL-951');
 
     await page.goBack();
     await expect.poll(async () => (await rowIds(page)).length).toBe(3);
@@ -147,11 +171,17 @@ test.describe('what a row shows and opens', () => {
     for (const id of rows) {
       if ((await focusedRowId(page)) === offsite.id) break;
       await page.keyboard.press(id === rows[0] ? 'k' : 'j');
+      did('AL-048');
     }
     await expect.poll(() => focusedRowId(page)).toBe(offsite.id);
+    saw('STL-403', 'F-038');
     await page.keyboard.press('s');
+    did('AL-061', 'F-073');
     await page.getByText('Favorites', { exact: true }).click();
+    did('AL-002', 'F-030');
     await expect.poll(() => rowIds(page)).toEqual([offsite.id]);
+    saw('STL-972');
+    saw('STL-923');
   });
 });
 
@@ -211,6 +241,7 @@ test.describe('mail that arrives while the list is open', () => {
 
     await mailbox.deliver({ from, subject: 'Just in', text: 'Fresh.' });
     const justIn = await mailbox.synced('Just in');
+    confirmed('F-017');
     await expect.poll(() => rowIds(page)).toEqual([justIn.id, earlier.id]);
 
     // A later arrival settles the list again: the first one is still listed once.
@@ -221,6 +252,7 @@ test.describe('mail that arrives while the list is open', () => {
       .toEqual([another.id, justIn.id, earlier.id]);
     await expect(page.getByText('Just in', { exact: true })).toHaveCount(1);
     expect(loads).toBe(0);
+    saw('STL-900');
     // The rows came with the live updates, not from reading the list again.
     expect(sent.filter(({ name }) => name === 'Soup').length).toBe(listReads);
   });
@@ -250,7 +282,9 @@ test.describe('cached mail without a connection', () => {
       .poll(() => catchUpFinished(page), { timeout: 60_000 })
       .toBe(true);
     await page.locator(`[data-entity-id="${rows[0]}"]`).click();
+    did('AL-050');
     await expect(page.getByText('Body of Charlie.')).toBeVisible();
+    saw('STL-906');
     await page.goBack();
     await expect.poll(() => rowIds(page)).toEqual(rows);
 

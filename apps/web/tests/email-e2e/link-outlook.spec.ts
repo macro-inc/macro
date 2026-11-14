@@ -1,4 +1,5 @@
 import { expect, test } from './harness/fixtures';
+import { saw } from './ledger/record';
 
 test.describe('an Outlook inbox in Settings', () => {
   test.use({ provider: 'OUTLOOK' });
@@ -27,6 +28,7 @@ test.describe('an Outlook inbox in Settings', () => {
     await expect(
       page.getByText('Outlook / Microsoft 365').first()
     ).toBeVisible();
+    saw('STX-009');
     // The status is part of the row's own data and an inbox that is up to
     // date shows none, so the row being there is what these wait on.
     await expect(page.getByText('Syncing…')).toBeHidden();

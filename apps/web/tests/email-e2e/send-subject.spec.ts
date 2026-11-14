@@ -1,4 +1,5 @@
 import { expect, test } from './harness/fixtures';
+import { did, saw } from './ledger/record';
 
 test.describe('a subject longer than Exchange keeps', () => {
   test.use({ provider: 'OUTLOOK' });
@@ -15,9 +16,11 @@ test.describe('a subject longer than Exchange keeps', () => {
       .getByRole('complementary', { name: 'Email navigation' })
       .getByLabel('New email')
       .click();
+    did('AL-010');
     const subject = page.getByRole('textbox', { name: 'Subject' });
 
     await subject.fill('x'.repeat(255));
+    did('AC-018');
     await expect(subject).toHaveValue('x'.repeat(255));
     await expect(page.getByText(/Outlook allows 255/)).toHaveCount(0);
 
@@ -25,6 +28,7 @@ test.describe('a subject longer than Exchange keeps', () => {
     await expect(
       page.getByText('Subject is 300 characters. Outlook allows 255.')
     ).toBeVisible();
+    saw('STC-017');
     await expect(subject).toHaveAttribute('aria-invalid', 'true');
   });
 });

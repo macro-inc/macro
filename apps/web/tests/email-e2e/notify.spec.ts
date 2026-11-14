@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
+import { did, saw } from './ledger/record';
 
 /**
  * Answers the notification service's type preferences, which the stack does
@@ -39,7 +40,9 @@ async function setNewEmail(page: Page, on: boolean) {
   const toggle = newEmailSwitch(page);
   await expect(toggle).toBeChecked({ checked: !on });
   await toggle.locator('xpath=following-sibling::div[1]').click();
+  did('AX-063');
   await expect(toggle).toBeChecked({ checked: on });
+  saw('STX-943');
 }
 
 test.describe('the mail badge in the navigation rail', () => {
@@ -67,10 +70,12 @@ test.describe('the mail badge in the navigation rail', () => {
     // Turning the type on shows the unread mail was there to be counted.
     await setNewEmail(page, true);
     await expect(badge).toHaveAttribute('data-unread');
+    saw('STX-032');
     expect([...disabledTypes]).toEqual([]);
 
     await setNewEmail(page, false);
     await expect(badge).not.toHaveAttribute('data-unread');
+    saw('STX-032');
     expect([...disabledTypes]).toEqual(['new_email']);
 
     // The saved preference, read again on a fresh load, still holds the
@@ -78,6 +83,7 @@ test.describe('the mail badge in the navigation rail', () => {
     await mailbox.open('/app/mail/~/settings/notifications');
     await expect(newEmailSwitch(page)).toBeEnabled();
     await expect(newEmailSwitch(page)).not.toBeChecked();
+    saw('STX-943');
     await expect(page.getByText('Lunch?').first()).toBeVisible();
     await expect(badge).not.toHaveAttribute('data-unread');
   });

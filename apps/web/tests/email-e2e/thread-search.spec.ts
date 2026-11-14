@@ -9,6 +9,7 @@ import {
   type ThreadMessage,
   threadMessages,
 } from './harness/thread';
+import { did } from './ledger/record';
 
 const THIRD = 'Step 3: the zeppelin is booked for the whole week.';
 const TENTH = 'Step 10: zeppelin confirmed.';
@@ -92,6 +93,7 @@ test.describe('a thread opened from a search result', () => {
   }) => {
     const { threadId, messages } = await searchFindsThread(page, mailbox);
     await page.getByText('Travel plan').first().click();
+    did('AX-056', 'F-051');
 
     await expect(page).toHaveURL(new RegExp(threadId));
     await expect(messageCard(page, TENTH).getByText('to Me')).toBeVisible();
@@ -110,6 +112,7 @@ test.describe('a thread opened from a search result', () => {
     const { threadId, messages } = await searchFindsThread(page, mailbox);
     await page.getByRole('button', { name: /^Show more/ }).click();
     await page.getByText(THIRD).last().click();
+    did('AX-056', 'F-052');
 
     await expect(page).toHaveURL(new RegExp(threadId));
     await expect(page).toHaveURL(new RegExp(messages[2].db_id));

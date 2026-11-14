@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
+import { did } from './ledger/record';
 
 const MAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
@@ -72,6 +73,7 @@ test.describe('calendar access for a connected inbox', () => {
     await page
       .getByRole('button', { name: `Reconnect ${mailbox.inbox.email}` })
       .click();
+    did('AX-004');
 
     expect(await scopesOnConsentPage(page)).toEqual([
       CALENDAR_SCOPE,
@@ -101,6 +103,7 @@ test.describe('calendar access for a connected inbox', () => {
     await page
       .getByRole('button', { name: `Reconnect ${mailbox.inbox.email}` })
       .click();
+    did('AX-004');
 
     expect(await scopesOnConsentPage(page)).toEqual([MAIL_SCOPE]);
     expect(

@@ -1,5 +1,6 @@
 import { expect, test } from './harness/fixtures';
 import { injectFault, notice, replyEditor, sentMessages } from './harness/send';
+import { confirmed, did, saw } from './ledger/record';
 
 test.describe('a send from an Outlook inbox', () => {
   test.use({ provider: 'OUTLOOK' });
@@ -20,18 +21,24 @@ test.describe('a send from an Outlook inbox', () => {
     const thread = await mailbox.synced('Lunch?');
 
     await mailbox.open(`/app/mail/${thread.id}`);
+    did('AL-910');
     await page.getByText('Reply...').click();
+    did('AL-171');
     await replyEditor(page).pressSequentially('Works for me.');
+    did('AC-081');
     // From here on Outlook's folders cannot be read: no sync brings the sent copy.
     await injectFault(mailbox, {
       route: 'messages.delta',
       error: 'unavailable',
     });
     await page.getByRole('button', { name: 'Send email' }).click();
+    did('AC-091');
     await expect(notice(page, 'Email sent')).toBeVisible();
+    saw('STC-025');
     expect(
       (await sentMessages(mailbox)).map((message) => message.subject)
     ).toEqual(['Re: Lunch?']);
+    confirmed('F-132');
 
     // The thread shows the delivery status panel when it has something to say.
     await expect(page.getByText('Delivery unconfirmed')).toHaveCount(0);
@@ -69,8 +76,10 @@ test.describe('a send from an Outlook inbox', () => {
       .getByRole('navigation', { name: 'Email tabs' })
       .getByRole('button', { name: 'Sent' })
       .click();
+    did('AL-002', 'F-030');
     await expect(
       page.getByRole('main').getByText('Works for me.')
     ).toBeVisible();
+    saw('STL-923');
   });
 });

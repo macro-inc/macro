@@ -6,6 +6,7 @@ import {
   type Page,
   type Request,
 } from '@playwright/test';
+import { did } from '../ledger/record';
 import type { Mailbox, ThreadPreview } from './fixtures';
 
 /** The GraphQL operation a request to the document storage service carries. */
@@ -40,12 +41,17 @@ export async function composeNew(
   mail: { to: string; subject: string; body: string }
 ): Promise<void> {
   await mailbox.open('/app/mail/new');
+  did('AC-910');
   const to = page.getByRole('combobox').first();
   await to.fill(mail.to);
   await to.press('Enter');
+  did('AC-003');
   await page.getByPlaceholder(/subject/i).fill(mail.subject);
+  did('AC-018');
   await body(page).click();
   await page.keyboard.type(mail.body);
+  did('AC-911');
+  did('AC-022');
 }
 
 /** The composer's message body. */
@@ -113,6 +119,7 @@ export async function attach(
   const chooser = page.waitForEvent('filechooser');
   await attachButton(page).click();
   await (await chooser).setFiles(file);
+  did('AC-024');
 }
 
 /** The threads Macro lists under Drafts for any of the user's inboxes. */

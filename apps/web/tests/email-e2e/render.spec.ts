@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import type { Page } from '@playwright/test';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { threadMessages } from './harness/thread';
+import { did, saw } from './ledger/record';
 
 /** A one-pixel PNG. */
 const PNG =
@@ -142,6 +143,7 @@ test.describe("a message's pictures", () => {
       );
       await servePictures(page, inlineFileId);
       await mailbox.open(`/app/mail/${threadId}`);
+      did('AL-910');
       await expect(page.getByText('Three pictures follow.')).toBeVisible();
 
       await soft(
@@ -151,6 +153,7 @@ test.describe("a message's pictures", () => {
         new RegExp(`/static-file/file/${inlineFileId}$`)
       );
       await soft.poll(() => loadedWidth(page, 'inline')).toBeGreaterThan(0);
+      saw('STL-906');
       await soft.poll(() => loadedWidth(page, 'remote')).toBeGreaterThan(0);
       soft(pictures.asked).toContain('/banner.png');
     } finally {
@@ -173,10 +176,12 @@ test.describe("a message's pictures", () => {
       );
       await servePictures(page, inlineFileId);
       await mailbox.open(`/app/mail/${threadId}`);
+      did('AL-910');
       await expect(page.getByText('Three pictures follow.')).toBeVisible();
       // The remote picture has loaded by then, so the page had its time.
       await expect.poll(() => loadedWidth(page, 'remote')).toBeGreaterThan(0);
       await expect.poll(() => loadedWidth(page, 'embedded')).toBeGreaterThan(0);
+      saw('STL-906');
     } finally {
       pictures.server.close();
     }
