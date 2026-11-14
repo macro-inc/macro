@@ -1,0 +1,44 @@
+crates/agent_monitor/src/outbound/transcript_feed.rs
+  s_cfe0e68707efd8::t_14115652e01056 1-495
+crates/agent_monitor/src/outbound/transcript_feed/test.rs
+  s_cfe0e68707efd8::t_75923bcc32c24b 62-68
+  s_cfe0e68707efd8::t_8979d51c33baa0 1-61,69-197
+crates/coding_agent_worker/src/monitor.rs
+  s_cfe0e68707efd8::t_e935312b2f94bf 16,81,84-87,98-105,210,389-416
+  s_cfe0e68707efd8::t_75923bcc32c24b 18
+  s_cfe0e68707efd8::t_3e4e788889676f 19,25,417-422
+crates/agent_monitor/fixtures/feed/rollout-2026-01-02T10-00-00-00000000-0000-7000-8000-000000000001.jsonl
+  s_52b778d7b06e4b::t_9acba8268355a4 1-8
+crates/agent_monitor/fixtures/feed/session.jsonl
+  s_52b778d7b06e4b::t_53876383fcb322 1-9
+crates/agent_monitor/AGENTS.md
+  s_cfe0e68707efd8::t_88775601348847 28-30
+crates/agent_monitor/src/outbound.rs
+  s_cfe0e68707efd8::t_0f530aa6c6837c 19
+crates/coding_agent_worker/README.md
+  s_cfe0e68707efd8::t_f341f2a0aa26c1 239-241,247-248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7801dc653405e478dfade331493b2e45ed8bae8f",
+  "prompts": {},
+  "sessions": {
+    "s_52b778d7b06e4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb1c9354-6ebd-4559-ba14-05d8d00f4534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
