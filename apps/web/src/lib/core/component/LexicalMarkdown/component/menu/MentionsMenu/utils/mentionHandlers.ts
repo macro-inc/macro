@@ -4,6 +4,7 @@ import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
 import type {
+  AgentSessionMentionInfo,
   DateMentionInfo,
   DocumentMentionInfo,
 } from '@macro-inc/lexical-core';
@@ -63,20 +64,49 @@ export function tracksMentions(
  * it skips the document/user attachment callbacks — but it is tracked like
  * any other entity mention so the session's References panel lists the doc.
  */
-async function handleAgentSessionMention(
+function handleAgentSessionMention(
   session: { id: string; name?: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor, blockId } = dependencies;
+  return handleAgentSessionMentionWithInsertion(session, () => {
+    const { editor, blockId } = dependencies;
+    return {
+      blockId,
+      tracksMentions: () => tracksMentions(dependencies),
+      insert(buildPayload) {
+        editor.dispatchCommand(
+          INSERT_AGENT_SESSION_MENTION_COMMAND,
+          buildPayload()
+        );
+      },
+    };
+  });
+}
+
+export type AgentSessionMentionInsertion = Pick<
+  HandlerDependencies,
+  'blockId'
+> & {
+  tracksMentions(): boolean;
+  insert(buildPayload: () => AgentSessionMentionInfo): void | Promise<void>;
+};
+
+/** Share agent-session tracking and the payload without an editor facade. */
+export async function handleAgentSessionMentionWithInsertion(
+  session: { id: string; name?: string },
+  prepare: () => AgentSessionMentionInsertion
+): Promise<void> {
+  const { blockId, tracksMentions, insert } = prepare();
   const mentionUuid =
-    blockId && tracksMentions(dependencies)
+    blockId && tracksMentions()
       ? await trackMention(blockId, 'agent_session', session.id)
       : undefined;
-  editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
+  const completion = insert(() => ({
     id: session.id,
     label: session.name,
     ...(mentionUuid ? { mentionUuid } : {}),
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
