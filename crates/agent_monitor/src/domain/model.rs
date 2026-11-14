@@ -383,6 +383,74 @@ pub struct Agent {
     /// Tool calls plus turns per minute over the last hour, oldest first.
     #[serde(serialize_with = "serialize_series")]
     pub activity: [u16; ACTIVITY_MINUTES],
+    /// The last hour by minute, one series per drill-in cell. Boxed: it is
+    /// most of a row's size.
+    pub minutes: Box<AgentMinutes>,
+}
+
+/// An agent's last hour by minute, oldest first: what the drill-in's stat
+/// cells draw.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct AgentMinutes {
+    /// Turns ended.
+    #[serde(serialize_with = "serialize_series")]
+    pub turns: [u16; ACTIVITY_MINUTES],
+    /// Tool calls started.
+    #[serde(serialize_with = "serialize_series")]
+    pub tools: [u16; ACTIVITY_MINUTES],
+    /// Tool calls that failed.
+    #[serde(serialize_with = "serialize_series")]
+    pub errors: [u16; ACTIVITY_MINUTES],
+    /// Tokens of every class.
+    #[serde(serialize_with = "serialize_series")]
+    pub tokens: [u32; ACTIVITY_MINUTES],
+    /// Spend, as the board's day total attributes it.
+    #[serde(serialize_with = "serialize_series")]
+    pub cost_usd: [f32; ACTIVITY_MINUTES],
+}
+
+impl Default for AgentMinutes {
+    fn default() -> Self {
+        Self {
+            turns: [0; ACTIVITY_MINUTES],
+            tools: [0; ACTIVITY_MINUTES],
+            errors: [0; ACTIVITY_MINUTES],
+            tokens: [0; ACTIVITY_MINUTES],
+            cost_usd: [0.0; ACTIVITY_MINUTES],
+        }
+    }
+}
+
+impl AgentMinutes {
+    /// Adds one minute's counts at `slot` (0 is the oldest minute); a slot
+    /// outside the hour is ignored.
+    pub fn add(&mut self, slot: usize, turns: u32, tools: u32, errors: u32, tokens: u64) {
+        let narrow = |value: u32| u16::try_from(value).unwrap_or(u16::MAX);
+        if let Some(value) = self.turns.get_mut(slot) {
+            *value = value.saturating_add(narrow(turns));
+        }
+        if let Some(value) = self.tools.get_mut(slot) {
+            *value = value.saturating_add(narrow(tools));
+        }
+        if let Some(value) = self.errors.get_mut(slot) {
+            *value = value.saturating_add(narrow(errors));
+        }
+        if let Some(value) = self.tokens.get_mut(slot) {
+            *value = value.saturating_add(u32::try_from(tokens).unwrap_or(u32::MAX));
+        }
+    }
+
+    /// Adds spend at `slot`; a slot outside the hour is ignored.
+    pub fn add_cost(&mut self, slot: usize, usd: f64) {
+        if let Some(value) = self.cost_usd.get_mut(slot) {
+            *value += usd as f32;
+        }
+    }
+
+    /// Whether the hour is empty.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 impl Agent {
@@ -419,6 +487,7 @@ impl Agent {
             cost: Cost::Unpriced,
             failures: 0,
             activity: [0; ACTIVITY_MINUTES],
+            minutes: Box::default(),
         }
     }
 }
@@ -501,6 +570,9 @@ pub struct Totals {
     pub cost_today: Cost,
     /// Spend per hour of the local day.
     pub cost_by_hour: [f32; HOURS_PER_DAY],
+    /// Spend since local midnight by agent kind, largest first; the parts add
+    /// up to `cost_today`.
+    pub spend_by_kind: Vec<(AgentKind, f64)>,
     /// Tokens per minute over the last hour, oldest first.
     #[serde(serialize_with = "serialize_series")]
     pub tokens_per_min: [u32; ACTIVITY_MINUTES],
@@ -518,6 +590,7 @@ impl Default for Totals {
             errors_24h: 0,
             cost_today: Cost::Unpriced,
             cost_by_hour: [0.0; HOURS_PER_DAY],
+            spend_by_kind: Vec::new(),
             tokens_per_min: [0; ACTIVITY_MINUTES],
         }
     }

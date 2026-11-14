@@ -908,3 +908,83 @@ impl IntoFact for ClaudeSessionFact {
         Fact::ClaudeSession(self)
     }
 }
+
+#[test]
+fn an_agents_minutes_hold_one_series_per_measure() {
+    let now = at(10, 0);
+    let mut facts = Facts::default();
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![transcript(
+            "s-m",
+            None,
+            vec![
+                usage(at(8, 0), 1_000_000, 0),
+                TranscriptEvent {
+                    at: at(9, 0),
+                    kind: TranscriptEventKind::ToolStart {
+                        id: "a".to_owned(),
+                        name: "Bash".to_owned(),
+                        gist: None,
+                    },
+                },
+                TranscriptEvent {
+                    at: at(9, 10),
+                    kind: TranscriptEventKind::ToolEnd {
+                        id: "a".to_owned(),
+                        is_error: true,
+                    },
+                },
+            ],
+        )]),
+        now,
+    );
+
+    let built = build_agents(&facts, now);
+    let agent = built
+        .agents
+        .get(&AgentId::claude_session("s-m"))
+        .expect("the transcript's agent");
+    let last = ACTIVITY_MINUTES - 1;
+
+    // Usage two minutes ago, the failed tool call one minute ago.
+    assert_eq!(agent.minutes.tokens[last - 2], 1_000_000);
+    assert!(agent.minutes.cost_usd[last - 2] > 0.0);
+    assert_eq!(agent.minutes.tools[last - 1], 1);
+    assert_eq!(agent.minutes.errors[last - 1], 1);
+    assert_eq!(agent.minutes.tools[last - 2], 0);
+    assert_eq!(agent.minutes.tokens[last - 1], 0);
+}
+
+#[test]
+fn spend_since_splits_by_transcript_and_adds_up_to_the_minutes() {
+    let now = at(10, 0);
+    let mut facts = Facts::default();
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![
+            transcript(
+                "s-m",
+                None,
+                vec![usage(at(1, 0), 1_000_000, 0), reported(at(3, 0), 12.0)],
+            ),
+            transcript("s-m", Some("sub"), vec![usage(at(4, 0), 500_000, 0)]),
+        ]),
+        now,
+    );
+
+    let since = at(2, 0);
+    let spend = spend_since(&facts, since, now);
+    let parts: f64 = spend.values().sum();
+    let minutes: f64 = minute_counts(&facts, now)
+        .range(since..)
+        .map(|(_, counts)| counts.cost_usd)
+        .sum();
+
+    // Only the subagent spent after `since`: its $2 estimate scaled by two.
+    assert_eq!(spend.len(), 1);
+    assert_usd(Cost::Estimated(parts), 4.0);
+    assert_usd(Cost::Estimated(minutes), 4.0);
+}

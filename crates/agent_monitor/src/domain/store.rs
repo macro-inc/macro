@@ -21,12 +21,16 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::domain::clock::Clock;
-use crate::domain::join::{FactEvent, Facts, MinuteCounts, build_agents, minute_counts};
-use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, Cost, Severity, Snapshot, SourceHealth, SourceKind, Status,
-    TapeEvent, TapeKind, Timestamp, Totals, Update, UpdateKind,
+use crate::domain::join::{
+    FactEvent, Facts, MinuteCounts, build_agents, minute_counts, spend_since,
 };
-use crate::domain::observation::{Change, FactKey, Observation, TranscriptEventKind};
+use crate::domain::model::{
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, Cost, Severity, Snapshot, SourceHealth,
+    SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, Update, UpdateKind,
+};
+use crate::domain::observation::{
+    Change, FactKey, Observation, TranscriptEventKind, TranscriptKey,
+};
 
 /// Store sizes and timings.
 #[derive(Clone, Debug)]
@@ -298,6 +302,8 @@ struct Reducer {
     /// Recent open tool calls' names by transcript and call id, so a failure
     /// line can name its tool.
     tool_names: HashMap<(FactKey, String), String>,
+    /// The agent each fact merged into, as last built.
+    owners: BTreeMap<FactKey, AgentId>,
 }
 
 impl Reducer {
@@ -312,6 +318,7 @@ impl Reducer {
             last_event: BTreeMap::new(),
             published_health: BTreeMap::new(),
             tool_names: HashMap::new(),
+            owners: BTreeMap::new(),
         }
     }
 
@@ -473,6 +480,7 @@ impl Reducer {
         updates.extend(tape.into_iter().map(UpdateKind::Event));
         self.shared.publish(updates);
         self.published = built.agents;
+        self.owners = built.owners;
     }
 
     fn event_line(
@@ -528,9 +536,15 @@ impl Reducer {
             .config
             .day_offset
             .unwrap_or_else(|| now.with_timezone(&Local).offset().fix());
+        let spend = spend_by_kind(
+            &spend_since(&self.facts, midnight(now, offset), now),
+            &self.owners,
+            &self.published,
+        );
         let totals = totals(
             &self.published,
             &minute_counts(&self.facts, now),
+            spend,
             now,
             offset,
         );
@@ -607,14 +621,49 @@ fn status_word(status: Status) -> &'static str {
     }
 }
 
+/// The start of the local day that holds `now`.
+fn midnight(now: Timestamp, offset: FixedOffset) -> Timestamp {
+    now.with_timezone(&offset)
+        .with_hour(0)
+        .and_then(|at| at.with_minute(0))
+        .and_then(|at| at.with_second(0))
+        .and_then(|at| at.with_nanosecond(0))
+        .map_or(now, |at| at.to_utc())
+}
+
+/// Each transcript's spend today, summed by the kind of agent it merged
+/// into, largest first. A transcript no agent holds counts as `Other`, so the
+/// kinds always add up to the day's total.
+fn spend_by_kind(
+    spend: &BTreeMap<TranscriptKey, f64>,
+    owners: &BTreeMap<FactKey, AgentId>,
+    agents: &BTreeMap<AgentId, Agent>,
+) -> Vec<(AgentKind, f64)> {
+    let mut by_kind: HashMap<AgentKind, f64> = HashMap::new();
+    for (key, usd) in spend {
+        let kind = owners
+            .get(&FactKey::Transcript(key.clone()))
+            .and_then(|id| agents.get(id))
+            .map_or(AgentKind::Other, |agent| agent.kind);
+        *by_kind.entry(kind).or_default() += usd;
+    }
+    let mut by_kind: Vec<(AgentKind, f64)> = by_kind.into_iter().collect();
+    by_kind.sort_by(|a, b| b.1.total_cmp(&a.1));
+    by_kind
+}
+
 /// The board numbers from the published rows and the per-minute counts.
 fn totals(
     agents: &BTreeMap<AgentId, Agent>,
     minutes: &BTreeMap<Timestamp, MinuteCounts>,
+    spend_by_kind: Vec<(AgentKind, f64)>,
     now: Timestamp,
     offset: FixedOffset,
 ) -> Totals {
-    let mut totals = Totals::default();
+    let mut totals = Totals {
+        spend_by_kind,
+        ..Totals::default()
+    };
     let day_ago = now - TimeDelta::hours(24);
 
     for agent in agents.values() {
@@ -629,13 +678,7 @@ fn totals(
         }
     }
 
-    let local_now = now.with_timezone(&offset);
-    let midnight = local_now
-        .with_hour(0)
-        .and_then(|at| at.with_minute(0))
-        .and_then(|at| at.with_second(0))
-        .and_then(|at| at.with_nanosecond(0))
-        .map_or(now, |at| at.to_utc());
+    let midnight = midnight(now, offset);
     let current_minute = now.timestamp().div_euclid(60);
     let mut spend_today = 0.0;
 

@@ -160,6 +160,17 @@ message Agent {
   uint32 failures = 29;
   // Tool calls plus turns per minute over the last hour, oldest first; 60 values.
   repeated uint32 activity = 30;
+  // The last hour by minute for the drill-in; absent when the hour is empty.
+  optional AgentMinutes minutes = 31;
+}
+
+// One agent's last hour by minute, oldest first; 60 values each.
+message AgentMinutes {
+  repeated uint32 turns = 1;
+  repeated uint32 tools = 2;
+  repeated uint32 errors = 3;
+  repeated uint32 tokens = 4;
+  repeated float cost_usd = 5;
 }
 
 enum TapeKind {
@@ -206,6 +217,13 @@ message Totals {
   repeated float cost_by_hour = 9;
   // 60 values, oldest minute first.
   repeated uint32 tokens_per_min = 10;
+  // Spend since local midnight by agent kind, largest first; adds up to cost_today.
+  repeated KindSpend spend_by_kind = 11;
+}
+
+message KindSpend {
+  AgentKind kind = 1;
+  double usd = 2;
 }
 
 enum SourceState {

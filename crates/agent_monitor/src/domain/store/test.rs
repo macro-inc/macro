@@ -139,8 +139,90 @@ fn totals_never_show_zero_spend_when_nothing_reported() {
     let totals = totals(
         &BTreeMap::new(),
         &BTreeMap::new(),
+        Vec::new(),
         start(),
         FixedOffset::east_opt(0).expect("a valid offset"),
     );
     assert_eq!(totals.cost_today, Cost::Unpriced);
+}
+
+/// A Claude transcript with one usage record per given time.
+fn spending_transcript(session: &str, at: &[Timestamp]) -> Fact {
+    use crate::domain::model::Tokens;
+    use crate::domain::observation::{
+        TranscriptDelta, TranscriptEvent, TranscriptKey, TranscriptProgram,
+    };
+
+    Fact::Transcript(TranscriptDelta {
+        key: TranscriptKey {
+            program: TranscriptProgram::Claude,
+            session: session.to_owned(),
+            subagent: None,
+        },
+        path: PathBuf::from(format!("/t/{session}.jsonl")),
+        from_start: true,
+        cwd: None,
+        branch: None,
+        model: Some("claude-opus-5-5".to_owned()),
+        title: None,
+        events: at
+            .iter()
+            .map(|at| TranscriptEvent {
+                at: *at,
+                kind: TranscriptEventKind::Usage(Tokens {
+                    input: 1_000_000,
+                    ..Tokens::default()
+                }),
+            })
+            .collect(),
+    })
+}
+
+#[test]
+fn spend_by_kind_covers_only_today_and_adds_up_to_the_day() {
+    let now = start();
+    let yesterday = Utc
+        .with_ymd_and_hms(2026, 1, 1, 22, 0, 0)
+        .single()
+        .expect("a valid fixed time");
+    let offset = FixedOffset::east_opt(0).expect("a valid offset");
+    let mut facts = Facts::default();
+    // One session spent yesterday and today; the other only today.
+    facts.apply(
+        Observation {
+            source: SourceKind::ClaudeTranscripts,
+            change: Change::Reset(vec![
+                spending_transcript("s-long", &[yesterday, now - TimeDelta::hours(1)]),
+                spending_transcript("s-new", &[now - TimeDelta::minutes(5)]),
+            ]),
+        },
+        now,
+    );
+    let built = build_agents(&facts, now);
+
+    let spend = spend_by_kind(
+        &spend_since(&facts, midnight(now, offset), now),
+        &built.owners,
+        &built.agents,
+    );
+    let totals = totals(
+        &built.agents,
+        &minute_counts(&facts, now),
+        spend,
+        now,
+        offset,
+    );
+
+    let day = totals.cost_today.usd().expect("spend today");
+    let kinds: f64 = totals.spend_by_kind.iter().map(|(_, usd)| usd).sum();
+    assert!((kinds - day).abs() < 1e-6, "kinds {kinds} vs day {day}");
+    let lifetime: f64 = built
+        .agents
+        .values()
+        .filter_map(|agent| agent.cost.usd())
+        .sum();
+    assert!(
+        lifetime > day + 1e-6,
+        "yesterday's spend stays out of the day: lifetime {lifetime}, day {day}"
+    );
 }

@@ -342,18 +342,12 @@ impl Facts {
     }
 }
 
-/// Per-minute counts over the last 24 hours, summed over every transcript.
-///
-/// Spend per minute is each transcript's estimate for that minute. When a
-/// session reported its own total (which covers its subagents too), every
-/// estimate in that session is scaled so the session sums to the reported
-/// total; a session that reported a total but has no priced usage puts it in
-/// the minute it last wrote.
-pub fn minute_counts(facts: &Facts, now: Timestamp) -> BTreeMap<Timestamp, MinuteCounts> {
-    let horizon = now - HISTORY;
+/// Per session (program and session id): the total its main transcript
+/// reported, and the estimate summed over all its transcripts.
+type SessionTotals<'a> = BTreeMap<(TranscriptProgram, &'a str), (Option<f64>, f64)>;
 
-    // Scale per session: reported total over the session's whole estimate.
-    let mut sessions: BTreeMap<(TranscriptProgram, &str), (Option<f64>, f64)> = BTreeMap::new();
+fn session_totals(facts: &Facts) -> SessionTotals<'_> {
+    let mut sessions = SessionTotals::new();
     for (key, owned) in &facts.transcripts {
         let entry = sessions
             .entry((key.program, key.session.as_str()))
@@ -363,39 +357,91 @@ pub fn minute_counts(facts: &Facts, now: Timestamp) -> BTreeMap<Timestamp, Minut
         }
         entry.1 += owned.fact.estimated.usd().unwrap_or(0.0);
     }
+    sessions
+}
+
+/// One transcript's spend by minute over the last 24 hours: each minute's
+/// estimate, scaled so the session sums to the total it reported (which
+/// covers its subagents too). A main transcript that reported a total but has
+/// no priced usage puts the total in the minute it last wrote.
+fn transcript_spend(
+    key: &TranscriptKey,
+    transcript: &TranscriptState,
+    sessions: &SessionTotals<'_>,
+    now: Timestamp,
+) -> Vec<(Timestamp, f64)> {
+    let horizon = now - HISTORY;
+    let (reported, estimated) = sessions
+        .get(&(key.program, key.session.as_str()))
+        .copied()
+        .unwrap_or_default();
+    let scale = match reported {
+        Some(reported) if estimated > 0.0 => reported / estimated,
+        _ => 1.0,
+    };
+
+    let mut spend: Vec<(Timestamp, f64)> = transcript
+        .minutes
+        .range(horizon..)
+        .map(|(minute, counts)| (*minute, counts.estimated_usd * scale))
+        .filter(|(_, usd)| *usd > 0.0)
+        .collect();
+
+    let unpriced_report = key.subagent.is_none() && estimated <= 0.0;
+    if let (true, Some(reported), Some(last)) =
+        (unpriced_report, transcript.reported, transcript.last_at)
+    {
+        let minute = minute_of(last);
+        if minute >= horizon {
+            spend.push((minute, reported));
+        }
+    }
+    spend
+}
+
+/// Per-minute counts over the last 24 hours, summed over every transcript,
+/// with spend as [`transcript_spend`] attributes it.
+pub fn minute_counts(facts: &Facts, now: Timestamp) -> BTreeMap<Timestamp, MinuteCounts> {
+    let horizon = now - HISTORY;
+    let sessions = session_totals(facts);
 
     let mut counts: BTreeMap<Timestamp, MinuteCounts> = BTreeMap::new();
     for (key, owned) in &facts.transcripts {
-        let transcript = &owned.fact;
-        let (reported, estimated) = sessions
-            .get(&(key.program, key.session.as_str()))
-            .copied()
-            .unwrap_or_default();
-        let scale = match reported {
-            Some(reported) if estimated > 0.0 => reported / estimated,
-            _ => 1.0,
-        };
-
-        for (minute, minute_counts) in transcript.minutes.range(horizon..) {
+        for (minute, minute_counts) in owned.fact.minutes.range(horizon..) {
             let total = counts.entry(*minute).or_default();
             total.turns += minute_counts.turns;
             total.tools += minute_counts.tools;
             total.errors += minute_counts.errors;
             total.tokens += minute_counts.tokens;
-            total.cost_usd += minute_counts.estimated_usd * scale;
         }
-
-        let unpriced_report = key.subagent.is_none() && estimated <= 0.0;
-        if let (true, Some(reported), Some(last)) =
-            (unpriced_report, transcript.reported, transcript.last_at)
-        {
-            let minute = minute_of(last);
-            if minute >= horizon {
-                counts.entry(minute).or_default().cost_usd += reported;
-            }
+        for (minute, usd) in transcript_spend(key, &owned.fact, &sessions, now) {
+            counts.entry(minute).or_default().cost_usd += usd;
         }
     }
     counts
+}
+
+/// Each transcript's spend from `since` on, attributed the same way as
+/// [`minute_counts`], so the parts add up to the minutes' total.
+pub fn spend_since(
+    facts: &Facts,
+    since: Timestamp,
+    now: Timestamp,
+) -> BTreeMap<TranscriptKey, f64> {
+    let sessions = session_totals(facts);
+    facts
+        .transcripts
+        .iter()
+        .map(|(key, owned)| {
+            let usd = transcript_spend(key, &owned.fact, &sessions, now)
+                .into_iter()
+                .filter(|(minute, _)| *minute >= since)
+                .map(|(_, usd)| usd)
+                .sum();
+            (key.clone(), usd)
+        })
+        .filter(|(_, usd)| *usd > 0.0)
+        .collect()
 }
 
 /// Joins every fact into agents, by the join table in
@@ -527,6 +573,7 @@ fn join_transcripts(
     now: Timestamp,
 ) {
     claim_terminals(facts, session_owner, unclaimed);
+    let sessions = session_totals(facts);
 
     // Main transcripts first, so subagents find their parent.
     let (mains, subagents): (Vec<_>, Vec<_>) = facts
@@ -584,7 +631,8 @@ fn join_transcripts(
         }
 
         if let Some(agent) = built.agents.get_mut(&id) {
-            merge_transcript(agent, key, owned, now);
+            let spend = transcript_spend(key, &owned.fact, &sessions, now);
+            merge_transcript(agent, key, owned, &spend, now);
         }
         built.owners.insert(FactKey::Transcript(key.clone()), id);
     }
@@ -927,6 +975,7 @@ fn merge_transcript(
     agent: &mut Agent,
     key: &TranscriptKey,
     owned: &Owned<TranscriptState>,
+    spend: &[(Timestamp, f64)],
     now: Timestamp,
 ) {
     let transcript = &owned.fact;
@@ -969,12 +1018,31 @@ fn merge_transcript(
             continue;
         };
         if minutes_ago < ACTIVITY_MINUTES {
-            let slot = &mut agent.activity[ACTIVITY_MINUTES - 1 - minutes_ago];
+            let slot = ACTIVITY_MINUTES - 1 - minutes_ago;
             let count = counts.turns + counts.tools;
-            *slot = slot.saturating_add(u16::try_from(count).unwrap_or(u16::MAX));
+            agent.activity[slot] =
+                agent.activity[slot].saturating_add(u16::try_from(count).unwrap_or(u16::MAX));
+            agent.minutes.add(
+                slot,
+                counts.turns,
+                counts.tools,
+                counts.errors,
+                counts.tokens,
+            );
         }
         if now - *minute < HISTORY {
             agent.failures += counts.errors;
+        }
+    }
+
+    for (minute, usd) in spend {
+        let minutes_ago = (current_minute - *minute).num_minutes();
+        if let Ok(minutes_ago) = usize::try_from(minutes_ago)
+            && minutes_ago < ACTIVITY_MINUTES
+        {
+            agent
+                .minutes
+                .add_cost(ACTIVITY_MINUTES - 1 - minutes_ago, *usd);
         }
     }
 

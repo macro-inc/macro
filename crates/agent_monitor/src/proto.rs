@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use chrono::DateTime;
 
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, Cost, HOURS_PER_DAY, Progress, Severity, Snapshot,
-    SourceHealth, SourceKind, SourceSet, SourceState, Status, TapeEvent, TapeKind, Timestamp,
-    Tokens, Totals, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, AgentMinutes, Cost, HOURS_PER_DAY, Progress,
+    Severity, Snapshot, SourceHealth, SourceKind, SourceSet, SourceState, Status, TapeEvent,
+    TapeKind, Timestamp, Tokens, Totals, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
 };
 
 #[expect(
@@ -267,7 +267,44 @@ impl From<&Agent> for wire::Agent {
                 .iter()
                 .map(|count| u32::from(*count))
                 .collect(),
+            minutes: (!agent.minutes.is_empty()).then(|| agent.minutes.as_ref().into()),
         }
+    }
+}
+
+impl From<&AgentMinutes> for wire::AgentMinutes {
+    fn from(minutes: &AgentMinutes) -> Self {
+        let widen = |series: &[u16]| series.iter().map(|count| u32::from(*count)).collect();
+        Self {
+            turns: widen(&minutes.turns),
+            tools: widen(&minutes.tools),
+            errors: widen(&minutes.errors),
+            tokens: minutes.tokens.to_vec(),
+            cost_usd: minutes.cost_usd.to_vec(),
+        }
+    }
+}
+
+impl TryFrom<wire::AgentMinutes> for AgentMinutes {
+    type Error = WireError;
+
+    fn try_from(minutes: wire::AgentMinutes) -> Result<Self, WireError> {
+        let narrow = |field: &'static str, values: Vec<u32>| {
+            series::<u16, ACTIVITY_MINUTES>(
+                field,
+                values
+                    .into_iter()
+                    .map(|count| u16::try_from(count).unwrap_or(u16::MAX))
+                    .collect(),
+            )
+        };
+        Ok(Self {
+            turns: narrow("minutes.turns", minutes.turns)?,
+            tools: narrow("minutes.tools", minutes.tools)?,
+            errors: narrow("minutes.errors", minutes.errors)?,
+            tokens: series::<u32, ACTIVITY_MINUTES>("minutes.tokens", minutes.tokens)?,
+            cost_usd: series::<f32, ACTIVITY_MINUTES>("minutes.cost_usd", minutes.cost_usd)?,
+        })
     }
 }
 
@@ -320,6 +357,12 @@ impl TryFrom<wire::Agent> for Agent {
             cost: cost_from_wire(agent.cost),
             failures: agent.failures,
             activity,
+            minutes: agent
+                .minutes
+                .map(AgentMinutes::try_from)
+                .transpose()?
+                .map(Box::new)
+                .unwrap_or_default(),
         })
     }
 }
@@ -434,6 +477,14 @@ impl From<&Totals> for wire::Totals {
             cost_today: Some(totals.cost_today.into()),
             cost_by_hour: totals.cost_by_hour.to_vec(),
             tokens_per_min: totals.tokens_per_min.to_vec(),
+            spend_by_kind: totals
+                .spend_by_kind
+                .iter()
+                .map(|(kind, usd)| wire::KindSpend {
+                    kind: wire::AgentKind::from(*kind) as i32,
+                    usd: *usd,
+                })
+                .collect(),
         }
     }
 }
@@ -456,6 +507,11 @@ impl TryFrom<wire::Totals> for Totals {
                 "tokens_per_min",
                 totals.tokens_per_min,
             )?,
+            spend_by_kind: totals
+                .spend_by_kind
+                .into_iter()
+                .map(|spend| Ok((kind_from_wire(spend.kind)?, spend.usd)))
+                .collect::<Result<_, WireError>>()?,
         })
     }
 }
