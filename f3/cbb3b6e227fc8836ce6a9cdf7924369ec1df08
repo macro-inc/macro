@@ -1,0 +1,19 @@
+packages/sdk-ocaml/test/check_interface.ml
+  s_e722a0e50d8d61::t_ddaa27be37537f 49-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f3cbb3b6e227fc8836ce6a9cdf7924369ec1df08",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
