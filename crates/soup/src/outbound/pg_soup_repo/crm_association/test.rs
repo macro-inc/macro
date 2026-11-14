@@ -144,7 +144,11 @@ fn row_edges(rows: &[Uuid]) -> Vec<CrmPropertyEdge> {
     edges
 }
 
-async fn sorted_edges(pool: &PgPool, companies: &[Uuid], contacts: &[Uuid]) -> Vec<CrmPropertyEdge> {
+async fn sorted_edges(
+    pool: &PgPool,
+    companies: &[Uuid],
+    contacts: &[Uuid],
+) -> Vec<CrmPropertyEdge> {
     let mut edges = property_edges(pool, companies, contacts).await.unwrap();
     edges.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
     edges
@@ -221,10 +225,22 @@ async fn matches_database_rows_whose_entity_cells_reference_a_record(pool: PgPoo
     .await;
     cell(&pool, both, champion, references(&[("CONTACT", CONTACT)])).await;
     let contact_only = row(&pool, deals).await;
-    cell(&pool, contact_only, champion, references(&[("CONTACT", CONTACT)])).await;
+    cell(
+        &pool,
+        contact_only,
+        champion,
+        references(&[("CONTACT", CONTACT)]),
+    )
+    .await;
     // The company's id typed as a contact names no requested record.
     let mistyped = row(&pool, deals).await;
-    cell(&pool, mistyped, account, references(&[("CONTACT", COMPANY)])).await;
+    cell(
+        &pool,
+        mistyped,
+        account,
+        references(&[("CONTACT", COMPANY)]),
+    )
+    .await;
     // A reference held by a column that is not an entity column.
     let text = row(&pool, deals).await;
     cell(&pool, text, notes, references(&[("COMPANY", COMPANY)])).await;
@@ -354,10 +370,17 @@ async fn database_row_edges_equal_the_full_scan(pool: PgPool) {
             let seed = database_number * 24 + n;
             let row_id = row(&pool, table_id).await;
             rows.push(row_id);
-            let several: Vec<(&str, Uuid)> = (0..(seed % 3)).map(|k| target(seed + k * 5)).collect();
+            let several: Vec<(&str, Uuid)> =
+                (0..(seed % 3)).map(|k| target(seed + k * 5)).collect();
             cell(&pool, row_id, entity, references(&several)).await;
             if seed % 2 == 0 {
-                cell(&pool, row_id, second_entity, references(&[target(seed + 1)])).await;
+                cell(
+                    &pool,
+                    row_id,
+                    second_entity,
+                    references(&[target(seed + 1)]),
+                )
+                .await;
             }
             if seed % 5 == 0 {
                 cell(&pool, row_id, text, references(&[target(seed)])).await;
