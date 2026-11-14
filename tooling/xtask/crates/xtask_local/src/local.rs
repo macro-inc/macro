@@ -29,6 +29,8 @@ pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
 pub mod gen_compose;
+pub mod google_emulator;
+mod grafana_forwarder;
 pub mod identity;
 pub mod instance;
 pub mod inventory;
@@ -37,6 +39,7 @@ pub mod kickstart;
 pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
+pub mod microsoft_emulator;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
@@ -995,16 +998,13 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    let gmail_forwarder = env
-        .merged
-        .get("GMAIL_FORWARDER_SA_KEY")
-        .is_some_and(|key| !key.trim().is_empty());
+    let sidecars = gen_compose::Sidecars::from_env(mode, &env.merged);
     gen_compose::generate(
         mode,
         instance,
         &binaries,
         static_frontend,
-        gmail_forwarder,
+        sidecars,
         computers,
     )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
@@ -1012,9 +1012,15 @@ fn prepare(
         portmap::write(instance)?;
     }
     if mode.spec().runs_local_infra {
-        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        // Without a real Google client the stack's Gmail emulator is Google.
+        let google = kickstart::GoogleIdp::from_env(&env.merged)
+            .unwrap_or_else(|| google_emulator::idp(instance));
         let github = kickstart::GithubIdp::from_env(&env.merged);
-        fusionauth::write_kickstart(instance, google.as_ref(), github.as_ref())?;
+        // Without a real Microsoft client the stack's Outlook emulator is
+        // Microsoft.
+        let microsoft =
+            microsoft_emulator::stands_in(mode, &env.merged).then(microsoft_emulator::idp);
+        fusionauth::write_kickstart(instance, Some(&google), github.as_ref(), microsoft.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -1157,7 +1163,15 @@ fn bring_up_infra(
     // of the infra instead of after it: its JVM start is the longest wait here.
     let fusionauth_start = spec.runs_local_infra.then(|| {
         let mut fa = compose_cmd(instance, env);
-        fa.arg("up").arg("-d").arg("fusionauth");
+        fa.arg("up").arg("-d");
+        // FusionAuth refuses to create the `microsoft` identity provider
+        // unless it can read the discovery document at its issuer, so the
+        // emulator that serves it starts first. It listens within a second;
+        // the kickstart runs after FusionAuth's JVM has booted.
+        if microsoft_emulator::stands_in(mode, &env.merged) {
+            fa.arg(microsoft_emulator::SERVICE);
+        }
+        fa.arg("fusionauth");
         let stage = stage.background();
         std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
     });
@@ -1221,6 +1235,9 @@ fn bring_up_infra(
         // already in the restored volumes, so this is just JVM boot.
         fusionauth::wait_ready(stage, instance)?;
         fusionauth::apply_redirect_urls(stage, instance)?;
+        if google_emulator::stands_in(mode, &env.merged) {
+            fusionauth::apply_google_authorization_endpoint(stage, instance)?;
+        }
 
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
@@ -1278,39 +1295,93 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
              the shell you run this from)"
         );
     }
-    match collector_action(otlp_port_holder().as_deref(), service) {
+    // `services = true` in the local telemetry settings: lgtm copies what it
+    // receives to the Grafana forwarder. Only this backend can. A forwarder
+    // that fails to start leaves lgtm's copy as it was.
+    let forwarder = (backend == cli::TracesBackend::Lgtm)
+        .then(|| grafana_forwarder::Forwarder::from_settings(stage))
+        .flatten()
+        .filter(|forwarder| {
+            forwarder
+                .reconcile(stage)
+                .inspect_err(|e| {
+                    stage.note(&format!(
+                        "  WARNING: could not start or update the Grafana forwarder \
+                         ({e:#}); forwarding left as it was"
+                    ));
+                })
+                .is_ok()
+        });
+    let copy_to = forwarder
+        .as_ref()
+        .map(grafana_forwarder::Forwarder::lgtm_endpoint);
+    let env: Vec<(&str, &str)> = copy_to
+        .map(|endpoint| (grafana_forwarder::LGTM_FORWARD_VAR, endpoint))
+        .into_iter()
+        .collect();
+    // `--no-recreate` would start a stopped lgtm with its old Grafana copy.
+    let start = |container: &str| match copy_to
+        .filter(|endpoint| grafana_forwarder::lgtm_differs(container, endpoint))
+    {
+        Some(endpoint) => grafana_forwarder::recreate_lgtm(stage, container, endpoint),
+        None => start_global_compose_service(stage, profile, service, "trace collector", &env),
+    };
+    let (container, started) = match collector_action(otlp_port_holder().as_deref(), service) {
         CollectorAction::Reuse(name) => {
             // Never `up` a running collector: Compose would recreate it
             // whenever its config hash differs (each worktree bind-mounts
             // its own `docker/lgtm` path), dropping the `otel-collector`
-            // attachments other running instances added to it.
-            stage.note(&format!("  reusing running trace collector {name}"));
-            return Ok(());
+            // attachments other running instances added to it. Only a change
+            // of its Grafana copy recreates it, restoring those.
+            match copy_to.filter(|endpoint| grafana_forwarder::lgtm_differs(&name, endpoint)) {
+                Some(endpoint) => {
+                    let recreated = grafana_forwarder::recreate_lgtm(stage, &name, endpoint);
+                    (name, recreated)
+                }
+                None => {
+                    stage.note(&format!("  reusing running trace collector {name}"));
+                    if let Some(forwarder) = &forwarder {
+                        forwarder.settle(stage, &name);
+                    }
+                    return Ok(());
+                }
+            }
         }
         CollectorAction::Replace(name) => {
             stage.note(&format!(
                 "  replacing running trace collector {name} (all collectors share the OTLP ports)"
             ));
             let _ = Command::new("docker").args(["rm", "-f", &name]).output();
+            let container = grafana_forwarder::LGTM_CONTAINER.to_owned();
+            let started = start(&container);
+            (container, started)
         }
-        CollectorAction::Start => {}
+        CollectorAction::Start => {
+            let container = grafana_forwarder::LGTM_CONTAINER.to_owned();
+            let started = start(&container);
+            (container, started)
+        }
+    };
+    if started.is_ok()
+        && let Some(forwarder) = &forwarder
+    {
+        forwarder.settle(stage, &container);
     }
-    let result =
-        start_global_compose_service(stage, profile, service, "trace collector").and_then(|()| {
-            // `up -d` returns once the container starts, not once it's accepting
-            // connections; `env_layer::resolve` (which runs right after this, in
-            // `prepare`) needs the OTLP port live NOW to decide whether to wire
-            // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of
-            // racing. 30s: the LGTM all-in-one is the heaviest collector and
-            // takes 10-20s on a cold volume.
-            for _ in 0..300 {
-                if summary::port_open(4318) {
-                    return Ok(());
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
+    let result = started.and_then(|()| {
+        // `up -d` returns once the container starts, not once it's accepting
+        // connections; `env_layer::resolve` (which runs right after this, in
+        // `prepare`) needs the OTLP port live NOW to decide whether to wire
+        // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of
+        // racing. 30s: the LGTM all-in-one is the heaviest collector and
+        // takes 10-20s on a cold volume.
+        for _ in 0..300 {
+            if summary::port_open(4318) {
+                return Ok(());
             }
-            anyhow::bail!("{profile} trace collector did not come up on port 4318 in time")
-        });
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        anyhow::bail!("{profile} trace collector did not come up on port 4318 in time")
+    });
     // The default backend must not brick a run that never asked for tracing
     // (offline, image pull failure): warn loud and continue without export —
     // the env probe simply won't wire `OTEL_EXPORTER_OTLP_ENDPOINT`. An
@@ -1428,27 +1499,37 @@ fn binds_host_otlp_port(ports: &str) -> bool {
 /// does not include generated infrastructure services such as LocalStack.
 /// `--no-recreate`: an existing container is only started, never replaced —
 /// its config hash differs per worktree, and a recreate drops the network
-/// attachments running instances added to it.
+/// attachments running instances added to it. `env` feeds the compose file's
+/// `${VAR}`s.
 fn start_global_compose_service(
     stage: &Stage,
     profile: &str,
     service: &str,
     label: &str,
+    env: &[(&str, &str)],
 ) -> Result<()> {
-    let compose = repo_root().join("docker/docker-compose.yml");
-    let mut up = Command::new("docker");
-    up.arg("compose")
+    let mut up = global_compose(profile);
+    up.arg("up")
+        .arg("-d")
+        .arg("--no-recreate")
+        .arg(service)
+        .envs(env.iter().copied());
+    stage.run(&format!("Starting {profile} {label}"), &mut up)
+}
+
+/// `docker compose` over the base compose file in the global `macro` project,
+/// with `profile` enabled.
+fn global_compose(profile: &str) -> Command {
+    let mut compose = Command::new("docker");
+    compose
+        .arg("compose")
         .arg("--project-directory")
         .arg(repo_root())
         .arg("-f")
-        .arg(&compose)
+        .arg(repo_root().join("docker/docker-compose.yml"))
         .arg("--profile")
-        .arg(profile)
-        .arg("up")
-        .arg("-d")
-        .arg("--no-recreate")
-        .arg(service);
-    stage.run(&format!("Starting {profile} {label}"), &mut up)
+        .arg(profile);
+    compose
 }
 
 /// Start the shared headless Chrome (compose profile `chrome`, CDP on 9222)
@@ -1459,7 +1540,8 @@ fn ensure_headless_chrome(stage: &Stage) {
     if summary::port_open(9222) {
         return; // already running (ours or a host Chrome — either works)
     }
-    if let Err(e) = start_global_compose_service(stage, "chrome", "headless-chrome", "browser") {
+    if let Err(e) = start_global_compose_service(stage, "chrome", "headless-chrome", "browser", &[])
+    {
         stage.note(&format!(
             "  WARNING: could not start headless Chrome ({e:#}); browser \
              debugging via CDP on :9222 will be unavailable"
@@ -1794,7 +1876,18 @@ pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
     );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false, &computers)?;
+    // No env is resolved here, so the sidecars are those of a stack without
+    // integration secrets: the Gmail and Outlook emulators, and no Gmail
+    // forwarder.
+    let sidecars = gen_compose::Sidecars::from_env(Mode::Local, &std::collections::BTreeMap::new());
+    let path = gen_compose::generate(
+        Mode::Local,
+        &instance,
+        &binaries,
+        false,
+        sidecars,
+        &computers,
+    )?;
     println!("{}", path.display());
     Ok(())
 }

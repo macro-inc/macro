@@ -2291,6 +2291,219 @@
         }
       }
     },
+    "/call/guest-chat/{call_id}/messages": {
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Post a guest message to the shared call thread.",
+        "operationId": "guest_call_chat_post_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/messages/{message_id}": {
+      "delete": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Delete a message owned by this guest.",
+        "operationId": "guest_call_chat_delete_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Edit a message owned by this guest.",
+        "operationId": "guest_call_chat_patch_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/messages/{message_id}/reactions": {
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Add or remove this guest's reaction.",
+        "operationId": "guest_call_chat_react_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/thread": {
+      "get": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Read the shared call thread with identities redacted.",
+        "operationId": "guest_call_chat_read_thread",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestChatThread"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/call/join/{token}": {
       "get": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -9143,6 +9356,95 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::set_contact_company"],
+        "summary": "Remove a contact's company link. A contact with an address on one of its\ncompany's domains cannot be unlinked. Idempotent.",
+        "operationId": "unlink_crm_contact_company",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/crm/contacts/{contact_id}/email": {
@@ -9167,6 +9469,206 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/emails": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::contact_emails"],
+        "summary": "Add an address to a contact. It must not belong to another contact in the\nteam, and becomes the primary only when the contact has none. Idempotent.",
+        "operationId": "add_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::contact_emails"],
+        "summary": "Remove an address from a contact. Nothing else is deleted: the contact\nstops showing that address's email history. Removing the primary promotes\nthe oldest address left. The last address on a domain of the contact's\ncompany cannot be removed while the contact is linked to it. Idempotent.",
+        "operationId": "remove_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
               }
             }
           },
@@ -9501,6 +10003,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PipelineFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/details": {
+      "get": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "The caller's live pipelines, each with its fields in column order (a\nselect field lists its options, so Stage lists the stages) and its table\nversion: what `ListPipelines` gives the agent, in one call.",
+        "operationId": "list_crm_pipeline_details",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipelineFields"
+                  }
                 }
               }
             }
@@ -22206,7 +22740,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -25164,6 +25698,103 @@
                             },
                             "requestId": {
                               "type": "string"
+                            }
+                          }
+                        }
+                      ],
+                      "description": "Data to be returned"
+                    },
+                    "error": {
+                      "type": "boolean",
+                      "description": "Indicates if an error occurred"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/upload_extract/{request_id}": {
+      "get": {
+        "tags": ["project"],
+        "summary": "Where the caller's folder upload stands, so the uploader can follow it to\nthe end even when a websocket update is missed.",
+        "operationId": "get_upload_extract_status_handler",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "The upload request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error", "data"],
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "description": "Where a folder upload stands, for the uploader to follow it to the end.",
+                          "required": ["status"],
+                          "properties": {
+                            "progress": {
+                              "oneOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "$ref": "#/components/schemas/UploadFolderProgress",
+                                  "description": "Files stored so far, once the extractor has counted them."
+                                }
+                              ]
+                            },
+                            "projectId": {
+                              "type": ["string", "null"],
+                              "description": "The uploaded folder, once it exists."
+                            },
+                            "status": {
+                              "$ref": "#/components/schemas/UploadFolderStatus"
                             }
                           }
                         }
@@ -33285,6 +33916,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
@@ -35079,6 +35714,24 @@
           }
         }
       },
+      "CommercialFields": {
+        "type": "object",
+        "description": "CRM-owned roles for columns in the reusable table.",
+        "properties": {
+          "money": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoneyColumn"
+            },
+            "description": "Monetary fields, each with an independent per-row currency."
+          },
+          "outcome": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Outcome column, absent only for a pipeline from a pre-migration writer."
+          }
+        }
+      },
       "CommittedChange": {
         "type": "object",
         "description": "One change a committed batch journaled: a table, the version the batch\nproduced, and the journal's id for it.",
@@ -35179,6 +35832,17 @@
         "type": "string",
         "description": "How a group's conditions combine.",
         "enum": ["and", "or"]
+      },
+      "ContactEmailRequest": {
+        "type": "object",
+        "description": "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to add or remove. An identical retry is accepted."
+          }
+        }
       },
       "ConversationId": {
         "type": "string",
@@ -35450,6 +36114,16 @@
           "emoji": {
             "type": "string",
             "description": "Emoji being reacted with."
+          },
+          "names": {
+            "type": "object",
+            "description": "Display names for reactors whose account identity is not visible to this viewer.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "users": {
             "type": "array",
@@ -36962,6 +37636,17 @@
           "updatedAt"
         ],
         "properties": {
+          "companyDomain": {
+            "type": "boolean",
+            "description": "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+          },
+          "companyDomainEmails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+          },
           "companyId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -36974,7 +37659,14 @@
           },
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address; absent for contacts added by name\nalone."
+            "description": "The contact's primary email address; absent for contacts added by\nname alone."
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`."
           },
           "firstInteraction": {
             "type": "string",
@@ -37001,7 +37693,7 @@
           },
           "personalEmail": {
             "type": "boolean",
-            "description": "Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only."
+            "description": "Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only."
           },
           "updatedAt": {
             "type": "string",
@@ -42743,6 +43435,10 @@
               }
             ]
           },
+          "afterCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount now."
+          },
           "before": {
             "oneOf": [
               {
@@ -42753,6 +43449,10 @@
                 "description": "Its value before; missing when it was empty."
               }
             ]
+          },
+          "beforeCurrency": {
+            "type": ["string", "null"],
+            "description": "For a monetary field, the currency code of the amount before."
           },
           "field": {
             "type": "string",
@@ -43706,6 +44406,11 @@
           "name": {
             "type": "string",
             "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           }
         }
       },
@@ -43717,6 +44422,11 @@
           "name": {
             "type": "string",
             "description": "Display name, never authentication evidence."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           },
           "userId": {
             "type": ["string", "null"],
@@ -44083,6 +44793,11 @@
             "format": "uuid",
             "description": "External person identity."
           },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          },
           "userId": {
             "type": ["string", "null"],
             "description": "Verified Macro user association, if present."
@@ -44145,6 +44860,11 @@
           "name": {
             "type": "string",
             "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
           },
           "provider": {
             "$ref": "#/components/schemas/ExternalChatProvider",
@@ -44465,6 +45185,10 @@
         "description": "The sum of a number field over the matched entries.",
         "required": ["field", "sum"],
         "properties": {
+          "currency": {
+            "type": ["string", "null"],
+            "description": "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+          },
           "field": {
             "type": "string",
             "description": "The field."
@@ -47529,7 +48253,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "property"
+          "property",
+          "name"
         ]
       },
       "GuestChatMessage": {
@@ -47579,6 +48304,18 @@
           }
         }
       },
+      "GuestChatPatch": {
+        "type": "object",
+        "description": "Text-only update to a guest-authored message.",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Replacement message body."
+          }
+        },
+        "additionalProperties": false
+      },
       "GuestChatPost": {
         "type": "object",
         "description": "Guests may send text only; attribution and parent are server-owned.",
@@ -47595,6 +48332,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "GuestChatThread": {
+        "type": "object",
+        "description": "A call thread and the verified viewer's sender identity.",
+        "required": ["viewer_id"],
+        "properties": {
+          "thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageThread",
+                "description": "None until the first message is posted."
+              }
+            ]
+          },
+          "viewer_id": {
+            "type": "string",
+            "description": "Guest sender ID used for own-message controls."
+          }
+        }
       },
       "GuestId": {
         "type": "string",
@@ -47741,6 +48500,17 @@
               "format": "uuid"
             },
             "description": "Teams it is a team machine for: their every member is a user of it."
+          },
+          "team_agent_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The agent teammate whose computer this is, when it is one. People\nreach the agent by message; nothing else may run on its computer.\nSet on the caller-facing listings and on a patch's answer."
+              }
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -50774,6 +51544,23 @@
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
+      "MoneyColumn": {
+        "type": "object",
+        "description": "Stable association between a numeric amount and its per-row denomination.",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The numeric column; renaming it preserves this association."
+          },
+          "currency": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The select column containing the currency code."
+          }
+        }
+      },
       "MyResponse": {
         "oneOf": [
           {
@@ -51820,7 +52607,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
           },
@@ -53161,11 +53948,16 @@
           "databaseId",
           "tableId",
           "primaryColumnId",
+          "commercialFields",
           "sharing",
           "createdAt",
           "trashedAt"
         ],
         "properties": {
+          "commercialFields": {
+            "$ref": "#/components/schemas/CommercialFields",
+            "description": "Stable identities for Outcome and amount/currency fields."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -53338,6 +54130,10 @@
           "readOnly"
         ],
         "properties": {
+          "currencyField": {
+            "type": ["string", "null"],
+            "description": "For a monetary amount, the field holding each entry's currency code."
+          },
           "multiple": {
             "type": "boolean",
             "description": "Whether it holds several values."
@@ -56156,18 +56952,18 @@
           "companyId": {
             "type": "string",
             "format": "uuid",
-            "description": "Destination company in the same team. Unlinking is not supported."
+            "description": "Destination company in the same team."
           }
         }
       },
       "SetContactEmailRequest": {
         "type": "object",
-        "description": "Add a missing contact email. Existing addresses are read-only.",
+        "description": "Choose a contact's primary email.",
         "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
-            "description": "The address to add. An identical retry is accepted."
+            "description": "The address to make primary. It is added when the contact does not\nhold it yet. An identical retry is accepted."
           }
         }
       },
@@ -57162,7 +57958,8 @@
           "frecency",
           "touched_by_me",
           "notified_at",
-          "property"
+          "property",
+          "name"
         ]
       },
       "SoupApiSortDirection": {
@@ -63135,6 +63932,31 @@
           }
         }
       },
+      "UploadFolderProgress": {
+        "type": "object",
+        "description": "Files of an extracted folder moved into storage so far.",
+        "required": ["filesTotal", "filesStored", "filesFailed"],
+        "properties": {
+          "filesFailed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files that could not be stored.",
+            "minimum": 0
+          },
+          "filesStored": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files stored successfully.",
+            "minimum": 0
+          },
+          "filesTotal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files the folder holds.",
+            "minimum": 0
+          }
+        }
+      },
       "UploadFolderRequest": {
         "type": "object",
         "required": ["content", "rootFolderName", "uploadRequestId"],
@@ -63166,6 +63988,19 @@
             "description": "The upload request id"
           }
         }
+      },
+      "UploadFolderStatus": {
+        "type": "string",
+        "description": "The upload status of the folder",
+        "enum": [
+          "pending",
+          "uploaded",
+          "processing",
+          "partially_completed",
+          "completed",
+          "failed",
+          "unknown"
+        ]
       },
       "UploadGrant": {
         "type": "object",

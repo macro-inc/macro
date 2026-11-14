@@ -5,7 +5,7 @@ use std::{collections::HashMap, future::Future, pin::Pin};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use entity_access::domain::models::{
-    EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
+    EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityType, ViewAccessLevel,
 };
 
 use super::{
@@ -43,6 +43,33 @@ pub trait InitiativeResources: std::fmt::Debug + Send + Sync + 'static {
         auth: EntityAccessAuth,
         entity: Entity,
     ) -> ResourceFuture<'_, Option<EntityAccessReceipt<ViewAccessLevel>>>;
+    /// View capabilities for the documents among `ids` visible under the same scope, in
+    /// input order, each decided as [`Self::view`] decides it. Implementations may check
+    /// them together; the default checks one at a time.
+    fn view_documents(
+        &self,
+        auth: EntityAccessAuth,
+        ids: Vec<String>,
+    ) -> ResourceFuture<'_, Vec<EntityAccessReceipt<ViewAccessLevel>>> {
+        Box::pin(async move {
+            let mut visible = Vec::new();
+            for id in ids {
+                if let Some(receipt) = self
+                    .view(
+                        auth.clone(),
+                        Entity {
+                            entity_id: id,
+                            entity_type: EntityType::Document,
+                        },
+                    )
+                    .await?
+                {
+                    visible.push(receipt);
+                }
+            }
+            Ok(visible)
+        })
+    }
     /// Read canonical property snapshots in a batch for verified entities.
     fn properties(
         &self,

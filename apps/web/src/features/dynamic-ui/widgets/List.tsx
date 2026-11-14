@@ -3,6 +3,10 @@ import {
   CollectionGroup,
 } from '@app/features/agent-cards/components/collection';
 import {
+  type LoadableType,
+  useReferenceItem,
+} from '@app/features/agent-cards/components/reference-card';
+import {
   compileToAst,
   defineQueryFilters,
   type Query,
@@ -13,7 +17,10 @@ import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filt
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import type { EntityIconSelector } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+} from '@core/component/EntityIcon';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
 import { Entity } from '@entity/entity';
@@ -26,7 +33,8 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { formatDocumentName } from '@service-storage/util/filename';
-import { createMemo, For, Show, Suspense } from 'solid-js';
+import { cn } from '@ui';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import type { EntityRef, WidgetOf } from '../view';
 import { TaskResultRow } from './TaskResultRow';
 
@@ -48,6 +56,10 @@ import { TaskResultRow } from './TaskResultRow';
  * `PropertiesProvider`, and the split-panel / soup-view contexts are optional.
  *
  *  - `items` mode: resolve the supplied refs → EntityData via an id-filtered AST.
+ *    A ref the query does not return - a kind soup cannot filter by id, like a
+ *    database, or an item it has not indexed yet, deleted, or out of the
+ *    viewer's reach - still shows, as a {@link ReferenceRow} loaded by id. An
+ *    items list never reads "Nothing matches", and one with no refs is not drawn.
  *  - `query` mode: drive the same query straight from `source.query`.
  */
 
@@ -81,8 +93,23 @@ const ID_FIELD_BY_TYPE: Partial<Record<EntityRef['type'], IdFieldName>> = {
   foreign_entity: 'foreignEntityRecordId',
   crm_company: 'crmCompanyId',
   calendar_event: 'calendarEventId',
-  // user / team / crm_contact / static_file have no soup item filter — skipped.
+  // user / team / crm_contact / static_file have no soup item filter; an
+  // items list still shows them, as rows loaded by id.
 };
+
+/** The card kind a ref the soup query did not return loads as, by id. */
+const REFERENCE_TYPE_BY_TYPE: Partial<Record<EntityRef['type'], LoadableType>> =
+  {
+    document: 'document',
+    database: 'database',
+    email: 'email_thread',
+    email_thread: 'email_thread',
+    project: 'project',
+    channel: 'channel',
+    routine: 'routine',
+    form: 'form',
+    initiative: 'initiative',
+  };
 
 /** Build a soup `Query` that fetches exactly the given refs by id. */
 function refsToQuery(refs: EntityRef[]): Query {
@@ -147,10 +174,114 @@ function Row(props: { entity: WithNotification<EntityData> }) {
   );
 }
 
+/** A row with its icon, title and a line about it, opening when it can. */
+function PlainRow(props: {
+  icon: EntityIconSelector;
+  title: string;
+  meta: string;
+  onOpen?: (event: MouseEvent) => void;
+  muted?: boolean;
+  deleted?: boolean;
+}) {
+  const body = (): JSX.Element => (
+    <>
+      <span class="mt-0.5 size-4 shrink-0">
+        <EntityIcon targetType={props.icon} size="sm" />
+      </span>
+      <span class="min-w-0 flex-1">
+        <span
+          class={cn(
+            'block truncate text-sm font-medium',
+            props.deleted && 'line-through'
+          )}
+        >
+          {props.title}
+        </span>
+        <span class="mt-1 block truncate text-xs text-ink-extra-muted">
+          {props.meta}
+        </span>
+      </span>
+    </>
+  );
+  return (
+    <div data-card-row class="min-w-0">
+      <Show
+        when={props.onOpen}
+        fallback={
+          <div
+            class={cn(
+              'mx-1 flex min-w-0 items-start gap-2 rounded-xl px-2 py-2',
+              props.muted && 'opacity-60'
+            )}
+          >
+            {body()}
+          </div>
+        }
+      >
+        {(onOpen) => (
+          <button
+            type="button"
+            class={cn(
+              'mx-1 flex w-full min-w-0 items-start gap-2 rounded-xl px-2 py-2 text-left touch:min-h-[44px] not-touch:hover:bg-list-hover focus-visible:bg-list-hover'
+            )}
+            aria-label={`Open ${props.title}`}
+            onClick={(event) => onOpen()(event)}
+          >
+            {body()}
+          </button>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+/** A ref loaded by id with the viewer's own access; never shows what they cannot see. */
+function LoadedReferenceRow(props: { type: LoadableType; id: string }) {
+  const item = useReferenceItem(() => props);
+  return (
+    <PlainRow
+      icon={item.icon()}
+      title={item.title()}
+      meta={item.meta()}
+      onOpen={item.open()}
+      muted={item.muted()}
+      deleted={item.deleted()}
+    />
+  );
+}
+
+/** A kind of item, as a reader would name it: `crm_contact` → `Crm contact`. */
+function kindLabel(type: EntityRef['type']): string {
+  const words = type.replaceAll('_', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * A ref the soup query did not return. A kind cards can load shows by id; any
+ * other kind still shows, as an unavailable row, so no ref is dropped.
+ */
+function ReferenceRow(props: { entity: EntityRef }) {
+  return (
+    <Show
+      when={REFERENCE_TYPE_BY_TYPE[props.entity.type]}
+      fallback={
+        <PlainRow
+          icon="default"
+          title={kindLabel(props.entity.type)}
+          meta="Can't be shown here"
+          muted
+        />
+      }
+    >
+      {(type) => <LoadedReferenceRow type={type()} id={props.entity.id} />}
+    </Show>
+  );
+}
+
 /** The icon a collection's header takes: the rows' own kind, or a mix. */
-function collectionIcon(entities: readonly EntityData[]): EntityIconSelector {
-  const kind = entities[0]?.type;
-  if (!kind || entities.some((entity) => entity.type !== kind)) return 'files';
+function collectionIcon(kinds: readonly string[]): EntityIconSelector {
+  const kind = kinds[0];
+  if (!kind || kinds.some((other) => other !== kind)) return 'files';
   return kind as EntityIconSelector;
 }
 
@@ -187,8 +318,8 @@ function Rows(props: ListProps) {
     return src.kind === 'items' ? refsToQuery(src.entities) : src.query;
   });
 
-  // `items` mode with zero resolvable refs would otherwise NIL-fill everything
-  // and return nothing — which is the correct "No items." outcome anyway.
+  // `items` mode with no soup-filterable refs NIL-fills everything and returns
+  // nothing; those refs then show as rows loaded by id (`unresolved` below).
   // `groupBy` orders the returned entities by the requested facet (the grouped
   // select flattens groups into `data.entities` in group order).
   const notificationSource = useGlobalNotificationSource();
@@ -215,14 +346,38 @@ function Rows(props: ListProps) {
       withEntityNotifications(entity, notificationSource)
     );
   });
-  const count = () => entities().length;
+  // Every ref an items list names shows: the ones soup did not return load
+  // by id instead of going missing.
+  // Until soup answers, nothing is known to be missing.
+  const unresolved = createMemo(() => {
+    const source = props.source;
+    const soupEntities = itemsQuery.data?.entities;
+    if (source.kind !== 'items' || !soupEntities) return [];
+    const returnedIds = new Set(soupEntities.map((entity) => entity.id));
+    const seenRefs = new Set<string>();
+    const missing = source.entities.filter((ref) => {
+      const key = `${ref.type}:${ref.id}`;
+      if (returnedIds.has(ref.id) || seenRefs.has(key)) return false;
+      seenRefs.add(key);
+      return true;
+    });
+    const rowsLeft =
+      props.limit != null
+        ? Math.max(0, props.limit - entities().length)
+        : missing.length;
+    return missing.slice(0, rowsLeft);
+  });
+  const count = () => entities().length + unresolved().length;
   const counted = () => `${count()} ${count() === 1 ? 'item' : 'items'}`;
 
   return (
     <CollectionCard
       title={props.title ?? counted()}
       subtitle={props.title ? counted() : undefined}
-      icon={collectionIcon(entities())}
+      icon={collectionIcon([
+        ...entities().map((entity) => entity.type),
+        ...unresolved().map((ref) => ref.type),
+      ])}
       count={count()}
       live={props.source.kind === 'query'}
       state="ready"
@@ -247,6 +402,7 @@ function Rows(props: ListProps) {
           </Show>
         )}
       </For>
+      <For each={unresolved()}>{(ref) => <ReferenceRow entity={ref} />}</For>
     </CollectionCard>
   );
 }
@@ -258,23 +414,27 @@ function Rows(props: ListProps) {
  * height with skeleton rows.
  */
 export function List(props: ListProps) {
+  const empty = () =>
+    props.source.kind === 'items' && props.source.entities.length === 0;
   return (
-    <ListEntityMetadataQueryProvider>
-      <ListLayoutProvider ref={() => undefined}>
-        {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
-        <Suspense
-          fallback={
-            <CollectionCard
-              title={props.title ?? 'Items'}
-              count={0}
-              live={props.source.kind === 'query'}
-              state="loading"
-            />
-          }
-        >
-          <Rows {...props} />
-        </Suspense>
-      </ListLayoutProvider>
-    </ListEntityMetadataQueryProvider>
+    <Show when={!empty()}>
+      <ListEntityMetadataQueryProvider>
+        <ListLayoutProvider ref={() => undefined}>
+          {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
+          <Suspense
+            fallback={
+              <CollectionCard
+                title={props.title ?? 'Items'}
+                count={0}
+                live={props.source.kind === 'query'}
+                state="loading"
+              />
+            }
+          >
+            <Rows {...props} />
+          </Suspense>
+        </ListLayoutProvider>
+      </ListEntityMetadataQueryProvider>
+    </Show>
   );
 }

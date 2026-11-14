@@ -2498,6 +2498,11 @@ export type TaskFilters = {
     include_cbm_atm_nc?: boolean | null;
 };
 
+/**
+ * How a query of several terms matches document content.
+ */
+export type TermMatching = 'all' | 'dynamic';
+
 export type UnifiedSearchRequest = {
     /**
      * Which calendar events to search. Defaults to `own`: events on the
@@ -2530,6 +2535,12 @@ export type UnifiedSearchRequest = {
      * Fields to search on (Name, Content, NameContent). Defaults to Content
      */
     search_on?: SearchOn;
+    /**
+     * How a query of several terms matches document content. Defaults to
+     * `all`, the strict AND that AI tools and the SDK rely on; the web
+     * app's Search view asks for `dynamic`.
+     */
+    term_matching?: TermMatching;
 };
 
 export type UnifiedSearchResponse = {

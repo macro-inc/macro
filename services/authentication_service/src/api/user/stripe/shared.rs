@@ -111,6 +111,7 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::NotTeamAdmin => StatusCode::FORBIDDEN,
             StripeOperationError::TeamPlanErr(e) => match e {
                 SetTeamMemberPlanError::TeamNotPaying => StatusCode::PAYMENT_REQUIRED,
+                SetTeamMemberPlanError::SeatIncluded => StatusCode::CONFLICT,
                 SetTeamMemberPlanError::CustomerError(CustomerError::PlanUnavailable(_)) => {
                     StatusCode::BAD_REQUEST
                 }

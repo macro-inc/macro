@@ -17,7 +17,7 @@ use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::{
     Billing as ComputerBilling, BillingPolicy, Effect, EffectWorker, Event, HostId, Rejected,
-    SubscriptionItemId, TimerKind,
+    SetupOutcome, SubscriptionItemId, TimerKind,
 };
 use crate::domain::models::{
     BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
@@ -52,10 +52,22 @@ impl FleetAttachmentSource for StaticFleetAttachment {
     }
 }
 
-/// Classifies a fleet failure that requires replacing a lost guest.
+/// Storage could not be reached at all right now (no connection to be had
+/// from the pool). An adapter reports it as the source of its error; the
+/// passes skip that tick and retry on the next, never counting it as a
+/// failed attempt. See [`crate::domain::service::ComputerError::is_storage_unavailable`].
+#[derive(Debug, thiserror::Error)]
+#[error("computer storage is unavailable right now")]
+pub struct StorageUnavailable(#[source] pub Box<dyn std::error::Error + Send + Sync + 'static>);
+
+/// Classifies a fleet failure: a lost guest is replaced, a permanent
+/// failure fails the computer at once, anything else is retried.
 pub trait FleetError: std::error::Error + Send + Sync + 'static {
     /// True only when the addressed instance no longer exists.
     fn is_missing(&self) -> bool;
+    /// True when retrying the same request cannot succeed, such as a
+    /// request the fleet rejected as invalid.
+    fn is_permanent(&self) -> bool;
 }
 
 /// An effect waiting in the outbox.
@@ -85,7 +97,7 @@ pub struct DueTimer {
 /// Why units could not be reserved.
 #[derive(Debug, thiserror::Error)]
 pub enum ReserveError<Err> {
-    /// No host has enough sale capacity.
+    /// No host that can run the size awake has enough sale capacity.
     #[error("no host has room for this size")]
     SoldOut,
     /// Reservation storage failed.
@@ -132,10 +144,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self::BillingGuard, Self::Err>> + Send;
 
     /// Under the host lock: return what `reservation.purchase_key` already
-    /// led to, or hold the purchase's units on the host with the most sold
+    /// led to, or hold the purchase's units until `expires_at` on the host,
+    /// among those whose awake capacity fits them, with the most sold
     /// capacity left (sold capacity minus live computers and
     /// reservations, expired or not: an expired one may still settle as
-    /// charged) until `expires_at`.
+    /// charged).
     fn reserve(
         &self,
         reservation: NewReservation,
@@ -338,13 +351,6 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     /// Every host with what its computers and reservations hold, by host id.
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
-
-    /// Sizes that no host can sell at `now`.
-    fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 }
 
 /// Errors from billing a team.
@@ -629,6 +635,35 @@ pub struct HostedPairing {
     pub pairing_id: PairingId,
     /// Secret used to claim the pairing.
     pub device_secret: DeviceSecret,
+}
+
+/// What a computer's buyer hears when its first setup ends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetupNotice {
+    /// The computer that was set up.
+    pub computer_id: ComputerId,
+    /// The team that owns the computer.
+    pub team_id: Uuid,
+    /// The computer's harness, once created.
+    pub harness_id: Option<HarnessId>,
+    /// The computer's name when the notice is sent.
+    pub computer_name: String,
+    /// Who bought the computer; for an agent teammate's, its inviter.
+    pub buyer: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// The agent teammate the computer runs, if it was bought for one.
+    pub agent: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
+    /// Ready, or why setup failed.
+    pub outcome: SetupOutcome,
+}
+
+/// Telling a buyer how setup ended.
+pub trait SetupNotices: Send + Sync + 'static {
+    /// Adapter failure type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Deliver `notice`. Delivering the same notice again (an effect
+    /// retried or redelivered) must not notify twice.
+    fn send(&self, notice: SetupNotice) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The harness registry macrod pairs with.

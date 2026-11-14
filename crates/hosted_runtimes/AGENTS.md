@@ -26,6 +26,9 @@ read it before changing behaviour.
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
   authentication_service.
+- `src/outbound/pg/agents.rs`: `ComputerAgents`, also alone as
+  `PgComputerAgents`, which implements harnesses' `ComputerTeamAgents` so
+  harness listings mark an agent teammate's computer.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 
@@ -60,8 +63,20 @@ read it before changing behaviour.
   so a new state must guard every timer event it can receive.
 - Each computer's effects run strictly in outbox order (`lease_effects` leases
   only a computer's oldest effect per worker).
+- A pool timeout is `ports::StorageUnavailable`
+  (`ComputerError::is_storage_unavailable`): passes skip the tick and effects
+  keep their attempts. Never count it as an effect failure.
+- A billing removal keeps one idempotency key across retries; see
+  `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
+- `NotifySetup` tells the buyer how first setup ended through the
+  `ports::SetupNotices` port (adapter: agent_harness_service
+  `computers/setup_notice.rs`): `Ready` on the first macrod connection,
+  `Failed` on each give-up before it (keyed by `failed_at`, so a retried
+  attempt notifies again). It never fails the computer when it cannot be sent.
+  `SetupNotice.agent` names the agent teammate an agent computer runs
+  (`ComputerAgents::agent_of`), so the adapter can tell its inviter by name.
 - Keep `#![deny(missing_docs)]` and document every public item tersely (CS-54).
 
 ## Related

@@ -2893,6 +2893,1153 @@ export const guestCallChatPostResponse = zod
   );
 
 /**
+ * @summary Post a guest message to the shared call thread.
+ */
+export const guestCallChatPostMessageParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const guestCallChatPostMessageBody = zod
+  .object({
+    content: zod.string().describe('Text to append to the call discussion.'),
+    id: zod
+      .uuid()
+      .describe(
+        'UUIDv7 used to deduplicate retries, including the first message.'
+      ),
+  })
+  .describe(
+    'Guests may send text only; attribution and parent are server-owned.'
+  );
+
+export const guestCallChatPostMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Delete a message owned by this guest.
+ */
+export const guestCallChatDeleteMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+/**
+ * @summary Edit a message owned by this guest.
+ */
+export const guestCallChatPatchMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const guestCallChatPatchMessageBody = zod
+  .object({
+    content: zod.string().describe('Replacement message body.'),
+  })
+  .describe('Text-only update to a guest-authored message.');
+
+export const guestCallChatPatchMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Add or remove this guest's reaction.
+ */
+export const guestCallChatReactMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const guestCallChatReactMessageBody = zod
+  .object({
+    add: zod.boolean().describe('Add when true, remove when false.'),
+    emoji: zod.string().describe('Emoji.'),
+    nonce: zod.string().nullish().describe('Client nonce.'),
+  })
+  .describe('Reaction mutation for the authenticated user.');
+
+export const guestCallChatReactMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Read the shared call thread with identities redacted.
+ */
+export const guestCallChatReadThreadParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const guestCallChatReadThreadResponse = zod
+  .object({
+    thread: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            replies: zod
+              .array(
+                zod
+                  .object({
+                    attachments: zod
+                      .array(
+                        zod
+                          .object({
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('When the attachment was added.'),
+                            entity_id: zod
+                              .string()
+                              .describe('Attached entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Attached entity type.'),
+                            height: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media height.'),
+                            id: zod.uuid().describe('Attachment UUID.'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media width.'),
+                          })
+                          .describe('An entity attached to a message.')
+                      )
+                      .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
+                    content: zod.string().describe('Macro Markdown body.'),
+                    created_at: zod.iso.datetime({}).describe('Creation time.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Message tombstone, independent of thread deletion.'
+                      ),
+                    edited_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Last content edit, if any.'),
+                    guest_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name of a verified call guest, retained after the call ends.'
+                      ),
+                    id: zod.uuid().describe('Message UUID.'),
+                    imported_author: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Original author text; never interpreted as an authenticated principal.'
+                              ),
+                          })
+                          .describe(
+                            'Display attribution for a comment imported from an external document.'
+                          ),
+                      ])
+                      .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            type: zod.enum(['channel']),
+                          })
+                          .describe('A channel, including direct messages.'),
+                        zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'A validated document identifier. Historical document ids need not be UUIDs.'
+                              ),
+                            type: zod.enum(['document']),
+                          })
+                          .describe('A document, including tasks and PDFs.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'An initiative, presented as a project in the application.'
+                              ),
+                            type: zod.enum(['initiative']),
+                          })
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM company.'),
+                            type: zod.enum(['crm_company']),
+                          })
+                          .describe('A CRM company.'),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM contact.'),
+                            type: zod.enum(['crm_contact']),
+                          })
+                          .describe('A CRM contact.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A video call and its persistent chat thread.'
+                              ),
+                            type: zod.enum(['call']),
+                          })
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                      ])
+                      .describe(
+                        'The entity whose permissions and lifecycle govern a message.'
+                      ),
+                    reactions: zod
+                      .array(
+                        zod
+                          .object({
+                            emoji: zod
+                              .string()
+                              .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
+                            users: zod
+                              .array(zod.string())
+                              .describe('User identifiers.'),
+                          })
+                          .describe(
+                            'Reaction emoji and the users who added it.'
+                          )
+                      )
+                      .describe('Aggregated reactions.'),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Authenticated actor or owner of imported content.'
+                      ),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Root message UUID for replies; absent on roots.'
+                      ),
+                    triggered_by: zod
+                      .string()
+                      .nullish()
+                      .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last persisted update.'),
+                  })
+                  .describe(
+                    'Shared message representation for channel timelines and entity discussions.'
+                  )
+              )
+              .describe('Replies in display order.'),
+            root: zod
+              .object({
+                attachments: zod
+                  .array(
+                    zod
+                      .object({
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the attachment was added.'),
+                        entity_id: zod
+                          .string()
+                          .describe('Attached entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Attached entity type.'),
+                        height: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media height.'),
+                        id: zod.uuid().describe('Attachment UUID.'),
+                        width: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media width.'),
+                      })
+                      .describe('An entity attached to a message.')
+                  )
+                  .describe('Attached entities.'),
+                bot_profile: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        avatar_url: zod
+                          .string()
+                          .nullish()
+                          .describe('Bot avatar URL.'),
+                        name: zod.string().describe('Bot display name.'),
+                      })
+                      .describe(
+                        'Public bot profile attached to bot-authored messages.'
+                      ),
+                  ])
+                  .optional(),
+                content: zod.string().describe('Macro Markdown body.'),
+                created_at: zod.iso.datetime({}).describe('Creation time.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Message tombstone, independent of thread deletion.'
+                  ),
+                edited_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Last content edit, if any.'),
+                guest_name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Display name of a verified call guest, retained after the call ends.'
+                  ),
+                id: zod.uuid().describe('Message UUID.'),
+                imported_author: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        name: zod
+                          .string()
+                          .describe(
+                            'Original author text; never interpreted as an authenticated principal.'
+                          ),
+                      })
+                      .describe(
+                        'Display attribution for a comment imported from an external document.'
+                      ),
+                  ])
+                  .optional(),
+                kind: zod
+                  .enum(['message', 'call_root'])
+                  .optional()
+                  .describe(
+                    'What a persisted message is. Set by the server, never by a client.'
+                  ),
+                mentions: zod
+                  .array(
+                    zod
+                      .object({
+                        entity_id: zod
+                          .string()
+                          .describe('Mentioned entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Mentioned entity type.'),
+                      })
+                      .describe('A mention tracked in a message body.')
+                  )
+                  .describe(
+                    'Tracked mentions, retained when a caller changes attachments only.'
+                  ),
+                parent: zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe('A channel, including direct messages.'),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('A channel, including direct messages.'),
+                    zod
+                      .object({
+                        id: zod
+                          .string()
+                          .describe(
+                            'A validated document identifier. Historical document ids need not be UUIDs.'
+                          ),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('A document, including tasks and PDFs.'),
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        type: zod.enum(['initiative']),
+                      })
+                      .describe(
+                        'An initiative, presented as a project in the application.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.uuid().describe('A CRM company.'),
+                        type: zod.enum(['crm_company']),
+                      })
+                      .describe('A CRM company.'),
+                    zod
+                      .object({
+                        id: zod.uuid().describe('A CRM contact.'),
+                        type: zod.enum(['crm_contact']),
+                      })
+                      .describe('A CRM contact.'),
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                        type: zod.enum(['call']),
+                      })
+                      .describe('A video call and its persistent chat thread.'),
+                  ])
+                  .describe(
+                    'The entity whose permissions and lifecycle govern a message.'
+                  ),
+                reactions: zod
+                  .array(
+                    zod
+                      .object({
+                        emoji: zod
+                          .string()
+                          .describe('Emoji being reacted with.'),
+                        names: zod
+                          .record(zod.string(), zod.string())
+                          .optional()
+                          .describe(
+                            'Display names for reactors whose account identity is not visible to this viewer.'
+                          ),
+                        users: zod
+                          .array(zod.string())
+                          .describe('User identifiers.'),
+                      })
+                      .describe('Reaction emoji and the users who added it.')
+                  )
+                  .describe('Aggregated reactions.'),
+                sender_id: zod
+                  .string()
+                  .describe(
+                    'Authenticated actor or owner of imported content.'
+                  ),
+                thread_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Root message UUID for replies; absent on roots.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe('User who triggered a bot-authored message.'),
+                triggered_via: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                  ),
+                updated_at: zod.iso
+                  .datetime({})
+                  .describe('Last persisted update.'),
+              })
+              .describe(
+                'Shared message representation for channel timelines and entity discussions.'
+              ),
+            state: zod
+              .object({
+                anchor: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            mark_id: zod
+                              .uuid()
+                              .describe(
+                                'Mark UUID serialized in the document.'
+                              ),
+                            marked_text: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                              ),
+                            type: zod.enum(['markdown']),
+                          })
+                          .describe(
+                            'Stable Lexical mark identity, independent of transient node keys.'
+                          ),
+                        zod
+                          .object({
+                            anchor_id: zod
+                              .uuid()
+                              .describe('Highlight annotation UUID.'),
+                            marked_text: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                              ),
+                            type: zod.enum(['pdf_highlight']),
+                          })
+                          .describe('An independently existing PDF highlight.'),
+                        zod
+                          .object({
+                            anchor_id: zod
+                              .uuid()
+                              .describe('Placeable annotation UUID.'),
+                            type: zod.enum(['pdf_placeable']),
+                          })
+                          .describe(
+                            'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                          ),
+                        zod
+                          .object({
+                            range: zod
+                              .string()
+                              .describe(
+                                'A1 cell or range, such as B4 or B4:C9.'
+                              ),
+                            sheetId: zod
+                              .string()
+                              .describe(
+                                'Stable sheet identity within the workbook.'
+                              ),
+                            sheetName: zod
+                              .string()
+                              .describe(
+                                'Sheet name when the discussion was created.'
+                              ),
+                            type: zod.enum(['spreadsheet']),
+                          })
+                          .describe(
+                            'A cell or rectangular range in a native spreadsheet.'
+                          ),
+                        zod
+                          .object({
+                            nodeId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Layer the pin follows; absent for a pin on the bare canvas.'
+                              ),
+                            pageId: zod
+                              .string()
+                              .describe('Page (canvas) the pin is on.'),
+                            type: zod.enum(['fig']),
+                            x: zod
+                              .number()
+                              .describe(
+                                "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                              ),
+                            y: zod
+                              .number()
+                              .describe('Vertical offset, measured like `x`.'),
+                          })
+                          .describe(
+                            'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                          ),
+                      ])
+                      .describe(
+                        "A thread's location within its document. PDF geometry remains annotation-owned."
+                      ),
+                  ])
+                  .optional(),
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('Creation time of the discussion.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Explicit deletion of the entire thread, distinct from root deletion.'
+                  ),
+                resolved: zod
+                  .boolean()
+                  .describe('Whether this discussion has been resolved.'),
+                root_id: zod
+                  .uuid()
+                  .describe(
+                    'Root message UUID; there is no separate thread identity.'
+                  ),
+                updated_at: zod.iso.datetime({}).describe('Last state change.'),
+                user_id: zod
+                  .string()
+                  .describe(
+                    'User who owns this discussion, including imported discussions.'
+                  ),
+              })
+              .describe(
+                'State belonging to a whole thread, keyed by its root message.'
+              ),
+          })
+          .describe(
+            'A discussion with its root and ordered replies, including root tombstones.'
+          ),
+      ])
+      .optional(),
+    viewer_id: zod
+      .string()
+      .describe('Guest sender ID used for own-message controls.'),
+  })
+  .describe("A call thread and the verified viewer's sender identity.");
+
+/**
  * @summary Handle `GET /call/join/{token}` through the call domain service.
  */
 export const meetingLookupParams = zod.object({
@@ -6336,6 +7483,18 @@ export const createCrmCompanyResponse = zod
       .array(
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -6349,7 +7508,13 @@ export const createCrmCompanyResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -6371,7 +7536,7 @@ export const createCrmCompanyResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -6607,6 +7772,18 @@ export const getCompanyResponse = zod
       .array(
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -6620,7 +7797,13 @@ export const getCompanyResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -6642,7 +7825,7 @@ export const getCompanyResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -6721,6 +7904,18 @@ export const listCompanyContactsParams = zod.object({
 
 export const listCompanyContactsResponseItem = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -6734,7 +7929,13 @@ export const listCompanyContactsResponseItem = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -6756,7 +7957,7 @@ export const listCompanyContactsResponseItem = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -6797,6 +7998,18 @@ export const createCrmContactBody = zod
 
 export const createCrmContactResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -6810,7 +8023,13 @@ export const createCrmContactResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -6832,7 +8051,7 @@ export const createCrmContactResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -6931,6 +8150,18 @@ export const searchContactsResponse = zod
       .array(
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -6944,7 +8175,13 @@ export const searchContactsResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -6966,7 +8203,7 @@ export const searchContactsResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -7000,6 +8237,18 @@ export const createCrmTeamContactBody = zod
 
 export const createCrmTeamContactResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -7013,7 +8262,13 @@ export const createCrmTeamContactResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -7035,7 +8290,7 @@ export const createCrmTeamContactResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -7065,6 +8320,18 @@ export const getContactByEmailResponse = zod
         zod.null(),
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -7078,7 +8345,13 @@ export const getContactByEmailResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -7100,7 +8373,7 @@ export const getContactByEmailResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -7127,6 +8400,18 @@ export const getContactParams = zod.object({
 
 export const getContactResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -7140,7 +8425,13 @@ export const getContactResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -7162,7 +8453,7 @@ export const getContactResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -7181,16 +8472,24 @@ export const setCrmContactCompanyParams = zod.object({
 
 export const setCrmContactCompanyBody = zod
   .object({
-    companyId: zod
-      .uuid()
-      .describe(
-        'Destination company in the same team. Unlinking is not supported.'
-      ),
+    companyId: zod.uuid().describe('Destination company in the same team.'),
   })
   .describe('Link or switch a contact with a known personal-provider email.');
 
 export const setCrmContactCompanyResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -7204,7 +8503,13 @@ export const setCrmContactCompanyResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -7226,7 +8531,80 @@ export const setCrmContactCompanyResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Remove a contact's company link. A contact with an address on one of its
+company's domains cannot be unlinked. Idempotent.
+ */
+export const unlinkCrmContactCompanyParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const unlinkCrmContactCompanyResponse = zod
+  .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -7247,12 +8625,26 @@ export const setCrmContactEmailBody = zod
   .object({
     email: zod
       .string()
-      .describe('The address to add. An identical retry is accepted.'),
+      .describe(
+        'The address to make primary. It is added when the contact does not\nhold it yet. An identical retry is accepted.'
+      ),
   })
-  .describe('Add a missing contact email. Existing addresses are read-only.');
+  .describe("Choose a contact's primary email.");
 
 export const setCrmContactEmailResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -7266,7 +8658,13 @@ export const setCrmContactEmailResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -7288,7 +8686,179 @@ export const setCrmContactEmailResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Add an address to a contact. It must not belong to another contact in the
+team, and becomes the primary only when the contact has none. Idempotent.
+ */
+export const addCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const addCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The address to add or remove. An identical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it."
+  );
+
+export const addCrmContactEmailResponse = zod
+  .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Remove an address from a contact. Nothing else is deleted: the contact
+stops showing that address's email history. Removing the primary promotes
+the oldest address left. The last address on a domain of the contact's
+company cannot be removed while the contact is linked to it. Idempotent.
+ */
+export const removeCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const removeCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The address to add or remove. An identical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it."
+  );
+
+export const removeCrmContactEmailResponse = zod
+  .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -7457,6 +9027,37 @@ export const updateCrmEmailPrivacyResponse = zod
  */
 export const listCrmPipelinesResponseItem = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -7537,6 +9138,37 @@ export const createCrmPipelineBody = zod
 
 export const createCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -7652,6 +9284,37 @@ export const createCrmPipelineWithFieldsBody = zod
 
 export const createCrmPipelineWithFieldsResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -7707,6 +9370,12 @@ export const createCrmPipelineWithFieldsResponse = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -7750,6 +9419,152 @@ export const createCrmPipelineWithFieldsResponse = zod
     })
   )
   .describe('A pipeline with its fields.');
+
+/**
+ * @summary The caller's live pipelines, each with its fields in column order (a
+select field lists its options, so Stage lists the stages) and its table
+version: what `ListPipelines` gives the agent, in one call.
+ */
+export const listCrmPipelineDetailsResponseItem = zod
+  .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    databaseId: zod.uuid().describe('Dedicated backing database.'),
+    id: zod
+      .uuid()
+      .describe('Entity identity, used with `CrmPipeline` access receipts.'),
+    name: zod.string().describe('Pipeline display name.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
+    sharing: zod
+      .enum(['private', 'team'])
+      .describe(
+        'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+      ),
+    tableId: zod.uuid().describe('Table of entries.'),
+    teamId: zod
+      .uuid()
+      .describe(
+        'Team owning the pipeline; references retain their own access controls.'
+      ),
+    trashedAt: zod.iso
+      .datetime({})
+      .nullable()
+      .describe('Trashed pipelines are omitted from navigation.'),
+    userId: zod
+      .string()
+      .describe('Owning user; sharing never changes ownership.'),
+  })
+  .describe(
+    'Pipeline metadata; table schema and data are read through the database service.'
+  )
+  .and(
+    zod.object({
+      grant: zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    })
+  )
+  .describe("Metadata together with the caller's effective grant.")
+  .and(
+    zod.object({
+      fields: zod
+        .array(
+          zod
+            .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
+              multiple: zod
+                .boolean()
+                .describe('Whether it holds several values.'),
+              name: zod.string().describe('The name entries and filters use.'),
+              options: zod
+                .array(zod.string())
+                .describe(
+                  "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                ),
+              readOnly: zod
+                .boolean()
+                .describe('Whether the caller cannot write it.'),
+              required: zod
+                .boolean()
+                .describe('Whether every entry must have a value.'),
+              type: zod
+                .enum([
+                  'company',
+                  'contact',
+                  'text',
+                  'number',
+                  'checkbox',
+                  'date',
+                  'date_range',
+                  'link',
+                  'select',
+                  'tags',
+                  'person',
+                  'item',
+                  'relation',
+                  'formula',
+                ])
+                .describe('What a field holds.'),
+            })
+            .describe('One field of a pipeline, named as people see it.')
+        )
+        .describe(
+          "Its fields in column order; a tracked pipeline's first names its record."
+        ),
+      version: zod.number().describe("Its table's version when read."),
+    })
+  )
+  .describe('A pipeline with its fields.');
+export const listCrmPipelineDetailsResponse = zod.array(
+  listCrmPipelineDetailsResponseItem
+);
 
 /**
  * @summary Entries whose company or contact matches the search, across the caller's
@@ -7874,6 +9689,39 @@ export const searchCrmPipelineEntriesResponseItem = zod
       .describe('Its matching entries.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -8047,6 +9895,39 @@ export const listCrmRecordPipelineEntriesResponseItem = zod
       .describe('Its matching entries.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -8113,6 +9994,37 @@ export const getCrmPipelineParams = zod.object({
 
 export const getCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -8299,6 +10211,37 @@ export const editCrmPipelineBody = zod
 
 export const editCrmPipelineResponse = zod
   .object({
+    commercialFields: zod
+      .object({
+        money: zod
+          .array(
+            zod
+              .object({
+                amount: zod
+                  .uuid()
+                  .describe(
+                    'The numeric column; renaming it preserves this association.'
+                  ),
+                currency: zod
+                  .uuid()
+                  .describe('The select column containing the currency code.'),
+              })
+              .describe(
+                'Stable association between a numeric amount and its per-row denomination.'
+              )
+          )
+          .optional()
+          .describe(
+            'Monetary fields, each with an independent per-row currency.'
+          ),
+        outcome: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Outcome column, absent only for a pipeline from a pre-migration writer.'
+          ),
+      })
+      .describe('CRM-owned roles for columns in the reusable table.'),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     databaseId: zod.uuid().describe('Dedicated backing database.'),
     id: zod
@@ -8354,6 +10297,12 @@ export const editCrmPipelineResponse = zod
         .array(
           zod
             .object({
+              currencyField: zod
+                .string()
+                .nullish()
+                .describe(
+                  "For a monetary amount, the field holding each entry's currency code."
+                ),
               multiple: zod
                 .boolean()
                 .describe('Whether it holds several values.'),
@@ -8826,6 +10775,12 @@ export const updateCrmPipelineEntriesResponse = zod
                           .describe("A stored value in its field's own terms."),
                       ])
                       .optional(),
+                    afterCurrency: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'For a monetary field, the currency code of the amount now.'
+                      ),
                     before: zod
                       .union([
                         zod.null(),
@@ -8903,6 +10858,12 @@ export const updateCrmPipelineEntriesResponse = zod
                           .describe("A stored value in its field's own terms."),
                       ])
                       .optional(),
+                    beforeCurrency: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'For a monetary field, the currency code of the amount before.'
+                      ),
                     field: zod.string().describe('The field.'),
                   })
                   .describe("One field's value before and after an update.")
@@ -9154,6 +11115,39 @@ export const findCrmPipelineEntriesResponse = zod
       .describe('How many entries matched in all.'),
     pipeline: zod
       .object({
+        commercialFields: zod
+          .object({
+            money: zod
+              .array(
+                zod
+                  .object({
+                    amount: zod
+                      .uuid()
+                      .describe(
+                        'The numeric column; renaming it preserves this association.'
+                      ),
+                    currency: zod
+                      .uuid()
+                      .describe(
+                        'The select column containing the currency code.'
+                      ),
+                  })
+                  .describe(
+                    'Stable association between a numeric amount and its per-row denomination.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Monetary fields, each with an independent per-row currency.'
+              ),
+            outcome: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Outcome column, absent only for a pipeline from a pre-migration writer.'
+              ),
+          })
+          .describe('CRM-owned roles for columns in the reusable table.'),
         createdAt: zod.iso.datetime({}).describe('Creation time.'),
         databaseId: zod.uuid().describe('Dedicated backing database.'),
         id: zod
@@ -9211,6 +11205,12 @@ export const findCrmPipelineEntriesResponse = zod
             .array(
               zod
                 .object({
+                  currencyField: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "For a monetary amount, the field holding each entry's currency code."
+                    ),
                   multiple: zod
                     .boolean()
                     .describe('Whether it holds several values.'),
@@ -9260,6 +11260,12 @@ export const findCrmPipelineEntriesResponse = zod
       .array(
         zod
           .object({
+            currency: zod
+              .string()
+              .nullish()
+              .describe(
+                "The currency code of a monetary field's amounts; such a field has one\ntotal per currency, never converted or combined. Absent for other numbers."
+              ),
             field: zod.string().describe('The field.'),
             sum: zod.number().describe('The sum.'),
           })
@@ -24824,6 +26830,12 @@ export const commentOnDocumentTextResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                names: zod
+                  .record(zod.string(), zod.string())
+                  .optional()
+                  .describe(
+                    'Display names for reactors whose account identity is not visible to this viewer.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -37894,6 +39906,12 @@ export const externalChatsResponseItem = zod
     name: zod
       .string()
       .describe("Display name: the group's, or a direct chat's other person."),
+    pictureFileId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
+      ),
     provider: zod
       .enum(['whatsapp'])
       .describe('The messaging service an external chat lives in.'),
@@ -38022,6 +40040,12 @@ export const externalChatResponse = zod
     name: zod
       .string()
       .describe("Display name: the group's, or a direct chat's other person."),
+    pictureFileId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
+      ),
     provider: zod
       .enum(['whatsapp'])
       .describe('The messaging service an external chat lives in.'),
@@ -38125,6 +40149,12 @@ export const externalChatResponse = zod
                         .string()
                         .describe(
                           'What to call them: their provider name, else their phone number,\nelse a generic name.'
+                        ),
+                      pictureFileId: zod
+                        .uuid()
+                        .nullish()
+                        .describe(
+                          "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                         ),
                     })
                     .describe(
@@ -38446,6 +40476,12 @@ export const externalChatMessagesResponse = zod
                     name: zod
                       .string()
                       .describe('Display name, never authentication evidence.'),
+                    pictureFileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                      ),
                     userId: zod
                       .string()
                       .nullish()
@@ -38480,6 +40516,12 @@ export const externalChatMessagesResponse = zod
                               .string()
                               .describe(
                                 'Display name, never authentication evidence.'
+                              ),
+                            pictureFileId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                               ),
                             userId: zod
                               .string()
@@ -38527,6 +40569,12 @@ export const externalChatMessagesResponse = zod
                                           .string()
                                           .describe(
                                             'Display name, never authentication evidence.'
+                                          ),
+                                        pictureFileId: zod
+                                          .uuid()
+                                          .nullish()
+                                          .describe(
+                                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                                           ),
                                         userId: zod
                                           .string()
@@ -38686,6 +40734,12 @@ export const externalChatMessagesResponse = zod
                                   .describe(
                                     'Display name, never authentication evidence.'
                                   ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                                  ),
                                 userId: zod
                                   .string()
                                   .nullish()
@@ -38732,6 +40786,12 @@ export const externalChatMessagesResponse = zod
                                   .describe(
                                     'Display name, never authentication evidence.'
                                   ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                                  ),
                                 userId: zod
                                   .string()
                                   .nullish()
@@ -38770,6 +40830,12 @@ export const externalChatMessagesResponse = zod
                   .string()
                   .describe('Display name, never authentication evidence.'),
                 personId: zod.uuid().describe('External person identity.'),
+                pictureFileId: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                  ),
                 userId: zod
                   .string()
                   .nullish()
@@ -38976,6 +41042,12 @@ export const externalChatMessageResponse = zod
             name: zod
               .string()
               .describe('Display name, never authentication evidence.'),
+            pictureFileId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+              ),
             userId: zod
               .string()
               .nullish()
@@ -39009,6 +41081,12 @@ export const externalChatMessageResponse = zod
                     name: zod
                       .string()
                       .describe('Display name, never authentication evidence.'),
+                    pictureFileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                      ),
                     userId: zod
                       .string()
                       .nullish()
@@ -39048,6 +41126,12 @@ export const externalChatMessageResponse = zod
                                   .string()
                                   .describe(
                                     'Display name, never authentication evidence.'
+                                  ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                                   ),
                                 userId: zod
                                   .string()
@@ -39185,6 +41269,12 @@ export const externalChatMessageResponse = zod
                           .describe(
                             'Display name, never authentication evidence.'
                           ),
+                        pictureFileId: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                          ),
                         userId: zod
                           .string()
                           .nullish()
@@ -39226,6 +41316,12 @@ export const externalChatMessageResponse = zod
                           .describe(
                             'Display name, never authentication evidence.'
                           ),
+                        pictureFileId: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                          ),
                         userId: zod
                           .string()
                           .nullish()
@@ -39262,6 +41358,12 @@ export const externalChatMessageResponse = zod
           .string()
           .describe('Display name, never authentication evidence.'),
         personId: zod.uuid().describe('External person identity.'),
+        pictureFileId: zod
+          .uuid()
+          .nullish()
+          .describe(
+            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          ),
         userId: zod
           .string()
           .nullish()
@@ -45598,6 +47700,7 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -45672,6 +47775,7 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Teams it is a team machine for: their every member is a user of it.'
           ),
+        team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
       .describe(
@@ -45734,6 +47838,7 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -45790,6 +47895,7 @@ export const listHarnessDirectoryResponseItem = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -45848,6 +47954,7 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -45967,6 +48074,7 @@ export const patchHarnessResponse = zod
       .describe(
         'Teams it is a team machine for: their every member is a user of it.'
       ),
+    team_agent_user_id: zod.union([zod.null(), zod.string()]).optional(),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
@@ -47428,10 +49536,11 @@ export const getItemsSoupQueryParams = zod.object({
       'touched_by_me',
       'notified_at',
       'property',
+      'name',
     ])
     .optional()
     .describe(
-      'Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.'
+      "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
     ),
   sort_property_definition_id: zod
     .uuid()
@@ -52582,6 +54691,7 @@ export const postItemsSoupBody = zod
                 'touched_by_me',
                 'notified_at',
                 'property',
+                'name',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -57182,6 +59292,7 @@ export const postItemsSoupAstBody = zod
                 'touched_by_me',
                 'notified_at',
                 'property',
+                'name',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -61894,6 +64005,7 @@ export const postItemsSoupAstGroupedBody = zod
                     'updated_at',
                     'viewed_updated',
                     'property',
+                    'name',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'
@@ -62190,6 +64302,7 @@ export const postItemsSoupAstGroupedBody = zod
                     'updated_at',
                     'viewed_updated',
                     'property',
+                    'name',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'
@@ -71559,6 +73672,12 @@ export const messageTimelineResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    names: zod
+                      .record(zod.string(), zod.string())
+                      .optional()
+                      .describe(
+                        'Display names for reactors whose account identity is not visible to this viewer.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -71914,6 +74033,12 @@ export const messageTimelineResponse = zod
                                   emoji: zod
                                     .string()
                                     .describe('Emoji being reacted with.'),
+                                  names: zod
+                                    .record(zod.string(), zod.string())
+                                    .optional()
+                                    .describe(
+                                      'Display names for reactors whose account identity is not visible to this viewer.'
+                                    ),
                                   users: zod
                                     .array(zod.string())
                                     .describe('User identifiers.'),
@@ -72293,6 +74418,12 @@ export const entityMessageCreateResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -72467,6 +74598,12 @@ export const entityMessageGetMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -72645,6 +74782,12 @@ export const entityMessageDeleteMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -72919,6 +75062,12 @@ export const entityMessageEditResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73101,6 +75250,12 @@ export const entityMessageReactResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73282,6 +75437,12 @@ export const entityMessageLegacyResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73481,6 +75642,12 @@ export const entityMessageGetThreadResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    names: zod
+                      .record(zod.string(), zod.string())
+                      .optional()
+                      .describe(
+                        'Display names for reactors whose account identity is not visible to this viewer.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -73660,6 +75827,12 @@ export const entityMessageGetThreadResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                names: zod
+                  .record(zod.string(), zod.string())
+                  .optional()
+                  .describe(
+                    'Display names for reactors whose account identity is not visible to this viewer.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -74264,6 +76437,12 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -74648,6 +76827,12 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
+                                            ),
+                                          names: zod
+                                            .record(zod.string(), zod.string())
+                                            .optional()
+                                            .describe(
+                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())
@@ -74912,6 +77097,12 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -75296,6 +77487,12 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
+                                            ),
+                                          names: zod
+                                            .record(zod.string(), zod.string())
+                                            .optional()
+                                            .describe(
+                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())
@@ -78141,6 +80338,75 @@ export const uploadExtractFolderHandlerResponse = zod.object({
       presignedUrl: zod.string(),
       requestId: zod.string(),
     })
+    .describe('Data to be returned'),
+  error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * @summary Where the caller's folder upload stands, so the uploader can follow it to
+the end even when a websocket update is missed.
+ */
+export const getUploadExtractStatusHandlerParams = zod.object({
+  request_id: zod.string().describe('The upload request id'),
+});
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesFailedMin = 0;
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesStoredMin = 0;
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesTotalMin = 0;
+
+export const getUploadExtractStatusHandlerResponse = zod.object({
+  data: zod
+    .object({
+      progress: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              filesFailed: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesFailedMin
+                )
+                .describe('Files that could not be stored.'),
+              filesStored: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesStoredMin
+                )
+                .describe('Files stored successfully.'),
+              filesTotal: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesTotalMin
+                )
+                .describe('Files the folder holds.'),
+            })
+            .describe(
+              'Files of an extracted folder moved into storage so far.'
+            ),
+        ])
+        .optional(),
+      projectId: zod
+        .string()
+        .nullish()
+        .describe('The uploaded folder, once it exists.'),
+      status: zod
+        .enum([
+          'pending',
+          'uploaded',
+          'processing',
+          'partially_completed',
+          'completed',
+          'failed',
+          'unknown',
+        ])
+        .describe('The upload status of the folder'),
+    })
+    .describe(
+      'Where a folder upload stands, for the uploader to follow it to the end.'
+    )
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });

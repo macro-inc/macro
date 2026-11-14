@@ -37,7 +37,6 @@ export default {
   editName: 'Edit {{name}} before turning it on',
   openName: 'Open {{name}}',
   enabled: 'Enabled',
-  on: 'On',
   notInterested: 'Not interested',
   notInterestedIn: 'Not interested in {{name}}',
   dismissFailed: 'Couldn’t dismiss that suggestion. Try again.',

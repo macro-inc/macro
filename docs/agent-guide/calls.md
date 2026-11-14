@@ -29,6 +29,25 @@ The channel/contact option opens the recipient picker. Starting a channel call
 connects the creator without waiting for recording, transcription, or recipient
 notification delivery. Verify that a second participant still receives the ring
 and can join, and that leaving immediately does not leave a recording running.
+Join actions target the selected live call ID. If that session ends, Join and
+recovery show an ended-call error instead of starting another session. Leaving
+while others remain and then joining keeps the same call history entry; after
+the last participant leaves, use Start call or Call again to start a new entry.
+Check a stale incoming notification and a disconnect during permission setup:
+neither may create or join a replacement call. These joins work for signed-in
+human sessions with `enable-programmatic-calls` off as well as on.
+
+Channel navigation carries `join_call=<callId>` for a selected call,
+`join_call=true` to look up a live session without creating one, and
+`join_call=start` only for an explicit new-call action. Each intent is consumed
+once. A retry retains the original call ID, including after a Start request
+allocated a session but media connection failed. If Start timed out before its
+response arrived, Retry waits for that request instead of sending another Start.
+If the response was lost, Retry only looks up and joins an existing call.
+Native token skipping also requires the selected session to match the native call.
+The `call.join` trace records the intent, source, session ID, and outcome.
+Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
+media connection also runs in that trace. No RTC tokens are recorded.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
@@ -207,10 +226,14 @@ Open call returns to the existing meeting/channel route. More offers
 only after explicit selection and reports success or failure. More stays available
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
-starts bottom-right, follows the speaker and gives screen sharing priority.
-Speaker changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen
-shares and participant departures update immediately. Reduced motion skips both
-the hold and the fade; outgoing controls stop accepting input during a transition.
+starts bottom-right and keeps the pinned participant or screen, regardless of
+Layout. A pinned participant keeps their camera/avatar even while sharing;
+your own camera pin survives other participants leaving the call.
+Unpinning or losing the pinned source immediately restores the default selection:
+screen share, speaker, camera, then first participant. Without a pin, speaker
+changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen shares
+and participant departures update immediately. Reduced motion skips both the hold
+and the fade; outgoing controls stop accepting input during a transition.
 Drag its header freely within the window. The nearest corner glows faintly within
 120px, strengthening until both edges reach the 24px snap range. This
 edge-anchored success gradient previews the snap, fading
@@ -286,14 +309,16 @@ This is presentation only: nothing posts top-level from the panel. A popup count
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 
-People connected to the call get no notification from its thread, mentions included; they stay
-followers, so later replies reach them after they leave. The call's root accepts replies and nothing
-else: no edit, delete or reactions. On a call's record the chat is read-only;
-its contents require channel read access. Deleting a record leaves the thread in the channel.
+Channel members connected to the call are notified of its thread's messages like followers, so a
+message sent in the call chat pops up for everyone else on the call, even before they post in it.
+The call's root accepts replies and nothing else: no edit, delete or reactions. On a call's record
+the chat is read-only; its contents require channel read access. Deleting a record leaves the thread
+in the channel.
 
 To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
 and open the channel from a second. Check replying from each side, a quote reply inside the thread,
-that no notification reaches the person in the call, and that ending the call updates the row.
+that a message sent in the call chat notifies the other person in the call, and that ending the
+call updates the row.
 
 While you are in a call, a green phone button (`Return to call`,
 `data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
@@ -377,6 +402,8 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+A level meter under the preview lights as the microphone picks up sound
+(`Speak to test your mic`); muting it empties the meter and shows `Mic is off`.
 Shared-link setup shows the people currently connected, with avatars, names, and
 an attendee count. It refreshes every 15 seconds while setup is open; guests see
 this only for standalone links. Empty calls show `No one else is here yet`; a
@@ -420,6 +447,28 @@ Guest access is limited to the call room and its live text discussion; joining d
 anonymous access to saved transcripts and recordings. Guest names are preserved in
 the host's call history. Signed-in attendees receive access to that session's saved
 call without gaining access to the channel.
+
+Live call discussion follows the call's stored type: a channel thread opens the
+channel call panel, while `call_chat` opens the call's own chat. Quick and
+scheduled calls use `call_chat` for both signed-in participants and guests.
+Guests can send text, quote replies, react, and edit or delete their own
+messages in the same chat as signed-in participants.
+Deleting the first call-chat message leaves later replies and the chat available.
+The guest composer is the shared `ChannelInput`: its text posts and quoted
+replies appear in the same `MessageThread` as signed-in messages. Guests cannot
+add mentions, attachments, or anchors. A guest's reactions and edits appear to
+signed-in participants; a guest can edit or delete only their own messages.
+Quoted account messages show the sender's profile name on both sides. Guest
+responses carry opaque participant IDs, while signed-in quotes retain normal
+account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
+deletes; the changes should appear live. Closing and reopening the chat refreshes
+the thread.
+A guest never receives Macro markup for things they cannot open. Have a signed-in
+participant send a quote reply, a pasted message link, a document mention, and a
+person mention: the guest sees the quote rendered and each reference as plain
+text with its name (a person as `@name`), never raw `<m-…>` text or a **No
+Access** chip. Web links stay clickable. On desktop the guest composer has no `+`
+menu; on phones `+` opens text formatting only.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
@@ -585,6 +634,8 @@ avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
 hover it on desktop or tap it on touch to open the profile card; guests use
 the shared avatar fallback.
+Signed-out meeting guests see initials for all participants, including account
+participants, without account profile-picture requests.
 This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.
@@ -821,3 +872,14 @@ push producer, notification/activity, permission and answer phases, and status
 HTTP requests; connection and cancellation outcomes end the incoming trace.
 For local collector verification and the exporter fixture, see
 [native call tracing](../development/android.md#native-call-tracing).
+
+### Calling an agent teammate
+
+An agent teammate (`enable-agent-teammates`) joins calls from its own computer
+and speaks with the voice in its repository's `config/voice.json`: the one
+picked when it was invited, or set later from **Team → Members** (see
+[agent teammates](settings.md#agent-teammates)). A changed voice applies from
+the agent's next call. Its speech runs through Macro's speech gateway on the
+agent harness service (`/brain/inference/stt` and `/brain/inference/tts`, the
+agent's own key), so call audio and synthesized text are billed as the agent's
+AI usage.

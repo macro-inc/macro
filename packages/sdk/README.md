@@ -468,24 +468,33 @@ await macro.channels
 
 ### Routines
 
-Create scheduled or event-triggered agent tasks through `macro.routines`.
-Routine configuration takes typed agent and event resource handles:
+Create scheduled or event-triggered routines through `macro.routines`. A
+routine runs `steps` in order: an `agent` ("Ask AI") step hands the run to a
+model or agent, and `code` steps run TypeScript against this SDK as the owner,
+type-checked when saved. Routine configuration takes typed agent and event
+resource handles:
 
 ```ts
 const routine = await macro.routines.create({
   name: 'Daily summary',
-  prompt: 'Summarize my open tasks.',
-  userPrompt: 'A daily task summary',
-  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+  trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'America/New_York' },
+  steps: [
+    {
+      type: 'agent',
+      instructions: 'Summarize my open tasks.',
+      model: 'anthropic/claude-sonnet-5-5',
+    },
+  ],
 });
 await routine.setEnabled(false);
 const transcript = await routine.execute(); // Chat or AgentSession, if available
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
-A routine can instead run `steps` in order: `code` steps run TypeScript against
-this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
-hands the run to a model or agent. Code steps' writes are attributed to Macro's
+A cron `schedule` has 6 fields (second minute hour day-of-month month
+day-of-week) or 7 with a year. The older single agent task (`prompt` and
+`userPrompt`, with `model`, `agent` or both, instead of `steps`) still saves
+and runs as one Ask AI step. Code steps' writes are attributed to Macro's
 agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
 user explicitly asks for the routine to act, send or post as them:
 
@@ -627,10 +636,18 @@ kind.
 
 ### CRM contact fields
 
-`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
-an identical retry is safe. Existing addresses cannot be replaced or cleared.
-`setCompany(company)` links or switches a known personal-provider contact to a
-Company handle in the same team. Unlinking is not supported. Both preserve
+A contact holds several addresses, one of them primary: `contact.emails()` lists
+them, primary first. `addEmail(address)` adds one, `setEmail(address)` makes one
+the primary (adding it when the contact does not hold it), and
+`removeEmail(address)` removes one; removing the primary promotes the oldest
+address left. Removing an address deletes nothing else: the contact stops
+showing that address's mail. An identical retry of any of them is safe.
+
+`setCompany(company)` links or switches a contact with a personal-provider
+primary to a Company handle in the same team, and `unlinkCompany()` removes the
+link. A contact with an address on one of its company's domains
+(`contact.companyDomain()`) can do neither, and the last of those addresses
+(`contact.companyDomainEmails()`) cannot be removed. All of them preserve
 identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
@@ -646,6 +663,14 @@ order through pipeline permissions.
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
+
+A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
+`Won` or `Lost`, independent of Stage) and a currency field beside each
+monetary field, such as `Revenue currency`; new entries default to `Open` and
+`USD`, and neither field can be emptied. `listWithFields()` and `find()` name
+each monetary field's `currencyField`, `find()` returns one total per
+`currency` for it, never converted or combined, and an update's changes carry
+`beforeCurrency` and `afterCurrency` for a monetary field.
 
 `macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and

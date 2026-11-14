@@ -22,7 +22,7 @@ import { EmailThread } from './thread';
 
 /** Options for listing inbox threads. */
 export interface InboxOptions {
-  /** Page size (default 20, max 500). */
+  /** Threads fetched per request (default 50, max 500). */
   pageSize?: number;
   /** Sort order. Defaults to `viewed_updated`. */
   sort?: ApiSortMethod;
@@ -294,12 +294,17 @@ export class EmailNamespace {
    * @readonly
    */
   inbox(opts?: InboxOptions): AsyncGenerator<EmailThread> {
+    const requestedLimit = opts?.pageSize ?? 50;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
+      throw new Error('pageSize must be positive');
+    const limit = Math.min(requestedLimit, 500);
+
     return paginate(async (cursor) => {
       const page = unwrap(
         await this.client.email.previewsInboxCursor({
           path: { view: 'inbox' },
           query: {
-            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
+            limit,
             ...(opts?.sort ? { sort_method: opts.sort } : {}),
             ...(cursor ? { cursor } : {}),
           },

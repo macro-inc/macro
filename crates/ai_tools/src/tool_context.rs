@@ -169,6 +169,10 @@ impl MacroEventBroker for MaybeToolEventBroker {
 pub type ToolBotService = BotServiceImpl<
     PgBotsRepo,
     MaybeToolEventBroker,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
     crate::mcp_app_catalog::PipedreamMcpAppCatalog,
 >;
 
@@ -186,9 +190,17 @@ pub fn build_bot_tool_context(
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
-            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
-                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
-            ),
+            BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                event_broker,
+                harnesses::domain::service::HarnessServiceImpl::new(
+                    harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool),
+                ),
+            )
+            .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
+                pipedream,
+            )),
         ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
@@ -2047,28 +2059,31 @@ pub type ToolMcpServerToolContext =
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
-pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
+/// The acting user's own activity, as `GET /activity` serves it.
+pub type ToolActivityReadService = activity::ActivityReadService<
     initiative::domain::personal_activity::ProjectVisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
         ToolEntityAccessService,
     >,
 >;
 
-pub fn build_activity_tool_context(
+pub fn build_activity_read_service(
     pool: sqlx::PgPool,
     properties: Arc<ToolPropertiesService>,
     entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolActivityToolContext {
-    activity::inbound::toolset::ActivityToolContext::new(
-        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
-            entity_access_service.clone(),
-        ),
+) -> Arc<ToolActivityReadService> {
+    Arc::new(
+        activity::ActivityReadService::new(
+            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+                entity_access_service.clone(),
+            ),
+        )
+        .with_metadata_resolver(ToolActivityMetadataResolver::new(
+            properties,
+            entity_access_service,
+        )),
     )
-    .with_metadata_resolver(ToolActivityMetadataResolver::new(
-        properties,
-        entity_access_service,
-    ))
 }
 
 pub use routines::inbound::RoutineToolContext;
@@ -2100,7 +2115,8 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
-    pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
+    pub activity_service: Arc<ToolActivityReadService>,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
     #[from_ref(skip)]

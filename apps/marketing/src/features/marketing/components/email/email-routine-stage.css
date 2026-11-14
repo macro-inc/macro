@@ -1,0 +1,34 @@
+/* The sharing stage's composition, with the inbox as the card: the email
+   arrives there, Macro posts to the channel below, and the push notification
+   drops in over the card's top edge. */
+.mail-sharing-splits > .mail-routine-inbox.mail-sharing-email { display: flex; flex-direction: column; height: 330px; container: mail-list / inline-size; }
+.mail-routine-list { flex: 1; min-height: 0; overflow: hidden; }
+.mail-routine-list .mail-row[aria-current=true] { animation: mail-share-enter 240ms ease-out both; }
+.mail-sharing-splits > .mail-routine-inbox + .mail-sharing-chat { height: 370px; }
+
+/* The phone's notification banner: app icon, title and time, then the summary. */
+.mail-routine-push {
+  position: absolute; z-index: 4; top: -46px; right: 16px; display: flex; gap: 10px; width: min(330px, calc(100% - 28px)); box-sizing: border-box; padding: 11px 13px;
+  border-radius: 20px; background: #202124f5; backdrop-filter: blur(24px); color: #fff; text-align: left;
+  box-shadow: inset 0 0 0 1px #ffffff1a, 0 18px 40px -14px #000c; font: 400 13px/17px 'Inter Variable', Inter, sans-serif;
+  animation: mail-routine-push 380ms cubic-bezier(.2, .9, .3, 1.15) both;
+}
+.mail-routine-push-icon { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: #000; box-shadow: inset 0 0 0 1px #ffffff24; }
+.mail-routine-push-icon svg { width: 20px; height: 20px; }
+.mail-routine-push > div { min-width: 0; }
+.mail-routine-push p { display: flex; gap: 8px; margin: 0; }
+.mail-routine-push strong { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.mail-routine-push p > span { flex: none; color: #ffffff8c; font-size: 12px; }
+@keyframes mail-routine-push { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
+
+@media (max-width: 799px) {
+  .mail-sharing-stage.mail-routine-stage .mail-sharing-chat { display: block; }
+}
+@media (max-width: 699px) {
+  .mail-sharing-splits > .mail-routine-inbox.mail-sharing-email { height: 250px; }
+  .mail-sharing-splits > .mail-routine-inbox + .mail-sharing-chat { height: 430px; }
+  .mail-routine-push { top: -40px; right: 10px; width: calc(100% - 20px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mail-routine-push, .mail-routine-list .mail-row[aria-current=true] { animation: none; }
+}

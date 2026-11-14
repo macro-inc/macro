@@ -302,7 +302,14 @@ async fn copied_pipelines_open_in_order_and_other_databases_are_untouched(pool: 
             .iter()
             .map(|column| column.definition.definition.display_name.as_str())
             .collect::<Vec<_>>(),
-        ["Company", "Stage", "Owner", "Revenue"]
+        [
+            "Company",
+            "Stage",
+            "Owner",
+            "Revenue",
+            "Outcome",
+            "Revenue currency"
+        ]
     );
     assert_eq!(
         sqlx::query_scalar!("SELECT position FROM database_columns WHERE id = $1", other)

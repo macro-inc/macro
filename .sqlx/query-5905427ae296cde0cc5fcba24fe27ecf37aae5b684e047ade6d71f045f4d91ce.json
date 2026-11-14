@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture SET state = 'due', picture_id = NULL, static_file_id = NULL,\n            staged = NULL, mime = NULL, attempts = 0, retry_at = now()\n        WHERE account_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5905427ae296cde0cc5fcba24fe27ecf37aae5b684e047ade6d71f045f4d91ce"
+}

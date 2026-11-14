@@ -115,6 +115,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Validate caller DATE ranges in REST/GraphQL input conversion; render typed UTC bounds with `to_rfc3339()` and map numeric range indices to caller keys in Rust.
 - Preserve projection-backed hydration, the UUID-keyed item/fact pools, and per-group total/has-more metadata through the shared grouped response.
 - Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions; grouped reads retain calendar events and timestamp queries retain their existing sources.
+- The `Name` sort rides the same selected-sort path: each union arm contributes `lower(<its name column>) COLLATE "und-x-icu"` as `sort_name`, hydrated rows order on their own `name` through the same `name_sort_key`, and the cursor carries the stored spelling SQL lowers again. ICU root, not the libc default, so the web's `compareSoupNames` (`localeCompare(…, 'und')`) shows the order the pages arrive in. An empty name sorts first ascending; database rows have no name there and sort last.
 - Preserve deployed timestamp cursor encodings; client query keys restart pages when ranges or selections change.
 - Keep flat timestamp top clauses lightweight; bind the caller's source ids, then document-ID arrays, after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
 - The dynamic query's document, chat, and project arms match `entity_access.source_id = ANY(<bound source ids>)`, not a join to the `user_source_ids` CTE: Postgres costs a CTE join at the average source's grant count and probed the item table once per grant for callers holding hundreds of thousands. The query runs in a transaction that raises `parallel_setup_cost`, because parallel plans made callers with a few thousand grants twice as slow.
@@ -136,13 +137,28 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Calendar access is `owner_id = $1 OR source_link_id = ANY(ARRAY(...))`, not
   an `EXISTS` over `macro_user_links`, so the planner can index both sides of
   the OR.
-- Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
-  listing (`initiative_access_clause`) check access per row with `EXISTS` on
+- Queries over a known id list (`*/by_ids.rs`, hydration, candidate gates
+  such as `initiative_gate`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are
-  collected once rather than semi-joined per row. Building the caller's whole
-  accessible set first scans `entity_access` once per source, so cost grows
-  with the table and the caller's channels, not the page. A listing `EXISTS`
-  also needs `PER_CANDIDATE`, or Postgres hashes it back into the whole set.
+  collected once rather than semi-joined per row; cost follows the ids passed
+  in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
+  into the caller's whole accessible set.
+- The initiative listing starts from the caller's access instead
+  (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
+  index descent per source returns only that source's initiative grants, and
+  the owner's team link is reached through the caller's own `team_user` rows,
+  checking every initiative their teammates own. The set and the teammates are
+  collected with `= ANY(ARRAY(...))`, which keeps `initiative` on its indexes
+  under stale statistics; a plain `IN` or join was planned as sequential scans
+  of `initiative` there. The per-row form
+  tests every initiative in the table, each against every source. Never match
+  `team_user.team_id::text` against the source array: no index serves it, so
+  it reads all of `team_user`. A filter that names its ids (GraphQL
+  hydration, and the nil id every other hydration passes) keeps the per-row
+  form (`names_initiative_ids`): the set costs a descent per source even when
+  one row comes back. Detail joins compare the bare uuid
+  (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id` read the table once per
+  page row.
 
 ## Related
 

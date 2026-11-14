@@ -71,6 +71,7 @@ use crate::domain::{
 
 mod delete_team;
 mod invite_link;
+mod team_agent;
 
 use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};
 
@@ -130,6 +131,12 @@ struct MockTeamRepository {
     seat_count: i32,
     add_user_to_team_result: Option<TeamMember<'static>>,
     add_user_to_team_calls: Arc<Mutex<usize>>,
+    /// The `seat_included` flag of each `add_user_to_team` call.
+    added_seat_included: Arc<Mutex<Vec<bool>>>,
+    /// What `is_seat_included` answers for every member.
+    seat_included: bool,
+    /// The `seat_included` flag of each `rollback_remove_user_from_team` call.
+    rolled_back_seat_included: Arc<Mutex<Vec<bool>>>,
     remove_user_calls: Arc<Mutex<usize>>,
     auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
     created_auto_join_domains: Arc<Mutex<Vec<Option<String>>>>,
@@ -222,6 +229,9 @@ impl MockTeamRepository {
             seat_count: 0,
             add_user_to_team_result: None,
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
+            added_seat_included: Arc::new(Mutex::new(Vec::new())),
+            seat_included: false,
+            rolled_back_seat_included: Arc::new(Mutex::new(Vec::new())),
             remove_user_calls: Arc::new(Mutex::new(0)),
             auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
             created_auto_join_domains: Arc::new(Mutex::new(Vec::new())),
@@ -274,6 +284,15 @@ impl MockTeamRepository {
 }
 
 impl TeamRepository for MockTeamRepository {
+    fn is_seat_included(
+        &self,
+        _: &uuid::Uuid,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        let seat_included = self.seat_included;
+        async move { Ok(seat_included) }
+    }
+
     fn get_stripe_customer_id(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -635,8 +654,13 @@ impl TeamRepository for MockTeamRepository {
     fn rollback_remove_user_from_team(
         &self,
         _: &TeamMember<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         *self.rollback_remove_calls.lock().unwrap() += 1;
+        self.rolled_back_seat_included
+            .lock()
+            .unwrap()
+            .push(seat_included);
         let fail = self.fail_rollback_remove;
         async move {
             if fail {
@@ -924,8 +948,10 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send {
         *self.add_user_to_team_calls.lock().unwrap() += 1;
+        self.added_seat_included.lock().unwrap().push(seat_included);
         let member = self.add_user_to_team_result.clone();
         async move { Ok(member) }
     }

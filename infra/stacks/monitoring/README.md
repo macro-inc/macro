@@ -7,7 +7,7 @@ Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
 `redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
-`routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
+`routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -51,7 +51,7 @@ its thresholds many times a day.
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts` and `computer-capacity.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts` and `storage-pool.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -60,7 +60,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts, Outlook sync, Routine suggestions and Computer capacity) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync, Routine suggestions, Computer capacity, and Search and database saturation) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -117,13 +117,13 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **119 resources to create**: 81 monitors (37 prod threshold and anomaly, 19 GraphQL soup, 9
+- **122 resources to create**: 83 monitors (39 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
   presence, 3 OAuth), 2 webhooks,
   16 log-based metrics, 9 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync, 8 log-based metrics for routine
   suggestions, 1 log-based and 6 span-based metrics for agent runtimes), the
-  GoAlert synthetic test, the eight prod alert dashboards, and the notification retention dashboard. If the paging
+  GoAlert synthetic test, the nine prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -349,6 +349,22 @@ plus two, fail; it does not page while suggestions are behind
 Deploy the agent-harness-service release that emits the
 `routine_suggestions.*` logs before these. Log-based metrics count from deploy
 onward. There is no baseline yet; the 10% threshold is a starting point.
+
+## Database saturation coverage
+
+`monitors/macrodb.ts` adds a monitor on instance I/O credits
+(`EBSIOBalance%`) for the prod instances that report a balance (the read
+replica today; the primary has reported none since its resize on 2026-10-28), with graphs of read plus write IOPS
+against the provisioned storage IOPS, disk queue depth and throughput credits beside
+it, and a Grafana copy. `monitors/storage-pool.ts` adds **one monitor and one
+dashboard** for cloud-storage-service pool waits, per pool. Neither pages.
+[The runbook](../../../docs/runbooks/macrodb.md#io-credits) covers both.
+
+The pool monitor and the pool graphs read `db.client.connection.*` metrics and
+have no data until the cloud-storage-service release that records them; the
+monitor's thresholds come from the `soup.pool.acquire` span and need a retune
+after a week of data. The dashboard's `env` and `db` variables switch it to
+dev; the monitors are prod only.
 
 ## Agent runtime coverage
 

@@ -9,7 +9,9 @@ use uuid::Uuid;
 use macro_event_broker::Event;
 
 use super::*;
-use crate::domain::broker_events::{ChannelCreatedMetadata, ChannelParticipantAddedMetadata};
+use crate::domain::broker_events::{
+    ChannelAccessRequestedMetadata, ChannelCreatedMetadata, ChannelParticipantAddedMetadata,
+};
 use crate::domain::models::ChannelType;
 use messages::domain::events::MessagePostedMetadata;
 
@@ -167,6 +169,44 @@ fn participant_added_yields_one_activity_per_user_with_stable_ordinals() {
     };
     assert_eq!(activities[0].id, replayed[0].id);
     assert_eq!(activities[1].id, replayed[1].id);
+}
+
+#[test]
+fn access_requested_keeps_the_requesters_name_from_the_event() {
+    let metadata = ChannelAccessRequestedMetadata {
+        channel_id: CHANNEL_ID,
+        request_id: Uuid::from_u128(3),
+        requester_id: user("macro|sarah@example.com"),
+        requester_name: Some("Sarah Lee".to_string()),
+    };
+    let event = envelope(ChannelTopicEvent::AccessRequested(metadata.clone()));
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities");
+    };
+    assert_eq!(activities.len(), 1);
+    assert_eq!(activities[0].subject_id, "macro|sarah@example.com");
+    assert_eq!(
+        activities[0].action,
+        Action::AccessRequested(::activity::AccessRequest {
+            request_id: Uuid::from_u128(3),
+            requester_name: Some("Sarah Lee".to_string()),
+        })
+    );
+
+    // Events from before the name was added still decode, without one.
+    let mut old = serde_json::to_value(ChannelTopicEvent::AccessRequested(metadata))
+        .expect("event serializes");
+    old["metadata"]
+        .as_object_mut()
+        .expect("metadata object")
+        .remove("requester_name");
+    let ChannelTopicEvent::AccessRequested(decoded) =
+        serde_json::from_value(old).expect("old event decodes")
+    else {
+        panic!("expected an access request");
+    };
+    assert_eq!(decoded.requester_name, None);
 }
 
 #[test]

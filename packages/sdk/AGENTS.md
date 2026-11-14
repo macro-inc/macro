@@ -48,9 +48,11 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  either the single agent task or `steps` (generated `CodeStep`s, agent steps
-  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
-  restricts to an explicit user request; `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
+  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
+  request, or the older single agent task. Its examples use steps only:
+  agents copy them, and a routine draft hands back steps, converting a single
+  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
@@ -72,8 +74,10 @@ enforced by the ordinary backend APIs.
   out of the SDK.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
-- `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
-  links or switches a known personal-provider contact. Neither accepts clearing.
+- `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a
+  contact's addresses; `setCompany(company)` links or switches a contact with a
+  personal-provider primary and `unlinkCompany()` removes the link. The server
+  refuses to unlink or move a company-domain contact (`companyDomain`).
 - `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
   (or `databases.saveQuery()` for a question that spans databases, sent with no
   `databaseId`) save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
@@ -81,6 +85,9 @@ enforced by the ordinary backend APIs.
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `crm.pipelines.listWithFields()` returns every pipeline with its fields
+  (Stage's options are its stages) and version in one
+  `GET /crm/pipelines/details`; `list()` stays the plain pipeline list.
 - `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
@@ -134,6 +141,12 @@ enforced by the ordinary backend APIs.
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
+- `src/entities/imports/`: `macro.imports`, the import ledger (cognition
+  `/import/entities`, `/import/notion/pages`): `list`, `track`,
+  `recordImported`, `importNotionPage` and `ImportEntry.decline()`; code mode
+  hides the matching ledger tools. `ImportEntry.item()` maps the row's
+  `entity_type` (`md`, `task`, `channel`, `database`, `project`,
+  `initiative`) to a handle.
 - `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
@@ -181,6 +194,8 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- The SDK is a root Bun workspace member: its dependencies resolve from the
+  root `bun.lock`, and there is no `bun.lock` here.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
@@ -234,7 +249,7 @@ the existing gateway prefixes.
   enum variant names. Validate new filter examples against the real local API.
 - Code-mode programs are untyped JavaScript, so a mistyped option key is
   dropped silently. Create-style methods call `rejectUnknownOptions`
-  (`src/utils/options.ts`) so it throws instead; the documents namespace does.
+  (`src/utils/options.ts`) so it throws instead; the documents and tasks namespaces do.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.

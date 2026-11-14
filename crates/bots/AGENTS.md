@@ -27,7 +27,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Boundaries
 
-- Depends on: `channels` (inbound, optional), `entity_access`, `entity_registry`,
+- Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
   `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`.
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
@@ -51,6 +51,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   computer's harness keeps them bound, and its release then deletes them through
   the trusted `HarnessAgentDeletion::delete_harness_agents` (no caller check;
   never a route).
+- Agent create, update and patch refuse an agent teammate's computer
+  (`BotError::AgentTeammateComputer`, a 409), read through harnesses'
+  `HarnessTeamAgents`, the service's `T` parameter.
 - Agent create and update hold a chosen harness's row `FOR SHARE` in their
   transaction and refuse a deleted one (`HarnessRemoved`, a 400), so no bind
   slips past a concurrent harness delete.

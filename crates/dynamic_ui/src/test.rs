@@ -39,7 +39,7 @@ fn a_view_of_every_widget_decodes() {
             },
             { "type": "channelMessage", "channelId": "channel-1", "messageId": "message-1" },
             { "type": "events", "title": "This week", "events": [{ "eventId": "event-1", "occurrenceKey": "2026-10-14" }] },
-            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }] },
+            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }, { "type": "database", "id": "database-1" }] },
             {
                 "type": "tags",
                 "title": "Engineering tags",
@@ -47,6 +47,16 @@ fn a_view_of_every_widget_decodes() {
                     "label": "Type",
                     "description": "What kind of work it is",
                     "children": [{ "label": "bug", "color": "red", "tagId": "tag-1" }]
+                }]
+            },
+            {
+                "type": "agentUpdates",
+                "items": [{
+                    "session": { "id": "session-1" },
+                    "sessionName": "Signing",
+                    "harness": "opencode",
+                    "kind": "tool_approval",
+                    "since": "2026-10-30T20:00:00Z"
                 }]
             },
             {
@@ -96,6 +106,41 @@ fn a_negated_combination_decodes() {
     assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
 }
 
+/// The model passes macro.agentSessions.updates() items unchanged.
+#[test]
+fn agent_updates_take_the_sdk_items_as_they_serialize() {
+    let view = json!({
+        "widgets": [{
+            "type": "agentUpdates",
+            "items": [{
+                "session": { "id": "session-1", "url": "https://macro.com/app/agent/session-1" },
+                "sessionName": "Signing",
+                "harness": "opencode",
+                "pullRequestUrl": "https://github.com/o/r/pull/1",
+                "kind": "permission",
+                "summary": "Signing wants to run codesign",
+                "since": "2026-10-30T20:00:00Z",
+                "options": ["Allow"]
+            }]
+        }]
+    });
+    assert_eq!(
+        serde_json::to_value(decode_view(&view).unwrap()).unwrap(),
+        json!({
+            "widgets": [{
+                "type": "agentUpdates",
+                "items": [{
+                    "session": { "id": "session-1" },
+                    "sessionName": "Signing",
+                    "harness": "opencode",
+                    "kind": "permission",
+                    "since": "2026-10-30T20:00:00Z"
+                }]
+            }]
+        })
+    );
+}
+
 #[test]
 fn fields_the_types_do_not_name_are_dropped() {
     let view = json!({
@@ -118,8 +163,7 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types =
-        "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`";
+    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),
@@ -155,7 +199,7 @@ fn what_the_renderer_cannot_draw_is_named_by_its_place() {
         ),
         (
             json!({ "widgets": [{ "type": "cards", "items": [{ "type": "spaceship", "id": "s-1" }] }] }),
-            "view.widgets[0] should be one of `document`, `email_thread`, `calendar_event`, `project`, `channel`, `routine`, `form`, `initiative`"
+            "view.widgets[0] should be one of `document`, `database`, `email_thread`, `calendar_event`, `project`, `channel`, `routine`, `form`, `initiative`"
                 .to_owned(),
         ),
         (

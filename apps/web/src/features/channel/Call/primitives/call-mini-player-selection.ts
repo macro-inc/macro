@@ -8,38 +8,46 @@ import {
 } from 'solid-js';
 import {
   type CallPreviewParticipant,
+  type CallPreviewPin,
   selectCallPreview,
 } from '../core/call-mini-player';
 
 export const CALL_SPEAKER_HOLD_MS = 650;
 
-/** Keep short speech gaps from repeatedly replacing the preview. Shares take priority immediately. */
+/** Hold speaker switches, but apply pins, unpins, shares and departures immediately. */
 export function createHeldCallPreview<T extends CallPreviewParticipant>(
   participants: Accessor<readonly T[]>,
-  reducedMotion: Accessor<boolean>
+  reducedMotion: Accessor<boolean>,
+  pin: Accessor<CallPreviewPin | undefined> = () => undefined
 ): Accessor<T | undefined> {
   const [id, setId] = createSignal<string>();
-  const desired = createMemo(() => selectCallPreview(participants())?.id);
+  const desired = createMemo(
+    () => selectCallPreview(participants(), pin())?.id
+  );
   const present = createMemo(() =>
     participants().some((person) => person.id === id())
   );
-  // Restart the hold when the desired speaker changes. Shares and departures
-  // bypass the timer; cleanup cancels an old speaker's pending switch.
+  // Restart the hold when the desired speaker changes. Explicit pin changes,
+  // shares and departures bypass it; cleanup cancels any pending switch.
   createEffect(
-    on([desired, reducedMotion, present], ([next, reduced, currentPresent]) => {
-      if (next === id()) return;
-      const target = participants().find((person) => person.id === next);
-      const immediate = !currentPresent || !target;
-      const skipMotion = reduced || target?.sharing;
-      if (immediate || skipMotion) {
-        setId(next);
-        return;
+    on(
+      [desired, reducedMotion, present, pin],
+      ([next, reduced, currentPresent, pinned], previous) => {
+        if (next === id()) return;
+        const target = participants().find((person) => person.id === next);
+        const pinChanged = pinned !== previous?.[3];
+        const immediate = !currentPresent || !target || !!pinned || pinChanged;
+        const skipMotion = reduced || target?.sharing;
+        if (immediate || skipMotion) {
+          setId(next);
+          return;
+        }
+        const timer = setTimeout(() => setId(next), CALL_SPEAKER_HOLD_MS);
+        onCleanup(() => clearTimeout(timer));
       }
-      const timer = setTimeout(() => setId(next), CALL_SPEAKER_HOLD_MS);
-      onCleanup(() => clearTimeout(timer));
-    })
+    )
   );
   return () =>
     participants().find((person) => person.id === id()) ??
-    selectCallPreview(participants());
+    selectCallPreview(participants(), pin());
 }

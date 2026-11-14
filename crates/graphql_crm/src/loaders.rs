@@ -8,6 +8,7 @@ use async_graphql::{
 };
 use crm::domain::pipelines::{PipelineEntry, PipelineRecordType};
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{CrmGraphqlContext, GraphqlCrmPipelineEntry, graphql_error};
@@ -91,7 +92,9 @@ pub fn pipeline_entries_loader(
     context: CrmGraphqlContext,
     user: MacroUserIdStr<'static>,
 ) -> DataLoader<PipelineEntriesLoader> {
-    DataLoader::new(PipelineEntriesLoader { context, user }, tokio::spawn)
+    DataLoader::new(PipelineEntriesLoader { context, user }, |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
 }
 
 /// Load the record's entries only when the edge is requested.

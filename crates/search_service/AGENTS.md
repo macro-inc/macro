@@ -53,10 +53,33 @@ per-entity-type search plus a unified search across them — mounted into
 
 ## Gotchas
 
+- Search spans and logs never carry what the user typed: not the query, its
+  terms, or the name term. Skip those arguments and record sizes and enums
+  (`term_len`, `search.terms`, `search.search_on`). The unified
+  search span is built by `simple_unified::unified_search_span`, which a test
+  reads back; add a field there, not by instrumenting the request.
 - Every whitespace-split term is ANDed, so a term the standard tokenizer
   analyzes to nothing (`-`, `@`) matches no document and empties the search.
   `terms::drop_wordless_terms` removes such terms for exact and partial
   queries; run new term handling through it.
+- The one exception to the AND is document content under
+  `term_matching: dynamic` on the unified request (see `opensearch_client`'s
+  `DocumentTermMatching`). It applies only when the request asks for it and
+  the `enable-dynamic-search-term-matching` flag is on for the caller
+  (`TermMatchingRollout`; local stacks have it on). The adapter never
+  makes a search wait on the flag provider: a search gets the caller's
+  remembered answer, or off when there is none, and an answer that is missing
+  or older than five minutes is re-read in the background, once per caller,
+  failed reads remembered as off. So in each process a caller's first search
+  after the flag turns on still runs strict. The mode a first page ran is
+  carried in the unified cursor (`document_term_matching`) and every later
+  page runs it without reading the flag, because processes learn the flag
+  independently and a page must not switch mode; a cursor without it decides
+  per page. So the flag switches first pages: a search already under way,
+  or a hand-made cursor on a request that asks for dynamic matching, keeps
+  the cursor's mode. It is a rollout switch, not an access check. The SDK and AI tools
+  never send it, so their documented AND holds. Names, emails, channels,
+  chats and call records are always a strict AND.
 - Calendar events have two scopes (`calendar_event_scope` on the unified
   request): `own` matches the caller's own and delegated calendars by
   owner and inbox link; `shared_with_you` resolves the events shared with the

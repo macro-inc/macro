@@ -96,6 +96,7 @@ export const AddToPipelineResponse = z.object({
         ])
         .optional(),
       fields: z.record(z.any()),
+      currencies: z.record(z.string()).optional(),
     })
   ),
   alreadyPresent: z.array(
@@ -112,6 +113,7 @@ export const AddToPipelineResponse = z.object({
         ])
         .optional(),
       fields: z.record(z.any()),
+      currencies: z.record(z.string()).optional(),
     })
   ),
   version: z.union([z.number().int(), z.null()]).optional(),
@@ -5442,6 +5444,7 @@ export const CreatePipelineResponse = z.object({
         options: z.array(z.string()),
         required: z.boolean(),
         readOnly: z.boolean(),
+        currencyField: z.union([z.string(), z.null()]).optional(),
       })
     ),
     version: z.number().int(),
@@ -8111,6 +8114,7 @@ export const EditPipelineResponse = z.object({
         options: z.array(z.string()),
         required: z.boolean(),
         readOnly: z.boolean(),
+        currencyField: z.union([z.string(), z.null()]).optional(),
       })
     ),
     version: z.number().int(),
@@ -10820,6 +10824,7 @@ export const FindPipelineEntriesResponse = z.object({
             ])
             .optional(),
           fields: z.record(z.any()),
+          currencies: z.record(z.string()).optional(),
         })
       ),
     })
@@ -10835,7 +10840,13 @@ export const FindPipelineEntriesResponse = z.object({
       empty: z.number().int().gte(0),
     })
   ),
-  totals: z.array(z.object({ field: z.string(), sum: z.number() })),
+  totals: z.array(
+    z.object({
+      field: z.string(),
+      currency: z.union([z.string(), z.null()]).optional(),
+      sum: z.number(),
+    })
+  ),
   summary: z.string(),
 });
 
@@ -13487,6 +13498,7 @@ export const ListPipelinesResponse = z.object({
           options: z.array(z.string()),
           required: z.boolean(),
           readOnly: z.boolean(),
+          currencyField: z.union([z.string(), z.null()]).optional(),
         })
       ),
       version: z.number().int(),
@@ -14397,75 +14409,6 @@ export const ReactToChannelMessageResponse = z.object({
     }
   }),
   count: z.number().int().gte(0),
-});
-
-export const ReadActivity = z.object({
-  from: z.string().datetime({ offset: true }),
-  to: z.string().datetime({ offset: true }),
-});
-
-export const ReadActivityResponse = z.object({
-  activities: z.array(
-    z.object({
-      actorId: z.string(),
-      entityType: z.string(),
-      entityId: z.string(),
-      action: z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.object({ type: z.literal('created') }),
-          z.object({ type: z.literal('edited') }),
-          z.object({ type: z.literal('opened') }),
-          z.object({ type: z.literal('deleted') }),
-          z.object({ type: z.literal('messaged') }),
-          z.object({ type: z.literal('sent') }),
-          z.object({ type: z.literal('responded') }),
-          z.object({
-            property: z.string(),
-            propertyName: z.union([z.string(), z.null()]).optional(),
-            propertyType: z.union([z.string(), z.null()]).optional(),
-            from: z.any().optional(),
-            fromLabels: z.union([z.array(z.string()), z.null()]).optional(),
-            to: z.any().optional(),
-            toLabels: z.union([z.array(z.string()), z.null()]).optional(),
-            type: z.literal('propertyChanged'),
-          }),
-          z.object({
-            participant: z.string(),
-            type: z.literal('participantAdded'),
-          }),
-          z.object({
-            participant: z.string(),
-            type: z.literal('participantRemoved'),
-          }),
-          z.object({ callId: z.string(), type: z.literal('callStarted') }),
-          z.object({ type: z.literal('taskAdded') }),
-          z.object({ type: z.literal('taskRemoved') }),
-          z.object({
-            tag: z.string(),
-            payload: z.any().optional(),
-            type: z.literal('unknown'),
-          }),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-      occurredAt: z.string().datetime({ offset: true }),
-    })
-  ),
-  truncated: z.boolean(),
 });
 
 export const ReadAgentSession = z
@@ -18508,6 +18451,7 @@ export const RemoveFromPipelineResponse = z.object({
         ])
         .optional(),
       fields: z.record(z.any()),
+      currencies: z.record(z.string()).optional(),
     })
   ),
   version: z.union([z.number().int(), z.null()]).optional(),
@@ -20145,6 +20089,7 @@ export const UpdateCalendarEvent = z.object({
       z.null(),
     ])
     .optional(),
+  addMacroCall: z.boolean().optional(),
   reminders: z
     .union([
       z.object({
@@ -20438,7 +20383,13 @@ export const UpdatePipelineEntriesResponse = z.object({
         ])
         .optional(),
       changes: z.array(
-        z.object({ field: z.string(), before: z.any(), after: z.any() })
+        z.object({
+          field: z.string(),
+          before: z.any(),
+          after: z.any(),
+          beforeCurrency: z.union([z.string(), z.null()]).optional(),
+          afterCurrency: z.union([z.string(), z.null()]).optional(),
+        })
       ),
     })
   ),
@@ -20924,7 +20875,7 @@ export const CodeToolsDescription = z.object({
 
 export const ExecuteCode = z
   .object({
-    execution_id: z.string(),
+    execution_id: z.union([z.string(), z.null()]).optional(),
     acting_as: z.any().superRefine((x, ctx) => {
       const schemas = [z.literal('requester'), z.literal('owner')];
       const errors = schemas.reduce<z.ZodError[]>(
@@ -21097,3 +21048,72 @@ export const ReadResponse = z.object({
 export const Subagent = z.object({ task: z.string() });
 
 export const SubagentResponse = z.object({ result: z.string() });
+
+export const ReadActivity = z.object({
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+export const ReadActivityResponse = z.object({
+  activities: z.array(
+    z.object({
+      actorId: z.string(),
+      entityType: z.string(),
+      entityId: z.string(),
+      action: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.object({ type: z.literal('created') }),
+          z.object({ type: z.literal('edited') }),
+          z.object({ type: z.literal('opened') }),
+          z.object({ type: z.literal('deleted') }),
+          z.object({ type: z.literal('messaged') }),
+          z.object({ type: z.literal('sent') }),
+          z.object({ type: z.literal('responded') }),
+          z.object({
+            property: z.string(),
+            propertyName: z.union([z.string(), z.null()]).optional(),
+            propertyType: z.union([z.string(), z.null()]).optional(),
+            from: z.any().optional(),
+            fromLabels: z.union([z.array(z.string()), z.null()]).optional(),
+            to: z.any().optional(),
+            toLabels: z.union([z.array(z.string()), z.null()]).optional(),
+            type: z.literal('propertyChanged'),
+          }),
+          z.object({
+            participant: z.string(),
+            type: z.literal('participantAdded'),
+          }),
+          z.object({
+            participant: z.string(),
+            type: z.literal('participantRemoved'),
+          }),
+          z.object({ callId: z.string(), type: z.literal('callStarted') }),
+          z.object({ type: z.literal('taskAdded') }),
+          z.object({ type: z.literal('taskRemoved') }),
+          z.object({
+            tag: z.string(),
+            payload: z.any().optional(),
+            type: z.literal('unknown'),
+          }),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      occurredAt: z.string().datetime({ offset: true }),
+    })
+  ),
+  truncated: z.boolean(),
+});

@@ -7,8 +7,8 @@ export type EmailView = 'team' | 'me';
 export type EmailSignalView = 'signal' | 'all';
 
 /**
- * Email threads involving a single CRM contact, fetched via the
- * `/soup/ast` endpoint.
+ * Email threads involving any address of a single CRM contact, fetched via
+ * the `/soup/ast` endpoint.
  *
  * - `team` (default): widens visibility to every teammate's mailbox via
  *   the CRM-scoped address filter (`eca`).
@@ -18,14 +18,13 @@ export type EmailSignalView = 'signal' | 'all';
  */
 export function useContactEmailsQuery(
   createQuery: typeof useSoupAstItemsQuery,
-  email: Accessor<string | undefined>,
+  emails: Accessor<string[]>,
   view: Accessor<EmailView>,
   signalView: Accessor<EmailSignalView>,
   primaryLinkId: Accessor<string | undefined>
 ) {
   return createQuery(
     () => {
-      const addr = email();
       const base = {
         calf: { l: { id: NIL_UUID } },
         df: { l: { id: NIL_UUID } },
@@ -42,7 +41,7 @@ export function useContactEmailsQuery(
         signalView() === 'signal' ? emailFilterForSignal() : undefined;
       const body = {
         ...base,
-        eca: addr ? [addr] : [],
+        eca: emails(),
         ef: andEmailFilters(
           signal,
           view() === 'me'
@@ -55,6 +54,8 @@ export function useContactEmailsQuery(
         body,
       };
     },
-    () => ({ enabled: !!email() && (view() !== 'me' || !!primaryLinkId()) })
+    () => ({
+      enabled: emails().length > 0 && (view() !== 'me' || !!primaryLinkId()),
+    })
   );
 }

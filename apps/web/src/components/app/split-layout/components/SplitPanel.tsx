@@ -72,6 +72,8 @@ export function SplitPanel(props: SplitPanelProps) {
   let pointerTarget: WeakRef<Element> | undefined;
 
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
+  const mobileHeaderOwner = createSignal<symbol>();
+  const headerMdControls = createSignal(0);
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
   const ownedSlots = createOwnedSlots(() => splitViewId(props.handle));
@@ -249,6 +251,8 @@ export function SplitPanel(props: SplitPanelProps) {
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
             layoutRefs,
+            mobileHeaderOwner,
+            headerMdControls,
             titleFileMenuRef,
             setTitleFileMenuRef,
             titleFileMenuTrigger,

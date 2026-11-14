@@ -33,6 +33,7 @@ import './monitors/queues';
 import './monitors/redis';
 import './monitors/regressions';
 import './monitors/routine-suggestions';
+import './monitors/storage-pool';
 import './monitors/stripe-inbox';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';
