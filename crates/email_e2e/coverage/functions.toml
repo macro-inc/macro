@@ -65,8 +65,9 @@ also = [
 ]
 
 [F-003]  # Connect an Outlook inbox that needs administrator approval
-by = ["http POST /email/init where ?link_id"]
-outlook = ["provider outlook:oauth.adminconsent", "provider outlook:subscriptions.create"]
+# After approval the inbox is linked by the same request as any other
+# Outlook inbox (F-002); what differs happens before it.
+outside = "the authentication service asks for the administrator's approval and records it"
 
 [F-004]  # Connect a second inbox to the same account
 by = ["http POST /email/init where ?link_id"]
@@ -308,8 +309,7 @@ outside = "document storage: POST /items/soup/ast with the shared filter"
 
 [F-033]  # Choose which inboxes or alias the list shows
 # The REST list always shows every inbox of the user; the web app narrows
-# the list by an owner literal in the filter tree of the soup request, which
-# no scenario sends and the shape of which is not pinned down here.
+# the list by an owner literal in the filter tree of the soup request.
 by = ["elsewhere document_storage_service POST /items/soup/ast where /ef/l/Owner"]
 also = ["graphql GraphqlSoupEmailThread.linkId"]
 
