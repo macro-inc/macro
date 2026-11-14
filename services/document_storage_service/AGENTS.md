@@ -112,8 +112,9 @@ threads, pins, recents, notifications, folders, activity.
 - CRM-scoped Soup email previews read the primary so consent withdrawal and
   exclusions take effect without replica lag; ordinary inbox lists keep the replica.
 - The list Soup reader gets its own CRM service, which reads the Sales views'
-  activity edges from the replica (`with_activity_edges_replica`); its record
-  and access reads, and the primary-backed Soup reader, keep the primary.
+  activity edges from the replica (`with_activity_edges_replica`) after checking
+  current permitted teams on the primary. Its record and other access reads,
+  and the primary-backed Soup reader, keep the primary.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.

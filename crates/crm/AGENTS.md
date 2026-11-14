@@ -102,10 +102,11 @@ tools/HTTP/GraphQL surfaces over them.
   every property row (1.8 s). Revisit if a team's records near 40k (100 ms).
   Keep its visibility rules identical to the Activity arm's. It reads the
   pool `with_activity_edges_replica` names, the replica for DSS's list Soup,
-  so it lags like the rest of a list: a record hidden or a member removed
-  moments ago can still match, and a record just added may not yet. Each item
-  still passes its own source's access check. Every other CRM read and write
-  stays on the primary.
+  after checking the viewer's current permitted teams on the primary. Record
+  data lags like the rest of a list: a record hidden moments ago can still
+  match, and a record just added may not yet. Membership removal and CRM access
+  revocation take effect on the next request. Each item still passes its own
+  source's access check. Every other CRM read and write stays on the primary.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
   address as any of its addresses, with or without a company, together with

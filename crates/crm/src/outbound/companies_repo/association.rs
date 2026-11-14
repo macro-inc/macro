@@ -164,18 +164,30 @@ impl CompaniesRepositoryImpl {
         if entity_types.is_empty() {
             return Ok(Vec::new());
         }
-        let (viewer, team_id) = match scope {
-            CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
-            CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
+        // Authority comes from the primary even when the edge data is read
+        // from a replica. Passing only current permitted team ids also fences
+        // a stale replica membership after the viewer changes teams.
+        let team_ids = match scope {
+            CrmContactListScope::Viewer(user_id) => sqlx::query_scalar!(
+                r#"SELECT team_id FROM team_user
+                   WHERE user_id = $1 AND (crm_access OR team_role <> 'member')"#,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?,
+            CrmContactListScope::Team { team_id, .. } => vec![team_id],
         };
+        if team_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         // Bounded like the scope read it stands beside: both grow with the
         // scope's records. On the replica when one is set
         // ([`Self::with_activity_edges_replica`]).
         let mut transaction = Self::bounded_read(&self.activity_edges_pool).await?;
         let rows = sqlx::query_file!(
             "src/outbound/companies_repo/activity_property_edges.sql",
-            viewer,
-            team_id,
+            &team_ids,
             entity_types as &[EntityType],
         )
         .fetch_all(&mut *transaction)

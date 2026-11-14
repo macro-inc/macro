@@ -82,11 +82,12 @@ impl CompaniesRepositoryImpl {
     }
 
     /// Read the activity edges (`activity_property_edges`, the Sales views'
-    /// per-record probes) from `replica`, off the primary. They then follow
-    /// the replica's lag: a record hidden or a member removed a moment ago can
-    /// still match, and a record just added may not yet. Every item still
-    /// passes its own source's access check. Every other read and write stays
-    /// on the primary.
+    /// per-record probes) from `replica`, after checking the viewer's current
+    /// permitted teams on the primary. Record data follows the replica's lag:
+    /// a record hidden a moment ago can still match, and a record just added
+    /// may not yet. Removed memberships and CRM access revocation take effect
+    /// on the next request. Every item still passes its own source's access
+    /// check. Every other read and write stays on the primary.
     pub fn with_activity_edges_replica(mut self, replica: readonly_pool::ReadOnlyPool) -> Self {
         self.activity_edges_pool = replica.0;
         self
