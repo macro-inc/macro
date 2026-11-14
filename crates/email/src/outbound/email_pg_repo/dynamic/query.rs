@@ -1365,13 +1365,16 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
 const OWNED_READ_BUDGET: Duration = Duration::from_secs(10);
 
 /// Reads an owned address page with [`OwnedRead`] within
-/// [`OWNED_READ_BUDGET`].
+/// [`OWNED_READ_BUDGET`], all its statements on one snapshot: a short inbox
+/// page is final only if the window it read is the one the count sees.
 async fn read_owned_page(
     pool: &PgPool,
     read: OwnedRead<'_>,
 ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
     let deadline = Instant::now() + OWNED_READ_BUDGET;
-    let mut transaction = pool.begin().await?;
+    let mut transaction = pool
+        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .await?;
     let page = read.fetch(&mut transaction, deadline).await?;
     transaction.commit().await?;
     Ok(page)
