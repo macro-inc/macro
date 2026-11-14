@@ -162,7 +162,8 @@ tools — hexagonal, heavily feature-gated.
   short page and its window count see one snapshot) and, like the general
   builder's owned requests, has no `statement_timeout`.
   `test/owned_address_read.rs` compares every tuning's pages with the general
-  builder; extend it when the read covers a new filter.
+  builder; extend it when the read covers a new filter. A repeated inbox id
+  reads as one in every builder (`distinct_links`).
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.

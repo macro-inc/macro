@@ -17,6 +17,7 @@ pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
+use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -1264,6 +1265,9 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     team_id: Option<Uuid>,
     owned_read: Option<OwnedReadTuning>,
 ) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+    // A repeated inbox would list its threads twice.
+    let link_ids = distinct_links(link_ids);
+    let link_ids = link_ids.as_slice();
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = query.vals();
@@ -1376,6 +1380,16 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     let rows = query.fetch_all(&mut *transaction).await?;
     transaction.commit().await?;
     Ok((rows, None))
+}
+
+/// `link_ids` without repeats, in order.
+fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
+    let mut seen = HashSet::with_capacity(link_ids.len());
+    link_ids
+        .iter()
+        .copied()
+        .filter(|link| seen.insert(*link))
+        .collect()
 }
 
 /// Reads an owned address page with [`OwnedRead`], all its statements on one
