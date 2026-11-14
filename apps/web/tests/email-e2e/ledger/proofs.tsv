@@ -1,7 +1,13 @@
 id	break
 F-001	the return from consent never sets up the inbox
+F-005	Share inbox closes the dialog and shares nothing
 F-006	a cancelled or failed connection says nothing
+F-007	Reconnect on the prompt starts nothing
+F-008	Enable on a disabled inbox does nothing
 F-009	removing an inbox removes nothing
+F-010	Connect work email in onboarding starts nothing
+F-014	no reconnect prompt is raised for an inbox that lost its access
+F-015	the From menu lists the inboxes without their aliases
 F-021	the Drafts tab lists no drafts
 F-029	the Noise tab is never selected
 F-030	a tab other than the provider views is never selected
