@@ -40,6 +40,8 @@ const PAYLOAD_HASH: &str = "x-amz-content-sha256";
 /// The largest request body the endpoint reads.
 const BODY_LIMIT: usize = 64 * 1024 * 1024;
 const DEFAULT_CONTENT_TYPE: &str = "application/octet-stream";
+/// The answer to a batch delete that removed what it was asked to.
+const DELETED: &str = r#"<?xml version="1.0" encoding="UTF-8"?><DeleteResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"></DeleteResult>"#;
 /// The operation a queue send is, at the end of its `x-amz-target`.
 const SEND_MESSAGE: &str = ".SendMessage";
 const SQS_CONTENT_TYPE: &str = "application/x-amz-json-1.0";
@@ -206,8 +208,14 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
         .unwrap_or_else(PoisonError::into_inner);
     let name = (bucket.clone(), key.clone());
     if key.is_empty() {
-        // Bucket-level calls: creating one, or a batch delete the services do
-        // not wait on. Buckets exist as soon as they are named.
+        // A batch delete names its keys in the body.
+        if method == Method::POST && query.as_deref().is_some_and(is_batch_delete) {
+            for key in batch_delete_keys(&body) {
+                objects.remove(&(bucket.clone(), key));
+            }
+            return (StatusCode::OK, [(CONTENT_TYPE, "application/xml")], DELETED).into_response();
+        }
+        // Creating a bucket: buckets exist as soon as they are named.
         return StatusCode::OK.into_response();
     }
 
@@ -250,6 +258,30 @@ async fn answer(State(endpoint): State<Endpoint>, request: Request) -> Response 
         }
         _ => StatusCode::METHOD_NOT_ALLOWED.into_response(),
     }
+}
+
+/// Whether a bucket-level query is S3's `DeleteObjects` (`?delete`).
+fn is_batch_delete(query: &str) -> bool {
+    query
+        .split('&')
+        .any(|part| part == "delete" || part.starts_with("delete="))
+}
+
+/// The keys a `DeleteObjects` body names: the text of each `<Key>`.
+fn batch_delete_keys(body: &[u8]) -> Vec<String> {
+    let body = String::from_utf8_lossy(body);
+    body.split("<Key>")
+        .skip(1)
+        .filter_map(|rest| rest.split_once("</Key>"))
+        .map(|(key, _)| {
+            // `&amp;` last: it may be what escaped the others.
+            key.replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&amp;", "&")
+        })
+        .collect()
 }
 
 fn get_any_bucket(objects: &Objects, key: &str) -> Response {
