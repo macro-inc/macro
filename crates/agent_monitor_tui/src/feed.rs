@@ -116,10 +116,21 @@ pub fn demo(seed: u64) -> Feed {
     );
     tracker.close();
 
+    in_process(store, Arc::new(transcripts), String::from("demo"), cancel)
+}
+
+/// A store running in this process, read without a socket. `stop` is
+/// cancelled when the feed is dropped, so it should stop the store's tasks.
+pub fn in_process(
+    store: Store,
+    transcripts: Arc<dyn TranscriptFeed>,
+    version: String,
+    stop: CancellationToken,
+) -> Feed {
     let updates = async_stream::stream! {
         yield ClientEvent::Connected(MonitorStatus {
             protocol: PROTOCOL,
-            version: String::from("demo"),
+            version,
             uptime: std::time::Duration::ZERO,
             sources: store.sources(),
             subscribers: 1,
@@ -141,7 +152,7 @@ pub fn demo(seed: u64) -> Feed {
 
     Feed {
         updates: updates.boxed(),
-        transcripts: Arc::new(transcripts),
-        _stop: cancel.drop_guard(),
+        transcripts,
+        _stop: stop.drop_guard(),
     }
 }

@@ -23,7 +23,7 @@ pub mod ui;
 pub mod view;
 
 #[cfg(unix)]
-pub use unix::{FeedChoice, Options, ViewerError, run};
+pub use unix::{FeedChoice, Options, ViewerError, run, run_feed};
 
 #[cfg(unix)]
 mod unix {
@@ -32,7 +32,7 @@ mod unix {
 
     use crate::app::App;
     use crate::body::Vitals;
-    use crate::feed;
+    use crate::feed::{self, Feed};
     use crate::runner;
     use crate::view::ViewState;
 
@@ -72,7 +72,12 @@ mod unix {
             FeedChoice::Socket(socket) => (feed::socket(socket), None),
             FeedChoice::Demo { seed } => (feed::demo(seed), Some(String::from("DEMO"))),
         };
+        run_feed(feed, label, options.fps).await
+    }
 
+    /// [`run`] on a feed the caller built, such as [`feed::in_process`]
+    /// over a store it hosts; `label` is shown in the header.
+    pub async fn run_feed(feed: Feed, label: Option<String>, fps: u8) -> Result<(), ViewerError> {
         let mut app = App::new(ViewState::new(Box::new(Vitals::default())), label);
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
@@ -82,7 +87,7 @@ mod unix {
             feed.updates,
             feed.transcripts,
             input,
-            options.fps,
+            fps,
         )
         .await;
         ratatui::restore();
