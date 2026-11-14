@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use chrono::{DurationRound, TimeDelta};
@@ -19,6 +19,7 @@ use crate::domain::observation::{
     Observation, RunRecordFact, TerminalActivity, TerminalFact, TerminalState, TranscriptDelta,
     TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
+use crate::domain::pricing;
 
 /// A transcript written this recently counts as working when no terminal says otherwise.
 const TRANSCRIPT_WORKING_WINDOW: TimeDelta = TimeDelta::seconds(90);
@@ -31,6 +32,10 @@ const TASK_CHARS: usize = 160;
 
 /// Longest `doing` text kept on a row.
 const DOING_CHARS: usize = 80;
+
+/// A terminal started at most this long after a transcript's first record
+/// still counts as the terminal that wrote it.
+const TERMINAL_START_SLACK: TimeDelta = TimeDelta::seconds(60);
 
 /// One transcript record worth a tape line, from [`Facts::apply`].
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +78,17 @@ struct Owned<T> {
     fact: T,
 }
 
+/// One transcript's counts for one minute.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct TranscriptMinute {
+    turns: u32,
+    tools: u32,
+    errors: u32,
+    tokens: u64,
+    /// Usage in this minute times the price table.
+    estimated_usd: f64,
+}
+
 /// What one transcript added up to so far.
 #[derive(Clone, Debug)]
 struct TranscriptState {
@@ -86,10 +102,13 @@ struct TranscriptState {
     tool_errors: u32,
     open_tools: BTreeMap<String, String>,
     tokens: Tokens,
-    cost: Cost,
+    /// The last running total the program reported (`Cost::Known`).
+    reported: Option<f64>,
+    /// Every usage record priced at the model that produced it.
+    estimated: Cost,
     first_at: Option<Timestamp>,
     last_at: Option<Timestamp>,
-    minutes: BTreeMap<Timestamp, MinuteCounts>,
+    minutes: BTreeMap<Timestamp, TranscriptMinute>,
 }
 
 impl TranscriptState {
@@ -105,7 +124,8 @@ impl TranscriptState {
             tool_errors: 0,
             open_tools: BTreeMap::new(),
             tokens: Tokens::default(),
-            cost: Cost::Unpriced,
+            reported: None,
+            estimated: Cost::Unpriced,
             first_at: None,
             last_at: None,
             minutes: BTreeMap::new(),
@@ -158,18 +178,32 @@ impl TranscriptState {
                 TranscriptEventKind::Usage(tokens) => {
                     self.tokens.add(*tokens);
                     minute.tokens += tokens.total();
+                    // A delta holds one model, so this prices the response at
+                    // the model that produced it.
+                    let estimate = pricing::estimate(self.model.as_deref(), *tokens);
+                    minute.estimated_usd += estimate.usd().unwrap_or(0.0);
+                    self.estimated = self.estimated.plus(estimate);
                 }
                 TranscriptEventKind::Cost(cost) => {
-                    // A reported cost is a running total; the minute gets the increase.
-                    let increase = cost.usd().unwrap_or(0.0) - self.cost.usd().unwrap_or(0.0);
-                    minute.cost_usd += increase.max(0.0);
-                    self.cost = *cost;
+                    // A reported cost is a running total; the last one wins.
+                    if let Some(usd) = cost.usd() {
+                        self.reported = Some(usd);
+                    }
                 }
             }
         }
 
         let horizon = now - HISTORY;
         self.minutes.retain(|minute, _| *minute >= horizon);
+    }
+
+    /// What this transcript alone cost: the program's own total when it
+    /// reported one, else the estimate (unpriced when nothing was priced).
+    fn cost(&self) -> Cost {
+        match self.reported {
+            Some(usd) => Cost::Known(usd),
+            None => self.estimated,
+        }
     }
 }
 
@@ -182,6 +216,9 @@ pub struct Facts {
     macrod_sessions: BTreeMap<String, Owned<MacrodSessionFact>>,
     managers: BTreeMap<PathBuf, Owned<ManagerFact>>,
     run_records: BTreeMap<String, Owned<RunRecordFact>>,
+    /// The Claude Code registry reported, so a session missing from it has
+    /// no running process.
+    registry_seen: bool,
 }
 
 impl Facts {
@@ -196,6 +233,9 @@ impl Facts {
                 Vec::new()
             }
             Change::Reset(facts) => {
+                if source == SourceKind::ClaudeRegistry {
+                    self.registry_seen = true;
+                }
                 self.forget(source);
                 facts
                     .into_iter()
@@ -294,27 +334,75 @@ impl Facts {
 }
 
 /// Per-minute counts over the last 24 hours, summed over every transcript.
+///
+/// Spend per minute is each transcript's estimate for that minute. When a
+/// session reported its own total (which covers its subagents too), every
+/// estimate in that session is scaled so the session sums to the reported
+/// total; a session that reported a total but has no priced usage puts it in
+/// the minute it last wrote.
 pub fn minute_counts(facts: &Facts, now: Timestamp) -> BTreeMap<Timestamp, MinuteCounts> {
     let horizon = now - HISTORY;
+
+    // Scale per session: reported total over the session's whole estimate.
+    let mut sessions: BTreeMap<(TranscriptProgram, &str), (Option<f64>, f64)> = BTreeMap::new();
+    for (key, owned) in &facts.transcripts {
+        let entry = sessions
+            .entry((key.program, key.session.as_str()))
+            .or_default();
+        if key.subagent.is_none() {
+            entry.0 = owned.fact.reported;
+        }
+        entry.1 += owned.fact.estimated.usd().unwrap_or(0.0);
+    }
+
     let mut counts: BTreeMap<Timestamp, MinuteCounts> = BTreeMap::new();
-    for transcript in facts.transcripts.values() {
-        for (minute, minute_counts) in transcript.fact.minutes.range(horizon..) {
+    for (key, owned) in &facts.transcripts {
+        let transcript = &owned.fact;
+        let (reported, estimated) = sessions
+            .get(&(key.program, key.session.as_str()))
+            .copied()
+            .unwrap_or_default();
+        let scale = match reported {
+            Some(reported) if estimated > 0.0 => reported / estimated,
+            _ => 1.0,
+        };
+
+        for (minute, minute_counts) in transcript.minutes.range(horizon..) {
             let total = counts.entry(*minute).or_default();
             total.turns += minute_counts.turns;
             total.tools += minute_counts.tools;
             total.errors += minute_counts.errors;
             total.tokens += minute_counts.tokens;
-            total.cost_usd += minute_counts.cost_usd;
+            total.cost_usd += minute_counts.estimated_usd * scale;
+        }
+
+        let unpriced_report = key.subagent.is_none() && estimated <= 0.0;
+        if let (true, Some(reported), Some(last)) =
+            (unpriced_report, transcript.reported, transcript.last_at)
+        {
+            let minute = minute_of(last);
+            if minute >= horizon {
+                counts.entry(minute).or_default().cost_usd += reported;
+            }
         }
     }
     counts
 }
 
-/// Joins every fact into agents.
+/// Joins every fact into agents, by the join table in
+/// [`crate::domain::observation`]:
 ///
-/// Covers terminals, the Claude registry's pid join, transcripts, subagents,
-/// manager enrichment and parents. Macrod sessions, run records and the Codex
-/// cwd-and-time join are filed but not yet joined.
+/// 1. every hc terminal is an agent, enriched by the registry entry of its
+///    foreground process and by its manager directory;
+/// 2. a registry entry no terminal claimed is an agent of its own;
+/// 3. a main transcript joins the agent holding its session, or a terminal
+///    running its program in its working directory, started before it, or
+///    becomes an agent of its own; a subagent transcript is an agent whose parent holds its
+///    session;
+/// 4. a macrod session enriches the agent holding its native session or its
+///    transcript, and never stands alone;
+/// 5. a run record enriches the terminal it names, or stands alone;
+/// 6. parents link by hc parent, else the spawning terminal.
 pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
     let mut built = Built::default();
     // Which agent holds each native session id, for transcripts and subagents.
@@ -380,6 +468,22 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
         built.agents.insert(id, agent);
     }
 
+    join_transcripts(facts, &mut built, &mut session_owner, now);
+    join_macrod_sessions(facts, &mut built, &session_owner);
+    join_run_records(facts, &mut built);
+    split_session_costs(facts, &mut built);
+    link_parents(facts, &mut built);
+    built
+}
+
+fn join_transcripts(
+    facts: &Facts,
+    built: &mut Built,
+    session_owner: &mut BTreeMap<String, AgentId>,
+    now: Timestamp,
+) {
+    claim_terminals(facts, session_owner);
+
     // Main transcripts first, so subagents find their parent.
     let (mains, subagents): (Vec<_>, Vec<_>) = facts
         .transcripts
@@ -387,48 +491,274 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
         .partition(|(key, _)| key.subagent.is_none());
 
     for (key, owned) in mains.into_iter().chain(subagents) {
-        let id = match (&key.subagent, session_owner.get(&key.session)) {
-            (None, Some(owner)) => owner.clone(),
+        let transcript = &owned.fact;
+        let owner = session_owner.get(&key.session).cloned();
+
+        let id = match (&key.subagent, owner) {
+            (None, Some(owner)) => owner,
             (None, None) => {
                 let id = transcript_agent_id(key);
                 let program = match key.program {
                     TranscriptProgram::Claude => CLAUDE_PROGRAM,
                     TranscriptProgram::Codex => CODEX_PROGRAM,
                 };
-                let name = owned
-                    .fact
+                let name = transcript
                     .title
                     .clone()
                     .unwrap_or_else(|| short_id(&key.session));
                 let mut agent = Agent::new(id.clone(), AgentKind::Other, name);
                 agent.program = Some(program.to_owned());
-                session_owner.insert(key.session.clone(), id.clone());
+                // No terminal and no registry entry. With the registry
+                // reporting, a Claude session missing from it has no
+                // process; Codex has no registry, so an idle rollout is
+                // taken as ended too.
+                let ended = facts.registry_seen || key.program == TranscriptProgram::Codex;
+                if ended {
+                    agent.status = Status::Done;
+                    agent.ended = transcript.last_at;
+                }
                 built.agents.insert(id.clone(), agent);
                 id
             }
             (Some(subagent), parent) => {
                 let id = AgentId::claude_subagent(&key.session, subagent);
-                let name = owned
-                    .fact
+                let name = transcript
                     .title
                     .clone()
                     .unwrap_or_else(|| short_id(subagent));
                 let mut agent = Agent::new(id.clone(), AgentKind::Subagent, name);
                 agent.program = Some(CLAUDE_PROGRAM.to_owned());
-                agent.parent = parent.cloned();
+                agent.parent = parent;
+                agent.status = Status::Done;
+                agent.ended = transcript.last_at;
                 built.agents.insert(id.clone(), agent);
                 id
             }
         };
+        if key.subagent.is_none() {
+            session_owner.insert(key.session.clone(), id.clone());
+        }
 
         if let Some(agent) = built.agents.get_mut(&id) {
             merge_transcript(agent, key, owned, now);
         }
         built.owners.insert(FactKey::Transcript(key.clone()), id);
     }
+}
 
-    link_parents(facts, &mut built);
-    built
+/// A terminal running a coding agent whose session no registry entry named.
+struct UnclaimedTerminal {
+    id: AgentId,
+    program: TranscriptProgram,
+    cwd: Option<PathBuf>,
+    created: Option<Timestamp>,
+}
+
+/// Joins transcripts nothing else claimed to the terminals that wrote them,
+/// by program, working directory and start time: Codex has no registry, and
+/// Claude Code run behind a wrapper or without a session registry entry has
+/// no pid join. A terminal claims the newest such transcript, and at most
+/// one.
+fn claim_terminals(facts: &Facts, session_owner: &mut BTreeMap<String, AgentId>) {
+    let claimed: BTreeSet<&AgentId> = session_owner.values().collect();
+    let mut terminals: Vec<UnclaimedTerminal> = facts
+        .terminals
+        .values()
+        .map(|owned| &owned.fact)
+        .filter_map(|terminal| {
+            let program = match terminal.program.as_deref() {
+                Some(CLAUDE_PROGRAM) => TranscriptProgram::Claude,
+                Some(CODEX_PROGRAM) => TranscriptProgram::Codex,
+                _ => return None,
+            };
+            let id = AgentId::terminal(&terminal.address);
+            (!claimed.contains(&id)).then(|| UnclaimedTerminal {
+                id,
+                program,
+                cwd: terminal.cwd.clone(),
+                created: terminal.created,
+            })
+        })
+        .collect();
+
+    let mut unowned: Vec<(&TranscriptKey, &TranscriptState)> = facts
+        .transcripts
+        .iter()
+        .filter(|(key, _)| key.subagent.is_none() && !session_owner.contains_key(&key.session))
+        .map(|(key, owned)| (key, &owned.fact))
+        .collect();
+    unowned.sort_by_key(|(_, transcript)| std::cmp::Reverse(transcript.last_at));
+
+    for (key, transcript) in unowned {
+        if let Some(id) = claim_terminal(&mut terminals, key.program, transcript) {
+            session_owner.insert(key.session.clone(), id);
+        }
+    }
+}
+
+/// The terminal that wrote a transcript: same program and working directory,
+/// started before the transcript's first record (with some slack), the
+/// latest such.
+fn claim_terminal(
+    terminals: &mut Vec<UnclaimedTerminal>,
+    program: TranscriptProgram,
+    transcript: &TranscriptState,
+) -> Option<AgentId> {
+    let first = transcript.first_at?;
+    let cwd = transcript.cwd.as_ref()?;
+    let (index, _) = terminals
+        .iter()
+        .enumerate()
+        .filter(|(_, terminal)| terminal.program == program && terminal.cwd.as_ref() == Some(cwd))
+        .filter_map(|(index, terminal)| Some((index, terminal.created?)))
+        .filter(|(_, created)| *created <= first + TERMINAL_START_SLACK)
+        .max_by_key(|(_, created)| *created)?;
+    Some(terminals.swap_remove(index).id)
+}
+
+fn join_macrod_sessions(
+    facts: &Facts,
+    built: &mut Built,
+    session_owner: &BTreeMap<String, AgentId>,
+) {
+    let by_transcript: BTreeMap<&PathBuf, &AgentId> = facts
+        .transcripts
+        .iter()
+        .filter(|(key, _)| key.subagent.is_none())
+        .filter_map(|(key, owned)| {
+            let owner = built.owners.get(&FactKey::Transcript(key.clone()))?;
+            Some((&owned.fact.path, owner))
+        })
+        .collect();
+
+    let mut joined = Vec::new();
+    for (id, owned) in &facts.macrod_sessions {
+        let session = &owned.fact;
+        let owner = session
+            .native_id
+            .as_ref()
+            .and_then(|native| session_owner.get(native))
+            .or_else(|| {
+                session
+                    .transcript
+                    .as_ref()
+                    .and_then(|path| by_transcript.get(path).copied())
+            });
+        let Some(owner) = owner.cloned() else {
+            continue;
+        };
+
+        if let Some(agent) = built.agents.get_mut(&owner) {
+            agent.sources.insert(owned.source);
+            if agent.kind == AgentKind::Other {
+                agent.kind = AgentKind::MacrodSession;
+            }
+            if agent.model.is_none() {
+                agent.model.clone_from(&session.model);
+            }
+            if agent.cwd.is_none() {
+                agent.cwd.clone_from(&session.cwd);
+            }
+            agent.started = earliest(agent.started, session.started);
+        }
+        joined.push((FactKey::MacrodSession(id.clone()), owner));
+    }
+    built.owners.extend(joined);
+}
+
+fn join_run_records(facts: &Facts, built: &mut Built) {
+    for (id, owned) in &facts.run_records {
+        let run = &owned.fact;
+        // The record names its terminal by address or by name; the terminal
+        // may instead carry the run id in a label.
+        let terminal = facts.terminals.values().map(|owned| &owned.fact).find(|terminal| {
+            let named = run
+                .terminal
+                .as_ref()
+                .is_some_and(|name| *name == terminal.address || *name == terminal.name);
+            named || terminal.run_id.as_ref() == Some(id)
+        });
+
+        let agent_id = match terminal {
+            Some(terminal) => AgentId::terminal(&terminal.address),
+            None => {
+                let agent_id = AgentId::run(id);
+                let name = run.label.clone().unwrap_or_else(|| id.clone());
+                let mut agent = Agent::new(agent_id.clone(), AgentKind::WorkRun, name);
+                let (status, detail) = run_status(run.status.as_deref());
+                agent.status = status;
+                agent.status_detail = detail;
+                agent.pid = run.pid;
+                agent.started = run.started;
+                agent.last_activity = run.started;
+                built.agents.insert(agent_id.clone(), agent);
+                agent_id
+            }
+        };
+
+        if let Some(agent) = built.agents.get_mut(&agent_id) {
+            agent.sources.insert(owned.source);
+            if agent.kind == AgentKind::Other {
+                agent.kind = AgentKind::WorkRun;
+            }
+            if agent.task.is_none() {
+                agent.task = run.task.as_deref().map(|task| clip(task, TASK_CHARS));
+            }
+            // The run's own cost file covers everything it ran.
+            if let Some(cost) = run.cost {
+                agent.cost = cost;
+            }
+        }
+        built
+            .owners
+            .insert(FactKey::RunRecord(id.clone()), agent_id);
+    }
+}
+
+/// A run record's status word as a status.
+fn run_status(word: Option<&str>) -> (Status, Option<String>) {
+    let status = match word {
+        Some("running" | "started") => Status::Working,
+        Some("done" | "succeeded" | "success" | "ok" | "finished") => Status::Done,
+        Some("failed" | "error" | "errored") => Status::Failed,
+        Some("killed" | "stopped" | "cancelled" | "canceled") => Status::Stopped,
+        _ => Status::Idle,
+    };
+    (status, word.map(str::to_owned))
+}
+
+/// A session's reported total covers its subagents, which are rows of their
+/// own: the main row keeps the rest, so rows add up to the reported total.
+/// Subtracting estimates makes the main row an estimate.
+fn split_session_costs(facts: &Facts, built: &mut Built) {
+    for (key, owned) in &facts.transcripts {
+        if key.subagent.is_none() {
+            continue;
+        }
+        let main = TranscriptKey {
+            subagent: None,
+            ..key.clone()
+        };
+        let reported_by_main = facts
+            .transcripts
+            .get(&main)
+            .is_some_and(|main| main.fact.reported.is_some());
+        let Some(subagent_usd) = owned.fact.cost().usd() else {
+            continue;
+        };
+        if !reported_by_main {
+            continue;
+        }
+        let Some(main_id) = built.owners.get(&FactKey::Transcript(main)).cloned() else {
+            continue;
+        };
+
+        if let Some(agent) = built.agents.get_mut(&main_id)
+            && let Some(usd) = agent.cost.usd()
+        {
+            agent.cost = Cost::Estimated((usd - subagent_usd).max(0.0));
+        }
+    }
 }
 
 const CLAUDE_PROGRAM: &str = "claude-code";
@@ -559,7 +889,7 @@ fn merge_transcript(
     agent.tool_calls += transcript.tool_calls;
     agent.tool_errors += transcript.tool_errors;
     agent.tokens.add(transcript.tokens);
-    agent.cost = agent.cost.plus(transcript.cost);
+    agent.cost = agent.cost.plus(transcript.cost());
     if let Some(doing) = transcript.open_tools.values().next_back() {
         agent.doing = Some(doing.clone());
     }
@@ -588,6 +918,7 @@ fn merge_transcript(
         .is_some_and(|last| now - last <= TRANSCRIPT_WORKING_WINDOW);
     if agent.terminal.is_none() && recently_written {
         agent.status = Status::Working;
+        agent.ended = None;
     }
 }
 
