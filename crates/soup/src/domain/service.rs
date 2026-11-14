@@ -2242,11 +2242,12 @@ where
         self.populate_properties_output(user_id, output).await
     }
 
-    #[tracing::instrument(err, skip(self, req), fields(with_properties = true))]
+    #[tracing::instrument(err, skip(self, req), fields(with_properties = tracing::field::Empty))]
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        tracing::Span::current().record("with_properties", true);
         let user_id = req.user_id.clone();
         let items = self.grouped_items(req).await?;
         self.populate_grouped_items(user_id, items).await
@@ -2256,12 +2257,13 @@ where
         name = "get_user_soup_grouped",
         err,
         skip(self, req),
-        fields(with_properties = false)
+        fields(with_properties = tracing::field::Empty)
     )]
     async fn get_user_soup_grouped_without_properties(
         &self,
         req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr> {
+        tracing::Span::current().record("with_properties", false);
         self.grouped_items(req).await
     }
 
