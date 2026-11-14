@@ -70,9 +70,9 @@ impl SharingRefused {
 }
 
 /// Whether the current request may change who can see an item: false under
-/// a scope that may not share.
+/// a scope that may not share, and for a channel-mention bot's program.
 pub fn may_share() -> bool {
-    current_scope().is_none_or(SessionScope::allows_sharing)
+    current_channel_mention().is_none() && current_scope().is_none_or(SessionScope::allows_sharing)
 }
 
 /// Refuses a change to who can see an item (`changes_sharing`) when the
@@ -89,6 +89,7 @@ pub fn refuse_sharing(changes_sharing: bool) -> Result<(), SharingRefused> {
     tracing::warn!(
         scope = current_scope().map(SessionScope::as_str),
         agent_session_id = ?current_session(),
+        channel_mention_id = ?current_channel_mention(),
         "refused a change to who can see an item"
     );
     Err(SharingRefused)
