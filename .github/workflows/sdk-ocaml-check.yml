@@ -1,0 +1,45 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs
+name: OCaml SDK Check
+'on':
+  push:
+    branches:
+    - main
+    paths:
+    - packages/sdk-ocaml/**
+    - packages/sdk/specs/**
+    - packages/sdk/src/config.ts
+    - flake.lock
+    - '.github/workflows/sdk-ocaml-check.yml'
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  check-ocaml-sdk:
+    name: OCaml SDK build and test
+    runs-on: namespace-profile-linux-small
+    timeout-minutes: 20
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: dune build && dune test (with the drift check)
+      run: |
+        set -euo pipefail
+        nix-shell packages/sdk-ocaml/shell.nix --run "cd packages/sdk-ocaml && dune build && dune test"
+      timeout-minutes: 10
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+concurrency:
+  group: sdk-ocaml-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: true
