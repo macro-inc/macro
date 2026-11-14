@@ -1,0 +1,47 @@
+(lang dune 3.17)
+
+(name macro_sdk)
+
+(generate_opam_files true)
+
+(source
+ (github macro-inc/macro))
+
+(authors "Macro")
+
+(maintainers "Macro")
+
+(package
+ (name macro_sdk)
+ (synopsis "Typed client for the Macro API, generated from its OpenAPI specs")
+ (description
+  "Request builders and JSON codecs for every Macro API operation. Sends nothing itself; pair it with a transport such as macro_sdk_eio.")
+ (depends
+  (ocaml
+   (>= 5.1))
+  (yojson
+   (>= 2.0))
+  uri))
+
+(package
+ (name macro_sdk_eio)
+ (synopsis "Eio transport for macro_sdk over HTTPS")
+ (depends
+  (ocaml
+   (>= 5.1))
+  macro_sdk
+  (cohttp-eio
+   (>= 6.0))
+  http
+  eio
+  (eio_main :with-test)
+  tls
+  tls-eio
+  x509
+  ca-certs
+  mirage-crypto-rng
+  domain-name
+  ipaddr
+  uri
+  (mirage-crypto-pk :with-test)
+  (ptime :with-test)))

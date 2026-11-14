@@ -1,0 +1,147 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "kinds", "version": "0.0.0" },
+  "paths": {
+    "/profiles/{id}": {
+      "get": {
+        "operationId": "get_profile",
+        "summary": "One profile.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "fields", "in": "query", "required": false, "style": "form", "explode": true, "schema": { "type": "array", "items": { "type": "string" } } },
+          { "name": "verbose", "in": "query", "required": false, "schema": { "type": ["boolean", "null"] } },
+          { "name": "color", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/Color" } },
+          { "name": "x-trace", "in": "header", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Profile" } } } },
+          "404": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } } } },
+          "500": { "description": "", "content": { "text/plain": { "schema": { "type": "string" } } } }
+        }
+      }
+    },
+    "/profiles": {
+      "post": {
+        "operationId": "create_profile",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Profile" } } } },
+        "responses": {
+          "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Profile" } } } },
+          "409": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Conflict" } } } },
+          "422": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } } } }
+        }
+      }
+    },
+    "/trees": {
+      "put": {
+        "operationId": "put_tree",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Tree" } } } } },
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Tree" } } } },
+          "202": { "description": "" }
+        }
+      }
+    },
+    "/upload": {
+      "post": {
+        "operationId": "upload",
+        "requestBody": { "required": true, "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } },
+        "responses": { "204": { "description": "" } }
+      }
+    },
+    "/files/{name}": {
+      "get": {
+        "operationId": "download",
+        "parameters": [ { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "", "content": { "application/pdf": {} } } }
+      }
+    },
+    "/attach": {
+      "post": {
+        "operationId": "attach",
+        "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "type": "object", "required": ["file", "note"], "properties": { "file": { "type": "string", "format": "binary" }, "note": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "", "content": { "text/plain": { "schema": { "type": "string" } } } } }
+      }
+    },
+    "/ping": {
+      "post": { "operationId": "ping", "responses": { "204": { "description": "" } } }
+    },
+    "/settings": {
+      "post": {
+        "operationId": "save_setting",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Setting" } } } },
+        "responses": { "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Shape": {
+        "description": "Tagged by kind.",
+        "oneOf": [
+          { "type": "object", "required": ["kind", "radius"], "properties": { "kind": { "type": "string", "enum": ["circle"] }, "radius": { "type": "number" } } },
+          { "type": "object", "required": ["kind"], "properties": { "kind": { "type": "string", "enum": ["square"] } } },
+          { "allOf": [ { "$ref": "#/components/schemas/Label" }, { "type": "object", "required": ["kind"], "properties": { "kind": { "type": "string", "enum": ["labeled"] } } } ] }
+        ]
+      },
+      "Label": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } },
+      "Command": {
+        "oneOf": [
+          { "type": "string", "enum": ["stop", "pause"] },
+          { "type": "object", "required": ["start"], "properties": { "start": { "$ref": "#/components/schemas/StartArgs" } } }
+        ]
+      },
+      "StartArgs": { "type": "object", "required": ["speed"], "properties": { "speed": { "type": "integer", "format": "int32" } } },
+      "Glow": {
+        "oneOf": [
+          { "type": "string", "description": "A preset." },
+          { "type": "object", "properties": { "size": { "type": ["number", "null"] } } }
+        ]
+      },
+      "Color": { "type": "string", "enum": ["red", "green"] },
+      "Profile": {
+        "type": "object",
+        "required": ["name", "bio"],
+        "properties": {
+          "name": { "type": "string", "description": "Shown everywhere." },
+          "nickname": { "type": "string" },
+          "bio": { "type": ["string", "null"] },
+          "visits": { "type": ["integer", "null"], "format": "int64" },
+          "tags": { "type": "object", "additionalProperties": { "type": "string" } },
+          "shape": { "$ref": "#/components/schemas/Shape" },
+          "command": { "$ref": "#/components/schemas/Command" },
+          "glow": { "$ref": "#/components/schemas/Glow" },
+          "color": { "$ref": "#/components/schemas/Color" },
+          "extra": { "description": "Anything." }
+        }
+      },
+      "Tree": {
+        "type": "object",
+        "required": ["value", "children"],
+        "properties": {
+          "value": { "type": "integer", "format": "int32" },
+          "children": { "type": "array", "items": { "$ref": "#/components/schemas/Tree" } }
+        }
+      },
+      "SettingValue": {
+        "oneOf": [
+          { "type": "object", "required": ["type", "value"], "properties": { "type": { "type": "string", "enum": ["bool"] }, "value": { "type": "boolean" } } },
+          { "type": "object", "required": ["type", "value"], "properties": { "type": { "type": "string", "enum": ["text"] }, "value": { "type": "string" } } }
+        ]
+      },
+      "Setting": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SettingValue" },
+          { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }
+        ]
+      },
+      "Cat": { "type": "object", "required": ["petType", "meows"], "properties": { "petType": { "type": "string" }, "meows": { "type": "boolean" } } },
+      "Dog": { "type": "object", "required": ["petType", "barks"], "properties": { "petType": { "type": "string" }, "barks": { "type": "boolean" } } },
+      "Pet": {
+        "oneOf": [ { "$ref": "#/components/schemas/Cat" }, { "$ref": "#/components/schemas/Dog" } ],
+        "discriminator": { "propertyName": "petType", "mapping": { "cat": "#/components/schemas/Cat", "dog": "#/components/schemas/Dog" } }
+      },
+      "ErrorBody": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string" } } },
+      "Conflict": { "type": "object", "required": ["existing"], "properties": { "existing": { "type": "string" } } }
+    }
+  }
+}

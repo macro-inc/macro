@@ -1,0 +1,5 @@
+; The README's example, built with the package so it keeps compiling.
+
+(executable
+ (name similar_tasks)
+ (libraries macro_sdk macro_sdk_eio eio_main))
