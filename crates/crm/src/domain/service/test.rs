@@ -116,6 +116,22 @@ impl CompaniesRepository for StubRepo {
             .map(Option::unwrap_or_default)
     }
 
+    async fn preview_companies(
+        &self,
+        _viewer_id: &str,
+        _company_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmCompanyPreview>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn preview_contacts(
+        &self,
+        _viewer_id: &str,
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmContactPreview>, CrmError> {
+        unimplemented!()
+    }
+
     async fn resolve_association(
         &self,
         scope: CrmContactListScope<'_>,

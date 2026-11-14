@@ -7,6 +7,7 @@ mod association;
 mod contact_listing;
 mod contact_update;
 mod email_privacy;
+mod previews;
 
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
@@ -1064,6 +1065,22 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         scope: crate::domain::contact_listing::CrmContactListScope<'_>,
     ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
         self.query_activity(scope).await
+    }
+
+    async fn preview_companies(
+        &self,
+        viewer_id: &str,
+        company_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmCompanyPreview>, CrmError> {
+        self.query_company_previews(viewer_id, company_ids).await
+    }
+
+    async fn preview_contacts(
+        &self,
+        viewer_id: &str,
+        contact_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmContactPreview>, CrmError> {
+        self.query_contact_previews(viewer_id, contact_ids).await
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %link_id, skipped = tracing::field::Empty), err)]

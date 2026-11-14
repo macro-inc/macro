@@ -75,6 +75,27 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         scope: super::contact_listing::CrmContactListScope<'_>,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
 
+    /// Previews of the companies in `company_ids` that `viewer_id` may open,
+    /// each as [`Self::get_company_for_team`] titles it after the access
+    /// check: the viewer belongs to the company's team, and a hidden company
+    /// is visible only to that team's admins and owners. Others are left out.
+    fn preview_companies(
+        &self,
+        viewer_id: &str,
+        company_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<super::previews::CrmCompanyPreview>, CrmError>> + Send;
+
+    /// Previews of the contacts in `contact_ids` that `viewer_id` may open,
+    /// with [`Self::get_contact_for_team`]'s visibility after the access
+    /// check: the viewer belongs to the contact's team, and a hidden contact,
+    /// or one under a hidden company, is visible only to its admins and
+    /// owners. Others are left out.
+    fn preview_contacts(
+        &self,
+        viewer_id: &str,
+        contact_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<super::previews::CrmContactPreview>, CrmError>> + Send;
+
     /// Idempotently ingest eligible stored mailbox history for a contact.
     /// The transaction rechecks current team membership, explicit consent for
     /// this exact primary mailbox, and both team and contributor exclusions.
