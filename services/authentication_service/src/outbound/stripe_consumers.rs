@@ -217,7 +217,7 @@ where
         delivery: &Delivery,
         change: &SubscriptionChange,
     ) -> Result<(), ApplyError> {
-        let decision = decide_personal_subscription(
+        let mut decision = decide_personal_subscription(
             &delivery.event_id,
             delivery.created_at,
             change,
@@ -225,6 +225,27 @@ where
             &self.prices,
         )
         .map_err(reject)?;
+        // The held snapshots may not have the older subscription's end
+        // yet. A cancel cannot be undone, so decide it again on Stripe's
+        // live list; if Stripe no longer shows a duplicate, the event
+        // applies as it otherwise would.
+        if decision == PersonalDecision::CancelDuplicate {
+            let live = self
+                .customers
+                .live_subscriptions(&change.subscription.customer)
+                .await?;
+            decision = decide_personal_subscription(
+                &delivery.event_id,
+                delivery.created_at,
+                change,
+                &live,
+                &self.prices,
+            )
+            .map_err(reject)?;
+            if decision != PersonalDecision::CancelDuplicate {
+                tracing::warn!("held snapshots showed a duplicate subscription; Stripe does not");
+            }
+        }
         self.apply_personal(delivery, &change.subscription, decision)
             .await
     }

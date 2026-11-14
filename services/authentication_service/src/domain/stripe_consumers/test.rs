@@ -823,3 +823,40 @@ fn canceling_a_personal_max_subscription_revokes_only_max() {
         }
     );
 }
+
+#[test]
+fn a_duplicate_seen_in_held_snapshots_is_cancelled_only_if_stripe_still_shows_it() {
+    let newer = change(
+        EventType::CustomerSubscriptionCreated,
+        subscription("sub_Newer", "active", 1_800_000_000, "price_premium"),
+        Value::Null,
+    );
+    // Held snapshots: the older subscription's deletion has not arrived yet.
+    let held = [
+        facts(subscription(
+            "sub_Older",
+            "active",
+            1_700_000_000,
+            "price_premium",
+        )),
+        newer.subscription.clone(),
+    ];
+    assert!(is_newer_duplicate(&newer.subscription, &held));
+
+    // Stripe's live list: the older one is already canceled, so the newer
+    // one is the customer's only subscription and must not be canceled.
+    let live = [
+        facts(subscription(
+            "sub_Older",
+            "canceled",
+            1_700_000_000,
+            "price_premium",
+        )),
+        newer.subscription.clone(),
+    ];
+    assert!(!is_newer_duplicate(&newer.subscription, &live));
+    assert!(matches!(
+        decide_personal_subscription(&event_id(), event_at(), &newer, &live, &prices()).unwrap(),
+        PersonalDecision::Apply(_)
+    ));
+}

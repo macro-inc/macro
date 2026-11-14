@@ -6,7 +6,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use stripe::CustomerId;
 
-use super::model::{ApplyError, CustomerFacts, ObjectKind, ObjectSnapshot};
+use super::model::{ApplyError, CustomerFacts, ObjectKind, ObjectSnapshot, SubscriptionFacts};
 use super::ports::{InboxRepo, StripeReader};
 use super::translate;
 
@@ -24,6 +24,24 @@ where
     /// Lookups over the inbox's snapshots, reading through `reader`.
     pub fn new(repo: Repo, reader: Arc<Reader>) -> Self {
         Self { repo, reader }
+    }
+
+    /// Every subscription of `customer` as Stripe lists it now, for a
+    /// decision the held snapshots may be behind on (an irreversible
+    /// cancel). Any failure, a list Macro cannot read included, retries:
+    /// the caller must not act without it.
+    pub async fn live_subscriptions(
+        &self,
+        customer: &CustomerId,
+    ) -> Result<Vec<SubscriptionFacts>, ApplyError> {
+        self.reader
+            .customer_subscriptions(customer)
+            .await
+            .map_err(|error| ApplyError::Retry(rootcause::Report::new(error).into_dynamic()))?
+            .iter()
+            .map(translate::subscription_facts)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| ApplyError::Retry(rootcause::Report::new(error).into_dynamic()))
     }
 
     /// The customer as held, without calling Stripe.

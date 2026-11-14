@@ -263,6 +263,30 @@ pub struct PersonalUpdate {
     pub plan_change: Option<PlanChange>,
 }
 
+/// Whether `subscription` is live while an older live subscription of the
+/// customer, of any kind, is in `customer_subscriptions`: a duplicate to
+/// cancel.
+pub fn is_newer_duplicate(
+    subscription: &SubscriptionFacts,
+    customer_subscriptions: &[SubscriptionFacts],
+) -> bool {
+    if !subscription.is_live() {
+        return false;
+    }
+    let live: Vec<&SubscriptionFacts> = customer_subscriptions
+        .iter()
+        .filter(|other| other.is_live())
+        .collect();
+    if live.len() < 2 {
+        return false;
+    }
+    let oldest = live
+        .iter()
+        .min_by_key(|other| (other.created, other.id.as_str()))
+        .map(|other| &other.id);
+    oldest != Some(&subscription.id)
+}
+
 /// Decides a personal subscription snapshot. `customer_subscriptions` holds
 /// every subscription of the customer (team ones included: an older live
 /// one of any kind makes a new personal one a duplicate).
@@ -281,20 +305,12 @@ pub fn decide_personal_subscription(
         return Ok(PersonalDecision::Ignore);
     };
 
-    let live: Vec<&SubscriptionFacts> = customer_subscriptions
-        .iter()
-        .filter(|other| other.is_live())
-        .collect();
-    if subscription.is_live() && live.len() > 1 {
-        let oldest = live
-            .iter()
-            .min_by_key(|other| (other.created, other.id.as_str()))
-            .map(|other| &other.id);
-        if oldest != Some(&subscription.id) {
-            return Ok(PersonalDecision::CancelDuplicate);
-        }
+    if is_newer_duplicate(subscription, customer_subscriptions) {
+        return Ok(PersonalDecision::CancelDuplicate);
     }
-    if subscription.status == SubscriptionStatus::Canceled && !live.is_empty() {
+    if subscription.status == SubscriptionStatus::Canceled
+        && customer_subscriptions.iter().any(SubscriptionFacts::is_live)
+    {
         return Ok(PersonalDecision::KeepAccess);
     }
 
