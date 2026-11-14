@@ -295,7 +295,7 @@ impl LoroProjection {
         for key in index.nodes.keys().copied() {
             child_index.remember(state.view(), key, &index.map(doc, key)?, &index, policy)?;
         }
-        Ok(Self {
+        let mut projection = Self {
             own_exports: Default::default(),
             search_text: policy.writes_root_search_text().then(Default::default),
             pending_nulls: pending_nulls.into_iter().collect(),
@@ -304,6 +304,7 @@ impl LoroProjection {
             indexed_vv: doc.oplog_vv(),
             indexed_frontiers: doc.state_frontiers(),
             stored_drift: OrderedSet::default(),
+            local_state_pending: OrderedSet::default(),
             model_drift: OrderedMap::default(),
             #[cfg(feature = "test-faults")]
             fail_after_writes: None,
@@ -311,7 +312,46 @@ impl LoroProjection {
             index,
             events,
             _subscription: subscription,
-        })
+        };
+        // Rebuilt at every attach and resync, so a rebuild never loses a pending write.
+        let keys: Vec<NodeKey> = projection.index.nodes.keys().copied().collect();
+        projection.note_local_state_for(doc, state, keys)?;
+        Ok(projection)
+    }
+    /// Track nodes among `keys` whose model value of a local_state_keys field differs from
+    /// storage, for the next ordinary local projection to write.
+    pub(crate) fn note_local_state_for(
+        &mut self,
+        doc: &LoroDoc,
+        state: &EditorState,
+        keys: impl IntoIterator<Item = NodeKey>,
+    ) -> Result<()> {
+        let local_keys = self.policy.local_state_keys();
+        if local_keys.is_empty() || self.policy.local_state_update_tag().is_none() {
+            return Ok(());
+        }
+        let view = state.view();
+        for key in keys {
+            if !view.is_attached(key) || !self.index.nodes.contains_key(&key) {
+                self.local_state_pending.shift_remove(&key);
+                continue;
+            }
+            let map = self.index.map(doc, key)?;
+            let model = view.export_json(key)?;
+            let differs = local_keys.iter().try_fold(false, |differs, name| {
+                Ok::<_, ProjectionError>(
+                    differs
+                        || crate::local::model_local_state(&model, name)
+                            != crate::local::stored_local_state(&map, name)?,
+                )
+            })?;
+            if differs {
+                self.local_state_pending.insert(key);
+            } else {
+                self.local_state_pending.shift_remove(&key);
+            }
+        }
+        Ok(())
     }
     /// Fail the next projection after `writes` own-field writes have reached Loro.
     #[cfg(feature = "test-faults")]

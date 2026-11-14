@@ -59,8 +59,18 @@ pub trait SyncPolicy: Send + Sync + 'static {
     fn retained_live_root_state(&self) -> &'static [&'static str] {
         &[]
     }
-    /// NodeState keys never written or deleted and masked on read.
+    /// Per-peer derived NodeState keys. Masked on every read and comparison (and so derived
+    /// by the receiver on remote create, update and open). When the policy declares
+    /// local_state_update_tag they are persisted as the model's value, written lazily by the
+    /// next ordinary local projection after a change, as Source's whole-state sync writes them
+    /// after the update that set them; otherwise they are never written.
     fn local_state_keys(&self) -> &'static [&'static str];
+    /// Tag of commits that change only per-peer derived state. Declaring it opts into
+    /// persisting local_state_keys; a chain made only of these commits writes none of it, as
+    /// Source does not sync such updates.
+    fn local_state_update_tag(&self) -> Option<&'static str> {
+        None
+    }
     /// Fields which alone do not trigger remote reconciliation.
     fn ignore_in_remote_compare(
         &self,

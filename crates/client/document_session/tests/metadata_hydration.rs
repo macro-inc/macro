@@ -2013,3 +2013,306 @@ fn load_normalisation_is_two_local_commits_in_source_order()
     );
     Ok(())
 }
+
+/// Open `snapshot` as a browser peer with its own peer id, as each Source tab does.
+fn open_peer(
+    snapshot: &[u8],
+    peer: u64,
+) -> Result<(EditorSurface, loro::LoroDoc), Box<dyn std::error::Error>> {
+    let doc = lexical_loro::new_doc(peer)?;
+    doc.import(snapshot)?;
+    let mut config = application_editor_config(
+        EditorConfig {
+            mode: lexical_model::EditorMode::ViewAttached,
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        EditorType::MarkdownSync,
+    );
+    config.policy = &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+    let now = Now {
+        mono: Millis(0),
+        wall: UnixMillis(0),
+    };
+    let mut surface =
+        <EditorSurface as Surface>::construct(SurfaceConfig::Editor(config), peer, now)?;
+    Surface::init(&mut surface, &doc, now, Access::Edit, &mut Vec::new())?;
+    Ok((surface, doc))
+}
+
+/// Every inline-search node's `$` in document order, recursively.
+fn chip_states(root: &serde_json::Value) -> Vec<serde_json::Value> {
+    fn walk(node: &serde_json::Value, into: &mut Vec<serde_json::Value>) {
+        if node["type"] == "inline-search" {
+            into.push(node["$"].clone());
+        }
+        for child in node["children"].as_array().into_iter().flatten() {
+            walk(child, into);
+        }
+    }
+    let mut into = Vec::new();
+    walk(root, &mut into);
+    into
+}
+
+fn live_root(surface: &EditorSurface) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(serde_json::to_value(surface.state().to_json()?)?["root"].clone())
+}
+
+/// Insert an inline-search chip ('/') at the end of the first paragraph as the browser
+/// does: a selection change commits the caret, then the host sends group-a.search-trigger.
+/// The trigger's eligibility reads the COMMITTED selection (macro_document_model
+/// plugins_group_a/menu/search.rs eligible :163 via handle :272-277), which is why
+/// menu/search/test.rs sets the selection in an earlier update before triggering.
+fn insert_chip(
+    surface: &mut EditorSurface,
+    doc: &loro::LoroDoc,
+    ms: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(
+        paragraph,
+        ChildIndex(u32::try_from(
+            surface.state().view().children(paragraph).count(),
+        )?),
+    );
+    local_input(
+        surface,
+        doc,
+        Input::SelectionFromView {
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+            change: None,
+        },
+        ms,
+    )?;
+    let command = macro_document_model::surface::decode_command(
+        "group-a.search-trigger",
+        r#"{"kind":"actions"}"#,
+        surface.state().max_key().generation(),
+        None,
+    )?
+    .ok_or("search trigger")?;
+    local_input(
+        surface,
+        doc,
+        Input::Command {
+            command,
+            selection: ViewSelection::KeepModel,
+        },
+        ms + 1,
+    )?;
+    let chips = chip_states(&live_root(surface)?);
+    assert_eq!(
+        chips.len(),
+        1,
+        "setup: the trigger inserted one chip: {chips:?}"
+    );
+    Ok(())
+}
+
+/// One unrelated keystroke at the start of the first paragraph.
+fn type_at_start(
+    surface: &mut EditorSurface,
+    doc: &loro::LoroDoc,
+    text: &str,
+    ms: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    local_input(
+        surface,
+        doc,
+        Input::Command {
+            command: Command::InsertText(text.into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        ms,
+    )?;
+    Ok(())
+}
+
+fn empty_document() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]}
+        ]
+    }});
+    Ok(lexical_loro::snapshot::raw_state_to_loro_snapshot(
+        &stored, None,
+    )?)
+}
+
+/// Source control peerLocalState f8449ed5 (row 0622ab39): a peer-class node's `$.local` is
+/// set in a LOCAL_STATUS update Source does not sync, so the chip's creating sync stores its
+/// peerId without local, and the next ordinary sync stores local: true.
+#[test]
+fn a_chip_stores_its_local_bit_at_the_next_ordinary_sync_like_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut a, a_doc) = open_peer(&empty_document()?, 50)?;
+    insert_chip(&mut a, &a_doc, 2000)?;
+    let live = chip_states(&live_root(&a)?);
+    assert_eq!(live[0]["local"], json!(true));
+    let stored = chip_states(&stored_root(&a_doc));
+    assert_eq!(stored[0]["peerId"], json!("50"));
+    assert!(
+        stored[0].get("local").is_none(),
+        "creating sync: {}",
+        stored[0]
+    );
+    type_at_start(&mut a, &a_doc, "x", 3000)?;
+    let stored = chip_states(&stored_root(&a_doc));
+    assert_eq!(
+        stored[0]["local"],
+        json!(true),
+        "next ordinary sync: {}",
+        stored[0]
+    );
+    Ok(())
+}
+
+/// Two-peer control peerLocalTwoPeer 044a12cc (row 749db337): Source's receiver keeps the
+/// writer's local:true on a remote-created chip and writes it back. RULED NAMED DIFFERENCE
+/// C-PEER-LOCAL-REMOTE-CREATE-01 (t1yg (b)): native derives the receiver's own bit on remote
+/// create (peerId == me), so B's model and stored local are false.
+#[test]
+fn a_receiver_stores_its_own_derived_local_bit_for_a_remote_chip()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut a, a_doc) = open_peer(&empty_document()?, 50)?;
+    // A word boundary, so the Actions trigger is eligible after it (search.rs trigger_boundaries).
+    type_at_start(&mut a, &a_doc, "a ", 1000)?;
+    let (mut b, b_doc) = open_peer(&a_doc.export(loro::ExportMode::Snapshot)?, 60)?;
+    insert_chip(&mut a, &a_doc, 2000)?;
+    type_at_start(&mut a, &a_doc, "b", 3000)?;
+    assert_eq!(chip_states(&stored_root(&a_doc))[0]["local"], json!(true));
+    let before = b_doc.oplog_vv();
+    b_doc.import(&a_doc.export(loro::ExportMode::updates(&before))?)?;
+    Surface::remote(
+        &mut b,
+        &b_doc,
+        Now {
+            mono: Millis(4000),
+            wall: UnixMillis(4000),
+        },
+        Access::Edit,
+        &mut Vec::new(),
+    )?;
+    let live = chip_states(&live_root(&b)?);
+    assert_eq!(live.len(), 1, "setup: B imported the chip: {live:?}");
+    assert_eq!(live[0]["peerId"], json!("50"));
+    assert_eq!(
+        live[0]["local"],
+        json!(false),
+        "B's derived bit (Source keeps true)"
+    );
+    type_at_start(&mut b, &b_doc, "c", 5000)?;
+    assert_eq!(
+        chip_states(&stored_root(&b_doc))[0]["local"],
+        json!(false),
+        "B's next ordinary sync stores its own bit (Source stores A's true)"
+    );
+    Ok(())
+}
+
+/// Reads and comparisons mask `local`: a remote update of an existing chip carrying a
+/// stored local the receiver's model disagrees with neither trips the strict checks nor
+/// replaces the receiver's derived bit.
+#[test]
+fn a_stored_local_bit_is_never_imported_on_update_or_compared()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut a, a_doc) = open_peer(&empty_document()?, 50)?;
+    insert_chip(&mut a, &a_doc, 2000)?;
+    type_at_start(&mut a, &a_doc, "x", 3000)?;
+    let (mut b, b_doc) = open_peer(&a_doc.export(loro::ExportMode::Snapshot)?, 60)?;
+    let opened = chip_states(&live_root(&b)?);
+    assert_eq!(opened.len(), 1, "setup: B opened the chip: {opened:?}");
+    assert_eq!(opened[0]["local"], json!(false));
+    // A edits the chip's own text; its stored local stays A's true.
+    let before = b_doc.oplog_vv();
+    type_text(&mut a, &a_doc, "q", 4000)?;
+    b_doc.import(&a_doc.export(loro::ExportMode::updates(&before))?)?;
+    Surface::remote(
+        &mut b,
+        &b_doc,
+        Now {
+            mono: Millis(5000),
+            wall: UnixMillis(5000),
+        },
+        Access::Edit,
+        &mut Vec::new(),
+    )?;
+    assert_eq!(chip_states(&live_root(&b)?)[0]["local"], json!(false));
+    Ok(())
+}
+
+/// A pending-local node no commit touches is written by the next ordinary local projection
+/// at `$.local` ONLY: Await's slot-absent own `text` must not ride along (the bypass write).
+/// A peer adds an Await {peerId 7, local true} (native await_ownership_test.rs stored_await()'s
+/// node); reader 8 derives false on the import and stores it at its next ordinary keystroke
+/// in another block. The pending bit comes from an import, not the open, so this row does not
+/// depend on the open-time question.
+#[test]
+fn a_pending_local_node_writes_only_its_local_state() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut b, b_doc) = open_peer(&empty_document()?, 8)?;
+    let peer = lexical_loro::new_doc(7)?;
+    peer.import(&b_doc.export(loro::ExportMode::Snapshot)?)?;
+    let since = peer.oplog_vv();
+    let mut state = lexical_loro::reconstruct_state(&peer, &lexical_loro::PlainPolicy)?.root;
+    state["children"]
+        .as_array_mut()
+        .ok_or("root children")?
+        .push(json!({
+            "type":"paragraph", "version":1, "direction":null, "format":"", "indent":0,
+            "textFormat":0, "textStyle":"", "$":{"id":"para0002"}, "children":[{
+                "type":"await", "version":1, "awaitId":"owned-await", "inline":true,
+                "$":{"id":"node0001", "peerId":"7", "local":true}
+            }]
+        }));
+    lexical_loro::mirror::set_state(&peer, &serde_json::Value::Object(state))?;
+    b_doc.import(&peer.export(loro::ExportMode::updates(&since))?)?;
+    Surface::remote(
+        &mut b,
+        &b_doc,
+        Now {
+            mono: Millis(1000),
+            wall: UnixMillis(1000),
+        },
+        Access::Edit,
+        &mut Vec::new(),
+    )?;
+    let awaited = |doc: &loro::LoroDoc| stored_root(doc)["children"][1]["children"][0].clone();
+    let imported = awaited(&b_doc);
+    assert_eq!(
+        imported["$"]["local"],
+        json!(true),
+        "setup: stored as the writer's bit"
+    );
+    type_at_start(&mut b, &b_doc, "x", 2000)?;
+    let mut expected = imported.clone();
+    expected["$"]["local"] = json!(false);
+    assert_eq!(
+        awaited(&b_doc),
+        expected,
+        "only $.local changes on the untouched Await"
+    );
+    Ok(())
+}

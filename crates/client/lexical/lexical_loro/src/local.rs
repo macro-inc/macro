@@ -1,6 +1,6 @@
 use super::*;
 use crate::index::Slot;
-use lexical_model::Mutation;
+use lexical_model::{Mutation, UpdateTag};
 use loro::{ExportMode, LoroMovableList};
 /// Same predecessor/binary-search tie breaking as loro-mirror's LIS.
 pub(crate) fn lis(sequence: &[usize]) -> OrderedSet<usize> {
@@ -174,6 +174,29 @@ impl LoroProjection {
         let next = next_state.view();
         if origin == LOCAL_ORIGIN {
             for &key in self.stored_drift.iter().chain(self.model_drift.keys()) {
+                if next.is_attached(key) {
+                    candidates.entry(key).or_insert(Mutation::Updated);
+                }
+            }
+        }
+        // Source's whole-state sync writes per-peer local state after the update that set it;
+        // a chain made only of such updates is never synced.
+        let local_state_only = !all.is_empty()
+            && self.policy.local_state_update_tag().is_some_and(|tag| {
+                all.iter().all(|commit| {
+                    commit
+                        .tags
+                        .iter()
+                        .any(|t| matches!(t, UpdateTag::Custom(custom) if &**custom == tag))
+                })
+            });
+        // Persistence is opt-in: a policy that declares its local-state update tag persists
+        // local_state_keys; any other policy keeps them masked and never written.
+        let writes_local_state = origin == LOCAL_ORIGIN
+            && self.policy.local_state_update_tag().is_some()
+            && !local_state_only;
+        if writes_local_state {
+            for &key in &self.local_state_pending {
                 if next.is_attached(key) {
                     candidates.entry(key).or_insert(Mutation::Updated);
                 }
@@ -573,6 +596,41 @@ impl LoroProjection {
                     }
                 }
             }
+            // A pending node: one write path. The exports here are exactly the pair diff_map
+            // would take. When they are equal with the per-peer keys masked, only that state
+            // changed: write it alone (diff_map would also insert slot-absent own fields) and
+            // leave the exports, the cached buffers, as the unchanged masked export.
+            if writes_local_state && self.local_state_pending.contains(&key) {
+                let names = self.policy.local_state_keys();
+                let mut before = exports.0.json().clone();
+                let mut after = exports.1.json().clone();
+                for name in names {
+                    set_local_state(&mut before, name, None);
+                    set_local_state(&mut after, name, None);
+                }
+                if before == after {
+                    let count = stats.containers_written;
+                    write_local_state_only(&map, &next.export_json(key)?, names, &mut stats)?;
+                    if count != stats.containers_written {
+                        #[cfg(feature = "test-faults")]
+                        if let Some(remaining) = self.fail_after_writes.as_mut() {
+                            if *remaining == 0 {
+                                self.fail_after_writes = None;
+                                return Err(diverged("injected projection write fault"));
+                            }
+                            *remaining -= 1;
+                        }
+                        written.insert(key);
+                    }
+                    self.index.bind(key, &map, self.policy)?;
+                    continue;
+                }
+                let model = next.export_json(key)?;
+                for name in names {
+                    set_local_state(exports.0.json_mut(), name, stored_local_state(&map, name)?);
+                    set_local_state(exports.1.json_mut(), name, model_local_state(&model, name));
+                }
+            }
             let before = exports.0.json();
             let new = exports.1.json();
             if origin == FIXUP_ORIGIN {
@@ -675,6 +733,7 @@ impl LoroProjection {
             self.stored_drift.retain(|key| !visited.contains(key));
             self.model_drift.retain(|key, _| !visited.contains(key));
         }
+        self.note_local_state_for(doc, next_state, candidates.keys().copied())?;
         drop(recording);
         if let Some(search) = &mut self.search_text {
             if let Some(draft) = search_text {
@@ -936,4 +995,78 @@ fn strip_absent_normalized_nulls(
         }
     }
     Ok(())
+}
+
+/// A model node's value of the per-peer state `name`.
+pub(crate) fn model_local_state(model: &SerializedNode, name: &str) -> Option<serde_json::Value> {
+    model.get("$").and_then(|state| state.get(name)).cloned()
+}
+
+/// The stored value of the per-peer state `name` in `map`'s `$` container.
+pub(crate) fn stored_local_state(map: &LoroMap, name: &str) -> Result<Option<serde_json::Value>> {
+    match map.get("$") {
+        Some(loro::ValueOrContainer::Container(loro::Container::Map(state))) => {
+            state.get(name).as_ref().map(schema::read_value).transpose()
+        }
+        Some(loro::ValueOrContainer::Value(loro::LoroValue::Map(state))) => state
+            .get(name)
+            .map(|value| schema::read_value(&loro::ValueOrContainer::Value(value.clone())))
+            .transpose(),
+        _ => Ok(None),
+    }
+}
+
+/// Set (or remove) `name` in an export's `$` object.
+fn set_local_state(json: &mut SerializedNode, name: &str, value: Option<serde_json::Value>) {
+    match value {
+        Some(value) => {
+            if let serde_json::Value::Object(state) = json
+                .entry("$")
+                .or_insert_with(|| serde_json::Value::Object(SerializedNode::new()))
+            {
+                state.insert(name.to_owned(), value);
+            }
+        }
+        None => {
+            if let Some(serde_json::Value::Object(state)) = json.get_mut("$") {
+                state.remove(name);
+                if state.is_empty() {
+                    json.remove("$");
+                }
+            }
+        }
+    }
+}
+
+/// Write only the per-peer state `names` of `map` from the model, through the projection's
+/// own `$` writer: schema::diff_map with `$` alone on both sides, which diffs a `$` Map
+/// container key by key and gives a plain `$` value map the ordinary containerization.
+fn write_local_state_only(
+    map: &LoroMap,
+    model: &SerializedNode,
+    names: &[&str],
+    stats: &mut ProjectionStats,
+) -> Result<()> {
+    let stored = match map.get("$") {
+        Some(state) => schema::read_value(&state)?,
+        None => serde_json::Value::Object(SerializedNode::new()),
+    };
+    let mut next = stored.as_object().cloned().unwrap_or_default();
+    for name in names {
+        match model_local_state(model, name) {
+            Some(value) => {
+                next.insert((*name).to_owned(), value);
+            }
+            None => {
+                next.remove(*name);
+            }
+        }
+    }
+    let next = serde_json::Value::Object(next);
+    if next == stored {
+        return Ok(());
+    }
+    let before = SerializedNode::from_iter([("$".to_owned(), stored)]);
+    let after = SerializedNode::from_iter([("$".to_owned(), next)]);
+    schema::diff_map(map, &before, &after, schema::MapSchema::Node, stats)
 }

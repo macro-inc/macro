@@ -187,6 +187,9 @@ impl SyncPolicy for MacroSyncPolicy {
     fn local_state_keys(&self) -> &'static [&'static str] {
         &["local"]
     }
+    fn local_state_update_tag(&self) -> Option<&'static str> {
+        Some(crate::peer::LOCAL_STATUS_TAG)
+    }
     fn ignore_in_remote_compare(&self, ty: &str, json: &SerializedNode) -> &'static [&'static str] {
         if matches!(ty, "image" | "video")
             && json.get("srcType").and_then(serde_json::Value::as_str) == Some("dss")
