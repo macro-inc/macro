@@ -7,8 +7,10 @@ import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HashIcon from '@icon/system/regular/hash.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
@@ -27,7 +29,12 @@ import {
   RadioGroup,
   ToggleSwitch,
 } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  chooseChannelPicture,
+  useChannelPictureEditor,
+} from './channel-picture';
+import { ChannelPicture } from './components/ChannelPicture';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
 const newChannelModalFocusLock = useFocusLock('create-channel');
@@ -62,6 +69,16 @@ export function CreateChannelModal() {
   const [createdChannelId, setCreatedChannelId] = createSignal<string>();
   const [sentRecipientIds, setSentRecipientIds] = createSignal<string[]>([]);
   const [addedAgentIds, setAddedAgentIds] = createSignal<string[]>([]);
+  const pictureEditor = useChannelPictureEditor();
+  // The channel exists only after step 2, so the chosen file waits here.
+  const [picture, setPicture] = createSignal<File>();
+  const pictureUrl = createMemo(() => {
+    const file = picture();
+    if (!file) return undefined;
+    const url = URL.createObjectURL(file);
+    onCleanup(() => URL.revokeObjectURL(url));
+    return url;
+  });
   const channelName = createMemo(() => name().trim());
   const inviteOptions = createMemo(() => [
     ...(agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
@@ -83,6 +100,7 @@ export function CreateChannelModal() {
     setCreatedChannelId(undefined);
     setSentRecipientIds([]);
     setAddedAgentIds([]);
+    setPicture(undefined);
   }
 
   function resetAndClose() {
@@ -144,6 +162,12 @@ export function CreateChannelModal() {
         auto_join_team: false,
       });
       setCreatedChannelId(id);
+      const chosenPicture = picture();
+      if (chosenPicture)
+        fireAndForget(
+          pictureEditor.upload(id, chosenPicture),
+          'create-channel'
+        );
       setStep('invite');
       replaceOrInsertSplit({ type: 'channel', id });
     } catch (cause) {
@@ -249,18 +273,12 @@ export function CreateChannelModal() {
                   {step() === 'invite' ? (
                     <>
                       Add people or agents to{' '}
-                      <span class="inline-flex items-baseline gap-1">
-                        <Show
-                          when={visibility() === 'private'}
-                          fallback={
-                            <HashIcon
-                              aria-hidden="true"
-                              class="inline size-4"
-                            />
-                          }
-                        >
-                          <LockIcon aria-hidden="true" class="inline size-4" />
-                        </Show>
+                      <span class="inline-flex items-center gap-1.5 align-bottom">
+                        <ChannelMark
+                          pictureUrl={pictureUrl()}
+                          private={visibility() === 'private'}
+                          class="size-5"
+                        />
                         {channelName()}
                       </span>
                     </>
@@ -269,15 +287,12 @@ export function CreateChannelModal() {
                   )}
                 </Dialog.Title>
                 <Show when={step() === 'visibility'}>
-                  <p class="mt-1 flex items-center gap-1 text-sm text-ink-muted">
-                    <Show
-                      when={visibility() === 'private'}
-                      fallback={
-                        <HashIcon aria-hidden="true" class="size-3.5" />
-                      }
-                    >
-                      <LockIcon aria-hidden="true" class="size-3.5" />
-                    </Show>
+                  <p class="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
+                    <ChannelMark
+                      pictureUrl={pictureUrl()}
+                      private={visibility() === 'private'}
+                      class="size-4"
+                    />
                     {channelName()}
                   </p>
                 </Show>
@@ -301,49 +316,56 @@ export function CreateChannelModal() {
             </div>
 
             <Show when={step() === 'name'}>
-              <div class="flex flex-col gap-2">
-                <label
-                  for="new-channel-name"
-                  class="text-sm font-medium text-ink"
-                >
-                  Name
-                </label>
-                <InputGroup
-                  size="xl"
-                  class="focus-within:ring-2 focus-within:ring-edge-muted"
-                >
-                  <InputGroup.Addon>
-                    <HashIcon aria-hidden="true" class="size-4" />
-                  </InputGroup.Addon>
-                  <InputGroup.Input
-                    ref={nameInput}
-                    id="new-channel-name"
-                    type="text"
-                    value={name()}
-                    onInput={(event) => {
-                      setName(event.currentTarget.value);
-                      setError(undefined);
-                    }}
-                    placeholder="e.g. Feature Requests"
-                    maxLength={80}
-                    autocomplete="off"
-                    data-1p-ignore
-                    aria-invalid={error() === 'Enter a channel name'}
-                    aria-describedby="new-channel-name-description"
-                  />
-                  <InputGroup.Addon align="inline-end">
-                    <span class="text-xs tabular-nums text-ink-extra-muted">
-                      {80 - name().length}
-                    </span>
-                  </InputGroup.Addon>
-                </InputGroup>
-                <p
-                  id="new-channel-name-description"
-                  class="text-sm text-ink-muted"
-                >
-                  Channels are where conversations happen around a topic. Use a
-                  name that is easy to find and understand.
-                </p>
+              <div class="flex flex-col gap-6">
+                <div class="flex flex-col gap-2">
+                  <label
+                    for="new-channel-name"
+                    class="text-sm font-medium text-ink"
+                  >
+                    Name
+                  </label>
+                  <InputGroup
+                    size="xl"
+                    class="focus-within:ring-2 focus-within:ring-edge-muted"
+                  >
+                    <InputGroup.Addon>
+                      <HashIcon aria-hidden="true" class="size-4" />
+                    </InputGroup.Addon>
+                    <InputGroup.Input
+                      ref={nameInput}
+                      id="new-channel-name"
+                      type="text"
+                      value={name()}
+                      onInput={(event) => {
+                        setName(event.currentTarget.value);
+                        setError(undefined);
+                      }}
+                      placeholder="e.g. Feature Requests"
+                      maxLength={80}
+                      autocomplete="off"
+                      data-1p-ignore
+                      aria-invalid={error() === 'Enter a channel name'}
+                      aria-describedby="new-channel-name-description"
+                    />
+                    <InputGroup.Addon align="inline-end">
+                      <span class="text-xs tabular-nums text-ink-extra-muted">
+                        {80 - name().length}
+                      </span>
+                    </InputGroup.Addon>
+                  </InputGroup>
+                  <p
+                    id="new-channel-name-description"
+                    class="text-sm text-ink-muted"
+                  >
+                    Channels are where conversations happen around a topic. Use
+                    a name that is easy to find and understand.
+                  </p>
+                </div>
+                <ChannelPictureField
+                  pictureUrl={pictureUrl()}
+                  onChoose={() => chooseChannelPicture(setPicture)}
+                  onRemove={() => setPicture(undefined)}
+                />
               </div>
             </Show>
 
@@ -351,6 +373,7 @@ export function CreateChannelModal() {
               <div ref={visibilityOptions} class="flex flex-col gap-3">
                 <span class="text-sm font-medium text-ink">Visibility</span>
                 <RadioGroup
+                  variant="cards"
                   value={visibility()}
                   onChange={(value) => {
                     if (value !== 'team' && value !== 'private') return;
@@ -358,29 +381,37 @@ export function CreateChannelModal() {
                     setError(undefined);
                   }}
                   aria-label="Visibility"
-                  class="gap-4"
+                  class="grid-cols-1 sm:grid-cols-2"
                 >
-                  <RadioGroup.Item value="team" class="items-start">
-                    <RadioGroup.ItemControl class="mt-0.5" />
-                    <div class="flex flex-col gap-1">
-                      <RadioGroup.ItemLabel class="text-base text-ink">
-                        Team — anyone on your team
+                  <RadioGroup.Item value="team">
+                    <HashIcon
+                      aria-hidden="true"
+                      class="mt-0.5 size-4 shrink-0"
+                    />
+                    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <RadioGroup.ItemLabel class="text-sm font-medium text-ink">
+                        Team
                       </RadioGroup.ItemLabel>
-                      <RadioGroup.ItemDescription class="text-sm text-ink-muted">
-                        Always discoverable to teammates
+                      <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                        Anyone on your team can find and join it
                       </RadioGroup.ItemDescription>
                     </div>
+                    <RadioGroup.ItemControl class="mt-0.5" />
                   </RadioGroup.Item>
-                  <RadioGroup.Item value="private" class="items-start">
-                    <RadioGroup.ItemControl class="mt-0.5" />
-                    <div class="flex flex-col gap-1">
-                      <RadioGroup.ItemLabel class="text-base text-ink">
-                        Private — only specific people
+                  <RadioGroup.Item value="private">
+                    <LockIcon
+                      aria-hidden="true"
+                      class="mt-0.5 size-4 shrink-0"
+                    />
+                    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <RadioGroup.ItemLabel class="text-sm font-medium text-ink">
+                        Private
                       </RadioGroup.ItemLabel>
-                      <RadioGroup.ItemDescription class="text-sm text-ink-muted">
-                        Can only be viewed or joined by invitation
+                      <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                        Only people you invite can view or join it
                       </RadioGroup.ItemDescription>
                     </div>
+                    <RadioGroup.ItemControl class="mt-0.5" />
                   </RadioGroup.Item>
                 </RadioGroup>
               </div>
@@ -516,5 +547,98 @@ export function CreateChannelModal() {
         </Show>
       </Panel>
     </Dialog>
+  );
+}
+
+/** The new channel's picture, or its visibility icon until one is chosen. */
+function ChannelMark(props: {
+  pictureUrl?: string;
+  private: boolean;
+  class: string;
+}) {
+  return (
+    <ChannelPicture
+      url={props.pictureUrl}
+      class={props.class}
+      fallback={
+        <Show
+          when={props.private}
+          fallback={<HashIcon aria-hidden="true" class="m-auto size-[80%]" />}
+        >
+          <LockIcon aria-hidden="true" class="m-auto size-[80%]" />
+        </Show>
+      }
+    />
+  );
+}
+
+function ChannelPictureField(props: {
+  pictureUrl?: string;
+  onChoose: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div class="flex items-center gap-3">
+      {/* A second, pointer-only target; the labelled buttons stay the tab stops. */}
+      <Button
+        type="button"
+        appearance="bare"
+        size="icon-xl"
+        tabIndex={-1}
+        aria-label={
+          props.pictureUrl ? 'Change channel picture' : 'Add a channel picture'
+        }
+        onClick={() => props.onChoose()}
+      >
+        <ChannelPicture
+          url={props.pictureUrl}
+          class="size-12"
+          fallback={
+            <span class="flex size-full items-center justify-center rounded-lg border border-dashed border-edge text-ink-muted">
+              <ImageIcon aria-hidden="true" class="size-5" />
+            </span>
+          }
+        />
+      </Button>
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-medium text-ink">Channel picture</div>
+        <div class="mt-0.5 text-xs text-ink-muted">
+          Helps people spot the channel at a glance. Square images work best.
+        </div>
+      </div>
+      <Show
+        when={props.pictureUrl}
+        fallback={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onChoose()}
+          >
+            <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+            Upload
+          </Button>
+        }
+      >
+        <div class="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => props.onRemove()}
+          >
+            Remove
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onChoose()}
+          >
+            Change
+          </Button>
+        </div>
+      </Show>
+    </div>
   );
 }
