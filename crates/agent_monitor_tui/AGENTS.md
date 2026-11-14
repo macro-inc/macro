@@ -86,21 +86,26 @@ times a second, and ticks at `fps` only while something animates.
 - On the CHANGES page `+ - < > [ ] n N m s p` and Home are page keys
   (`keys::ChangeKey`), so there a command starting with m, s, p or n is
   typed in capitals (`MON`, `SPND`, `SRC`, `PRS`; no mnemonic starts with
-  N); elsewhere letters start the command line in any case. Its tabs are
+  N); on the monitor and BODY pages `b` is a page key too, so BODY is typed
+  in capitals there; elsewhere letters start the command line in any case. Its tabs are
   the mapped repositories, then `other PRs` (`app::ChangeTab::OtherPrs`)
   for pull requests in no mapped repository, drawn as PRS rows.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
-- `b` / `B` cycle the BODY figure only on pages that show BODY (monitor and
-  BODY); elsewhere `b` still starts the command line.
+- `b` cycles the BODY figure forward on the monitor page and the BODY page;
+  `B` cycles back only on the BODY page, so on the monitor page a capital
+  `B` starts the command line and `BODY` still types. Elsewhere `b` starts
+  the command line.
   Every figure follows the theme: `Theme::figure` is the mesh man's
-  `Palette`, and each figure's `Look` maps its parts onto those roles, so
-  `t` recolours whichever figure is showing.
+  `Palette`, and each figure's `Look` maps its parts onto those roles, so a
+  theme change (backtick, Ctrl-T or `THEME`) recolours whichever figure is
+  showing.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
 - A bare letter starts the command line, so never bind a lowercase letter
-  that begins a mnemonic (`t` would swallow TAPE and TREE). CHANGES is the
-  one exception: its `m s p n` leave capitals for commands (above).
+  that begins a mnemonic (`t` would swallow TAPE and TREE). The
+  exceptions are CHANGES (`m s p n`) and `b` on the monitor and BODY pages; they leave
+  capitals for commands (above).
   Elsewhere use Ctrl or a command instead, as the theme does (Ctrl-T, `` ` ``, `THEME`). Browsers
   (ttyd previews) swallow Ctrl-T, Ctrl-W and Ctrl-N, so give every Ctrl key
   a plain-key twin.

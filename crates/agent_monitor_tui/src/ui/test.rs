@@ -351,7 +351,7 @@ fn help_overlay() {
     let screen = render(&mut app, 200, 56);
     assert!(screen.contains("AGT builder working"));
     assert!(
-        screen.contains("in any case (CAPITALS on 8), then ENTER:"),
+        screen.contains("any case (CAPITALS on 0, 7, 8), then ENTER:"),
         "{screen}"
     );
 }

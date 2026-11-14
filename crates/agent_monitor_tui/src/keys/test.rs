@@ -244,14 +244,31 @@ fn b_cycles_body_figures_where_body_shows_and_types_elsewhere() {
             step(idle(), Key::Char('b'), &page),
             (idle(), Action::CycleFigure(true))
         );
-        assert_eq!(
-            step(idle(), Key::Char('B'), &page),
-            (idle(), Action::CycleFigure(false))
-        );
     }
+    assert_eq!(
+        step(idle(), Key::Char('B'), &Page::Zoom(Pane::Body)),
+        (idle(), Action::CycleFigure(false))
+    );
     let (mode, action) = step(idle(), Key::Char('b'), &Page::Tree);
     assert_eq!(action, Action::None);
     assert!(matches!(mode, Mode::Command { .. }));
+}
+
+#[test]
+fn body_typed_in_capitals_on_the_monitor_page_opens_body() {
+    let keys: Vec<Key> = "BODY".chars().map(Key::Char).collect();
+    let (mode, actions) = run(idle(), &keys, &Page::Monitor);
+    assert!(actions.iter().all(|action| *action == Action::None));
+    assert_eq!(
+        step(mode, Key::Enter, &Page::Monitor),
+        (
+            idle(),
+            Action::Run(Command {
+                page: Page::Zoom(Pane::Body),
+                filter: Vec::new(),
+            })
+        )
+    );
 }
 
 #[test]

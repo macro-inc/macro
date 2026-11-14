@@ -511,7 +511,10 @@ const HELP: [(&str, &str); 22] = [
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
-    ("b  B", "next / previous BODY figure (monitor and BODY)"),
+    (
+        "b  B",
+        "next BODY figure (monitor, BODY); previous (BODY only)",
+    ),
     (
         "CTRL-T  `",
         "next colour theme (` where a browser keeps CTRL-T)",
@@ -529,7 +532,7 @@ const HELP: [(&str, &str); 22] = [
     ("", ""),
     (
         "TYPE A LETTER",
-        "command line, in any case (CAPITALS on 8), then ENTER:",
+        "command line, any case (CAPITALS on 0, 7, 8), then ENTER:",
     ),
     ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
     (

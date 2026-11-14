@@ -440,11 +440,14 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Char('`') => (stay, Action::Theme(None)),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
         Key::Char('a') => (stay, Action::ToggleAll),
-        // Only where BODY shows; elsewhere `b` starts a command as before.
-        Key::Char(letter @ ('b' | 'B'))
-            if matches!(page, Page::Monitor | Page::Zoom(Pane::Body)) =>
-        {
-            (stay, Action::CycleFigure(letter == 'b'))
+        // Only where BODY shows. On the monitor page only lowercase `b`, so a
+        // capital starts the command line and `BODY` still types; elsewhere
+        // `b` starts a command as before.
+        Key::Char('b') if matches!(page, Page::Monitor | Page::Zoom(Pane::Body)) => {
+            (stay, Action::CycleFigure(true))
+        }
+        Key::Char('B') if matches!(page, Page::Zoom(Pane::Body)) => {
+            (stay, Action::CycleFigure(false))
         }
         Key::Char('/') => (
             Mode::Find {
