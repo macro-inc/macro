@@ -141,6 +141,20 @@ async fn new_mail_is_announced_to_the_notification_service(
         Some("Noon at the usual place?")
     );
 
+    // Tapping the notification opens the thread by the id it carries.
+    let named = content["threadId"].as_str().unwrap_or_default();
+    let opened = inbox
+        .get(&format!("/email/threads/{named}?limit=100"))
+        .await?
+        .ok()?;
+    assert_eq!(opened["thread"]["db_id"], preview["id"]);
+    assert_eq!(
+        opened["thread"]["messages"][0]["body_text"]
+            .as_str()
+            .map(str::trim),
+        Some("Noon at the usual place?")
+    );
+
     // A later mail's notification arrives without a second one for the first.
     inbox.deliver(&Mail::new(
         "Alan <alan@example.com>",

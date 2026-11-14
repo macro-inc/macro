@@ -369,16 +369,169 @@ async fn search_answer(user: &User, query: &str) -> Result<Value, Report> {
     .ok()
 }
 
+/// The hits of a search answer that are the mail thread named `subject`.
+fn mail_hits<'a>(answer: &'a Value, subject: &str) -> Vec<&'a Value> {
+    answer["results"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|hit| hit["thread_id"].is_string())
+        .filter(|hit| hit["subject"] == subject || hit["name"] == subject)
+        .collect()
+}
+
+/// A search of everything, as global search and Cmd+K send it (no kind of
+/// item left out), finds mail, and the hit names the thread it opens. When
+/// this fails, mail can only be found from the Email view's own search, or
+/// a result opens nothing.
+async fn a_search_of_everything_finds_mail_and_the_hit_opens(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    inbox.deliver(&Mail::new(SENDER, "Harvest dates", "The kumquat forecast."))?;
+    let preview = inbox.wait_for_preview("inbox", "Harvest dates").await?;
+
+    let hit = eventually(
+        "a search of everything to find the mail",
+        DEFAULT_TIMEOUT,
+        async || {
+            let answer = search_answer(&ada, "kumquat").await?;
+            Ok(mail_hits(&answer, "Harvest dates")
+                .first()
+                .map(|hit| (*hit).clone()))
+        },
+    )
+    .await?;
+    assert_eq!(
+        hit["thread_id"], preview["id"],
+        "the hit names another thread than the inbox lists: {hit}"
+    );
+
+    // Opening the result: the thread the hit names is the delivered mail.
+    let thread_id = hit["thread_id"].as_str().unwrap_or_default();
+    let opened = inbox.thread(thread_id).await?;
+    assert_eq!(
+        opened["messages"][0]["subject"], "Harvest dates",
+        "{opened}"
+    );
+    assert!(
+        opened["messages"][0]["body_text"]
+            .as_str()
+            .is_some_and(|text| text.contains("kumquat")),
+        "the opened result is not the mail that was found: {opened}"
+    );
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_search_of_everything_finds_mail_and_the_hit_opens() -> Result<(), Report> {
+    a_search_of_everything_finds_mail_and_the_hit_opens(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_search_of_everything_finds_mail_and_the_hit_opens() -> Result<(), Report> {
+    a_search_of_everything_finds_mail_and_the_hit_opens(Provider::Outlook).await
+}
+
+/// A hit on a word only one message of a thread holds names that message,
+/// so the thread opens at it: the message the hit names is in the thread
+/// the hit names, holds the word, and is the one the provider delivered.
+/// When this fails, a search result opens its thread at the top and the
+/// reader has to look for the match.
+async fn a_search_hit_names_the_message_it_matched(provider: Provider) -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let root = "loquat@orchard.example";
+    inbox.deliver(&Mail {
+        message_id: Some(root.to_owned()),
+        ..Mail::new(SENDER, "Orchard notes", "A message about loquat.")
+    })?;
+    let preview = inbox.wait_for_preview("inbox", "Orchard notes").await?;
+    inbox.deliver(
+        &Mail::new(SENDER, "Orchard notes", "A message about longan.").in_reply_to(root),
+    )?;
+    let third = inbox.deliver(
+        &Mail::new(SENDER, "Orchard notes", "A message about lychee.").in_reply_to(root),
+    )?;
+
+    let hit = eventually(
+        "a search for the third message's word to find the thread",
+        DEFAULT_TIMEOUT,
+        async || {
+            let answer = search_answer(&ada, "lychee").await?;
+            Ok(mail_hits(&answer, "Orchard notes")
+                .first()
+                .map(|hit| (*hit).clone()))
+        },
+    )
+    .await?;
+    assert_eq!(hit["thread_id"], preview["id"], "{hit}");
+    let matched: Vec<&str> = hit["email_message_search_results"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|result| result["message_id"].as_str())
+        .collect();
+    assert_eq!(
+        matched.len(),
+        1,
+        "the hit does not name the one message that holds the word: {hit}"
+    );
+
+    let thread = inbox
+        .get(&format!(
+            "/email/threads/{}?limit=100",
+            hit["thread_id"].as_str().unwrap_or_default()
+        ))
+        .await?
+        .ok()?;
+    let messages = thread["thread"]["messages"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(messages.len(), 3, "{thread}");
+    let named = messages
+        .iter()
+        .find(|message| message["db_id"] == matched[0])
+        .ok_or_else(|| {
+            rootcause::report!("the thread does not hold the message the hit names: {thread}")
+        })?;
+    assert!(
+        named["body_text"]
+            .as_str()
+            .is_some_and(|text| text.contains("lychee")),
+        "the hit names a message without the word: {named}"
+    );
+    assert_eq!(
+        named["provider_id"],
+        third.id.as_str(),
+        "the hit names another message than the provider delivered last: {named}"
+    );
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_search_hit_names_the_message_it_matched() -> Result<(), Report> {
+    a_search_hit_names_the_message_it_matched(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_search_hit_names_the_message_it_matched() -> Result<(), Report> {
+    a_search_hit_names_the_message_it_matched(Provider::Outlook).await
+}
+
 /// A personal tag shows in its owner's search results and in nobody
 /// else's: someone the inbox is delegated to finds the same thread without
 /// it. When this fails, the search answer carries another person's
-/// personal tags.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Report> {
+/// personal tags, or a tag put on a thread or taken off it is not stored.
+async fn a_personal_tag_stays_its_owners(provider: Provider) -> Result<(), Report> {
     let stack = search_stack().await?;
     let ada = stack.unique_user("ada").await?;
     let bob = stack.unique_user("bob").await?;
-    let inbox = ada.link_gmail().await?;
+    let inbox = ada.link(provider, ada.email()).await?;
     inbox.deliver(&Mail::new(SENDER, "Shared plans", "The tamarillo harvest."))?;
     let preview = inbox.wait_for_preview("inbox", "Shared plans").await?;
     let thread = preview["id"].as_str().unwrap_or_default().to_owned();
@@ -419,13 +572,20 @@ async fn a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Rep
         .await?
         .ok()?;
     let option = option["id"].as_str().unwrap_or_default().to_owned();
-    ada.document_storage_request(
-        Method::POST,
-        &format!("/properties/entities/THREAD/{thread}/{definition}/options/{option}"),
-        None,
-    )
-    .await?
-    .ok()?;
+    let tag_on_thread =
+        format!("/properties/entities/THREAD/{thread}/{definition}/options/{option}");
+    let thread_properties = format!("/properties/entities/THREAD/{thread}");
+    ada.document_storage_request(Method::POST, &tag_on_thread, None)
+        .await?
+        .ok()?;
+    let tagged = ada
+        .document_storage_request(Method::GET, &thread_properties, None)
+        .await?
+        .ok()?;
+    assert!(
+        tag_value(&tagged, &definition).contains(&option),
+        "the thread does not carry the tag: {tagged}"
+    );
 
     eventually(
         "Ada's search to find the thread with her tag",
@@ -442,5 +602,40 @@ async fn a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Rep
         !answer.contains(&option) && !answer.contains("Orchard"),
         "{answer}"
     );
+
+    // Ada takes the tag off again.
+    ada.document_storage_request(Method::DELETE, &tag_on_thread, None)
+        .await?
+        .ok()?;
+    let untagged = ada
+        .document_storage_request(Method::GET, &thread_properties, None)
+        .await?
+        .ok()?;
+    assert!(
+        !tag_value(&untagged, &definition).contains(&option),
+        "the thread still carries the tag: {untagged}"
+    );
     stack.finish().await
+}
+
+/// What an entity's properties hold as the value of one property, as text:
+/// the options chosen for it, apart from the options it could take.
+fn tag_value(properties: &Value, definition: &str) -> String {
+    properties["properties"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|property| property["definition"]["id"] == definition)
+        .map(|property| property["value"].to_string())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Report> {
+    a_personal_tag_stays_its_owners(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Report> {
+    a_personal_tag_stays_its_owners(Provider::Outlook).await
 }

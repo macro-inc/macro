@@ -574,3 +574,90 @@ async fn a_gmail_and_an_outlook_inbox_of_a_user_each_use_their_own_grant() -> Re
 async fn an_outlook_and_a_gmail_inbox_of_a_user_each_use_their_own_grant() -> Result<(), Report> {
     each_inbox_of_a_user_uses_its_own_grant(Provider::Outlook, Provider::Gmail).await
 }
+
+/// The change subscription Outlook holds for the mailbox, once Macro has
+/// made one that `known` does not name.
+async fn wait_for_subscription(
+    stack: &Stack,
+    inbox: &Inbox,
+    known: Option<&str>,
+) -> Result<email_e2e::outlook_emulator::SubscriptionSummary, Report> {
+    eventually(
+        "Macro to subscribe to the mailbox's changes",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok(stack
+                .outlook()
+                .subscriptions()
+                .into_iter()
+                .find(|subscription| {
+                    subscription.mailbox == inbox.email() && Some(subscription.id.as_str()) != known
+                }))
+        },
+    )
+    .await
+}
+
+/// Outlook asks Macro to renew its change subscription (the
+/// `reauthorizationRequired` lifecycle event): Macro extends the
+/// subscription it has, without opening another. When Outlook tells Macro
+/// it removed the subscription, Macro opens a new one, and mail still
+/// arrives. When this fails the subscription lapses or stays gone, and new
+/// mail only shows at the next poll.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_subscription_is_renewed_when_outlook_asks() -> Result<(), Report> {
+    use email_e2e::outlook_emulator::LifecycleEvent;
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook().await?;
+    let subscription = wait_for_subscription(&stack, &inbox, None).await?;
+    let renewed_before = answered(&stack, &inbox, "subscriptions.update");
+    let created_before = answered(&stack, &inbox, "subscriptions.create");
+
+    stack
+        .outlook()
+        .send_lifecycle(&subscription.id, LifecycleEvent::ReauthorizationRequired)?;
+    eventually(
+        "Macro to renew the subscription Outlook asked it to renew",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok((answered(&stack, &inbox, "subscriptions.update") > renewed_before).then_some(()))
+        },
+    )
+    .await?;
+    let held: Vec<_> = stack
+        .outlook()
+        .subscriptions()
+        .into_iter()
+        .filter(|held| held.mailbox == inbox.email())
+        .collect();
+    assert_eq!(held.len(), 1, "{held:?}");
+    assert_eq!(held[0].id, subscription.id, "the subscription was replaced");
+    assert!(
+        held[0].expires_at >= subscription.expires_at,
+        "the renewal shortened the subscription: {held:?}"
+    );
+    assert_eq!(
+        answered(&stack, &inbox, "subscriptions.create"),
+        created_before
+    );
+    inbox.deliver(&mail("After the renewal"))?;
+    inbox.wait_for_preview("inbox", "After the renewal").await?;
+
+    // Outlook drops the subscription and says so.
+    stack
+        .outlook()
+        .send_lifecycle(&subscription.id, LifecycleEvent::SubscriptionRemoved)?;
+    let replacement = wait_for_subscription(&stack, &inbox, Some(&subscription.id)).await?;
+    assert_eq!(replacement.resource, subscription.resource);
+    inbox.deliver(&mail("After the replacement"))?;
+    inbox
+        .wait_for_preview("inbox", "After the replacement")
+        .await?;
+    let link = inbox.link().await?;
+    assert_eq!(link["needs_reauth"], false, "{link}");
+    assert_eq!(link["sync_status"], "UP_TO_DATE", "{link}");
+
+    stack.finish().await
+}

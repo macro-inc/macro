@@ -1607,3 +1607,141 @@ async fn outlook_draft_without_a_sender_gets_its_attachment_stored() -> Result<(
 
     stack.finish().await
 }
+
+/// New Outlook mail is announced to the open app: once the message is
+/// stored, the connection gateway is asked to tell the inbox's viewers to
+/// refresh, and the list the app then reads holds the thread. When this
+/// fails the mail is stored but the open list stays as it was until the
+/// user reloads.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_new_mail_tells_the_open_app_to_refresh() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook().await?;
+    // Linking announces itself with the same event: only what is asked
+    // after the delivery counts.
+    let asked_before = stack.service_requests().len();
+
+    let delivered = inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Seen without reloading",
+        "Hello.",
+    ))?;
+    eventually(
+        "the client to be told to refresh the inbox",
+        DEFAULT_TIMEOUT,
+        async || {
+            let told = stack
+                .service_requests()
+                .iter()
+                .skip(asked_before)
+                .any(|request| {
+                    request.service == "connection-gateway"
+                        && request.body.as_ref().is_some_and(|body| {
+                            body["message"]["event"] == "upsert_message"
+                                && body["message"]["link_id"]
+                                    == inbox.link_id().to_string().as_str()
+                        })
+                });
+            Ok(told.then_some(()))
+        },
+    )
+    .await?;
+
+    // What the app reads when it refreshes: the thread, with the message
+    // the provider holds.
+    let thread = wait_for_thread_named(&inbox, "inbox", "Seen without reloading").await?;
+    assert_eq!(thread["messages"][0]["from"]["email"], "grace@example.com");
+    let at_provider = inbox.provider_message(&delivered.id)?;
+    assert!(
+        at_provider.is_some_and(|message| message.in_inbox),
+        "the provider does not hold the message in the inbox"
+    );
+
+    stack.finish().await
+}
+
+/// A draft the user writes in Outlook itself, not in Macro, shows in
+/// Macro's Drafts with what it says, and an edit made in Outlook reaches
+/// Macro's copy. When this fails a draft begun in Outlook is missing from
+/// Macro, or Macro keeps showing its first wording.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_draft_written_in_outlook_shows_and_follows_its_edits() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook().await?;
+    let outlook = stack.outlook();
+
+    let draft = outlook.deliver(
+        inbox.email(),
+        &outlook_emulator::NewMessage {
+            to: Some("Grace <grace@example.com>".to_owned()),
+            subject: Some("Begun in Outlook".to_owned()),
+            text: Some("First wording.".to_owned()),
+            folder: Some("drafts".to_owned()),
+            ..Default::default()
+        },
+    )?;
+    let preview = inbox.wait_for_preview("drafts", "Begun in Outlook").await?;
+    let thread_id = preview["id"].as_str().unwrap_or_default().to_owned();
+    let thread = inbox
+        .wait_for_thread(&thread_id, "the draft to be readable", |thread| {
+            thread["messages"][0]["db_id"].is_string()
+        })
+        .await?;
+    let message = &thread["messages"][0];
+    assert_eq!(message["is_draft"], true, "{message}");
+    assert_eq!(message["subject"], "Begun in Outlook");
+    assert_eq!(message["to"][0]["email"], "grace@example.com");
+    assert!(
+        message["body_text"]
+            .as_str()
+            .is_some_and(|text| text.contains("First wording.")),
+        "the draft does not read as written: {message}"
+    );
+
+    // The owner goes on writing in Outlook.
+    let edited = reqwest::Client::new()
+        .patch(format!("{}/me/messages/{}", outlook.graph_url(), draft.id))
+        .bearer_auth(outlook.access_token(inbox.email())?)
+        .json(&json!({
+            "subject": "Begun and finished in Outlook",
+            "body": { "contentType": "text", "content": "Second wording." },
+        }))
+        .send()
+        .await?;
+    assert!(
+        edited.status().is_success(),
+        "editing the draft in Outlook answered {}",
+        edited.status()
+    );
+
+    let thread = inbox
+        .wait_for_thread(&thread_id, "the draft to follow the edit", |thread| {
+            thread["messages"][0]["body_text"]
+                .as_str()
+                .is_some_and(|text| text.contains("Second wording."))
+        })
+        .await?;
+    let message = &thread["messages"][0];
+    assert_eq!(message["is_draft"], true, "{message}");
+    assert_eq!(message["subject"], "Begun and finished in Outlook");
+    assert_eq!(
+        thread["messages"].as_array().map_or(0, Vec::len),
+        1,
+        "the edit made another message: {thread}"
+    );
+    inbox
+        .wait_for_preview("drafts", "Begun and finished in Outlook")
+        .await?;
+    // The mailbox still holds the one draft, as edited.
+    let drafts: Vec<_> = inbox
+        .provider_messages()?
+        .into_iter()
+        .filter(|message| message.id == draft.id)
+        .collect();
+    assert_eq!(drafts.len(), 1, "{drafts:?}");
+    assert_eq!(drafts[0].subject, "Begun and finished in Outlook");
+
+    stack.finish().await
+}

@@ -975,3 +975,85 @@ async fn outlook_user_writes_made_while_the_mailbox_cools_down_are_not_refused()
 
     stack.finish().await
 }
+
+/// How soon Macro reads a mailbox's changes once Outlook reports missed
+/// notifications: well under the two minutes after which its poll would
+/// read them anyway.
+const MISSED_NOTIFICATIONS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
+
+/// Waits until Macro has no read of the mailbox's folders under way or due:
+/// from then on the next one is its two-minute poll, unless something asks
+/// for one sooner.
+async fn wait_until_no_folder_read_is_due(stack: &Stack, inbox: &Inbox) -> Result<(), Report> {
+    eventually(
+        "Macro to have read the mailbox's folders",
+        DEFAULT_TIMEOUT,
+        async || {
+            let busy: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM email_sync_streams \
+                 WHERE link_id = $1 AND kind IN ('folder_catalog', 'mail_folder') \
+                 AND (lease_id IS NOT NULL OR next_run_at <= now())",
+            )
+            .bind(inbox.link_id())
+            .fetch_one(stack.db())
+            .await?;
+            Ok((busy == 0).then_some(()))
+        },
+    )
+    .await
+}
+
+/// Outlook tells Macro that it dropped change notifications for the mailbox
+/// (the `missed` lifecycle event). Macro does not wait for its poll: it reads
+/// the folders' changes at once, and the mailbox goes on syncing with
+/// nothing listed twice. When this fails, mail whose notification Outlook
+/// dropped only shows up to two minutes later, at the next poll.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_missed_notifications_are_made_up_for_at_once() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook().await?;
+    inbox.deliver(&mail("Before the gap"))?;
+    inbox.wait_for_preview("inbox", "Before the gap").await?;
+    let subscription = eventually(
+        "Macro to subscribe to the mailbox's changes",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok(stack
+                .outlook()
+                .subscriptions()
+                .into_iter()
+                .find(|subscription| subscription.mailbox == inbox.email()))
+        },
+    )
+    .await?;
+
+    wait_until_no_folder_read_is_due(&stack, &inbox).await?;
+    let read_before = answered(&stack, &inbox, "messages.delta").len();
+    stack
+        .outlook()
+        .send_lifecycle(&subscription.id, outlook_emulator::LifecycleEvent::Missed)?;
+    eventually(
+        "Macro to read the folders' changes after Outlook reported missed notifications",
+        MISSED_NOTIFICATIONS_TIMEOUT,
+        async || {
+            let read = answered(&stack, &inbox, "messages.delta");
+            Ok(read
+                .iter()
+                .skip(read_before)
+                .any(|request| request.status == 200)
+                .then_some(()))
+        },
+    )
+    .await?;
+
+    // The mailbox goes on syncing, and the extra read duplicated nothing.
+    inbox.deliver(&mail("After the gap"))?;
+    inbox.wait_for_preview("inbox", "After the gap").await?;
+    for subject in ["Before the gap", "After the gap"] {
+        assert_eq!(count_in_view(&inbox, "inbox", subject).await?, 1);
+    }
+    assert_eq!(inbox.link().await?["sync_status"], "UP_TO_DATE");
+
+    stack.finish().await
+}

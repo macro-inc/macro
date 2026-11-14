@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use email_e2e::{Mail, Provider, Report, Stack};
+use email_e2e::{Inbox, Mail, Provider, Report, Stack};
 use serde_json::{Value, json};
 
 /// The pairs of users a contacts message connects, each pair sorted.
@@ -239,4 +239,173 @@ async fn outlook_a_reply_is_previewed_by_its_new_text() -> Result<(), Report> {
     );
 
     stack.finish().await
+}
+
+/// Saves a person in the mailbox owner's address book at the provider, as
+/// the provider's own contacts app does.
+fn save_in_address_book(
+    stack: &Stack,
+    provider: Provider,
+    mailbox: &str,
+    address: &str,
+    name: &str,
+) -> Result<(), Report> {
+    match provider {
+        Provider::Gmail => stack.gmail().upsert_contact(
+            mailbox,
+            email_e2e::gmail_emulator::SeedContact {
+                email: address.to_owned(),
+                name: Some(name.to_owned()),
+                photo_url: None,
+            },
+            false,
+        )?,
+        Provider::Outlook => {
+            stack.outlook().upsert_contact(
+                mailbox,
+                None,
+                &email_e2e::outlook_emulator::SeedContact {
+                    email: address.to_owned(),
+                    name: Some(name.to_owned()),
+                },
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// How many requests of one route the provider answered the mailbox with
+/// success.
+fn provider_calls(stack: &Stack, provider: Provider, mailbox: &str, route: &str) -> usize {
+    match provider {
+        Provider::Gmail => stack
+            .gmail()
+            .requests()
+            .iter()
+            .filter(|request| {
+                request.mailbox.as_deref() == Some(mailbox)
+                    && request.route.is_some_and(|name| name.to_string() == route)
+                    && request.status < 300
+            })
+            .count(),
+        Provider::Outlook => stack
+            .outlook()
+            .requests()
+            .iter()
+            .filter(|request| {
+                request.mailbox.as_deref() == Some(mailbox)
+                    && request.route.is_some_and(|name| name.to_string() == route)
+                    && request.status < 300
+            })
+            .count(),
+    }
+}
+
+/// Waits until the recipient picker lists an address with a name, and
+/// answers the name.
+async fn wait_for_picker_name(inbox: &Inbox, address: &str) -> Result<String, Report> {
+    let link_id = inbox.link_id().to_string();
+    email_e2e::eventually(
+        &format!("the recipient picker to list {address} with a name"),
+        email_e2e::DEFAULT_TIMEOUT,
+        async || {
+            let contacts = inbox.get("/email/contacts").await?.ok()?;
+            Ok(contacts["contacts"][&link_id]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|contact| contact["email_address"] == address)
+                .and_then(|contact| contact["name"].as_str())
+                .map(str::to_owned))
+        },
+    )
+    .await
+}
+
+/// The provider's address book reaches Macro: the people saved there
+/// before the inbox was linked, and one saved later, at the next refresh.
+/// Someone the user then writes to by a bare address is listed by the
+/// recipient picker under the name the address book gives them.
+///
+/// When it fails: the address book is read and thrown away, so people the
+/// user saved at the provider have no name in Macro until they write
+/// themselves, or contacts saved after linking never arrive.
+async fn address_book_names_the_people_the_user_writes_to(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    stack.seed_mailbox(provider, ada.email(), &[])?;
+    save_in_address_book(
+        &stack,
+        provider,
+        ada.email(),
+        "grace@example.com",
+        "Grace Brewster Hopper",
+    )?;
+    let inbox = ada.link(provider, ada.email()).await?;
+
+    // The provider was asked for the address book.
+    let routes = match provider {
+        Provider::Gmail => ["people.connections.list", "otherContacts.list"],
+        Provider::Outlook => ["contactFolders.list", "contacts.list"],
+    };
+    for route in routes {
+        email_e2e::eventually(
+            &format!("Macro to ask the provider for {route}"),
+            email_e2e::DEFAULT_TIMEOUT,
+            async || Ok((provider_calls(&stack, provider, ada.email(), route) > 0).then_some(())),
+        )
+        .await?;
+    }
+
+    inbox
+        .send(&json!({
+            "subject": "Compiler notes",
+            "to": [{ "email": "grace@example.com" }],
+            "body_text": "Here are my notes.",
+        }))
+        .await?;
+    assert_eq!(
+        wait_for_picker_name(&inbox, "grace@example.com").await?,
+        "Grace Brewster Hopper"
+    );
+
+    // A person saved after linking arrives with the periodic refresh.
+    save_in_address_book(
+        &stack,
+        provider,
+        ada.email(),
+        "linus@example.com",
+        "Linus Benedict Torvalds",
+    )?;
+    stack
+        .send_to_queue(
+            "link-manager",
+            &json!({ "operation": "Refresh", "link_id": inbox.link_id() }),
+        )
+        .await?;
+    inbox
+        .send(&json!({
+            "subject": "Kernel notes",
+            "to": [{ "email": "linus@example.com" }],
+            "body_text": "And these.",
+        }))
+        .await?;
+    assert_eq!(
+        wait_for_picker_name(&inbox, "linus@example.com").await?,
+        "Linus Benedict Torvalds"
+    );
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_address_book_names_the_people_the_user_writes_to() -> Result<(), Report> {
+    address_book_names_the_people_the_user_writes_to(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_address_book_names_the_people_the_user_writes_to() -> Result<(), Report> {
+    address_book_names_the_people_the_user_writes_to(Provider::Outlook).await
 }

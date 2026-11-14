@@ -205,6 +205,181 @@ async fn remind_me_if_no_reply(provider: Provider) -> Result<(), Report> {
     stack.finish().await
 }
 
+/// How far ahead a reminder is set that the scenario changes and removes
+/// before its time: no sweep of the scenario finds it due.
+const REMIND_MUCH_LATER: Duration = Duration::from_secs(3600);
+
+/// `PUT /reminders/email/{thread_id}` with a command the reminder menu sends.
+async fn put_followup(inbox: &Inbox, thread_id: &str, command: &Value) -> Result<Value, Report> {
+    inbox
+        .user()
+        .document_storage_request(
+            Method::PUT,
+            &format!("/reminders/email/{thread_id}"),
+            Some(command),
+        )
+        .await?
+        .ok()
+}
+
+/// The instant a follow-up names, to the millisecond.
+fn remind_at(followup: &Value) -> Option<i64> {
+    followup["remindAt"]
+        .as_str()
+        .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+        .map(|at| at.timestamp_millis())
+}
+
+/// A reminder can be moved to another time and then removed: the edit
+/// names the revision it replaces and is answered with the new time, and
+/// removing brings the thread back to the inbox, in Macro and at the
+/// provider, without ever reminding. A second thread's reminder comes due
+/// meanwhile, so the sweep that finds it had the removed one to pass over.
+///
+/// When it fails, a reminder keeps its old time after an edit, or a thread
+/// whose reminder the user removed stays filed away, or still reminds.
+async fn changed_then_removed_reminder_gives_the_thread_back(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let (thread, message) = receive(&inbox, "Invoice", "invoice-1@example.com").await?;
+    let (other, _) = receive(&inbox, "Contract draft", "contract-1@example.com").await?;
+
+    let first_time = Utc::now() + REMIND_MUCH_LATER;
+    let set = put_followup(
+        &inbox,
+        &thread,
+        &json!({
+            "type": "set",
+            "operationId": Uuid::now_v7(),
+            "expectedRevision": null,
+            "remindAt": first_time,
+            "condition": "if_no_reply",
+        }),
+    )
+    .await?;
+    assert!(
+        !in_inbox(&inbox, &thread).await?,
+        "the reminded thread stayed in the inbox"
+    );
+    inbox
+        .wait_for_provider_message(
+            "the reminded thread out of the provider's inbox",
+            |at_provider| at_provider.id == message && !at_provider.in_inbox,
+        )
+        .await?;
+
+    // Change the time, naming the revision the menu showed.
+    let second_time = first_time + REMIND_MUCH_LATER;
+    let changed = put_followup(
+        &inbox,
+        &thread,
+        &json!({
+            "type": "set",
+            "operationId": Uuid::now_v7(),
+            "expectedRevision": set["revision"],
+            "remindAt": second_time,
+            "condition": "if_no_reply",
+        }),
+    )
+    .await?;
+    assert_eq!(changed["reminderId"], set["reminderId"], "{changed}");
+    assert_ne!(changed["revision"], set["revision"], "{changed}");
+    assert_eq!(
+        remind_at(&changed),
+        Some(second_time.timestamp_millis()),
+        "the edit was not answered with the new time: {changed}"
+    );
+    let read = followup(&inbox, &thread).await?;
+    assert_eq!(
+        remind_at(&read),
+        Some(second_time.timestamp_millis()),
+        "the reminder kept its old time: {read}"
+    );
+    assert_eq!(read["revision"], changed["revision"], "{read}");
+    assert!(
+        !in_inbox(&inbox, &thread).await?,
+        "changing the reminder's time brought the thread back"
+    );
+
+    // An edit or a removal that names the replaced revision is refused.
+    let stale = inbox
+        .user()
+        .document_storage_request(
+            Method::PUT,
+            &format!("/reminders/email/{thread}"),
+            Some(&json!({
+                "type": "remove",
+                "operationId": Uuid::now_v7(),
+                "expectedRevision": set["revision"],
+            })),
+        )
+        .await?;
+    assert_eq!(
+        stale.status, 400,
+        "a removal naming a replaced revision was not refused: {}",
+        stale.text
+    );
+
+    put_followup(
+        &inbox,
+        &thread,
+        &json!({
+            "type": "remove",
+            "operationId": Uuid::now_v7(),
+            "expectedRevision": changed["revision"],
+        }),
+    )
+    .await?;
+    eventually(
+        "the removed reminder to give the thread back",
+        DEFAULT_TIMEOUT,
+        async || {
+            let state = followup(&inbox, &thread).await?["state"].clone();
+            Ok((state == "removed" && in_inbox(&inbox, &thread).await?).then_some(()))
+        },
+    )
+    .await?;
+    inbox
+        .wait_for_provider_message("the thread back in the provider's inbox", |at_provider| {
+            at_provider.id == message && at_provider.in_inbox
+        })
+        .await?;
+
+    // The other thread's reminder comes due: the sweeps that return it
+    // would have delivered the removed one too, were it still alive.
+    let other_reminder = remind_if_no_reply(&inbox, &other).await?;
+    let other_id = other_reminder["reminderId"].as_str().unwrap_or_default();
+    let mut notifications = Vec::new();
+    eventually(
+        "the other thread's reminder to notify",
+        DEFAULT_TIMEOUT,
+        async || {
+            stack
+                .send_to_queue(DISPATCH, &json!({ "operation": "sweep" }))
+                .await?;
+            notifications.extend(stack.take_queue_messages(INGRESS).await?);
+            Ok(notifies(&notifications, other_id).then_some(()))
+        },
+    )
+    .await?;
+    let removed_id = set["reminderId"].as_str().unwrap_or_default();
+    assert!(!removed_id.is_empty(), "{set}");
+    assert!(
+        !notifies(&notifications, removed_id),
+        "Ada was reminded about a thread whose reminder she removed: {notifications:?}"
+    );
+    assert_eq!(followup(&inbox, &thread).await?["state"], "removed");
+
+    stack.finish().await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn gmail_remind_me_if_no_reply() -> Result<(), Report> {
     remind_me_if_no_reply(Provider::Gmail).await
@@ -213,4 +388,14 @@ async fn gmail_remind_me_if_no_reply() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_remind_me_if_no_reply() -> Result<(), Report> {
     remind_me_if_no_reply(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_changed_then_removed_reminder_gives_the_thread_back() -> Result<(), Report> {
+    changed_then_removed_reminder_gives_the_thread_back(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_changed_then_removed_reminder_gives_the_thread_back() -> Result<(), Report> {
+    changed_then_removed_reminder_gives_the_thread_back(Provider::Outlook).await
 }

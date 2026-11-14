@@ -180,6 +180,108 @@ async fn reply_joins_the_thread_on_both_sides(provider: Provider) -> Result<(), 
     stack.finish().await
 }
 
+/// The addresses a recipient field of a stored message names, sorted.
+fn stored_addresses(message: &Value, field: &str) -> Vec<String> {
+    let mut addresses: Vec<String> = message[field]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|recipient| recipient["email"].as_str().map(str::to_owned))
+        .collect();
+    addresses.sort();
+    addresses
+}
+
+/// A reply to all reaches everyone the original named: its sender and the
+/// other To recipient in To, the Cc recipient in Cc, and the replying inbox
+/// itself in neither. Each of them gets one copy, filed under the message
+/// it answers. When this fails, a reply to all reaches only the person who
+/// wrote, or names its own sender as a recipient.
+async fn reply_to_all_reaches_everyone_but_its_sender(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let grace = stack.user("grace").await?;
+    let joan = stack.user("joan").await?;
+    let linus = stack.user("linus").await?;
+    let ada_inbox = ada.link(provider, ada.email()).await?;
+    let grace_inbox = grace.link(provider, grace.email()).await?;
+    let joan_inbox = joan.link(provider, joan.email()).await?;
+    let linus_inbox = linus.link(provider, linus.email()).await?;
+
+    grace_inbox
+        .send(&json!({
+            "subject": "Offsite",
+            "to": [{ "email": ada.email() }, { "email": joan.email() }],
+            "cc": [{ "email": linus.email() }],
+            "body_text": "Which week?",
+            "body_html": html("<html><body><div>Which week?</div></body></html>"),
+        }))
+        .await?;
+    let arrived = ada_inbox.wait_for_preview("inbox", "Offsite").await?;
+    let original = first_message(&ada_inbox, &arrived).await?;
+
+    // What Reply all fills in: the sender and the other To recipient in
+    // To, the Cc recipient in Cc, and not the inbox that replies.
+    let sent = ada_inbox
+        .send(&json!({
+            "subject": "Re: Offsite",
+            "to": [{ "email": grace.email() }, { "email": joan.email() }],
+            "cc": [{ "email": linus.email() }],
+            "replying_to_id": original["db_id"],
+            "body_text": "The second.",
+            "body_html": html("<html><body><div>The second.</div></body></html>"),
+        }))
+        .await?;
+
+    let mut everyone = [grace.email(), joan.email()];
+    everyone.sort_unstable();
+    for inbox in [&grace_inbox, &joan_inbox, &linus_inbox] {
+        let (copy, wire) = wait_for_wire(&stack, inbox, "Re: Offsite").await?;
+        let to = wire.header("to").unwrap_or_default();
+        let cc = wire.header("cc").unwrap_or_default();
+        for address in everyone {
+            assert!(
+                to.contains(address),
+                "{address} is not in To of the copy at {}: {:?}",
+                inbox.email(),
+                wire.headers
+            );
+            assert!(
+                !cc.contains(address),
+                "{address} is in Cc: {:?}",
+                wire.headers
+            );
+        }
+        assert!(
+            cc.contains(linus.email()) && !to.contains(linus.email()),
+            "the Cc recipient is not in Cc, or is in To, at {}: {:?}",
+            inbox.email(),
+            wire.headers
+        );
+        assert!(
+            !to.contains(ada.email()) && !cc.contains(ada.email()),
+            "the reply names its own sender as a recipient: {:?}",
+            wire.headers
+        );
+        let copies = provider_copies(inbox, "Re: Offsite")?;
+        assert_eq!(copies.len(), 1, "{copies:?}");
+        assert!(
+            provider_copies(inbox, "Offsite")?
+                .iter()
+                .any(|question| question.thread_id == copy.thread_id),
+            "the provider filed the reply apart from the message it answers at {}",
+            inbox.email()
+        );
+    }
+
+    let stored = wait_until_sent(&ada_inbox, &sent).await?;
+    assert_eq!(stored_addresses(&stored, "to"), everyone, "{stored}");
+    assert_eq!(stored_addresses(&stored, "cc"), [linus.email()], "{stored}");
+    assert_eq!(stored["replying_to_id"], original["db_id"], "{stored}");
+
+    stack.finish().await
+}
+
 /// Everyone a message names gets it, and nobody learns who was on Bcc: the
 /// Bcc recipient's address is in no header and no body of the other copies.
 async fn cc_and_bcc_recipients_get_the_message(provider: Provider) -> Result<(), Report> {
@@ -832,6 +934,16 @@ async fn gmail_reply_joins_the_thread_on_both_sides() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_reply_joins_the_thread_on_both_sides() -> Result<(), Report> {
     reply_joins_the_thread_on_both_sides(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_reply_to_all_reaches_everyone_but_its_sender() -> Result<(), Report> {
+    reply_to_all_reaches_everyone_but_its_sender(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_reply_to_all_reaches_everyone_but_its_sender() -> Result<(), Report> {
+    reply_to_all_reaches_everyone_but_its_sender(Provider::Outlook).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -238,3 +238,102 @@ async fn gmail_trashed_and_junk_threads_open_and_change_by_id() -> Result<(), Re
 async fn outlook_trashed_and_junk_threads_open_and_change_by_id() -> Result<(), Report> {
     trashed_and_junk_threads_open_and_change_by_id(Provider::Outlook).await
 }
+
+const FOCUS: &str = "query { user { id emailFocus { id name inboxVisible \
+     focus { isFocus category needsReply } } } }";
+
+/// The threads Home lists for the user as worth their attention.
+async fn on_home(user: &User) -> Result<Vec<Value>, Report> {
+    let read = user.graphql(FOCUS, &json!({})).await?;
+    Ok(read["user"]["emailFocus"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default())
+}
+
+/// Home lists the mail classified as worth the user's attention and no
+/// other mail, and marking a thread done from there takes it out of the
+/// inbox at the provider and off Home.
+///
+/// When it fails: Home shows no mail or all of it, or a thread marked done
+/// there stays in the mailbox and on the list.
+async fn mail_on_home_is_listed_and_marked_done(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    deliver(&stack, &inbox, "Needs an answer", false, None)?;
+    deliver(&stack, &inbox, "Newsletter", false, None)?;
+    let needed = inbox.wait_for_preview("inbox", "Needs an answer").await?;
+    inbox.wait_for_preview("inbox", "Newsletter").await?;
+    let thread = needed["id"].as_str().unwrap_or_default();
+    assert_eq!(on_home(&ada).await?, Vec::<Value>::new());
+
+    // The worker that classifies mail asks a model and is not started: its
+    // verdict on the first thread is written here.
+    let message = inbox.thread(thread).await?["messages"][0]["db_id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    sqlx::query(
+        "INSERT INTO email_thread_focus \
+             (thread_id, link_id, classified_message_id, classified_message_ts, is_focus, \
+              category, importance, needs_reply, needs_follow_up, scores, model, classified_at, \
+              pinned) \
+         VALUES ($1::uuid, $2, $3::uuid, now(), TRUE, 'known', 80, TRUE, FALSE, '{}', \
+                 'scenario', now(), TRUE)",
+    )
+    .bind(thread)
+    .bind(inbox.link_id())
+    .bind(message)
+    .execute(stack.db())
+    .await?;
+
+    let listed = on_home(&ada).await?;
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert_eq!(listed[0]["id"], thread);
+    assert_eq!(listed[0]["name"], "Needs an answer");
+    assert_eq!(listed[0]["inboxVisible"], true);
+    assert_eq!(
+        listed[0]["focus"],
+        json!({ "isFocus": true, "category": "KNOWN", "needsReply": true })
+    );
+
+    let done = ada
+        .graphql(
+            SET_ARCHIVED,
+            &json!({ "input": { "threadId": listed[0]["id"], "archived": true } }),
+        )
+        .await?;
+    assert_eq!(
+        done["setEmailThreadArchived"]["inboxVisible"], false,
+        "{done}"
+    );
+    inbox
+        .wait_for_provider_message("the thread marked done to leave the inbox", |message| {
+            message.subject == "Needs an answer" && !message.in_inbox
+        })
+        .await?;
+    assert_eq!(on_home(&ada).await?, Vec::<Value>::new());
+    // The other mail was not touched.
+    let kept = inbox
+        .provider_messages()?
+        .into_iter()
+        .find(|message| message.subject == "Newsletter");
+    assert!(kept.is_some_and(|message| message.in_inbox));
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_on_home_is_listed_and_marked_done() -> Result<(), Report> {
+    mail_on_home_is_listed_and_marked_done(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_mail_on_home_is_listed_and_marked_done() -> Result<(), Report> {
+    mail_on_home_is_listed_and_marked_done(Provider::Outlook).await
+}

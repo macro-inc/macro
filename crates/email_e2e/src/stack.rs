@@ -724,6 +724,28 @@ impl Stack {
         self.queues().take(queue).await
     }
 
+    /// The mail events the services have published about one inbox since
+    /// the scenario started (the Kafka topic `macro.email`, which activity,
+    /// routines and suggestions read), oldest first within a partition:
+    /// each with its `event_type` (`email.message_received`, …) and
+    /// `metadata`. The topic is every scenario's, so events about other
+    /// inboxes are left out. Publishing follows the mail by a moment: wait
+    /// for an event with [`eventually`].
+    pub async fn email_events(&self, link_id: Uuid) -> Result<Vec<serde_json::Value>, Report> {
+        let Some(brokers) = self.worker_env.get(KAFKA_BROKERS) else {
+            bail!("the stack has no Kafka broker");
+        };
+        let published =
+            crate::infra::kafka::published_since(brokers, EMAIL_EVENTS, self.event_starts.clone())
+                .await?;
+        let link_id = link_id.to_string();
+        Ok(published
+            .iter()
+            .filter_map(|payload| serde_json::from_slice::<serde_json::Value>(payload).ok())
+            .filter(|event| event["metadata"]["link_id"] == link_id.as_str())
+            .collect())
+    }
+
     /// How many messages wait, are being worked on or are delayed on a queue.
     pub async fn queue_depth(&self, queue: &str) -> Result<u64, Report> {
         let queues = self.queues();

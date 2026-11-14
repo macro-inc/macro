@@ -282,16 +282,26 @@ async fn gmail_a_delegate_is_told_of_new_mail_and_can_open_it() -> Result<(), Re
         BTreeSet::from([olga.macro_id().to_owned(), dan.macro_id().to_owned()])
     );
 
-    let thread = dan
-        .get(&format!("/email/threads/{thread_id}?limit=100"))
-        .await?
-        .ok()?;
-    assert_eq!(
-        thread["thread"]["messages"][0]["body_text"]
-            .as_str()
-            .map(str::trim),
-        Some("Hello both.")
-    );
+    // Each opens the thread from the notification: by the id it carries,
+    // not by the one the inbox lists.
+    let request = &notification["request"]["req"];
+    let named = request["notification"]["content"]["threadId"]
+        .as_str()
+        .unwrap_or_default();
+    assert_eq!(request["notification_entity"]["entity_id"], named);
+    for user in [&dan, &olga] {
+        let thread = user
+            .get(&format!("/email/threads/{named}?limit=100"))
+            .await?
+            .ok()?;
+        assert_eq!(thread["thread"]["db_id"], thread_id);
+        assert_eq!(
+            thread["thread"]["messages"][0]["body_text"]
+                .as_str()
+                .map(str::trim),
+            Some("Hello both.")
+        );
+    }
 
     stack.finish().await
 }

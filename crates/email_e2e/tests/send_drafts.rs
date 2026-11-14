@@ -24,7 +24,7 @@ use email_e2e::{Mail, Provider, Report, Stack};
 use serde_json::{Value, json};
 use support::{
     first_message, html, message_in_thread, provider_copies, provider_drafts,
-    wait_for_no_provider_draft, wait_for_provider_draft, wait_for_wire,
+    wait_for_no_provider_draft, wait_for_provider_draft, wait_for_wire, wire,
 };
 use uuid::Uuid;
 
@@ -53,6 +53,15 @@ async fn draft_is_saved_and_updated(provider: Provider) -> Result<(), Report> {
     assert_eq!(draft["link_id"], inbox.link_id().to_string());
     let preview = inbox.wait_for_preview("drafts", "Plans").await?;
     assert_eq!(preview["id"], draft["thread_db_id"]);
+    // Outlook keeps a draft as an item in Drafts. The first save has to be
+    // there before the update: an update that overtakes it is written as the
+    // item's first content, and nothing in the mailbox is changed.
+    let first_in_mailbox = if provider == Provider::Outlook {
+        wait_until_in_mailbox(&inbox, &id, "Plans").await?;
+        Some(wait_for_provider_draft(&inbox, "Plans").await?.id)
+    } else {
+        None
+    };
 
     let updated = inbox
         .save_draft(&json!({
@@ -81,11 +90,127 @@ async fn draft_is_saved_and_updated(provider: Provider) -> Result<(), Report> {
         draft_previews(&inbox, "Plans").await?.is_empty(),
         "the draft's first version is still listed"
     );
-    if provider == Provider::Outlook {
+    if let Some(first_in_mailbox) = first_in_mailbox {
         wait_until_in_mailbox(&inbox, &id, "Plans for May").await?;
         let drafts = provider_drafts(&inbox)?;
         assert_eq!(drafts.len(), 1, "one draft, one item in Drafts: {drafts:?}");
+        assert_eq!(
+            drafts[0].id, first_in_mailbox,
+            "the update put another item in Drafts instead of changing the first"
+        );
+        let in_mailbox = wire(&stack, &inbox, &drafts[0].id).await?;
+        assert_eq!(in_mailbox.subject, "Plans for May");
+        assert!(
+            in_mailbox.html.contains("Second thoughts.")
+                && !in_mailbox.html.contains("First thoughts."),
+            "the item in Drafts does not hold the update: {}",
+            in_mailbox.html
+        );
+        assert_eq!(in_mailbox.header("cc"), Some("linus@example.com"));
     }
+
+    stack.finish().await
+}
+
+/// The addresses a recipient field of a stored message names, sorted.
+fn addresses(message: &Value, field: &str) -> Vec<String> {
+    let mut addresses: Vec<String> = message[field]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|recipient| recipient["email"].as_str().map(str::to_owned))
+        .collect();
+    addresses.sort();
+    addresses
+}
+
+/// A recipient taken off a draft is gone, and one moved from To to Cc is
+/// in Cc only: the draft reopens that way and is sent that way. The
+/// removed recipient gets nothing. If this fails, a message reaches someone
+/// its sender had removed, or keeps a recipient in the field it was moved
+/// out of.
+async fn removed_and_moved_recipients_are_what_is_sent(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let grace = stack.user("grace").await?;
+    let linus = stack.user("linus").await?;
+    let joan = stack.user("joan").await?;
+    let from = ada.link(provider, ada.email()).await?;
+    let removed = grace.link(provider, grace.email()).await?;
+    let moved = linus.link(provider, linus.email()).await?;
+    let kept = joan.link(provider, joan.email()).await?;
+
+    let first = json!({
+        "subject": "Seating plan",
+        "to": [{ "email": grace.email() }, { "email": linus.email() }, { "email": joan.email() }],
+        "body_text": "As drawn.",
+        "body_html": html("<html><body><div>As drawn.</div></body></html>"),
+    });
+    let draft = from.save_draft(&first).await?;
+    let id = id_of(&draft);
+    let read = reopened(&from, &draft).await?;
+    let mut all = [grace.email(), linus.email(), joan.email()];
+    all.sort_unstable();
+    assert_eq!(addresses(&read, "to"), all, "{read}");
+
+    // Grace is removed, Linus is moved from To to Cc.
+    let mut changed = first.clone();
+    changed["db_id"] = json!(id);
+    changed["draft_generation"] = json!(generation_of(&draft));
+    changed["to"] = json!([{ "email": joan.email() }]);
+    changed["cc"] = json!([{ "email": linus.email() }]);
+    let saved = from.save_draft(&changed).await?;
+    assert_eq!(id_of(&saved), id, "the change made another draft");
+    let read = reopened(&from, &draft).await?;
+    assert_eq!(addresses(&read, "to"), [joan.email()], "{read}");
+    assert_eq!(addresses(&read, "cc"), [linus.email()], "{read}");
+    assert_eq!(addresses(&read, "bcc"), [""; 0], "{read}");
+    wait_until_in_mailbox(&from, &id, "Seating plan").await?;
+
+    let mut send = changed.clone();
+    send["draft_generation"] = json!(generation_of(&saved));
+    from.send(&send).await?;
+
+    for inbox in [&kept, &moved] {
+        let (_, received) = wait_for_wire(&stack, inbox, "Seating plan").await?;
+        let to = received.header("to").unwrap_or_default();
+        let cc = received.header("cc").unwrap_or_default();
+        assert!(
+            to.contains(joan.email()) && !to.contains(linus.email()),
+            "To is not the one recipient left in it: {:?}",
+            received.headers
+        );
+        assert!(
+            cc.contains(linus.email()) && !cc.contains(joan.email()),
+            "Cc is not the recipient moved to it: {:?}",
+            received.headers
+        );
+        assert!(
+            !received
+                .headers
+                .iter()
+                .any(|(_, value)| value.contains(grace.email())),
+            "the message still names the removed recipient: {:?}",
+            received.headers
+        );
+        assert_eq!(provider_copies(inbox, "Seating plan")?.len(), 1);
+    }
+    // Both copies are delivered, so the removed recipient's would be too.
+    assert!(
+        provider_copies(&removed, "Seating plan")?.is_empty(),
+        "the removed recipient got the message"
+    );
+    let sent = email_e2e::eventually(
+        "Macro to show the message as sent",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || {
+            let message = reopened(&from, &draft).await?;
+            Ok((message["is_sent"] == true).then_some(message))
+        },
+    )
+    .await?;
+    assert_eq!(addresses(&sent, "to"), [joan.email()], "{sent}");
+    assert_eq!(addresses(&sent, "cc"), [linus.email()], "{sent}");
 
     stack.finish().await
 }
@@ -822,6 +947,16 @@ async fn gmail_draft_is_saved_and_updated() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_draft_is_saved_and_updated() -> Result<(), Report> {
     draft_is_saved_and_updated(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_removed_and_moved_recipients_are_what_is_sent() -> Result<(), Report> {
+    removed_and_moved_recipients_are_what_is_sent(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_removed_and_moved_recipients_are_what_is_sent() -> Result<(), Report> {
+    removed_and_moved_recipients_are_what_is_sent(Provider::Outlook).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -299,6 +299,129 @@ async fn forward_from_another_inbox_keeps_attachments(provider: Provider) -> Res
     stack.finish().await
 }
 
+/// The line a forward puts above the message it forwards.
+const FORWARDED_LINE: &str = "---------- Forwarded message ----------";
+
+/// Forwards the message named "Blueprints" from the inbox that received it
+/// to `to`, the way the composer does: a draft that names the message it
+/// forwards, quotes it under the forwarded-message line and takes over its
+/// two files. Returns the forward as the recipient's provider holds it.
+async fn forward_blueprints(
+    stack: &Stack,
+    from: &Inbox,
+    to: &Inbox,
+) -> Result<support::Wire, Report> {
+    deliver_with_inline_logo(stack, from, "Blueprints")?;
+    let originals = received_attachments(from, "Blueprints", 2).await?;
+    let preview = from.wait_for_preview("inbox", "Blueprints").await?;
+    let original = support::first_message(from, &preview).await?;
+
+    let message = json!({
+        "subject": "Fwd: Blueprints",
+        "to": [{ "email": to.email() }],
+        "replying_to_id": original["db_id"],
+        "body_text": "For you.",
+        "body_html": html(&format!(
+            "<html><body><div>For you.</div><div><br></div>\
+             <div>{FORWARDED_LINE}<br>From: Grace<br>Subject: Blueprints</div>\
+             <blockquote><div>The blueprints.</div><img src=\"cid:{LOGO_CID}\"></blockquote>\
+             </body></html>"
+        )),
+    });
+    let draft = from.save_draft(&message).await?;
+    let draft_id = id_of(&draft, "db_id")?;
+    for original in &originals {
+        from.post(
+            &format!(
+                "/email/drafts/{draft_id}/forwarded-attachments?draft_generation={}",
+                draft["draft_generation"]
+            ),
+            Some(&json!({ "attachment_id": original["db_id"] })),
+        )
+        .await?
+        .ok()
+        .context("the original's attachment could not be added to the forward")?;
+    }
+    from.send(&as_saved(&message, &draft)).await?;
+    let (_, received) = wait_for_wire(stack, to, "Fwd: Blueprints").await?;
+    Ok(received)
+}
+
+/// A forward reaches its recipient with the message it forwards quoted once
+/// under the forwarded-message line and with both of the original's files:
+/// the PDF, and the image the quoted body shows. When this fails, the
+/// recipient of a forward gets the sender's note and nothing of what was
+/// forwarded.
+async fn forward_arrives_with_the_original_and_its_files(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let linus = stack.user("linus").await?;
+    let from = ada.link(provider, ada.email()).await?;
+    let to = linus.link(provider, linus.email()).await?;
+
+    let received = forward_blueprints(&stack, &from, &to).await?;
+
+    assert_eq!(
+        received.html_count(FORWARDED_LINE),
+        1,
+        "the forward arrived without, or with more than one, forwarded-message line: {}",
+        received.html
+    );
+    assert_eq!(
+        received.html_count("The blueprints."),
+        1,
+        "the forward does not quote the original once: {}",
+        received.html
+    );
+    let pdf = received
+        .attachments
+        .iter()
+        .find(|attachment| attachment.filename == "report.pdf");
+    assert_eq!(
+        pdf.map(|attachment| attachment.bytes.as_slice()),
+        Some(REPORT),
+        "the forward arrived without the original's PDF: {:?}",
+        received.attachments
+    );
+    let image = received
+        .attachments
+        .iter()
+        .find(|attachment| attachment.content_id.as_deref() == Some(LOGO_CID));
+    assert_eq!(
+        image.map(|attachment| attachment.bytes.as_slice()),
+        Some(LOGO),
+        "the image the quoted body shows was not sent with it: {:?}",
+        received.attachments
+    );
+    assert_eq!(received.attachments.len(), 2, "{:?}", received.attachments);
+    assert_eq!(provider_copies(&to, "Fwd: Blueprints")?.len(), 1);
+
+    stack.finish().await
+}
+
+/// A forward is a message of its own, not an answer: the copy its recipient
+/// gets names no message it replies to. When this fails, a mail client
+/// files the forward under a conversation its recipient was never part of,
+/// or shows it as a reply to a message that is not there.
+async fn forward_is_not_sent_as_a_reply(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let linus = stack.user("linus").await?;
+    let from = ada.link(provider, ada.email()).await?;
+    let to = linus.link(provider, linus.email()).await?;
+
+    let received = forward_blueprints(&stack, &from, &to).await?;
+
+    assert_eq!(
+        received.header("in-reply-to"),
+        None,
+        "the forward was sent as a reply: {:?}",
+        received.headers
+    );
+
+    stack.finish().await
+}
+
 /// An Outlook draft that already holds an attachment at the provider can be
 /// edited and sent. Graph reports an attachment larger than its file, so a
 /// re-sync that expects the file's exact length takes its own upload for a
@@ -717,6 +840,28 @@ async fn gmail_forward_from_another_inbox_keeps_attachments() -> Result<(), Repo
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_forward_from_another_inbox_keeps_attachments() -> Result<(), Report> {
     forward_from_another_inbox_keeps_attachments(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_forward_arrives_with_the_original_and_its_files() -> Result<(), Report> {
+    forward_arrives_with_the_original_and_its_files(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_forward_arrives_with_the_original_and_its_files() -> Result<(), Report> {
+    forward_arrives_with_the_original_and_its_files(Provider::Outlook).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "known bug: forward-sent-as-reply"]
+async fn gmail_forward_is_not_sent_as_a_reply() -> Result<(), Report> {
+    forward_is_not_sent_as_a_reply(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "known bug: forward-sent-as-reply"]
+async fn outlook_forward_is_not_sent_as_a_reply() -> Result<(), Report> {
+    forward_is_not_sent_as_a_reply(Provider::Outlook).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

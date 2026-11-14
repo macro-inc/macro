@@ -16,6 +16,7 @@ use email_e2e::{
 };
 use rootcause::report;
 use serde_json::{Value, json};
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Marks the next token the provider serves the mailbox: a fault that
@@ -50,6 +51,26 @@ fn token_served(stack: &Stack, inbox: &Inbox, mark: u64) -> bool {
     !pending
 }
 
+/// How long a health check may take to reach the provider: well under the
+/// two minutes after which Outlook's own poll would meet the provider anyway.
+const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Whether Macro has asked for a new access token for the Outlook mailbox,
+/// not the cached one, since the provider had answered `since` requests.
+fn forced_refresh_since(stack: &Stack, inbox: &Inbox, since: usize) -> bool {
+    stack
+        .outlook()
+        .requests()
+        .iter()
+        .skip(since)
+        .any(|request| {
+            matches!(request.route, Some(outlook_emulator::Route::OauthToken))
+                && request.mailbox.as_deref() == Some(inbox.email())
+                && request.path.contains("force_refresh=true")
+                && request.status == 200
+        })
+}
+
 /// The thread's id in Macro once the inbox lists it.
 async fn receive(inbox: &Inbox, from: &str, subject: &str) -> Result<String, Report> {
     inbox.deliver(&Mail::new(from, subject, "Hello."))?;
@@ -74,12 +95,24 @@ async fn health_check_tells_healthy_from_revoked(provider: Provider) -> Result<(
 
     revoked.revoke_grant()?;
     let mark = mark_next_token(&stack, &healthy);
+    let asked_before = stack.outlook().requests().len();
 
     let accepted = ada.post("/email/links/health-check", None).await?;
     assert_eq!(accepted.status, 202, "{}", accepted.text);
     let accepted = bob.post("/email/links/health-check", None).await?;
     assert_eq!(accepted.status, 202, "{}", accepted.text);
 
+    if provider == Provider::Outlook {
+        // Outlook's sync would notice the revoked grant by itself at its
+        // next poll, and any token request uses up the mark: only the
+        // check asks for a token that is not the cached one.
+        eventually(
+            "the health check to make Microsoft issue the healthy connection a new token",
+            HEALTH_CHECK_TIMEOUT,
+            async || Ok(forced_refresh_since(&stack, &healthy, asked_before).then_some(())),
+        )
+        .await?;
+    }
     revoked
         .wait_for_link("the revoked connection to need a reconnect", |link| {
             link["needs_reauth"] == true
