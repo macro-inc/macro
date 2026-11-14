@@ -697,9 +697,15 @@ impl SoupRequest<Option<EntityFilterAst>> {
             // set. Skip the CRM sub-request rather than over-include.
             return None;
         }
-        // A request for hidden companies must still reach the CRM service's
-        // admin check, even when its id filter cannot match a company.
-        if extract.hidden != Some(true) && exclusions::crm_company(filter_ast) {
+        // The CRM query matches `id = ANY(ids)` when ids are given, so ids that
+        // are all nil match no company. Read the extract rather than the tree:
+        // it flattens `And` into the id list, and the skip must answer exactly
+        // what the query would have. A request for hidden companies must still
+        // reach the CRM service's admin check.
+        if extract.hidden != Some(true)
+            && !extract.ids.is_empty()
+            && extract.ids.iter().all(Uuid::is_nil)
+        {
             return None;
         }
 

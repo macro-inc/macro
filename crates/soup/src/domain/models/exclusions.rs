@@ -7,7 +7,6 @@ use item_filters::ast::{
     EntityFilterAst,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
-    crm_company::CrmCompanyLiteral,
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
 };
@@ -63,12 +62,5 @@ pub(super) fn foreign_entity(filter: Option<&EntityFilterAst>) -> bool {
     excludes_all(
         filter.and_then(|filter| filter.foreign_entity_filter.as_deref()),
         |literal| matches!(literal, ForeignEntityLiteral::Id(id) if id.is_nil()),
-    )
-}
-
-pub(super) fn crm_company(filter: Option<&EntityFilterAst>) -> bool {
-    excludes_all(
-        filter.and_then(|filter| filter.crm_company_filter.as_deref()),
-        |literal| matches!(literal, CrmCompanyLiteral::Id(id) if id.is_nil()),
     )
 }

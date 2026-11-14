@@ -146,22 +146,27 @@ fn absent_filters_and_real_entity_ids_keep_domain_requests() {
 fn exclusion_respects_and_or_and_not_without_dropping_possible_matches() {
     let excluded = Expr::val(Uuid::nil());
     let included = Expr::val(id(1));
+    // (tree, other legs, CRM company leg). The CRM leg answers what its query
+    // would: the extractor fails closed on a negation and unions `And`ed ids,
+    // so only an id list that is all nil is skipped.
     let cases = [
-        (Expr::and(excluded.clone(), included.clone()), false),
-        (Expr::and(included.clone(), excluded.clone()), false),
-        (Expr::or(excluded.clone(), excluded.clone()), false),
-        (Expr::or(excluded.clone(), included.clone()), true),
-        (Expr::or(included.clone(), excluded.clone()), true),
-        (Expr::is_not(excluded.clone()), true),
-        (Expr::is_not(included), true),
+        (Expr::and(excluded.clone(), included.clone()), false, true),
+        (Expr::and(included.clone(), excluded.clone()), false, true),
+        (Expr::or(excluded.clone(), excluded.clone()), false, false),
+        (Expr::or(excluded.clone(), included.clone()), true, true),
+        (Expr::or(included.clone(), excluded.clone()), true, true),
+        (Expr::is_not(excluded.clone()), true, false),
+        (Expr::is_not(included), true, false),
         // Negations are deliberately not simplified: pruning is conservative.
-        (Expr::is_not(Expr::is_not(excluded)), true),
+        (Expr::is_not(Expr::is_not(excluded)), true, false),
     ];
     for leg in LEGS {
-        for (tree, expected) in &cases {
-            // The CRM leg fails closed on any negation (`extract_crm_company_filter`).
-            let expected =
-                *expected && !(matches!(leg, Leg::CrmCompany) && matches!(tree, Expr::Not(_)));
+        for (tree, expected, crm_expected) in &cases {
+            let expected = if matches!(leg, Leg::CrmCompany) {
+                *crm_expected
+            } else {
+                *expected
+            };
             for follow_up in [false, true] {
                 let req = request(Some(filter_for(leg, tree)), follow_up);
                 assert_eq!(
