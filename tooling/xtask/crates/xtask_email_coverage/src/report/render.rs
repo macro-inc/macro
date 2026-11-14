@@ -10,50 +10,94 @@ const PAGE: &str = include_str!("page.html");
 const BODY_SLOT: &str = "<!-- body -->";
 /// How many rows the job summary lists before it refers to the page.
 const SUMMARY_ROWS: usize = 60;
+/// What is said of a function another service carries out.
+const DEFERRED: &str = "deferred to the full-stack tier";
+
+/// The functions the email backend has a part in and this tier measures.
+fn backend(model: &Model) -> usize {
+    model.functions_listed - model.functions_ui_only - model.functions_deferred
+}
 
 /// The one line a run prints.
 pub(crate) fn headline(model: &Model) -> String {
-    let backend = model.functions_listed - model.functions_ui_only - model.functions_outside;
+    let of = |tally: &Tally| {
+        format!(
+            "{} proved, {} claimed, {} performed only, {} open",
+            tally.proved, tally.claimed, tally.performed, tally.open
+        )
+    };
     format!(
-        "{backend} backend functions: Gmail {} covered, {} performed only, {} open; \
-         Outlook {} covered, {} performed only, {} open ({} scenarios recorded)",
-        model.functions_gmail.covered,
-        model.functions_gmail.performed,
-        model.functions_gmail.open,
-        model.functions_outlook.covered,
-        model.functions_outlook.performed,
-        model.functions_outlook.open,
+        "{} backend functions: Gmail {}; Outlook {}; {} {DEFERRED} ({} scenarios recorded)",
+        backend(model),
+        of(&model.functions_gmail),
+        of(&model.functions_outlook),
+        model.functions_deferred,
         model.suite.recorded,
+    )
+}
+
+/// What the statuses of a function mean.
+fn legend(bold: fn(&str) -> String) -> String {
+    format!(
+        "A function is {} on a provider when a passing scenario performed it there, is \
+         recorded as checking its result, and a deliberate break in product code made that \
+         scenario fail: only that counts as covered. It is {} when the scenario is recorded \
+         as checking it and no break has shown it, {} when scenarios did it and none is \
+         recorded as checking it.",
+        bold("proved"),
+        bold("claimed"),
+        bold("performed")
     )
 }
 
 fn tally_cells(tally: &Tally) -> String {
     format!(
-        "{} | {} | {} | {} | {}",
-        tally.total, tally.covered, tally.performed, tally.waived, tally.open
+        "{} | {} | {} | {} | {} | {}",
+        tally.total, tally.proved, tally.claimed, tally.performed, tally.waived, tally.open
     )
 }
 
 fn status_word(cell: Option<&Cell>) -> &'static str {
     match cell.map(|cell| cell.status) {
         None => "n/a",
+        Some(Status::Proved) => "proved",
+        Some(Status::Claimed) => "claimed",
         Some(Status::Covered) => "covered",
         Some(Status::Performed) => "performed",
         Some(Status::Waived) => "waived",
+        Some(Status::Deferred) => "deferred",
         Some(Status::Open) => "open",
     }
 }
 
 fn is_gap(cell: Option<&Cell>) -> bool {
-    cell.is_some_and(|cell| matches!(cell.status, Status::Open | Status::Performed))
+    cell.is_some_and(|cell| {
+        matches!(
+            cell.status,
+            Status::Open | Status::Performed | Status::Claimed
+        )
+    })
 }
 
-fn open_functions(model: &Model) -> Vec<&FunctionRow> {
+/// The functions this tier measures or defers: all but the browser's own.
+fn backend_functions(model: &Model) -> Vec<&FunctionRow> {
     model
         .functions
         .iter()
-        .filter(|row| is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()))
+        .filter(|row| row.ui_only.is_none())
         .collect()
+}
+
+/// A function's standing on a provider in the job summary, naming the bug
+/// that keeps it open.
+fn summary_cell(row: &FunctionRow, cell: Option<&Cell>) -> String {
+    if row.deferred.is_some() {
+        return "deferred".to_owned();
+    }
+    match &row.bug {
+        Some(bug) if cell.is_some() => format!("open (known bug {bug})"),
+        _ => status_word(cell).to_owned(),
+    }
 }
 
 fn open_entries(model: &Model) -> Vec<&EntryRow> {
@@ -67,22 +111,22 @@ fn open_entries(model: &Model) -> Vec<&EntryRow> {
 /// The job summary.
 pub(crate) fn markdown(model: &Model) -> String {
     let mut out = String::new();
-    let backend = model.functions_listed - model.functions_ui_only - model.functions_outside;
     let _ = writeln!(out, "## Email backend coverage\n");
+    let _ = writeln!(out, "{}\n", headline(model));
     let _ = writeln!(
         out,
-        "{} functions of email are listed; the email backend has a part in {backend} \
-         ({} more are carried out by other services and not measured here). A function \
-         is **covered** when a passing scenario performed it on that provider and is recorded \
-         as checking its result, **performed** when scenarios did it and none is recorded as \
-         checking it.\n",
-        model.functions_listed, model.functions_outside
+        "{} functions of email are listed; the email backend has a part in {} ({} more are \
+         carried out by other services and {DEFERRED}). {}\n",
+        model.functions_listed,
+        backend(model),
+        model.functions_deferred,
+        legend(|word| format!("**{word}**"))
     );
     let _ = writeln!(
         out,
-        "| Functions | total | covered | performed only | waived | open |"
+        "| Functions | total | proved | claimed | performed only | waived | open |"
     );
-    let _ = writeln!(out, "| --- | ---: | ---: | ---: | ---: | ---: |");
+    let _ = writeln!(out, "| --- | ---: | ---: | ---: | ---: | ---: | ---: |");
     let _ = writeln!(out, "| Gmail | {} |", tally_cells(&model.functions_gmail));
     let _ = writeln!(
         out,
@@ -93,25 +137,20 @@ pub(crate) fn markdown(model: &Model) -> String {
     let _ = writeln!(out, "### Entry points reached\n");
     let _ = writeln!(
         out,
-        "| Kind | Gmail total | reached | waived | open | Outlook total | reached | waived | open |"
+        "| Kind | Gmail total | reached | waived | deferred | open | Outlook total | reached \
+         | waived | deferred | open |"
     );
     let _ = writeln!(
         out,
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
     );
     for kind in &model.entry_points {
         let _ = writeln!(
             out,
-            "| {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} |",
             kind.kind,
-            kind.gmail.total,
-            kind.gmail.covered,
-            kind.gmail.waived,
-            kind.gmail.open,
-            kind.outlook.total,
-            kind.outlook.covered,
-            kind.outlook.waived,
-            kind.outlook.open,
+            entry_tally_cells(&kind.gmail),
+            entry_tally_cells(&kind.outlook)
         );
     }
     let _ = writeln!(out);
@@ -143,30 +182,51 @@ pub(crate) fn markdown(model: &Model) -> String {
     );
     list(
         &mut out,
-        "Checks and waivers the records do not bear out",
+        "Checks, proofs, waivers and deferrals the records do not bear out",
         &model.stale,
     );
 
-    let functions = open_functions(model);
+    if !model.dead_code.is_empty() {
+        let _ = writeln!(out, "### Dead code candidates\n");
+        let _ = writeln!(
+            out,
+            "Entry points waived because nothing in the repository calls them.\n"
+        );
+        let _ = writeln!(out, "| Entry point | Source | Reason |");
+        let _ = writeln!(out, "| --- | --- | --- |");
+        for row in &model.dead_code {
+            let _ = writeln!(
+                out,
+                "| `{}` | `{}` | {} |",
+                row.entry, row.source, row.reason
+            );
+        }
+        let _ = writeln!(out);
+    }
+
+    // Every function, not only the open ones: what is proved is read here.
+    let functions = backend_functions(model);
+    let unproved = functions
+        .iter()
+        .filter(|row| is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()))
+        .count();
     let _ = writeln!(
         out,
-        "<details><summary>{} functions not covered on a provider</summary>\n",
+        "<details><summary>Every backend function ({unproved} of {} not proved on a \
+         provider)</summary>\n",
         functions.len()
     );
     let _ = writeln!(out, "| Function | | Gmail | Outlook |");
     let _ = writeln!(out, "| --- | --- | --- | --- |");
-    for row in functions.iter().take(SUMMARY_ROWS) {
+    for row in functions {
         let _ = writeln!(
             out,
             "| {} | {} | {} | {} |",
             row.id,
             row.function,
-            status_word(row.gmail.as_ref()),
-            status_word(row.outlook.as_ref())
+            summary_cell(row, row.gmail.as_ref()),
+            summary_cell(row, row.outlook.as_ref())
         );
-    }
-    if functions.len() > SUMMARY_ROWS {
-        let _ = writeln!(out, "\nThe rest are in the report artifact.");
     }
     let _ = writeln!(out, "\n</details>\n");
 
@@ -193,6 +253,13 @@ pub(crate) fn markdown(model: &Model) -> String {
     }
     let _ = writeln!(out, "\n</details>");
     out
+}
+
+fn entry_tally_cells(tally: &Tally) -> String {
+    format!(
+        "{} | {} | {} | {} | {}",
+        tally.total, tally.covered, tally.waived, tally.deferred, tally.open
+    )
 }
 
 fn list(out: &mut String, title: &str, items: &[String]) {
@@ -240,8 +307,15 @@ fn html_cell(cell: Option<&Cell>) -> String {
 
 fn html_tally(name: &str, tally: &Tally) -> String {
     format!(
-        "<tr><th>{name}</th><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-        tally.total, tally.covered, tally.performed, tally.waived, tally.open
+        "<tr><th>{name}</th><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+        tally.total, tally.proved, tally.claimed, tally.performed, tally.waived, tally.open
+    )
+}
+
+fn html_entry_tally(tally: &Tally) -> String {
+    format!(
+        "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
+        tally.total, tally.covered, tally.waived, tally.deferred, tally.open
     )
 }
 
@@ -259,20 +333,23 @@ fn html_list(out: &mut String, title: &str, items: &[String]) {
 /// The page.
 pub(crate) fn html(model: &Model) -> String {
     let mut out = String::new();
-    let backend = model.functions_listed - model.functions_ui_only - model.functions_outside;
     let _ = write!(
         out,
-        "<h1>Email backend coverage</h1><p>{} functions of email are listed; the email backend has \
-         a part in {backend} ({} more are carried out by other services and not measured \
-         here). A function is <b>covered</b> on a provider when a passing scenario \
-         performed it there and is recorded as checking its result; <b>performed</b> when \
-         scenarios did it and none is recorded as checking it. {} scenarios left a record.</p>",
-        model.functions_listed, model.functions_outside, model.suite.recorded
+        "<h1>Email backend coverage</h1><p><b>{}</b></p><p>{} functions of email are listed; \
+         the email backend has a part in {} ({} more are carried out by other services and \
+         {DEFERRED}). {} {} scenarios left a record.</p>",
+        escape(&headline(model)),
+        model.functions_listed,
+        backend(model),
+        model.functions_deferred,
+        legend(|word| format!("<b>{word}</b>")),
+        model.suite.recorded
     );
     let _ = write!(
         out,
         "<h2>Functions</h2><div class=\"scroll\"><table><tr><th></th><th>total</th>\
-         <th>covered</th><th>performed only</th><th>waived</th><th>open</th></tr>{}{}</table></div>",
+         <th>proved</th><th>claimed</th><th>performed only</th><th>waived</th><th>open</th></tr>\
+         {}{}</table></div>",
         html_tally("Gmail", &model.functions_gmail),
         html_tally("Outlook", &model.functions_outlook)
     );
@@ -280,23 +357,16 @@ pub(crate) fn html(model: &Model) -> String {
     let _ = write!(
         out,
         "<h2>Entry points reached</h2><div class=\"scroll\"><table><tr><th>kind</th>\
-         <th>Gmail total</th><th>reached</th><th>waived</th><th>open</th>\
-         <th>Outlook total</th><th>reached</th><th>waived</th><th>open</th></tr>"
+         <th>Gmail total</th><th>reached</th><th>waived</th><th>deferred</th><th>open</th>\
+         <th>Outlook total</th><th>reached</th><th>waived</th><th>deferred</th><th>open</th></tr>"
     );
     for kind in &model.entry_points {
         let _ = write!(
             out,
-            "<tr><th>{}</th><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>\
-             <td>{}</td><td>{}</td></tr>",
+            "<tr><th>{}</th>{}{}</tr>",
             kind.kind,
-            kind.gmail.total,
-            kind.gmail.covered,
-            kind.gmail.waived,
-            kind.gmail.open,
-            kind.outlook.total,
-            kind.outlook.covered,
-            kind.outlook.waived,
-            kind.outlook.open,
+            html_entry_tally(&kind.gmail),
+            html_entry_tally(&kind.outlook)
         );
     }
     let _ = write!(out, "</table></div>");
@@ -323,9 +393,28 @@ pub(crate) fn html(model: &Model) -> String {
     html_list(&mut out, "The ledger is broken", &model.broken);
     html_list(
         &mut out,
-        "Checks and waivers the records do not bear out",
+        "Checks, proofs, waivers and deferrals the records do not bear out",
         &model.stale,
     );
+
+    if !model.dead_code.is_empty() {
+        let _ = write!(
+            out,
+            "<h2>Dead code candidates</h2><p>Entry points waived because nothing in the \
+             repository calls them.</p><div class=\"scroll\"><table class=\"rows\"><tr>\
+             <th>entry point</th><th>reason</th></tr>"
+        );
+        for row in &model.dead_code {
+            let _ = write!(
+                out,
+                "<tr><td><code>{}</code><br><small>{}</small></td><td>{}</td></tr>",
+                escape(&row.entry),
+                escape(&row.source),
+                escape(&row.reason)
+            );
+        }
+        let _ = write!(out, "</table></div>");
+    }
 
     let _ = write!(out, "<h2>Every function</h2>");
     let mut area = "";
@@ -352,11 +441,7 @@ pub(crate) fn html(model: &Model) -> String {
             .ui_only
             .as_ref()
             .map(|reason| ("no backend part", reason))
-            .or_else(|| {
-                row.outside
-                    .as_ref()
-                    .map(|service| ("another service", service))
-            });
+            .or_else(|| row.deferred.as_ref().map(|service| (DEFERRED, service)));
         match elsewhere {
             Some((label, reason)) => {
                 let _ = write!(

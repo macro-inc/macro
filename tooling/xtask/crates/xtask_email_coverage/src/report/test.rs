@@ -3,9 +3,9 @@ use serde_json::json;
 use super::evidence::Evidence;
 use super::graphql::Schema;
 use super::junit::Results;
-use super::ledger::{Atom, Ledger, Waivers, checks, functions, map};
+use super::ledger::{Atom, Ledger, Waivers, checks, functions, map, proofs};
 use super::seen::{Hit, Reader, matches};
-use super::{Status, build};
+use super::{Status, build, render};
 use crate::{Sources, parse_tsv};
 
 const ROWS: &str = "kind\tkey\tproviders\tmatch\tsource\n\
@@ -127,7 +127,7 @@ fn a_matcher_takes_a_pointer_or_a_value() {
     assert!(!matches("/kind=Refresh", &body));
 }
 
-/// The whole join: a function is covered only where a scenario of that
+/// The whole join: a function is claimed only where a scenario of that
 /// provider performed it and is said to check it, and an action is told
 /// from its opposite.
 #[test]
@@ -145,6 +145,7 @@ fn functions_and_entry_points_are_counted_per_provider() {
         map: map(MAP).unwrap(),
         checks: checks("function\tscenario\nF-001\tstate gmail_stars\nF-002\tstate gmail_stars\n")
             .unwrap(),
+        proofs: Vec::new(),
         waivers: Waivers::default(),
     };
     let records = vec![
@@ -163,7 +164,7 @@ fn functions_and_entry_points_are_counted_per_provider() {
     };
     assert_eq!(
         status("F-001"),
-        (Some(Status::Covered), Some(Status::Performed))
+        (Some(Status::Claimed), Some(Status::Performed))
     );
     // Nobody unstarred: the check that says so is stale.
     assert_eq!(status("F-002"), (Some(Status::Open), Some(Status::Open)));
@@ -180,9 +181,10 @@ fn functions_and_entry_points_are_counted_per_provider() {
         (Some(Status::Performed), Some(Status::Performed))
     );
     assert_eq!(status("F-006"), (None, None));
-    assert_eq!(model.functions_outside, 1);
+    assert_eq!(model.functions_deferred, 1);
     assert_eq!(model.functions_ui_only, 1);
-    assert_eq!(model.functions_gmail.covered, 1);
+    assert_eq!(model.functions_gmail.claimed, 1);
+    assert_eq!(model.functions_gmail.proved, 0);
 
     let entry = |key: &str| {
         let row = model.entry_rows.iter().find(|row| row.key == key).unwrap();
@@ -229,6 +231,7 @@ fn a_ledger_that_contradicts_the_list_is_broken() {
         functions: functions(FUNCTIONS).unwrap(),
         map: map("[F-001]\nby = [\"http GET /email/gone\"]\n[F-009]\nui = \"x\"\n").unwrap(),
         checks: Vec::new(),
+        proofs: Vec::new(),
         waivers: Waivers::default(),
     };
     let model = build(&reader, &ledger, Vec::new(), &Results::default());
@@ -297,4 +300,268 @@ fn a_results_file_without_tests_is_an_error() {
         error.to_string().contains("holds no test results"),
         "{error}"
     );
+}
+
+/// A function counts as covered only where a break in product code made
+/// the scenario that performs and checks it fail; a proof of anything else
+/// is stale, and one that names what does not exist is broken.
+#[test]
+fn a_function_is_proved_only_by_a_break_that_failed_its_scenario() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: checks("function\tscenario\nF-001\tstate gmail_stars\n").unwrap(),
+        proofs: proofs(
+            "function\tprovider\tscenario\tbreak\n\
+F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n\
+F-001\toutlook\tstate outlook_stars\tthe flag is not sent to Outlook\n\
+F-009\tgmail\tstate gmail_stars\tx\n\
+F-001\tyahoo\tstate gmail_stars\tx\n\
+F-001\tgmail\tstate gone\tx\n",
+        )
+        .unwrap(),
+        waivers: Waivers::default(),
+    };
+    let records = vec![
+        record("gmail_stars", "gmail", true),
+        record("outlook_stars", "outlook", true),
+    ];
+    let model = build(&reader, &ledger, records, &Results::default());
+
+    let row = model
+        .functions
+        .iter()
+        .find(|row| row.id == "F-001")
+        .unwrap();
+    let gmail = row.gmail.as_ref().unwrap();
+    assert_eq!(gmail.status, Status::Proved);
+    assert_eq!(gmail.examples, vec!["state gmail_stars".to_owned()]);
+    assert_eq!(
+        gmail.reason.as_deref(),
+        Some("the label change is not sent to Gmail")
+    );
+    // The Outlook scenario is not said to check the function: its proof
+    // proves nothing.
+    assert_eq!(row.outlook.as_ref().unwrap().status, Status::Performed);
+    assert_eq!(model.stale.len(), 1, "{:?}", model.stale);
+    assert!(model.stale[0].contains("`state outlook_stars` for F-001 on outlook"));
+
+    assert_eq!(model.functions_gmail.proved, 1);
+    assert_eq!(model.functions_gmail.claimed, 0);
+    assert!(model.has_gaps());
+    let broken = model.broken.join("\n");
+    assert!(broken.contains("F-009 is not a function"), "{broken}");
+    assert!(broken.contains("the provider `yahoo`"), "{broken}");
+    assert!(
+        broken.contains("the scenario `state gone` is not in the results"),
+        "{broken}"
+    );
+    assert_eq!(model.broken.len(), 3, "{broken}");
+    assert!(
+        render::headline(&model).contains("Gmail 1 proved, 0 claimed, 2 performed only, 1 open"),
+        "{}",
+        render::headline(&model)
+    );
+    assert!(proofs("function\tprovider\tscenario\tbreak\nF-001\tgmail\tstate x\t \n").is_err());
+}
+
+/// What is left to the full-stack tier is neither waived nor open: an entry
+/// point the ledger defers, and a function another service carries out.
+#[test]
+fn what_is_deferred_is_counted_apart_from_what_is_waived() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: Vec::new(),
+        proofs: Vec::new(),
+        waivers: toml::from_str(
+            r#"
+[[deferred]]
+entry = "http GET /email/drafts/{id}/operation"
+provider = "gmail"
+reason = "needs the browser to sign in"
+
+[[deferred]]
+entry = "http GET /email/drafts/scheduled"
+reason = "reached all the same"
+"#,
+        )
+        .unwrap(),
+    };
+    let records = vec![record("gmail_stars", "gmail", true)];
+    let model = build(&reader, &ledger, records, &Results::default());
+
+    assert_eq!(model.broken, Vec::<String>::new());
+    let row = model
+        .entry_rows
+        .iter()
+        .find(|row| row.key == "GET /email/drafts/{id}/operation")
+        .unwrap();
+    let gmail = row.gmail.as_ref().unwrap();
+    assert_eq!(gmail.status, Status::Deferred);
+    assert_eq!(
+        gmail.reason.as_deref(),
+        Some("needs the browser to sign in")
+    );
+    assert_eq!(row.outlook.as_ref().unwrap().status, Status::Open);
+    let http = model
+        .entry_points
+        .iter()
+        .find(|kind| kind.kind == "http")
+        .unwrap();
+    assert_eq!((http.gmail.deferred, http.gmail.waived), (1, 0));
+    assert_eq!(http.outlook.deferred, 1);
+    // A deferred entry point a scenario reaches is no longer deferred.
+    assert_eq!(model.stale.len(), 1, "{:?}", model.stale);
+    assert!(model.stale[0].contains("is deferred on gmail and 1 scenarios reach it"));
+
+    let search = model
+        .functions
+        .iter()
+        .find(|row| row.id == "F-006")
+        .unwrap();
+    assert_eq!(search.deferred.as_deref(), Some("the search service"));
+    let summary = render::markdown(&model);
+    assert!(
+        summary.contains("| F-006 | Search mail by text | deferred | deferred |"),
+        "{summary}"
+    );
+    assert!(render::html(&model).contains("deferred to the full-stack tier: the search service"));
+}
+
+/// An entry point nothing calls is waived and listed with where it is.
+#[test]
+fn a_waiver_for_dead_code_is_listed_as_a_candidate() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: Vec::new(),
+        proofs: Vec::new(),
+        waivers: toml::from_str(
+            r#"
+[[dead_code]]
+entry = "http GET /email/drafts/{id}/operation"
+reason = "no client asks for it"
+
+[[dead_code]]
+entry = "http GET /email/gone"
+reason = "x"
+"#,
+        )
+        .unwrap(),
+    };
+    let model = build(&reader, &ledger, Vec::new(), &Results::default());
+
+    let row = model
+        .entry_rows
+        .iter()
+        .find(|row| row.key == "GET /email/drafts/{id}/operation")
+        .unwrap();
+    assert_eq!(row.gmail.as_ref().unwrap().status, Status::Waived);
+    assert_eq!(row.outlook.as_ref().unwrap().status, Status::Waived);
+    assert_eq!(model.dead_code.len(), 1);
+    assert_eq!(
+        (
+            model.dead_code[0].entry.as_str(),
+            model.dead_code[0].source.as_str(),
+            model.dead_code[0].reason.as_str()
+        ),
+        (
+            "http GET /email/drafts/{id}/operation",
+            "a.rs:2",
+            "no client asks for it"
+        )
+    );
+    assert!(
+        model
+            .broken
+            .iter()
+            .any(|problem| problem.contains("[[dead_code]] names `http GET /email/gone`")),
+        "{:?}",
+        model.broken
+    );
+    let summary = render::markdown(&model);
+    assert!(
+        summary.contains(
+            "### Dead code candidates\n\nEntry points waived because nothing in the repository \
+             calls them.\n\n| Entry point | Source | Reason |\n| --- | --- | --- |\n\
+             | `http GET /email/drafts/{id}/operation` | `a.rs:2` | no client asks for it |"
+        ),
+        "{summary}"
+    );
+    assert!(render::html(&model).contains("<h2>Dead code candidates</h2>"));
+}
+
+/// A known product bug keeps a function open whatever its scenarios show.
+#[test]
+fn a_function_with_a_known_bug_stays_open() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(&MAP.replace("[F-001]\n", "[F-001]\nbug = \"BUG-7\"\n")).unwrap(),
+        checks: checks("function\tscenario\nF-001\tstate gmail_stars\n").unwrap(),
+        proofs: proofs(
+            "function\tprovider\tscenario\tbreak\n\
+F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
+        )
+        .unwrap(),
+        waivers: Waivers::default(),
+    };
+    let records = vec![
+        record("gmail_stars", "gmail", true),
+        record("outlook_stars", "outlook", true),
+    ];
+    let model = build(&reader, &ledger, records, &Results::default());
+
+    assert_eq!(model.broken, Vec::<String>::new());
+    assert_eq!(model.stale, Vec::<String>::new());
+    let row = model
+        .functions
+        .iter()
+        .find(|row| row.id == "F-001")
+        .unwrap();
+    assert_eq!(row.bug.as_deref(), Some("BUG-7"));
+    let gmail = row.gmail.as_ref().unwrap();
+    assert_eq!((gmail.status, gmail.scenarios), (Status::Open, 0));
+    assert_eq!(row.outlook.as_ref().unwrap().status, Status::Open);
+    assert_eq!(model.functions_gmail.proved, 0);
+    let summary = render::markdown(&model);
+    assert!(
+        summary.contains(
+            "| F-001 | Star a thread | open (known bug BUG-7) | open (known bug BUG-7) |"
+        ),
+        "{summary}"
+    );
+    assert!(render::html(&model).contains("<small>known bug BUG-7</small>"));
 }

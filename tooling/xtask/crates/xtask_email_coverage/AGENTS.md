@@ -12,8 +12,8 @@
   the list cannot go stale.
 - `report` joins the records the `crates/email_e2e` scenarios leave
   (`evidence.json`) and nextest's `junit.xml` with the ledger, and says
-  which functions of email are covered on Gmail and on Outlook and which
-  entry points are reached. `crates/email_e2e/AGENTS.md` (Coverage) explains
+  which functions of email are proved, claimed or only performed on Gmail
+  and on Outlook and which entry points are reached. `crates/email_e2e/AGENTS.md` (Coverage) explains
   the ledger files.
 
 ## Start here
@@ -25,10 +25,11 @@
 - `src/list/http.rs`: the router walker. `src/repo.rs`: resolving a path such
   as `email::inbound::axum::send_router::send_router` to its file.
 - `src/list/wire.rs`: the `match` column, from serde attributes.
-- `src/report.rs`: the join and its rules (what counts as covered).
+- `src/report.rs`: the join and its rules (what counts as proved, claimed,
+  performed, waived, deferred or open).
   `src/report/seen.rs`: which entry point a recorded request is.
-  `src/report/ledger.rs`: `functions.toml`, `checks.tsv`, `waivers.toml` and
-  the atoms (`<kind> <key> where <conditions>`). `src/report/render.rs`: the
+  `src/report/ledger.rs`: `functions.toml`, `checks.tsv`, `proofs.tsv`,
+  `waivers.toml` and the atoms (`<kind> <key> where <conditions>`). `src/report/render.rs`: the
   job summary and the page.
 
 ## Recipes
@@ -66,5 +67,19 @@
   (an entry point in no function, a function with no entry, a name that does
   not exist), with or without `--enforce`. Coverage gaps fail only with
   `--enforce`.
+- Only **proved** is covered: a scenario performs the function, `checks.tsv`
+  says it checks the result, and `proofs.tsv` names a break in product code
+  that made it fail on that provider. Without the proof it is **claimed**.
+  With `--enforce` everything not proved and not waived or deferred is a
+  gap.
+- A proof naming an unknown function, a provider other than `gmail` or
+  `outlook`, or a scenario not in the results is broken (always fails); one
+  whose scenario no longer performs and checks the function is stale.
+- Deferred is not waived: a function with `outside` in `functions.toml` and
+  an entry point under `[[deferred]]` in `waivers.toml` wait for the
+  full-stack tier and have their own count. `[[dead_code]]` waives an entry
+  point with no caller and lists it under "Dead code candidates".
+- `bug = "<id>"` in a function's mapping keeps it open: its scenarios,
+  checks and proofs are not looked at.
 - A record counts only when its scenario passed. A scenario that linked no
   inbox counts for both providers, and so does one that linked both.

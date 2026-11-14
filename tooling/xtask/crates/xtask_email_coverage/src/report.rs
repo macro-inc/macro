@@ -3,13 +3,14 @@
 //! reach.
 //!
 //! A function is something a user or the system does with mail (star a
-//! thread, refresh a token). It is **covered** on a provider when a scenario
+//! thread, refresh a token). It is **claimed** on a provider when a scenario
 //! that passed on an inbox of that provider performed it (the record the
 //! harness wrote shows the requests `functions.toml` names for it) and
-//! `checks.tsv` says that scenario checks its result. It is **performed**
-//! when a scenario did it and none is said to check it. Entry points are
-//! the detail under the functions: a row is covered when a passing scenario
-//! reached it.
+//! `checks.tsv` says that scenario checks its result. It is **proved** when
+//! `proofs.tsv` also names a break in product code that made such a scenario
+//! fail there: only that counts as covered. It is **performed** when a
+//! scenario did it and none is said to check it. Entry points are the detail
+//! under the functions: a row is covered when a passing scenario reached it.
 
 mod evidence;
 mod graphql;
@@ -27,7 +28,7 @@ use rootcause::prelude::*;
 use serde::Serialize;
 
 use self::junit::Outcome;
-use self::ledger::{Atom, Ledger, Mapping};
+use self::ledger::{Atom, Ledger, Mapping, Proof};
 use self::seen::{Reader, Scenario};
 use crate::{ENTRYPOINTS_PATH, Kind, Providers, Row, Sources, read_tsv};
 
@@ -57,8 +58,8 @@ pub struct Options {
     pub results: Vec<PathBuf>,
     /// Where `coverage.json`, `coverage.md` and `index.html` go.
     pub out: PathBuf,
-    /// Fail when a function or an entry point is neither covered nor
-    /// waived.
+    /// Fail when a function is neither proved nor waived, or an entry
+    /// point is neither reached, waived nor deferred.
     pub enforce: bool,
 }
 
@@ -66,12 +67,20 @@ pub struct Options {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Status {
-    /// Reached (an entry point), or performed and checked (a function).
+    /// A function a scenario performs and is said to check, where a break
+    /// in product code made that scenario fail.
+    Proved,
+    /// A function a scenario performs and is said to check; no break has
+    /// shown that the scenario fails without it.
+    Claimed,
+    /// An entry point a scenario reached.
     Covered,
     /// Performed by a scenario that is not said to check it.
     Performed,
     /// Left uncovered on purpose.
     Waived,
+    /// An entry point left to the full-stack tier.
+    Deferred,
     /// Nothing covers it.
     Open,
 }
@@ -84,7 +93,8 @@ pub(crate) struct Cell {
     pub(crate) scenarios: usize,
     /// A few of them.
     pub(crate) examples: Vec<String>,
-    /// Why it is waived.
+    /// Why it is waived or deferred, what was broken to prove it, or the
+    /// known bug that keeps it open.
     pub(crate) reason: Option<String>,
 }
 
@@ -92,9 +102,16 @@ pub(crate) struct Cell {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 pub(crate) struct Tally {
     pub(crate) total: usize,
+    /// Functions only.
+    pub(crate) proved: usize,
+    /// Functions only.
+    pub(crate) claimed: usize,
+    /// Entry points only: reached.
     pub(crate) covered: usize,
     pub(crate) performed: usize,
     pub(crate) waived: usize,
+    /// Entry points only.
+    pub(crate) deferred: usize,
     pub(crate) open: usize,
 }
 
@@ -103,9 +120,12 @@ impl Tally {
         let Some(cell) = cell else { return };
         self.total += 1;
         match cell.status {
+            Status::Proved => self.proved += 1,
+            Status::Claimed => self.claimed += 1,
             Status::Covered => self.covered += 1,
             Status::Performed => self.performed += 1,
             Status::Waived => self.waived += 1,
+            Status::Deferred => self.deferred += 1,
             Status::Open => self.open += 1,
         }
     }
@@ -118,8 +138,11 @@ pub(crate) struct FunctionRow {
     pub(crate) function: String,
     /// Why the email backend has no part in it, when it has none.
     pub(crate) ui_only: Option<String>,
-    /// Which other service carries it out, when this report cannot see it.
-    pub(crate) outside: Option<String>,
+    /// Which other service carries it out, when it is deferred to the
+    /// full-stack tier.
+    pub(crate) deferred: Option<String>,
+    /// The known product bug that keeps it open.
+    pub(crate) bug: Option<String>,
     pub(crate) gmail: Option<Cell>,
     pub(crate) outlook: Option<Cell>,
 }
@@ -133,6 +156,14 @@ pub(crate) struct EntryRow {
     pub(crate) functions: Vec<String>,
     pub(crate) gmail: Option<Cell>,
     pub(crate) outlook: Option<Cell>,
+}
+
+/// An entry point nothing in the repository calls.
+#[derive(Debug, Serialize)]
+pub(crate) struct DeadCodeRow {
+    pub(crate) entry: String,
+    pub(crate) source: String,
+    pub(crate) reason: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,27 +206,31 @@ pub(crate) struct Model {
     /// Functions in the list, and those the backend has no part in.
     pub(crate) functions_listed: usize,
     pub(crate) functions_ui_only: usize,
-    /// Functions another service carries out, which no record shows.
-    pub(crate) functions_outside: usize,
+    /// Functions another service carries out, deferred to the full-stack
+    /// tier.
+    pub(crate) functions_deferred: usize,
     pub(crate) functions_gmail: Tally,
     pub(crate) functions_outlook: Tally,
     pub(crate) functions: Vec<FunctionRow>,
     pub(crate) entry_points: Vec<KindTotals>,
     pub(crate) entry_rows: Vec<EntryRow>,
+    /// Waived entry points with no caller in the repository.
+    pub(crate) dead_code: Vec<DeadCodeRow>,
     /// Background loops: listed, never counted.
     pub(crate) loops: Vec<String>,
     /// What scenarios made the backend do that is in no list.
     pub(crate) unlisted: Vec<String>,
     /// Where the ledger contradicts itself or the code: always a failure.
     pub(crate) broken: Vec<String>,
-    /// Checks and waivers the evidence does not bear out.
+    /// Checks, proofs, waivers and deferrals the evidence does not bear out.
     pub(crate) stale: Vec<String>,
 }
 
 impl Model {
-    /// Whether anything is neither covered nor waived.
+    /// Whether a function is neither proved nor waived, or an entry point
+    /// neither reached, waived nor deferred.
     fn has_gaps(&self) -> bool {
-        let gap = |tally: &Tally| tally.open + tally.performed > 0;
+        let gap = |tally: &Tally| tally.open + tally.performed + tally.claimed > 0;
         gap(&self.functions_gmail)
             || gap(&self.functions_outlook)
             || self
@@ -284,8 +319,11 @@ pub(crate) fn build(
     // record counts: the harness writes one only for a scenario that ended
     // with its services healthy.
     let mut scenarios: BTreeMap<String, Scenario> = BTreeMap::new();
+    // Every scenario the results know, passed or not: a proof may name one.
+    let mut known: BTreeSet<String> = results.outcomes.keys().cloned().collect();
     for record in records {
         let name = record.scenario();
+        known.insert(name.clone());
         let passed = results.outcomes.is_empty()
             || matches!(
                 results.outcomes.get(&name),
@@ -375,6 +413,52 @@ pub(crate) fn build(
             waived_entries.insert((waiver.entry.clone(), provider), &waiver.reason);
         }
     }
+    // An entry point nothing calls is waived on both providers, and listed.
+    let mut dead_code = Vec::new();
+    for dead in &ledger.waivers.dead_code {
+        let Some(row) = by_entry.get(&dead.entry) else {
+            broken.push(format!(
+                "{}: [[dead_code]] names `{}`, which is not in {ENTRYPOINTS_PATH}",
+                ledger::WAIVERS_PATH,
+                dead.entry
+            ));
+            continue;
+        };
+        for provider in PROVIDERS {
+            waived_entries.insert((dead.entry.clone(), provider), &dead.reason);
+        }
+        dead_code.push(DeadCodeRow {
+            entry: dead.entry.clone(),
+            source: row.source.clone(),
+            reason: dead.reason.clone(),
+        });
+    }
+    let mut deferred_entries: BTreeMap<(String, &str), &str> = BTreeMap::new();
+    for deferral in &ledger.waivers.deferred {
+        if !by_entry.contains_key(&deferral.entry) {
+            broken.push(format!(
+                "{}: defers `{}`, which is not in {ENTRYPOINTS_PATH}",
+                ledger::WAIVERS_PATH,
+                deferral.entry
+            ));
+        }
+        if let Some(provider) = unknown_provider(deferral.provider.as_deref()) {
+            broken.push(format!(
+                "{}: a deferral names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                ledger::WAIVERS_PATH
+            ));
+        }
+        for provider in applies(deferral.provider.as_deref()) {
+            if waived_entries.contains_key(&(deferral.entry.clone(), provider)) {
+                broken.push(format!(
+                    "{}: `{}` is both waived and deferred on {provider}",
+                    ledger::WAIVERS_PATH,
+                    deferral.entry
+                ));
+            }
+            deferred_entries.insert((deferral.entry.clone(), provider), &deferral.reason);
+        }
+    }
 
     let mut entry_rows = Vec::new();
     let mut entry_totals: BTreeMap<String, KindTotals> = BTreeMap::new();
@@ -411,14 +495,28 @@ pub(crate) fn build(
                     .map(|(scenario, _)| scenario.name())
                     .collect();
                 let waiver = waived_entries.get(&(name.clone(), provider)).copied();
-                if !by.is_empty() && waiver.is_some() {
+                let deferral = deferred_entries.get(&(name.clone(), provider)).copied();
+                if !by.is_empty() && (waiver.is_some() || deferral.is_some()) {
                     stale.push(format!(
-                        "{}: `{name}` is waived on {provider} and {} scenarios reach it",
+                        "{}: `{name}` is {} on {provider} and {} scenarios reach it",
                         ledger::WAIVERS_PATH,
+                        if waiver.is_some() {
+                            "waived"
+                        } else {
+                            "deferred"
+                        },
                         by.len()
                     ));
                 }
-                cell_of(&by, &by, waiver)
+                if !by.is_empty() {
+                    cell_of(Status::Covered, &by, None)
+                } else if waiver.is_some() {
+                    cell_of(Status::Waived, &by, waiver)
+                } else if deferral.is_some() {
+                    cell_of(Status::Deferred, &by, deferral)
+                } else {
+                    cell_of(Status::Open, &by, None)
+                }
             })
         };
         let (gmail, outlook) = (cell(GMAIL), cell(OUTLOOK));
@@ -468,6 +566,38 @@ pub(crate) fn build(
         checked.insert((id.as_str(), scenario.as_str()));
     }
     let mut used_checks: BTreeSet<(&str, &str)> = BTreeSet::new();
+    // A proof that names what does not exist is broken; one whose scenario
+    // no longer performs and claims the function is stale, further down.
+    let mut proofs: Vec<&Proof> = Vec::new();
+    for proof in &ledger.proofs {
+        let mut wrong = Vec::new();
+        if !listed.contains(proof.function.as_str()) {
+            wrong.push(format!(
+                "{} is not a function in {}",
+                proof.function,
+                ledger::FUNCTIONS_PATH
+            ));
+        }
+        if !PROVIDERS.contains(&proof.provider.as_str()) {
+            wrong.push(format!(
+                "the provider `{}` is neither {GMAIL} nor {OUTLOOK}",
+                proof.provider
+            ));
+        }
+        if !known.contains(&proof.scenario) {
+            wrong.push(format!(
+                "the scenario `{}` is not in the results",
+                proof.scenario
+            ));
+        }
+        if wrong.is_empty() {
+            proofs.push(proof);
+        }
+        for problem in wrong {
+            broken.push(format!("{}: {problem}", ledger::PROOFS_PATH));
+        }
+    }
+    let mut used_proofs: BTreeSet<(&str, &str, &str)> = BTreeSet::new();
     let mut waived_functions: BTreeMap<(&str, &str), &str> = BTreeMap::new();
     for waiver in &ledger.waivers.function {
         if !listed.contains(waiver.id.as_str()) {
@@ -493,7 +623,7 @@ pub(crate) fn build(
     let mut function_rows = Vec::new();
     let (mut functions_gmail, mut functions_outlook) = (Tally::default(), Tally::default());
     let mut functions_ui_only = 0;
-    let mut functions_outside = 0;
+    let mut functions_deferred = 0;
     for function in &ledger.functions {
         let mapping = match ledger.map.functions.get(&function.id) {
             Some(mapping) => mapping,
@@ -511,14 +641,15 @@ pub(crate) fn build(
             if mapping.ui.is_some() {
                 functions_ui_only += 1;
             } else {
-                functions_outside += 1;
+                functions_deferred += 1;
             }
             function_rows.push(FunctionRow {
                 id: function.id.clone(),
                 area: function.area.clone(),
                 function: function.wording.clone(),
                 ui_only: mapping.ui.clone(),
-                outside: mapping.outside.clone(),
+                deferred: mapping.outside.clone().filter(|_| mapping.ui.is_none()),
+                bug: None,
                 gmail: None,
                 outlook: None,
             });
@@ -542,6 +673,12 @@ pub(crate) fn build(
                     ledger::MAP_PATH,
                     function.id
                 ));
+            }
+            // A known product bug keeps the function open whatever the
+            // scenarios do: one that passes with the bug in shows nothing.
+            if let Some(bug) = &mapping.bug {
+                let reason = format!("known bug {bug}");
+                return Some(cell_of(Status::Open, &[], Some(&reason)));
             }
             let performed: Vec<&Scenario> = scenarios
                 .iter()
@@ -571,7 +708,30 @@ pub(crate) fn build(
                     function.id
                 ));
             }
-            Some(cell_of(&names, &checking, waiver))
+            let proving: Vec<&Proof> = proofs
+                .iter()
+                .copied()
+                .filter(|proof| {
+                    proof.function == function.id
+                        && proof.provider == provider
+                        && checking.contains(&proof.scenario)
+                })
+                .collect();
+            for proof in &proving {
+                used_proofs.insert((&proof.function, &proof.provider, &proof.scenario));
+            }
+            if let Some(proof) = proving.first() {
+                let by: Vec<String> = proving.iter().map(|proof| proof.scenario.clone()).collect();
+                Some(cell_of(Status::Proved, &by, Some(&proof.broke)))
+            } else if !checking.is_empty() {
+                Some(cell_of(Status::Claimed, &checking, None))
+            } else if !names.is_empty() {
+                Some(cell_of(Status::Performed, &names, None))
+            } else if waiver.is_some() {
+                Some(cell_of(Status::Waived, &names, waiver))
+            } else {
+                Some(cell_of(Status::Open, &names, None))
+            }
         };
         let gmail = cell(GMAIL, function.gmail);
         let outlook = cell(OUTLOOK, function.outlook);
@@ -582,12 +742,37 @@ pub(crate) fn build(
             area: function.area.clone(),
             function: function.wording.clone(),
             ui_only: None,
-            outside: None,
+            deferred: None,
+            bug: mapping.bug.clone(),
             gmail,
             outlook,
         });
     }
+    // What is said of a function a known bug keeps open is not looked at.
+    let has_bug = |id: &str| {
+        ledger
+            .map
+            .functions
+            .get(id)
+            .is_some_and(|mapping| mapping.bug.is_some())
+    };
+    for proof in proofs {
+        let used = used_proofs.contains(&(&proof.function, &proof.provider, &proof.scenario));
+        if !used && !has_bug(&proof.function) {
+            stale.push(format!(
+                "{}: breaking the product is said to fail `{}` for {} on {}, and no record \
+                 shows that scenario performing and checking the function there",
+                ledger::PROOFS_PATH,
+                proof.scenario,
+                proof.function,
+                proof.provider
+            ));
+        }
+    }
     for (id, scenario) in &ledger.checks {
+        if has_bug(id) {
+            continue;
+        }
         if !used_checks.contains(&(id.as_str(), scenario.as_str())) {
             stale.push(format!(
                 "{}: `{scenario}` is said to check {id}, and no record shows it performing \
@@ -616,12 +801,13 @@ pub(crate) fn build(
         suite,
         functions_listed: ledger.functions.len(),
         functions_ui_only,
-        functions_outside,
+        functions_deferred,
         functions_gmail,
         functions_outlook,
         functions: function_rows,
         entry_points: entry_totals.into_values().collect(),
         entry_rows,
+        dead_code,
         loops,
         unlisted: unlisted.into_iter().collect(),
         broken,
@@ -667,24 +853,13 @@ fn performs(
     (mapping.by.is_empty() || mapping.by.iter().any(seen)) && mapping.on(provider).iter().all(seen)
 }
 
-/// The cell of a row that `performed` scenarios did and `covering` ones
-/// cover.
-fn cell_of(performed: &[String], covering: &[String], waiver: Option<&str>) -> Cell {
-    let (status, shown) = if !covering.is_empty() {
-        (Status::Covered, covering)
-    } else if !performed.is_empty() {
-        (Status::Performed, performed)
-    } else if waiver.is_some() {
-        (Status::Waived, performed)
-    } else {
-        (Status::Open, performed)
-    };
+/// The cell of a row that stands at `status` because of the scenarios
+/// `shown`.
+fn cell_of(status: Status, shown: &[String], reason: Option<&str>) -> Cell {
     Cell {
         status,
         scenarios: shown.len(),
         examples: shown.iter().take(EXAMPLES).cloned().collect(),
-        reason: (status == Status::Waived)
-            .then(|| waiver.map(str::to_owned))
-            .flatten(),
+        reason: reason.map(str::to_owned),
     }
 }

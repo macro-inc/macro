@@ -1,6 +1,7 @@
 //! The checked-in files the report joins the evidence with: the list of
 //! email functions, how the backend carries each out, which scenarios check
-//! one, and what is waived.
+//! one, which a break in product code proved, and what is waived, deferred
+//! or thought dead.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -19,10 +20,13 @@ pub(crate) const MAP_PATH: &str = "crates/email_e2e/coverage/functions.toml";
 /// The scenarios that check a function's result.
 pub(crate) const CHECKS_PATH: &str = "crates/email_e2e/coverage/checks.tsv";
 /// What is left uncovered on purpose.
+/// The breaks in product code that made a scenario fail.
+pub(crate) const PROOFS_PATH: &str = "crates/email_e2e/coverage/proofs.tsv";
 pub(crate) const WAIVERS_PATH: &str = "crates/email_e2e/coverage/waivers.toml";
 
 const FUNCTIONS_HEADER: &str = "id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at";
 const CHECKS_HEADER: &str = "function\tscenario";
+const PROOFS_HEADER: &str = "function\tprovider\tscenario\tbreak";
 const YES: &str = "yes";
 /// What the function list's provider columns say when it does not.
 const NO: &str = "no";
@@ -54,6 +58,7 @@ struct RawMapping {
     also: Vec<String>,
     ui: Option<String>,
     outside: Option<String>,
+    bug: Option<String>,
 }
 
 /// How the backend carries one function out, parsed.
@@ -72,6 +77,8 @@ pub(crate) struct Mapping {
     /// Which other service carries the function out, when no stack of the
     /// suite records it.
     pub(crate) outside: Option<String>,
+    /// The known product bug that keeps the function open, when one does.
+    pub(crate) bug: Option<String>,
 }
 
 impl Mapping {
@@ -196,7 +203,7 @@ pub(crate) struct Map {
     pub(crate) plumbing: BTreeMap<String, String>,
 }
 
-/// What is left uncovered on purpose.
+/// What is left uncovered on purpose, for good or until a later tier.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Waivers {
@@ -204,9 +211,16 @@ pub(crate) struct Waivers {
     pub(crate) entry_point: Vec<EntryWaiver>,
     #[serde(default)]
     pub(crate) function: Vec<FunctionWaiver>,
+    /// Entry points left to the full-stack tier: not waived, not open.
+    #[serde(default)]
+    pub(crate) deferred: Vec<EntryWaiver>,
+    /// Entry points nothing in the repository calls: waived, and listed as
+    /// candidates for removal.
+    #[serde(default)]
+    pub(crate) dead_code: Vec<DeadCode>,
 }
 
-/// An entry point no scenario is asked to reach.
+/// An entry point no scenario is asked to reach, or not yet.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct EntryWaiver {
@@ -215,6 +229,27 @@ pub(crate) struct EntryWaiver {
     /// `gmail` or `outlook`; both when absent.
     pub(crate) provider: Option<String>,
     pub(crate) reason: String,
+}
+
+/// An entry point with no caller in the repository.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DeadCode {
+    /// `kind key`, as in the list.
+    pub(crate) entry: String,
+    /// How it was found to have no caller.
+    pub(crate) reason: String,
+}
+
+/// A break in product code that made a scenario fail on a provider: the
+/// scenario does not pass without the function working.
+#[derive(Clone, Debug)]
+pub(crate) struct Proof {
+    pub(crate) function: String,
+    pub(crate) provider: String,
+    pub(crate) scenario: String,
+    /// What was broken in product code.
+    pub(crate) broke: String,
 }
 
 /// A function no scenario is asked to cover.
@@ -234,6 +269,7 @@ pub(crate) struct Ledger {
     /// (function id, scenario) pairs: the scenario checks the function's
     /// result.
     pub(crate) checks: Vec<(String, String)>,
+    pub(crate) proofs: Vec<Proof>,
     pub(crate) waivers: Waivers,
 }
 
@@ -244,6 +280,7 @@ impl Ledger {
             functions: functions(&read(root, FUNCTIONS_PATH)?)?,
             map: map(&read(root, MAP_PATH)?)?,
             checks: checks(&read(root, CHECKS_PATH)?)?,
+            proofs: proofs(&read(root, PROOFS_PATH)?)?,
             waivers: toml::from_str(&read(root, WAIVERS_PATH)?)
                 .context(format!("{WAIVERS_PATH} does not parse"))?,
         })
@@ -324,6 +361,7 @@ pub(crate) fn map(text: &str) -> Result<Map, Report> {
             also: atoms(&raw.also)?,
             ui: raw.ui,
             outside: raw.outside,
+            bug: raw.bug,
         };
         map.functions.insert(name, mapping);
     }
@@ -338,6 +376,26 @@ pub(crate) fn checks(text: &str) -> Result<Vec<(String, String)>, Report> {
                 bail!("{CHECKS_PATH}: a row has {} columns, not 2", columns.len());
             };
             Ok((function.to_owned(), scenario.to_owned()))
+        })
+        .collect()
+}
+
+pub(crate) fn proofs(text: &str) -> Result<Vec<Proof>, Report> {
+    rows(text, PROOFS_HEADER, PROOFS_PATH)?
+        .into_iter()
+        .map(|columns| {
+            let [function, provider, scenario, broken] = columns[..] else {
+                bail!("{PROOFS_PATH}: a row has {} columns, not 4", columns.len());
+            };
+            if broken.trim().is_empty() {
+                bail!("{PROOFS_PATH}: the proof of {function} does not say what was broken");
+            }
+            Ok(Proof {
+                function: function.to_owned(),
+                provider: provider.to_owned(),
+                scenario: scenario.to_owned(),
+                broke: broken.to_owned(),
+            })
         })
         .collect()
 }

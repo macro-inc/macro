@@ -12,7 +12,11 @@
 #   ui      the function happens in the browser; the value says why no
 #           backend takes part
 #   outside another service carries the function out and no scenario's stack
-#           records it; the value names the service. Not measured here.
+#           records it; the value names the service. Deferred to the
+#           full-stack tier, not measured here.
+#   bug     a known product bug keeps the function open; the value is its
+#           short id. The function is never proved or claimed, and checks
+#           and proofs that name it are not looked at, until the line goes.
 #
 # Conditions:
 #   /json/pointer=value, /json/pointer   on the request body shape (http,

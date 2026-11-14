@@ -206,26 +206,42 @@ shared with the web app's suite) and backend entry points second.
   the request that performs it (`by`), what must reach each provider
   (`gmail`, `outlook`), and the entry points that take part (`also`). A
   function the browser does alone says so (`ui`); one another service
-  carries out where no stack records it says which (`outside`) and is left
-  out of the count. Routes of document storage that scenarios do record
+  carries out where no stack records it says which (`outside`) and is
+  deferred to the full-stack tier, out of the count. One a known product
+  bug breaks says which (`bug = "<short id>"`): it stays open whatever
+  scenarios show, and the report names the bug, until the line goes with
+  the fix. Routes of document storage that scenarios do record
   (lists, search, reminders, tags) are listed by hand in `sources.toml`
   (`[[elsewhere]]`). Every
   entry point belongs to a function or to `[plumbing]`; every function in
   the list has an entry. The report fails otherwise, so a new route or a new
   function cannot go unmapped.
 - `coverage/checks.tsv` names the scenarios that check a function's result.
-  A function is **covered** on a provider when such a scenario passed there
+  A function is **claimed** on a provider when such a scenario passed there
   and its record shows the function performed; **performed** when scenarios
   did it and none is listed. When you write a scenario that asserts a
   function's result at the provider and in what the service returns, add
   its row.
-- `coverage/waivers.toml` holds what is left uncovered on purpose, with the
-  reason.
+- `coverage/proofs.tsv` (`function`, `provider`, `scenario`, `break`) names
+  the breaks that proved a claim: with that one thing broken in product
+  code, the scenario failed on that provider. A claimed function with such
+  a row is **proved**, and only proved counts as covered in the headline.
+  Add a row only after watching the scenario fail with the break in and
+  pass with it out. A row that names an unknown function, provider or
+  scenario fails the report; one whose scenario no longer performs and
+  checks the function is reported as stale.
+- `coverage/waivers.toml` holds what is left uncovered, with the reason:
+  functions and entry points waived for good (`[[function]]`,
+  `[[entry_point]]`), entry points deferred to the full-stack tier
+  (`[[deferred]]`, counted apart from waived), and entry points nothing in
+  the repository calls (`[[dead_code]]`: waived, and listed in the report
+  under "Dead code candidates" with their source).
 - `just email-e2e-coverage` after `just email-e2e` writes the report to
   `target/email-e2e-coverage/` (`index.html`, `coverage.md`,
   `coverage.json`). In CI the `Email end-to-end (coverage)` job puts it in
   the job summary and the `email-e2e-coverage` artifact. It reports only;
-  `--enforce` makes gaps fail.
+  `--enforce` makes gaps fail: a function neither proved nor waived, an
+  entry point neither reached, waived nor deferred.
 
 ## Start here
 

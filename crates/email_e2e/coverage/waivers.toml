@@ -1,13 +1,38 @@
-# What the email end-to-end suite leaves uncovered on purpose. Every waiver
-# says why. A waiver for something a scenario does cover is reported as
-# stale.
+# What the email end-to-end suite leaves uncovered, and why. Four kinds:
+# waived for good, deferred to the full-stack tier, thought dead, and (in
+# functions.toml, `bug`) held open by a known product bug. Anything listed
+# here that a scenario does cover or reach is reported as stale.
+#
+# A function no scenario is asked to cover:
 #
 # [[function]]
 # id = "F-000"            # from apps/web/tests/email-e2e/ledger/functions.tsv
 # provider = "outlook"    # optional: gmail or outlook; both when absent
 # reason = "..."
 #
+# An entry point no scenario is asked to reach:
+#
 # [[entry_point]]
 # entry = "http GET /health"   # `kind key`, as in entrypoints.tsv
 # provider = "gmail"           # optional
 # reason = "..."
+#
+# An entry point left to the full-stack tier (a provider's sign-in route,
+# say): not waived and not open, counted in its own column. An entry point
+# is waived or deferred on a provider, never both.
+#
+# [[deferred]]
+# entry = "http GET /email/oauth/callback"
+# provider = "gmail"           # optional
+# reason = "..."
+#
+# An entry point nothing in the repository calls: waived on both providers
+# and listed under "Dead code candidates" with its source. The reason says
+# how it was found to have no caller.
+#
+# [[dead_code]]
+# entry = "http GET /email/unused"
+# reason = "..."
+#
+# Functions another service carries out are deferred to the full-stack tier
+# by `outside` in functions.toml, not here.
