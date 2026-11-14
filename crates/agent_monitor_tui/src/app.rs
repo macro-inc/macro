@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use tui_tree_widget::TreeState;
 
-use agent_monitor::domain::model::{AgentId, Oid, PrId, RepoGraph, RepoId};
+use agent_monitor::domain::model::{AgentId, CiState, Mergeable, Oid, PrId, RepoGraph, RepoId};
 
 use crate::keys::{self, Action, ChangeKey, Key, Mode, Motion, Page, Pane};
 use crate::theme::ThemeName;
@@ -64,14 +64,23 @@ pub enum ChangeRow {
     Pr(PrId),
 }
 
+/// A tab of the CHANGES page.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChangeTab {
+    /// A mapped repository's graph.
+    Repo(RepoId),
+    /// Pull requests in no mapped repository, listed without a graph.
+    OtherPrs,
+}
+
 /// Time buckets one column of the CHANGES map can stand for, in seconds.
 pub const SCALES: [i64; 6] = [60, 5 * 60, 15 * 60, 3_600, 4 * 3_600, 86_400];
 
 /// Where the CHANGES page is: kept by identity so it survives new lanes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ChangesCursor {
-    /// The repository shown; `None` is the first tab.
-    pub repo: Option<RepoId>,
+    /// The tab shown; `None` is the first tab.
+    pub tab: Option<ChangeTab>,
     /// The row under the cursor; `None` is the first lane.
     pub row: Option<ChangeRow>,
     /// The commit under the cursor on that row; `None` is its tip.
@@ -215,19 +224,48 @@ impl App {
         }
     }
 
-    /// The repository the CHANGES page shows.
-    pub fn change_repo(&self) -> Option<&RepoGraph> {
-        let tabs = self.view.repo_tabs();
-        self.cursors
+    /// The CHANGES page's tabs: the mapped repositories, then other pull
+    /// requests when any pull request is in no mapped repository, so none
+    /// the page counts goes missing.
+    pub fn change_tabs(&self) -> Vec<ChangeTab> {
+        let mut tabs: Vec<ChangeTab> = self
+            .view
+            .repo_tabs()
+            .into_iter()
+            .map(|graph| ChangeTab::Repo(graph.id.clone()))
+            .collect();
+        if !self.view.unmapped_prs(&Filter::default()).is_empty() {
+            tabs.push(ChangeTab::OtherPrs);
+        }
+        tabs
+    }
+
+    /// The tab the CHANGES page shows: the chosen one while it exists, else
+    /// the first.
+    pub fn change_tab(&self) -> Option<ChangeTab> {
+        let tabs = self.change_tabs();
+        let chosen = self
+            .cursors
             .changes
-            .repo
+            .tab
             .as_ref()
-            .and_then(|id| tabs.iter().find(|graph| graph.id == *id).copied())
-            .or_else(|| tabs.first().copied())
+            .filter(|tab| tabs.contains(tab))
+            .cloned();
+        chosen.or_else(|| tabs.into_iter().next())
+    }
+
+    /// The repository the CHANGES page shows; `None` on the other pull
+    /// requests tab or with no repository mapped.
+    pub fn change_repo(&self) -> Option<&RepoGraph> {
+        match self.change_tab()? {
+            ChangeTab::Repo(id) => self.view.repos.get(&id),
+            ChangeTab::OtherPrs => None,
+        }
     }
 
     /// The CHANGES page's rows: the trunk, the lanes in order, then pull
-    /// requests with no lane.
+    /// requests with no lane; with no graph, the pull requests in no mapped
+    /// repository.
     pub fn change_rows(&self) -> Vec<ChangeRow> {
         let Some(graph) = self.change_repo() else {
             return self
@@ -255,7 +293,7 @@ impl App {
     }
 
     /// The row under the CHANGES cursor: the chosen one while it exists,
-    /// else the first lane.
+    /// else the first lane (the first row when there is no trunk).
     pub fn change_row(&self) -> Option<ChangeRow> {
         let rows = self.change_rows();
         let chosen = self
@@ -265,7 +303,11 @@ impl App {
             .as_ref()
             .filter(|row| rows.contains(row))
             .cloned();
-        chosen.or_else(|| rows.get(1).or(rows.first()).cloned())
+        let first = match rows.first() {
+            Some(ChangeRow::Trunk) => rows.get(1).or(rows.first()),
+            _ => rows.first(),
+        };
+        chosen.or_else(|| first.cloned())
     }
 
     fn change(&mut self, change: ChangeKey) {
@@ -288,15 +330,10 @@ impl App {
                 };
             }
             ChangeKey::PrevRepo | ChangeKey::NextRepo => {
-                let ids: Vec<RepoId> = self
-                    .view
-                    .repo_tabs()
-                    .iter()
-                    .map(|graph| graph.id.clone())
-                    .collect();
+                let ids = self.change_tabs();
                 let current = self
-                    .change_repo()
-                    .and_then(|graph| ids.iter().position(|id| *id == graph.id))
+                    .change_tab()
+                    .and_then(|tab| ids.iter().position(|id| *id == tab))
                     .unwrap_or(0);
                 let next = if change == ChangeKey::NextRepo {
                     (current + 1) % ids.len().max(1)
@@ -304,7 +341,7 @@ impl App {
                     (current + ids.len().max(1) - 1) % ids.len().max(1)
                 };
                 let cursor = &mut self.cursors.changes;
-                cursor.repo = ids.get(next).cloned();
+                cursor.tab = ids.get(next).cloned();
                 cursor.row = None;
                 cursor.commit = None;
             }
@@ -326,18 +363,18 @@ impl App {
     /// look, wrapping around.
     fn jump_to_attention(&mut self, forward: bool) {
         let rows = self.change_rows();
-        let Some(graph) = self.change_repo() else {
-            return;
-        };
+        let graph = self.change_repo();
         let wants: Vec<bool> = rows
             .iter()
             .map(|row| match row {
                 ChangeRow::Lane(branch) => graph
-                    .lanes
-                    .iter()
-                    .find(|lane| lane.branch == *branch)
+                    .and_then(|graph| graph.lanes.iter().find(|lane| lane.branch == *branch))
                     .is_some_and(|lane| self.view.attention(lane).is_some()),
-                ChangeRow::Trunk | ChangeRow::Pr(_) => false,
+                ChangeRow::Pr(id) => self.view.prs.get(id).is_some_and(|pr| {
+                    !pr.state.is_final()
+                        && (pr.ci == CiState::Failed || pr.mergeable == Mergeable::Conflicting)
+                }),
+                ChangeRow::Trunk => false,
             })
             .collect();
         let current = self
@@ -428,8 +465,16 @@ impl App {
 
     /// The agent the CHANGES row under the cursor opens, or its lane page.
     fn activate_change(&mut self) -> Option<AgentId> {
+        let row = self.change_row()?;
+        if let ChangeRow::Pr(id) = &row {
+            return self
+                .view
+                .prs
+                .get(id)
+                .and_then(|pr| ViewState::pr_agent(pr).cloned());
+        }
         let graph = self.change_repo()?;
-        match self.change_row()? {
+        match row {
             ChangeRow::Lane(branch) => {
                 let lane = graph.lanes.iter().find(|lane| lane.branch == branch)?;
                 match self.view.lane_agent(lane) {
@@ -441,12 +486,8 @@ impl App {
                     }
                 }
             }
-            ChangeRow::Pr(id) => self
-                .view
-                .prs
-                .get(&id)
-                .and_then(|pr| ViewState::pr_agent(pr).cloned()),
             ChangeRow::Trunk => graph.trunk_agents.first().cloned(),
+            ChangeRow::Pr(_) => None,
         }
     }
 

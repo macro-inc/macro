@@ -527,7 +527,10 @@ const HELP: [(&str, &str); 22] = [
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),
-    ("TYPE A LETTER", "command line, in any case, then ENTER:"),
+    (
+        "TYPE A LETTER",
+        "command line, in any case (CAPITALS on 8), then ENTER:",
+    ),
     ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
     (
         "FAIL TREE SRC BODY CHG WALL",

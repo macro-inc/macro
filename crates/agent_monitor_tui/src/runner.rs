@@ -109,6 +109,7 @@ where
             break;
         }
 
+        app.view.prune_fresh(Utc::now());
         let wait = if app.view.dirty {
             MIN_FRAME.saturating_sub(since_draw)
         } else if fps > 0 && app.animating() {

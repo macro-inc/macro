@@ -33,6 +33,7 @@ use chrono::Utc;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 pub use assemble::{
     Assembled, Candidate, Gathered, Picked, RECENT, Ranked, RepoWanted, TrunkRef, assemble,
@@ -287,6 +288,9 @@ impl<B: GitBackend> Mapper<B> {
         self.send(Change::Reset(Vec::new())).await?;
         self.health().await?;
         let mut wanted = self.interest.wanted.clone();
+        let mut arrivals = self.interest.arrivals.clone();
+        arrivals.borrow_and_update();
+        let mut arrivals_open = true;
         let current = wanted.borrow_and_update().clone();
         self.sync(current).await?;
 
@@ -306,6 +310,12 @@ impl<B: GitBackend> Mapper<B> {
                     let current = wanted.borrow_and_update().clone();
                     self.sync(current).await?;
                 }
+                // A viewer arrived: a regather held back by the idle gap
+                // is due on the watched schedule, which `next` recomputes.
+                arrived = arrivals.changed(), if arrivals_open => {
+                    // With no store behind it, mapping goes on unwoken.
+                    arrivals_open = arrived.is_ok();
+                }
                 changes = self.watch.next() => {
                     let Some(changes) = changes else {
                         return Err(SourceError::Internal(rootcause::report!("the ref watcher stopped").into_dynamic()));
@@ -314,7 +324,7 @@ impl<B: GitBackend> Mapper<B> {
                 }
                 () = tokio::time::sleep_until(sleep_until), if next.is_some() => {
                     if let Some((repo, _)) = next {
-                        self.gather(&repo).await?;
+                        self.gather(&repo, &cancel).await?;
                     }
                 }
             }
@@ -326,6 +336,9 @@ impl<B: GitBackend> Mapper<B> {
     async fn sync(&mut self, wanted: Arc<GitWanted>) -> Result<(), SourceError> {
         self.wanted = wanted.clone();
         let now = Instant::now();
+        // Forget directories no agent works in any more.
+        self.discovered
+            .retain(|cwd, _| wanted.cwds.contains_key(cwd));
         // Directories to repositories.
         let mut by_repo: BTreeMap<PathBuf, BTreeMap<PathBuf, bool>> = BTreeMap::new();
         for (cwd, live) in &wanted.cwds {
@@ -501,12 +514,16 @@ impl<B: GitBackend> Mapper<B> {
         }
     }
 
-    async fn gather(&mut self, common: &Path) -> Result<(), SourceError> {
+    async fn gather(
+        &mut self,
+        common: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<(), SourceError> {
         let Some(repo) = self.repos.get(common) else {
             self.schedule.drop_repo(common);
             return Ok(());
         };
-        let span = tracing::debug_span!(
+        let span = tracing::info_span!(
             "macrod.monitor.git.gather",
             lanes = tracing::field::Empty,
             commits = tracing::field::Empty,
@@ -514,7 +531,12 @@ impl<B: GitBackend> Mapper<B> {
             outcome = tracing::field::Empty,
         );
         let started = Instant::now();
-        let result = gather(&self.backend, &repo.place, &repo.wanted, Utc::now()).await;
+        let gathering =
+            gather(&self.backend, &repo.place, &repo.wanted, Utc::now()).instrument(span.clone());
+        let result = tokio::select! {
+            () = cancel.cancelled() => return Ok(()),
+            result = gathering => result,
+        };
         let took = started.elapsed();
         let ms = u64::try_from(took.as_millis()).unwrap_or(u64::MAX);
         span.record("duration_ms", ms);
@@ -543,6 +565,11 @@ impl<B: GitBackend> Mapper<B> {
                 span.record("outcome", "failed");
                 tracing::warn!(parent: &span, error = %reason, "git gather failed");
                 self.failure = Some(String::from("git failed"));
+            }
+            Err(GitError::TimedOut) => {
+                span.record("outcome", "timed_out");
+                tracing::warn!(parent: &span, "git gather timed out");
+                self.failure = Some(String::from("git timed out"));
             }
         }
         self.health().await

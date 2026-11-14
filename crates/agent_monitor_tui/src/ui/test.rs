@@ -5,13 +5,13 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use agent_monitor::domain::model::{
-    SourceHealth, SourceKind, SourceState, Timestamp, TranscriptItem, TranscriptItemKind, Update,
-    UpdateKind,
+    PrId, RepoName, SourceHealth, SourceKind, SourceState, Timestamp, TranscriptItem,
+    TranscriptItemKind, Update, UpdateKind,
 };
 use agent_monitor::outbound::demo;
 
 use super::*;
-use crate::app::App;
+use crate::app::{App, ChangeRow, ChangeTab};
 use crate::body::Vitals;
 use crate::keys::{Key, Page};
 use crate::view::ViewState;
@@ -173,6 +173,58 @@ fn changes_failing_lane_selected_and_enter_drills_into_the_author() {
 }
 
 #[test]
+fn changes_without_repositories_lists_the_prs_and_enter_opens_the_author() {
+    let mut app = app();
+    app.view.repos.clear();
+    app.key(Key::Char('8'));
+    let screen = render(&mut app, 240, 45);
+    insta::assert_snapshot!(screen);
+    let first = app.view.sorted_prs(&app.filter)[0].clone();
+    assert!(screen.contains(&format!("#{}", first.number)), "{screen}");
+    // The cursor starts on the first pull request, not the second.
+    assert_eq!(app.change_row(), Some(ChangeRow::Pr(first.id.clone())));
+    app.key(Key::Enter);
+    assert_eq!(
+        app.page(),
+        &Page::Agent(
+            ViewState::pr_agent(&first)
+                .cloned()
+                .expect("the demo PR has an author")
+        )
+    );
+}
+
+#[test]
+fn changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab() {
+    let mut app = app();
+    let mut other = app
+        .view
+        .sorted_prs(&app.filter)
+        .into_iter()
+        .find(|pr| !pr.state.is_final())
+        .cloned()
+        .expect("an open demo PR");
+    other.repo = RepoName::parse("elsewhere/tools").expect("a repository name");
+    other.number = 42;
+    other.id = PrId::from_wire(String::from("elsewhere/tools#42"));
+    other.title = Some(String::from("Pin the toolchain"));
+    app.view.prs.insert(other.id.clone(), other.clone());
+    app.key(Key::Char('8'));
+    let mapped = render(&mut app, 240, 45);
+    assert!(mapped.contains(" other PRs 1 "), "{mapped}");
+    assert!(app.change_repo().is_some());
+
+    while app.change_tab() != Some(ChangeTab::OtherPrs) {
+        app.key(Key::Char(']'));
+    }
+    let screen = render(&mut app, 240, 45);
+    insta::assert_snapshot!(screen);
+    assert_eq!(app.change_rows(), vec![ChangeRow::Pr(other.id.clone())]);
+    app.key(Key::Enter);
+    assert!(matches!(app.page(), Page::Agent(_)));
+}
+
+#[test]
 fn lane_detail_200x56() {
     let mut app = app();
     app.key(Key::Char('8'));
@@ -298,4 +350,8 @@ fn help_overlay() {
     app.key(Key::Char('?'));
     let screen = render(&mut app, 200, 56);
     assert!(screen.contains("AGT builder working"));
+    assert!(
+        screen.contains("in any case (CAPITALS on 8), then ENTER:"),
+        "{screen}"
+    );
 }

@@ -226,3 +226,88 @@ fn spend_by_kind_covers_only_today_and_adds_up_to_the_day() {
         "yesterday's spend stays out of the day: lifetime {lifetime}, day {day}"
     );
 }
+
+/// The demo graph's first lane with an agent, as `(graph, lane index)`.
+fn demo_lane() -> (RepoGraph, usize) {
+    let snapshot =
+        crate::outbound::demo::snapshot(7, start(), std::time::Duration::from_millis(250), 400);
+    let graph = snapshot.repos[0].clone();
+    let index = graph
+        .lanes
+        .iter()
+        .position(|lane| !lane.agents.is_empty() && lane.commits.len() >= 2)
+        .expect("a demo lane with an agent and commits");
+    (graph, index)
+}
+
+fn oid(n: u64) -> Oid {
+    Oid::parse(&format!("{n:040x}")).expect("an oid")
+}
+
+fn texts(lines: &[TapeEvent]) -> Vec<(TapeKind, String)> {
+    lines
+        .iter()
+        .map(|line| (line.kind, line.text.clone()))
+        .collect()
+}
+
+#[test]
+fn a_rebase_writes_a_rewrote_line() {
+    let (previous, index) = demo_lane();
+    let mut graph = previous.clone();
+    for (n, commit) in graph.lanes[index].commits.iter_mut().enumerate() {
+        commit.oid = oid(0xa000 + n as u64);
+    }
+    let lines = commit_lines(&previous, &graph, start());
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].kind, TapeKind::Rewritten);
+}
+
+#[test]
+fn more_commits_than_a_lane_carries_are_not_a_rewrite() {
+    let (previous, index) = demo_lane();
+    let mut graph = previous.clone();
+    let lane = &mut graph.lanes[index];
+    let template = lane.commits[0].clone();
+    lane.commits = (0..30)
+        .map(|n| Commit {
+            oid: oid(0xb000 + n),
+            ..template.clone()
+        })
+        .collect();
+    lane.elided = 7;
+    lane.ahead += 35;
+    let branch = lane.branch.clone();
+    let lines = commit_lines(&previous, &graph, start());
+    assert_eq!(
+        texts(&lines),
+        vec![(TapeKind::Commit, format!("committed 35 to {branch}"))]
+    );
+}
+
+#[test]
+fn a_new_stacked_branch_taking_the_old_tip_is_not_a_rewrite() {
+    let (previous, index) = demo_lane();
+    let mut graph = previous.clone();
+    let old_tip = previous.lanes[index].commits[0].clone();
+    // The old commits move to a new branch below; the lane keeps one new
+    // commit on top of the old tip.
+    let mut below = previous.lanes[index].clone();
+    below.branch = String::from("feat/below");
+    below.agents = Vec::new();
+    let lane = &mut graph.lanes[index];
+    lane.base = LaneBase::Lane {
+        branch: String::from("feat/below"),
+        oid: old_tip.oid.clone(),
+    };
+    lane.commits = vec![Commit {
+        oid: oid(0xc000),
+        subject: String::from("on top"),
+        ..old_tip.clone()
+    }];
+    graph.lanes.push(below);
+    let lines = commit_lines(&previous, &graph, start());
+    assert_eq!(lines.len(), 1, "{:?}", texts(&lines));
+    assert_eq!(lines[0].kind, TapeKind::Commit);
+    assert!(lines[0].text.ends_with("on top"), "{}", lines[0].text);
+}

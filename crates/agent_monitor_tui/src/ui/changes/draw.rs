@@ -14,12 +14,13 @@ use ratatui::widgets::Paragraph;
 use agent_monitor::domain::model::{Commit, Lane, LaneBase, Pr, PrState, RepoGraph, Status};
 
 use super::layout::{self, LaneRow, Scene, Viewport};
-use super::{ci_mark, distance, lane_tag, lane_token, repo_short, review_mark, title_spans};
+use super::{ci_mark, distance, lane_tag, lane_token, review_mark, tab_spans, title_spans};
 use crate::app::{App, ChangeRow, SCALES};
 use crate::format;
 use crate::theme;
 use crate::theme::Token;
 use crate::ui::Clock;
+use crate::ui::panes::pr_line;
 use crate::view::LaneSort;
 
 /// Board width at or above this many inner columns: every column.
@@ -59,11 +60,15 @@ pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clo
     }
 
     let Some(graph) = app.change_repo().cloned() else {
-        let lines = vec![Line::from(Span::styled(
-            "  no repositories yet: agents' working directories in a git checkout show here",
-            theme::ink(Token::Rule),
-        ))];
-        frame.render_widget(Paragraph::new(lines), inner);
+        if app.change_tabs().is_empty() {
+            let lines = vec![Line::from(Span::styled(
+                "  no repositories yet: agents' working directories in a git checkout show here",
+                theme::ink(Token::Rule),
+            ))];
+            frame.render_widget(Paragraph::new(lines), inner);
+        } else {
+            draw_other_prs(frame.buffer_mut(), inner, app, clock);
+        }
         return;
     };
 
@@ -214,6 +219,76 @@ pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clo
     painter.footer(buffer, footer_y, selected.as_ref(), &orphans);
 }
 
+/// The other pull requests tab: the tab strip, then pull requests in no
+/// mapped repository as PRS rows (no graph to draw them on), and the keys.
+fn draw_other_prs(buffer: &mut Buffer, inner: Rect, app: &mut App, clock: Clock) {
+    let right = inner.right();
+    let width = usize::from(inner.width);
+    write(buffer, inner.x, inner.y, right, &tab_spans(app));
+    let prs: Vec<Pr> = app
+        .view
+        .unmapped_prs(&app.filter)
+        .into_iter()
+        .cloned()
+        .collect();
+    let note = if app.view.repos.is_empty() {
+        "  no repository mapped: pull requests only"
+    } else {
+        "  pull requests in no mapped repository"
+    };
+    write(
+        buffer,
+        inner.x,
+        inner.y + 1,
+        right,
+        &[Span::styled(note, theme::ink(Token::Rule))],
+    );
+
+    let list_y = inner.y + 2;
+    let footer_y = inner.bottom().saturating_sub(2);
+    let rows = usize::from(footer_y.saturating_sub(list_y));
+    let selected = app.change_row();
+    let cursor = prs
+        .iter()
+        .position(|pr| selected == Some(ChangeRow::Pr(pr.id.clone())));
+    let scroll = scroll_into(cursor, app.cursors.changes.scroll, rows, prs.len());
+    app.cursors.changes.scroll = scroll;
+    for (offset, pr) in prs.iter().skip(scroll).take(rows).enumerate() {
+        let y = list_y + u16::try_from(offset).unwrap_or(0);
+        let chosen = Some(offset + scroll) == cursor;
+        let line = pr_line(app, clock, pr, width, width >= 64, chosen);
+        buffer.set_line(inner.x, y, &line, inner.width);
+    }
+    if prs.len() > scroll + rows {
+        write(
+            buffer,
+            inner.x,
+            footer_y.saturating_sub(1),
+            right,
+            &[Span::styled(
+                format!(" ▼ {} more", prs.len() - scroll - rows),
+                theme::ink(Token::TextDim),
+            )],
+        );
+    }
+
+    for x in inner.left()..right {
+        put(buffer, x, footer_y, "┄", theme::ink(Token::InfoFaint));
+    }
+    let mut keys = Vec::new();
+    for (key, what) in [("↑↓", "PR"), ("ENTER", "AGENT"), ("[ ]", "REPO")] {
+        keys.push(Span::styled(
+            format!(" {key}"),
+            theme::bold(Token::Highlight),
+        ));
+        keys.push(Span::styled(
+            format!(" {what} "),
+            theme::ink(Token::TextDim),
+        ));
+    }
+    write(buffer, inner.x, footer_y + 1, right, &keys);
+}
+
 /// The scroll that keeps `cursor` in view, clamped to the list.
 fn scroll_into(cursor: Option<usize>, current: usize, rows: usize, total: usize) -> usize {
     let scroll = layout::scroll_for(cursor, current, rows);
@@ -305,35 +380,7 @@ impl Painter<'_> {
 
     fn header(&self, buffer: &mut Buffer, y: u16, zoom: usize, sort: LaneSort, hide_landed: bool) {
         let right = self.inner.right();
-        let mut spans = vec![Span::styled("REPO ", theme::ink(Token::TextDim))];
-        for graph in self.app.view.repo_tabs() {
-            let lanes = graph
-                .lanes
-                .iter()
-                .filter(|lane| lane.landed.is_none())
-                .count();
-            let failing = graph
-                .lanes
-                .iter()
-                .any(|lane| self.app.view.attention(lane) == Some(crate::view::Attention::Failing));
-            let text = format!(
-                " {} {lanes}{} ",
-                repo_short(graph),
-                if failing { " ✕" } else { "" }
-            );
-            if graph.id == self.graph.id {
-                spans.push(Span::styled(text, theme::chip(Token::Text)));
-            } else {
-                spans.push(Span::styled(
-                    text,
-                    theme::ink(if failing {
-                        Token::Alert
-                    } else {
-                        Token::TextDim
-                    }),
-                ));
-            }
-        }
+        let mut spans = tab_spans(self.app);
         spans.push(Span::styled("   ", theme::base()));
         let trunk = &self.graph.trunk;
         spans.push(Span::styled(trunk.name.clone(), theme::bold(Token::Accent)));
@@ -561,8 +608,8 @@ impl Painter<'_> {
             } else {
                 ("━", line)
             };
-            let glyph = match (&cursor, &cell.oid) {
-                (Some(cursor), Some(oid)) if cursor == oid => "◈",
+            let glyph = match &cursor {
+                Some(cursor) if cell.held.contains(cursor) => "◈",
                 _ => glyph,
             };
             put(buffer, self.x(col), y, glyph, style);
@@ -735,7 +782,10 @@ impl Painter<'_> {
                 Some(age) => theme::glitch(glyph, age, self.clock.now.timestamp_millis()),
                 None => glyph.to_owned(),
             };
-            let glyph = if cursor.as_ref() == Some(&station.oid) {
+            let glyph = if cursor
+                .as_ref()
+                .is_some_and(|cursor| station.held.contains(cursor))
+            {
                 String::from("◈")
             } else {
                 glyph

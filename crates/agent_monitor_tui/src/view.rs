@@ -221,12 +221,30 @@ impl ViewState {
         self.fresh.clear();
     }
 
-    /// Replaces a graph and marks the commits it gained as fresh.
+    /// Replaces a graph and marks the commits it gained as fresh: new
+    /// commits on the trunk or on a lane it already had, and any commit
+    /// newer than everything it had. A lane that only now enters the graph
+    /// (an agent moved onto an old branch) brings its old commits quietly.
     fn upsert_repo(&mut self, graph: RepoGraph) {
         if let Some(previous) = self.repos.get(&graph.id) {
             let known: HashSet<&Oid> = graph_commits(previous).map(|commit| &commit.oid).collect();
+            let lanes: HashSet<&str> = previous
+                .lanes
+                .iter()
+                .map(|lane| lane.branch.as_str())
+                .collect();
+            let newest = graph_commits(previous).map(|commit| commit.at).max();
+            let gained = graph.trunk.commits.iter().chain(
+                graph
+                    .lanes
+                    .iter()
+                    .filter(|lane| lanes.contains(lane.branch.as_str()))
+                    .flat_map(|lane| lane.commits.iter()),
+            );
+            let newer =
+                graph_commits(&graph).filter(|commit| newest.is_none_or(|at| commit.at > at));
             let now = self.now();
-            for commit in graph_commits(&graph) {
+            for commit in gained.chain(newer) {
                 if !known.contains(&commit.oid) {
                     let arrived = now.map_or(commit.at, |now| now.max(commit.at));
                     self.fresh.insert(commit.oid.clone(), arrived);
@@ -237,6 +255,12 @@ impl ViewState {
             }
         }
         self.repos.insert(graph.id.clone(), graph);
+    }
+
+    /// Forgets commits that arrived more than [`FRESH_FOR`] before `now`,
+    /// so the page stops animating once their glitch has played.
+    pub fn prune_fresh(&mut self, now: Timestamp) {
+        self.fresh.retain(|_, at| *at > now - FRESH_FOR);
     }
 
     fn push_tape(&mut self, event: TapeEvent) {

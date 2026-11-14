@@ -211,6 +211,7 @@ fn start(backend: impl GitBackend) -> Running {
     let interest = GitInterest {
         wanted: receiver,
         subscribers: Arc::new(|| 1),
+        arrivals: watch::channel(0).1,
     };
     let (sender, out) = mpsc::channel(64);
     let cancel = CancellationToken::new();

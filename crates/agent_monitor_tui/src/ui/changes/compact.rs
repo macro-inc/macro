@@ -10,7 +10,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use agent_monitor::domain::model::{Lane, PrState};
+use agent_monitor::domain::model::{Lane, Pr, PrState};
 
 use super::draw::{put, write};
 use super::layout::{self, Viewport};
@@ -46,12 +46,30 @@ pub fn draw(
     }
 
     let Some(graph) = app.change_repo().cloned() else {
-        // No repository mapped: the pull requests alone, as a list.
-        let prs = app.view.sorted_prs(&app.filter);
+        // No graph (no repository mapped, or the other pull requests tab):
+        // those pull requests as a list.
+        let prs: Vec<Pr> = app
+            .view
+            .unmapped_prs(&app.filter)
+            .into_iter()
+            .cloned()
+            .collect();
+        let selected = app.change_row();
+        let cursor = prs
+            .iter()
+            .position(|pr| selected == Some(ChangeRow::Pr(pr.id.clone())));
+        let scroll = layout::scroll_for(cursor, app.cursors.changes.scroll, height)
+            .min(prs.len().saturating_sub(height));
+        app.cursors.changes.scroll = scroll;
         let mut lines: Vec<Line<'_>> = prs
             .iter()
+            .enumerate()
+            .skip(scroll)
             .take(height)
-            .map(|pr| pr_line(app, clock, pr, width, width >= 64, false))
+            .map(|(index, pr)| {
+                let chosen = (focused || zoomed) && Some(index) == cursor;
+                pr_line(app, clock, pr, width, width >= 64, chosen)
+            })
             .collect();
         if lines.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -248,6 +266,18 @@ pub fn draw(
     if open_orphans > 0 {
         spans.push(Span::styled(
             format!("+{open_orphans} PRs without a local branch"),
+            theme::ink(Token::Rule),
+        ));
+    }
+    let other = app
+        .view
+        .unmapped_prs(&app.filter)
+        .iter()
+        .filter(|pr| !pr.state.is_final())
+        .count();
+    if other > 0 {
+        spans.push(Span::styled(
+            format!("   +{other} in other PRs"),
             theme::ink(Token::Rule),
         ));
     }

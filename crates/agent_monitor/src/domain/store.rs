@@ -25,9 +25,9 @@ use crate::domain::join::{
     FactEvent, Facts, MinuteCounts, build_agents, git_wanted, minute_counts, spend_since,
 };
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, RepoGraph,
-    RepoId, Severity, Snapshot, SourceHealth, SourceKind, Status, TapeEvent, TapeKind, Timestamp,
-    Totals, Update, UpdateKind,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Commit, Cost, Lane, LaneBase, Oid, Pr,
+    PrId, PrState, RepoGraph, RepoId, Severity, Snapshot, SourceHealth, SourceKind, Status,
+    TapeEvent, TapeKind, Timestamp, Totals, Update, UpdateKind,
 };
 use crate::domain::observation::{
     Change, FactKey, GitWanted, Observation, PrWanted, TranscriptEventKind, TranscriptKey,
@@ -345,6 +345,7 @@ impl Store {
         GitInterest {
             wanted: self.git_wanted(),
             subscribers: Arc::new(move || updates.receiver_count()),
+            arrivals: self.shared.arrivals.subscribe(),
         }
     }
 
@@ -817,6 +818,25 @@ fn commit_lines(previous: &RepoGraph, graph: &RepoGraph, now: Timestamp) -> Vec<
             continue;
         }
         let kept = lane.commits.iter().any(|commit| commit.oid == old_tip.oid);
+        if !kept && base_holds(graph, lane, &old_tip.oid) {
+            // A new stacked branch took the old tip: everything carried is
+            // new on top of it.
+            lines.extend(new_commit_lines(now, agent, lane, &lane.commits));
+            continue;
+        }
+        if !kept && lane.elided > 0 && same_base(&before.base, &lane.base) {
+            // More commits landed than a lane carries: the old tip is
+            // among the elided ones, not rewritten.
+            let count = lane.ahead.saturating_sub(before.ahead).max(1);
+            lines.push(line(
+                now,
+                agent,
+                TapeKind::Commit,
+                format!("committed {count} to {}", lane.branch),
+                Severity::Info,
+            ));
+            continue;
+        }
         if !kept {
             lines.push(line(
                 now,
@@ -832,32 +852,73 @@ fn commit_lines(previous: &RepoGraph, graph: &RepoGraph, now: Timestamp) -> Vec<
             ));
             continue;
         }
-        let fresh: Vec<_> = lane
+        let fresh: Vec<Commit> = lane
             .commits
             .iter()
             .take_while(|commit| commit.oid != old_tip.oid)
+            .cloned()
             .collect();
-        if fresh.len() > COMMIT_LINES {
-            lines.push(line(
-                now,
-                agent,
-                TapeKind::Commit,
-                format!("committed {} to {}", fresh.len(), lane.branch),
-                Severity::Info,
-            ));
-            continue;
-        }
-        for commit in fresh.into_iter().rev() {
-            lines.push(line(
+        lines.extend(new_commit_lines(now, agent, lane, &fresh));
+    }
+    lines
+}
+
+/// A line per new commit (oldest first), or one summary line when there
+/// are more than [`COMMIT_LINES`].
+fn new_commit_lines(
+    now: Timestamp,
+    agent: &AgentId,
+    lane: &Lane,
+    fresh: &[Commit],
+) -> Vec<TapeEvent> {
+    if fresh.len() > COMMIT_LINES {
+        return vec![line(
+            now,
+            agent,
+            TapeKind::Commit,
+            format!("committed {} to {}", fresh.len(), lane.branch),
+            Severity::Info,
+        )];
+    }
+    fresh
+        .iter()
+        .rev()
+        .map(|commit| {
+            line(
                 now,
                 agent,
                 TapeKind::Commit,
                 format!("committed {} {}", commit.oid.short(), commit.subject),
                 Severity::Info,
-            ));
+            )
+        })
+        .collect()
+}
+
+/// Whether two bases start from the same commit.
+fn same_base(a: &LaneBase, b: &LaneBase) -> bool {
+    let oid = |base: &LaneBase| match base {
+        LaneBase::Trunk { oid, .. } | LaneBase::Lane { oid, .. } => oid.clone(),
+    };
+    oid(a) == oid(b)
+}
+
+/// Whether `oid` is under `lane` now: its base commit, or a commit the lane
+/// it is stacked on (or the trunk) carries.
+fn base_holds(graph: &RepoGraph, lane: &Lane, oid: &Oid) -> bool {
+    match &lane.base {
+        LaneBase::Trunk { oid: base, .. } => {
+            base == oid || graph.trunk.commits.iter().any(|commit| commit.oid == *oid)
+        }
+        LaneBase::Lane { branch, oid: base } => {
+            base == oid
+                || graph
+                    .lanes
+                    .iter()
+                    .filter(|below| below.branch == *branch)
+                    .any(|below| below.commits.iter().any(|commit| commit.oid == *oid))
         }
     }
-    lines
 }
 
 fn spawned_text(agent: &Agent) -> String {

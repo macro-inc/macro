@@ -510,3 +510,23 @@ fn the_changes_page_claims_its_keys_and_other_pages_do_not() {
         Action::Move(Some(Pane::Agents), Motion::Top)
     );
 }
+
+#[test]
+fn on_changes_lowercase_m_s_p_n_are_page_keys_and_capitals_type_commands() {
+    let page = Page::Zoom(Pane::Changes);
+    let (_, actions) = run(idle(), &[Key::Char('m')], &page);
+    assert_eq!(actions, vec![Action::Changes(ChangeKey::ToggleLanded)]);
+
+    for word in ["MON", "SPND", "SRC", "PRS"] {
+        let mut keys: Vec<Key> = word.chars().map(Key::Char).collect();
+        keys.push(Key::Enter);
+        let (_, actions) = run(idle(), &keys, &page);
+        assert_eq!(
+            actions.last(),
+            Some(&Action::Run(
+                Command::parse(word).expect("a known mnemonic")
+            )),
+            "{word}"
+        );
+    }
+}
