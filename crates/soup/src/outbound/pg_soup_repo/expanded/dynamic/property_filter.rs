@@ -130,7 +130,11 @@ impl Disjunction {
                 reference_membership_predicate(&group, entity_id_sql)
             }
         }));
-        predicates.extend(self.options.into_values().map(|group| {
+        predicates.extend(self.options.into_values().map(|mut group| {
+            // Sorted, so the SQL text does not depend on the shape of the OR
+            // tree; deduplicated first, so `A OR A` keeps the singleton form.
+            group.members.sort_unstable();
+            group.members.dedup();
             if group.members.len() == 1 {
                 property_literal_predicate(&group.first, entity_id_sql)
             } else {
@@ -184,11 +188,8 @@ fn reference_membership_predicate(
 }
 
 fn option_membership_predicate(group: &MembershipGroup<Uuid>, entity_id_sql: &str) -> String {
-    // Sorted, so the SQL text does not depend on the shape of the OR tree.
-    let mut members = group.members.clone();
-    members.sort_unstable();
-    members.dedup();
-    let options = members
+    let options = group
+        .members
         .iter()
         .map(|id| format!("'{id}'"))
         .collect::<Vec<_>>()
@@ -204,7 +205,7 @@ fn option_membership_predicate(group: &MembershipGroup<Uuid>, entity_id_sql: &st
             WHERE ep_prop.entity_id = {entity_id_sql}
             {entity_type_clause}
             AND ep_prop.property_definition_id = '{definition}'
-            AND ep_prop.values->'value' ?| ARRAY[{options}]
+            AND ep_prop.values->'value' ?| ARRAY[{options}]::text[]
         )"#
     )
 }

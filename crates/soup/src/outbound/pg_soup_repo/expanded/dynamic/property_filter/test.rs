@@ -48,7 +48,7 @@ fn options_of_one_definition_share_one_exists() {
         exists(
             "",
             STATUS,
-            &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}', '{BLOCKED}']")
+            &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}', '{BLOCKED}']::text[]")
         )
     );
 }
@@ -57,6 +57,15 @@ fn options_of_one_definition_share_one_exists() {
 fn a_lone_option_keeps_its_key_test() {
     assert_eq!(
         squash(&predicate(&status(BLOCKED), "d.id")),
+        exists("", STATUS, &format!("? '{BLOCKED}'"))
+    );
+}
+
+#[test]
+fn a_repeated_option_keeps_its_key_test() {
+    let expr = Expr::or(status(BLOCKED), status(BLOCKED));
+    assert_eq!(
+        squash(&predicate(&expr, "d.id")),
         exists("", STATUS, &format!("? '{BLOCKED}'"))
     );
 }
@@ -78,12 +87,12 @@ fn options_group_by_definition_and_entity_type() {
             exists(
                 "",
                 STATUS,
-                &format!("?| ARRAY['{IN_PROGRESS}', '{BLOCKED}']")
+                &format!("?| ARRAY['{IN_PROGRESS}', '{BLOCKED}']::text[]")
             ),
             exists(
                 "AND ep_prop.entity_type = 'TASK'",
                 STATUS,
-                &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}']")
+                &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}']::text[]")
             ),
             exists("", PRIORITY, &format!("? '{LOW}'")),
         )
@@ -100,7 +109,7 @@ fn negation_and_conjunction_close_the_or_region() {
             exists(
                 "",
                 STATUS,
-                &format!("?| ARRAY['{NOT_STARTED}', '{BLOCKED}']")
+                &format!("?| ARRAY['{NOT_STARTED}', '{BLOCKED}']::text[]")
             )
         )
     );
