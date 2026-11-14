@@ -1,0 +1,61 @@
+packages/sdk-ocaml/analyzer/bin/dune
+  s_9112f34ff430c3::t_9a828cc67ad776 1-5
+packages/sdk-ocaml/analyzer/bin/main.ml
+  s_9112f34ff430c3::t_f8262cbd299938 1-18
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_9112f34ff430c3::t_eaeeff4a27d17d 1-416
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_9112f34ff430c3::t_1b1b5ba6753b15 1-17
+packages/sdk-ocaml/analyzer/lib/dune
+  s_9112f34ff430c3::t_de99a6067b0a0f 1-4
+packages/sdk-ocaml/analyzer/lib/policy.ml
+  s_9112f34ff430c3::t_72a7ca61ea01c2 1-127
+packages/sdk-ocaml/analyzer/lib/sdk.ml
+  s_9112f34ff430c3::t_b7b8a3cf56adca 1-103
+packages/sdk-ocaml/analyzer/lib/sdk.mli
+  s_9112f34ff430c3::t_0623183e467f41 1-21
+packages/sdk-ocaml/analyzer/test/dune
+  s_9112f34ff430c3::t_860aaba600e14a 1-16
+packages/sdk-ocaml/analyzer/test/mini_sdk/dune
+  s_9112f34ff430c3::t_f4f01e8283fd1b 1-15
+packages/sdk-ocaml/analyzer/test/mini_sdk/macro.ml
+  s_9112f34ff430c3::t_4086bae4dc1303 1-35
+packages/sdk-ocaml/analyzer/test/mini_sdk/macro.mli
+  s_9112f34ff430c3::t_176a9fcabf57b4 1-25
+packages/sdk-ocaml/analyzer/test/mini_sdk/mini_transport.ml
+  s_9112f34ff430c3::t_e63099cb2a2bd5 1-25
+packages/sdk-ocaml/analyzer/test/mini_sdk/mini_transport.mli
+  s_9112f34ff430c3::t_41d842940a2a17 1-10
+packages/sdk-ocaml/analyzer/test/mini_sdk/operations.json
+  s_9112f34ff430c3::t_3d8e593169bc7f 1-8
+packages/sdk-ocaml/analyzer/test/test_analyzer.ml
+  s_9112f34ff430c3::t_5945f967c35afa 1-317
+packages/sdk-ocaml/dune-project
+  s_9112f34ff430c3::t_8aca557ab1453c 6-13
+packages/sdk-ocaml/runner/dune
+  s_9112f34ff430c3::t_dbb1cd60f9032f 1-5
+packages/sdk-ocaml/runner/http/dune
+  s_9112f34ff430c3::t_f37bc424a356a3 1-4
+packages/sdk-ocaml/runner/http/macro_sdk_http.ml
+  s_9112f34ff430c3::t_265be62f20d06f 1-203
+packages/sdk-ocaml/runner/http/macro_sdk_http.mli
+  s_9112f34ff430c3::t_32128af8f08e80 1-16
+packages/sdk-ocaml/runner/main.ml
+  s_9112f34ff430c3::t_52ae3353d1a568 1-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f54bc8b8272cf5626d40f67507b876b879e26362",
+  "prompts": {},
+  "sessions": {
+    "s_9112f34ff430c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7f2f1b9-0d51-4192-a482-51131529ed86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
