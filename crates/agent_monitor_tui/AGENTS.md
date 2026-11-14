@@ -19,7 +19,9 @@ times a second, and ticks at `fps` only while something animates.
 
 - `src/keys.rs`: the pure key machine `step(mode, key, page) -> (mode, Action)`.
 - `src/app.rs`: page stack, cursors, filters; how each `Action` lands.
-- `src/view.rs`: the mirrored state and the derived rows (sorting, failures, spend).
+- `src/view.rs`: the mirrored state and the derived rows (sorting, failures,
+  spend). Spend by kind is the collector's split of today (`Totals::spend_by_kind`),
+  never a sum of rows' lifetime costs, so it adds up to the day total.
 - `src/ui.rs`: layout and its width breakpoints; panes and pages live in `src/ui/`.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
 

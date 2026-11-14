@@ -1,7 +1,7 @@
 //! Drawing: the header, the quote board, the page body and the command line.
 //! Layout degrades by width: under 140 columns BODY and SOURCES drop, under
 //! 100 everything stacks in one column; under 40 rows the board shrinks to
-//! one line.
+//! one line. Above 200 columns BODY takes a quarter of the width.
 
 mod board;
 mod drill;
