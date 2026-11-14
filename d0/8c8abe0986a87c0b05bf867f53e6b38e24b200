@@ -1,0 +1,22 @@
+apps/web/src/lib/queries/calendar/graphql/backfill.ts
+  s_cddbf55ed4bdd0::t_2c493df288d8bd 6,16,55-85,101,109-113,115
+apps/web/src/lib/queries/calendar/graphql/tests/backfill.test.ts
+  s_cddbf55ed4bdd0::t_1d1a58ab5625a8 89-92,101-141,150-179
+  s_cddbf55ed4bdd0::t_b66369f696c491 93-100,142-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d08c8abe0986a87c0b05bf867f53e6b38e24b200",
+  "prompts": {},
+  "sessions": {
+    "s_cddbf55ed4bdd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b54a3cd1-74a1-47e2-acbb-16a0f1673050",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
