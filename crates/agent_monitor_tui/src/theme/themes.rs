@@ -27,7 +27,7 @@ pub enum ThemeName {
     #[default]
     Classic,
     /// Warm monochrome: everything routine is a shade of amber or sand, so
-    /// only errors (vermilion) and waiting on a person (gold) stand out.
+    /// only errors (vermilion) and waiting on a person (yellow) stand out.
     Ember,
     /// Old phosphor: desaturated teal tools, sage ok, coral errors.
     Phosphor,
@@ -194,8 +194,8 @@ pub const CLASSIC: Theme = Theme {
 pub const EMBER: Theme = theme(
     ThemeName::Ember,
     Spec {
-        highlight: (255, 206, 128),
-        attention: (255, 214, 64),
+        highlight: (255, 192, 120),
+        attention: (255, 228, 32),
         ok: (168, 150, 92),
         trace: (118, 100, 58),
         info: (222, 196, 150),
@@ -211,8 +211,8 @@ pub const EMBER: Theme = theme(
 pub const PHOSPHOR: Theme = theme(
     ThemeName::Phosphor,
     Spec {
-        highlight: (255, 214, 140),
-        attention: (250, 220, 96),
+        highlight: (240, 198, 148),
+        attention: (255, 232, 56),
         ok: (126, 170, 128),
         trace: (66, 112, 92),
         info: (112, 184, 176),
@@ -228,8 +228,8 @@ pub const PHOSPHOR: Theme = theme(
 pub const DUSK: Theme = theme(
     ThemeName::Dusk,
     Spec {
-        highlight: (250, 210, 150),
-        attention: (246, 214, 104),
+        highlight: (236, 194, 154),
+        attention: (255, 224, 64),
         ok: (140, 170, 116),
         trace: (82, 98, 136),
         info: (138, 156, 212),
