@@ -780,6 +780,7 @@ gmail = ["provider gmail:messages.send"]
 outlook = ["provider outlook:messages.createReply", "provider outlook:messages.send"]
 
 [F-110]  # Forward a message
+bug = "forward-sent-as-reply"
 by = [
   "http POST /email/messages where /message/replying_to_id",
   "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
@@ -1131,6 +1132,7 @@ by = ["kafka macro.email:MessageReceived", "kafka macro.email:MessageSent"]
 also = ["http GET /internal/recent_messages/{user_id}"]
 
 [F-176]  # Enrich CRM contacts from mail and clean up after removal
+bug = "outlook-crm-cleanup"
 by = [
   "queue backfill:PopulateCrmContact",
   "queue backfill:PopulateCrmForUser",
