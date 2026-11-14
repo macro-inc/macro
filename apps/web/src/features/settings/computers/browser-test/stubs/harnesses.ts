@@ -14,6 +14,8 @@ export function useHarnessesQuery() {
   };
 }
 
+export const useRunnableHarnessesQuery = useHarnessesQuery;
+
 export async function invalidateHarnesses() {}
 
 const idleMutation = () => ({
@@ -26,6 +28,8 @@ export const useSetHarnessTeamAccessMutation = idleMutation;
 export function useHarnessDirectoryQuery() {
   return { isSuccess: true, data: [] };
 }
+
+export const useRunnableHarnessDirectoryQuery = useHarnessDirectoryQuery;
 
 export function useHarnessResidentsQuery() {
   return { isSuccess: true, data: [] };

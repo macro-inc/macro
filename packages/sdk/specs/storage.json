@@ -11244,7 +11244,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller; its first table, \"Table 1\" unless\n`firstTable` names it, holds a \"Name\" text column.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -22740,7 +22740,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -33916,6 +33916,10 @@
           "requester_id": {
             "$ref": "#/components/schemas/MacroUserIdStr",
             "description": "Person asking to join."
+          },
+          "requester_name": {
+            "type": ["string", "null"],
+            "description": "The requester's profile name when they asked, if they had one. Absent\non events from before it was added."
           }
         }
       },
@@ -36543,6 +36547,10 @@
         "description": "Request body for creating a database.",
         "required": ["name"],
         "properties": {
+          "firstTable": {
+            "type": ["string", "null"],
+            "description": "The first table's display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\"."
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -44402,6 +44410,11 @@
           "name": {
             "type": "string",
             "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           }
         }
       },
@@ -44413,6 +44426,11 @@
           "name": {
             "type": "string",
             "description": "Display name, never authentication evidence."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
           },
           "userId": {
             "type": ["string", "null"],
@@ -44779,6 +44797,11 @@
             "format": "uuid",
             "description": "External person identity."
           },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          },
           "userId": {
             "type": ["string", "null"],
             "description": "Verified Macro user association, if present."
@@ -44841,6 +44864,11 @@
           "name": {
             "type": "string",
             "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "pictureFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
           },
           "provider": {
             "$ref": "#/components/schemas/ExternalChatProvider",
@@ -48229,7 +48257,8 @@
           "created_at",
           "updated_at",
           "viewed_updated",
-          "property"
+          "property",
+          "name"
         ]
       },
       "GuestChatMessage": {
@@ -48475,6 +48504,17 @@
               "format": "uuid"
             },
             "description": "Teams it is a team machine for: their every member is a user of it."
+          },
+          "team_agent_user_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The agent teammate whose computer this is, when it is one. People\nreach the agent by message; nothing else may run on its computer.\nSet on the caller-facing listings and on a patch's answer."
+              }
+            ]
           },
           "updated_at": {
             "type": "string",
@@ -52571,7 +52611,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\n`name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.\nFlat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
           },
@@ -57922,7 +57962,8 @@
           "frecency",
           "touched_by_me",
           "notified_at",
-          "property"
+          "property",
+          "name"
         ]
       },
       "SoupApiSortDirection": {

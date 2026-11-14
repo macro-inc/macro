@@ -5,8 +5,8 @@
 use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
-    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission,
-    TeamRole, UserTeamInfo, ViewAccessLevel,
+    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityAudience, EntityPermission,
+    RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -329,6 +329,17 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Gets the users each entity's `entity_access` grants reach (direct users, team
+    /// members, and active channel participants), the same users
+    /// [`Self::get_entity_users`] returns for an entity of a type without a special
+    /// audience. Entities granted to the same sources share one audience; entities
+    /// without grants are left out.
+    fn get_entity_grant_audiences(
+        &self,
+        entity_ids: &[Uuid],
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityAudience>, AccessError>> + Send;
+
     /// Get direct user grants only, excluding inherited channel, team, and project access.
     fn get_direct_entity_users(
         &self,
@@ -630,8 +641,10 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     ///
     /// The activity team feed applies this audience in SQL
-    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`); keep
-    /// the two in step.
+    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`), and
+    /// [`EntityAudienceLookup`] resolves it for many entities at once
+    /// (`outbound/pg_access_repo/queries/entity_audiences.rs`); keep the three
+    /// in step.
     fn get_users_by_entity(
         &self,
         entity_id: &str,
@@ -819,4 +832,21 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+}
+
+/// Resolves the current users of many entities of one type at once.
+pub trait EntityAudienceLookup: Clone + Send + Sync + 'static {
+    /// Returns the users with current access to each of `entity_ids`, grouping
+    /// entities whose users are the same.
+    ///
+    /// Each entity's users are those [`EntityAccessService::get_users_by_entity`]
+    /// returns for it. Entities without users may be left out, and so are ids of
+    /// grant-based kinds that are not UUIDs, which can hold no grant, instead of
+    /// failing the rest. Returned ids are spelled as they were passed in, every
+    /// spelling of one entity included.
+    fn get_entity_audiences(
+        &self,
+        entity_type: EntityType,
+        entity_ids: &[&str],
+    ) -> impl Future<Output = Result<Vec<EntityAudience>, AccessError>> + Send;
 }

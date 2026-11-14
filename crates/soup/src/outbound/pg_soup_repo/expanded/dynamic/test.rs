@@ -699,6 +699,7 @@ fn initiative_name_literals_are_escaped_and_not_like_patterns() {
     assert!(sql.contains("strpos("));
 }
 
+mod name_sort;
 mod property_sort;
 
 #[test]
