@@ -1253,6 +1253,94 @@ async fn entries_list_referencing_rows_from_visible_live_pipelines(pool: PgPool)
     );
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn entries_come_only_from_primary_references_of_tracked_pipelines(pool: PgPool) {
+    let (s, _db, a, team, company) = fixture(&pool).await;
+    let op = |value| serde_json::from_value::<DatabaseOp>(value).unwrap();
+    let names = |entity: Uuid| json!({"type":"entities","value":[{"entityType":"COMPANY","entityId":entity.to_string()}]});
+    let other = Uuid::now_v7();
+    sqlx::query!("INSERT INTO crm_companies (id, team_id, first_interaction, last_interaction) VALUES ($1, $2, now(), now())", other, team).execute(&pool).await.unwrap();
+    // A tracked pipeline with a second company column.
+    let tracked = create(&s, team, PipelineRecordType::Company).await;
+    let partner = ColumnId::new();
+    write(&s, &a, &tracked, vec![op(json!({
+        "kind": "column", "table": tracked.table_id, "column": partner,
+        "change": {"kind": "create", "definition": {"source": "new", "name": "Partner", "type": {"type": "entity", "target": "COMPANY", "multi": false}}}
+    }))]).await.unwrap();
+    let rows = match &write(&s, &a, &tracked, vec![op(json!({
+        "kind": "rows", "table": tracked.table_id,
+        "change": {"kind": "insert", "rows": [
+            [{"column": tracked.primary_column_id, "value": names(other)}, {"column": partner, "value": names(company)}],
+            [{"column": tracked.primary_column_id, "value": names(company)}, {"column": partner, "value": names(other)}]
+        ]}
+    }))]).await.unwrap()[0] {
+        OpResult::Rows { change: RowsResult::Inserted { rows }, .. } => rows.clone(),
+        other => panic!("{other:?}"),
+    };
+    // A generic pipeline whose Name became a company column.
+    let generic = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Partners".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    write(&s, &a, &generic, vec![op(json!({
+        "kind": "column", "table": generic.table_id, "column": generic.primary_column_id,
+        "change": {"kind": "change_type", "to": {"type": "entity", "target": "COMPANY", "multi": false}}
+    }))]).await.unwrap();
+    write(&s, &a, &generic, vec![op(json!({
+        "kind": "rows", "table": generic.table_id,
+        "change": {"kind": "insert", "rows": [[{"column": generic.primary_column_id, "value": names(company)}]]}
+    }))]).await.unwrap();
+    let second = create(&s, team, PipelineRecordType::Company).await;
+    let second_row = inserted(
+        &write(&s, &a, &second, vec![insert(&second, company)])
+            .await
+            .unwrap(),
+    );
+
+    // Only rows whose primary column names the company, grouped by pipeline.
+    let entries = s
+        .entries(
+            &user(OWNER),
+            PipelineRecordType::Company,
+            &[company, company],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        entries
+            .iter()
+            .map(|e| (e.pipeline.pipeline.id, e.row_id, e.record_id))
+            .collect::<Vec<_>>(),
+        vec![
+            (tracked.id, rows[1], company),
+            (second.id, second_row, company)
+        ]
+    );
+    assert_eq!(entries[0].columns.len(), 7);
+    assert!(entries[0].cells.contains_key(&partner));
+    assert_eq!(entries[1].columns.len(), 6);
+
+    // One pipeline's rows, for each record its primary column names.
+    let view = access(&a, tracked.id, EntityType::CrmPipeline, OWNER).await;
+    assert_eq!(
+        s.record_rows(view, &[company, other])
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| (r.row_id, r.record_id))
+            .collect::<Vec<_>>(),
+        vec![(rows[0], other), (rows[1], company)]
+    );
+}
+
 /// A user no other test shares, so cached source ids cannot leak across tests.
 async fn fresh_user(pool: &PgPool, team: Option<Uuid>) -> String {
     let id = format!("macro|sharing-{}@macro.com", Uuid::now_v7());
