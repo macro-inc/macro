@@ -6,6 +6,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CreateChannelModal, openNewChannelModal } from './CreateChannelModal';
 
 const mocks = vi.hoisted(() => ({
   createChannel: vi.fn(),
@@ -58,17 +59,14 @@ vi.mock('@queries/team/teams', () => ({
   }),
 }));
 
-// The open state lives in the module, so each test loads a fresh copy.
+// Each test mounts its own dialog, so only the module's open flag carries over.
 async function openModal() {
-  vi.resetModules();
-  const { CreateChannelModal, openNewChannelModal } = await import(
-    './CreateChannelModal'
-  );
   render(() => <CreateChannelModal />);
   openNewChannelModal();
   fireEvent.input(await screen.findByRole('textbox', { name: 'Name' }), {
     target: { value: 'Design reviews' },
   });
+  return openNewChannelModal;
 }
 
 function create() {
@@ -152,5 +150,53 @@ describe('CreateChannelModal', () => {
       'Choose a PNG, JPG, WebP, or GIF image'
     );
     expect(screen.queryByRole('button', { name: 'Change' })).toBeNull();
+  });
+
+  it('keeps focus on the picture button as the picture changes', async () => {
+    mocks.chosenFiles = [picture];
+    await openModal();
+
+    const choose = screen.getByRole('button', { name: 'Upload' });
+    choose.focus();
+    fireEvent.click(choose);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Change' })
+    );
+
+    const remove = screen.getByRole('button', { name: 'Remove' });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Upload' })
+    );
+  });
+
+  it('forgets the picture when the dialog closes', async () => {
+    mocks.chosenFiles = [picture];
+    const reopen = await openModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:channel-picture');
+    reopen();
+
+    await screen.findByRole('button', { name: 'Upload' });
+  });
+
+  it('says where to try again when the picture fails to save', async () => {
+    mocks.chosenFiles = [picture];
+    mocks.setPicture.mockRejectedValue(new Error('upload failed'));
+    vi.spyOn(console, 'error').mockReturnValue(undefined);
+    await openModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+    create();
+
+    await waitFor(() =>
+      expect(mocks.toast.failure).toHaveBeenCalledWith(
+        'Could not save the new channel’s picture. Set it again from the channel menu.'
+      )
+    );
+    expect(mocks.createChannel).toHaveBeenCalled();
   });
 });

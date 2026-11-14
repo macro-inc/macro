@@ -60,7 +60,7 @@ describe('RadioGroup', () => {
     expect(radio).toBeInstanceOf(HTMLInputElement);
   });
 
-  it('selects a card from its title and describes it to assistive tech', () => {
+  it('keeps label and description wiring in the cards variant', () => {
     const onChange = vi.fn();
     render(() => (
       <RadioGroup

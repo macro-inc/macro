@@ -574,6 +574,7 @@ function ChannelPictureField(props: {
   onChoose: () => void;
   onRemove: () => void;
 }) {
+  let chooseButton: HTMLButtonElement | undefined;
   return (
     <div class="flex items-center gap-3">
       {/* A second, pointer-only target; the labelled buttons stay the tab stops. */}
@@ -603,39 +604,34 @@ function ChannelPictureField(props: {
           Helps people spot the channel at a glance. Square images work best.
         </div>
       </div>
-      <Show
-        when={props.pictureUrl}
-        fallback={
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => props.onChoose()}
-          >
-            <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-            Upload
-          </Button>
-        }
-      >
-        <div class="flex shrink-0 items-center gap-1">
+      {/* The choose button stays mounted as its label changes, so it keeps focus. */}
+      <div class="flex shrink-0 items-center gap-1">
+        <Show when={props.pictureUrl}>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => props.onRemove()}
+            onClick={() => {
+              chooseButton?.focus();
+              props.onRemove();
+            }}
           >
             Remove
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => props.onChoose()}
-          >
-            Change
-          </Button>
-        </div>
-      </Show>
+        </Show>
+        <Button
+          ref={chooseButton}
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => props.onChoose()}
+        >
+          <Show when={!props.pictureUrl}>
+            <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+          </Show>
+          {props.pictureUrl ? 'Change' : 'Upload'}
+        </Button>
+      </div>
     </div>
   );
 }

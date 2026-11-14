@@ -53,14 +53,19 @@ export function chooseChannelPicture(onChoose: (file: File) => void) {
 export function useChannelPictureEditor() {
   const mutation = useSetChannelPictureMutation(createStaticFile);
 
-  const save = async (channelId: string, file: File | null) => {
+  const save = async (
+    channelId: string,
+    file: File | null,
+    failure = 'Could not update channel picture. Please try again.'
+  ) => {
     try {
       await mutation.mutateAsync({ channelId, file });
       toast.success(
         file ? 'Channel picture updated' : 'Channel picture removed'
       );
-    } catch {
-      toast.failure('Could not update channel picture. Please try again.');
+    } catch (cause) {
+      console.error('Failed to save channel picture', cause);
+      toast.failure(failure);
     }
   };
 
@@ -80,9 +85,15 @@ export function useChannelPictureEditor() {
     /**
      * Save a picture chosen with `chooseChannelPicture` before the channel
      * existed. Each call saves, so channels created in quick succession all
-     * keep their pictures.
+     * keep their pictures. It runs after the dialog that chose it has closed,
+     * so a failure says where to try again.
      */
-    upload: (channelId: string, file: File) => save(channelId, file),
+    upload: (channelId: string, file: File) =>
+      save(
+        channelId,
+        file,
+        'Could not save the new channel’s picture. Set it again from the channel menu.'
+      ),
   };
 }
 
