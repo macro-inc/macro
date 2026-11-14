@@ -84,18 +84,19 @@ pub(crate) async fn run<F: RecordFormat>(
         watch: Watch::new().map_err(internal)?,
         watching: BTreeSet::new(),
         known: BTreeMap::new(),
+        started: false,
     };
 
+    // With no directory yet the source is absent and sends no reset: an
+    // empty reset would claim, say, that no Claude Code process is running.
+    // The reconcile starts it once a directory appears.
     engine.watch_new_dirs();
     if engine.watching.is_empty() {
         engine
             .health(SourceState::Absent, Some("no record directory"))
             .await?;
-    }
-    let facts = engine.scan_all().await?;
-    engine.send(Change::Reset(facts)).await?;
-    if !engine.watching.is_empty() {
-        engine.health(SourceState::Healthy, None).await?;
+    } else {
+        engine.start().await?;
     }
 
     let mut reconcile = tokio::time::interval(RECONCILE_EVERY);
@@ -139,6 +140,8 @@ struct Engine<F: RecordFormat> {
     watch: Watch,
     watching: BTreeSet<WatchedDir>,
     known: BTreeMap<PathBuf, Known>,
+    /// The first reset was sent.
+    started: bool,
 }
 
 impl<F: RecordFormat> Engine<F> {
@@ -293,8 +296,19 @@ impl<F: RecordFormat> Engine<F> {
     }
 
     /// Lists every directory again and re-reads what changed or appeared.
+    /// Reads every record and reports them as a reset.
+    async fn start(&mut self) -> Result<(), SourceError> {
+        let facts = self.scan_all().await?;
+        self.send(Change::Reset(facts)).await?;
+        self.started = true;
+        self.health(SourceState::Healthy, None).await
+    }
+
     async fn reconcile(&mut self) -> Result<(), SourceError> {
         if self.watch_new_dirs() {
+            if !self.started {
+                return self.start().await;
+            }
             self.health(SourceState::Healthy, None).await?;
         }
         let format = Arc::clone(&self.format);

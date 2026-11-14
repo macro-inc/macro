@@ -76,3 +76,19 @@ fn an_entry_whose_process_is_gone_is_not_reported() {
 
     assert_eq!(source.read(&path), None);
 }
+
+#[tokio::test]
+async fn a_missing_registry_is_absent_and_claims_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut source = start(Box::new(ClaudeRegistrySource::new(
+        dir.path().join("sessions"),
+    )));
+
+    match source.next().await {
+        Change::Health(health) => {
+            assert_eq!(health.state, crate::domain::model::SourceState::Absent);
+        }
+        other => panic!("expected health, got {other:?}"),
+    }
+    source.stop().await;
+}
