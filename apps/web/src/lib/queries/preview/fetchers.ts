@@ -475,14 +475,30 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
   );
 }
 
-/** A routine previews from its own read; one that is gone reads as deleted. */
+/**
+ * A routine previews from its own read; one that is gone reads as deleted.
+ * The server reads a routine only to its owner, so anyone else previews it
+ * from its shared template, and without one it stays unavailable.
+ */
 async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
   return Promise.all(
     ids.map(async (id): Promise<PreviewItem> => {
       const base = { id, type: 'routine', loading: false } as const;
       const routine = await scheduledActionClient.getRoutine(id);
-      if (routine.isErr())
-        return { ...base, access: failedReadAccess(routine.error) };
+      if (routine.isErr()) {
+        const template = await scheduledActionClient.getTemplate(id);
+        if (template.isErr())
+          return { ...base, access: failedReadAccess(routine.error) };
+        return {
+          ...base,
+          access: 'access',
+          rawName: template.value.name,
+          name: template.value.name,
+          appearance: readEntityAppearance(template.value.appearance),
+          owner: template.value.author,
+          updatedAt: template.value.updated_at,
+        };
+      }
       return {
         ...base,
         access: 'access',

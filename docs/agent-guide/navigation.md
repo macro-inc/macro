@@ -1471,11 +1471,13 @@ An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
 instead of opening the routine. Owners can mention their routines in channels
-(see Routine templates).
+(see Routine templates); for anyone else the mention takes the shared
+template's name and opens it, and reads `No Access` (or `Deleted`) when the
+routine isn't shared.
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
-delete, or view run history. Anyone else who opens a routine link sees its
-template when the owner shared one and routine sharing is enabled, and otherwise
-an unavailable message.
+delete, or view run history; the server reads a routine only to its owner.
+Anyone else who opens a routine link sees its template when the owner shared
+one and routine sharing is enabled, and otherwise an unavailable message.
 Run conversations keep their own permissions.
 
 ### Routine templates

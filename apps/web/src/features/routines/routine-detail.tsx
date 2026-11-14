@@ -147,9 +147,13 @@ export function RoutineDetail(props: {
     fireAndForget(openChatWithInput(`${mentions.join(' ')} `), 'routines');
   };
   // Routines run as their owner, so everyone else sees the shared template.
+  // The server reads a routine only to its owner, so for anyone else the
+  // routine never loads and its refused read is what says so. Until then
+  // (loading, or a failure that could be passing) the owner's view shows.
   const ownedByViewer = () => {
     const routine = source.routine();
-    return routine ? routine.ownerId === userId() : true;
+    if (routine) return routine.ownerId === userId();
+    return !source.readRefused();
   };
   return (
     <Show

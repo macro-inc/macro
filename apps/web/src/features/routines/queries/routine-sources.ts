@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onMount } from 'solid-js';
@@ -71,6 +72,12 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   };
 }
 
+/**
+ * How the server refuses a routine to anyone but its owner: 401 without a
+ * grant, 404 with a grant but no ownership.
+ */
+const REFUSED_READ_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
+
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
@@ -92,6 +99,19 @@ export function createRoutineDetailSource(
         ? list.data?.find((item) => item.id === id())
         : undefined)
   );
+  // A refetch with no data puts the query back to pending, so the refusal is
+  // kept for this routine until a read settles otherwise; the page doesn't
+  // swap views on every refocus.
+  const refusedId = createMemo<string | undefined>((previous) => {
+    if (detail.isSuccess) return undefined;
+    if (detail.isError) {
+      const refused = REFUSED_READ_CODES.some((code) =>
+        thrownResultErrorHasCode(detail.error, code)
+      );
+      return refused ? id() : undefined;
+    }
+    return previous === id() ? previous : undefined;
+  });
   const routine = createMemo(() => {
     const current = raw();
     return current?.id ? toRoutine(current) : undefined;
@@ -167,6 +187,8 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
+    // A refusal says nothing about a routine the viewer's own lists hold.
+    readRefused: () => !raw() && refusedId() === id(),
     update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,

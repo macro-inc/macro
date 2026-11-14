@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { ThrownResultError } from '@core/util/result';
 import type {
   CodeUpgrade,
   RoutineTask,
@@ -38,6 +39,8 @@ vi.mock('@app/lib/split-router', () => ({
 
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
+  /** The error code the routine's own read fails with. */
+  readErrorCode: (): string => 'SERVER_ERROR',
   openChat: vi.fn(async (_input: string) => {}),
   status: (): string => 'success',
   history: (): HistoryRecord[] => [],
@@ -78,6 +81,13 @@ vi.mock('./queries/routines', () => ({
     },
     get isPending() {
       return mocks.status() === 'pending';
+    },
+    get error() {
+      return mocks.status() === 'error'
+        ? new ThrownResultError([
+            { code: mocks.readErrorCode(), message: 'Read failed' },
+          ])
+        : null;
     },
     get data() {
       return mocks.readSchedules()[0];
@@ -371,6 +381,7 @@ beforeEach(() => {
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
   [mocks.activationPending, setActivationPending] = createSignal(false);
   mocks.metadataStatus = () => 'success';
+  mocks.readErrorCode = () => 'SERVER_ERROR';
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
   mocks.codeUpgrades = () => [];
@@ -1028,6 +1039,38 @@ describe('routine editor triggers', () => {
     expect(
       screen.getByText('Unable to load routine. Please try again.')
     ).toBeTruthy();
+  });
+
+  it.each(['UNAUTHORIZED', 'NOT_FOUND'])(
+    'shows the shared template when the server refuses the routine (%s)',
+    (code) => {
+      mocks.readErrorCode = () => code;
+      setStatus('error');
+      setSchedules([]);
+      render(() => <Routine />);
+      expect(screen.getByText('Template for routine-id')).toBeTruthy();
+      expect(screen.queryByText(/Unable to load routine/)).toBeNull();
+    }
+  );
+
+  it('keeps the template while a refused read refetches', () => {
+    mocks.readErrorCode = () => 'UNAUTHORIZED';
+    setStatus('error');
+    setSchedules([]);
+    render(() => <Routine />);
+    const template = screen.getByText('Template for routine-id');
+    setStatus('pending');
+    expect(screen.getByText('Template for routine-id')).toBe(template);
+    setStatus('error');
+    expect(screen.getByText('Template for routine-id')).toBe(template);
+  });
+
+  it('keeps the owner view for a refused read of a routine the viewer’s list holds', () => {
+    mocks.readErrorCode = () => 'UNAUTHORIZED';
+    setStatus('error');
+    render(() => <Routine />);
+    expect(screen.queryByText('Template for routine-id')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Instructions' })).toBeTruthy();
   });
 
   it('preserves the cron editor and queued save after a background refetch error', async () => {
