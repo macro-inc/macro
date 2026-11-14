@@ -66,8 +66,8 @@ pub enum Widget {
         events: Vec<AgendaEvent>,
     },
     /// Rich cards for the one to four specific items the answer is about: a
-    /// document or spreadsheet, an email thread, a calendar event, a project,
-    /// a channel, a routine, a form or an initiative. Each card opens its
+    /// document or spreadsheet, a database, an email thread, a calendar event,
+    /// a project, a channel, a routine, a form or an initiative. Each card opens its
     /// item, and a routine's card can pause it or run it now. Use a list
     /// widget for longer sets.
     Cards {
@@ -190,7 +190,7 @@ pub struct CardItem {
     pub item_type: CardItemType,
     /// The item's id exactly as a tool returned it: a document id (documents
     /// and spreadsheets), an email thread id, a calendar eventId, or a
-    /// project, channel, routine, form or initiative id.
+    /// database, project, channel, routine, form or initiative id.
     pub id: String,
 }
 
@@ -199,6 +199,7 @@ pub struct CardItem {
 #[serde(rename_all = "snake_case")]
 pub enum CardItemType {
     Document,
+    Database,
     EmailThread,
     CalendarEvent,
     Project,
@@ -243,7 +244,8 @@ pub struct TagNode {
 pub enum ListSource {
     /// The items a filter matches, fetched by the list itself.
     Query { query: Box<Query> },
-    /// A fixed set of items.
+    /// A fixed set of items. Each one shows, even one the list's query
+    /// cannot return; a kind no card loads shows as an unavailable row.
     Items { entities: Vec<EntityRef> },
 }
 
