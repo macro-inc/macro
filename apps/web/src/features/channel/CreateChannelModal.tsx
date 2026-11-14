@@ -263,10 +263,7 @@ export function CreateChannelModal() {
     >
       <Panel depth={2} class="rounded-xl *:max-h-[85vh]">
         <Panel.Body scroll>
-          <form
-            class="flex min-h-80 flex-col gap-7 p-6 sm:p-8"
-            onSubmit={handleSubmit}
-          >
+          <form class="flex flex-col gap-7 p-6 sm:p-8" onSubmit={handleSubmit}>
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0">
                 <Dialog.Title class="text-xl font-semibold text-ink">
@@ -464,7 +461,7 @@ export function CreateChannelModal() {
               )}
             </Show>
 
-            <div class="mt-auto flex items-center justify-between gap-3 pt-4">
+            <div class="flex items-center justify-between gap-3">
               <span class="text-sm text-ink-muted">
                 Step{' '}
                 {step() === 'name' ? '1' : step() === 'visibility' ? '2' : '3'}{' '}
