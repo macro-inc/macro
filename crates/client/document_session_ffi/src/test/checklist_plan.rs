@@ -34,15 +34,42 @@ fn checklist_plan_query_forwards_under_mutex_without_mutation_and_checks_generat
             },
         )
         .unwrap();
-    session.handle(FfiNow {mono_ms:2,wall_ms:1_000_002},FfiInput::SetState {root:serde_json::from_value(json!({"type":"root","children":[{"type":"list","listType":"check","tag":"ul","start":1,"children":[{"type":"listitem","value":1,"checked":true,"children":[{"type":"text","text":"Work!"}]}]}]})).unwrap()}).unwrap();
-    let FfiQueryReply::Nodes { keys, .. } = session
+    let state = session.handle(FfiNow {mono_ms:2,wall_ms:1_000_002},FfiInput::SetState {root:serde_json::from_value(json!({"type":"root","children":[{"type":"list","listType":"check","tag":"ul","start":1,"children":[{"type":"listitem","value":1,"checked":true,"children":[{"type":"text","text":"Work!"}]}]}]})).unwrap()}).unwrap();
+    let errors: Vec<_> = state
+        .view
+        .iter()
+        .filter_map(|effect| match effect {
+            FfiViewEffect::Error { message } => Some(message),
+            _ => None,
+        })
+        .collect();
+    assert!(errors.is_empty(), "state setup returned errors: {errors:?}");
+    assert!(
+        state
+            .view
+            .iter()
+            .any(|effect| matches!(effect, FfiViewEffect::Diff { .. })),
+        "state setup must emit its model diff"
+    );
+    let FfiQueryReply::Nodes { keys, nodes } = session
         .query(FfiQuery::NodesOfType {
-            name: "list".into(),
+            name: "task-list".into(),
         })
         .unwrap()
     else {
         panic!("list")
     };
+    assert_eq!(
+        keys.len(),
+        1,
+        "the app must retain one configured checklist"
+    );
+    assert_eq!(
+        nodes.len(),
+        1,
+        "one serialized node must match the unique key"
+    );
+    assert_eq!(nodes[0]["type"], "task-list");
     let list = keys[0];
     session
         .handle(

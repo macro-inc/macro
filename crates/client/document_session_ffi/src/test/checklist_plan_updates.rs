@@ -34,15 +34,42 @@ fn failed_conversion_retains_delivery_until_owned_retry_and_rebind() {
             },
         )
         .expect("seed");
-    session.handle(FfiNow { mono_ms: 2, wall_ms: 1_000_002 }, FfiInput::SetState { root: serde_json::from_value(json!({"type":"root","children":[{"type":"list","listType":"check","tag":"ul","start":1,"children":[{"type":"listitem","value":1,"checked":true,"children":[{"type":"text","text":"Work"}]}]}]})).expect("root") }).expect("state");
-    let FfiQueryReply::Nodes { keys, .. } = session
+    let state = session.handle(FfiNow { mono_ms: 2, wall_ms: 1_000_002 }, FfiInput::SetState { root: serde_json::from_value(json!({"type":"root","children":[{"type":"list","listType":"check","tag":"ul","start":1,"children":[{"type":"listitem","value":1,"checked":true,"children":[{"type":"text","text":"Work"}]}]}]})).expect("root") }).expect("state");
+    let errors: Vec<_> = state
+        .view
+        .iter()
+        .filter_map(|effect| match effect {
+            FfiViewEffect::Error { message } => Some(message),
+            _ => None,
+        })
+        .collect();
+    assert!(errors.is_empty(), "state setup returned errors: {errors:?}");
+    assert!(
+        state
+            .view
+            .iter()
+            .any(|effect| matches!(effect, FfiViewEffect::Diff { .. })),
+        "state setup must emit its model diff"
+    );
+    let FfiQueryReply::Nodes { keys, nodes } = session
         .query(FfiQuery::NodesOfType {
-            name: "list".into(),
+            name: "task-list".into(),
         })
         .expect("query")
     else {
         panic!("nodes")
     };
+    assert_eq!(
+        keys.len(),
+        1,
+        "the app must retain one configured checklist"
+    );
+    assert_eq!(
+        nodes.len(),
+        1,
+        "one serialized node must match the unique key"
+    );
+    assert_eq!(nodes[0]["type"], "task-list");
     let generation = keys[0].generation();
     let mut payload: serde_json::Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
