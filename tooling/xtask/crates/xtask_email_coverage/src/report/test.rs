@@ -1,11 +1,11 @@
 use serde_json::json;
 
 use super::evidence::Evidence;
+use super::gaps::{ignored, judge_known_bugs, read_known_bugs};
 use super::graphql::Schema;
 use super::junit::Results;
 use super::ledger::{Atom, Ledger, Waivers, checks, functions, map, proofs};
 use super::seen::{Hit, Reader, matches};
-use super::gaps::{ignored, judge_known_bugs, read_known_bugs};
 use super::{Status, build, render};
 use crate::{Sources, parse_tsv};
 

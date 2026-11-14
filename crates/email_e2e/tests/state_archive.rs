@@ -413,10 +413,7 @@ async fn gmail_many_threads_are_archived_in_one_batch() -> Result<(), Report> {
             })
             .count()
     };
-    assert!(
-        writes("messages.batchModify") > 0,
-        "no batch reached Gmail"
-    );
+    assert!(writes("messages.batchModify") > 0, "no batch reached Gmail");
     assert_eq!(
         writes("messages.modify"),
         0,

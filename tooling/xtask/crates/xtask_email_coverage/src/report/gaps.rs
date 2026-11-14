@@ -81,7 +81,6 @@ impl Model {
     }
 }
 
-
 /// Reads the results of the known-bug runs, one directory per job that runs
 /// them, and adds what they show to the model. A directory without results
 /// is an error: the scenarios of that job would otherwise go unjudged.
@@ -165,8 +164,8 @@ pub(super) fn unkept_bugs(root: &Path, ledger: &Ledger) -> Result<Vec<String>, R
         if path.extension().is_none_or(|extension| extension != "rs") {
             continue;
         }
-        let text = std::fs::read_to_string(&path)
-            .context(format!("could not read {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).context(format!("could not read {}", path.display()))?;
         let (ids, others) = ignored(&text);
         kept.extend(ids);
         if others > 0 {
@@ -199,7 +198,10 @@ pub(crate) fn ignored(text: &str) -> (Vec<String>, usize) {
     let mut ids = Vec::new();
     let mut others = 0;
     for found in regex!(r#"#\[ignore(?:\s*=\s*"([^"]*)")?\s*\]"#).captures_iter(text) {
-        match found.get(1).and_then(|reason| reason.as_str().strip_prefix(KEPT_FOR)) {
+        match found
+            .get(1)
+            .and_then(|reason| reason.as_str().strip_prefix(KEPT_FOR))
+        {
             Some(id) => ids.push(id.to_owned()),
             None => others += 1,
         }
