@@ -47,7 +47,8 @@
 - After changing an email route, resolver, message type or tool:
   `cargo x email-coverage list`, commit the file, and give the new entry
   point a function in `crates/email_e2e/coverage/functions.toml`.
-- `just email-e2e-coverage` after a local `just email-e2e`.
+- `just email-e2e-coverage` after a local `just email-e2e`; add `--enforce`
+  to see what CI fails on.
 
 ## Gotchas
 
@@ -90,7 +91,16 @@
   says it checks the result, and `proofs.tsv` names a break in product code
   that made it fail on that provider. Without the proof it is **claimed**.
   With `--enforce` everything not proved and not waived or deferred is a
-  gap.
+  gap. CI enforces.
+- The gaps are one list (`Model::find_gaps`, printed as `gap:` lines and in
+  the report): failed scenarios, functions not proved, entry points not
+  reached, stale ledger lines, and known-bug scenarios that pass. A
+  function a known bug holds open is not a gap, and neither is an entry
+  point all of whose functions are held open on that provider.
+- `--known-bugs <dir>` reads the `junit.xml` of the known-bug runs: a
+  scenario there that did not fail is a gap unless `waivers.toml` names it
+  under `[[intermittent_bug]]`; an `[[intermittent_bug]]` naming a scenario
+  those runs do not hold is a gap too. Without the flag nothing is judged.
 - A proof naming an unknown function, a provider other than `gmail` or
   `outlook`, or a scenario not in the results is broken (always fails); one
   whose scenario no longer performs and checks the function is stale.

@@ -111,7 +111,8 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Sending the way the web composer does (a stack with `document_storage`):
   `inbox.send_attempt(attempt_id, &message, &extra)` with the GraphQL draft
   input (`draftId`, `subject`, `to`, `bodyText`, …), then `cancel_send`,
-  `send_attempt_state` and `wait_for_send_attempt(attempt_id, "SENT")`. The
+  `send_attempt_state`, `pending_sends` (the unsettled Sends of all the
+  user's inboxes) and `wait_for_send_attempt(attempt_id, "SENT")`. The
   undo window is `SENT_UNDO_DELAY_SECS` (1 s); a scenario that undoes sets
   it longer through `StackOptions.env`. Any other query or mutation:
   `user.graphql(query, &variables)`. See `tests/send_attempt.rs`.
@@ -278,12 +279,33 @@ shared with the web app's suite) and backend entry points second.
   the calendar functions" and in `coverage.json` (`owned`), with whether a
   scenario reached each. An owned entry point cannot also be waived,
   deferred, dead code or named in `functions.toml`.
+  A scenario kept for a known bug whose bug shows only now and then is
+  named under `[[intermittent_bug]]`, so that it may pass.
+  The file is the one place that says why something is left: every entry
+  needs its own reason. A dead-code reason starts with `unreachable:
+  candidate for removal`; do not write a scenario for such an entry point.
+  An entry point the product cannot reach on one provider is not waived:
+  give it `[[applies]]` in `coverage/sources.toml` and regenerate the list.
 - `just email-e2e-coverage` after `just email-e2e` writes the report to
   `target/email-e2e-coverage/` (`index.html`, `coverage.md`,
   `coverage.json`). In CI the `Email end-to-end (coverage)` job puts it in
-  the job summary and the `email-e2e-coverage` artifact. It reports only;
-  `--enforce` makes gaps fail: a function neither proved nor waived, an
-  entry point neither reached, waived nor deferred.
+  the job summary and the `email-e2e-coverage` artifact, and runs it with
+  `--enforce`, so each gap fails the job and is printed as a `gap:` line
+  and listed under "Gaps": a scenario that failed; a function that is not
+  proved on a provider and neither waived, deferred nor held open by a
+  known bug; an entry point neither reached, waived nor deferred (one whose
+  functions are all held open by a known bug on that provider is let
+  through); a waiver, deferral or proof the records contradict; and, with
+  `--known-bugs <dir>` (the results of the known-bug jobs), a scenario kept
+  for a known bug that passes and is not under `[[intermittent_bug]]`.
+  Without `--enforce` the same list is only reported.
+- A new route, resolver, message type or provider method therefore needs,
+  in the same change, a scenario that reaches it or an entry in
+  `coverage/waivers.toml`; a new function needs a scenario, a row in
+  `checks.tsv` and a proof.
+- When a known bug is fixed its scenario starts to pass and the coverage
+  job fails: remove the `#[ignore]` and the function's `bug` in
+  `functions.toml`, and give it checks and proofs.
 
 ## Start here
 
@@ -330,7 +352,8 @@ shared with the web app's suite) and backend entry points second.
   `PR CI`, on pull requests that touch email, the emulators or the schema.
   Its jobs run side by side: the scenarios without search in three parts
   (nextest `--partition`), the search scenarios with OpenSearch, and the
-  scenarios for known bugs. A last job reports the coverage. A scenario outside `tests/search.rs` that sets
+  scenarios for known bugs. A last job enforces the coverage, and reads the
+  results of the known-bug runs. A scenario outside `tests/search.rs` that sets
   `StackOptions::search` has no cluster in CI: keep search scenarios in that
   file.
 

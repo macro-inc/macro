@@ -53,7 +53,7 @@ email-e2e-known-bugs *args:
 
 # What the last `just email-e2e` run covers: the functions of email and the
 # backend entry points, from the records its scenarios left. Writes
-# target/email-e2e-coverage/index.html. `--enforce` fails on gaps.
+# target/email-e2e-coverage/index.html. `--enforce` fails on gaps, as CI does.
 email-e2e-coverage *args:
     cargo run -p xtask -- email-coverage report --results target/debug/email-e2e --results target/nextest/email-e2e --out target/email-e2e-coverage {{ args }}
 
