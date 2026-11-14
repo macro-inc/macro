@@ -51,6 +51,9 @@ async fn received_attachment_becomes_a_document(provider: Provider) -> Result<()
         .get(&format!("/email/attachments/{id}/document_id"))
         .await?;
     assert_eq!(first.status, 200, "{}", first.text);
+    assert_eq!(second.status, 200, "{}", second.text);
+    let document = first.json["document_id"].as_str().unwrap_or_default();
+    assert!(!document.is_empty(), "no document id: {}", first.text);
     // Asking again gives the same document, not a second one.
     assert_eq!(first.json["document_id"], second.json["document_id"]);
 

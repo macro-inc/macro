@@ -334,6 +334,11 @@ async fn completed_grant(
         };
         let id = grant_id(&request.owner, &mailbox.email);
         state.grants.insert(id, mailbox.email.clone());
+        state
+            .link_grants
+            .entry(request.attempt_id.to_lowercase())
+            .or_default()
+            .insert(id);
         let grant = json!({
             "calendar_requested": false,
             "grant_id": id,
@@ -356,7 +361,8 @@ struct RevokeRequest {
 
 /// Stands in for `POST /internal/revoke_microsoft_grant`: the grant it names
 /// is released, and the grants other principals hold for the same mailbox
-/// stay. The mailbox is revoked once no grant for it is left.
+/// stay. A link described with only released grants gets no more access
+/// tokens, and the mailbox is revoked once no grant for it is left.
 async fn revoke_grant(
     AxumState(emulator): AxumState<OutlookEmulator>,
     Json(request): Json<RevokeRequest>,

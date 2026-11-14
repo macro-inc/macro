@@ -20,11 +20,23 @@ if [ "$status" -ne 0 ] && [ "$status" -ne 100 ]; then
 fi
 
 rows="$(sed 's/\x1b\[[0-9;]*m//g' "$output" | awk '
-  $1 == "PASS" || $1 == "FAIL" || $1 == "TIMEOUT" || $1 == "SIGABRT" || $1 == "SIGSEGV" {
-    name = $NF; binary = $(NF - 1)
-    if ($1 == "PASS") print "| `" binary " " name "` | **now passing: remove the `#[ignore]`** |"
-    else print "| `" binary " " name "` | still failing (expected) |"
-  }' | sort -u)"
+  # With `--retries`, a scenario has a `TRY <n> <status>` line for each
+  # attempt and, when a later attempt passed, a `FLAKY <n>/<m>` line: the
+  # last line of a scenario is its result, and passing on a retry is passing.
+  {
+    status = $1
+    if ($1 == "TRY") status = $3
+    if ($1 == "FLAKY") status = "PASS"
+  }
+  status == "PASS" || status == "FAIL" || status == "TIMEOUT" || status == "SIGABRT" || status == "SIGSEGV" {
+    result[$(NF - 1) " " $NF] = status
+  }
+  END {
+    for (scenario in result) {
+      if (result[scenario] == "PASS") print "| `" scenario "` | **now passing: remove the `#[ignore]`** |"
+      else print "| `" scenario "` | still failing (expected) |"
+    }
+  }' | sort)"
 
 {
   echo "### Email end-to-end: scenarios for known bugs"
