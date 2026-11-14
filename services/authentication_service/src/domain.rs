@@ -2,3 +2,4 @@
 
 pub mod computer_billing;
 pub mod microsoft;
+pub mod stripe_consumers;

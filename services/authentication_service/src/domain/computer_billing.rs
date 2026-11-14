@@ -55,10 +55,10 @@ impl ComputerPrices {
     }
 }
 
-/// Receives a complete team subscription snapshot after every team
-/// subscription webhook. It only reports; `hosted_runtimes` decides what the
+/// Receives every team subscription snapshot the Stripe inbox applies, in
+/// order. It only reports; `hosted_runtimes` decides what the
 /// snapshot means for each computer (items matched by computer id).
-// Object-safe: `ApiContext` holds it as `Arc<dyn ComputerBillingObserver>`.
+// Object-safe: the Stripe inbox consumers hold it as `Arc<dyn ComputerBillingObserver>`.
 #[async_trait::async_trait]
 pub trait ComputerBillingObserver: Send + Sync {
     async fn subscription_observed(

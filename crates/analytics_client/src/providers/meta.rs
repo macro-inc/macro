@@ -1,7 +1,14 @@
 //! Meta (Facebook) Conversions API provider.
 
+use std::time::Duration;
+
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+
+/// Longest a track call may take, connecting included. Callers await it
+/// inline (the Stripe inbox's analytics consumer), so a hung Meta must not
+/// hold them.
+const TRACK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Action source for Meta Conversions API events.
 #[derive(Clone, Debug, Default)]
@@ -165,7 +172,13 @@ impl MetaProvider {
             payload["test_event_code"] = serde_json::json!(test_code);
         }
 
-        let response = self.client.post(&url).json(&payload).send().await?;
+        let response = self
+            .client
+            .post(&url)
+            .timeout(TRACK_TIMEOUT)
+            .json(&payload)
+            .send()
+            .await?;
         let status = response.status();
         // Grab the status-based error while the response is still owned; then
         // consume the body for logging.

@@ -399,6 +399,13 @@ impl TeamService for FakeTeamService {
         panic!("unexpected restore_permissions_for_team_members call")
     }
 
+    async fn team_subscription_id(
+        &self,
+        _team_id: &uuid::Uuid,
+    ) -> Result<Option<stripe::SubscriptionId>, TeamError> {
+        panic!("unexpected team_subscription_id call")
+    }
+
     async fn patch_team_subscription_id(
         &self,
         _team_id: &uuid::Uuid,

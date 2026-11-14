@@ -50,13 +50,3 @@ fn max_is_unavailable_until_its_price_is_configured() {
         "price_premium"
     );
 }
-
-#[test]
-fn configured_prices_are_recognized_by_plan() {
-    assert_eq!(
-        prices().plan_for_price("price_premium"),
-        Some(PaidPlan::Premium)
-    );
-    assert_eq!(prices().plan_for_price("price_max"), Some(PaidPlan::Max));
-    assert_eq!(prices().plan_for_price("price_other"), None);
-}

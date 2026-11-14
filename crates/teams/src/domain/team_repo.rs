@@ -529,6 +529,13 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
+    /// The team's current subscription id.
+    /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
+    fn team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send;
+
     /// Patches the team subscription id
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn patch_team_subscription_id(

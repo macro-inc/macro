@@ -1620,7 +1620,7 @@ impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
 
     fn update_user_roles_and_permissions_for_subscription(
         &self,
-        _: Email<Lowercase<'_>>,
+        _: &MacroUserIdStr<'_>,
         _: roles_and_permissions::domain::model::SubscriptionStatus,
         _: roles_and_permissions::domain::model::ProductTier,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send {

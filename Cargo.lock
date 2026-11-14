@@ -2381,7 +2381,6 @@ dependencies = [
  "maud",
  "mention_utils",
  "messages",
- "miniserde",
  "mobile_welcome_email_db_client",
  "mockall",
  "model",
@@ -2414,6 +2413,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "static_file_service_client",
+ "stripe_inbox",
  "strum 0.27.2",
  "system_status",
  "team_agents",
@@ -20134,6 +20134,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
 dependencies = [
  "vte 0.10.1",
+]
+
+[[package]]
+name = "stripe_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-stripe",
+ "chrono",
+ "futures",
+ "macro_db_migrator",
+ "macro_user_id",
+ "opentelemetry",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

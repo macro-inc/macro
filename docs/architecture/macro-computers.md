@@ -204,7 +204,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   subscription (or team) already gone as removed and, after `MAX_BILLING_ATTEMPTS`, logs `computer billing item
   removal abandoned` (a Datadog monitor in `infra/stacks/monitoring`) and
   stops. `observe_subscription(team, SubscriptionObserved)` is the one billing
-  owner for webhooks: items are matched by `computer_id`, never by price or
+  owner for Stripe subscription events, fed by the Stripe inbox's
+  `computers` consumer (`docs/architecture/stripe-event-inbox.md`) with each
+  snapshot in order, its `observed_at` the event's time: items are matched by `computer_id`, never by price or
   count; a billed computer whose item is missing (or whose subscription
   ended) gets `BillingItemMissing` (ends billing now, retention); past
   due/unpaid/paused → `PaymentLapsed` (`PastDue`, the computer is turned off
@@ -212,8 +214,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   snapshot read before a computer's `billing_changed_at` cannot change it.
   Items a computer is not billed on (duplicates, or items naming a canceled,
   released or unknown computer; never one naming a reservation) are removed;
-  every computer is tried and the first error returned, so the webhook fails
-  and Stripe redelivers. An undo or restore whose charge applied but whose
+  every computer is tried and the first error returned, so the inbox retries
+  the snapshot. An undo or restore whose charge applied but whose
   event never did (a dropped request) is finished by reconcile from its item
   (`readd_charge`); a pending one is left for a later snapshot. The billing
   worker handles each effect on its own: a failure to read the computer is
