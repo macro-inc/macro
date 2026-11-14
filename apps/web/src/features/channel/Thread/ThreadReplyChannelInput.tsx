@@ -22,6 +22,7 @@ import {
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { FocusRequest } from './focus-request';
+import { threadReplyInputId } from './utils/reply-input-id';
 
 type ThreadReplyChannelInputProps = {
   parent: MessageParent;
@@ -100,7 +101,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
     <ChannelInput
       parent={props.parent}
       input={{
-        id: `thread-reply-input-${props.threadId}`,
+        id: threadReplyInputId(props.threadId),
         placeholder: 'Send a reply',
         value: props.replyInputState()?.value,
         attachments: props.replyInputState()?.attachments,
@@ -115,7 +116,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         channelId: `${props.parent.type}:${props.parent.id}`,
         threadId: props.threadId,
       })}
-      markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
+      markdownNamespace={`${threadReplyInputId(props.threadId)}-markdown`}
       onReady={onReady}
       onChange={(snapshot) => {
         props.setReplyInputState(snapshot);

@@ -1,4 +1,5 @@
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import type {
   MessageActionEvent,
   MessageActionHandler,
@@ -22,6 +23,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { queryThreadReplyEditor } from '../Thread/utils/reply-input-id';
 import {
   getRenderedMessageReplyText,
   getSelectedMessageText,
@@ -254,6 +256,9 @@ function ActionMenuContent(props: ActionMenuProps) {
                     action={action}
                     onPointerDown={(event) => {
                       if (action.id !== 'reply') return;
+                      // Keep the Reply button from taking focus so the
+                      // composer can receive it once it mounts.
+                      event.preventDefault();
                       selectedReplyText = getSelectedMessageText(
                         event.currentTarget,
                         message().id
@@ -264,12 +269,13 @@ function ActionMenuContent(props: ActionMenuProps) {
                       );
                     }}
                     onClick={(event) => {
+                      const current = message();
                       const selectedText =
                         action.id === 'reply'
                           ? (selectedReplyText ??
                             getSelectedMessageText(
                               event.currentTarget,
-                              message().id
+                              current.id
                             ))
                           : undefined;
                       selectedReplyText = undefined;
@@ -278,13 +284,20 @@ function ActionMenuContent(props: ActionMenuProps) {
                           ? (renderedReplyText ??
                             getRenderedMessageReplyText(
                               event.currentTarget,
-                              message().id
+                              current.id
                             ))
                           : undefined;
                       renderedReplyText = undefined;
+                      if (action.id === 'reply') {
+                        triggerFocusInput(() =>
+                          queryThreadReplyEditor(
+                            current.thread_id ?? current.id
+                          )
+                        );
+                      }
                       fireAndForget(
                         action.onClick?.({
-                          message: message(),
+                          message: current,
                           event,
                           selectedText,
                           renderedText,

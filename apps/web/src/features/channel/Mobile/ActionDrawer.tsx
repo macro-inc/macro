@@ -25,6 +25,7 @@ import {
   Show,
 } from 'solid-js';
 import { renderIcon } from '../Message/render-icon';
+import { queryThreadReplyEditor } from '../Thread/utils/reply-input-id';
 import { useMessageActionDrawer } from './message-action-drawer-context';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
@@ -61,10 +62,7 @@ function buildActionItems(
       icon: ReplyIcon,
       onClick: actions?.onReply,
       getFocusTarget: replyThreadId
-        ? () =>
-            document.querySelector<HTMLElement>(
-              `[data-input-id="thread-reply-input-${replyThreadId}"] [contenteditable]`
-            )
+        ? () => queryThreadReplyEditor(replyThreadId)
         : undefined,
     },
     {

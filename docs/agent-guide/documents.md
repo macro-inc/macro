@@ -2714,7 +2714,8 @@ Touch keeps separate `Attach images` and
 `Format` buttons. `Send comment` is disabled until text exists. Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user. Editing a discussion comment keeps the attachment and send controls, with no
+user. Clicking `Reply` on a comment focuses the reply composer. Editing a
+discussion comment keeps the attachment and send controls, with no
 trash button. Deleting a comment's first message deletes the whole discussion —
 the confirmation reads `Delete comment`, the replies under it go too, and an
 anchored comment's highlight clears from the document. Deleting a reply removes
@@ -2742,7 +2743,8 @@ a `Comments` drawer on touch devices. Hovering a desktop card reveals its action
 without changing the card size or header text wrapping. New comments, replies,
 and edits use plain inputs on the card or drawer's background. On desktop, with
 the margin card focused: Enter opens a reply (same as the Reply action; Enter in
-the composer then sends), and Escape closes the reply composer, then the card.
+the composer then sends), clicking Reply focuses the reply composer, and Escape
+closes the reply composer, then the card.
 A press anywhere outside the comments and the document text (another split, the
 sidebar, the document header or empty page) returns a selected card and its
 highlighted text to their resting state; menus and dialogs opened from the card

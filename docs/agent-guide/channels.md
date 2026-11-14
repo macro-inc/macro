@@ -431,7 +431,8 @@ disables the entrance animation.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files` and the `Send message` button. Replies also include a close-reply control.
 
-Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
+Hover a message for its action menu. `Reply` on a top-level message opens that thread and
+focuses the reply composer so typing can start immediately. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
 clicking the reference navigates back to that reply. References to the current
 channel navigate in place, including inside the preview panel, without opening

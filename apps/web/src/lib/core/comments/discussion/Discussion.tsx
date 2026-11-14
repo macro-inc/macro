@@ -6,6 +6,10 @@ import { buildThreadReplyListMeta } from '@channel/Thread/reply-list-meta';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
+import {
+  queryThreadReplyEditor,
+  threadReplyInputId,
+} from '@channel/Thread/utils/reply-input-id';
 import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -217,7 +221,6 @@ export function DiscussionThreadView(props: {
   const [isReplying, setIsReplying] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   let replyInputHandle: { clear: () => void } | undefined;
-  let replyInputContainerRef: HTMLDivElement | undefined;
 
   const comments = () => props.thread.comments;
   const root = () => comments()[0];
@@ -344,11 +347,7 @@ export function DiscussionThreadView(props: {
               >
                 <Thread.ActionsFooter>
                   <Thread.ReplyButton
-                    getFocusTarget={() =>
-                      replyInputContainerRef?.querySelector<HTMLElement>(
-                        '[contenteditable]'
-                      ) ?? null
-                    }
+                    getFocusTarget={() => queryThreadReplyEditor(threadId())}
                     onClick={() => setIsReplying(true)}
                     aria-label="Reply"
                   />
@@ -395,7 +394,6 @@ export function DiscussionThreadView(props: {
                           />
                         </Show>
                         <div
-                          ref={replyInputContainerRef}
                           class="relative pt-2"
                           style={{ 'margin-left': channelReplyInputOffsetX }}
                         >
@@ -403,7 +401,11 @@ export function DiscussionThreadView(props: {
                             <ThreadReplyInputConnector rail="thread" />
                           </Show>
                           <DiscussionInput
-                            input={{ mode: 'reply', placeholder: 'Reply...' }}
+                            input={{
+                              mode: 'reply',
+                              id: threadReplyInputId(threadId()),
+                              placeholder: 'Reply...',
+                            }}
                             onSend={handleReply}
                             onClose={() => {
                               setIsReplying(false);
@@ -423,9 +425,7 @@ export function DiscussionThreadView(props: {
                       <Thread.ActionsFooter>
                         <Thread.ReplyButton
                           getFocusTarget={() =>
-                            replyInputContainerRef?.querySelector<HTMLElement>(
-                              '[contenteditable]'
-                            ) ?? null
+                            queryThreadReplyEditor(threadId())
                           }
                           onClick={() => setIsReplying(true)}
                           aria-label="Reply"

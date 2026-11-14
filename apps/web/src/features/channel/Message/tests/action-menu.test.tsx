@@ -4,9 +4,16 @@
 
 import type { MessageData } from '@core/messages/types';
 import { fireEvent, render } from '@solidjs/testing-library';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionMenu } from '../ActionMenu';
 import { Root } from '../Root';
+
+const focusMocks = vi.hoisted(() => ({
+  triggerFocusInput: vi.fn(),
+}));
+vi.mock('@core/directive/focusInput', () => ({
+  triggerFocusInput: focusMocks.triggerFocusInput,
+}));
 
 const message: MessageData = {
   id: 'message-1',
@@ -19,6 +26,10 @@ const message: MessageData = {
 };
 
 describe('ActionMenu', () => {
+  beforeEach(() => {
+    focusMocks.triggerFocusInput.mockClear();
+  });
+
   it('mounts only while its message is hovered', () => {
     const onPointerEnter = vi.fn();
     const { container } = render(() => (
@@ -123,6 +134,7 @@ describe('ActionMenu', () => {
     expect(onReply).toHaveBeenCalledWith(
       expect.objectContaining({ selectedText: 'this phrase' })
     );
+    expect(focusMocks.triggerFocusInput).toHaveBeenCalledOnce();
   });
 
   it('passes resolved decorator text to Reply', () => {
@@ -147,5 +159,27 @@ describe('ActionMenu', () => {
     expect(onReply).toHaveBeenCalledWith(
       expect.objectContaining({ renderedText: 'Resolved bot response' })
     );
+    expect(focusMocks.triggerFocusInput).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Reply from taking focus so the composer can', () => {
+    const onReply = vi.fn();
+    const { container } = render(() => (
+      <Root message={message} actions={{ onReply }}>
+        <ActionMenu />
+      </Root>
+    ));
+    const root = container.querySelector<HTMLElement>('[data-message]')!;
+    fireEvent.pointerEnter(root);
+    const reply = container.querySelector<HTMLButtonElement>(
+      '[data-message-action="reply"]'
+    )!;
+    const event = new MouseEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+    });
+    reply.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
   });
 });

@@ -29,6 +29,7 @@ import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
+import { queryThreadReplyEditor } from './utils/reply-input-id';
 import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
 import {
   getCollapsedRepliesCount,
@@ -156,8 +157,6 @@ export function ChannelThread(props: ThreadProps) {
     props.onSelectMessage?.(props.data().id);
     replySelection.select(replyId);
   };
-
-  let replyInputContainerRef: HTMLDivElement | undefined;
 
   const { attachReplyInputRef } = createThreadHotkeys({
     messageListScopeId: props.messageListScopeId!,
@@ -408,10 +407,7 @@ export function ChannelThread(props: ThreadProps) {
 
                   <Show when={hasInlineReplyInput()}>
                     <div
-                      ref={(el) => {
-                        attachReplyInputRef(el);
-                        replyInputContainerRef = el;
-                      }}
+                      ref={attachReplyInputRef}
                       class="ph-no-capture relative"
                     >
                       {/* The first reply has an author avatar before its
@@ -482,13 +478,7 @@ export function ChannelThread(props: ThreadProps) {
                       <Show when={shouldShowReplyButton()}>
                         <Thread.ReplyButton
                           getFocusTarget={() =>
-                            props.inputMode !== 'unified'
-                              ? (replyInputContainerRef?.querySelector<HTMLElement>(
-                                  '[contenteditable]'
-                                ) ?? null)
-                              : document.querySelector<HTMLElement>(
-                                  `[data-input-id="thread-reply-input-${props.data().id}"] [contenteditable]`
-                                )
+                            queryThreadReplyEditor(props.data().id)
                           }
                           onClick={(event) =>
                             replyAction()?.({ message: props.data(), event })

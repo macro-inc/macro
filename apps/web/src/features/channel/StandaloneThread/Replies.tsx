@@ -4,6 +4,7 @@ import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
 import { buildThreadReplyListMeta } from '../Thread/reply-list-meta';
 import { ThreadReplyRail } from '../Thread/ThreadReplyRail';
+import { queryThreadReplyEditor } from '../Thread/utils/reply-input-id';
 import {
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
@@ -162,7 +163,7 @@ export function Replies(props: RepliesProps) {
               </Show>
               <Show when={shouldShowReplyButton()}>
                 <Thread.ReplyButton
-                  getFocusTarget={() => null}
+                  getFocusTarget={() => queryThreadReplyEditor(ctx.messageId())}
                   onClick={(event) => {
                     const parent = ctx.parent();
                     if (!parent) return;

@@ -8,6 +8,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
+import { queryThreadReplyEditor } from '../Thread/utils/reply-input-id';
 import { getMessageReplyPreviewTexts } from './browser-selection';
 
 /**
@@ -51,11 +52,7 @@ export function MaybeSwipeToReplyRow(
     const threadId = props.message.thread_id ?? props.message.id;
     // Called synchronously inside the touch gesture so iOS opens the
     // keyboard once the reply input mounts.
-    triggerFocusInput(() =>
-      document.querySelector<HTMLElement>(
-        `[data-input-id="thread-reply-input-${threadId}"] [contenteditable]`
-      )
-    );
+    triggerFocusInput(() => queryThreadReplyEditor(threadId));
     fireAndForget(
       onReply({
         message: props.message,
