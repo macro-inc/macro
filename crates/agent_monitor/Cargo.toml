@@ -35,6 +35,8 @@ tonic-prost-build = { workspace = true }
 ignored = ["prost", "tonic-prost"]
 
 [dev-dependencies]
+clap = { workspace = true }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 tracing-subscriber = { workspace = true }

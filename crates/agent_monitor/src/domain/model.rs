@@ -115,14 +115,14 @@ impl SourceKind {
         }
     }
 
-    fn bit(self) -> u8 {
-        1 << (self as u8)
+    fn bit(self) -> u16 {
+        1 << (self as u16)
     }
 }
 
 /// The set of sources that contributed to one agent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct SourceSet(u8);
+pub struct SourceSet(u16);
 
 impl SourceSet {
     /// Adds a source.

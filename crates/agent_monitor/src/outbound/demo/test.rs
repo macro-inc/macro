@@ -66,3 +66,14 @@ fn the_snapshot_is_deterministic_and_has_a_tape() {
     assert!(first.totals.tools_24h > 0);
     assert!(first.totals.working + first.totals.waiting + first.totals.blocked > 0);
 }
+
+#[test]
+fn the_fleet_stays_bounded() {
+    let step = Duration::from_millis(250);
+    let long_run = snapshot(7, start(), step, 4000);
+    assert!(
+        long_run.agents.len() <= 40,
+        "{} agents after a long run",
+        long_run.agents.len()
+    );
+}

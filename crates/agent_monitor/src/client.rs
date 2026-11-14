@@ -20,6 +20,10 @@ use crate::trace_context::TraceContextInterceptor;
 const SOCKET_URI: &str = "http://monitor.sock";
 
 const FIRST_BACKOFF: Duration = Duration::from_millis(250);
+
+/// Silence after which a connection counts as stalled: three missed
+/// heartbeats (the collector sends one every 15 s).
+const STALL_TIMEOUT: Duration = Duration::from_secs(45);
 const MAX_BACKOFF: Duration = Duration::from_secs(5);
 
 /// Why a call failed.
@@ -129,8 +133,8 @@ pub enum ClientEvent {
         /// Why.
         reason: String,
     },
-    /// The collector speaks a newer protocol; this viewer must be updated. The
-    /// stream ends after this.
+    /// The collector speaks another protocol version; the older side must be
+    /// updated. The stream ends after this.
     Incompatible {
         /// The collector's protocol.
         protocol: u32,
@@ -145,10 +149,13 @@ pub fn watch(socket: PathBuf, cancel: CancellationToken) -> impl Stream<Item = C
         let mut backoff = FIRST_BACKOFF;
         loop {
             let span = tracing::info_span!("macrod.monitor.viewer.connect");
-            let connected = connect_and_subscribe(&socket).instrument(span).await;
+            let connected = tokio::select! {
+                () = cancel.cancelled() => return,
+                connected = connect_and_subscribe(&socket).instrument(span) => connected,
+            };
 
             let reason = match connected {
-                Ok((status, _)) if status.protocol > PROTOCOL => {
+                Ok((status, _)) if status.protocol != PROTOCOL => {
                     yield ClientEvent::Incompatible { protocol: status.protocol };
                     return;
                 }
@@ -158,12 +165,13 @@ pub fn watch(socket: PathBuf, cancel: CancellationToken) -> impl Stream<Item = C
                     loop {
                         let next = tokio::select! {
                             () = cancel.cancelled() => return,
-                            next = updates.next() => next,
+                            next = tokio::time::timeout(STALL_TIMEOUT, updates.next()) => next,
                         };
                         match next {
-                            Some(Ok(update)) => yield ClientEvent::Update(Box::new(update)),
-                            Some(Err(error)) => break error.to_string(),
-                            None => break String::from("the collector closed the stream"),
+                            Ok(Some(Ok(update))) => yield ClientEvent::Update(Box::new(update)),
+                            Ok(Some(Err(error))) => break error.to_string(),
+                            Ok(None) => break String::from("the collector closed the stream"),
+                            Err(_) => break String::from("the collector stopped answering"),
                         }
                     }
                 }

@@ -21,11 +21,12 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 use crate::domain::clock::Clock;
 use crate::domain::model::{
-    Agent, AgentKind, Cost, Snapshot, SourceKind, Timestamp, Tokens, TranscriptItem,
-    TranscriptItemKind,
+    Agent, AgentKind, Cost, Snapshot, SourceHealth, SourceKind, SourceState, Timestamp, Tokens,
+    TranscriptItem, TranscriptItemKind,
 };
 use crate::domain::observation::{
     Change, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact, Observation,
@@ -104,6 +105,12 @@ impl AgentSource for DemoSource {
         self.transcripts.clear();
         self.transcripts.append(reset.items);
         send(&out, Change::Reset(reset.facts)).await?;
+        let health = SourceHealth {
+            state: SourceState::Healthy,
+            items: u32::try_from(fleet.agents.len()).unwrap_or(u32::MAX),
+            ..SourceHealth::starting(SourceKind::Demo)
+        };
+        send(&out, Change::Health(health)).await?;
 
         let mut ticker = tokio::time::interval(self.config.step);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -114,10 +121,20 @@ impl AgentSource for DemoSource {
                 _ = ticker.tick() => {}
             }
             let step = fleet.step(self.clock.now());
+            let span = tracing::debug_span!(
+                "macrod.monitor.source.batch",
+                source = SourceKind::Demo.name(),
+                observations = step.changes.len(),
+            );
             self.transcripts.append(step.items);
-            for change in step.changes {
-                send(&out, change).await?;
+            async {
+                for change in step.changes {
+                    send(&out, change).await?;
+                }
+                Ok::<(), SourceError>(())
             }
+            .instrument(span)
+            .await?;
         }
     }
 }
@@ -1026,11 +1043,23 @@ impl DemoFleet {
                     Phase::Blocked
                 } else {
                     let started = self.tool_start(now);
-                    if started.name == "Task" {
+                    if started.name == "Task" && self.agents[index].program == Program::Claude {
+                        // One subagent per agent at a time: a new one replaces the last.
+                        let agent = &mut self.agents[index];
+                        for previous in std::mem::take(&mut agent.subagents) {
+                            if let Some(key) = agent.transcript_key() {
+                                step.changes.push(Change::Remove(FactKey::Transcript(
+                                    TranscriptKey {
+                                        subagent: Some(previous),
+                                        ..key
+                                    },
+                                )));
+                            }
+                        }
                         let subagent = format!("agent-{}", started.id);
-                        let delta = self.agents[index].subagent_delta(&subagent, now);
+                        let delta = agent.subagent_delta(&subagent, now);
                         step.changes.push(Change::Upsert(Fact::Transcript(delta)));
-                        self.agents[index].subagents.push(subagent);
+                        agent.subagents.push(subagent);
                     }
                     events.push(started.event);
                     step.items.push((path, started.item));
