@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::stream::BoxStream;
 use futures::StreamExt as _;
+use futures::stream::BoxStream;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tokio_util::task::TaskTracker;
@@ -48,21 +48,32 @@ struct SocketTranscripts {
 // `async_trait` because the run loop holds the reader as `Arc<dyn TranscriptFeed>`.
 #[async_trait]
 impl TranscriptFeed for SocketTranscripts {
-    async fn follow(&self, agent: &Agent, tail: usize) -> Result<TranscriptStream, TranscriptError> {
+    async fn follow(
+        &self,
+        agent: &Agent,
+        tail: usize,
+    ) -> Result<TranscriptStream, TranscriptError> {
         let tail = u32::try_from(tail).unwrap_or(u32::MAX);
         let mut client = MonitorClient::connect(&self.socket)
             .await
-            .map_err(|error| TranscriptError::Internal(rootcause::Report::new(error).into_dynamic()))?;
-        let stream = client
-            .follow_transcript(&agent.id, tail)
-            .await
-            .map_err(|error| match error {
-                // The collector's way of saying this agent has no transcript.
-                ClientError::Call(status) if status.code() == tonic::Code::FailedPrecondition => {
-                    TranscriptError::Unavailable
-                }
-                error => TranscriptError::Internal(rootcause::Report::new(error).into_dynamic()),
+            .map_err(|error| {
+                TranscriptError::Internal(rootcause::Report::new(error).into_dynamic())
             })?;
+        let stream =
+            client
+                .follow_transcript(&agent.id, tail)
+                .await
+                .map_err(|error| match error {
+                    // The collector's way of saying this agent has no transcript.
+                    ClientError::Call(status)
+                        if status.code() == tonic::Code::FailedPrecondition =>
+                    {
+                        TranscriptError::Unavailable
+                    }
+                    error => {
+                        TranscriptError::Internal(rootcause::Report::new(error).into_dynamic())
+                    }
+                })?;
 
         // A failed item ends the stream; the page shows what it has.
         let items = stream
@@ -78,7 +89,12 @@ pub fn demo(seed: u64) -> Feed {
     let cancel = CancellationToken::new();
     let tracker = TaskTracker::new();
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-    let store = Store::start(StoreConfig::default(), clock.clone(), &tracker, cancel.clone());
+    let store = Store::start(
+        StoreConfig::default(),
+        clock.clone(),
+        &tracker,
+        cancel.clone(),
+    );
     let transcripts = DemoTranscripts::default();
 
     let config = DemoConfig {

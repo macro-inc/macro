@@ -51,7 +51,9 @@ impl Clock {
 
     /// `HH:MM:SS` in local time.
     pub fn time_of(&self, at: Timestamp) -> String {
-        at.with_timezone(&self.offset).format("%H:%M:%S").to_string()
+        at.with_timezone(&self.offset)
+            .format("%H:%M:%S")
+            .to_string()
     }
 }
 
@@ -113,11 +115,23 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
 
     let mut left = vec![
         Span::styled(" MACROD ", theme::strip()),
-        Span::styled(" MON ", Style::new().fg(theme::STRIP).bg(theme::BG).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            " MON ",
+            Style::new()
+                .fg(theme::STRIP)
+                .bg(theme::BG)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(">_ ", theme::bold(theme::YELLOW)),
     ];
     if let Some(label) = &app.label {
-        left.push(Span::styled(format!(" {label} "), Style::new().fg(theme::BG).bg(theme::YELLOW).add_modifier(ratatui::style::Modifier::BOLD)));
+        left.push(Span::styled(
+            format!(" {label} "),
+            Style::new()
+                .fg(theme::BG)
+                .bg(theme::YELLOW)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
         left.push(Span::raw(" "));
     }
     left.extend([
@@ -128,15 +142,28 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
         Span::styled("  WAIT ", theme::ink(theme::DIM)),
         Span::styled(totals.waiting.to_string(), theme::bold(theme::YELLOW)),
         Span::styled("  BLOCK ", theme::ink(theme::DIM)),
-        Span::styled(totals.blocked.to_string(), theme::bold(if totals.blocked > 0 { theme::RED } else { theme::AMBER })),
+        Span::styled(
+            totals.blocked.to_string(),
+            theme::bold(if totals.blocked > 0 {
+                theme::RED
+            } else {
+                theme::AMBER
+            }),
+        ),
         Span::styled("  ERR ", theme::ink(theme::DIM)),
         Span::styled(errors.to_string(), theme::bold(error_color)),
         Span::styled("  DAY ", theme::ink(theme::DIM)),
         Span::styled(format::cost(totals.cost_today), theme::bold(theme::YELLOW)),
     ]);
     if area.width >= WIDE {
-        left.push(Span::styled(format!("  AGENTS {}", app.view.agents.len()), theme::ink(theme::DIM)));
-        left.push(Span::styled(format!("  SEQ {}", app.view.seq), theme::ink(theme::FAINT)));
+        left.push(Span::styled(
+            format!("  AGENTS {}", app.view.agents.len()),
+            theme::ink(theme::DIM),
+        ));
+        left.push(Span::styled(
+            format!("  SEQ {}", app.view.seq),
+            theme::ink(theme::FAINT),
+        ));
     }
 
     let local = clock.now.with_timezone(&clock.offset);
@@ -154,8 +181,11 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     };
     let right_width = time.len() + date.len();
 
-    let [left_area, right_area] =
-        Layout::horizontal([Constraint::Min(0), Constraint::Length(u16::try_from(right_width).unwrap_or(0))]).areas(area);
+    let [left_area, right_area] = Layout::horizontal([
+        Constraint::Min(0),
+        Constraint::Length(u16::try_from(right_width).unwrap_or(0)),
+    ])
+    .areas(area);
     frame.render_widget(Paragraph::new(Line::from(left)), left_area);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
@@ -184,7 +214,10 @@ fn draw_ticker(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
             _ => ("▲ ", theme::bold(theme::GREEN)),
         };
         let pieces = [
-            (app.view.name_of(&event.agent).to_uppercase(), theme::bold(theme::AMBER)),
+            (
+                app.view.name_of(&event.agent).to_uppercase(),
+                theme::bold(theme::AMBER),
+            ),
             (String::from(" "), theme::base()),
             (String::from(arrow.0), arrow.1),
             (format!("{} ", tag.trim()), theme::bold(color)),
@@ -201,7 +234,8 @@ fn draw_ticker(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
 
     let width = usize::from(area.width);
     let steps = clock.now.timestamp_millis() / TICKER_STEP_MS;
-    let offset = usize::try_from(steps.rem_euclid(i64::try_from(cells.len()).unwrap_or(1))).unwrap_or(0);
+    let offset =
+        usize::try_from(steps.rem_euclid(i64::try_from(cells.len()).unwrap_or(1))).unwrap_or(0);
     let spans: Vec<Span<'static>> = (0..width)
         .filter_map(|column| cells.get((offset + column) % cells.len()))
         .map(|(character, style)| Span::styled(character.to_string(), *style))
@@ -231,7 +265,13 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     for (key, long_name, short_name, active) in tabs {
         let name = if short { short_name } else { long_name };
         if active {
-            spans.push(Span::styled(format!("{key} {name}"), Style::new().fg(theme::BG).bg(theme::AMBER).add_modifier(ratatui::style::Modifier::BOLD)));
+            spans.push(Span::styled(
+                format!("{key} {name}"),
+                Style::new()
+                    .fg(theme::BG)
+                    .bg(theme::AMBER)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            ));
         } else {
             spans.push(Span::styled(key, theme::bold(theme::YELLOW)));
             spans.push(Span::styled(format!(" {name}"), theme::ink(theme::AMBER)));
@@ -241,11 +281,18 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if let Page::Agent(id) = page {
         spans.push(Span::styled(
             format!("▸ {}", app.view.name_of(id)),
-            Style::new().fg(theme::BG).bg(theme::YELLOW).add_modifier(ratatui::style::Modifier::BOLD),
+            Style::new()
+                .fg(theme::BG)
+                .bg(theme::YELLOW)
+                .add_modifier(ratatui::style::Modifier::BOLD),
         ));
     }
 
-    let hints = if area.width >= WIDE { "/ FIND  ? KEYS  ESC BACK " } else { "" };
+    let hints = if area.width >= WIDE {
+        "/ FIND  ? KEYS  ESC BACK "
+    } else {
+        ""
+    };
     let [left, right] = Layout::horizontal([
         Constraint::Min(0),
         Constraint::Length(u16::try_from(hints.len()).unwrap_or(0)),
@@ -327,12 +374,18 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
             }
             if !app.filter.words.is_empty() {
                 spans.push(Span::styled("FILTER ", theme::ink(theme::DIM)));
-                spans.push(Span::styled(app.filter.words.join(" "), theme::bold(theme::YELLOW)));
+                spans.push(Span::styled(
+                    app.filter.words.join(" "),
+                    theme::bold(theme::YELLOW),
+                ));
                 spans.push(Span::raw("  "));
             }
             if !app.filter.find.is_empty() {
                 spans.push(Span::styled("FIND ", theme::ink(theme::DIM)));
-                spans.push(Span::styled(format!("/{}", app.filter.find), theme::bold(theme::YELLOW)));
+                spans.push(Span::styled(
+                    format!("/{}", app.filter.find),
+                    theme::bold(theme::YELLOW),
+                ));
                 spans.push(Span::raw("  "));
             }
             for (key, what) in [
@@ -348,7 +401,10 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 spans.push(Span::styled(format!(" {what}  "), theme::ink(theme::FAINT)));
             }
             if let Link::Reconnecting(reason) = &app.view.link {
-                spans.push(Span::styled(format!("LINK: {reason}"), theme::ink(theme::RED)));
+                spans.push(Span::styled(
+                    format!("LINK: {reason}"),
+                    theme::ink(theme::RED),
+                ));
             }
             Line::from(spans)
         }
@@ -357,13 +413,19 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
 }
 
 const HELP: [(&str, &str); 16] = [
-    ("0 … 7", "monitor, then the numbered pane full screen (5 = tree)"),
+    (
+        "0 … 7",
+        "monitor, then the numbered pane full screen (5 = tree)",
+    ),
     ("w", "wall: a card per agent"),
     ("TAB  S-TAB", "focus the next or previous pane"),
     ("↑ ↓  j k", "move the cursor"),
     ("← →  h l", "collapse / expand, previous / next card"),
     ("PGUP PGDN HOME END", "page, first, last"),
-    ("ENTER", "open the agent under the cursor; expand a tool call"),
+    (
+        "ENTER",
+        "open the agent under the cursor; expand a tool call",
+    ),
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
     ("?", "this help"),
@@ -371,12 +433,18 @@ const HELP: [(&str, &str); 16] = [
     ("", ""),
     ("TYPE A LETTER", "command line, then ENTER:"),
     ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
-    ("FAIL TREE SRC BODY WALL", "failures, tree, sources, body, wall"),
+    (
+        "FAIL TREE SRC BODY WALL",
+        "failures, tree, sources, body, wall",
+    ),
     ("AGT builder working", "words after a mnemonic filter rows"),
 ];
 
+/// The help box: the keys column plus the longest description and borders.
+const HELP_WIDTH: u16 = 86;
+
 fn draw_help(frame: &mut Frame<'_>, area: Rect) {
-    let width = area.width.min(78);
+    let width = area.width.min(HELP_WIDTH);
     let height = area.height.min(u16::try_from(HELP.len()).unwrap_or(0) + 2);
     let popup = Rect {
         x: area.x + (area.width - width) / 2,
@@ -396,8 +464,12 @@ fn draw_help(frame: &mut Frame<'_>, area: Rect) {
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).block(
-            theme::pane("KEYS", vec![Span::styled(" ESC CLOSES ", theme::ink(theme::DIM))], true)
-                .borders(Borders::ALL),
+            theme::pane(
+                "KEYS",
+                vec![Span::styled(" ESC CLOSES ", theme::ink(theme::DIM))],
+                true,
+            )
+            .borders(Borders::ALL),
         ),
         popup,
     );

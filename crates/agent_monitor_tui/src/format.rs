@@ -103,7 +103,11 @@ pub fn right(text: &str, width: usize) -> String {
 /// Eight-level bars for the last `width` values of a series, scaled to their
 /// maximum: zero is a ghost baseline, anything else at least one level in
 /// `color`.
-pub fn spark<I: IntoIterator<Item = u64>>(values: I, width: usize, color: Color) -> Vec<Span<'static>> {
+pub fn spark<I: IntoIterator<Item = u64>>(
+    values: I,
+    width: usize,
+    color: Color,
+) -> Vec<Span<'static>> {
     const LEVELS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
     let values: Vec<u64> = values.into_iter().collect();
     let skip = values.len().saturating_sub(width);
@@ -117,15 +121,32 @@ pub fn spark<I: IntoIterator<Item = u64>>(values: I, width: usize, color: Color)
     for value in values {
         let is_zero = *value == 0 || max == 0;
         if is_zero != run_is_zero && !run.is_empty() {
-            let style = if run_is_zero { Style::new().fg(theme::GHOST) } else { Style::new().fg(color) };
+            let style = if run_is_zero {
+                Style::new().fg(theme::GHOST)
+            } else {
+                Style::new().fg(color)
+            };
             spans.push(Span::styled(std::mem::take(&mut run), style));
         }
         run_is_zero = is_zero;
-        let level = if is_zero { 0 } else { (value * 8).div_ceil(max).clamp(1, 8) - 1 };
-        run.push(LEVELS.get(usize::try_from(level).unwrap_or(7)).copied().unwrap_or('█'));
+        let level = if is_zero {
+            0
+        } else {
+            (value * 8).div_ceil(max).clamp(1, 8) - 1
+        };
+        run.push(
+            LEVELS
+                .get(usize::try_from(level).unwrap_or(7))
+                .copied()
+                .unwrap_or('█'),
+        );
     }
     if !run.is_empty() {
-        let style = if run_is_zero { Style::new().fg(theme::GHOST) } else { Style::new().fg(color) };
+        let style = if run_is_zero {
+            Style::new().fg(theme::GHOST)
+        } else {
+            Style::new().fg(color)
+        };
         spans.push(Span::styled(run, style));
     }
     spans

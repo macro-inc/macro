@@ -34,7 +34,11 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     let mut children: BTreeMap<&AgentId, Vec<&Agent>> = BTreeMap::new();
     let mut roots: Vec<&Agent> = Vec::new();
     for agent in &agents {
-        match agent.parent.as_ref().filter(|parent| shown.contains(parent)) {
+        match agent
+            .parent
+            .as_ref()
+            .filter(|parent| shown.contains(parent))
+        {
             Some(parent) => children.entry(parent).or_default().push(agent),
             None => roots.push(agent),
         }
@@ -48,9 +52,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
         .collect();
     for node in opened {
         if let Some(last) = node.last()
-            && app.cursors.tree_seen.insert(last.clone()) {
-                app.cursors.tree.open(node);
-            }
+            && app.cursors.tree_seen.insert(last.clone())
+        {
+            app.cursors.tree.open(node);
+        }
     }
     if app.cursors.tree.selected().is_empty() {
         app.cursors.tree.select_first();
@@ -65,7 +70,11 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     let block = theme::pane(
         "5 TREE",
         vec![Span::styled(
-            format!(" {} AGENTS · {} ROOTS · ←→ FOLD · ENTER OPEN ", agents.len(), roots.len()),
+            format!(
+                " {} AGENTS · {} ROOTS · ←→ FOLD · ENTER OPEN ",
+                agents.len(),
+                roots.len()
+            ),
             theme::ink(theme::DIM),
         )],
         true,
@@ -82,8 +91,11 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
         }
         Err(error) => {
             frame.render_widget(
-                ratatui::widgets::Paragraph::new(Span::styled(error.to_string(), theme::ink(theme::RED)))
-                    .block(block),
+                ratatui::widgets::Paragraph::new(Span::styled(
+                    error.to_string(),
+                    theme::ink(theme::RED),
+                ))
+                .block(block),
                 tree_area,
             );
         }
@@ -104,8 +116,11 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
             Layout::vertical([Constraint::Length(card_height), Constraint::Min(0)]).areas(side);
         draw_card(frame, card, app, clock, agent, true);
         frame.render_widget(
-            ratatui::widgets::Paragraph::new(details(agent, clock))
-                .block(theme::pane("DETAIL", Vec::new(), false)),
+            ratatui::widgets::Paragraph::new(details(agent, clock)).block(theme::pane(
+                "DETAIL",
+                Vec::new(),
+                false,
+            )),
             rest,
         );
     }
@@ -127,7 +142,10 @@ fn details(agent: &Agent, clock: Clock) -> Vec<Line<'static>> {
         field("MODEL", or_dash(agent.model.clone())),
         field("BRANCH", or_dash(agent.branch.clone())),
         field("TERMINAL", or_dash(agent.terminal.clone())),
-        field("STARTED", or_dash(agent.started.map(|at| clock.time_of(at)))),
+        field(
+            "STARTED",
+            or_dash(agent.started.map(|at| clock.time_of(at))),
+        ),
         field("CHILDREN", agent.children.len().to_string()),
         field("TOKENS", format::thousands(agent.tokens.total())),
     ]
@@ -158,25 +176,41 @@ fn item(
     // The widget indents two columns per level; the name gives them back so
     // the columns after it line up.
     let name_width = NAME_WIDTH.saturating_sub(depth * 2).max(6);
-    let started = agent.started.map_or_else(|| String::from("--:--:--"), |at| clock.time_of(at));
-    let age = agent.started.map_or_else(|| String::from("—"), |at| format::age(clock.now - at));
+    let started = agent
+        .started
+        .map_or_else(|| String::from("--:--:--"), |at| clock.time_of(at));
+    let age = agent
+        .started
+        .map_or_else(|| String::from("—"), |at| format::age(clock.now - at));
     let line = Line::from(vec![
         theme::status_square(agent.status, clock.blink()),
         Span::raw(" "),
         Span::styled(format::cell(agent.kind.label(), 9), theme::ink(theme::DIM)),
-        Span::styled(format::cell(&agent.name, name_width), theme::bold(theme::AMBER)),
+        Span::styled(
+            format::cell(&agent.name, name_width),
+            theme::bold(theme::AMBER),
+        ),
         Span::styled(
             format!(" {} ", theme::status_word(agent.status)),
             theme::ink(theme::status_color(agent.status)),
         ),
         Span::styled(started, theme::ink(theme::FAINT)),
         Span::styled(format::right(&age, 5), theme::ink(theme::DIM)),
-        Span::styled(format::right(&format::cost(agent.cost), 9), theme::bold(theme::YELLOW)),
-        Span::styled(format!(" {:>3}▸", agent.children.len()), theme::ink(theme::FAINT)),
+        Span::styled(
+            format::right(&format::cost(agent.cost), 9),
+            theme::bold(theme::YELLOW),
+        ),
+        Span::styled(
+            format!(" {:>3}▸", agent.children.len()),
+            theme::ink(theme::FAINT),
+        ),
         Span::raw("  "),
         match &agent.doing {
             Some(doing) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
-            None => Span::styled(agent.task.clone().unwrap_or_default(), theme::ink(theme::DIM)),
+            None => Span::styled(
+                agent.task.clone().unwrap_or_default(),
+                theme::ink(theme::DIM),
+            ),
         },
     ]);
 

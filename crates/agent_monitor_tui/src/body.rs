@@ -154,7 +154,14 @@ impl Vitals {
         Some(index)
     }
 
-    fn gauge_line(label: &str, channel: &Channel, rate: usize, max: usize, width: usize, color: ratatui::style::Color) -> Line<'static> {
+    fn gauge_line(
+        label: &str,
+        channel: &Channel,
+        rate: usize,
+        max: usize,
+        width: usize,
+        color: ratatui::style::Color,
+    ) -> Line<'static> {
         let bar_width = width.saturating_sub(13);
         let share = if max == 0 {
             0.0
@@ -172,7 +179,10 @@ impl Vitals {
             Span::styled(format::cell(label, 8), label_style),
             Span::styled("█".repeat(filled), theme::ink(color)),
             Span::styled("░".repeat(bar_width - filled), theme::ink(theme::GHOST)),
-            Span::styled(format::right(&rate.to_string(), 5), theme::bold(theme::AMBER)),
+            Span::styled(
+                format::right(&rate.to_string(), 5),
+                theme::bold(theme::AMBER),
+            ),
         ])
     }
 }
@@ -187,15 +197,17 @@ impl BodyPane for Vitals {
         self.latest = Some(latest);
 
         if let Some(index) = Self::channel_index(event.kind)
-            && let Some(channel) = self.channels.get_mut(index) {
-                channel.hit(event.at);
-            }
+            && let Some(channel) = self.channels.get_mut(index)
+        {
+            channel.hit(event.at);
+        }
 
         let namespace = event.agent.as_str().split(':').next().unwrap_or_default();
         if let Some(index) = NAMESPACES.iter().position(|name| *name == namespace)
-            && let Some(channel) = self.namespaces.get_mut(index) {
-                channel.hit(event.at);
-            }
+            && let Some(channel) = self.namespaces.get_mut(index)
+        {
+            channel.hit(event.at);
+        }
         if event.kind == TapeKind::ToolStart {
             let name = event.text.split_whitespace().next().unwrap_or_default();
             if !name.is_empty() {
@@ -253,10 +265,16 @@ impl BodyPane for Vitals {
             Span::styled(format!("{heart} "), theme::bold(theme::RED)),
             Span::styled(format!("{} BPM", self.bpm()), theme::bold(theme::YELLOW)),
             Span::styled(
-                format!("  {} TOK/M", format::compact(u64::from(self.tokens_per_min))),
+                format!(
+                    "  {} TOK/M",
+                    format::compact(u64::from(self.tokens_per_min))
+                ),
                 theme::ink(theme::DIM),
             ),
-            Span::styled(format!("  {} WORKING", self.working), theme::bold(theme::GREEN)),
+            Span::styled(
+                format!("  {} WORKING", self.working),
+                theme::bold(theme::GREEN),
+            ),
         ]);
 
         let [header_area, ecg_area, trace_area, rest] = Layout::vertical([
@@ -304,7 +322,13 @@ impl BodyPane for Vitals {
             format::cell("EVENT      /MIN", width),
             theme::ink(theme::FAINT),
         )));
-        let colors = [theme::CYAN, theme::AMBER, theme::GREEN, theme::RED, theme::DIM];
+        let colors = [
+            theme::CYAN,
+            theme::AMBER,
+            theme::GREEN,
+            theme::RED,
+            theme::DIM,
+        ];
         for (index, (label, color)) in CHANNELS.iter().zip(colors).enumerate() {
             let (Some(channel), Some(rate)) = (self.channels.get(index), rates.get(index)) else {
                 continue;
@@ -318,13 +342,21 @@ impl BodyPane for Vitals {
         )));
         for (index, label) in NAMESPACES.iter().enumerate() {
             let offset = CHANNELS.len() + index;
-            let (Some(channel), Some(rate)) = (self.namespaces.get(index), rates.get(offset)) else {
+            let (Some(channel), Some(rate)) = (self.namespaces.get(index), rates.get(offset))
+            else {
                 continue;
             };
             if *rate == 0 && channel.shown < 0.05 {
                 continue;
             }
-            lines.push(Self::gauge_line(label, channel, *rate, max, width, theme::YELLOW));
+            lines.push(Self::gauge_line(
+                label,
+                channel,
+                *rate,
+                max,
+                width,
+                theme::YELLOW,
+            ));
         }
 
         let mut tools: Vec<(&String, usize)> = self
@@ -347,7 +379,10 @@ impl BodyPane for Vitals {
                     Span::styled(format::cell(name, 8), theme::ink(theme::CYAN)),
                     Span::styled("▮".repeat(filled), theme::ink(theme::CYAN)),
                     Span::styled(" ".repeat(room - filled), theme::base()),
-                    Span::styled(format::right(&rate.to_string(), 5), theme::bold(theme::AMBER)),
+                    Span::styled(
+                        format::right(&rate.to_string(), 5),
+                        theme::bold(theme::AMBER),
+                    ),
                 ]));
             }
         }

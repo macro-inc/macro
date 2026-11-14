@@ -71,7 +71,10 @@ fn snapshot_replaces_and_older_updates_are_dropped() {
         seq: 9,
         kind: UpdateKind::Removed(AgentId::from_wire(String::from("demo:a"))),
     });
-    assert!(view.agents.contains_key(&AgentId::from_wire(String::from("demo:a"))));
+    assert!(
+        view.agents
+            .contains_key(&AgentId::from_wire(String::from("demo:a")))
+    );
 
     view.apply(Update {
         seq: 11,
@@ -169,11 +172,15 @@ fn filter_words_match_kind_status_and_name() {
 }
 
 #[test]
-fn failures_are_newest_first_and_include_failed_agents_without_a_line() {
+fn failures_add_up_to_failed_agents_and_every_tool_error() {
     let mut view = view();
     let mut failed = agent("demo:crashed", Status::Failed, 4);
     failed.status_detail = Some(String::from("exit 1"));
-    view.apply(snapshot(1, vec![failed, agent("demo:rpc", Status::Working, 2)]));
+    // Three tool errors, of which only one is still on the tape.
+    let mut rpc = agent("demo:rpc", Status::Working, 2);
+    rpc.tool_errors = 3;
+    rpc.started = Some(at(1));
+    view.apply(snapshot(1, vec![failed, rpc]));
     view.apply(Update {
         seq: 2,
         kind: UpdateKind::Event(event(2, "demo:rpc", TapeKind::ToolError, Severity::Warning)),
@@ -183,17 +190,29 @@ fn failures_are_newest_first_and_include_failed_agents_without_a_line() {
         kind: UpdateKind::Event(event(6, "demo:rpc", TapeKind::ToolStart, Severity::Info)),
     });
 
-    let rows: Vec<(&str, &str, String)> = view
+    let rows: Vec<(&str, String, String)> = view
         .failures(&Filter::default())
         .iter()
-        .map(|row| (row.what, row.agent.as_str(), row.detail.clone()))
-        .map(|(what, id, detail)| (what, if id == "demo:rpc" { "demo:rpc" } else { "demo:crashed" }, detail))
+        .map(|row| (row.what, row.agent.to_string(), row.detail.clone()))
         .collect();
     assert_eq!(
         rows,
         vec![
-            ("agent", "demo:crashed", String::from("exit 1")),
-            ("tool", "demo:rpc", String::from("Bash cargo test")),
+            (
+                "agent",
+                String::from("demo:crashed"),
+                String::from("exit 1")
+            ),
+            (
+                "tool",
+                String::from("demo:rpc"),
+                String::from("Bash cargo test")
+            ),
+            (
+                "tool",
+                String::from("demo:rpc"),
+                String::from("2 earlier tool errors")
+            ),
         ]
     );
 }

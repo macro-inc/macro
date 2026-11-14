@@ -251,10 +251,7 @@ impl PartialEq for Mode {
         match (self, other) {
             (Mode::Base(a), Mode::Base(b)) => a == b,
             (Mode::Help { base: a }, Mode::Help { base: b }) => a == b,
-            (
-                Mode::Command { input: a, base: x },
-                Mode::Command { input: b, base: y },
-            )
+            (Mode::Command { input: a, base: x }, Mode::Command { input: b, base: y })
             | (Mode::Find { input: a, base: x }, Mode::Find { input: b, base: y }) => {
                 x == y && same_line(a, b)
             }
@@ -395,7 +392,7 @@ fn cycle(base: Base, forward: bool, page: &Page) -> Base {
         (Some(0), false) => last,
         (Some(index), false) => index - 1,
     };
-    Base::Pane(panes[next])
+    panes.get(next).copied().map_or(base, Base::Pane)
 }
 
 /// Applies an editing key to a line input; returns whether the key edited it.
