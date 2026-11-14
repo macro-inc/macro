@@ -1,0 +1,29 @@
+.github/workspace-dep-closures.json
+  s_cfe0e68707efd8::t_e693ce75fbc5e7 1375
+crates/agent_monitor_tui/Cargo.toml
+  s_cfe0e68707efd8::t_9b0dc614bc9ea0 15,26-30
+crates/agent_monitor_tui/src/body.rs
+  s_cfe0e68707efd8::t_95ec09790a8826 5-7
+crates/agent_monitor_tui/src/body/mesh.rs
+  s_cfe0e68707efd8::t_d313d93c2eb50b 1-65
+crates/agent_monitor_tui/src/lib.rs
+  s_cfe0e68707efd8::t_e3126aa6125b1d 67-78,87
+Cargo.lock
+  s_cfe0e68707efd8::t_c57e259e172b5f 939
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0ab3cc3cf59c276868ca1d220c369d594ee9832d",
+  "prompts": {},
+  "sessions": {
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
