@@ -513,14 +513,14 @@ const invalidThenable = Object.defineProperty({}, 'then', {
     throw new Error('Must not inspect then');
   },
 });
-for (const value of [
-  undefined,
-  null,
-  {},
-  Promise.resolve(true),
-  invalidThenable,
+for (const { label, value } of [
+  { label: '[object Undefined]', value: undefined },
+  { label: '[object Null]', value: null },
+  { label: 'plain object', value: {} },
+  { label: '[object Promise]', value: Promise.resolve(true) },
+  { label: 'invalid thenable', value: invalidThenable },
 ]) {
-  test(`caller admission rejects non-boolean ${Object.prototype.toString.call(value)} without materialization`, async () => {
+  test(`caller admission rejects non-boolean ${label} without materialization`, async () => {
     const executor = setup();
     const results: ExecutorSettlement[] = [];
     let calls = 0;

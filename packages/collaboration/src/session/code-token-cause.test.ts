@@ -66,13 +66,13 @@ test('frees the record even when taking a cause throws', () => {
 });
 
 test.each([
-  ['no-effect', [7], [5], () => ['value']],
-  ['no-cause-id', [1], [], () => ['value']],
-  ['take-missed', [1], [5], () => undefined],
-  ['take-missed', [1], [5], () => ['a', 'b']],
+  ['no-effect', 'no-effect', [7], [5], () => ['value']],
+  ['no-cause-id', 'no-cause-id', [1], [], () => ['value']],
+  ['take-missed-undefined', 'take-missed', [1], [5], () => undefined],
+  ['take-missed-pair', 'take-missed', [1], [5], () => ['a', 'b']],
 ] as const)(
   'a %s contract break is reported, binds nothing and frees the record',
-  (reason, ordinals, causes, take) => {
+  (_label, reason, ordinals, causes, take) => {
     const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
     const freed: string[] = [];
     const effects: CodeTokenCauseCarrier[] = [{}, {}];
