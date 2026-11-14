@@ -301,6 +301,20 @@ jobs:
         EMAIL_E2E_KNOWN_BUGS: '1'
       continue-on-error: true
       working-directory: apps/web
+    - name: report the coverage of the email UI
+      if: '!cancelled()'
+      run: just email-e2e-ledger
+      env:
+        EMAIL_E2E_LEDGER_ENFORCE: '0'
+      working-directory: apps/web
+    - name: Upload email-e2e-browser-coverage artifact
+      if: '!cancelled()'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-browser-coverage
+        path: apps/web/tests/email-e2e/ledger-results/report
+        if-no-files-found: ignore
+        retention-days: '30'
     - name: Upload email-e2e-browser-logs artifact
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

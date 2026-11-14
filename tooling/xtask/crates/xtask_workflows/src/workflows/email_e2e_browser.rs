@@ -72,6 +72,15 @@ const SERVICE_LOGS: xtask_paths::RuntimePath<'static> =
 const TRACES: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("apps/web/tests/email-e2e/test-results");
 
+/// What the coverage report of the email UI writes
+/// (`apps/web/tests/email-e2e/ledger/README.md`).
+const LEDGER: xtask_paths::RuntimePath<'static> =
+    xtask_paths::runtime_path!("apps/web/tests/email-e2e/ledger-results/report");
+
+/// Whether an email action, state or request that no test covers fails the
+/// job. Off until the suite covers the manifest: the report only reports.
+const ENFORCE_LEDGER: bool = false;
+
 /// Build the workflow.
 pub fn email_e2e_browser() -> Workflow {
     let push = MAIN_PATHS
@@ -131,6 +140,13 @@ fn suite() -> Job {
         .add_step(code_check_cloud_storage::configure_postgres())
         .add_step(run_suite())
         .add_step(known_bugs())
+        .add_step(ledger())
+        .add_step(
+            steps::upload_artifact("email-e2e-browser-coverage", LEDGER)
+                .add_with(("if-no-files-found", "ignore"))
+                .add_with(("retention-days", 30))
+                .if_condition(Expression::new("!cancelled()")),
+        )
         .add_step(upload("email-e2e-browser-logs", SERVICE_LOGS))
         .add_step(upload("email-e2e-browser-traces", TRACES))
         .add_step(steps::show_sccache_stats())
@@ -154,6 +170,21 @@ fn known_bugs() -> Step<Run> {
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)
+}
+
+/// What the suite covers of the email UI, from what the two runs above
+/// recorded: the job summary and the `email-e2e-browser-coverage` artifact.
+/// It runs after a failed suite too, where it says what the tests that
+/// passed cover.
+fn ledger() -> Step<Run> {
+    Step::new("report the coverage of the email UI")
+        .run("just email-e2e-ledger")
+        .add_env((
+            "EMAIL_E2E_LEDGER_ENFORCE",
+            if ENFORCE_LEDGER { "1" } else { "0" },
+        ))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .if_condition(Expression::new("!cancelled()"))
 }
 
 fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
