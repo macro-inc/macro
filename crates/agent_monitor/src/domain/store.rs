@@ -22,17 +22,17 @@ use tokio_util::task::TaskTracker;
 
 use crate::domain::clock::Clock;
 use crate::domain::join::{
-    FactEvent, Facts, MinuteCounts, build_agents, minute_counts, spend_since,
+    FactEvent, Facts, MinuteCounts, build_agents, git_wanted, minute_counts, spend_since,
 };
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, Severity,
-    Snapshot, SourceHealth, SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, Update,
-    UpdateKind,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, RepoGraph,
+    RepoId, Severity, Snapshot, SourceHealth, SourceKind, Status, TapeEvent, TapeKind, Timestamp,
+    Totals, Update, UpdateKind,
 };
 use crate::domain::observation::{
-    Change, FactKey, Observation, PrWanted, TranscriptEventKind, TranscriptKey,
+    Change, FactKey, GitWanted, Observation, PrWanted, TranscriptEventKind, TranscriptKey,
 };
-use crate::domain::source::PrInterest;
+use crate::domain::source::{GitInterest, PrInterest};
 
 /// Store sizes and timings.
 #[derive(Clone, Debug)]
@@ -102,6 +102,7 @@ struct State {
     totals: Totals,
     sources: BTreeMap<SourceKind, SourceHealth>,
     prs: BTreeMap<PrId, Pr>,
+    repos: BTreeMap<RepoId, RepoGraph>,
 }
 
 #[derive(Debug)]
@@ -111,6 +112,7 @@ struct Shared {
     updates: broadcast::Sender<Arc<Update>>,
     totals: watch::Sender<Arc<Totals>>,
     wanted: watch::Sender<Arc<PrWanted>>,
+    git_wanted: watch::Sender<Arc<GitWanted>>,
     arrivals: watch::Sender<u64>,
 }
 
@@ -159,6 +161,7 @@ impl Shared {
                 totals: state.totals.clone(),
                 sources: state.sources.values().cloned().collect(),
                 prs: state.prs.values().cloned().collect(),
+                repos: state.repos.values().cloned().collect(),
             }),
         })
     }
@@ -181,6 +184,12 @@ fn apply_to_state(state: &mut State, kind: &UpdateKind) {
         }
         UpdateKind::PrRemoved(id) => {
             state.prs.remove(id);
+        }
+        UpdateKind::RepoUpsert(graph) => {
+            state.repos.insert(graph.id.clone(), graph.clone());
+        }
+        UpdateKind::RepoRemoved(id) => {
+            state.repos.remove(id);
         }
         UpdateKind::Snapshot(_) | UpdateKind::Event(_) | UpdateKind::Heartbeat(_) => {}
     }
@@ -212,6 +221,7 @@ pub fn replay(
         updates,
         totals,
         wanted,
+        git_wanted: watch::channel(Arc::new(GitWanted::default())).0,
         arrivals: watch::channel(0).0,
     });
     let clock = Arc::new(ReplayClock(Mutex::new(Timestamp::default())));
@@ -262,6 +272,7 @@ impl Store {
             updates,
             totals,
             wanted,
+            git_wanted: watch::channel(Arc::new(GitWanted::default())).0,
             arrivals: watch::channel(0).0,
         });
 
@@ -323,6 +334,25 @@ impl Store {
         }
     }
 
+    /// What the git source should map, republished whenever it changes.
+    pub fn git_wanted(&self) -> watch::Receiver<Arc<GitWanted>> {
+        self.shared.git_wanted.subscribe()
+    }
+
+    /// What the git source needs from the store.
+    pub fn git_interest(&self) -> GitInterest {
+        let updates = self.shared.updates.clone();
+        GitInterest {
+            wanted: self.git_wanted(),
+            subscribers: Arc::new(move || updates.receiver_count()),
+        }
+    }
+
+    /// One repository's current graph.
+    pub fn repo(&self, id: &RepoId) -> Option<RepoGraph> {
+        self.shared.lock().repos.get(id).cloned()
+    }
+
     /// One pull request's current row.
     pub fn pr(&self, id: &PrId) -> Option<Pr> {
         self.shared.lock().prs.get(id).cloned()
@@ -338,6 +368,8 @@ struct Reducer {
     published: BTreeMap<AgentId, Agent>,
     /// The pull requests last published.
     published_prs: BTreeMap<PrId, Pr>,
+    /// The repository graphs last published.
+    published_repos: BTreeMap<RepoId, RepoGraph>,
     /// Transcript records not yet turned into tape lines.
     pending_events: Vec<FactEvent>,
     /// Source health as reported, merged with when each last sent anything.
@@ -359,6 +391,7 @@ impl Reducer {
             facts: Facts::default(),
             published: BTreeMap::new(),
             published_prs: BTreeMap::new(),
+            published_repos: BTreeMap::new(),
             pending_events: Vec::new(),
             health: BTreeMap::new(),
             last_event: BTreeMap::new(),
@@ -526,6 +559,23 @@ impl Reducer {
             }
         }
 
+        for (id, graph) in &built.repos {
+            match self.published_repos.get(id) {
+                Some(previous) if previous == graph => {}
+                previous => {
+                    if let Some(previous) = previous {
+                        tape.extend(commit_lines(previous, graph, now));
+                    }
+                    updates.push(UpdateKind::RepoUpsert(graph.clone()));
+                }
+            }
+        }
+        for id in self.published_repos.keys() {
+            if !built.repos.contains_key(id) {
+                updates.push(UpdateKind::RepoRemoved(id.clone()));
+            }
+        }
+
         for event in std::mem::take(&mut self.pending_events) {
             let tape_line = self.event_line(&built.owners, event, recent);
             tape.extend(tape_line);
@@ -545,11 +595,16 @@ impl Reducer {
         if **self.shared.wanted.borrow() != wanted {
             self.shared.wanted.send_replace(Arc::new(wanted));
         }
+        let git_wanted = git_wanted(&built);
+        if **self.shared.git_wanted.borrow() != git_wanted {
+            self.shared.git_wanted.send_replace(Arc::new(git_wanted));
+        }
 
         updates.extend(tape.into_iter().map(UpdateKind::Event));
         self.shared.publish(updates);
         self.published = built.agents;
         self.published_prs = built.prs;
+        self.published_repos = built.repos;
         self.owners = built.owners;
     }
 
@@ -734,6 +789,72 @@ fn pr_lines(previous: Option<&Pr>, pr: &Pr, now: Timestamp, recent: Timestamp) -
                 Severity::Info,
             )),
             PrState::Unknown | PrState::Open | PrState::Draft => {}
+        }
+    }
+    lines
+}
+
+/// Commits a lane gains in one reduce that each get a tape line; a bigger
+/// jump (a pull or a cherry-pick of many) gets one summary line.
+const COMMIT_LINES: usize = 3;
+
+/// The tape lines a repository graph's change implies, for lanes an agent
+/// works on: a line per new commit, or one line when the old tip is gone
+/// (a rebase or a reset). Lines go to the lane's first agent.
+fn commit_lines(previous: &RepoGraph, graph: &RepoGraph, now: Timestamp) -> Vec<TapeEvent> {
+    let mut lines = Vec::new();
+    for lane in &graph.lanes {
+        let (Some(agent), Some(tip)) = (lane.agents.first(), lane.tip()) else {
+            continue;
+        };
+        let Some(before) = previous.lanes.iter().find(|old| old.branch == lane.branch) else {
+            continue;
+        };
+        let Some(old_tip) = before.tip() else {
+            continue;
+        };
+        if old_tip.oid == tip.oid {
+            continue;
+        }
+        let kept = lane.commits.iter().any(|commit| commit.oid == old_tip.oid);
+        if !kept {
+            lines.push(line(
+                now,
+                agent,
+                TapeKind::Rewritten,
+                format!(
+                    "rewrote {} {} → {}",
+                    lane.branch,
+                    old_tip.oid.short(),
+                    tip.oid.short()
+                ),
+                Severity::Notice,
+            ));
+            continue;
+        }
+        let fresh: Vec<_> = lane
+            .commits
+            .iter()
+            .take_while(|commit| commit.oid != old_tip.oid)
+            .collect();
+        if fresh.len() > COMMIT_LINES {
+            lines.push(line(
+                now,
+                agent,
+                TapeKind::Commit,
+                format!("committed {} to {}", fresh.len(), lane.branch),
+                Severity::Info,
+            ));
+            continue;
+        }
+        for commit in fresh.into_iter().rev() {
+            lines.push(line(
+                now,
+                agent,
+                TapeKind::Commit,
+                format!("committed {} {}", commit.oid.short(), commit.subject),
+                Severity::Info,
+            ));
         }
     }
     lines

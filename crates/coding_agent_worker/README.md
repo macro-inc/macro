@@ -235,8 +235,11 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   without a viewer. The viewer reconnects by itself when its collector goes
   away, and a collector started by a later `macrod monitor` takes over.
   Its colours come from `[monitor] theme` (`classic`, the default, `ember`,
-  `phosphor` or `dusk`; `--theme` overrides it), and `t` in the viewer
-  cycles through them.
+  `phosphor` or `dusk`, in any case; `--theme` overrides it). A name that is
+  no theme draws in `classic` with a warning on the command line; the
+  collector ignores the key. In the viewer, Ctrl-T (or a backtick, for a
+  terminal in a browser, which keeps Ctrl-T) cycles the themes and the
+  `THEME [name]` command picks one.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
   lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
   or the `--config` / `--profile` it is given (resolved as for
@@ -260,6 +263,16 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   watches and at most every 5 minutes otherwise; 0 turns it off. Without
   `gh` the source shows absent. Merged and closed PRs older than
   `history_hours` are dropped.
+- **Repositories** (the viewer's 8 CHANGES page) come from the `git`
+  source: each agent working directory resolves once to its repository's
+  common directory, so every worktree of a clone is one repository (8 at
+  most). It maps the trunk (`origin/HEAD`'s target, else `origin/main`),
+  the branches agents sit on, PR head branches and branches committed to in
+  the last day (40 lanes, 30 commits each), woken by inotify watches on the
+  refs, never by a timer; regathers are debounced and spaced at least ten
+  times the last gather's duration apart. It is read-only: it never
+  fetches, takes a git lock or runs `git status`. `[monitor] changes =
+  false` turns it off.
 - **`macrod monitor dump`** prints `{"connected": ...}`, then one
   `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
   stops after N updates. `--transcript <agent id>` prints that agent's
@@ -275,7 +288,7 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
 - The Config tab toggles hosting (`Agent monitor`), which writes a
   `[monitor]` table; new configs leave it out (hosting is on by default),
   because a macrod older than the monitor rejects a file that has one.
-  `history_hours`, `fps`, `run_record_dirs`, `pr_poll_secs` and `theme` take effect
+  `history_hours`, `fps`, `run_record_dirs`, `pr_poll_secs`, `changes` and `theme` take effect
   on the next start.
 - **History is bounded**: transcripts are indexed back `history_hours`
   (24 by default), and an agent that ended or last wrote longer ago is

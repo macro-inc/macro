@@ -101,7 +101,9 @@ impl BodyPane for MeshBody {
             | TapeKind::Status
             | TapeKind::TurnStart
             | TapeKind::Finished
-            | TapeKind::Removed => return,
+            | TapeKind::Removed
+            | TapeKind::Commit
+            | TapeKind::Rewritten => return,
         };
         self.body.fire(event.agent.as_str(), kind);
     }

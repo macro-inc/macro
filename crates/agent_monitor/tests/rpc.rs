@@ -136,7 +136,8 @@ async fn subscribe_sends_a_snapshot_then_gapless_deltas() {
     let mut seq = first.seq;
     let mut upserts = 0;
     let mut events = 0;
-    while upserts < 30 || events < 30 {
+    let mut repos = 0;
+    while upserts < 30 || events < 30 || repos == 0 {
         let update = tokio::time::timeout(DEADLINE, updates.next())
             .await
             .expect("updates keep coming")
@@ -147,6 +148,19 @@ async fn subscribe_sends_a_snapshot_then_gapless_deltas() {
         match update.kind {
             UpdateKind::Upsert(_) => upserts += 1,
             UpdateKind::Event(_) => events += 1,
+            UpdateKind::RepoUpsert(ref graph) => {
+                // The demo's repository graph survives the wire whole.
+                repos += 1;
+                assert!(graph.lanes.iter().any(|lane| matches!(
+                    lane.base,
+                    agent_monitor::domain::model::LaneBase::Lane { .. }
+                )));
+                assert!(graph.lanes.iter().any(|lane| !lane.agents.is_empty()));
+                let wire = agent_monitor::proto::wire::Update::from(&update);
+                let back =
+                    agent_monitor::domain::model::Update::try_from(wire).expect("it converts back");
+                assert_eq!(back, update);
+            }
             UpdateKind::Snapshot(_) => panic!("a keeping-up subscriber is not re-snapshotted"),
             _ => {}
         }

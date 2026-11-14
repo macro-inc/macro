@@ -7,6 +7,7 @@
 //! transcripts, manager directories), so it drives the store's joins rather
 //! than bypassing them.
 
+mod repo;
 #[cfg(test)]
 mod test;
 
@@ -178,6 +179,9 @@ impl DemoPr {
             created: Some(opened),
             updated: Some(closed.unwrap_or(now)),
             closed,
+            head_oid: None,
+            merge_oid: None,
+            base_branch: Some(String::from("main")),
         })
     }
 }
@@ -766,6 +770,7 @@ struct ToolStarted {
 /// The scripted fleet.
 pub struct DemoFleet {
     rng: StdRng,
+    repo: repo::DemoRepo,
     agents: Vec<DemoAgent>,
     start: Timestamp,
     steps: u64,
@@ -779,6 +784,7 @@ impl DemoFleet {
     pub fn new(seed: u64, start: Timestamp) -> Self {
         let mut fleet = Self {
             rng: StdRng::seed_from_u64(seed),
+            repo: repo::DemoRepo::new(start),
             agents: Vec::new(),
             start,
             steps: 0,
@@ -970,6 +976,11 @@ impl DemoFleet {
                 reset.facts.push(Fact::PrStatus(Box::new(status)));
             }
         }
+        if let Some(repo) = RepoName::parse(DEMO_REPO) {
+            reset
+                .facts
+                .push(Fact::RepoGraph(Box::new(self.repo.graph(&repo))));
+        }
         reset
     }
 
@@ -1142,6 +1153,13 @@ impl DemoFleet {
                 step.changes
                     .push(Change::Upsert(Fact::PrStatus(Box::new(status))));
             }
+        }
+        if self.repo.step(self.steps, now)
+            && let Some(repo) = RepoName::parse(DEMO_REPO)
+        {
+            step.changes.push(Change::Upsert(Fact::RepoGraph(Box::new(
+                self.repo.graph(&repo),
+            ))));
         }
         step
     }

@@ -96,11 +96,13 @@ pub enum SourceKind {
     Daemon,
     /// Pull request status from GitHub, polled through the `gh` CLI.
     Github,
+    /// Local git repositories' branches and commits, woken by ref watches.
+    Git,
 }
 
 impl SourceKind {
     /// Every source, in display order.
-    pub const ALL: [SourceKind; 10] = [
+    pub const ALL: [SourceKind; 11] = [
         SourceKind::Hc,
         SourceKind::ClaudeRegistry,
         SourceKind::ClaudeTranscripts,
@@ -111,6 +113,7 @@ impl SourceKind {
         SourceKind::Demo,
         SourceKind::Daemon,
         SourceKind::Github,
+        SourceKind::Git,
     ];
 
     /// A short lowercase name, used in span fields and the SOURCES pane.
@@ -126,6 +129,7 @@ impl SourceKind {
             SourceKind::Demo => "demo",
             SourceKind::Daemon => "daemon",
             SourceKind::Github => "github",
+            SourceKind::Git => "git",
         }
     }
 
@@ -536,6 +540,10 @@ pub enum TapeKind {
     PrMerged,
     /// A pull request was closed without merging.
     PrClosed,
+    /// A commit landed on a branch an agent works on.
+    Commit,
+    /// A branch's tip moved and its old tip is gone: a rebase or a reset.
+    Rewritten,
 }
 
 /// How loudly a tape line should show.
@@ -690,6 +698,8 @@ pub struct Snapshot {
     pub sources: Vec<SourceHealth>,
     /// Every known pull request.
     pub prs: Vec<Pr>,
+    /// Every repository agents work in, with its branches.
+    pub repos: Vec<RepoGraph>,
 }
 
 /// One change the store publishes.
@@ -712,6 +722,10 @@ pub enum UpdateKind {
     PrUpsert(Pr),
     /// A pull request that is gone (pruned, or no source knows it).
     PrRemoved(PrId),
+    /// A whole repository graph, replacing the one with the same id.
+    RepoUpsert(RepoGraph),
+    /// A repository no agent works in any more.
+    RepoRemoved(RepoId),
     /// The collector is alive.
     Heartbeat(Timestamp),
 }
@@ -976,4 +990,218 @@ pub struct Pr {
     pub updated_at: Option<Timestamp>,
     /// When it was merged or closed.
     pub closed_at: Option<Timestamp>,
+    /// The commit its head branch points at on GitHub: what was pushed.
+    pub head_oid: Option<Oid>,
+    /// The commit a merged pull request became on its base branch.
+    pub merge_oid: Option<Oid>,
+    /// The branch it merges into.
+    pub base_branch: Option<String>,
+}
+
+/// A git repository, identified by its canonical common directory, so every
+/// worktree of one clone is one repository.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct RepoId(String);
+
+impl RepoId {
+    /// The id of the repository whose common directory is `dir`.
+    pub fn of_common_dir(dir: &std::path::Path) -> Self {
+        Self(dir.to_string_lossy().into_owned())
+    }
+
+    /// Wraps an id received over the wire. Ids are opaque to viewers.
+    pub fn from_wire(id: String) -> Self {
+        Self(id)
+    }
+
+    /// The id as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for RepoId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// A git object id: 40 (SHA-1) or 64 (SHA-256) lowercase hex digits.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct Oid(String);
+
+impl Oid {
+    /// Checks the shape and lowercases it; anything else is `None`.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim();
+        let valid = matches!(text.len(), 40 | 64) && text.bytes().all(|b| b.is_ascii_hexdigit());
+        valid.then(|| Self(text.to_ascii_lowercase()))
+    }
+
+    /// The whole id.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// The first seven digits, as `git log --oneline` shows them.
+    pub fn short(&self) -> &str {
+        self.0.get(..7).unwrap_or(&self.0)
+    }
+}
+
+/// The null id, as git writes it for "no commit".
+impl Default for Oid {
+    fn default() -> Self {
+        Self("0".repeat(40))
+    }
+}
+
+impl fmt::Display for Oid {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// Lanes a repository graph carries at most; the rest are counted.
+pub const MAX_LANES: usize = 40;
+
+/// Commits a lane carries at most, newest first; the rest are counted.
+pub const MAX_LANE_COMMITS: usize = 30;
+
+/// First-parent commits of the trunk a repository graph carries.
+pub const MAX_TRUNK_COMMITS: usize = 120;
+
+/// Characters of a commit subject kept.
+pub const SUBJECT_CHARS: usize = 72;
+
+/// One repository's trunk and the branches drawn against it, bounded.
+///
+/// The git source fills everything but the joined fields (`trunk_agents`,
+/// each lane's `agents`, `pr` and `landed`), which the store's reducer adds.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct RepoGraph {
+    /// The canonical git common directory.
+    pub id: RepoId,
+    /// `owner/name` of `origin`, else the directory's name.
+    pub name: String,
+    /// The `origin` repository on GitHub.
+    pub remote: Option<RepoName>,
+    /// The line every lane forks from.
+    pub trunk: Trunk,
+    /// Branches drawn, ranked: live agent, open pull request, newest commit.
+    pub lanes: Vec<Lane>,
+    /// Branches that qualified but did not fit.
+    pub hidden_lanes: u32,
+    /// Agents sitting in a checkout of the trunk's local branch (joined).
+    pub trunk_agents: Vec<AgentId>,
+}
+
+/// The trunk: `origin/HEAD`'s target, else `origin/main`, `origin/master`,
+/// local `main` or `master`.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Trunk {
+    /// Its ref's short name, such as `origin/main`.
+    pub name: String,
+    /// First-parent commits, newest first, at most [`MAX_TRUNK_COMMITS`].
+    pub commits: Vec<Commit>,
+    /// The local branch of the same name, when the trunk is a remote ref.
+    pub local: Option<LocalTrunk>,
+    /// When the trunk's remote ref last moved (a fetch); `None` for a local trunk.
+    pub fetched_at: Option<Timestamp>,
+    /// Worktrees with the trunk's local branch checked out.
+    pub worktrees: Vec<PathBuf>,
+}
+
+/// The local branch behind a remote trunk, and how far it is from it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct LocalTrunk {
+    /// Its name, such as `main`.
+    pub name: String,
+    /// Commits it has that the trunk lacks.
+    pub ahead: u32,
+    /// Commits the trunk has that it lacks.
+    pub behind: u32,
+}
+
+/// Where a lane starts.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaneBase {
+    /// It forks from the trunk at `oid`, committed at `at`.
+    Trunk {
+        /// The merge-base.
+        oid: Oid,
+        /// Its commit time.
+        at: Timestamp,
+    },
+    /// It is stacked on another lane, at that lane's commit `oid`.
+    Lane {
+        /// The lane below it.
+        branch: String,
+        /// The commit it starts from.
+        oid: Oid,
+    },
+}
+
+/// One branch drawn against the trunk.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Lane {
+    /// The branch's short name.
+    pub branch: String,
+    /// Other branches at the same commit.
+    pub aliases: Vec<String>,
+    /// Where it starts.
+    pub base: LaneBase,
+    /// Commits it has that the trunk lacks (its whole stack, when stacked).
+    pub ahead: u32,
+    /// Commits the trunk has that it lacks.
+    pub behind: u32,
+    /// Its own commits, newest first, at most [`MAX_LANE_COMMITS`].
+    pub commits: Vec<Commit>,
+    /// Its own commits not carried.
+    pub elided: u32,
+    /// The newest commit known to be pushed: `origin/<branch>`, else the
+    /// pull request's head.
+    pub pushed: Option<Oid>,
+    /// The worktree it is checked out in.
+    pub worktree: Option<PathBuf>,
+    /// Agents working in it, its pull request's author first and managers
+    /// last (joined).
+    pub agents: Vec<AgentId>,
+    /// Its pull request (joined): an open one, else the newest.
+    pub pr: Option<PrId>,
+    /// The trunk commit its merged pull request became (joined).
+    pub landed: Option<Oid>,
+}
+
+impl Lane {
+    /// The newest commit, if it carries any.
+    pub fn tip(&self) -> Option<&Commit> {
+        self.commits.first()
+    }
+
+    /// Whether `name` is this lane's branch or one of its aliases.
+    pub fn is_named(&self, name: &str) -> bool {
+        self.branch == name || self.aliases.iter().any(|alias| alias == name)
+    }
+}
+
+/// One commit, as the graph draws it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Commit {
+    /// Its id.
+    pub oid: Oid,
+    /// Its commit time.
+    pub at: Timestamp,
+    /// Its author's name.
+    pub author: String,
+    /// Its subject, at most [`SUBJECT_CHARS`] characters.
+    pub subject: String,
+    /// Whether it has more than one parent.
+    pub merge: bool,
+    /// The pull request number its subject ends with (`… (#123)`), as a
+    /// squash merge writes it.
+    pub pr: Option<u32>,
 }

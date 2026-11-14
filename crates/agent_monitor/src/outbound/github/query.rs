@@ -10,7 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 
-use crate::domain::model::{CiState, Mergeable, PrRef, PrState, RepoName, ReviewState, Timestamp};
+use crate::domain::model::{
+    CiState, Mergeable, Oid, PrRef, PrState, RepoName, ReviewState, Timestamp,
+};
 use crate::domain::observation::PrStatusFact;
 use crate::outbound::github::GithubError;
 
@@ -131,8 +133,8 @@ fn build(repos: Vec<(RepoName, Vec<Lookup>)>) -> PrQuery {
     }
     text.push_str("}\n");
     text.push_str(&format!(
-        "fragment pr on PullRequest {{ number url title state isDraft headRefName mergeable \
-         reviewDecision createdAt updatedAt mergedAt closedAt commits(last: 1) {{ nodes {{ commit \
+        "fragment pr on PullRequest {{ number url title state isDraft headRefName headRefOid \
+         baseRefName mergeCommit {{ oid }} mergeable reviewDecision createdAt updatedAt mergedAt closedAt commits(last: 1) {{ nodes {{ commit \
          {{ statusCheckRollup {{ state }} status {{ context(name: \"{CI_GATE_CONTEXT}\") {{ state }} \
          }} }} }} }} }}\n"
     ));
@@ -162,6 +164,9 @@ struct Node {
     #[serde(default)]
     is_draft: bool,
     head_ref_name: Option<String>,
+    head_ref_oid: Option<String>,
+    base_ref_name: Option<String>,
+    merge_commit: Option<MergeCommit>,
     mergeable: Option<String>,
     review_decision: Option<String>,
     created_at: Option<Timestamp>,
@@ -169,6 +174,11 @@ struct Node {
     merged_at: Option<Timestamp>,
     closed_at: Option<Timestamp>,
     commits: Option<Commits>,
+}
+
+#[derive(Deserialize)]
+struct MergeCommit {
+    oid: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -281,6 +291,13 @@ fn status(repo: &RepoName, node: Node) -> PrStatusFact {
         created: node.created_at,
         updated: node.updated_at,
         closed: node.merged_at.or(node.closed_at),
+        head_oid: node.head_ref_oid.as_deref().and_then(Oid::parse),
+        merge_oid: node
+            .merge_commit
+            .and_then(|commit| commit.oid)
+            .as_deref()
+            .and_then(Oid::parse),
+        base_branch: node.base_ref_name,
     }
 }
 

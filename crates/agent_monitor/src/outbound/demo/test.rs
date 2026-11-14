@@ -77,3 +77,32 @@ fn the_fleet_stays_bounded() {
         long_run.agents.len()
     );
 }
+
+#[test]
+fn the_repository_joins_agents_prs_a_stack_and_a_landing() {
+    let snapshot = snapshot(7, start(), Duration::from_millis(250), 400);
+    let graph = snapshot.repos.first().expect("the demo repository");
+    let lane = |branch: &str| {
+        graph
+            .lanes
+            .iter()
+            .find(|lane| lane.branch == branch)
+            .expect("a lane")
+    };
+    let ui = lane("feat/ui-pages");
+    assert!(matches!(
+        ui.base,
+        crate::domain::model::LaneBase::Lane { .. }
+    ));
+    assert!(!ui.agents.is_empty());
+    assert!(
+        ui.pr
+            .as_ref()
+            .is_some_and(|pr| pr.as_str().ends_with("#4215"))
+    );
+    assert!(lane("chore/4188").landed.is_some());
+    assert!(lane("feat/mesh-plan").commits.is_empty());
+    // Working agents committed while the script ran.
+    assert!(lane("feat/rpc-server").commits.len() > 7);
+    assert!(!graph.trunk_agents.is_empty());
+}

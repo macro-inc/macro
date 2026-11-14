@@ -3,6 +3,8 @@
 //! owns the loop around it: it applies observations, builds agents, diffs them
 //! against the rows it published, and writes the tape.
 
+mod repos;
+pub use repos::git_wanted;
 #[cfg(test)]
 mod test;
 
@@ -13,7 +15,7 @@ use chrono::{DurationRound, TimeDelta};
 
 use crate::domain::model::{
     ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Cost, Mergeable, Pr, PrId, PrRef,
-    PrState, RepoName, ReviewState, SourceKind, Status, Timestamp, Tokens,
+    PrState, RepoGraph, RepoId, RepoName, ReviewState, SourceKind, Status, Timestamp, Tokens,
 };
 use crate::domain::observation::{
     BranchCandidate, Change, CheckoutFact, ClaudeSessionFact, Fact, FactKey, FinishReason,
@@ -81,6 +83,8 @@ pub struct Built {
     pub owners: BTreeMap<FactKey, AgentId>,
     /// Every pull request by id.
     pub prs: BTreeMap<PrId, Pr>,
+    /// Every repository graph by id, joined to agents and pull requests.
+    pub repos: BTreeMap<RepoId, RepoGraph>,
 }
 
 #[derive(Clone, Debug)]
@@ -244,6 +248,7 @@ pub struct Facts {
     run_records: BTreeMap<String, Owned<RunRecordFact>>,
     prs: BTreeMap<PrId, Owned<PrStatusFact>>,
     checkouts: BTreeMap<PathBuf, Owned<CheckoutFact>>,
+    repos: BTreeMap<RepoId, Owned<RepoGraph>>,
     /// Pull requests pruned as finished, with when: a later status for one
     /// is ignored, and nothing asks for it again.
     retired: BTreeMap<PrId, Timestamp>,
@@ -316,6 +321,15 @@ impl Facts {
                 self.checkouts
                     .insert(fact.cwd.clone(), Owned { source, fact });
             }
+            Fact::RepoGraph(graph) => {
+                self.repos.insert(
+                    graph.id.clone(),
+                    Owned {
+                        source,
+                        fact: *graph,
+                    },
+                );
+            }
             Fact::Transcript(delta) => {
                 let key = FactKey::Transcript(delta.key.clone());
                 let entry = self
@@ -370,6 +384,9 @@ impl Facts {
             }
             FactKey::Checkout(cwd) => {
                 self.checkouts.remove(cwd);
+            }
+            FactKey::Repo(id) => {
+                self.repos.remove(id);
             }
         }
     }
@@ -481,6 +498,7 @@ impl Facts {
             + self.run_records.len()
             + self.prs.len()
             + self.checkouts.len()
+            + self.repos.len()
     }
 
     /// Pull requests named by a transcript or a manager.
@@ -532,6 +550,13 @@ impl Facts {
         self.run_records.retain(|_, owned| owned.source != source);
         self.prs.retain(|_, owned| owned.source != source);
         self.checkouts.retain(|_, owned| owned.source != source);
+        self.repos.retain(|_, owned| owned.source != source);
+    }
+
+    /// The GitHub repository a working directory is a checkout of, once the
+    /// GitHub source resolved it.
+    fn checkout_repo(&self, cwd: &std::path::Path) -> Option<&RepoName> {
+        self.checkouts.get(cwd).map(|owned| &owned.fact.repo)
     }
 }
 
@@ -756,6 +781,7 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
     split_session_costs(facts, &mut built);
     link_parents(facts, &mut built);
     join_prs(facts, &mut built);
+    repos::join_repos(facts, &mut built);
     built
 }
 
@@ -907,6 +933,9 @@ fn join_prs(facts: &Facts, built: &mut Built) {
                 .or(entry.author.as_ref().map(|(_, at)| *at)),
             updated_at: status.and_then(|status| status.updated),
             closed_at: status.and_then(|status| status.closed),
+            head_oid: status.and_then(|status| status.head_oid.clone()),
+            merge_oid: status.and_then(|status| status.merge_oid.clone()),
+            base_branch: status.and_then(|status| status.base_branch.clone()),
         };
         built.prs.insert(id, pr);
     }

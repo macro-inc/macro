@@ -3,7 +3,7 @@ source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
  MACROD://MON  >_  DEMO  ACTIVE SYS.LINK ● LIVE ╱ WORK 25 ╱ WAIT 0 ╱ BLOCK 1 ╱ ERR 50 ╱ DAY ~$25.28 ╱ AGENTS 34 ╱ SEQ 0x0001                                                     FRI 02 JAN ⟦ 10:01:40 ⟧
- 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES   5 TREE   6 SOURCES   7 BODY   8 PRS   w WALL   ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄ / FIND  ? KEYS  ESC BACK 
+ 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES   5 TREE   6 SOURCES   7 BODY   8 CHANGES   w WALL   ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄ / FIND  ? KEYS  ESC BACK 
 ┏ WORKING ────────── Q1 ┓┏ WAITING ────────── Q2 ┓┏ BLOCKED ────────── Q3 ┓┏ TURNS 24H ──────── Q4 ┓┏ TOOLS 24H ──────── Q5 ┓┏ ERR 24H ────────── Q6 ┓┏ TOK/MIN ────────── Q7 ┓┏ DAY ────────────── Q8 ┓
 ┃25 ▰▰▰▰▰▰▰▰▰▰▱▱        ┃┃0 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃1 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃234                    ┃┃644                    ┃┃50                     ┃┃5.0M                   ┃┃~$25.28                ┃
 ┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
@@ -15,10 +15,10 @@ expression: "render(&mut app, 200, 56)"
 ││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▂▁█▅│   │
 ││TRN 1 TLS 1 ERR 0 — 0s               ││TRN 2 TLS 4 ERR 0 ~$0.13 28s         ││TRN 18 TLS 52 ERR 3 ~$2.01 33m40s    ││TRN 9 TLS 24 ERR 2 ~$0.51 1m27s      ││TRN 14 TLS 38 ERR 6 ~$1.43 22m40s    │   │
 ││10:01:40 TEND turn end               ││10:01:40 TURN turn start             ││10:01:40 TOOL Task explore the reduce││10:01:39 TOOL Bash just check        ││10:01:37 TOOL Grep Snapshot          │   │
-││10:01:40 TOOL Read store.rs          ││10:01:40 STAT working                ││10:01:37 TURN turn start             ││10:01:37 TOOL Task explore the reduce││10:01:36 STAT working (building)     │   │
-││10:01:40 SPWN subagent explore the re││10:01:34 TEND turn end               ││10:01:37 STAT working                ││10:01:34 TURN turn start             ││10:01:31 STAT blocked (permission)   │   │
-││                                     ││10:01:34 STAT idle                   ││10:01:37 TEND turn end               ││10:01:34 STAT working                ││10:01:27 TOOL Bash just check        │   │
-│┃  ·   ·   ·   ·   ·   ·   ·   ·   ·  ┃┃10:01:33 TOOL Grep subscribe         ┃┃10:01:37 STAT idle                   ┃┃10:01:34 TEND turn end               ┃┃10:01:26 TURN turn start             ┃   │
+││10:01:40 TOOL Read store.rs          ││10:01:40 STAT working                ││10:01:40 CMIT committed 880ed88 chore││10:01:37 TOOL Task explore the reduce││10:01:36 STAT working (building)     │   │
+││10:01:40 SPWN subagent explore the re││10:01:34 TEND turn end               ││10:01:37 TURN turn start             ││10:01:34 TURN turn start             ││10:01:31 STAT blocked (permission)   │   │
+││                                     ││10:01:34 STAT idle                   ││10:01:37 STAT working                ││10:01:34 STAT working                ││10:01:27 TOOL Bash just check        │   │
+│┃  ·   ·   ·   ·   ·   ·   ·   ·   ·  ┃┃10:01:33 TOOL Grep subscribe         ┃┃10:01:37 TEND turn end               ┃┃10:01:34 TEND turn end               ┃┃10:01:26 TURN turn start             ┃   │
 │┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
 │┏◆ scratch-notes  other ────── 0x7022 ┓┏◆ lint-sweep session  other ──────━━━┓┏◆ fix-18  builder ─────────── 0x2D73 ┓┏◆ chat-desk  chatter ──────── 0x3958 ┓┏◆ q4-roadmap  planner ─────── 0x3E71 ┓   │
 │┃WORK   claude-sonnet-5-5             ┃┃WORK                                 ┃┃WORK   claude-sonnet-5-5             ┃┃WORK   claude-opus-5-5               ┃┃WORK   claude-fable-5-2              ┃   │

@@ -8,14 +8,17 @@ use std::collections::HashSet;
 
 use tui_tree_widget::TreeState;
 
-use agent_monitor::domain::model::AgentId;
+use agent_monitor::domain::model::{AgentId, Oid, PrId, RepoGraph, RepoId};
 
-use crate::keys::{self, Action, Key, Mode, Motion, Page, Pane};
+use crate::keys::{self, Action, ChangeKey, Key, Mode, Motion, Page, Pane};
 use crate::theme::ThemeName;
-use crate::view::{Filter, ViewState};
+use crate::view::{Filter, LaneSort, ViewState};
 
 /// Rows a page-up or page-down moves.
 const PAGE_ROWS: usize = 10;
+
+/// Columns `<` and `>` pan the CHANGES map.
+const PAN_COLUMNS: u32 = 16;
 
 /// Cursor positions, each kept by identity where rows can reorder.
 #[derive(Debug, Default)]
@@ -44,10 +47,50 @@ pub struct Cursors {
     pub expanded: HashSet<String>,
     /// The selected drill-in child.
     pub child: usize,
-    /// The selected PRS row.
-    pub pr: usize,
     /// The selected pull request in the drill-in.
     pub agent_pr: usize,
+    /// The CHANGES page's repository, rows, zoom and toggles.
+    pub changes: ChangesCursor,
+}
+
+/// A row of the CHANGES page.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChangeRow {
+    /// The trunk.
+    Trunk,
+    /// A lane, by branch.
+    Lane(String),
+    /// A pull request with no lane, by id.
+    Pr(PrId),
+}
+
+/// Time buckets one column of the CHANGES map can stand for, in seconds.
+pub const SCALES: [i64; 6] = [60, 5 * 60, 15 * 60, 3_600, 4 * 3_600, 86_400];
+
+/// Where the CHANGES page is: kept by identity so it survives new lanes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ChangesCursor {
+    /// The repository shown; `None` is the first tab.
+    pub repo: Option<RepoId>,
+    /// The row under the cursor; `None` is the first lane.
+    pub row: Option<ChangeRow>,
+    /// The commit under the cursor on that row; `None` is its tip.
+    pub commit: Option<Oid>,
+    /// The time scale chosen with `+`/`-` (an index into [`SCALES`]);
+    /// `None` picks one that fits.
+    pub zoom: Option<usize>,
+    /// The scale the last frame drew, so `+`/`-` step from it.
+    pub drawn_zoom: usize,
+    /// Columns the map is panned back from now.
+    pub pan: u32,
+    /// The first list row the last frame showed.
+    pub scroll: usize,
+    /// Landed lanes are hidden.
+    pub hide_landed: bool,
+    /// Lane order.
+    pub sort: LaneSort,
+    /// The agent under the cursor on a lane's page.
+    pub lane_agent: usize,
 }
 
 /// Everything the viewer draws from.
@@ -68,7 +111,8 @@ pub struct App {
     pub label: Option<String>,
     /// The colour theme frames are drawn in.
     pub theme: ThemeName,
-    /// Whether the command line names the theme, after `t` switched it,
+    /// Whether the command line names the theme, after Ctrl-T or `THEME`
+    /// switched it,
     /// until the next key.
     pub theme_notice: bool,
     /// Set when the user quits.
@@ -115,7 +159,9 @@ impl App {
     /// Whether anything on screen moves without new data.
     pub fn animating(&self) -> bool {
         let body_visible = matches!(self.page(), Page::Monitor | Page::Zoom(Pane::Body));
-        (body_visible && self.view.body.animating()) || self.view.any_working()
+        (body_visible && self.view.body.animating())
+            || self.view.any_working()
+            || (*self.page() == Page::Zoom(Pane::Changes) && !self.view.fresh.is_empty())
     }
 
     /// Handles one key.
@@ -152,14 +198,255 @@ impl App {
             }
             Action::ToggleAll => self.filter.all = !self.filter.all,
             Action::CycleFigure(forward) => self.view.body.cycle(forward),
-            Action::CycleTheme => {
-                self.set_theme(self.theme.next());
+            Action::Theme(theme) => {
+                self.set_theme(theme.unwrap_or_else(|| self.theme.next()));
                 self.theme_notice = true;
+            }
+            Action::UnknownTheme(name) => {
+                use strum::IntoEnumIterator as _;
+                let known: Vec<String> = ThemeName::iter().map(|name| name.to_string()).collect();
+                self.message = Some(format!("UNKNOWN THEME: {name} ({})", known.join(", ")));
             }
             Action::Unknown(line) => {
                 self.message = Some(format!("UNKNOWN COMMAND: {line}"));
             }
             Action::Find(query) => self.filter.find = query.to_lowercase(),
+            Action::Changes(change) => self.change(change),
+        }
+    }
+
+    /// The repository the CHANGES page shows.
+    pub fn change_repo(&self) -> Option<&RepoGraph> {
+        let tabs = self.view.repo_tabs();
+        self.cursors
+            .changes
+            .repo
+            .as_ref()
+            .and_then(|id| tabs.iter().find(|graph| graph.id == *id).copied())
+            .or_else(|| tabs.first().copied())
+    }
+
+    /// The CHANGES page's rows: the trunk, the lanes in order, then pull
+    /// requests with no lane.
+    pub fn change_rows(&self) -> Vec<ChangeRow> {
+        let Some(graph) = self.change_repo() else {
+            return self
+                .view
+                .unmapped_prs(&self.filter)
+                .into_iter()
+                .map(|pr| ChangeRow::Pr(pr.id.clone()))
+                .collect();
+        };
+        let cursor = &self.cursors.changes;
+        let mut rows = vec![ChangeRow::Trunk];
+        rows.extend(
+            self.view
+                .sorted_lanes(graph, &self.filter, cursor.sort)
+                .into_iter()
+                .map(|lane| ChangeRow::Lane(lane.branch.clone())),
+        );
+        rows.extend(
+            self.view
+                .orphan_prs(graph, &self.filter)
+                .into_iter()
+                .map(|pr| ChangeRow::Pr(pr.id.clone())),
+        );
+        rows
+    }
+
+    /// The row under the CHANGES cursor: the chosen one while it exists,
+    /// else the first lane.
+    pub fn change_row(&self) -> Option<ChangeRow> {
+        let rows = self.change_rows();
+        let chosen = self
+            .cursors
+            .changes
+            .row
+            .as_ref()
+            .filter(|row| rows.contains(row))
+            .cloned();
+        chosen.or_else(|| rows.get(1).or(rows.first()).cloned())
+    }
+
+    fn change(&mut self, change: ChangeKey) {
+        let cursor = &mut self.cursors.changes;
+        match change {
+            ChangeKey::ZoomIn => {
+                cursor.zoom = Some(cursor.drawn_zoom.saturating_sub(1));
+            }
+            ChangeKey::ZoomOut => {
+                cursor.zoom = Some((cursor.drawn_zoom + 1).min(SCALES.len() - 1));
+            }
+            ChangeKey::Earlier => cursor.pan = cursor.pan.saturating_add(PAN_COLUMNS),
+            ChangeKey::Later => cursor.pan = cursor.pan.saturating_sub(PAN_COLUMNS),
+            ChangeKey::Now => cursor.pan = 0,
+            ChangeKey::ToggleLanded => cursor.hide_landed = !cursor.hide_landed,
+            ChangeKey::Sort => {
+                cursor.sort = match cursor.sort {
+                    LaneSort::Fork => LaneSort::Attention,
+                    LaneSort::Attention => LaneSort::Fork,
+                };
+            }
+            ChangeKey::PrevRepo | ChangeKey::NextRepo => {
+                let ids: Vec<RepoId> = self
+                    .view
+                    .repo_tabs()
+                    .iter()
+                    .map(|graph| graph.id.clone())
+                    .collect();
+                let current = self
+                    .change_repo()
+                    .and_then(|graph| ids.iter().position(|id| *id == graph.id))
+                    .unwrap_or(0);
+                let next = if change == ChangeKey::NextRepo {
+                    (current + 1) % ids.len().max(1)
+                } else {
+                    (current + ids.len().max(1) - 1) % ids.len().max(1)
+                };
+                let cursor = &mut self.cursors.changes;
+                cursor.repo = ids.get(next).cloned();
+                cursor.row = None;
+                cursor.commit = None;
+            }
+            ChangeKey::NextAttention | ChangeKey::PrevAttention => {
+                self.jump_to_attention(change == ChangeKey::NextAttention);
+            }
+            ChangeKey::OpenLane => {
+                if let (Some(graph), Some(ChangeRow::Lane(branch))) =
+                    (self.change_repo(), self.change_row())
+                {
+                    let page = Page::Lane(graph.id.clone(), branch);
+                    self.open(page);
+                }
+            }
+        }
+    }
+
+    /// Moves the CHANGES cursor to the next (or previous) lane that wants a
+    /// look, wrapping around.
+    fn jump_to_attention(&mut self, forward: bool) {
+        let rows = self.change_rows();
+        let Some(graph) = self.change_repo() else {
+            return;
+        };
+        let wants: Vec<bool> = rows
+            .iter()
+            .map(|row| match row {
+                ChangeRow::Lane(branch) => graph
+                    .lanes
+                    .iter()
+                    .find(|lane| lane.branch == *branch)
+                    .is_some_and(|lane| self.view.attention(lane).is_some()),
+                ChangeRow::Trunk | ChangeRow::Pr(_) => false,
+            })
+            .collect();
+        let current = self
+            .change_row()
+            .and_then(|row| rows.iter().position(|candidate| *candidate == row))
+            .unwrap_or(0);
+        let len = rows.len();
+        let found = (1..=len)
+            .map(|step| {
+                if forward {
+                    (current + step) % len
+                } else {
+                    (current + len - step % len) % len
+                }
+            })
+            .find(|index| wants.get(*index).copied().unwrap_or(false));
+        if let Some(index) = found {
+            self.cursors.changes.row = rows.get(index).cloned();
+            self.cursors.changes.commit = None;
+        }
+    }
+
+    fn move_change(&mut self, motion: Motion) {
+        match motion {
+            Motion::Left | Motion::Right => self.move_change_commit(motion == Motion::Left),
+            _ => {
+                let rows = self.change_rows();
+                let current = self
+                    .change_row()
+                    .and_then(|row| rows.iter().position(|candidate| *candidate == row))
+                    .unwrap_or(0);
+                let next = moved(current, rows.len(), motion);
+                if rows.get(next) != rows.get(current) {
+                    self.cursors.changes.commit = None;
+                }
+                self.cursors.changes.row = rows.get(next).cloned();
+            }
+        }
+    }
+
+    /// Moves the commit cursor along the selected row: left is older.
+    fn move_change_commit(&mut self, older: bool) {
+        let Some(graph) = self.change_repo() else {
+            return;
+        };
+        let commits: Vec<Oid> = match self.change_row() {
+            Some(ChangeRow::Lane(branch)) => graph
+                .lanes
+                .iter()
+                .find(|lane| lane.branch == branch)
+                .map(|lane| {
+                    lane.commits
+                        .iter()
+                        .map(|commit| commit.oid.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            Some(ChangeRow::Trunk) => graph
+                .trunk
+                .commits
+                .iter()
+                .map(|commit| commit.oid.clone())
+                .collect(),
+            Some(ChangeRow::Pr(_)) | None => Vec::new(),
+        };
+        if commits.is_empty() {
+            return;
+        }
+        // Newest first: older is a higher index.
+        let current = self
+            .cursors
+            .changes
+            .commit
+            .as_ref()
+            .and_then(|oid| commits.iter().position(|candidate| candidate == oid))
+            .unwrap_or(0);
+        let next = if older {
+            (current + 1).min(commits.len() - 1)
+        } else {
+            current.saturating_sub(1)
+        };
+        self.cursors.changes.commit = if next == 0 {
+            None
+        } else {
+            commits.get(next).cloned()
+        };
+    }
+
+    /// The agent the CHANGES row under the cursor opens, or its lane page.
+    fn activate_change(&mut self) -> Option<AgentId> {
+        let graph = self.change_repo()?;
+        match self.change_row()? {
+            ChangeRow::Lane(branch) => {
+                let lane = graph.lanes.iter().find(|lane| lane.branch == branch)?;
+                match self.view.lane_agent(lane) {
+                    Some(agent) => Some(agent.id.clone()),
+                    None => {
+                        let page = Page::Lane(graph.id.clone(), branch);
+                        self.open(page);
+                        None
+                    }
+                }
+            }
+            ChangeRow::Pr(id) => self
+                .view
+                .prs
+                .get(&id)
+                .and_then(|pr| ViewState::pr_agent(pr).cloned()),
+            ChangeRow::Trunk => graph.trunk_agents.first().cloned(),
         }
     }
 
@@ -175,6 +462,9 @@ impl App {
             self.cursors.transcript = None;
             self.cursors.child = 0;
             self.cursors.agent_pr = 0;
+        }
+        if let Page::Lane(..) = page {
+            self.cursors.changes.lane_agent = 0;
         }
         self.pages.push(page);
     }
@@ -196,10 +486,7 @@ impl App {
                 self.cursors.spend = moved(self.cursors.spend, len, motion);
             }
             (Some(Pane::Body), _) => {}
-            (Some(Pane::Prs), _) => {
-                let len = self.view.sorted_prs(&self.filter).len();
-                self.cursors.pr = moved(self.cursors.pr, len, motion);
-            }
+            (Some(Pane::Changes), _) => self.move_change(motion),
             (Some(Pane::AgentPrs), Page::Agent(id)) => {
                 let len = self.view.agents.get(id).map_or(0, |agent| agent.prs.len());
                 self.cursors.agent_pr = moved(self.cursors.agent_pr, len, motion);
@@ -217,6 +504,16 @@ impl App {
             (Some(Pane::Children), _) => {}
             (None, Page::Tree) => self.move_tree(motion),
             (None, Page::Wall) => self.move_wall(motion),
+            (None, Page::Lane(repo, branch)) => {
+                let len = self
+                    .view
+                    .repos
+                    .get(repo)
+                    .and_then(|graph| graph.lanes.iter().find(|lane| lane.branch == *branch))
+                    .map_or(0, |lane| lane.agents.len());
+                self.cursors.changes.lane_agent =
+                    moved(self.cursors.changes.lane_agent, len, motion);
+            }
             (None, _) => {}
         }
     }
@@ -325,11 +622,7 @@ impl App {
                 .agents
                 .get(id)
                 .and_then(|agent| agent.children.get(self.cursors.child).cloned()),
-            (Some(Pane::Prs), _) => self
-                .view
-                .sorted_prs(&self.filter)
-                .get(self.cursors.pr)
-                .and_then(|pr| ViewState::pr_agent(pr).cloned()),
+            (Some(Pane::Changes), _) => self.activate_change(),
             // Another agent tied to the pull request: its author when this
             // agent is not, else the next tied agent.
             (Some(Pane::AgentPrs), Page::Agent(id)) => {
@@ -356,6 +649,12 @@ impl App {
                 .sorted_agents(&self.filter)
                 .get(self.cursors.wall)
                 .map(|agent| agent.id.clone()),
+            (None, Page::Lane(repo, branch)) => self
+                .view
+                .repos
+                .get(repo)
+                .and_then(|graph| graph.lanes.iter().find(|lane| lane.branch == *branch))
+                .and_then(|lane| lane.agents.get(self.cursors.changes.lane_agent).cloned()),
             _ => None,
         };
 

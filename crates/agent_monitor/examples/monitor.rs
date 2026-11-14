@@ -161,12 +161,21 @@ mod unix {
         let seq = update.seq;
         match &update.kind {
             UpdateKind::Snapshot(snapshot) => format!(
-                "{seq} snapshot agents={} tape={} sources={} prs={}",
+                "{seq} snapshot agents={} tape={} sources={} prs={} repos={}",
                 snapshot.agents.len(),
                 snapshot.tape.len(),
                 snapshot.sources.len(),
-                snapshot.prs.len()
+                snapshot.prs.len(),
+                snapshot.repos.len()
             ),
+            UpdateKind::RepoUpsert(graph) => format!(
+                "{seq} repo {} trunk={} lanes={} hidden={}",
+                graph.name,
+                graph.trunk.name,
+                graph.lanes.len(),
+                graph.hidden_lanes
+            ),
+            UpdateKind::RepoRemoved(id) => format!("{seq} repo removed {id}"),
             UpdateKind::PrUpsert(pr) => format!(
                 "{seq} pr {} {:?} ci={:?} agents={}",
                 pr.id,

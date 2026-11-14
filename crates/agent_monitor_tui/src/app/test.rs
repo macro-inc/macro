@@ -1,5 +1,6 @@
 use crate::body::Vitals;
-use crate::keys::{Key, Page, Pane};
+use crate::keys::{Key, Mode, Page, Pane};
+use crate::view::LaneSort;
 use crate::view::ViewState;
 
 use super::*;
@@ -49,21 +50,150 @@ fn a_toggles_and_esc_walks_back_one_page() {
 }
 
 #[test]
-fn t_cycles_every_theme_and_names_it_until_the_next_key() {
+fn ctrl_t_cycles_every_theme_and_names_it_until_the_next_key() {
     use strum::IntoEnumIterator as _;
 
     let mut app = app();
     assert_eq!(app.theme, ThemeName::Classic);
     let mut seen = vec![app.theme];
     for _ in 1..ThemeName::iter().count() {
-        app.key(Key::Char('t'));
+        app.key(Key::NextTheme);
         assert!(app.theme_notice);
         seen.push(app.theme);
     }
     assert_eq!(seen, ThemeName::iter().collect::<Vec<_>>());
 
-    app.key(Key::Char('t'));
+    app.key(Key::NextTheme);
     assert_eq!(app.theme, ThemeName::Classic, "wraps around");
     app.key(Key::Down);
     assert!(!app.theme_notice);
+}
+
+/// The demo fleet's state, on the CHANGES page.
+fn changes_app() -> App {
+    let start = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 1, 2, 10, 0, 0)
+        .single()
+        .expect("a time");
+    let snapshot = agent_monitor::outbound::demo::snapshot(
+        7,
+        start,
+        std::time::Duration::from_millis(250),
+        400,
+    );
+    let mut view = ViewState::new(Box::new(Vitals::default()));
+    view.apply(agent_monitor::domain::model::Update {
+        seq: 1,
+        kind: agent_monitor::domain::model::UpdateKind::Snapshot(snapshot),
+    });
+    let mut app = App::new(view, None);
+    app.key(Key::Char('8'));
+    app
+}
+
+#[test]
+fn changes_keys_move_lanes_commits_zoom_pan_and_toggles() {
+    let mut app = changes_app();
+    assert_eq!(*app.page(), Page::Zoom(Pane::Changes));
+    let first = app.change_row();
+    assert!(
+        matches!(first, Some(ChangeRow::Lane(_))),
+        "the cursor starts on the first lane"
+    );
+
+    app.key(Key::Up);
+    assert_eq!(app.change_row(), Some(ChangeRow::Trunk));
+    app.key(Key::Down);
+    app.key(Key::Down);
+    assert_ne!(app.change_row(), first);
+
+    // ← walks back through the lane's commits, → returns to the tip.
+    app.key(Key::Left);
+    assert!(app.cursors.changes.commit.is_some());
+    app.key(Key::Right);
+    assert_eq!(app.cursors.changes.commit, None);
+
+    app.cursors.changes.drawn_zoom = 2;
+    app.key(Key::Char('+'));
+    assert_eq!(app.cursors.changes.zoom, Some(1));
+    app.key(Key::Char('-'));
+    assert_eq!(app.cursors.changes.zoom, Some(3));
+    app.key(Key::Char('<'));
+    app.key(Key::Char('<'));
+    assert_eq!(app.cursors.changes.pan, 32);
+    app.key(Key::Char('>'));
+    assert_eq!(app.cursors.changes.pan, 16);
+    app.key(Key::Home);
+    assert_eq!(app.cursors.changes.pan, 0);
+    app.key(Key::Char('m'));
+    assert!(app.cursors.changes.hide_landed);
+    app.key(Key::Char('s'));
+    assert_eq!(app.cursors.changes.sort, LaneSort::Attention);
+    // None of these opened the command line.
+    assert_eq!(app.mode, Mode::default());
+}
+
+#[test]
+fn n_finds_the_failing_lane_and_enter_opens_its_author_or_p_its_page() {
+    let mut app = changes_app();
+    app.key(Key::Char('n'));
+    let Some(ChangeRow::Lane(branch)) = app.change_row() else {
+        panic!("n lands on a lane");
+    };
+    assert_eq!(branch, "feat/ui-pages");
+
+    app.key(Key::Char('p'));
+    assert!(matches!(app.page(), Page::Lane(_, lane) if *lane == branch));
+    app.key(Key::Esc);
+    app.key(Key::Enter);
+    let Page::Agent(agent) = app.page().clone() else {
+        panic!("Enter opens the lane's agent");
+    };
+    assert_eq!(app.view.name_of(&agent), "ui-pages");
+}
+
+#[test]
+fn the_cursor_stays_on_its_lane_when_a_new_lane_appears_above_it() {
+    let mut app = changes_app();
+    app.key(Key::Down);
+    app.key(Key::Down);
+    let chosen = app.change_row();
+    let mut graph = app.change_repo().cloned().expect("the demo repository");
+    let mut newest = graph.lanes[0].clone();
+    newest.branch = String::from("feat/brand-new");
+    if let agent_monitor::domain::model::LaneBase::Trunk { at, .. } = &mut newest.base {
+        *at += chrono::TimeDelta::minutes(30);
+    }
+    newest.agents.clear();
+    newest.pr = None;
+    graph.lanes.insert(0, newest);
+    app.view.apply(agent_monitor::domain::model::Update {
+        seq: 10_000,
+        kind: agent_monitor::domain::model::UpdateKind::RepoUpsert(graph),
+    });
+    assert!(
+        app.change_rows()
+            .contains(&ChangeRow::Lane(String::from("feat/brand-new")))
+    );
+    assert_eq!(app.change_row(), chosen);
+}
+
+#[test]
+fn the_theme_command_switches_theme_or_reports_an_unknown_one() {
+    let mut app = app();
+    for key in "THEME phosphor".chars().map(Key::Char) {
+        app.key(key);
+    }
+    app.key(Key::Enter);
+    assert_eq!(app.theme, ThemeName::Phosphor);
+    assert!(app.theme_notice);
+
+    for key in "THEME neon".chars().map(Key::Char) {
+        app.key(key);
+    }
+    app.key(Key::Enter);
+    assert_eq!(app.theme, ThemeName::Phosphor);
+    assert_eq!(
+        app.message.as_deref(),
+        Some("UNKNOWN THEME: neon (classic, ember, phosphor, dusk)")
+    );
 }

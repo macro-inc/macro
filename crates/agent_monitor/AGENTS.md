@@ -34,6 +34,14 @@ subscriber gets a fresh snapshot.
   lookups through `gh api graphql` (`github/query.rs`); a failed query keeps
   the other queries' answers; `gh` and `git` sit behind
   `GithubBackend` so tests answer from `fixtures/github/`.
+- `src/outbound/git.rs`: the `git` source behind the CHANGES page. It maps
+  the repositories agents work in (`Store::git_interest`: agent directories
+  and PR head branches) into `RepoGraph`s: four read-only git calls per
+  gather (`git/gather.rs`: refs with worktrees, ahead/behind, the trunk's
+  first-parent log, the lanes' log with boundaries), assembled purely in
+  `git/assemble.rs` (trunk choice, lane ranking and caps, aliases, stacks);
+  `git` sits behind `GitBackend`. The reducer attaches agents, PRs and
+  landings in `domain/join/repos.rs`.
 - `src/outbound/local.rs`: every real-machine source from a few roots. File
   sources share `outbound/transcripts.rs` (tailed JSON lines) or
   `outbound/records.rs` (small whole-file records).
@@ -44,7 +52,12 @@ subscriber gets a fresh snapshot.
   --demo --socket <path>`, then `... -- dump --socket <path> --count 50`.
 - Add a source: an adapter in `src/outbound/` implementing `AgentSource` with
   its own `SourceKind`; decode its facts into `Fact`s, never `Agent`s.
-- A fixed state for snapshot tests: `outbound::demo::snapshot(seed, start, step, steps)`.
+- A fixed state for snapshot tests: `outbound::demo::snapshot(seed, start, step, steps)`;
+  its repository graph is scripted in `outbound/demo/repo.rs`.
+- Test the git source against real repositories: `outbound/git/test.rs`
+  builds them in a temp dir with real `git` at fixed dates (`fixture`), and
+  skips when `git` is missing; `sources_dump` prints each machine
+  repository's graph and gather time.
 - Check the real sources and the join on this machine: `cargo run --release -p
   agent_monitor --example sources_dump -- --home ~ [--run-dir <dir>]... [--idle 60]`;
   live terminals in its output should match `hc ls --json`.
@@ -67,7 +80,8 @@ subscriber gets a fresh snapshot.
 ## Gotchas
 
 - `build.rs` compiles the proto with `protox`; no `protoc` is needed. Bump
-  `proto::PROTOCOL` on any incompatible proto change.
+  `proto::PROTOCOL` on any incompatible proto change (3 added repository
+  graphs).
 - `Change::Reset` replaces every fact filed under its `SourceKind`, so each
   adapter needs its own kind. `SourceKind::Daemon` belongs to the hosting
   macrod (`coding_agent_worker/src/monitor/daemon_source.rs`) and only reports
@@ -82,9 +96,22 @@ subscriber gets a fresh snapshot.
 - Sources are push-driven: `hc events` stdout and `notify` watches. The only
   timers are hc's 45 s silence watchdog, the 30 s reconcile `stat` sweep, and
   the `github` source, which polls GitHub every `[monitor] pr_poll_secs` while
-  a viewer is subscribed and at most every 5 minutes otherwise.
+  a viewer is subscribed and at most every 5 minutes otherwise. The `git`
+  source wakes on ref watches (loose refs, `packed-refs`, worktree `HEAD`s,
+  `FETCH_HEAD`) and drops `index` writes before scheduling.
   `notify`'s inotify mask includes `IN_OPEN`, so busy transcript directories
   wake the watcher often; those are real writes, not polling.
+- The `git` source never fetches, never takes a lock (`GIT_OPTIONAL_LOCKS=0`),
+  never runs `git status` or reads a working tree: it reads refs and the
+  commit graph only. Regathers wait 300 ms of quiet (2 s at most), are spaced
+  `max(1 s, 10 × the last gather)` apart (15 s with no viewer), run one at a
+  time, and an unchanged graph is not sent.
+- `main` is squash-merged, so a merged PR never rejoins the trunk in the
+  DAG: landings come from `Pr::merge_oid` or the trunk subject's `(#N)`.
+  A clone that fetches only `main` has no `origin/<branch>`, so a lane's
+  pushed commit is that ref when it exists, else the PR's head; commits
+  above it draw hollow.
+- Commit subjects and author names go on rows only, never on spans or logs.
 - PR authorship comes from transcripts, never from GitHub: Claude Code's
   `toolUseResult.gitOperation.pr` (`action: created`), else a call whose
   shell command runs `gh pr create` (`outbound/pr_create.rs`: quoted text,

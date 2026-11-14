@@ -34,7 +34,7 @@ fn number_keys_open_pages_and_drop_focus() {
         ('5', Page::Tree),
         ('6', Page::Zoom(Pane::Sources)),
         ('7', Page::Zoom(Pane::Body)),
-        ('8', Page::Zoom(Pane::Prs)),
+        ('8', Page::Zoom(Pane::Changes)),
     ];
     for (digit, page) in cases {
         assert_eq!(
@@ -256,7 +256,7 @@ fn b_cycles_body_figures_where_body_shows_and_types_elsewhere() {
 
 #[test]
 fn reserved_letters_do_not_start_the_command_line() {
-    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a', 't'] {
+    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a'] {
         let (mode, _) = step(idle(), Key::Char(letter), &Page::Monitor);
         assert_eq!(mode, idle(), "{letter}");
     }
@@ -265,10 +265,74 @@ fn reserved_letters_do_not_start_the_command_line() {
 }
 
 #[test]
-fn t_cycles_the_theme() {
-    let (mode, action) = step(idle(), Key::Char('t'), &Page::Monitor);
+fn lowercase_tape_with_a_filter_opens_tape_filtered() {
+    let keys: Vec<Key> = "tape error".chars().map(Key::Char).collect();
+    let (mode, _) = run(idle(), &keys, &Page::Monitor);
+    assert_eq!(
+        step(mode, Key::Enter, &Page::Monitor),
+        (
+            idle(),
+            Action::Run(Command {
+                page: Page::Zoom(Pane::Tape),
+                filter: vec![String::from("error")],
+            })
+        )
+    );
+}
+
+#[test]
+fn ctrl_t_cycles_the_theme_in_any_mode() {
+    let (mode, action) = step(idle(), Key::NextTheme, &Page::Monitor);
     assert_eq!(mode, idle());
-    assert_eq!(action, Action::CycleTheme);
+    assert_eq!(action, Action::Theme(None));
+
+    let (typing, _) = step(idle(), Key::Char('T'), &Page::Monitor);
+    let (mode, action) = step(typing.clone(), Key::NextTheme, &Page::Monitor);
+    assert_eq!(mode, typing, "the command line keeps what was typed");
+    assert_eq!(action, Action::Theme(None));
+}
+
+#[test]
+fn a_backtick_cycles_the_theme_where_a_browser_keeps_ctrl_t() {
+    assert_eq!(
+        step(idle(), Key::Char('`'), &Page::Monitor),
+        (idle(), Action::Theme(None))
+    );
+    assert_eq!(
+        step(idle(), Key::Char('`'), &Page::Zoom(Pane::Changes)).1,
+        Action::Theme(None)
+    );
+    // On the command line it is just a character.
+    let (typing, _) = step(idle(), Key::Char('T'), &Page::Monitor);
+    let (mode, action) = step(typing, Key::Char('`'), &Page::Monitor);
+    assert_eq!(action, Action::None);
+    assert!(matches!(mode, Mode::Command { input, .. } if input.value() == "T`"));
+}
+
+#[test]
+fn ctrl_t_decodes_to_the_theme_key() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let event = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    assert_eq!(Key::from_event(event), Some(Key::NextTheme));
+    let event = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE);
+    assert_eq!(Key::from_event(event), Some(Key::Char('t')));
+}
+
+#[test]
+fn the_theme_command_picks_or_cycles() {
+    let enter = |line: &str| {
+        let keys: Vec<Key> = line.chars().map(Key::Char).collect();
+        let (mode, _) = run(idle(), &keys, &Page::Monitor);
+        step(mode, Key::Enter, &Page::Monitor).1
+    };
+    assert_eq!(enter("THEME"), Action::Theme(None));
+    assert_eq!(enter("theme dusk"), Action::Theme(Some(ThemeName::Dusk)));
+    assert_eq!(enter("THEME Ember"), Action::Theme(Some(ThemeName::Ember)));
+    assert_eq!(
+        enter("THEME neon"),
+        Action::UnknownTheme(String::from("neon"))
+    );
 }
 
 #[test]
@@ -327,8 +391,10 @@ fn every_mnemonic_parses_case_insensitively() {
         ("SRC", Page::Zoom(Pane::Sources)),
         ("BODY", Page::Zoom(Pane::Body)),
         ("WALL", Page::Wall),
-        ("PRS", Page::Zoom(Pane::Prs)),
-        ("pr", Page::Zoom(Pane::Prs)),
+        ("PRS", Page::Zoom(Pane::Changes)),
+        ("pr", Page::Zoom(Pane::Changes)),
+        ("CHG", Page::Zoom(Pane::Changes)),
+        ("changes", Page::Zoom(Pane::Changes)),
     ];
     for (line, page) in cases {
         assert_eq!(
@@ -398,5 +464,49 @@ fn a_toggles_ended_agents() {
     assert_eq!(
         step(focused.clone(), Key::Char('a'), &Page::Monitor),
         (focused, Action::ToggleAll)
+    );
+}
+
+#[test]
+fn the_changes_page_claims_its_keys_and_other_pages_do_not() {
+    let changes = Page::Zoom(Pane::Changes);
+    for (key, change) in [
+        (Key::Char('+'), ChangeKey::ZoomIn),
+        (Key::Char('-'), ChangeKey::ZoomOut),
+        (Key::Char('<'), ChangeKey::Earlier),
+        (Key::Char('>'), ChangeKey::Later),
+        (Key::Home, ChangeKey::Now),
+        (Key::Char('['), ChangeKey::PrevRepo),
+        (Key::Char(']'), ChangeKey::NextRepo),
+        (Key::Char('n'), ChangeKey::NextAttention),
+        (Key::Char('N'), ChangeKey::PrevAttention),
+        (Key::Char('m'), ChangeKey::ToggleLanded),
+        (Key::Char('s'), ChangeKey::Sort),
+        (Key::Char('p'), ChangeKey::OpenLane),
+    ] {
+        assert_eq!(
+            step(idle(), key, &changes),
+            (idle(), Action::Changes(change)),
+            "{key:?}"
+        );
+    }
+    // Moving and opening stay the common keys.
+    assert_eq!(
+        step(idle(), Key::Left, &changes).1,
+        Action::Move(Some(Pane::Changes), Motion::Left)
+    );
+    assert_eq!(
+        step(idle(), Key::Enter, &changes).1,
+        Action::Activate(Some(Pane::Changes))
+    );
+    // Elsewhere `n` starts the command line and Home goes to the top.
+    let agents = Page::Zoom(Pane::Agents);
+    assert!(matches!(
+        step(idle(), Key::Char('n'), &agents).0,
+        Mode::Command { .. }
+    ));
+    assert_eq!(
+        step(idle(), Key::Home, &agents).1,
+        Action::Move(Some(Pane::Agents), Motion::Top)
     );
 }

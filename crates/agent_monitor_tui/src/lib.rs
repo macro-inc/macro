@@ -61,6 +61,9 @@ mod unix {
         pub figure: Option<String>,
         /// The colour theme it starts in.
         pub theme: ThemeName,
+        /// A note for the command line until the first key, such as a
+        /// configured theme that does not exist.
+        pub notice: Option<String>,
     }
 
     /// Why the viewer stopped with an error.
@@ -99,20 +102,23 @@ mod unix {
             label,
             options.fps,
             options.theme,
+            options.notice,
             options.figure.as_deref(),
         )
         .await
     }
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
-    /// over a store it hosts; `label` is shown in the header.
+    /// over a store it hosts; `label` is shown in the header and `notice` on
+    /// the command line until the first key.
     pub async fn run_feed(
         feed: Feed,
         label: Option<String>,
         fps: u8,
         theme: ThemeName,
+        notice: Option<String>,
     ) -> Result<(), ViewerError> {
-        run_with(feed, label, fps, theme, None).await
+        run_with(feed, label, fps, theme, notice, None).await
     }
 
     async fn run_with(
@@ -120,10 +126,12 @@ mod unix {
         label: Option<String>,
         fps: u8,
         theme: ThemeName,
+        notice: Option<String>,
         figure: Option<&str>,
     ) -> Result<(), ViewerError> {
         let mut app = App::new(ViewState::new(body(figure)), label);
         app.set_theme(theme);
+        app.message = notice;
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
         let result = runner::run_loop(

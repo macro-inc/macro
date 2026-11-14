@@ -8,7 +8,9 @@ mod test;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tui_input::{Input, InputRequest};
 
-use agent_monitor::domain::model::AgentId;
+use agent_monitor::domain::model::{AgentId, RepoId};
+
+use crate::theme::ThemeName;
 
 /// A key the viewer reacts to, decoded from a terminal event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +45,9 @@ pub enum Key {
     Backspace,
     /// Ctrl-C.
     Interrupt,
+    /// Ctrl-T: the next colour theme, in any mode (a backtick does it outside
+    /// the command line and find).
+    NextTheme,
 }
 
 impl Key {
@@ -55,6 +60,7 @@ impl Key {
         let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
         let key = match event.code {
             KeyCode::Char('c') if ctrl => Key::Interrupt,
+            KeyCode::Char('t') if ctrl => Key::NextTheme,
             KeyCode::Char(_) if ctrl => return None,
             KeyCode::Char(character) => Key::Char(character),
             KeyCode::Enter => Key::Enter,
@@ -89,6 +95,8 @@ pub enum Page {
     Wall,
     /// One agent's drill-in.
     Agent(AgentId),
+    /// One lane of the CHANGES page: its commits, pull request and agents.
+    Lane(RepoId, String),
 }
 
 impl Page {
@@ -101,11 +109,11 @@ impl Page {
                 Pane::Spend,
                 Pane::Sources,
                 Pane::Tape,
-                Pane::Prs,
+                Pane::Changes,
                 Pane::Failures,
             ],
             Page::Agent(_) => &[Pane::Transcript, Pane::Children, Pane::AgentPrs],
-            Page::Zoom(_) | Page::Tree | Page::Wall => &[],
+            Page::Zoom(_) | Page::Tree | Page::Wall | Page::Lane(..) => &[],
         }
     }
 
@@ -115,7 +123,7 @@ impl Page {
             Page::Monitor => Some(Pane::Agents),
             Page::Zoom(pane) => Some(*pane),
             Page::Agent(_) => Some(Pane::Transcript),
-            Page::Tree | Page::Wall => None,
+            Page::Tree | Page::Wall | Page::Lane(..) => None,
         }
     }
 
@@ -130,7 +138,7 @@ impl Page {
             '5' => Page::Tree,
             '6' => Page::Zoom(Pane::Sources),
             '7' => Page::Zoom(Pane::Body),
-            '8' => Page::Zoom(Pane::Prs),
+            '8' => Page::Zoom(Pane::Changes),
             _ => return None,
         };
         Some(page)
@@ -152,8 +160,8 @@ pub enum Pane {
     Sources,
     /// 7 BODY.
     Body,
-    /// 8 PRS.
-    Prs,
+    /// 8 CHANGES: the git graph agents commit to, with pull requests on it.
+    Changes,
     /// The drill-in's transcript tail.
     Transcript,
     /// The drill-in's children list.
@@ -208,7 +216,7 @@ impl Command {
             "SRC" => Page::Zoom(Pane::Sources),
             "BODY" => Page::Zoom(Pane::Body),
             "WALL" => Page::Wall,
-            "PRS" | "PR" => Page::Zoom(Pane::Prs),
+            "CHG" | "CHANGES" | "PRS" | "PR" => Page::Zoom(Pane::Changes),
             _ => return None,
         };
         let filter = words.map(str::to_lowercase).collect();
@@ -318,14 +326,71 @@ pub enum Action {
     ToggleAll,
     /// Show the BODY pane's next figure, or the previous one when false.
     CycleFigure(bool),
-    /// Switch to the next colour theme.
-    CycleTheme,
+    /// Switch to this colour theme, or to the next one when `None`.
+    Theme(Option<ThemeName>),
+    /// A `THEME` command naming no theme, to report.
+    UnknownTheme(String),
+    /// A CHANGES page key.
+    Changes(ChangeKey),
+}
+
+/// What a key does on the CHANGES page, beyond moving and opening.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChangeKey {
+    /// `+`: finer time buckets.
+    ZoomIn,
+    /// `-`: coarser time buckets.
+    ZoomOut,
+    /// `<`: look earlier.
+    Earlier,
+    /// `>`: look later.
+    Later,
+    /// `Home`: back to now.
+    Now,
+    /// `[`: the previous repository.
+    PrevRepo,
+    /// `]`: the next repository.
+    NextRepo,
+    /// `n`: the next lane needing attention.
+    NextAttention,
+    /// `N`: the previous lane needing attention.
+    PrevAttention,
+    /// `m`: show or hide landed lanes.
+    ToggleLanded,
+    /// `s`: fork order or attention first.
+    Sort,
+    /// `p`: the lane's detail page.
+    OpenLane,
+}
+
+impl ChangeKey {
+    /// The CHANGES key `key` is, if any.
+    fn of(key: Key) -> Option<ChangeKey> {
+        let change = match key {
+            Key::Char('+' | '=') => ChangeKey::ZoomIn,
+            Key::Char('-' | '_') => ChangeKey::ZoomOut,
+            Key::Char('<' | ',') => ChangeKey::Earlier,
+            Key::Char('>' | '.') => ChangeKey::Later,
+            Key::Home => ChangeKey::Now,
+            Key::Char('[') => ChangeKey::PrevRepo,
+            Key::Char(']') => ChangeKey::NextRepo,
+            Key::Char('n') => ChangeKey::NextAttention,
+            Key::Char('N') => ChangeKey::PrevAttention,
+            Key::Char('m') => ChangeKey::ToggleLanded,
+            Key::Char('s') => ChangeKey::Sort,
+            Key::Char('p') => ChangeKey::OpenLane,
+            _ => return None,
+        };
+        Some(change)
+    }
 }
 
 /// The next state and action for `key` in `mode` on `page`.
 pub fn step(mode: Mode, key: Key, page: &Page) -> (Mode, Action) {
-    if key == Key::Interrupt {
-        return (mode, Action::Quit);
+    match key {
+        Key::Interrupt => return (mode, Action::Quit),
+        Key::NextTheme => return (mode, Action::Theme(None)),
+        _ => {}
     }
 
     match mode {
@@ -347,6 +412,13 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
     };
     let stay = Mode::Base(base);
 
+    // The CHANGES page claims a few keys that elsewhere start a command.
+    if *page == Page::Zoom(Pane::Changes)
+        && let Some(change) = ChangeKey::of(key)
+    {
+        return (stay, Action::Changes(change));
+    }
+
     match key {
         Key::Esc => match base {
             Base::Pane(_) => (Mode::Base(Base::Idle), Action::None),
@@ -363,6 +435,9 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::End => (stay, Action::Move(pane, Motion::Bottom)),
         Key::Enter => (stay, Action::Activate(pane)),
         Key::Char('q') => (stay, Action::Quit),
+        // Browsers keep Ctrl-T for a new tab, so a terminal in a browser
+        // (ttyd) cycles themes with a backtick.
+        Key::Char('`') => (stay, Action::Theme(None)),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
         Key::Char('a') => (stay, Action::ToggleAll),
         // Only where BODY shows; elsewhere `b` starts a command as before.
@@ -371,7 +446,6 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         {
             (stay, Action::CycleFigure(letter == 'b'))
         }
-        Key::Char('t') => (stay, Action::CycleTheme),
         Key::Char('/') => (
             Mode::Find {
                 input: Input::default(),
@@ -389,7 +463,7 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
             input.handle(InputRequest::InsertChar(letter));
             (Mode::Command { input, base }, Action::None)
         }
-        Key::Char(_) | Key::Backspace | Key::Interrupt => (stay, Action::None),
+        Key::Char(_) | Key::Backspace | Key::Interrupt | Key::NextTheme => (stay, Action::None),
     }
 }
 
@@ -436,10 +510,12 @@ fn step_command(mut input: Input, base: Base, key: Key) -> (Mode, Action) {
         Key::Esc => (Mode::Base(base), Action::None),
         Key::Enter => {
             let line = input.value().trim().to_owned();
-            let action = match Command::parse(&line) {
-                Some(command) => Action::Run(command),
-                None if line.is_empty() => Action::None,
-                None => Action::Unknown(line),
+            let action = match (theme_command(&line), Command::parse(&line)) {
+                (Some(Ok(theme)), _) => Action::Theme(theme),
+                (Some(Err(name)), _) => Action::UnknownTheme(name),
+                (None, Some(command)) => Action::Run(command),
+                (None, None) if line.is_empty() => Action::None,
+                (None, None) => Action::Unknown(line),
             };
             (Mode::Base(base), action)
         }
@@ -449,6 +525,21 @@ fn step_command(mut input: Input, base: Base, key: Key) -> (Mode, Action) {
             (Mode::Command { input, base }, Action::None)
         }
     }
+}
+
+/// A `THEME [name]` command line: `Ok(None)` for the next theme,
+/// `Ok(Some(name))` for that one, `Err(word)` for a name that is no theme,
+/// and `None` when the line is not a theme command.
+fn theme_command(line: &str) -> Option<Result<Option<ThemeName>, String>> {
+    let mut words = line.split_whitespace();
+    if !words.next()?.eq_ignore_ascii_case("THEME") {
+        return None;
+    }
+    let theme = match words.next() {
+        None => Ok(None),
+        Some(word) => word.parse().map(Some).map_err(|_| word.to_owned()),
+    };
+    Some(theme)
 }
 
 fn step_find(mut input: Input, base: Base, key: Key) -> (Mode, Action) {

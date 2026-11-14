@@ -48,6 +48,7 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         fps: cli.fps,
         figure: cli.figure,
         theme: cli.theme,
+        notice: None,
     })
     .await
 }

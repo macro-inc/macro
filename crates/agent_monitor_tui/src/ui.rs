@@ -1,9 +1,10 @@
 //! Drawing: the header, the quote board, the page body and the command line.
 //! Layout degrades by width: under 140 columns BODY and SOURCES drop, under
-//! 100 everything stacks in one column (PRS and FAILURES share a row); under 40 rows the board shrinks to
+//! 100 everything stacks in one column (CHANGES and FAILURES share a row); under 40 rows the board shrinks to
 //! one line. Above 200 columns BODY takes a quarter of the width.
 
 mod board;
+mod changes;
 mod drill;
 mod panes;
 mod tree;
@@ -84,6 +85,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
         Page::Tree => tree::draw(frame, body, app, clock),
         Page::Wall => wall::draw(frame, body, app, clock),
         Page::Agent(id) => drill::draw(frame, body, app, clock, &id),
+        Page::Lane(repo, branch) => changes::draw_lane(frame, body, app, clock, &repo, &branch),
     }
 
     draw_command(frame, command, app);
@@ -271,7 +273,12 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         ("5", "TREE", "TREE", *page == Page::Tree),
         ("6", "SOURCES", "SRC", *page == Page::Zoom(Pane::Sources)),
         ("7", "BODY", "BODY", *page == Page::Zoom(Pane::Body)),
-        ("8", "PRS", "PRS", *page == Page::Zoom(Pane::Prs)),
+        (
+            "8",
+            "CHANGES",
+            "CHG",
+            matches!(page, Page::Zoom(Pane::Changes) | Page::Lane(..)),
+        ),
         ("w", "WALL", "WALL", *page == Page::Wall),
     ];
     let short = area.width < NARROW;
@@ -363,7 +370,7 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
         .areas(area);
         panes::draw(frame, agents, app, clock, Pane::Agents, false);
         panes::draw(frame, tape, app, clock, Pane::Tape, false);
-        panes::draw(frame, prs, app, clock, Pane::Prs, false);
+        panes::draw(frame, prs, app, clock, Pane::Changes, false);
         panes::draw(frame, failures, app, clock, Pane::Failures, false);
         panes::draw(frame, spend, app, clock, Pane::Spend, false);
         return;
@@ -397,7 +404,7 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
     let [prs, failures] =
         Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(right);
     panes::draw(frame, tape, app, clock, Pane::Tape, false);
-    panes::draw(frame, prs, app, clock, Pane::Prs, false);
+    panes::draw(frame, prs, app, clock, Pane::Changes, false);
     panes::draw(frame, failures, app, clock, Pane::Failures, false);
 }
 
@@ -409,7 +416,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 Span::styled(format!(" {}", input.value()), theme::bold(Token::Highlight)),
                 Span::styled("█", theme::ink(Token::Highlight)),
                 Span::styled(
-                    "   MON AGT TAPE SPND FAIL TREE SRC BODY PRS WALL  + filter words",
+                    "   MON AGT TAPE SPND FAIL TREE SRC BODY CHG WALL  + filter words",
                     theme::ink(Token::Rule),
                 ),
             ],
@@ -433,7 +440,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                     app.theme.to_string().to_uppercase(),
                     theme::bold(Token::Highlight),
                 ));
-                spans.push(Span::styled("  t NEXT", theme::ink(Token::Rule)));
+                spans.push(Span::styled("  CTRL-T or ` NEXT", theme::ink(Token::Rule)));
                 spans.push(Span::raw("  "));
             }
             if let Some(message) = &app.message {
@@ -487,10 +494,10 @@ fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
     spans
 }
 
-const HELP: [(&str, &str); 19] = [
+const HELP: [(&str, &str); 22] = [
     (
         "0 … 8",
-        "monitor, then the numbered pane full screen (5 = tree, 8 = PRs)",
+        "monitor, then the numbered pane full screen (5 = tree, 8 = changes)",
     ),
     ("w", "wall: a card per agent"),
     ("TAB  S-TAB", "focus the next or previous pane"),
@@ -505,19 +512,34 @@ const HELP: [(&str, &str); 19] = [
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
     ("b  B", "next / previous BODY figure (monitor and BODY)"),
-    ("t", "next colour theme"),
+    (
+        "CTRL-T  `",
+        "next colour theme (` where a browser keeps CTRL-T)",
+    ),
+    (
+        "8: + − < > HOME",
+        "changes: zoom, pan, back to now; [ ] repository",
+    ),
+    (
+        "8: n N m s p",
+        "next/previous failing lane, landed, sort, lane page",
+    ),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),
-    ("TYPE A LETTER", "command line, then ENTER:"),
+    ("TYPE A LETTER", "command line, in any case, then ENTER:"),
     ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
     (
-        "FAIL TREE SRC BODY PRS WALL",
-        "failures, tree, sources, body, pull requests, wall",
+        "FAIL TREE SRC BODY CHG WALL",
+        "failures, tree, sources, body, changes (PRS too), wall",
     ),
     (
         "AGT builder working",
         "words after a mnemonic filter rows; all lists ended",
+    ),
+    (
+        "THEME [name]",
+        "colour theme: classic, ember, phosphor or dusk; no name = next",
     ),
 ];
 

@@ -89,8 +89,8 @@ pub struct MonitorArgs {
     /// `~/.macrod/profiles/<name>.toml`, instead.
     #[arg(long, global = true)]
     profile: Option<ProfileName>,
-    /// The viewer's colour theme (classic, ember, phosphor or dusk),
-    /// instead of `[monitor] theme`.
+    /// The viewer's colour theme (classic, ember, phosphor or dusk, in any
+    /// case), instead of `[monitor] theme`.
     #[arg(long)]
     theme: Option<agent_monitor_tui::ThemeName>,
 }
@@ -251,6 +251,7 @@ impl Collector {
         local.run_record_dirs = run_record_dirs;
         local.hc_labels.run_id = settings.run_id_labels.clone();
         local.pr_poll = Some(Duration::from_secs(u64::from(settings.pr_poll_secs)));
+        local.changes = settings.changes;
 
         let tracker = TaskTracker::new();
         let cancel = CancellationToken::new();
@@ -264,7 +265,8 @@ impl Collector {
             cancel.clone(),
         );
         let github = local.github(store.pr_interest());
-        for make in local.makers().into_iter().chain(github) {
+        let git = local.git(store.git_interest());
+        for make in local.makers().into_iter().chain(github).chain(git) {
             spawn_source(&store, make, &tracker, cancel.clone());
         }
         if let Some(daemon) = daemon {
@@ -581,14 +583,40 @@ async fn view(
         }
         agent_monitor_tui::FeedChoice::Socket(socket)
     };
+    let (theme, notice) = viewer_theme(theme, &settings.theme);
     agent_monitor_tui::run(agent_monitor_tui::Options {
         feed,
         fps: settings.fps,
         figure,
-        theme: theme.unwrap_or(settings.theme),
+        theme,
+        notice,
     })
     .await
     .map_err(|error| rootcause::report!("{error}"))
+}
+
+/// The theme the viewer starts in: `--theme`, else `[monitor] theme`. A
+/// configured name that is no theme falls back to classic with a warning for
+/// the command line, rather than stopping the viewer over a cosmetic key.
+fn viewer_theme(
+    flag: Option<agent_monitor_tui::ThemeName>,
+    configured: &str,
+) -> (agent_monitor_tui::ThemeName, Option<String>) {
+    if let Some(theme) = flag {
+        return (theme, None);
+    }
+    match configured.trim().parse() {
+        Ok(theme) => (theme, None),
+        Err(_) => (
+            agent_monitor_tui::ThemeName::default(),
+            Some(format!(
+                "UNKNOWN [monitor] THEME {configured:?}; USING {}",
+                agent_monitor_tui::ThemeName::default()
+                    .to_string()
+                    .to_uppercase()
+            )),
+        ),
+    }
 }
 
 /// Starts `macrod monitor serve --exit-when-idle` detached from this
