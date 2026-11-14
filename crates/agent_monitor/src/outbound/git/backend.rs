@@ -23,9 +23,12 @@ pub enum GitError {
     /// No `git` program was found.
     #[error("git not found")]
     NotFound,
-    /// `git` ran and failed, or timed out.
+    /// `git` ran and failed.
     #[error("git failed: {0}")]
     Failed(String),
+    /// `git` ran past its time budget and was killed.
+    #[error("git timed out")]
+    TimedOut,
 }
 
 /// A working directory resolved to its repository.
@@ -150,7 +153,7 @@ impl GitCli {
             }
             let output = tokio::time::timeout(CALL_TIMEOUT, child.wait_with_output())
                 .await
-                .map_err(|_elapsed| GitError::Failed(String::from("timed out")))?
+                .map_err(|_elapsed| GitError::TimedOut)?
                 .map_err(|error| GitError::Failed(error.to_string()))?;
             if !output.status.success() {
                 let reason = String::from_utf8_lossy(&output.stderr);
@@ -223,23 +226,29 @@ impl GitBackend for GitCli {
         args.extend(refs.iter().map(String::as_str));
         match self.run(&args, None).await {
             Ok(output) => Ok(parse::ahead_behind(&output)),
-            Err(GitError::NotFound) => Err(GitError::NotFound),
-            // git older than 2.41 has no `ahead-behind` atom: count each ref.
+            Err(error @ (GitError::NotFound | GitError::TimedOut)) => Err(error),
+            // git older than 2.41 has no `ahead-behind` atom: count each
+            // ref, all of them within one call's time budget.
             Err(GitError::Failed(_)) => {
-                let mut counts = BTreeMap::new();
-                for name in refs {
-                    let range = format!("{trunk}...{name}");
-                    let output = self
-                        .run(
-                            &[&git_dir, "rev-list", "--left-right", "--count", &range],
-                            None,
-                        )
-                        .await?;
-                    if let Some((behind, ahead)) = parse::left_right(&output) {
-                        counts.insert(name, (ahead, behind));
+                let count = async {
+                    let mut counts = BTreeMap::new();
+                    for name in refs {
+                        let range = format!("{trunk}...{name}");
+                        let output = self
+                            .run(
+                                &[&git_dir, "rev-list", "--left-right", "--count", &range],
+                                None,
+                            )
+                            .await?;
+                        if let Some((behind, ahead)) = parse::left_right(&output) {
+                            counts.insert(name, (ahead, behind));
+                        }
                     }
-                }
-                Ok(counts)
+                    Ok(counts)
+                };
+                tokio::time::timeout(CALL_TIMEOUT, count)
+                    .await
+                    .map_err(|_elapsed| GitError::TimedOut)?
             }
         }
     }
