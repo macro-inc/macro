@@ -5,7 +5,7 @@ expression: "render(&mut app(), 100, 30)"
  MACROD  MON >_  DEMO  ● LIVE  WORK 25  WAIT 0  BLOCK 1  ERR 50  DAY ~$28.60               10:01:40 
  0 MON  1 AGENTS  2 TAPE  3 SPEND  4 FAILURES  5 TREE  6 SOURCES  7 BODY  w WALL                    
  WORKING 25 │ WAITING 0 │ BLOCKED 1 │ TURNS 24H 234 │ TOOLS 24H 644 │ ERR 24H 50 │ TOK/MIN 5.0M │ DA
-┌ 1 AGENTS  30 LIVE / 34 ROWS ───────────────────────────────────┐┌ 3 SPEND TODAY  ~$28.60 ────────┐
+┌ 1 AGENTS  30 LIVE · 34 ROWS / 34 ALL  a SHOWS ENDED ───────────┐┌ 3 SPEND TODAY  ~$28.60 ────────┐
 │  NAME               DOING              AGE  TRN  TOOLS COST    ││          █                     │
 │■ rpc-server/explore explore the reduce   0s    1     1        —││         ▇█                     │
 │■ fix-19             Follow-up from rev  28s    2     4   ~$0.28││         ██                     │

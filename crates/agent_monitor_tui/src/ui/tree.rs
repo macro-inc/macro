@@ -15,15 +15,21 @@ use crate::format;
 use crate::theme;
 use crate::ui::Clock;
 use crate::ui::wall::draw_card;
+use crate::view::Filter;
 
 /// Width the tree text pads names to.
 const NAME_WIDTH: usize = 16;
 
 /// Draws the tree page.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
+    // The tree is the history view: ended agents stay under their parents.
+    let filter = Filter {
+        all: true,
+        ..app.filter.clone()
+    };
     let agents: Vec<Agent> = app
         .view
-        .sorted_agents(&app.filter)
+        .sorted_agents(&filter)
         .into_iter()
         .cloned()
         .collect();

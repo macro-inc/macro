@@ -7,6 +7,8 @@ mod test;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
+use chrono::TimeDelta;
+
 use agent_monitor::domain::model::{
     Agent, AgentId, AgentKind, Cost, Severity, Snapshot, SourceHealth, SourceKind, Status,
     TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem, Update, UpdateKind,
@@ -16,6 +18,12 @@ use crate::body::BodyPane;
 
 /// Tape lines kept in the viewer.
 pub const TAPE_CAPACITY: usize = 2000;
+
+/// How long an ended agent stays listed without the all toggle.
+pub const RECENTLY_ENDED: TimeDelta = TimeDelta::minutes(10);
+
+/// The window of the FAILURES pane.
+pub const FAILURE_WINDOW: TimeDelta = TimeDelta::hours(24);
 
 /// Transcript items kept for the open agent.
 pub const TRANSCRIPT_CAPACITY: usize = 400;
@@ -236,12 +244,41 @@ impl ViewState {
         }
     }
 
-    /// Agents for the AGENTS pane: live ones (ended agents last), sorted
-    /// Working, Blocked, Waiting, Idle, then by latest activity, filtered.
+    /// The latest time the view has seen: the collector's heartbeat, the
+    /// newest tape line or the newest agent activity. Recency rules use it
+    /// instead of the wall clock, so they follow the data.
+    pub fn now(&self) -> Option<Timestamp> {
+        let tape = self.tape.back().map(|event| event.at);
+        let activity = self
+            .agents
+            .values()
+            .filter_map(|agent| agent.last_activity)
+            .max();
+        [self.heartbeat, tape, activity].into_iter().flatten().max()
+    }
+
+    /// Whether an agent is listed without the all toggle: it has not ended,
+    /// or it ended within the last few minutes so its finish is still seen.
+    pub fn is_current(&self, agent: &Agent, now: Option<Timestamp>) -> bool {
+        if !agent.status.is_final() {
+            return true;
+        }
+        let ended = agent.ended.or(agent.last_activity);
+        match (ended, now) {
+            (Some(ended), Some(now)) => ended >= now - RECENTLY_ENDED,
+            _ => false,
+        }
+    }
+
+    /// Agents for the AGENTS pane and the wall, sorted Working, Blocked,
+    /// Waiting, Idle, then ended, each by latest activity. Without
+    /// [`Filter::all`] only current agents are listed.
     pub fn sorted_agents(&self, filter: &Filter) -> Vec<&Agent> {
+        let now = self.now();
         let mut agents: Vec<&Agent> = self
             .agents
             .values()
+            .filter(|agent| filter.all || self.is_current(agent, now))
             .filter(|agent| filter.matches_agent(agent))
             .collect();
         agents.sort_by(|a, b| {
@@ -294,6 +331,9 @@ impl ViewState {
             });
         }
 
+        // Only agents active inside the window add rows of their own, so
+        // hundreds of old sessions do not bury today's failures.
+        let since = self.now().map(|now| now - FAILURE_WINDOW);
         for agent in self.agents.values() {
             if !filter.matches_agent(agent) {
                 continue;
@@ -301,6 +341,9 @@ impl ViewState {
             let Some(at) = agent.ended.or(agent.last_activity) else {
                 continue;
             };
+            if since.is_some_and(|since| at < since) {
+                continue;
+            }
 
             let on_tape = tool_lines.get(&agent.id).copied().unwrap_or(0);
             let earlier = agent.tool_errors.saturating_sub(on_tape);
@@ -401,6 +444,8 @@ impl ViewState {
 /// name, task, doing or tape text).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
+    /// List ended agents too, not only current ones.
+    pub all: bool,
     /// Lowercase command-line words.
     pub words: Vec<String>,
     /// Lowercase find query.

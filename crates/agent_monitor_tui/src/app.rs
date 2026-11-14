@@ -1,6 +1,9 @@
 //! The viewer's whole state: the mirrored [`ViewState`], the key machine's
 //! mode, the page stack, cursors and filters, and how actions change them.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
 use tui_tree_widget::TreeState;
@@ -120,9 +123,14 @@ impl App {
             Action::Move(pane, motion) => self.move_cursor(pane, motion),
             Action::Activate(pane) => self.activate(pane),
             Action::Run(command) => {
-                self.filter.words = command.filter;
+                // `all` among the words lists ended agents too.
+                let (all, words): (Vec<String>, Vec<String>) =
+                    command.filter.into_iter().partition(|word| word == "all");
+                self.filter.all = !all.is_empty();
+                self.filter.words = words;
                 self.open(command.page);
             }
+            Action::ToggleAll => self.filter.all = !self.filter.all,
             Action::Unknown(line) => {
                 self.message = Some(format!("UNKNOWN COMMAND: {line}"));
             }
