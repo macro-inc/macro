@@ -154,10 +154,18 @@ pub(crate) struct Record {
 #[serde(tag = "line", rename_all = "snake_case")]
 pub(crate) enum Line {
     Begin(Begin),
-    /// A step began. Never sent: it names what an interrupted run was doing.
+    /// A step began. Never sent as is: it names what an interrupted run was
+    /// doing, and becomes that step's span, so the spans under it keep their
+    /// parent.
     Started {
         step: String,
         at_ns: u64,
+        /// The key its finished event would carry, from [`Event::span`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        span: Option<String>,
+        /// The key of the step it began inside, from [`Event::under`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent: Option<String>,
     },
     Record(Record),
 }
@@ -352,12 +360,15 @@ impl Recorder {
             .and_then(Value::as_str)
     }
 
-    /// Note that a step began. Only an interrupted run reports it, as the step it
-    /// was in when it stopped.
-    pub fn step_started(&self, step: &str) {
+    /// Note that a step began, keyed `span` and inside `parent` as its finished
+    /// event will be. Only an interrupted run reports it: as the step it was in
+    /// when it stopped, and as an `interrupted` step for each one still open.
+    pub fn step_started(&self, step: &str, span: Option<&str>, parent: Option<&str>) {
         self.shared.append(&Line::Started {
             step: step.to_owned(),
             at_ns: unix_ns(SystemTime::now()),
+            span: span.map(str::to_owned),
+            parent: parent.map(str::to_owned),
         });
     }
 

@@ -8,7 +8,7 @@ use xtask_local_telemetry::{Event, Paths};
 use super::super::instance::Instance;
 use super::{
     BuildOutput, CargoUnit, RunKind, RunTelemetry, SccacheStats, ServiceHealth,
-    parse_cargo_timings, parse_cpuinfo_model, parse_meminfo_kib, step_name,
+    fresh_cargo_timings, parse_cargo_timings, parse_cpuinfo_model, parse_meminfo_kib, step_name,
 };
 
 /// A `stop` exits as soon as it returns, so its run line must already be
@@ -391,4 +391,42 @@ fn a_ready_bring_up_carries_its_picker_key() {
     let run_id = parts.get(1).expect("a run id");
     assert!(run_id.len() == 32 && run_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert!(parts.get(2).is_some_and(|machine| !machine.is_empty()));
+}
+
+#[test]
+fn reading_a_build_report_removes_the_copy_cargo_kept_of_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let older = dir.path().join("cargo-timing-20200101T000000Z.html");
+    std::fs::write(&older, "").expect("write older report");
+    // File times are coarser than the clock: start the build a second back.
+    let since = SystemTime::now()
+        .checked_sub(Duration::from_secs(1))
+        .expect("time");
+    let ours = dir.path().join("cargo-timing-20990101T000000Z.html");
+    let report = dir.path().join("cargo-timing.html");
+    let html = r#"<script>
+const UNIT_DATA = [
+  { "i": 1, "name": "serde", "version": "1.0.0", "mode": "todo", "target": "",
+    "features": [], "start": 0.1, "duration": 4.0, "unblocked_units": [],
+    "unblocked_rmeta_units": [], "sections": null }
+];
+const CONCURRENCY_DATA = [];
+</script>"#;
+    std::fs::write(&ours, html).expect("write report");
+    std::fs::hard_link(&ours, &report).expect("link report");
+    // A report written before the build began is kept, even if its clock
+    // says otherwise.
+    let earlier = since.checked_sub(Duration::from_secs(60)).expect("time");
+    std::fs::File::options()
+        .write(true)
+        .open(&older)
+        .and_then(|file| file.set_modified(earlier))
+        .expect("age the older report");
+
+    let units = fresh_cargo_timings(&report, since);
+
+    assert_eq!(units.len(), 1);
+    assert!(report.exists());
+    assert!(!ours.exists());
+    assert!(older.exists());
 }

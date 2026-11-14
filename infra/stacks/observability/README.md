@@ -136,7 +136,8 @@ that config holding only this ingest-only token, since every engineer can read i
 `trace_id` is its `run_id` and opens its waterfall in Tempo: steps nest under the
 step they ran in, crates under the build, and every span carries `run_id`. Runs that ended before their
 events were sent are sent by the developer's next run, clamped to 30 minutes old
-like CI's, and a killed run arrives with `outcome="interrupted"`.
+like CI's, and a killed run arrives with `outcome="interrupted"`, as do the steps
+it had open, which carry only `step` and `outcome`.
 
 | `event` | Fields |
 | --- | --- |

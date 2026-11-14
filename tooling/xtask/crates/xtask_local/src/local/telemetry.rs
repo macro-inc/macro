@@ -66,6 +66,8 @@ const BRING_UP_FIELD: &str = "bring_up";
 const OFFSET_FIELD: &str = "offset_in_run";
 /// Cargo's timing report of the last build, relative to the workspace root.
 const CARGO_TIMINGS: &str = "target/cargo-timings/cargo-timing.html";
+/// The start of the per-build copies cargo keeps beside [`CARGO_TIMINGS`].
+const CARGO_TIMING_REPORT_PREFIX: &str = "cargo-timing-";
 /// Compilation units shorter than this get no `crate` event.
 const CRATE_MIN_SECONDS: f64 = 1.0;
 /// At most this many of a build's slowest units get a `crate` event.
@@ -291,24 +293,26 @@ impl RunTelemetry {
     /// is its child.
     pub(super) fn step_started(&self, label: &str, lane: &'static str) {
         let step = step_name(label);
-        self.shared
-            .with_recorder(|recorder| recorder.step_started(step));
-        let mut state = self.shared.state();
-        state.started += 1;
-        let key = format!("step/{}", state.started);
-        state
-            .open
-            .entry(std::thread::current().id())
-            .or_default()
-            .push(OpenStep {
+        let (key, parent) = {
+            let mut state = self.shared.state();
+            state.started += 1;
+            let key = format!("step/{}", state.started);
+            let stack = state.open.entry(std::thread::current().id()).or_default();
+            let parent = stack.last().map(|open| open.key.clone());
+            stack.push(OpenStep {
                 step: step.to_owned(),
-                key,
+                key: key.clone(),
                 lane,
                 at: SystemTime::now(),
             });
-        if step.starts_with(BUILD_STEP) {
-            state.sccache_before = Some(std::thread::spawn(sccache_stats));
-        }
+            if step.starts_with(BUILD_STEP) {
+                state.sccache_before = Some(std::thread::spawn(sccache_stats));
+            }
+            (key, parent)
+        };
+        self.shared.with_recorder(|recorder| {
+            recorder.step_started(step, Some(&key), parent.as_deref());
+        });
     }
 
     /// A step's captured output; only a build's is read, for its unit counts.
@@ -453,22 +457,30 @@ impl RunTelemetry {
                 .map(|output| output.workspace_crates)
                 .unwrap_or_default();
             for unit in fresh_cargo_timings(&report, build_started) {
-                let started = build_started + Duration::from_secs_f64(unit.start);
-                let duration = Duration::from_secs_f64(unit.duration);
+                // Read from a file on disk: skip a unit whose times don't fit.
+                let (Ok(offset), Ok(duration)) = (
+                    Duration::try_from_secs_f64(unit.start),
+                    Duration::try_from_secs_f64(unit.duration),
+                ) else {
+                    continue;
+                };
+                let Some(ended) = build_started
+                    .checked_add(offset)
+                    .and_then(|started| started.checked_add(duration))
+                else {
+                    continue;
+                };
                 shared.record(
                     Event::new("crate")
                         .with("crate", unit.name.as_str())
                         .with("target", unit.target_kind())
                         .with("workspace", workspace.contains(&unit.name))
                         .with("seconds", seconds(duration))
-                        .with(
-                            "offset_in_build",
-                            seconds(Duration::from_secs_f64(unit.start)),
-                        )
+                        .with("offset_in_build", seconds(offset))
                         .with("step", step.as_str())
                         .with("lane", CARGO_LANE)
                         .lasting(&unit.span_name(), duration)
-                        .at(started + duration)
+                        .at(ended)
                         .under(&build_key),
                 );
             }
@@ -839,9 +851,34 @@ fn fresh_cargo_timings(report: &Path, since: SystemTime) -> Vec<CargoUnit> {
     if !fresh {
         return Vec::new();
     }
-    std::fs::read_to_string(report)
+    let units = std::fs::read_to_string(report)
         .map(|html| parse_cargo_timings(&html))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if let Some(dir) = report.parent() {
+        remove_timestamped_reports(dir, since);
+    }
+    units
+}
+
+/// Cargo also keeps each build's report as `cargo-timing-<time>.html`, so every
+/// bring-up would add one. Remove the ones this build wrote; `cargo-timing.html`
+/// stays, and so do reports of builds run by hand before it.
+fn remove_timestamped_reports(dir: &Path, since: SystemTime) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let ours = name.to_str().is_some_and(|name| {
+            name.starts_with(CARGO_TIMING_REPORT_PREFIX) && name.ends_with(".html")
+        }) && entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .is_ok_and(|modified| modified >= since);
+        if ours {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// The counters of the shared sccache server.
