@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{Asked, QueueStep, Recorder, Served, counted, path_shape, shape};
+use super::{Asked, QueueStep, Recorder, Served, counted, path_shape, shape, without_literals};
 
 #[test]
 fn a_shape_keeps_tags_and_drops_content() {
@@ -10,6 +10,9 @@ fn a_shape_keeps_tags_and_drops_content() {
         "to": ["ada@example.com", "grace@example.com"],
         "urgent": true,
         "note": null,
+        "field": "starred",
+        "terms": "invoice",
+        "labels": ["Receipts"],
     });
     assert_eq!(
         shape(&message),
@@ -19,6 +22,9 @@ fn a_shape_keeps_tags_and_drops_content() {
             "to": ["<str>"],
             "urgent": true,
             "note": null,
+            "field": "starred",
+            "terms": "<str>",
+            "labels": ["<str>"],
         })
     );
 }
@@ -115,7 +121,7 @@ fn a_request_is_kept_with_the_shape_of_its_query_and_body() {
         service: "email_service",
         method: "POST",
         path: "/outlook/webhook/4f1c22",
-        query: Some("validationToken=abc%20def&view=inbox"),
+        query: Some("validationToken=abc%20def&query=invoice&sort_method=viewed&force_share=true"),
         body: body.as_bytes(),
         status: 202,
         answer: b"",
@@ -124,10 +130,21 @@ fn a_request_is_kept_with_the_shape_of_its_query_and_body() {
     let seen = recorder.seen();
     let request = seen.http.keys().next().unwrap();
     assert_eq!(request.path, "/outlook/webhook/{}");
-    assert_eq!(request.query, "validationToken&view=inbox");
+    assert_eq!(
+        request.query,
+        "force_share=true&query&sort_method=viewed&validationToken"
+    );
     assert_eq!(
         request.body,
         json!({ "value": [{ "lifecycleEvent": "missed", "subscriptionId": "<str>" }] }).to_string()
     );
     assert_eq!(seen.http.values().copied().collect::<Vec<_>>(), vec![1]);
+}
+
+#[test]
+fn a_graphql_document_loses_what_was_written_into_it() {
+    assert_eq!(
+        without_literals(r#"query { search(text: "the \"plan\" for May") { id } tag(name: "x") }"#),
+        r#"query { search(text: "") { id } tag(name: "") }"#
+    );
 }

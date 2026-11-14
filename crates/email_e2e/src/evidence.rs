@@ -36,6 +36,23 @@ const SIGN_IN_ROUTES: &str = "oauth.";
 /// The longest string a shape keeps as it is.
 const TAG_LENGTH: usize = 48;
 const TEXT: &str = "<str>";
+/// The keys whose string values name a kind of request, message or event,
+/// and are kept: everything else a body or a query holds may be content.
+const KIND_KEYS: [&str; 11] = [
+    "action",
+    "backfillOperation",
+    "changeType",
+    "event",
+    "event_type",
+    "field",
+    "kind",
+    "lifecycleEvent",
+    "operation",
+    "sort_method",
+    "type",
+];
+/// The query values kept under any key.
+const FLAGS: [&str; 2] = ["true", "false"];
 const NOT_JSON: &str = "<not json>";
 /// The path the GraphQL API is served at, in any service.
 const GRAPHQL_SUFFIX: &str = "/graphql";
@@ -159,7 +176,7 @@ impl Recorder {
                 .graphql
                 .entry(Asked {
                     service,
-                    query: query.to_owned(),
+                    query: without_literals(query),
                     variables: shape(&request["variables"]).to_string(),
                     answered,
                 })
@@ -369,26 +386,42 @@ pub(crate) fn path_shape(path: &str) -> String {
 }
 
 /// The shape of a JSON value: its keys, with every value that could be
-/// content replaced. A string stays only when it reads as a tag (a short
-/// word such as an enum variant's name), which is what tells one kind of
-/// message from another; a list keeps the shape of its first item, and a
-/// boolean stays as it is.
+/// content replaced. A string stays only under a key that names a kind
+/// ([`KIND_KEYS`]) and when it reads as a tag (a short word such as an enum
+/// variant's name), which is what tells one kind of message from another.
+/// Any other string is something a person may have typed, however short. A
+/// list keeps the shape of its first item, and a boolean stays as it is.
 pub(crate) fn shape(value: &Value) -> Value {
+    shape_under(None, value)
+}
+
+fn shape_under(key: Option<&str>, value: &Value) -> Value {
     match value {
         Value::Null => Value::Null,
         // Not content, and often what tells one action from its opposite.
         Value::Bool(flag) => json!(flag),
         Value::Number(_) => json!(0),
-        Value::String(text) if is_tag(text) => json!(text),
+        Value::String(text) if key.is_some_and(names_a_kind) && is_tag(text) => json!(text),
         Value::String(_) => json!(TEXT),
-        Value::Array(items) => Value::Array(items.first().map(shape).into_iter().collect()),
+        Value::Array(items) => Value::Array(
+            items
+                .first()
+                .map(|item| shape_under(key, item))
+                .into_iter()
+                .collect(),
+        ),
         Value::Object(fields) => Value::Object(
             fields
                 .iter()
-                .map(|(key, value)| (key.clone(), shape(value)))
+                .map(|(key, value)| (key.clone(), shape_under(Some(key), value)))
                 .collect(),
         ),
     }
+}
+
+/// Whether the values under `key` are the names of kinds, not content.
+fn names_a_kind(key: &str) -> bool {
+    KIND_KEYS.contains(&key)
 }
 
 /// Whether `text` reads as a tag: a short run of letters, `_`, `.` and `-`.
@@ -401,14 +434,41 @@ fn is_tag(text: &str) -> bool {
             .all(|character| character.is_ascii_alphabetic() || "_.-".contains(character))
 }
 
+/// A GraphQL document with the text of its string literals removed: the
+/// fields asked for stay, and what was written into them does not.
+fn without_literals(document: &str) -> String {
+    let mut kept = String::with_capacity(document.len());
+    let mut in_literal = false;
+    let mut escaped = false;
+    for character in document.chars() {
+        if !in_literal {
+            kept.push(character);
+            in_literal = character == '"';
+        } else if escaped {
+            escaped = false;
+        } else if character == '\\' {
+            escaped = true;
+        } else if character == '"' {
+            kept.push(character);
+            in_literal = false;
+        }
+    }
+    kept
+}
+
 /// The shape of a query string: its keys in order, each with its value when
-/// that reads as a tag (`view=inbox`) and alone otherwise (`cursor`).
+/// that names a kind or is a flag (`sort_method=viewed`, `force_share=true`)
+/// and alone otherwise (`cursor`, `query`).
 fn query_shape(query: &str) -> String {
     let mut pairs: Vec<String> = query
         .split('&')
         .filter(|pair| !pair.is_empty())
         .map(|pair| match pair.split_once('=') {
-            Some((key, value)) if is_tag(value) => format!("{key}={value}"),
+            Some((key, value))
+                if is_tag(value) && (names_a_kind(key) || FLAGS.contains(&value)) =>
+            {
+                format!("{key}={value}")
+            }
             Some((key, _)) => key.to_owned(),
             None => pair.to_owned(),
         })
