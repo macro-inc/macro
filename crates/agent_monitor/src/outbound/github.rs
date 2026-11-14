@@ -50,7 +50,7 @@ const DISCOVERY_RETRY: Duration = Duration::from_secs(5 * 60);
 /// burst of changes makes one query.
 const NEW_REF_DEBOUNCE: Duration = Duration::from_secs(5);
 
-/// Never two queries closer together than this.
+/// Never two polls closer together than this.
 const MIN_GAP: Duration = Duration::from_secs(15);
 
 /// Each interval is stretched or shrunk by up to this fraction.
@@ -202,12 +202,13 @@ pub struct GithubSource<B = GhCli> {
 }
 
 impl<B: GithubBackend> GithubSource<B> {
-    /// Asks through `backend` every `every` while someone watches.
+    /// Asks through `backend` every `every` (at least [`MIN_GAP`]) while
+    /// someone watches.
     pub fn new(backend: B, interest: PrInterest, every: Duration) -> Self {
         Self {
             backend,
             interest,
-            every,
+            every: every.max(MIN_GAP),
         }
     }
 }
@@ -336,7 +337,7 @@ impl<B: GithubBackend> Poller<B> {
         // not as soon as anything changes.
         self.polled = wanted.clone();
         let factor = rand::rng().random_range(1.0 - JITTER..=1.0 + JITTER);
-        self.gap = self.source.every.mul_f64(factor);
+        self.gap = self.source.every.mul_f64(factor).max(MIN_GAP);
 
         let branches = self.branches(wanted).instrument(span.clone()).await;
         self.send_checkouts().await?;

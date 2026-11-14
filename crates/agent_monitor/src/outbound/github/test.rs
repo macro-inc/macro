@@ -226,7 +226,13 @@ struct Harness {
 }
 
 fn run_fake(watchers: usize, absent: bool) -> Harness {
-    run_backend(watchers, absent, None, std::iter::empty())
+    run_backend(
+        watchers,
+        absent,
+        None,
+        std::iter::empty(),
+        Duration::from_secs(60),
+    )
 }
 
 /// `extra` refs are looked up after the fixture's.
@@ -235,6 +241,7 @@ fn run_backend(
     absent: bool,
     fail_after: Option<usize>,
     extra: impl IntoIterator<Item = PrRef>,
+    every: Duration,
 ) -> Harness {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let backend = FakeGithub {
@@ -274,7 +281,7 @@ fn run_backend(
         subscribers: Arc::new(move || count.load(Ordering::SeqCst)),
         arrivals: arrived,
     };
-    let source = GithubSource::new(backend, interest, Duration::from_secs(60));
+    let source = GithubSource::new(backend, interest, every);
     let (out, observations) = mpsc::channel(1024);
     let cancel = CancellationToken::new();
     tokio::spawn(Box::new(source).run(out, cancel.clone()));
@@ -376,7 +383,7 @@ async fn a_failed_later_query_keeps_what_the_earlier_one_answered() {
     // The fixture's 4 lookups plus 120 in a repository sorted after them make
     // two queries; the second fails.
     let extra = (1..=120).map(|number| pr("example-org/zzz", number));
-    let mut harness = run_backend(1, false, Some(1), extra);
+    let mut harness = run_backend(1, false, Some(1), extra, Duration::from_secs(60));
 
     let (changes, health) = harness.until_health().await;
     assert_eq!(harness.calls.lock().expect("calls").len(), 2);
@@ -388,5 +395,19 @@ async fn a_failed_later_query_keeps_what_the_earlier_one_answered() {
     assert_eq!(health.state, SourceState::Unhealthy);
     assert_eq!(health.items, 3);
     assert_eq!(health.detail.as_deref(), Some("gh api failed"));
+    harness.cancel.cancel();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_poll_interval_below_the_minimum_gap_is_raised_to_it() {
+    let mut harness = run_backend(1, false, None, std::iter::empty(), Duration::from_secs(1));
+
+    let (_, health) = harness.until_health().await;
+    assert_eq!(health.poll_every, Some(MIN_GAP));
+    harness.until_health().await;
+    harness.until_health().await;
+    for gap in harness.gaps() {
+        assert!(gap >= MIN_GAP && gap < MIN_GAP * 2, "{gap:?}");
+    }
     harness.cancel.cancel();
 }

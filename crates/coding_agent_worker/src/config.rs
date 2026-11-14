@@ -76,7 +76,7 @@ pub struct MonitorSettings {
     pub run_id_labels: Vec<String>,
     /// Seconds between pull request status polls of GitHub (through the `gh`
     /// CLI, one batched query per 100 lookups) while a viewer watches; at
-    /// most every 5 minutes with none.
+    /// most every 5 minutes with none. Values under 15 are raised to 15.
     /// 0 turns pull request status off.
     pub pr_poll_secs: u32,
 }
