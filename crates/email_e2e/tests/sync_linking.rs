@@ -938,6 +938,87 @@ async fn outlook_mailbox_on_another_account_is_a_conflict() -> Result<(), Report
     mailbox_on_another_account_is_a_conflict(Provider::Outlook).await
 }
 
+/// How many channels the provider announces a mailbox's changes on: the
+/// Gmail watch (a mailbox has one or none), or its Graph subscriptions.
+fn change_channels(stack: &Stack, provider: Provider, address: &str) -> usize {
+    match provider {
+        Provider::Gmail => usize::from(provider_announces_changes(stack, provider, address)),
+        Provider::Outlook => stack
+            .outlook()
+            .subscriptions()
+            .iter()
+            .filter(|subscription| subscription.mailbox == address)
+            .count(),
+    }
+}
+
+/// Confirming the share: after the conflict, the second user retries
+/// `POST /email/init` with `force_share=true`, as the client does when they
+/// agree to share the mailbox. Both users then have the one inbox: the same
+/// link, the mail it held and the mail that arrives afterwards, and the
+/// provider still announces the mailbox's changes on as many channels as
+/// before. When this fails, the confirmation is refused again or makes a
+/// second inbox, or the share takes the mailbox, or its mail, from the user
+/// who connected it first.
+async fn confirming_the_share_gives_both_users_the_inbox(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    let team = "team@example.com";
+    seed_mailbox(&stack, provider, team, &["Shared plan".to_owned()])?;
+    let held = ada.link(provider, team).await?;
+    held.wait_for_preview("inbox", "Shared plan").await?;
+    let channels = change_channels(&stack, provider, team);
+    assert!(channels > 0, "the provider announces nothing for {team}");
+
+    let attempt = sign_in(&stack, &bob, provider, team, mail_scopes(provider)).await?;
+    let refused = init(&bob, attempt).await?;
+    assert_eq!(refused.status, 409, "{}", refused.text);
+    let shared = bob
+        .post(
+            &format!("/email/init?link_id={attempt}&force_share=true"),
+            None,
+        )
+        .await?;
+    assert_eq!(shared.status, 200, "{}", shared.text);
+    let link = held.link_id().to_string();
+    assert_eq!(shared.json["link_id"], link.as_str(), "{}", shared.text);
+
+    held.deliver(&mail("After sharing"))?;
+    let both_threads = [
+        (link.clone(), "After sharing".to_owned()),
+        (link.clone(), "Shared plan".to_owned()),
+    ];
+    for user in [&ada, &bob] {
+        let links = listed_links(user).await?;
+        assert_eq!(links.len(), 1, "{}: {links:?}", user.email());
+        assert_eq!(links[0]["id"], link.as_str(), "{}", user.email());
+        assert_eq!(links[0]["email_address"], team, "{}", user.email());
+        wait_for_subject(user, "After sharing").await?;
+        assert_eq!(
+            subjects_by_link(user, "inbox").await?,
+            both_threads,
+            "{}",
+            user.email()
+        );
+    }
+    assert_eq!(links_for_address(&stack, team).await?, 1);
+    assert_eq!(change_channels(&stack, provider, team), channels);
+    assert_eq!(open_sign_ins(&stack, &bob).await?, 0);
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_confirming_the_share_gives_both_users_the_inbox() -> Result<(), Report> {
+    confirming_the_share_gives_both_users_the_inbox(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_confirming_the_share_gives_both_users_the_inbox() -> Result<(), Report> {
+    confirming_the_share_gives_both_users_the_inbox(Provider::Outlook).await
+}
+
 /// The calendar state of a Gmail inbox follows what was granted: a mail-only
 /// link needs the calendar permission, and consenting to the calendar scopes
 /// for the same inbox clears that on the existing inbox instead of making a

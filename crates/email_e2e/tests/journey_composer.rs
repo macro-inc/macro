@@ -8,7 +8,9 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use email_e2e::{Inbox, Mail, Provider, ProviderMessage, Report, Stack, StackOptions};
+use email_e2e::{
+    Inbox, Mail, Provider, ProviderMessage, Report, Stack, StackOptions, gmail_emulator,
+};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -515,4 +517,113 @@ async fn gmail_new_message_to_several_people_carries_the_signature() -> Result<(
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_new_message_to_several_people_carries_the_signature() -> Result<(), Report> {
     new_message_to_several_people_carries_the_signature(Provider::Outlook).await
+}
+
+const SEND_AS: &str = "query { user { id emailLinks { id sendAs { emailAddress displayName } } } }";
+
+/// The addresses the composer's From offers for an inbox, with their names.
+async fn send_as(inbox: &Inbox) -> Result<Vec<(String, String)>, Report> {
+    let data = inbox.user().graphql(SEND_AS, &json!({})).await?;
+    let link_id = inbox.link_id().to_string();
+    let links = data["user"]["emailLinks"].as_array();
+    let senders = links
+        .into_iter()
+        .flatten()
+        .filter(|link| link["id"] == link_id.as_str())
+        .filter_map(|link| link["sendAs"].as_array());
+    Ok(senders
+        .flatten()
+        .map(|sender| {
+            (
+                sender["emailAddress"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                sender["displayName"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+        })
+        .collect())
+}
+
+/// A send-as alias of a Gmail mailbox, verified there or still pending.
+fn alias(email: &str, name: &str, verified: bool) -> gmail_emulator::SeedSendAs {
+    gmail_emulator::SeedSendAs {
+        email: email.to_owned(),
+        name: Some(name.to_owned()),
+        signature: None,
+        verified,
+    }
+}
+
+/// The From list of a Gmail inbox is the mailbox's address and the aliases
+/// Gmail has verified, never one still pending; and it follows Gmail: once
+/// the pending alias is verified there and another removed, a message sent
+/// from the newly verified alias goes out under it and the list shows the
+/// aliases as Gmail now has them.
+///
+/// When it fails, the composer offers an address Gmail will not send from,
+/// misses an alias the user set up, or keeps offering one they removed.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_from_list_is_the_verified_aliases_and_follows_gmail() -> Result<(), Report> {
+    let stack = stack_with_graphql().await?;
+    let ada = stack.user("ada").await?;
+    let grace = stack.user("grace").await?;
+    let (sales, billing) = ("sales@example.com", "billing@example.com");
+    stack.gmail().add_mailbox(&gmail_emulator::SeedMailbox {
+        email: ada.email().to_owned(),
+        send_as: vec![
+            alias(sales, "Sales", true),
+            alias(billing, "Billing", false),
+        ],
+        ..Default::default()
+    })?;
+    let inbox = ada.link_gmail().await?;
+    let to = grace.link_gmail().await?;
+
+    let offered = send_as(&inbox).await?;
+    let addresses: Vec<&str> = offered.iter().map(|(email, _)| email.as_str()).collect();
+    assert_eq!(addresses, [ada.email(), sales], "{offered:?}");
+    assert_eq!(offered[1].1, "Sales");
+
+    // At Gmail the pending alias is verified and the other one removed.
+    stack
+        .gmail()
+        .set_send_as(ada.email(), vec![alias(billing, "Billing", true)])?;
+    // Sending asks Gmail for the aliases anew, so the alias verified a
+    // moment ago can be sent from at once.
+    let attempt_id = Uuid::now_v7();
+    let text = "Your invoice is on its way.";
+    inbox
+        .send_attempt(
+            attempt_id,
+            &json!({
+                "draftId": Uuid::now_v7(),
+                "senderEmail": billing,
+                "subject": "Invoice",
+                "to": [{ "email": grace.email(), "name": "Grace" }],
+                "bodyText": text,
+                "bodyHtml": html(&format!("<html><body><div>{text}</div></body></html>")),
+            }),
+            &json!({}),
+        )
+        .await?;
+    inbox.wait_for_send_attempt(attempt_id, "SENT").await?;
+    let sent = delivered(&inbox, "Invoice").await?;
+    assert!(
+        sent.from
+            .as_deref()
+            .is_some_and(|from| from.contains(billing)),
+        "{sent:?}"
+    );
+    let preview = to.wait_for_preview("inbox", "Invoice").await?;
+    assert_eq!(preview["senderEmail"], billing, "{preview}");
+
+    let offered = send_as(&inbox).await?;
+    let addresses: Vec<&str> = offered.iter().map(|(email, _)| email.as_str()).collect();
+    assert_eq!(addresses, [ada.email(), billing], "{offered:?}");
+
+    stack.finish().await
 }

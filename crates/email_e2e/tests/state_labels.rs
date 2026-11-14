@@ -166,16 +166,15 @@ async fn gmail_a_star_removed_at_gmail_is_removed_in_macro() -> Result<(), Repor
     stack.finish().await
 }
 
-/// A star set in Macro reaches Gmail and the Starred list; unstarring in
-/// Macro removes it from both.
+/// A star set in Macro reaches the provider (Gmail's star, Outlook's flag)
+/// and the Starred list; unstarring in Macro removes it from both.
 ///
-/// When it fails: a star set in Macro is missing in Gmail, or a thread
-/// unstarred in Macro stays starred there.
-#[tokio::test(flavor = "multi_thread")]
-async fn gmail_a_star_set_in_macro_reaches_gmail() -> Result<(), Report> {
+/// When it fails: a star set in Macro is missing in Gmail or Outlook, or a
+/// thread unstarred in Macro stays starred there.
+async fn a_star_set_in_macro_reaches_the_provider(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
-    let inbox = ada.link_gmail().await?;
+    let inbox = ada.link(provider, ada.email()).await?;
     let second = inbox.deliver(&Mail::new(
         "Alan <alan@example.com>",
         "Star in Macro",
@@ -195,14 +194,14 @@ async fn gmail_a_star_set_in_macro_reaches_gmail() -> Result<(), Report> {
     };
     set_star(true).await?;
     inbox
-        .wait_for_provider_message("the star to reach Gmail", |message| {
+        .wait_for_provider_message("the star to reach the provider", |message| {
             message.id == second.id && message.starred
         })
         .await?;
     inbox.wait_for_preview("starred", "Star in Macro").await?;
     set_star(false).await?;
     inbox
-        .wait_for_provider_message("the star to leave Gmail", |message| {
+        .wait_for_provider_message("the star to leave the provider", |message| {
             message.id == second.id && !message.starred
         })
         .await?;
@@ -217,6 +216,16 @@ async fn gmail_a_star_set_in_macro_reaches_gmail() -> Result<(), Report> {
     .await?;
 
     stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_star_set_in_macro_reaches_gmail() -> Result<(), Report> {
+    a_star_set_in_macro_reaches_the_provider(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_star_set_in_macro_reaches_outlook() -> Result<(), Report> {
+    a_star_set_in_macro_reaches_the_provider(Provider::Outlook).await
 }
 
 /// Creates a label in the inbox and returns its id.
@@ -432,4 +441,138 @@ async fn gmail_a_star_set_at_gmail_shows_in_macro() -> Result<(), Report> {
     );
 
     stack.finish().await
+}
+
+/// The inbox's label and sender changes Macro has accepted and the
+/// provider has not yet confirmed, as the settings screen asks for them.
+async fn waiting_settings_changes(inbox: &Inbox) -> Result<Vec<Value>, Report> {
+    let operations = inbox.get("/email/settings/operations").await?.ok()?;
+    Ok(operations.as_array().cloned().unwrap_or_default())
+}
+
+/// A label deletion the provider refuses is reported on the inbox as
+/// needing attention while the label is still at the provider, and leaves
+/// the report once the provider has deleted the label.
+///
+/// When it fails: a deletion stuck behind the provider is not reported, so
+/// the label looks deleted while the mailbox still has it, or a deletion
+/// that went through stays reported as waiting.
+async fn a_refused_label_deletion_is_reported_until_it_goes_through(
+    provider: Provider,
+) -> Result<(), Report> {
+    use email_e2e::{DEFAULT_TIMEOUT, eventually, outlook_emulator};
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let label_id = create_label(&inbox, "Clients").await?;
+    // Outlook gets the category after Macro has answered: only then is
+    // nothing waiting.
+    eventually(
+        "the label to exist at the provider with nothing waiting",
+        DEFAULT_TIMEOUT,
+        async || {
+            let at_provider = stack.provider_labels(&inbox).await?;
+            let waiting = waiting_settings_changes(&inbox).await?;
+            Ok(
+                (at_provider.iter().any(|name| name == "Clients") && waiting.is_empty())
+                    .then_some(()),
+            )
+        },
+    )
+    .await?;
+
+    let mailbox = Some(inbox.email().to_owned());
+    let fault = match provider {
+        Provider::Gmail => stack.gmail().inject_fault(Fault {
+            mailbox,
+            route: Some(Route::LabelsDelete),
+            error: Some(FaultError::RateLimit),
+            retry_after_seconds: Some(1),
+            ..Default::default()
+        }),
+        Provider::Outlook => stack.outlook().inject_fault(outlook_emulator::Fault {
+            mailbox,
+            route: Some(outlook_emulator::Route::CategoriesDelete),
+            error: Some(outlook_emulator::FaultError::RateLimit),
+            retry_after_seconds: Some(1),
+            ..Default::default()
+        }),
+    };
+    inbox
+        .delete(&format!("/email/labels/{label_id}"), None)
+        .await?
+        .ok()?;
+
+    let reported = eventually(
+        "the refused deletion to be reported as needing attention",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok(waiting_settings_changes(&inbox)
+                .await?
+                .into_iter()
+                .find(|change| change["needs_attention"] == true))
+        },
+    )
+    .await?;
+    assert_eq!(reported["kind"], "delete_label", "{reported}");
+    let refused = match provider {
+        Provider::Gmail => stack
+            .gmail()
+            .requests()
+            .iter()
+            .any(|request| request.route == Some(Route::LabelsDelete) && request.status == 429),
+        Provider::Outlook => stack.outlook().requests().iter().any(|request| {
+            request.route == Some(outlook_emulator::Route::CategoriesDelete)
+                && request.status == 429
+        }),
+    };
+    assert!(refused, "the provider was never asked to delete the label");
+    let at_provider = stack.provider_labels(&inbox).await?;
+    assert!(
+        at_provider.iter().any(|name| name == "Clients"),
+        "the refused deletion removed the label: {at_provider:?}"
+    );
+
+    match provider {
+        Provider::Gmail => stack.gmail().remove_fault(fault),
+        Provider::Outlook => stack.outlook().remove_fault(fault),
+    };
+    eventually(
+        "the label to be gone at the provider",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok((!stack
+                .provider_labels(&inbox)
+                .await?
+                .iter()
+                .any(|name| name == "Clients"))
+            .then_some(()))
+        },
+    )
+    .await?;
+    eventually(
+        "the deletion to leave the report",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok(waiting_settings_changes(&inbox)
+                .await?
+                .is_empty()
+                .then_some(()))
+        },
+    )
+    .await?;
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_refused_label_deletion_is_reported_until_it_goes_through() -> Result<(), Report> {
+    a_refused_label_deletion_is_reported_until_it_goes_through(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_refused_label_deletion_is_reported_until_it_goes_through() -> Result<(), Report>
+{
+    a_refused_label_deletion_is_reported_until_it_goes_through(Provider::Outlook).await
 }

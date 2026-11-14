@@ -271,6 +271,92 @@ async fn outlook_junk_leaves_the_inbox() -> Result<(), Report> {
     junk_leaves_the_inbox(Provider::Outlook).await
 }
 
+/// Report spam: the message is filed under Gmail's Spam and Macro lists the
+/// thread under Spam. What the Gmail scenario above cannot yet assert, the
+/// thread leaving Macro's inbox, is its known bug.
+///
+/// When it fails, a thread the user called spam is not spam in Gmail, or
+/// Macro's Spam view does not show it.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_junk_is_filed_under_spam() -> Result<(), Report> {
+    let stack = stack_with_graphql().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    let (offer, offer_message) = receive(&inbox, "You won a prize").await?;
+    let (kept, kept_message) = receive(&inbox, "Team lunch").await?;
+
+    set_state(&inbox, &offer, "junk", true).await?;
+    inbox
+        .wait_for_provider_message("the offer under Gmail's Spam", |message| {
+            message.id == offer_message.id && is_in(message, Provider::Gmail, JUNK)
+        })
+        .await?;
+    wait_listed(&inbox, "spam", &offer, true).await?;
+    assert!(
+        thread_label_ids(&inbox, &offer)
+            .await?
+            .iter()
+            .any(|label| label == JUNK.gmail),
+        "the thread Macro answers has no Spam label"
+    );
+    assert!(!lists(&inbox, "spam", &kept).await?);
+    let kept_now = inbox.provider_message(&kept_message.id)?;
+    assert!(
+        kept_now.is_some_and(|message| !is_in(&message, Provider::Gmail, JUNK)),
+        "a thread left alone is under Gmail's Spam"
+    );
+
+    stack.finish().await
+}
+
+/// Not spam: a thread reported as junk and then reported as not junk leaves
+/// the provider's junk (Gmail's Spam, the Outlook Junk Email folder) for
+/// the inbox, and Macro lists it in the inbox and no longer under Spam.
+///
+/// When it fails, a thread the user rescued from spam stays in spam at
+/// Gmail or Outlook, or stays in Macro's Spam view and out of the inbox.
+async fn not_junk_returns_to_the_inbox(provider: Provider) -> Result<(), Report> {
+    let stack = stack_with_graphql().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let (offer, offer_message) = receive(&inbox, "You won a prize").await?;
+
+    set_state(&inbox, &offer, "junk", true).await?;
+    inbox
+        .wait_for_provider_message("the offer in junk", |message| {
+            message.id == offer_message.id && is_in(message, provider, JUNK)
+        })
+        .await?;
+    wait_listed(&inbox, "spam", &offer, true).await?;
+
+    set_state(&inbox, &offer, "junk", false).await?;
+    inbox
+        .wait_for_provider_message("the offer out of junk and in the inbox", |message| {
+            message.id == offer_message.id
+                && !is_in(message, provider, JUNK)
+                && in_inbox_view(message, provider)
+        })
+        .await?;
+    wait_listed(&inbox, "spam", &offer, false).await?;
+    wait_listed(&inbox, "inbox", &offer, true).await?;
+    assert!(
+        in_app_inbox(&inbox, &offer).await?,
+        "a thread that is not junk is missing from the web app's inbox"
+    );
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_not_junk_returns_to_the_inbox() -> Result<(), Report> {
+    not_junk_returns_to_the_inbox(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_not_junk_returns_to_the_inbox() -> Result<(), Report> {
+    not_junk_returns_to_the_inbox(Provider::Outlook).await
+}
+
 /// Done for a selection: `setEmailThreadsArchived` on two of three threads
 /// takes both out of the inbox at the provider and in Macro, leaves the
 /// third, and Undo (archived false) brings both back.
@@ -573,4 +659,93 @@ async fn gmail_thread_is_filed_in_a_project() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_thread_is_filed_in_a_project() -> Result<(), Report> {
     thread_is_filed_in_a_project(Provider::Outlook).await
+}
+
+/// The value the thread's properties hold for a property, or `Null` when
+/// the thread does not carry it.
+async fn property_value(inbox: &Inbox, thread_id: &str, property: &str) -> Result<Value, Report> {
+    let properties = inbox
+        .user()
+        .document_storage_request(
+            Method::GET,
+            &format!("/properties/entities/THREAD/{thread_id}"),
+            None,
+        )
+        .await?
+        .ok()?;
+    let held = properties["properties"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|held| held["definition"]["id"] == property);
+    Ok(held.map_or(Value::Null, |held| held["value"].clone()))
+}
+
+/// A property the user made is set on a mail thread from the side panel:
+/// the thread's properties then hold the value, a change replaces it, and
+/// another thread of the inbox holds none. The mail at the provider is
+/// left as it was: properties are Macro's own.
+///
+/// When it fails, a value typed in the side panel is gone after a reload,
+/// or shows on a thread it was not set on.
+async fn a_property_set_on_a_thread_is_kept(provider: Provider) -> Result<(), Report> {
+    let stack = stack_with_graphql().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let (thread_id, before) = receive(&inbox, "Supplier quote").await?;
+    let (other_thread, _) = receive(&inbox, "Lunch on Friday").await?;
+
+    let definition = ada
+        .document_storage_request(
+            Method::POST,
+            "/properties/definitions",
+            Some(&json!({
+                "scope": "user",
+                "display_name": "Order number",
+                "data_type": { "type": "string" },
+            })),
+        )
+        .await?
+        .ok()?;
+    let property = definition["id"].as_str().unwrap_or_default().to_owned();
+    assert!(!property.is_empty(), "{definition}");
+    let on_thread = format!("/properties/entities/THREAD/{thread_id}/{property}");
+
+    for order in ["PO-1042", "PO-2077"] {
+        ada.document_storage_request(
+            Method::PUT,
+            &on_thread,
+            Some(&json!({ "value": { "type": "string", "value": order } })),
+        )
+        .await?
+        .ok()?;
+        let value = property_value(&inbox, &thread_id, &property).await?;
+        let held: Vec<&str> = ["PO-1042", "PO-2077"]
+            .into_iter()
+            .filter(|known| value.to_string().contains(known))
+            .collect();
+        assert_eq!(held, [order], "the thread holds {value}");
+    }
+    assert_eq!(
+        property_value(&inbox, &other_thread, &property).await?,
+        Value::Null
+    );
+
+    let after = inbox.provider_message(&before.id)?;
+    assert!(
+        after.is_some_and(|after| after.labels == before.labels && after.read == before.read),
+        "the mail changed at the provider"
+    );
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_property_set_on_a_thread_is_kept() -> Result<(), Report> {
+    a_property_set_on_a_thread_is_kept(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_property_set_on_a_thread_is_kept() -> Result<(), Report> {
+    a_property_set_on_a_thread_is_kept(Provider::Outlook).await
 }

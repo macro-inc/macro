@@ -497,6 +497,16 @@ impl GmailEmulator {
         })
     }
 
+    /// Replaces a mailbox's send-as aliases, as its owner does in Gmail's
+    /// settings (adding, removing or verifying one). `settings.sendAs.list`
+    /// answers the new set after the primary address.
+    pub fn set_send_as(&self, email: &str, aliases: Vec<SeedSendAs>) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            state.mailbox_mut(email)?.send_as = aliases;
+            Ok(())
+        })
+    }
+
     /// Adds or changes a contact of a mailbox.
     pub fn upsert_contact(
         &self,

@@ -337,3 +337,55 @@ async fn gmail_mail_on_home_is_listed_and_marked_done() -> Result<(), Report> {
 async fn outlook_mail_on_home_is_listed_and_marked_done() -> Result<(), Report> {
     mail_on_home_is_listed_and_marked_done(Provider::Outlook).await
 }
+
+/// The names of the inbox threads the list shows the user under `filter`,
+/// in order of name.
+async fn listed_under(user: &User, filter: &Value) -> Result<Vec<String>, Report> {
+    let (_, threads) = all_pages(user, filter).await?;
+    let mut names: Vec<String> = threads.into_iter().map(|(name, _)| name).collect();
+    names.sort_unstable();
+    Ok(names)
+}
+
+/// A user with two inboxes who chooses one in the list's inbox selector
+/// (the `Owner` literal of the mail filter) is shown that inbox's threads
+/// only; choosing both, or none, lists the threads of both. When this
+/// fails, choosing an inbox still lists the other inbox's mail, or lists
+/// nothing.
+async fn choosing_an_inbox_lists_only_its_threads(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let home = ada.link(provider, ada.email()).await?;
+    let work = ada.link(provider, "ada.work@example.com").await?;
+    let (at_home, at_work) = ("To the home inbox", "To the work inbox");
+    deliver(&stack, &home, at_home, false, None)?;
+    deliver(&stack, &work, at_work, false, None)?;
+    // Each mail is in the inbox it was sent to, and in no other.
+    home.wait_for_preview("inbox", at_home).await?;
+    work.wait_for_preview("inbox", at_work).await?;
+
+    let owner = |inbox: &Inbox| json!({ "l": { "Owner": inbox.link_id() } });
+    assert_eq!(listed_under(&ada, &owner(&home)).await?, [at_home]);
+    assert_eq!(listed_under(&ada, &owner(&work)).await?, [at_work]);
+    let either = json!({ "|": [owner(&home), owner(&work)] });
+    assert_eq!(listed_under(&ada, &either).await?, [at_home, at_work]);
+    // No inbox chosen is every inbox: a filter that names none.
+    let unread = json!({ "l": { "Read": false } });
+    assert_eq!(listed_under(&ada, &unread).await?, [at_home, at_work]);
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_choosing_an_inbox_lists_only_its_threads() -> Result<(), Report> {
+    choosing_an_inbox_lists_only_its_threads(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_choosing_an_inbox_lists_only_its_threads() -> Result<(), Report> {
+    choosing_an_inbox_lists_only_its_threads(Provider::Outlook).await
+}

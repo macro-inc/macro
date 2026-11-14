@@ -67,6 +67,30 @@ async fn followup(inbox: &Inbox, thread_id: &str) -> Result<Value, Report> {
     Ok(response["followup"].clone())
 }
 
+/// The threads the Reminders tab lists with the id of each one's reminder,
+/// sorted: `GET /reminders/email/collection`, as the tab reads it.
+async fn reminders_tab(inbox: &Inbox) -> Result<Vec<(String, String)>, Report> {
+    let page = inbox
+        .user()
+        .document_storage_request(Method::GET, "/reminders/email/collection", None)
+        .await?
+        .ok()?;
+    let text = |value: &Value| value.as_str().unwrap_or_default().to_owned();
+    let mut listed: Vec<(String, String)> = page["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|item| {
+            (
+                text(&item["threadId"]),
+                text(&item["followup"]["reminderId"]),
+            )
+        })
+        .collect();
+    listed.sort();
+    Ok(listed)
+}
+
 /// Sets "remind me if no reply" on the thread, `REMIND_IN` from now.
 async fn remind_if_no_reply(inbox: &Inbox, thread_id: &str) -> Result<Value, Report> {
     let remind_at = Utc::now() + REMIND_IN;
@@ -125,6 +149,20 @@ async fn remind_me_if_no_reply(provider: Provider) -> Result<(), Report> {
             "the reminded thread stayed in the inbox"
         );
     }
+    let mut pending: Vec<(String, String)> =
+        [(&quiet, &quiet_reminder), (&answered, &answered_reminder)]
+            .into_iter()
+            .map(|(thread, reminder)| {
+                let reminder_id = reminder["reminderId"].as_str().unwrap_or_default();
+                (thread.clone(), reminder_id.to_owned())
+            })
+            .collect();
+    pending.sort();
+    assert_eq!(
+        reminders_tab(&inbox).await?,
+        pending,
+        "the Reminders tab does not list the two threads with a reminder"
+    );
     for message_id in [&quiet_message, &answered_message] {
         inbox
             .wait_for_provider_message(
@@ -175,6 +213,11 @@ async fn remind_me_if_no_reply(provider: Provider) -> Result<(), Report> {
         )
     })?;
 
+    assert_eq!(
+        reminders_tab(&inbox).await?,
+        Vec::<(String, String)>::new(),
+        "a reminder that returned or was cancelled is still in the Reminders tab"
+    );
     assert!(
         in_inbox(&inbox, &quiet).await?,
         "the unanswered thread did not come back"

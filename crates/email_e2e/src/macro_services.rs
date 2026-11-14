@@ -59,6 +59,7 @@ struct Routes {
     /// scenario's object storage.
     uploads_url: String,
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
+    gmail_token_requests: GmailTokenRequests,
     failures: Failures,
     holds: Holds,
     /// Cancelled when the stand-in stops, so a request still held then is
@@ -66,6 +67,11 @@ struct Routes {
     stopping: CancellationToken,
     document_storage: RealService,
 }
+
+/// The method and status of every request for a Gmail access token. The
+/// Gmail emulator answers them on its control API, which its request log
+/// leaves out, so the evidence of a scenario takes them from here.
+type GmailTokenRequests = Arc<Mutex<Vec<(String, u16)>>>;
 
 /// The base URL of a real service that answers in a stand-in's place,
 /// once the stack has started it.
@@ -123,6 +129,7 @@ impl HeldRequest {
 pub(crate) struct MacroServices {
     address: SocketAddr,
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
+    gmail_token_requests: GmailTokenRequests,
     failures: Failures,
     holds: Holds,
     document_storage: RealService,
@@ -139,6 +146,7 @@ impl MacroServices {
         uploads_url: &str,
     ) -> Result<Self, Report> {
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let gmail_token_requests = GmailTokenRequests::default();
         let failures = Failures::default();
         let holds = Holds::default();
         let document_storage = RealService::default();
@@ -152,6 +160,7 @@ impl MacroServices {
             outlook_authentication: format!("{outlook_url}{EMULATOR_AUTHENTICATION_PATH}"),
             uploads_url: uploads_url.to_owned(),
             requests: requests.clone(),
+            gmail_token_requests: gmail_token_requests.clone(),
             failures: failures.clone(),
             holds: holds.clone(),
             stopping: cancel.clone(),
@@ -178,6 +187,7 @@ impl MacroServices {
         Ok(Self {
             address,
             requests,
+            gmail_token_requests,
             failures,
             holds,
             document_storage,
@@ -199,6 +209,15 @@ impl MacroServices {
     /// Every request the other stand-ins received, oldest first.
     pub(crate) fn requests(&self) -> Vec<ServiceRequest> {
         self.requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Every request for a Gmail access token the authentication stand-in
+    /// passed on to the Gmail emulator, oldest first: (method, status).
+    pub(crate) fn gmail_token_requests(&self) -> Vec<(String, u16)> {
+        self.gmail_token_requests
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
@@ -386,14 +405,26 @@ async fn forward_token_request(
     if let Some(content_type) = headers.get(axum::http::header::CONTENT_TYPE) {
         passed_on.insert(axum::http::header::CONTENT_TYPE, content_type.clone());
     }
-    forward(
+    // The route of the authentication service that refreshes a Gmail grant.
+    let gmail_token = rest
+        .starts_with("internal/google_access_token")
+        .then(|| method.to_string());
+    let answered = forward(
         &routes.http,
         method,
         passed_on,
         format!("{emulator}/{rest}"),
         body,
     )
-    .await
+    .await;
+    if let Some(method) = gmail_token {
+        routes
+            .gmail_token_requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push((method, answered.status().as_u16()));
+    }
+    answered
 }
 
 /// Makes the request at `url` and answers its status, content type and body.

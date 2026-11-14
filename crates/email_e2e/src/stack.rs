@@ -929,7 +929,18 @@ impl Stack {
                 request.status,
             )
         });
-        let provider = counted(gmail.chain(outlook));
+        // Gmail access tokens come from the authentication stand-in, which
+        // the Gmail emulator answers outside its request log.
+        let gmail_tokens = self
+            .macro_services
+            .as_ref()
+            .map(MacroServices::gmail_token_requests)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(method, status)| {
+                provider_call("gmail", Some("oauth.token".to_owned()), &method, "", status)
+            });
+        let provider = counted(gmail.chain(gmail_tokens).chain(outlook));
 
         let services = counted(self.service_requests().iter().map(|request| {
             serde_json::json!({
