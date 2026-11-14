@@ -27,11 +27,23 @@ F-068	mark as read does nothing
 F-069	mark as unread does nothing
 F-070	opening a thread does not mark it read
 F-071	Done does nothing
+F-072	marking a done thread not done does nothing
 F-073	starring does nothing
+F-074	unstarring a row does nothing
 F-075	Trash does nothing
 F-076	restoring from Trash does nothing
+F-080	Block Sender does not block the sender
+F-081	Sender to Noise does not move the sender
 F-082	bulk Done does nothing
+F-083	Undo in the Trash notice does not restore the thread
+F-084	a tag picked for a thread is not saved
+F-085	the tag chip of a row does not filter the list
 F-087	moving to a folder moves nothing
+F-088	a property set in the side panel is not saved
+F-090	a reminder preset picked for a thread sets nothing
+F-091	Remove reminder removes nothing
+F-092	the Reminders tab does not list a thread with a reminder
+F-094	a reminder cancelled by a reply stays in the Reminders tab
 F-095	New email opens no composer
 F-097	an added recipient is not added
 F-099	Cc is not added
@@ -67,5 +79,8 @@ F-149	the signature preview renders nothing
 F-153	an invitation shows no event card
 F-157	turning the calendar off never asks the service
 F-177	Escape does not go back to the list
+F-179	a right-click on a row opens no menu
+F-180	Settings does not list a sender block that waits for the mailbox
 F-182	a folder name on a row opens nothing
 F-189	Try again in the accounts settings does nothing
+F-196	unblocking a sender does nothing

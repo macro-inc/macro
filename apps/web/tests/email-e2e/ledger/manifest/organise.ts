@@ -830,6 +830,17 @@ export const organise = {
       trigger: 'Undo on the "Sender block queued" toast',
       source: ['src/lib/queries/email/thread.ts'],
     },
+    {
+      id: 'AL-905',
+      surface: 'SL-33',
+      fn: ['F-160'],
+      action: 'Grant or deny a request for access to a thread',
+      trigger: 'Share dialog "Permission requests": "Grant access" / "Deny"',
+      source: [
+        'src/lib/core/component/TopBar/ShareButton.tsx',
+        'src/features/access-requests/views/PermissionRequestsView.tsx',
+      ],
+    },
   ],
   states: [
     // SL-25 row action menu
@@ -1191,6 +1202,26 @@ export const organise = {
         'src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx',
       ],
     },
+    {
+      id: 'STL-982',
+      surface: 'SL-23',
+      fn: ['F-084'],
+      state:
+        'result: the row carries the tag as a chip, and loses it once the tag is taken off',
+      trigger: 'after a tag is picked, or picked again, for the thread',
+      source: ['src/features/property/tags/EntityRowTags.tsx'],
+    },
+    {
+      id: 'STL-983',
+      surface: 'SL-32',
+      fn: ['F-088'],
+      state:
+        'result: the Properties section lists the property with the value chosen',
+      trigger: 'after a property is added and its value picked',
+      source: [
+        'src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx',
+      ],
+    },
 
     // SL-33 share dialog
     {
@@ -1316,6 +1347,30 @@ export const organise = {
       ],
     },
     {
+      id: 'STL-943',
+      surface: 'SL-33',
+      fn: ['F-160'],
+      state:
+        'the Share dialog opens by itself with "Permission requests (n)": who asked and for what access',
+      trigger: 'the owner opens a thread with a request waiting',
+      source: [
+        'src/features/access-requests/share-request-trigger.tsx',
+        'src/features/access-requests/views/PermissionRequestsView.tsx',
+      ],
+    },
+    {
+      id: 'STL-944',
+      surface: 'SL-33',
+      fn: ['F-160'],
+      state:
+        'result: the request leaves the dialog and the person joins the roster at the granted access',
+      trigger: 'after Grant access succeeds',
+      source: [
+        'src/features/access-requests/views/PermissionRequestsView.tsx',
+        'src/features/access-requests/views/DirectAccessView.tsx',
+      ],
+    },
+    {
       id: 'STL-945',
       surface: 'SL-30',
       fn: ['F-167'],
@@ -1337,6 +1392,27 @@ export const organise = {
         'src/features/soup/createSoupEntityActions.ts',
         'src/features/next-soup/actions/make-copy-entity-id-action.ts',
       ],
+    },
+    {
+      id: 'STL-980',
+      surface: 'SL-32',
+      fn: ['F-188'],
+      state:
+        'result: the panel shows the Tags, Properties and Activity sections and when the thread was created and last updated',
+      trigger: 'open the panel on a thread',
+      source: [
+        'src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx',
+        'src/components/app/side-panel/EntityMetadata.tsx',
+      ],
+    },
+    {
+      id: 'STL-981',
+      surface: 'SL-31',
+      fn: ['F-064'],
+      state:
+        'result: the browser saves "<subject>.eml" with the source of the latest message',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-message/eml-download-adapter.ts'],
     },
   ],
 } as const satisfies Group;
