@@ -79,7 +79,7 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () =>
           (await mailbox.providerMessages())
-            .filter((message) => message.from.includes('@example.com'))
+            .filter((message) => message.from?.includes('@example.com'))
             .filter((message) => message.subject !== 'Re: Lunch?')
             .map((message) => `${message.subject}:${message.inInbox}`)
             .sort()

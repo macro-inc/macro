@@ -129,7 +129,7 @@ for (const provider of PROVIDERS) {
       await expect(page).toHaveURL(new RegExp(threadId));
       // Two messages that arrive within one second can swap places, so the
       // latest is the one the service lists last, never the 3rd.
-      const latest = messages[messages.length - 1].snippet;
+      const latest = String(messages[messages.length - 1].snippet);
       expect(latest).not.toBe(THIRD);
       await expect(messageCard(page, latest).getByText('to Me')).toBeVisible();
       // The 3rd message is neither the target nor expanded.
