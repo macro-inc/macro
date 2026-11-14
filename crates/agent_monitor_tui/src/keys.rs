@@ -318,6 +318,8 @@ pub enum Action {
     ToggleAll,
     /// Show the BODY pane's next figure, or the previous one when false.
     CycleFigure(bool),
+    /// Switch to the next colour theme.
+    CycleTheme,
 }
 
 /// The next state and action for `key` in `mode` on `page`.
@@ -369,6 +371,7 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         {
             (stay, Action::CycleFigure(letter == 'b'))
         }
+        Key::Char('t') => (stay, Action::CycleTheme),
         Key::Char('/') => (
             Mode::Find {
                 input: Input::default(),

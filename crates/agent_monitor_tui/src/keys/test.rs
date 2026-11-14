@@ -256,12 +256,19 @@ fn b_cycles_body_figures_where_body_shows_and_types_elsewhere() {
 
 #[test]
 fn reserved_letters_do_not_start_the_command_line() {
-    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a'] {
+    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a', 't'] {
         let (mode, _) = step(idle(), Key::Char(letter), &Page::Monitor);
         assert_eq!(mode, idle(), "{letter}");
     }
     let (mode, _) = step(idle(), Key::Char('J'), &Page::Monitor);
     assert!(matches!(mode, Mode::Command { .. }));
+}
+
+#[test]
+fn t_cycles_the_theme() {
+    let (mode, action) = step(idle(), Key::Char('t'), &Page::Monitor);
+    assert_eq!(mode, idle());
+    assert_eq!(action, Action::CycleTheme);
 }
 
 #[test]

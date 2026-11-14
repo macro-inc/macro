@@ -15,7 +15,6 @@ mod test;
 use chrono::{FixedOffset, Timelike as _};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
@@ -25,6 +24,7 @@ use crate::app::App;
 use crate::format;
 use crate::keys::{Mode, Page, Pane};
 use crate::theme;
+use crate::theme::Token;
 use crate::view::Link;
 
 /// Widths at which the layout changes.
@@ -59,6 +59,7 @@ impl Clock {
 
 /// Draws one frame.
 pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
+    theme::set_active(app.theme);
     let area = frame.area();
     frame.render_widget(Block::default().style(theme::base()), area);
 
@@ -97,13 +98,13 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     let totals = &app.view.totals;
     let wide = area.width >= WIDE;
     let (link, link_style) = match &app.view.link {
-        Link::Connecting => (String::from("○ CONNECTING"), theme::bold(theme::YELLOW)),
-        Link::Live => (String::from("● LIVE"), theme::bold(theme::GREEN)),
-        Link::Reconnecting(_) => (String::from("● RECONNECTING"), theme::bold(theme::RED)),
-        Link::Incompatible(_) => (String::from("✕ UPDATE MACROD"), theme::bold(theme::RED)),
+        Link::Connecting => (String::from("○ CONNECTING"), theme::bold(Token::Highlight)),
+        Link::Live => (String::from("● LIVE"), theme::bold(Token::Ok)),
+        Link::Reconnecting(_) => (String::from("● RECONNECTING"), theme::bold(Token::Alert)),
+        Link::Incompatible(_) => (String::from("✕ UPDATE MACROD"), theme::bold(Token::Alert)),
     };
     let errors = totals.errors_24h + totals.failed_24h;
-    let error_color = if errors > 0 { theme::RED } else { theme::GREEN };
+    let error_color = if errors > 0 { Token::Alert } else { Token::Ok };
     let state = match (wide, app.view.any_working()) {
         (false, _) => "",
         (true, true) => "ACTIVE ",
@@ -113,45 +114,46 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     let gap = if wide { " ╱ " } else { "  " };
     let field = |label: &str| {
         vec![
-            Span::styled(gap.to_owned(), theme::ink(theme::FAINT)),
-            Span::styled(format!("{label} "), theme::ink(theme::DIM)),
+            Span::styled(gap.to_owned(), theme::ink(Token::Rule)),
+            Span::styled(format!("{label} "), theme::ink(Token::TextDim)),
         ]
     };
 
     let mut left = theme::strip_title("MACROD://MON");
-    left.push(Span::styled(" >_ ", theme::bold(theme::YELLOW)));
+    left.push(Span::styled(" >_ ", theme::bold(Token::Highlight)));
     if let Some(label) = &app.label {
         left.push(Span::styled(
             format!(" {label} "),
-            Style::new()
-                .fg(theme::BG)
-                .bg(theme::YELLOW)
-                .add_modifier(ratatui::style::Modifier::BOLD),
+            theme::chip(Token::Highlight),
         ));
         left.push(Span::raw(" "));
     }
-    left.push(Span::styled(state, theme::ink(theme::DIM)));
+    left.push(Span::styled(state, theme::ink(Token::TextDim)));
     if wide {
-        left.push(Span::styled("SYS.LINK ", theme::ink(theme::CYAN_DIM)));
+        left.push(Span::styled("SYS.LINK ", theme::ink(Token::InfoDim)));
     }
     left.push(Span::styled(link, link_style));
     left.extend(field("WORK"));
     left.push(Span::styled(
         totals.working.to_string(),
-        theme::bold(theme::GREEN),
+        theme::bold(Token::Ok),
     ));
     left.extend(field("WAIT"));
     left.push(Span::styled(
         totals.waiting.to_string(),
-        theme::bold(theme::YELLOW),
+        theme::bold(if totals.waiting > 0 {
+            Token::Attention
+        } else {
+            Token::Text
+        }),
     ));
     left.extend(field("BLOCK"));
     left.push(Span::styled(
         totals.blocked.to_string(),
         theme::bold(if totals.blocked > 0 {
-            theme::RED
+            Token::Alert
         } else {
-            theme::AMBER
+            Token::Text
         }),
     ));
     left.extend(field("ERR"));
@@ -177,19 +179,19 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     left.extend(field("DAY"));
     left.push(Span::styled(
         format::cost(totals.cost_today),
-        theme::bold(theme::YELLOW),
+        theme::bold(Token::Highlight),
     ));
     if wide {
         left.extend(field("AGENTS"));
         left.push(Span::styled(
             app.view.agents.len().to_string(),
-            theme::bold(theme::AMBER),
+            theme::bold(Token::Text),
         ));
         left.extend(host_spans(app));
-        left.push(Span::styled(gap, theme::ink(theme::FAINT)));
+        left.push(Span::styled(gap, theme::ink(Token::Rule)));
         left.push(Span::styled(
             format!("SEQ 0x{:04X}", app.view.seq),
-            theme::ink(theme::CYAN_DIM),
+            theme::ink(Token::InfoDim),
         ));
     }
 
@@ -217,10 +219,10 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     frame.render_widget(Paragraph::new(Line::from(left)), left_area);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(date, theme::ink(theme::DIM)),
-            Span::styled("⟦ ", theme::ink(theme::CYAN_DIM)),
-            Span::styled(time, theme::bold(theme::AMBER)),
-            Span::styled(" ⟧", theme::ink(theme::CYAN_DIM)),
+            Span::styled(date, theme::ink(Token::TextDim)),
+            Span::styled("⟦ ", theme::ink(Token::InfoDim)),
+            Span::styled(time, theme::bold(Token::Text)),
+            Span::styled(" ⟧", theme::ink(Token::InfoDim)),
         ])),
         right_area,
     );
@@ -236,24 +238,24 @@ fn host_spans(app: &App) -> Vec<Span<'static>> {
     let Some(health) = app.view.sources.get(&SourceKind::Daemon) else {
         return Vec::new();
     };
-    let label = Span::styled(" ╱ HOST ", theme::ink(theme::DIM));
+    let label = Span::styled(" ╱ HOST ", theme::ink(Token::TextDim));
     let harness = health
         .detail
         .as_deref()
         .map(|id| id.chars().take(HARNESS_ID_SHOWN).collect::<String>());
     let Some(harness) = harness else {
-        return vec![label, Span::styled("NOT SERVING", theme::ink(theme::FAINT))];
+        return vec![label, Span::styled("NOT SERVING", theme::ink(Token::Rule))];
     };
 
-    let mut spans = vec![label, Span::styled(harness, theme::bold(theme::AMBER))];
+    let mut spans = vec![label, Span::styled(harness, theme::bold(Token::Text))];
     if health.state == SourceState::Healthy {
         spans.extend([
-            Span::styled(" ● ON", theme::bold(theme::GREEN)),
-            Span::styled("  PROMPTS ", theme::ink(theme::DIM)),
-            Span::styled(health.items.to_string(), theme::bold(theme::YELLOW)),
+            Span::styled(" ● ON", theme::bold(Token::Ok)),
+            Span::styled("  PROMPTS ", theme::ink(Token::TextDim)),
+            Span::styled(health.items.to_string(), theme::bold(Token::Highlight)),
         ]);
     } else {
-        spans.push(Span::styled(" ○ OFFLINE", theme::bold(theme::RED)));
+        spans.push(Span::styled(" ○ OFFLINE", theme::bold(Token::Alert)));
     }
     spans
 }
@@ -273,10 +275,7 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         ("w", "WALL", "WALL", *page == Page::Wall),
     ];
     let short = area.width < NARROW;
-    let active_style = Style::new()
-        .fg(theme::BG)
-        .bg(theme::AMBER)
-        .add_modifier(ratatui::style::Modifier::BOLD);
+    let active_style = theme::chip(Token::Text);
 
     let mut spans = Vec::new();
     for (key, long_name, short_name, active) in tabs {
@@ -285,8 +284,8 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
             spans.push(Span::styled(format!(" {key} {name} "), active_style));
         } else {
             spans.push(Span::raw(" "));
-            spans.push(Span::styled(key, theme::bold(theme::YELLOW)));
-            spans.push(Span::styled(format!(" {name}"), theme::ink(theme::AMBER)));
+            spans.push(Span::styled(key, theme::bold(Token::Highlight)));
+            spans.push(Span::styled(format!(" {name}"), theme::ink(Token::Text)));
             spans.push(Span::raw(" "));
         }
         if !short {
@@ -296,10 +295,7 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if let Page::Agent(id) = page {
         spans.push(Span::styled(
             format!(" {} ", app.view.name_of(id)),
-            Style::new()
-                .fg(theme::BG)
-                .bg(theme::YELLOW)
-                .add_modifier(ratatui::style::Modifier::BOLD),
+            theme::chip(Token::Highlight),
         ));
     }
 
@@ -312,7 +308,7 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let room = usize::from(area.width).saturating_sub(used + hints.len() + 1);
     if room > 0 {
         spans.push(Span::raw(" "));
-        spans.push(Span::styled(rule(room), theme::ink(theme::CYAN_DARK)));
+        spans.push(Span::styled(rule(room), theme::ink(Token::InfoFaint)));
     }
     let [left, right] = Layout::horizontal([
         Constraint::Min(0),
@@ -321,7 +317,7 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     .areas(area);
     frame.render_widget(Paragraph::new(Line::from(spans)), left);
     frame.render_widget(
-        Paragraph::new(Span::styled(hints, theme::ink(theme::DIM))),
+        Paragraph::new(Span::styled(hints, theme::ink(Token::TextDim))),
         right,
     );
 }
@@ -410,41 +406,53 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
         Mode::Command { input, .. } => Line::from(prompt(
             "CMD",
             vec![
-                Span::styled(format!(" {}", input.value()), theme::bold(theme::YELLOW)),
-                Span::styled("█", theme::ink(theme::YELLOW)),
+                Span::styled(format!(" {}", input.value()), theme::bold(Token::Highlight)),
+                Span::styled("█", theme::ink(Token::Highlight)),
                 Span::styled(
                     "   MON AGT TAPE SPND FAIL TREE SRC BODY PRS WALL  + filter words",
-                    theme::ink(theme::FAINT),
+                    theme::ink(Token::Rule),
                 ),
             ],
         )),
         Mode::Find { input, .. } => Line::from(prompt(
             "FIND",
             vec![
-                Span::styled(format!(" /{}", input.value()), theme::bold(theme::YELLOW)),
-                Span::styled("█", theme::ink(theme::YELLOW)),
+                Span::styled(
+                    format!(" /{}", input.value()),
+                    theme::bold(Token::Highlight),
+                ),
+                Span::styled("█", theme::ink(Token::Highlight)),
             ],
         )),
         Mode::Base(_) | Mode::Help { .. } => {
             let mut spans = theme::strip_title(">_");
             spans.push(Span::raw(" "));
+            if app.theme_notice {
+                spans.push(Span::styled("THEME ", theme::ink(Token::TextDim)));
+                spans.push(Span::styled(
+                    app.theme.to_string().to_uppercase(),
+                    theme::bold(Token::Highlight),
+                ));
+                spans.push(Span::styled("  t NEXT", theme::ink(Token::Rule)));
+                spans.push(Span::raw("  "));
+            }
             if let Some(message) = &app.message {
-                spans.push(Span::styled(message.clone(), theme::bold(theme::RED)));
+                spans.push(Span::styled(message.clone(), theme::bold(Token::Alert)));
                 spans.push(Span::raw("  "));
             }
             if !app.filter.words.is_empty() {
-                spans.push(Span::styled("FILTER ", theme::ink(theme::DIM)));
+                spans.push(Span::styled("FILTER ", theme::ink(Token::TextDim)));
                 spans.push(Span::styled(
                     app.filter.words.join(" "),
-                    theme::bold(theme::YELLOW),
+                    theme::bold(Token::Highlight),
                 ));
                 spans.push(Span::raw("  "));
             }
             if !app.filter.find.is_empty() {
-                spans.push(Span::styled("FIND ", theme::ink(theme::DIM)));
+                spans.push(Span::styled("FIND ", theme::ink(Token::TextDim)));
                 spans.push(Span::styled(
                     format!("/{}", app.filter.find),
-                    theme::bold(theme::YELLOW),
+                    theme::bold(Token::Highlight),
                 ));
                 spans.push(Span::raw("  "));
             }
@@ -457,13 +465,13 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 ("w", "WALL"),
                 ("q", "QUIT"),
             ] {
-                spans.push(Span::styled(key, theme::bold(theme::AMBER)));
-                spans.push(Span::styled(format!(" {what}  "), theme::ink(theme::FAINT)));
+                spans.push(Span::styled(key, theme::bold(Token::Text)));
+                spans.push(Span::styled(format!(" {what}  "), theme::ink(Token::Rule)));
             }
             if let Link::Reconnecting(reason) = &app.view.link {
                 spans.push(Span::styled(
                     format!("LINK: {reason}"),
-                    theme::ink(theme::RED),
+                    theme::ink(Token::Alert),
                 ));
             }
             Line::from(spans)
@@ -479,7 +487,7 @@ fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
     spans
 }
 
-const HELP: [(&str, &str); 18] = [
+const HELP: [(&str, &str); 19] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = PRs)",
@@ -497,6 +505,7 @@ const HELP: [(&str, &str); 18] = [
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
     ("b  B", "next / previous BODY figure (monitor and BODY)"),
+    ("t", "next colour theme"),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),
@@ -528,8 +537,8 @@ fn draw_help(frame: &mut Frame<'_>, area: Rect) {
         .iter()
         .map(|(keys, what)| {
             Line::from(vec![
-                Span::styled(format::cell(keys, 26), theme::bold(theme::YELLOW)),
-                Span::styled(*what, theme::ink(theme::AMBER)),
+                Span::styled(format::cell(keys, 26), theme::bold(Token::Highlight)),
+                Span::styled(*what, theme::ink(Token::Text)),
             ])
         })
         .collect();
@@ -538,7 +547,7 @@ fn draw_help(frame: &mut Frame<'_>, area: Rect) {
         Paragraph::new(lines).block(
             theme::pane(
                 "KEYS",
-                vec![Span::styled(" ESC CLOSES ", theme::ink(theme::DIM))],
+                vec![Span::styled(" ESC CLOSES ", theme::ink(Token::TextDim))],
                 true,
             )
             .borders(Borders::ALL),

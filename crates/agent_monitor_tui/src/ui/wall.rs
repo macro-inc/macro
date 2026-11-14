@@ -11,6 +11,7 @@ use agent_monitor::domain::model::{Agent, Cost};
 use crate::app::App;
 use crate::format;
 use crate::theme;
+use crate::theme::Token;
 use crate::ui::Clock;
 use crate::ui::panes::tape_tag;
 
@@ -46,7 +47,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
                 page + 1,
                 pages
             ),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )],
         true,
     );
@@ -85,12 +86,16 @@ pub fn draw_card(
     agent: &Agent,
     selected: bool,
 ) {
-    let border = if selected { theme::YELLOW } else { theme::EDGE };
+    let border = if selected {
+        Token::Highlight
+    } else {
+        Token::Frame
+    };
     let mut title = vec![theme::status_square(agent.status, clock.blink())];
     title.extend(theme::strip_title(&agent.name));
     title.push(Span::styled(
         format!(" {} ", agent.kind.label()),
-        theme::ink(theme::DIM),
+        theme::ink(Token::TextDim),
     ));
     let title = Line::from(title);
     let id = format!(" {} ", short_id(agent));
@@ -99,7 +104,7 @@ pub fn draw_card(
     let mut block = theme::frame(border).title(title);
     if fits {
         block =
-            block.title(Line::from(Span::styled(id, theme::ink(theme::CYAN_DIM))).right_aligned());
+            block.title(Line::from(Span::styled(id, theme::ink(Token::InfoDim))).right_aligned());
     }
     let inner = block.inner(area);
     let width = usize::from(inner.width);
@@ -107,16 +112,16 @@ pub fn draw_card(
     let status_color = theme::status_color(agent.status);
     let model = agent.model.clone().unwrap_or_default();
     let doing = match &agent.doing {
-        Some(doing) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
+        Some(doing) => Span::styled(doing.clone(), theme::ink(Token::Info)),
         None => Span::styled(
             agent.task.clone().unwrap_or_else(|| String::from("—")),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         ),
     };
     let cost_color = if let Cost::Unpriced = agent.cost {
-        theme::FAINT
+        Token::Rule
     } else {
-        theme::YELLOW
+        Token::Highlight
     };
     let started = agent
         .started
@@ -131,37 +136,37 @@ pub fn draw_card(
             ),
             Span::styled(
                 format!("  {}", format::clip(&model, 18)),
-                theme::ink(theme::FAINT),
+                theme::ink(Token::Rule),
             ),
         ]),
         Line::from(doing),
-        Line::from(format::activity(&agent.activity, width, theme::GREEN)),
+        Line::from(format::activity(&agent.activity, width, Token::Trace)),
         Line::from(vec![
-            Span::styled("TRN ", theme::ink(theme::FAINT)),
-            Span::styled(agent.turns.to_string(), theme::bold(theme::AMBER)),
-            Span::styled(" TLS ", theme::ink(theme::FAINT)),
-            Span::styled(agent.tool_calls.to_string(), theme::bold(theme::CYAN)),
-            Span::styled(" ERR ", theme::ink(theme::FAINT)),
+            Span::styled("TRN ", theme::ink(Token::Rule)),
+            Span::styled(agent.turns.to_string(), theme::bold(Token::Text)),
+            Span::styled(" TLS ", theme::ink(Token::Rule)),
+            Span::styled(agent.tool_calls.to_string(), theme::bold(Token::Info)),
+            Span::styled(" ERR ", theme::ink(Token::Rule)),
             Span::styled(
                 agent.tool_errors.to_string(),
                 theme::bold(if agent.tool_errors > 0 {
-                    theme::RED
+                    Token::Alert
                 } else {
-                    theme::FAINT
+                    Token::Rule
                 }),
             ),
-            Span::styled(" ", theme::ink(theme::FAINT)),
+            Span::styled(" ", theme::ink(Token::Rule)),
             Span::styled(format::cost(agent.cost), theme::bold(cost_color)),
-            Span::styled(format!(" {started}"), theme::ink(theme::DIM)),
+            Span::styled(format!(" {started}"), theme::ink(Token::TextDim)),
         ]),
     ];
     let room = usize::from(inner.height).saturating_sub(lines.len());
     for event in app.view.agent_tape(&agent.id, room) {
         let (tag, color) = tape_tag(event.kind);
         lines.push(Line::from(vec![
-            Span::styled(clock.time_of(event.at), theme::ink(theme::FAINT)),
+            Span::styled(clock.time_of(event.at), theme::ink(Token::Rule)),
             Span::styled(format!(" {tag} "), theme::ink(color)),
-            Span::styled(event.text.clone(), theme::ink(theme::DIM)),
+            Span::styled(event.text.clone(), theme::ink(Token::TextDim)),
         ]));
     }
 

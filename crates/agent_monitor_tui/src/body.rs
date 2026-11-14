@@ -19,6 +19,7 @@ use agent_monitor::domain::model::{TapeEvent, TapeKind, Timestamp, Totals};
 
 use crate::format;
 use crate::theme;
+use crate::theme::Token;
 
 /// What fills the BODY pane. The viewer feeds it every live tape line and
 /// every totals update, ticks it while it animates, and renders it into its
@@ -52,6 +53,12 @@ pub trait BodyPane: Send {
     /// for panes that have several. Ignored by default.
     fn cycle(&mut self, forward: bool) {
         let _ = forward;
+    }
+
+    /// Matches the pane's own colours to `theme`. Panes drawn with tokens
+    /// follow the theme already and ignore this.
+    fn set_theme(&mut self, theme: &theme::Theme) {
+        let _ = theme;
     }
 }
 
@@ -178,7 +185,7 @@ impl Vitals {
         rate: usize,
         max: usize,
         width: usize,
-        color: ratatui::style::Color,
+        color: Token,
     ) -> Line<'static> {
         let bar_width = width.saturating_sub(13);
         let share = if max == 0 {
@@ -189,17 +196,17 @@ impl Vitals {
         // Display rounding of a share in [0, 1].
         let filled = ((share.clamp(0.0, 1.0) * bar_width as f32).round() as usize).min(bar_width);
         let label_style = if channel.flash > Duration::ZERO {
-            theme::bold(theme::YELLOW)
+            theme::bold(Token::Highlight)
         } else {
-            theme::ink(theme::DIM)
+            theme::ink(Token::TextDim)
         };
         Line::from(vec![
             Span::styled(format::cell(label, 8), label_style),
             Span::styled("█".repeat(filled), theme::ink(color)),
-            Span::styled("░".repeat(bar_width - filled), theme::ink(theme::GHOST)),
+            Span::styled("░".repeat(bar_width - filled), theme::ink(Token::Ghost)),
             Span::styled(
                 format::right(&rate.to_string(), 5),
-                theme::bold(theme::AMBER),
+                theme::bold(Token::Text),
             ),
         ])
     }
@@ -301,18 +308,18 @@ impl BodyPane for Vitals {
         let beat = self.heart_phase < 0.18;
         let heart = if beat { "♥" } else { "♡" };
         let header = Line::from(vec![
-            Span::styled(format!("{heart} "), theme::bold(theme::RED)),
-            Span::styled(format!("{} BPM", self.bpm()), theme::bold(theme::YELLOW)),
+            Span::styled(format!("{heart} "), theme::bold(Token::Alert)),
+            Span::styled(format!("{} BPM", self.bpm()), theme::bold(Token::Highlight)),
             Span::styled(
                 format!(
                     "  {} TOK/M",
                     format::compact(u64::from(self.tokens_per_min))
                 ),
-                theme::ink(theme::DIM),
+                theme::ink(Token::TextDim),
             ),
             Span::styled(
                 format!("  {} WORKING", self.working),
-                theme::bold(theme::GREEN),
+                theme::bold(Token::Ok),
             ),
         ]);
 
@@ -338,14 +345,14 @@ impl BodyPane for Vitals {
         Sparkline::default()
             .data(&ecg)
             .max(8)
-            .style(theme::ink(theme::RED))
+            .style(theme::ink(Token::Alert))
             .render(ecg_area, buffer);
 
         let trace: Vec<u64> = self.trace.iter().map(|value| u64::from(*value)).collect();
         let skip = trace.len().saturating_sub(width);
         Sparkline::default()
             .data(trace.get(skip..).unwrap_or_default())
-            .style(theme::ink(theme::GREEN))
+            .style(theme::ink(Token::Ok))
             .render(trace_area, buffer);
 
         let mut lines = Vec::new();
@@ -359,14 +366,14 @@ impl BodyPane for Vitals {
 
         lines.push(Line::from(Span::styled(
             format::cell("EVENT      /MIN", width),
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         )));
         let colors = [
-            theme::CYAN,
-            theme::AMBER,
-            theme::GREEN,
-            theme::RED,
-            theme::DIM,
+            Token::Info,
+            Token::Text,
+            Token::Ok,
+            Token::Alert,
+            Token::TextDim,
         ];
         for (index, (label, color)) in CHANNELS.iter().zip(colors).enumerate() {
             let (Some(channel), Some(rate)) = (self.channels.get(index), rates.get(index)) else {
@@ -377,7 +384,7 @@ impl BodyPane for Vitals {
 
         lines.push(Line::from(Span::styled(
             format::cell("SOURCE     /MIN", width),
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         )));
         for (index, label) in NAMESPACES.iter().enumerate() {
             let offset = CHANNELS.len() + index;
@@ -394,7 +401,7 @@ impl BodyPane for Vitals {
                 *rate,
                 max,
                 width,
-                theme::YELLOW,
+                Token::Highlight,
             ));
         }
 
@@ -408,26 +415,26 @@ impl BodyPane for Vitals {
         if !tools.is_empty() {
             lines.push(Line::from(Span::styled(
                 format::cell("TOOL       /MIN", width),
-                theme::ink(theme::FAINT),
+                theme::ink(Token::Rule),
             )));
             let top = tools.first().map_or(1, |(_, rate)| *rate).max(1);
             for (name, rate) in tools.into_iter().take(TOP_TOOLS) {
                 let room = width.saturating_sub(13);
                 let filled = (rate * room).div_ceil(top).min(room);
                 lines.push(Line::from(vec![
-                    Span::styled(format::cell(name, 8), theme::ink(theme::CYAN)),
-                    Span::styled("▮".repeat(filled), theme::ink(theme::CYAN)),
+                    Span::styled(format::cell(name, 8), theme::ink(Token::Info)),
+                    Span::styled("▮".repeat(filled), theme::ink(Token::Info)),
                     Span::styled(" ".repeat(room - filled), theme::base()),
                     Span::styled(
                         format::right(&rate.to_string(), 5),
-                        theme::bold(theme::AMBER),
+                        theme::bold(Token::Text),
                     ),
                 ]));
             }
         }
 
         Paragraph::new(lines)
-            .style(Style::new().bg(theme::BG))
+            .style(Style::new().bg(Token::Bg.color()))
             .render(rest, buffer);
     }
 }

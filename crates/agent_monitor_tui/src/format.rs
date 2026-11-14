@@ -1,12 +1,12 @@
 //! Short number, money, age and text forms for dense cells.
 
 use chrono::TimeDelta;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::Span;
 
 use agent_monitor::domain::model::Cost;
 
-use crate::theme;
+use crate::theme::Token;
 
 /// An age or duration in its largest unit: `42s`, `12m`, `3h`, `2d`.
 pub fn age(delta: TimeDelta) -> String {
@@ -106,7 +106,7 @@ pub fn right(text: &str, width: usize) -> String {
 pub fn spark<I: IntoIterator<Item = u64>>(
     values: I,
     width: usize,
-    color: Color,
+    color: Token,
 ) -> Vec<Span<'static>> {
     const LEVELS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
     let values: Vec<u64> = values.into_iter().collect();
@@ -122,9 +122,9 @@ pub fn spark<I: IntoIterator<Item = u64>>(
         let is_zero = *value == 0 || max == 0;
         if is_zero != run_is_zero && !run.is_empty() {
             let style = if run_is_zero {
-                Style::new().fg(theme::GHOST)
+                Style::new().fg(Token::Ghost.color())
             } else {
-                Style::new().fg(color)
+                Style::new().fg(color.color())
             };
             spans.push(Span::styled(std::mem::take(&mut run), style));
         }
@@ -143,9 +143,9 @@ pub fn spark<I: IntoIterator<Item = u64>>(
     }
     if !run.is_empty() {
         let style = if run_is_zero {
-            Style::new().fg(theme::GHOST)
+            Style::new().fg(Token::Ghost.color())
         } else {
-            Style::new().fg(color)
+            Style::new().fg(color.color())
         };
         spans.push(Span::styled(run, style));
     }
@@ -153,6 +153,6 @@ pub fn spark<I: IntoIterator<Item = u64>>(
 }
 
 /// [`spark`] over a per-minute activity series.
-pub fn activity(values: &[u16], width: usize, color: Color) -> Vec<Span<'static>> {
+pub fn activity(values: &[u16], width: usize, color: Token) -> Vec<Span<'static>> {
     spark(values.iter().map(|value| u64::from(*value)), width, color)
 }

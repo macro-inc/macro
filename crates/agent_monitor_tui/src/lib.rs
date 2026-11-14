@@ -22,6 +22,7 @@ pub mod theme;
 pub mod ui;
 pub mod view;
 
+pub use theme::ThemeName;
 #[cfg(unix)]
 pub use unix::{FeedChoice, Options, ViewerError, run, run_feed};
 
@@ -33,6 +34,7 @@ mod unix {
     use crate::app::App;
     use crate::feed::{self, Feed};
     use crate::runner;
+    use crate::theme::ThemeName;
     use crate::view::ViewState;
 
     /// Where the viewer reads from.
@@ -57,6 +59,8 @@ mod unix {
         /// The BODY figure to start on, by name or number (from 1); the
         /// default figure when `None` or unknown.
         pub figure: Option<String>,
+        /// The colour theme it starts in.
+        pub theme: ThemeName,
     }
 
     /// Why the viewer stopped with an error.
@@ -90,22 +94,36 @@ mod unix {
             FeedChoice::Socket(socket) => (feed::socket(socket), None),
             FeedChoice::Demo { seed } => (feed::demo(seed), Some(String::from("DEMO"))),
         };
-        run_with(feed, label, options.fps, options.figure.as_deref()).await
+        run_with(
+            feed,
+            label,
+            options.fps,
+            options.theme,
+            options.figure.as_deref(),
+        )
+        .await
     }
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
     /// over a store it hosts; `label` is shown in the header.
-    pub async fn run_feed(feed: Feed, label: Option<String>, fps: u8) -> Result<(), ViewerError> {
-        run_with(feed, label, fps, None).await
+    pub async fn run_feed(
+        feed: Feed,
+        label: Option<String>,
+        fps: u8,
+        theme: ThemeName,
+    ) -> Result<(), ViewerError> {
+        run_with(feed, label, fps, theme, None).await
     }
 
     async fn run_with(
         feed: Feed,
         label: Option<String>,
         fps: u8,
+        theme: ThemeName,
         figure: Option<&str>,
     ) -> Result<(), ViewerError> {
         let mut app = App::new(ViewState::new(body(figure)), label);
+        app.set_theme(theme);
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
         let result = runner::run_loop(

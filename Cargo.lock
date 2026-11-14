@@ -944,6 +944,8 @@ dependencies = [
  "mesh_man",
  "ratatui",
  "rootcause",
+ "serde",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

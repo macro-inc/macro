@@ -351,3 +351,49 @@ fn normalising_scales_to_two_tall_on_the_pelvis() {
     let nerve = &figure.nerves[0];
     assert!((nerve.length() - (20.0_f32.hypot(60.0) * 2.0 / 170.0)).abs() < 1e-4);
 }
+
+#[test]
+fn classic_look_paints_the_palette_as_is() {
+    use crate::{Look, Palette};
+
+    let palette = Palette {
+        skin: (1, 2, 3),
+        bone: (4, 5, 6),
+        nerve: (7, 8, 9),
+        spark: (10, 11, 12),
+        alert: (13, 14, 15),
+        ..Palette::DEFAULT
+    };
+    let paint = Look::Classic.paint(&palette);
+    assert_eq!(paint.skin_busy, palette.skin);
+    assert_eq!(paint.floor_bright, palette.skin);
+    assert_eq!(paint.bone_idle, palette.bone);
+    assert_eq!(paint.nerve, palette.nerve);
+    assert_eq!(paint.scan_near, palette.spark);
+    assert_eq!(paint.heart, palette.alert);
+}
+
+#[test]
+fn every_look_follows_the_palette() {
+    use crate::{Look, Palette};
+
+    let other = Palette {
+        skin: (200, 40, 40),
+        skin_dim: (150, 30, 30),
+        ok: (40, 40, 200),
+        nerve: (40, 200, 40),
+        nerve_dim: (30, 150, 30),
+        nerve_hot: (180, 255, 180),
+        bone: (100, 100, 200),
+        ..Palette::DEFAULT
+    };
+    for look in [Look::Classic, Look::Xray, Look::Cyborg, Look::Neural] {
+        let a = look.paint(&Palette::DEFAULT);
+        let b = look.paint(&other);
+        assert_ne!(
+            (a.skin_idle, a.bone_idle, a.nerve),
+            (b.skin_idle, b.bone_idle, b.nerve),
+            "{look:?} ignores the palette"
+        );
+    }
+}

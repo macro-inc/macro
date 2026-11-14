@@ -22,14 +22,16 @@ the cell, so layer order is the depth cue.
 ## Start here
 
 - `src/lib.rs`: the public API (`Body::fire`, `set_load`, `tick`, `nerve_names`, `nerve_for`, `heart_rate`).
-- `src/widget.rs`: layers, palette, pulses and flashes on screen.
+- `src/widget.rs`: layers, pulses and flashes on screen.
 - `src/figure.rs`: `Figure`, its builder (`build_normalised` for figures in
   other units) and `catalog()`.
 - `src/model.rs`: the default figure's joints, skin rings, bones, nerve paths.
 - `src/figures.rs` and `src/figures/`: the procedural figures after it (XRAY,
   CYBORG, NEURAL), drafted in `common.rs` helpers (joints, branching nerve
   trees, a seeded random source) and turned into `Figure`s by `finish`.
-- `src/palette.rs`: each figure's `Look` and its colours.
+- `src/palette.rs`: `Palette`, the colour roles callers match to their theme
+  with `Body::set_palette`, and each figure's `Look`, which maps its parts
+  onto those roles (`Look::paint`). The classic look is the palette as is.
 - `src/assets.rs` (feature `demo-assets`): decodes the figures made from
   downloaded meshes, `assets/*.mmf`, written by the standalone `convert/`
   tool (outside the workspace; format in `convert/src/format.rs`).
@@ -55,7 +57,9 @@ the cell, so layer order is the depth cue.
 - Add a nerve: `side_nerves` (or `mesh_man`) in `src/model.rs`; it must
   start at `BRAIN` and stay inside the unit cube (tests check both). Update the
   name list in `Body::nerve_names`' doc. A new nerve moves every hashed key (`Body::nerve_for`).
-- Change the look: `src/widget.rs` constants and layer order, then refresh the
+- Change the look: `Palette::DEFAULT` or a `Look`'s role mapping in
+  `src/palette.rs` (never a colour literal in `src/widget.rs`), or the
+  layer order, then refresh the
   snapshots (`INSTA_UPDATE=always`) and check them in a real terminal.
 
 ## Checks

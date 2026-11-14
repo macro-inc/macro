@@ -3,6 +3,7 @@
 //! ```sh
 //! cargo run -p agent_monitor_tui --example demo
 //! cargo run -p agent_monitor_tui --example demo -- --socket /tmp/monitor.sock
+//! cargo run -p agent_monitor_tui --example demo -- --theme ember
 //! ```
 
 #[cfg(not(unix))]
@@ -15,7 +16,7 @@ fn main() {
 async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
     use std::path::PathBuf;
 
-    use agent_monitor_tui::{FeedChoice, Options, run};
+    use agent_monitor_tui::{FeedChoice, Options, ThemeName, run};
     use clap::Parser;
 
     #[derive(Parser)]
@@ -32,6 +33,9 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         /// The BODY figure to start on, by name or number (`b` / `B` cycle).
         #[arg(long)]
         figure: Option<String>,
+        /// The colour theme: classic, ember, phosphor or dusk.
+        #[arg(long, default_value_t = ThemeName::default())]
+        theme: ThemeName,
     }
 
     let cli = Cli::parse();
@@ -43,6 +47,7 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         feed,
         fps: cli.fps,
         figure: cli.figure,
+        theme: cli.theme,
     })
     .await
 }

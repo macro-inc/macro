@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use chrono::TimeDelta;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
@@ -18,6 +17,7 @@ use crate::app::App;
 use crate::format;
 use crate::keys::{Base, Pane};
 use crate::theme;
+use crate::theme::Token;
 use crate::ui::Clock;
 use crate::ui::panes::{pr_line, tape_line};
 
@@ -33,7 +33,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, id: 
         let block = theme::pane("AGENT", Vec::new(), true);
         let text = format!("  {id} is gone. ESC goes back.");
         frame.render_widget(
-            Paragraph::new(Span::styled(text, theme::ink(theme::RED))).block(block),
+            Paragraph::new(Span::styled(text, theme::ink(Token::Alert))).block(block),
             area,
         );
         return;
@@ -74,10 +74,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, id: 
 fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     let field = |label: &'static str, value: Option<String>| -> Vec<Span<'static>> {
         vec![
-            Span::styled(format!("{label} "), theme::ink(theme::FAINT)),
+            Span::styled(format!("{label} "), theme::ink(Token::Rule)),
             Span::styled(
                 value.unwrap_or_else(|| String::from("—")),
-                theme::ink(theme::AMBER),
+                theme::ink(Token::Text),
             ),
             Span::raw("   "),
         ]
@@ -87,7 +87,7 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     title.extend([
         Span::styled(
             format!(" {} ", agent.kind.label()),
-            theme::bold(theme::YELLOW),
+            theme::bold(Token::Highlight),
         ),
         theme::status_square(agent.status, clock.blink()),
         Span::styled(
@@ -98,9 +98,9 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
             agent.status_detail.clone().unwrap_or_default(),
             theme::ink(theme::status_color(agent.status)),
         ),
-        Span::styled(format!(" {} ", agent.id), theme::ink(theme::CYAN_DIM)),
+        Span::styled(format!(" {} ", agent.id), theme::ink(Token::InfoDim)),
     ]);
-    let block = theme::frame(theme::EDGE).title(Line::from(title));
+    let block = theme::frame(Token::Frame).title(Line::from(title));
 
     let mut first = Vec::new();
     first.extend(field("PROGRAM", agent.program.clone()));
@@ -121,10 +121,10 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
         "PARENT",
         agent.parent.as_ref().map(ToString::to_string),
     ));
-    second.push(Span::styled("TASK ", theme::ink(theme::FAINT)));
+    second.push(Span::styled("TASK ", theme::ink(Token::Rule)));
     second.push(Span::styled(
         agent.task.clone().unwrap_or_default(),
-        theme::ink(theme::YELLOW),
+        theme::ink(Token::Highlight),
     ));
 
     frame.render_widget(
@@ -153,43 +153,48 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
         .map(|value| u64::from(*value))
         .collect();
     // Cells with a per-minute series draw it; the rest show only their value.
-    let cells: [(&str, String, Color, Option<Vec<u64>>); 9] = [
-        ("DURATION", duration, theme::AMBER, None),
-        ("COST", format::cost(agent.cost), theme::YELLOW, Some(cents)),
+    let cells: [(&str, String, Token, Option<Vec<u64>>); 9] = [
+        ("DURATION", duration, Token::Text, None),
+        (
+            "COST",
+            format::cost(agent.cost),
+            Token::Highlight,
+            Some(cents),
+        ),
         (
             "TURNS",
             format::thousands(u64::from(agent.turns)),
-            theme::AMBER,
+            Token::Text,
             Some(counts(&minutes.turns)),
         ),
         (
             "TOOLS",
             format::thousands(u64::from(agent.tool_calls)),
-            theme::CYAN,
+            Token::Info,
             Some(counts(&minutes.tools)),
         ),
         (
             "ERRORS",
             errors.to_string(),
-            if errors > 0 { theme::RED } else { theme::GREEN },
+            if errors > 0 { Token::Alert } else { Token::Ok },
             Some(counts(&minutes.errors)),
         ),
         (
             "TOKENS",
             format::compact(agent.tokens.total()),
-            theme::AMBER,
+            Token::Text,
             Some(tokens),
         ),
         (
             "TOK IN",
             format::compact(agent.tokens.input),
-            theme::AMBER,
+            Token::Text,
             None,
         ),
         (
             "TOK OUT",
             format::compact(agent.tokens.output),
-            theme::AMBER,
+            Token::Text,
             None,
         ),
         (
@@ -199,15 +204,15 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
                 format::compact(agent.tokens.cache_read),
                 format::compact(agent.tokens.cache_write)
             ),
-            theme::DIM,
+            Token::TextDim,
             None,
         ),
     ];
     let areas = Layout::horizontal([Constraint::Ratio(1, 9); 9]).split(area);
     for ((label, value, color, series), cell) in cells.into_iter().zip(areas.iter()) {
-        let block = theme::frame(theme::EDGE).title(Line::from(vec![Span::styled(
+        let block = theme::frame(Token::Frame).title(Line::from(vec![Span::styled(
             format!(" {label} "),
-            theme::bold(theme::STRIP),
+            theme::bold(Token::Accent),
         )]));
         let mut lines = vec![Line::from(Span::styled(value, theme::bold(color)))];
         if let Some(series) = series {
@@ -226,7 +231,7 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
 struct Mark {
     at: Timestamp,
     glyph: char,
-    color: Color,
+    color: Token,
     rank: u8,
 }
 
@@ -243,11 +248,11 @@ fn marks(app: &App, agent: &Agent) -> Vec<Mark> {
             .iter()
             .map(|item| {
                 let (glyph, color, rank) = match (item.kind, item.is_error) {
-                    (TranscriptItemKind::User, _) => ('▲', theme::YELLOW, 2),
-                    (TranscriptItemKind::Assistant, _) => ('▪', theme::AMBER, 1),
-                    (TranscriptItemKind::ToolCall, _) => ('▮', theme::CYAN, 3),
-                    (TranscriptItemKind::ToolResult, true) => ('✖', theme::RED, 4),
-                    (TranscriptItemKind::ToolResult, false) => ('│', theme::CYAN, 0),
+                    (TranscriptItemKind::User, _) => ('▲', Token::Highlight, 2),
+                    (TranscriptItemKind::Assistant, _) => ('▪', Token::Text, 1),
+                    (TranscriptItemKind::ToolCall, _) => ('▮', Token::Info, 3),
+                    (TranscriptItemKind::ToolResult, true) => ('✖', Token::Alert, 4),
+                    (TranscriptItemKind::ToolResult, false) => ('│', Token::Info, 0),
                 };
                 Mark {
                     at: item.at,
@@ -264,13 +269,13 @@ fn marks(app: &App, agent: &Agent) -> Vec<Mark> {
             .filter(|event| event.agent == agent.id)
             .map(|event| {
                 let (glyph, color, rank) = match event.kind {
-                    TapeKind::TurnStart => ('▲', theme::YELLOW, 2),
-                    TapeKind::TurnEnd => ('▪', theme::AMBER, 1),
-                    TapeKind::ToolStart | TapeKind::ToolEnd => ('▮', theme::CYAN, 3),
+                    TapeKind::TurnStart => ('▲', Token::Highlight, 2),
+                    TapeKind::TurnEnd => ('▪', Token::Text, 1),
+                    TapeKind::ToolStart | TapeKind::ToolEnd => ('▮', Token::Info, 3),
                     TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => {
-                        ('✖', theme::RED, 4)
+                        ('✖', Token::Alert, 4)
                     }
-                    _ => ('◆', theme::GREEN, 2),
+                    _ => ('◆', Token::Ok, 2),
                 };
                 Mark {
                     at: event.at,
@@ -294,7 +299,7 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
                 " {} EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ",
                 marks.len()
             ),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )],
         false,
     );
@@ -306,7 +311,7 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
     }
     let (Some(first), Some(last)) = (marks.first(), marks.last()) else {
         frame.render_widget(
-            Paragraph::new(Span::styled("  no activity yet", theme::ink(theme::FAINT))),
+            Paragraph::new(Span::styled("  no activity yet", theme::ink(Token::Rule))),
             inner,
         );
         return;
@@ -341,7 +346,7 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
             *cell = Some(Mark {
                 at: first.at,
                 glyph: '┊',
-                color: theme::FAINT,
+                color: Token::Rule,
                 rank: 0,
             });
         }
@@ -358,7 +363,7 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
         .iter()
         .map(|cell| match cell {
             Some(mark) => Span::styled(mark.glyph.to_string(), theme::bold(mark.color)),
-            None => Span::styled("·", theme::ink(theme::GHOST)),
+            None => Span::styled("·", theme::ink(Token::Ghost)),
         })
         .collect();
     let start = clock.time_of(first.at);
@@ -370,7 +375,7 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(strip),
-            Line::from(Span::styled(axis, theme::ink(theme::FAINT))),
+            Line::from(Span::styled(axis, theme::ink(Token::Rule))),
         ]),
         inner,
     );
@@ -401,19 +406,19 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
 
     let mut extra = vec![Span::styled(
         format!(" {} ITEMS ", items.len()),
-        theme::ink(theme::DIM),
+        theme::ink(Token::TextDim),
     )];
     extra.push(if following {
-        Span::styled(" ▼ FOLLOWING ", theme::ink(theme::GREEN))
+        Span::styled(" ▼ FOLLOWING ", theme::ink(Token::Ok))
     } else {
         Span::styled(
             format!(" {} BELOW ", last - cursor),
-            theme::bold(theme::BG).bg(theme::YELLOW),
+            theme::chip(Token::Highlight),
         )
     });
     extra.push(Span::styled(
         " ENTER EXPANDS A TOOL CALL ",
-        theme::ink(theme::FAINT),
+        theme::ink(Token::Rule),
     ));
     let block = theme::pane("TRANSCRIPT", extra, focused);
     let inner = block.inner(area);
@@ -451,12 +456,12 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     if let Some(error) = &transcript.error {
         shown.push(Line::from(Span::styled(
             format!("  {error}"),
-            theme::ink(theme::RED),
+            theme::ink(Token::Alert),
         )));
     } else if shown.is_empty() {
         shown.push(Line::from(Span::styled(
             "  reading the transcript…",
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         )));
     }
     frame.render_widget(Paragraph::new(shown).block(block), area);
@@ -471,39 +476,39 @@ fn item_lines(
 ) -> Vec<Line<'static>> {
     let time = Span::styled(
         format!("{} ", clock.time_of(item.at)),
-        theme::ink(theme::FAINT),
+        theme::ink(Token::Rule),
     );
     let one_line = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     match item.kind {
         TranscriptItemKind::User => vec![Line::from(vec![
             time,
-            Span::styled("USER ", theme::bold(theme::YELLOW)),
-            Span::styled(one_line(&item.text), theme::ink(theme::YELLOW)),
+            Span::styled("USER ", theme::bold(Token::Highlight)),
+            Span::styled(one_line(&item.text), theme::ink(Token::Highlight)),
         ])],
         TranscriptItemKind::Assistant => vec![Line::from(vec![
             time,
-            Span::styled("TURN ", theme::bold(theme::AMBER)),
-            Span::styled(one_line(&item.text), theme::ink(theme::AMBER)),
+            Span::styled("TURN ", theme::bold(Token::Text)),
+            Span::styled(one_line(&item.text), theme::ink(Token::Text)),
         ])],
         TranscriptItemKind::ToolResult => vec![Line::from(vec![
             time,
-            Span::styled("ERR  ", theme::bold(theme::RED)),
+            Span::styled("ERR  ", theme::bold(Token::Alert)),
             Span::styled(
                 theme::glitch(
                     &one_line(&item.text),
                     (clock.now - item.at).num_milliseconds(),
                     clock.now.timestamp_millis(),
                 ),
-                theme::ink(theme::RED),
+                theme::ink(Token::Alert),
             ),
         ])],
         TranscriptItemKind::ToolCall => {
             let result = item.tool_id.as_ref().and_then(|id| results.get(id));
             let (status, color) = match result {
-                Some(result) if result.is_error => ("✕ ERR", theme::RED),
-                Some(_) => ("◆ OK", theme::GREEN),
-                None => ("◇ …", theme::YELLOW),
+                Some(result) if result.is_error => ("✕ ERR", Token::Alert),
+                Some(_) => ("◆ OK", Token::Ok),
+                None => ("◇ …", Token::Highlight),
             };
             let duration = result
                 .and_then(|result| result.duration_ms)
@@ -517,13 +522,13 @@ fn item_lines(
             let gist_width = width.saturating_sub(9 + 5 + 12 + tail.len());
             let mut lines = vec![Line::from(vec![
                 time,
-                Span::styled("TOOL ", theme::bold(theme::CYAN)),
-                Span::styled(format::cell(&name, 12), theme::bold(theme::CYAN)),
+                Span::styled("TOOL ", theme::bold(Token::Info)),
+                Span::styled(format::cell(&name, 12), theme::bold(Token::Info)),
                 Span::styled(
                     format::cell(&one_line(&item.text), gist_width),
-                    theme::ink(theme::DIM),
+                    theme::ink(Token::TextDim),
                 ),
-                Span::styled(format!(" {duration:>6} "), theme::ink(theme::DIM)),
+                Span::styled(format!(" {duration:>6} "), theme::ink(Token::TextDim)),
                 Span::styled(format!("{status:<5}"), theme::bold(color)),
             ])];
 
@@ -534,19 +539,19 @@ fn item_lines(
             if open {
                 lines.push(Line::from(Span::styled(
                     "         ┌ ARGUMENTS",
-                    theme::ink(theme::FAINT),
+                    theme::ink(Token::Rule),
                 )));
                 lines.push(Line::from(Span::styled(
                     format!(
                         "         │ {}",
                         format::clip(&one_line(&item.text), EXPANDED_CHARS)
                     ),
-                    theme::ink(theme::AMBER),
+                    theme::ink(Token::Text),
                 )));
                 if let Some(result) = result {
                     lines.push(Line::from(Span::styled(
                         "         ├ RESULT",
-                        theme::ink(theme::FAINT),
+                        theme::ink(Token::Rule),
                     )));
                     lines.push(Line::from(Span::styled(
                         format!(
@@ -558,7 +563,7 @@ fn item_lines(
                 }
                 lines.push(Line::from(Span::styled(
                     "         └",
-                    theme::ink(theme::FAINT),
+                    theme::ink(Token::Rule),
                 )));
             }
             lines
@@ -572,7 +577,7 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
         "CHILDREN",
         vec![Span::styled(
             format!(" {} · TAB HERE, ENTER DRILLS ", agent.children.len()),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )],
         focused,
     );
@@ -582,8 +587,11 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
             Some(child) => Line::from(vec![
                 theme::status_square(child.status, clock.blink()),
                 Span::raw(" "),
-                Span::styled(format::cell(child.kind.label(), 9), theme::ink(theme::DIM)),
-                Span::styled(format::cell(&child.name, 16), theme::bold(theme::AMBER)),
+                Span::styled(
+                    format::cell(child.kind.label(), 9),
+                    theme::ink(Token::TextDim),
+                ),
+                Span::styled(format::cell(&child.name, 16), theme::bold(Token::Text)),
                 Span::raw(" "),
                 Span::styled(
                     format!("{} ", theme::status_word(child.status)),
@@ -591,17 +599,17 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
                 ),
                 Span::styled(
                     format::right(&format::cost(child.cost), 8),
-                    theme::bold(theme::YELLOW),
+                    theme::bold(Token::Highlight),
                 ),
                 Span::raw(" "),
                 Span::styled(
                     child.doing.clone().unwrap_or_default(),
-                    theme::ink(theme::CYAN),
+                    theme::ink(Token::Info),
                 ),
             ]),
             None => Line::from(Span::styled(
                 format!("· {child} (gone)"),
-                theme::ink(theme::FAINT),
+                theme::ink(Token::Rule),
             )),
         };
         lines.push(if focused && index == app.cursors.child {
@@ -613,7 +621,7 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no children",
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
@@ -625,7 +633,7 @@ fn draw_prs(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: 
         "PRS",
         vec![Span::styled(
             format!(" {} · ENTER OPENS ITS OTHER AGENT ", agent.prs.len()),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )],
         focused,
     );
@@ -649,7 +657,7 @@ fn draw_prs(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: 
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no pull requests",
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);

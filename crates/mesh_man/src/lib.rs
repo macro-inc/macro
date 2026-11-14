@@ -40,7 +40,7 @@ mod widget;
 mod test;
 
 pub use figure::{Core, Figure, FigureBuilder, catalog};
-pub use palette::Look;
+pub use palette::{Look, Palette, Rgb};
 pub use pulse::PulseKind;
 
 use pulse::{Flash, Pulse};
@@ -83,6 +83,8 @@ pub struct Body {
     glow: Vec<f32>,
     /// The colours the terminal can show.
     color_depth: ColorDepth,
+    /// The colours the figure is drawn in.
+    palette: Palette,
 }
 
 /// How many colours the terminal shows.
@@ -140,6 +142,7 @@ impl Body {
             flashes: Vec::new(),
             glow,
             color_depth: ColorDepth::default(),
+            palette: Palette::DEFAULT,
         }
     }
 
@@ -212,6 +215,13 @@ impl Body {
     /// Draws with the colours a terminal of `depth` can show.
     pub fn set_color_depth(&mut self, depth: ColorDepth) {
         self.color_depth = depth;
+    }
+
+    /// Draws in `palette`'s colours: the dashboard's theme. Each figure's
+    /// [`Look`] maps its parts onto the palette's roles, so a new palette
+    /// recolours every figure.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
     }
 
     /// The names of the current figure's nerves. For the default figure, in

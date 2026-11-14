@@ -13,6 +13,7 @@ use agent_monitor::domain::model::{Agent, AgentId};
 use crate::app::App;
 use crate::format;
 use crate::theme;
+use crate::theme::Token;
 use crate::ui::Clock;
 use crate::ui::wall::draw_card;
 use crate::view::Filter;
@@ -81,7 +82,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
                 agents.len(),
                 roots.len()
             ),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )],
         true,
     );
@@ -99,7 +100,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
             frame.render_widget(
                 ratatui::widgets::Paragraph::new(Span::styled(
                     error.to_string(),
-                    theme::ink(theme::RED),
+                    theme::ink(Token::Alert),
                 ))
                 .block(block),
                 tree_area,
@@ -136,8 +137,8 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
 fn details(agent: &Agent, clock: Clock) -> Vec<Line<'static>> {
     let field = |label: &str, value: String| {
         Line::from(vec![
-            Span::styled(format::cell(label, 9), theme::ink(theme::FAINT)),
-            Span::styled(value, theme::ink(theme::AMBER)),
+            Span::styled(format::cell(label, 9), theme::ink(Token::Rule)),
+            Span::styled(value, theme::ink(Token::Text)),
         ])
     };
     let or_dash = |value: Option<String>| value.unwrap_or_else(|| String::from("—"));
@@ -191,31 +192,34 @@ fn item(
     let line = Line::from(vec![
         theme::status_square(agent.status, clock.blink()),
         Span::raw(" "),
-        Span::styled(format::cell(agent.kind.label(), 9), theme::ink(theme::DIM)),
+        Span::styled(
+            format::cell(agent.kind.label(), 9),
+            theme::ink(Token::TextDim),
+        ),
         Span::styled(
             format::cell(&agent.name, name_width),
-            theme::bold(theme::AMBER),
+            theme::bold(Token::Text),
         ),
         Span::styled(
             format!(" {} ", theme::status_word(agent.status)),
             theme::ink(theme::status_color(agent.status)),
         ),
-        Span::styled(started, theme::ink(theme::FAINT)),
-        Span::styled(format::right(&age, 5), theme::ink(theme::DIM)),
+        Span::styled(started, theme::ink(Token::Rule)),
+        Span::styled(format::right(&age, 5), theme::ink(Token::TextDim)),
         Span::styled(
             format::right(&format::cost(agent.cost), 9),
-            theme::bold(theme::YELLOW),
+            theme::bold(Token::Highlight),
         ),
         Span::styled(
             format!(" {:>3}▸", agent.children.len()),
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         ),
         Span::raw("  "),
         match &agent.doing {
-            Some(doing) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
+            Some(doing) => Span::styled(doing.clone(), theme::ink(Token::Info)),
             None => Span::styled(
                 agent.task.clone().unwrap_or_default(),
-                theme::ink(theme::DIM),
+                theme::ink(Token::TextDim),
             ),
         },
     ]);
