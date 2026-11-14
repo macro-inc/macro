@@ -197,6 +197,8 @@ shared with the web app's suite) and backend entry points second.
   the lambda and agent tool runs, the provider methods called, the events
   published and what was sent to other services. It records what happened
   until the scenario ended, after the Outlook work that was due.
+  Gmail token requests are those the authentication stand-in passed on
+  (`provider gmail:oauth.token`); the Gmail emulator's request log has none.
 - A record holds shapes, not content (`src/evidence.rs`): route templates,
   operation names and field names. A string value is kept only under a key
   in `KIND_KEYS` (and only when it reads as a short tag) or, in a query

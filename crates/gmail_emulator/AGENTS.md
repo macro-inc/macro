@@ -128,6 +128,9 @@ a local stack, without Google accounts.
 - The signature of a mailbox's primary address: `PUT
   /_emulator/mailboxes/{email}/signature` with `{"signature": "<html>"}`
   (`set_signature`); `settings.sendAs.list` answers it. It is empty until set.
+- The aliases a mailbox can send from: `GmailEmulator::set_send_as(email,
+  aliases)` replaces them, and `settings.sendAs.list` answers them after the
+  primary address. A Rust method only; there is no `/_emulator/` route.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real

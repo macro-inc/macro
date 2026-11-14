@@ -1224,6 +1224,8 @@ outlook = ["provider outlook:rules.delete"]
 also = ["queue gmail-ops:UnblockSender"]
 
 [F-197]  # Report a thread as spam
+bug = "gmail-junk-stays-in-inbox"
+bug_on = "gmail"
 by = [
   "http PATCH /email/threads/{id}/state where /field=junk, /value=true",
   "graphql CompleteMutationRoot.setEmailThreadState where /input/field=JUNK, /input/value=true",
