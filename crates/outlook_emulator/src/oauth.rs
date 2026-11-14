@@ -310,9 +310,14 @@ struct GrantRequest {
     owner: String,
 }
 
-/// The id the stand-in gives a mailbox's grant.
-fn grant_id(email: &str) -> uuid::Uuid {
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, email.as_bytes())
+/// The id the stand-in gives the grant one principal holds for a mailbox.
+/// Like the authentication service, each principal who signs in to a mailbox
+/// holds a grant of their own.
+fn grant_id(owner: &str, email: &str) -> uuid::Uuid {
+    uuid::Uuid::new_v5(
+        &uuid::Uuid::NAMESPACE_URL,
+        format!("{owner}\n{email}").as_bytes(),
+    )
 }
 
 /// Stands in for the authentication service's `GET /internal/microsoft_grant`,
@@ -327,9 +332,16 @@ async fn completed_grant(
         let Some(mailbox) = email.and_then(|email| state.mailboxes.get(email)) else {
             return (None, StatusCode::NOT_FOUND.into_response());
         };
+        let id = grant_id(&request.owner, &mailbox.email);
+        state.grants.insert(id, mailbox.email.clone());
+        state
+            .link_grants
+            .entry(request.attempt_id.to_lowercase())
+            .or_default()
+            .insert(id);
         let grant = json!({
             "calendar_requested": false,
-            "grant_id": grant_id(&mailbox.email),
+            "grant_id": id,
             "generation": 1,
             "owner": request.owner,
             "email": mailbox.email,
@@ -347,19 +359,19 @@ struct RevokeRequest {
     grant_id: uuid::Uuid,
 }
 
-/// Stands in for `POST /internal/revoke_microsoft_grant`: the mailbox whose
-/// grant it names is revoked.
+/// Stands in for `POST /internal/revoke_microsoft_grant`: the grant it names
+/// is released, and the grants other principals hold for the same mailbox
+/// stay. A link described with only released grants gets no more access
+/// tokens, and the mailbox is revoked once no grant for it is left.
 async fn revoke_grant(
     AxumState(emulator): AxumState<OutlookEmulator>,
     Json(request): Json<RevokeRequest>,
 ) -> Response {
     let mailbox = emulator.with_state(|state| {
-        let email = state
-            .mailboxes
-            .keys()
-            .find(|email| grant_id(email) == request.grant_id)
-            .cloned()?;
-        state.revoke_grant(&email).ok()?;
+        let email = state.grants.remove(&request.grant_id)?;
+        if !state.grants.values().any(|held| *held == email) {
+            state.revoke_grant(&email).ok()?;
+        }
         Some(email)
     });
     logged(

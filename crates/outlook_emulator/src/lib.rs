@@ -461,7 +461,28 @@ impl OutlookEmulator {
     pub fn link_mailbox(&self, link_id: &str, email: &str) -> Result<(), EmulatorError> {
         self.with_state(|state| {
             let email = state.mailbox(email)?.email.clone();
-            state.links.insert(link_id.to_lowercase(), email);
+            state.bind_link(link_id.to_lowercase(), email);
+            Ok(())
+        })
+    }
+
+    /// Binds a Macro email link id to the mailbox of the OAuth attempt it
+    /// was made from, with the grants the stand-in described for that
+    /// attempt: once they are all released, the link gets no access token.
+    pub fn link_attempt(&self, link_id: &str, attempt_id: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            let attempt = attempt_id.to_lowercase();
+            let email = state
+                .links
+                .get(&attempt)
+                .cloned()
+                .ok_or_else(|| EmulatorError::UnknownMailbox(attempt.clone()))?;
+            let grants = state.link_grants.get(&attempt).cloned().unwrap_or_default();
+            let link = link_id.to_lowercase();
+            state.bind_link(link.clone(), email);
+            if !grants.is_empty() {
+                state.link_grants.entry(link).or_default().extend(grants);
+            }
             Ok(())
         })
     }

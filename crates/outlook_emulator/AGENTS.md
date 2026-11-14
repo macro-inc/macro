@@ -212,7 +212,10 @@ local stack, without Microsoft accounts.
 - Waiting is event driven (`wait_for_notifications`); don't add sleep loops.
 - The authentication-service stand-in is not a Microsoft API. It exists so the
   service can run without FusionAuth, and answers like the real routes: 404
-  for an unknown link, 401 for a revoked grant.
+  for an unknown link, 401 for a revoked grant. A link is refused
+  once every grant described for it (`microsoft_grant` with its id, or with
+  the attempt `link_attempt` made it from) is released; a link no grant was
+  described for is answered for until its mailbox is revoked.
 - ID tokens name Microsoft's issuer, not the emulator's address, because
   `fusionauth` only accepts Microsoft's. The discovery document says the same,
   as Microsoft's does for `common`. Tokens are dated by the real clock, the
