@@ -1,0 +1,68 @@
+crates/mesh_man/src/widget.rs
+  s_c9372f02798ba7::t_4bdb813fbbaa2d 1-130,133-136,155-167,179-229,231-236,238-251,253,255-312,314-405
+  s_c9372f02798ba7::t_0908d69c8b740f 131-132
+  s_c9372f02798ba7::t_a802c1afa3848a 137-139,152-154
+  s_c9372f02798ba7::t_830e6244229882 168-170,176-178
+  s_c9372f02798ba7::t_b060c21c1d0c89 230
+  s_c9372f02798ba7::t_c57eb6b5f6217c 237
+  s_c9372f02798ba7::t_a12a5c435432e8 252
+  s_c9372f02798ba7::t_bdb7fb044a7385 254
+  s_c9372f02798ba7::t_1f5a4b19b4eca7 313
+  s_c9372f02798ba7::t_a755b9583dbbae 406-408
+crates/mesh_man/src/lib.rs
+  s_c9372f02798ba7::t_3dddcad4c27fd6 1-95,101-180
+  s_c9372f02798ba7::t_2346c758317613 96-100
+  s_c9372f02798ba7::t_41497703715bc7 181-183
+crates/mesh_man/src/test.rs
+  s_c9372f02798ba7::t_b837506142a23f 1-197
+crates/mesh_man/Cargo.toml
+  s_c9372f02798ba7::t_14e0690805bce8 1-14
+crates/mesh_man/src/model.rs
+  s_c9372f02798ba7::t_87cad34b7b9167 1-770
+  s_c9372f02798ba7::t_376d9cf3ed0d18 771-773
+crates/mesh_man/src/project.rs
+  s_c9372f02798ba7::t_1d915f2de128df 1-39
+  s_1b36fa5422acb7::t_fd60ad84492516 40-49
+crates/mesh_man/src/pulse.rs
+  s_c9372f02798ba7::t_91111d94003740 1-89
+Cargo.lock
+  s_1b36fa5422acb7::t_289b34548add9f 9232-9237,13376-13386
+crates/mesh_man/src/snapshots/mesh_man__test__frame_zero_snapshot.snap
+  s_52b778d7b06e4b::t_62e4b734d6d10d 1-34
+crates/mesh_man/src/snapshots/mesh_man__test__quarter_turn_snapshot.snap
+  s_52b778d7b06e4b::t_703b6bf16ade2d 1-34
+Cargo.toml
+  s_1b36fa5422acb7::t_30e925f32f4a59 135,320
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b20fc0e1a3071c302d13d74248d4ae66a35074e5",
+  "prompts": {},
+  "sessions": {
+    "s_1b36fa5422acb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cb59596-7b07-4ad3-a590-3ccda4aca3de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_52b778d7b06e4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb1c9354-6ebd-4559-ba14-05d8d00f4534",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c9372f02798ba7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ebd54d2-e804-4b70-979e-858ee39d6725",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
