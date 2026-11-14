@@ -226,7 +226,8 @@ switcher triggers, and scrolling list controls have a backend-free regression:
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
 actions to icons and narrowing the open search on phones only; tablet and desktop
-keep the labels. Its backend-free regression over the real row is
+keep the labels. Its backend-free regression renders the real row with a stand-in
+for the task filters (the real phone filter trigger, one button on desktop):
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free

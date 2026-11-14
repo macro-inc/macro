@@ -22,12 +22,16 @@ function filters(page: Page, project: string) {
 async function expectOnScreen(page: Page, controls: Locator[]) {
   const width = page.viewportSize()?.width ?? 0;
   for (const control of controls) {
-    const box = await control.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box?.x).toBeGreaterThanOrEqual(GUTTER);
-    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
-      width - GUTTER
-    );
+    const edges = async () => {
+      const box = await control.boundingBox();
+      return box ? [box.x, box.x + box.width] : [Number.NaN, Number.NaN];
+    };
+    await expect
+      .poll(async () => (await edges())[0])
+      .toBeGreaterThanOrEqual(GUTTER);
+    await expect
+      .poll(async () => (await edges())[1])
+      .toBeLessThanOrEqual(width - GUTTER);
   }
 }
 

@@ -1,4 +1,5 @@
 import '@app/index.css';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -72,6 +73,7 @@ function Fixture() {
 }
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
+applyTheme('Macro Light');
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
 render(() => <Fixture />, root);

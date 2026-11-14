@@ -1089,9 +1089,9 @@ toolbar stays the same height and scrolls
 horizontally in narrow splits, keeping list controls, Add existing tasks, and New
 task accessible. On phones (touch, under 640px) Add existing tasks and New task
 show as icon buttons named by those labels and the open search field narrows, so
-the row fits from 320px wide without scrolling. Opening an associated task extends the breadcrumb trail; choose
-the project breadcrumb to return, or Projects to restore the collection and its
-filters, groups, and scroll position. Project URLs retain identity and section:
+the row fits from 320px wide without scrolling. Opening an associated task
+extends the breadcrumb trail; choose the project breadcrumb to return, or
+Projects to restore the collection and its filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
 in the project title and Projects row menus, copy `/app/initiative/<project-id>`,
 which opens the project in Tasks; pasting it, or an older
