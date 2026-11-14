@@ -4,6 +4,7 @@
 //! notifications); a 30 s reconcile only re-checks what is already known.
 
 pub mod claude_transcripts;
+pub mod codex_rollouts;
 pub mod demo;
 pub mod hc;
 mod tail;
