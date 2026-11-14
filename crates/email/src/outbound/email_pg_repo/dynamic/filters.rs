@@ -720,7 +720,8 @@ pub(super) enum BranchFacts<'a> {
     /// Present, and outside trash unless the view is Trash.
     Checked(&'a ResolvedFilters),
     /// None: the branches list a superset of the candidate threads, which
-    /// the caller matches thread by thread with the full message check.
+    /// the caller matches thread by thread with the full message check and
+    /// its inboxes.
     Skipped,
 }
 
@@ -729,6 +730,17 @@ impl BranchFacts<'_> {
         match self {
             Self::Checked(resolved) => build_trash_check(resolved),
             Self::Skipped => SqlFragment::raw("TRUE"),
+        }
+    }
+
+    /// The inboxes a text branch keeps its messages to. A superset leaves
+    /// that to its caller: its contacts are already the inboxes' own, and
+    /// the planner would AND each contact's messages with a bitmap of the
+    /// whole inbox.
+    fn message_scope(self, link_scope: Option<&[Uuid]>) -> Option<&[Uuid]> {
+        match self {
+            Self::Checked(_) => link_scope,
+            Self::Skipped => None,
         }
     }
 }
@@ -846,11 +858,17 @@ fn push_contact_group(
 ) {
     let cte_name = format!("matching_contacts_{}", contact_ctes.len());
     contact_ctes.push((cte_name.clone(), contact_query));
+    let message_scope = facts.message_scope(link_scope);
     if kinds.sender {
-        branches.push(text_sender_branch(&cte_name, facts, link_scope));
+        branches.push(text_sender_branch(&cte_name, facts, message_scope));
     }
     if kinds.any_recipient() {
-        branches.push(text_recipient_branch(&cte_name, kinds, facts, link_scope));
+        branches.push(text_recipient_branch(
+            &cte_name,
+            kinds,
+            facts,
+            message_scope,
+        ));
     }
 }
 
